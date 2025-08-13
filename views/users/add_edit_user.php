@@ -67,6 +67,23 @@ if (isset($data['user']['id'])) {
       <label for="inputPassword4" class="form-label">Password</label>
       <input type="password" id="password" name="password" class="form-control" required>
     </div>  
+    <div class="col-md-6">
+      <label for="inputRole4" class="form-label">Role</label>
+      <select id="role" name="role" class="form-select">
+        <option value="admin">Admin</option>
+        <option value="user">User</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label for="inputActive4" class="form-label">Active</label>
+      <select id="is_active" name="is_active" class="form-select">
+        <option value="1">Yes</option>
+        <option value="0">No</option>
+      </select>
+    </div>
+  </div>
+  <input type="hidden" name="action" value="addPost">
+  <input type="hidden" name="page" value="users"> 
   </div>
   <button type="submit" class=" ">Add User</button>
 </form>
