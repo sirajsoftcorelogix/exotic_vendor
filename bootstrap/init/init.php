@@ -21,6 +21,6 @@ require_once 'helpers/html_helpers.php';
 
 // Optionally include more common setup like error reporting, timezone, etc.
 
-$domain = "http://" . $_SERVER['SERVER_NAME'] . "/VendorPortal";
-$root_path = $_SERVER['DOCUMENT_ROOT'].'/VendorPortal';
+$domain = "http://" . $_SERVER['SERVER_NAME'] . "/exotic_vendor";
+$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
 ?>

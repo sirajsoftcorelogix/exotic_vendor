@@ -1,6 +1,6 @@
 <?php $loginUser = getloginUser();?>
-<?php //$root_path = $_SERVER['DOCUMENT_ROOT'].'/VendorPortal';
-//$domain = "http://".$_SERVER['SERVER_NAME']."/VendorPortal";
+<?php //$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
+//$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor";
 global $domain, $root_path;
 ?>
 <!DOCTYPE html>

@@ -2,7 +2,7 @@
 require_once 'bootstrap/init/init.php';
 $page = $_GET['page'] ?? 'dashboard';
 $action = $_GET['action'] ?? 'list';
-//$domain = "http://".$_SERVER['SERVER_NAME']."/VendorPortal"; 
+//$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
 switch ($page) {
 	
 	case 'users':
