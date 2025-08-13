@@ -135,8 +135,8 @@ document.getElementById('addVendorForm').addEventListener('submit', function(eve
       <input type="text" id="contact_name" name="contact_name" class="form-control" required>
     </div>
     <div class="col-md-6">
-        <label for="inputEmail4" class="form-label">Email</label>
-        <input type="email" id="email" name="email" class="form-control" required>
+        <label for="inputEmail4" class="form-label">Vendor Email</label>
+        <input type="email" id="email" name="vendor_email" class="form-control" required>
     </div>
     </div>
     <div class="row mb-3">

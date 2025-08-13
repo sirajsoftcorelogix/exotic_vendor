@@ -36,16 +36,34 @@ class VendorsController {
             $result = $vendorsModel->addVendor($data);            
             //$message = $result ? 'Vendor added successfully.' : 'Failed to add vendor.';
         }
-        if (!$result) {
-            echo json_encode(['success' => false, 'message' => 'Database operation failed.']);
-            exit;
-        }else {
-            echo json_encode(['success' => true, 'message' => 'Vendor saved successfully.']);
-        }
+        echo json_encode($result);
+        // if (!$result) {
+        //     echo json_encode(['success' => false, 'message' => 'Database operation failed.']);
+        //     exit;
+        // }else {
+        //     echo json_encode(['success' => true, 'message' => 'Vendor saved successfully.']);
+        // }
         
         exit;
         //$vendors = $vendorsModel->getAllVendors();
         //renderTemplate('views/vendors/index.php', ['vendors' => $vendors, 'message' => $message], 'Manage Vendors');
+    }
+    public function delete() {
+        global $vendorsModel;
+        // Try to get id from JSON or POST
+        $data = json_decode(file_get_contents('php://input'), true);
+        $id = isset($data['id']) ? (int)$data['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
+        if ($id > 0) {
+            $result = $vendorsModel->deleteVendor($id);
+            if ($result) {
+                echo json_encode(['success' => true, 'message' => 'Vendor deleted successfully.']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Failed to delete vendor.']);
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid vendor ID.'.$id]);
+        }
+        exit;
     }
     
 }

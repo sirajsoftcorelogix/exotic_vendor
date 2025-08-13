@@ -12,6 +12,7 @@ if (isset($data['message'])) {
     <h2>Vendors</h2>
     <a href="index.php?page=vendors&action=add" class="btn btn-primary">Add New Vendor</a>
 </div>
+<div id="addUserMsg" style="margin-top:10px;"> </div>
 <table class="table table-bordered">
   <thead>
     <tr>
@@ -42,8 +43,10 @@ if (isset($data['message'])) {
         <button class="btn btn-sm btn-danger mt-0" onclick="deleteData(<?= $vendor['id'] ?>)" title="Delete"><i class="fa fa-trash"></i></button>
     </td>
     </tr>
+    
     <script>
     function deleteData(id) {
+    const msgDiv = document.getElementById('addUserMsg');
     if (confirm('Are you sure you want to delete this vendor?')) {
         fetch('?page=vendors&action=delete', {
             method: 'POST',
@@ -55,10 +58,14 @@ if (isset($data['message'])) {
         .then(response => response.json())  
         .then(data => {
             if (data.success) { 
-                alert(data.message);
+                //alert(data.message);
+                msgDiv.textContent = data.message;
+                msgDiv.style.color = data.success ? 'green' : 'red';
                 document.querySelector(`tr[data-id="${id}"]`).remove();
             } else {
-                alert(data.message);    
+                //alert(data.message); 
+                msgDiv.textContent = data.message;
+                msgDiv.style.color = data.success ? 'green' : 'red';   
             }
         })
         .catch(error => {
