@@ -25,6 +25,20 @@ if (isset($data['user']['id'])) {
       <label for="inputPassword4" class="form-label">Password</label>
       <input type="password" id="password" name="password" class="form-control" placeholder="Enter new password (leave blank to keep current)">
     </div>
+    <div class="col-md-6">
+      <label for="inputRole4" class="form-label">Role</label>
+      <select id="role" name="role" class="form-select">
+        <option value="admin" <?= $data['user']['role'] == 'admin' ? 'selected' : '' ?>>Admin</option>
+        <option value="user" <?= $data['user']['role'] == 'user' ? 'selected' : '' ?>>User</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label for="inputActive4" class="form-label">Active</label>
+      <select id="is_active" name="is_active" class="form-select">
+        <option value="1" <?= $data['user']['is_active'] ? 'selected' : '' ?>>Yes</option>
+        <option value="0" <?= !$data['user']['is_active'] ? 'selected' : '' ?>>No</option>
+      </select>
+    </div>
   </div>
   <input type="hidden" name="id" value="<?= $data['user']['id'] ?>">
   <button type="submit" class="btn btn-secondary">Update User</button>
