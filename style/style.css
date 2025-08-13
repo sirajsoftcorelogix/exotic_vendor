@@ -553,6 +553,20 @@ button {
 button:hover {
     background-color: #e67c30;
 }
+.btn-primary {
+    background-color: var(--secondaryColor);
+    color: white;
+    padding: 12px;
+    border: none;
+    font-weight: normal;
+    border-radius: 5px;
+    margin-top: 20px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+.btn-primary:hover {
+    background-color: #e67c30;
+}
 /*end of login.css */
 
 #item-details > table {

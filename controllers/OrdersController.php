@@ -6,6 +6,7 @@ global $domain;
 class OrdersController { 
      
     public function index() {
+        global $ordersModel;
         $orders = $ordersModel->getAllOrders();
         renderTemplate('views/orders/index.php', ['orders' => $orders], 'Manage Orders');
     }
@@ -45,7 +46,7 @@ class OrdersController {
         // Initialize cURL
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
-        
+
         //curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

@@ -1,11 +1,25 @@
 
 <div class="container">  
+<?php
+if (isset($data['message'])) {
+    $message = $data['message'];
+    if (is_array($message)) {
+        $message = implode('<br>', $message);
+    }
+    echo "<div class='alert alert-success'>$message</div>";
+}
+?>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Users</h2>
+    <a href="index.php?page=users&action=add" class="btn btn-primary">Add New User</a>
+</div>
 <table class="table table-bordered">
   <thead>
     <tr>
       <th scope="col">#</th>
       <th scope="col">Name</th>
       <th scope="col">Email</th>
+      <th scope="col">Phone</th>
       <th scope="col">Role</th>
       <th scope="col">Active</th>
     </tr>
@@ -26,7 +40,7 @@
       <td><?= $item['is_active'] == 1 ? 'Yes' : 'No' ?></td>
       <td>
           <a href="index.php?page=users&action=update&id=<?= $item['id'] ?>" class="btn btn-sm btn-warning" title="Edit"><i class="fa fa-edit"></i></a>
-          <button class="btn btn-sm btn-danger" onclick="deleteData(<?= $item['id'] ?>)" title="Delete"><i class="fa fa-trash"></i></button>
+          <button class="btn btn-sm btn-danger mt-0" onclick="deleteData(<?= $item['id'] ?>)" title="Delete"><i class="fa fa-trash"></i></button>
       </td>
   </tr>
 <script>

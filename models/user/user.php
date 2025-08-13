@@ -66,16 +66,41 @@ class User {
     }
    
     public function insert($data) {
+        // Check if email already exists
+        $checkSql = "SELECT id FROM vp_users WHERE email = ?";
+        $checkStmt = $this->db->prepare($checkSql);
+        $checkStmt->bind_param('s', $data['email']);
+        $checkStmt->execute();
+        $checkStmt->store_result();
+        if ($checkStmt->num_rows > 0) {
+            return ['success' => false, 'message' => 'Email already exists. Please use a different email address.'];
+        }
+        $checkStmt->close();
+
         $sql = "INSERT INTO vp_users (name, email, phone, password, role, is_active) VALUES (?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT); // FIX: assign to variable
+        $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
         $stmt->bind_param('sssssi', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active']);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'User added successfully.'];
-        }   
-        return ['success' => false, 'error' => 'Insert failed: ' . $stmt->error];
+        }
+        return [
+            'success' => false,
+            'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+        ];
     }
     public function update($id, $data) {
+        // Check if email already exists for another user
+        $checkSql = "SELECT id FROM vp_users WHERE email = ? AND id != ?";
+        $checkStmt = $this->db->prepare($checkSql);
+        $checkStmt->bind_param('si', $data['email'], $id);
+        $checkStmt->execute();
+        $checkStmt->store_result();
+        if ($checkStmt->num_rows > 0) {
+            return ['success' => false, 'message' => 'Email already exists. Please use a different email address.'];
+        }
+        $checkStmt->close();
+
         if (!empty($data['password'])) {
             $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role = ?, is_active = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
@@ -89,8 +114,10 @@ class User {
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'User updated successfully.'];
         }
-        return ['success' => false, 'error' => 'Update failed: ' . $stmt->error];
-                                            
+        return [
+            'success' => false,
+            'message' => 'Update failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+        ];
     }
     public function delete($id) {
         $sql = "DELETE FROM vp_users WHERE id = ?";

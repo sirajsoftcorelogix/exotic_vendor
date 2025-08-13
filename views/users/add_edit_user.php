@@ -66,7 +66,9 @@ if (isset($data['user']['id'])) {
     <div class="col-md-6">
       <label for="inputPassword4" class="form-label">Password</label>
       <input type="password" id="password" name="password" class="form-control" required>
-    </div>  
+    </div>
+  </div>
+  <div class="row mb-3">  
     <div class="col-md-6">
       <label for="inputRole4" class="form-label">Role</label>
       <select id="role" name="role" class="form-select">
@@ -81,7 +83,7 @@ if (isset($data['user']['id'])) {
         <option value="0">No</option>
       </select>
     </div>
-  </div>
+  </div>  
   <input type="hidden" name="action" value="addPost">
   <input type="hidden" name="page" value="users"> 
 

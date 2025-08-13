@@ -45,40 +45,21 @@ switch ($page) {
                 break;
         }
         break;
-	case 'tenants':
-        require_once 'controllers/TenantsController.php';
-		$controller = new TenantsController($conn);
-		
+	case 'vendors':
+        require_once 'controllers/VendorsController.php';
+        $controller = new VendorsController($conn);
         switch ($action) {
             case 'list':
-                $controller->index();
+                $controller->index();   
                 break;
-            case 'add_edit_tenant':
-                $controller->add_edit_tenant();
+            case 'add':
+                $controller->addEditVendor();
                 break;
-            case 'update':
-                $controller->update();
-                break;
-            case 'delete':
-               // $controller->delete();
-                break;
-            default:
-                $controller->index();
-                break;
-        }
-        break;	
-    case 'stores':
-        require_once 'controllers/StoresController.php';
-		$controller = new StoresController($conn);
-        switch ($action) {
-            case 'list':
-                $controller->index();
-                break;
-            case 'add_edit_store':
-                $controller->add_edit_store();
+            case 'addPost':
+                $controller->addPost();
                 break;
             case 'update':
-                $controller->update();
+                $controller->addEditVendor();
                 break;
             case 'delete':
                 $controller->delete();
@@ -87,11 +68,6 @@ switch ($page) {
                 $controller->index();
                 break;
         }
-        break;	
-    case 'dashboard':
-        require_once 'controllers/DashboardController.php';
-        $controller = new DashboardController();
-        $controller->index();
         break;
     case 'orders':
         require_once 'controllers/OrdersController.php';
@@ -110,7 +86,12 @@ switch ($page) {
                 $controller->index();
                 break;
         }
-
+        break;
+    case 'dashboard':
+        require_once 'controllers/DashboardController.php';
+        $controller = new DashboardController();
+        $controller->index();
+        break;
     default:
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();

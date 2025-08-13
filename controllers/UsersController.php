@@ -138,6 +138,11 @@ class UsersController {
                 $data['id'] = 0; // Ensure id is set for insert
                 $result = $usersModel->insert($data);
             }
+            // if (!$result) {
+            //     echo json_encode(['success' => false, 'message' => 'Database operation failed.']);
+            // } else {
+            //     echo json_encode(['success' => true, 'message' => 'User saved successfully.']);
+            // }
             
             echo json_encode($result);
         }
