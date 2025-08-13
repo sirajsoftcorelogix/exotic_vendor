@@ -84,11 +84,12 @@ if (isset($data['user']['id'])) {
   </div>
   <input type="hidden" name="action" value="addPost">
   <input type="hidden" name="page" value="users"> 
+
   </div>
   <button type="submit" class=" ">Add User</button>
 </form>
 <?php } ?>
-<div id="addUserMsg" style="margin-top:10px;"></div>
+<div id="addUserMsg" style="margin-top:10px;"> </div>
 <script>
 document.getElementById('addUserForm').onsubmit = function(e) {
   e.preventDefault();
