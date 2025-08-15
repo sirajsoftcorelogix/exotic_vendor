@@ -7,9 +7,26 @@ class OrdersController {
      
     public function index() {
         global $ordersModel;
+        // Fetch all orders
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
+        $offset = ($page - 1) * $limit;
+
         $orders = $ordersModel->getAllOrders();
-        renderTemplate('views/orders/index.php', ['orders' => $orders], 'Manage Orders');
+        $total_orders = count($orders);
+        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+        // Paginate orders
+        $orders = array_slice($orders, $offset, $limit);
+        // Render the orders view
+        renderTemplate('views/orders/index.php', [
+            'orders' => $orders,
+            'total_orders' => $total_orders,
+            'total_pages' => $total_pages,
+            'current_page' => $page
+        ], 'Manage Orders');
     }
+        
     public function viewOrder() {
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
@@ -40,6 +57,7 @@ class OrdersController {
 
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
             'Content-Type: application/x-www-form-urlencoded'
         ];
         
@@ -47,15 +65,17 @@ class OrdersController {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
 
-        //curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $response = curl_exec($ch);
-        //print_r($response);
+        
         $error = curl_error($ch);
         curl_close($ch);
-
+        // print_r($error);
+        // print_r($headers);
+        // print_r($response);
         if ($response === false) {
             renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
             return;
@@ -74,29 +94,53 @@ class OrdersController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
             return;
         }
-        $imported = 0;
+        $imported = 0; $totalorder = 0;
         foreach ($orders['orders'] as $order) { 
+            
+            //print_r($order['cart']);
+            // Check if the order has the required fields
             // Map API fields to your table columns
-            $result = $ordersModel->insertOrder([
-                'order_number' => $order['orderid'] ?? '',
-                'title' => $order['cart']['title'] ?? '',
-                'item_code' => $order['cart']['itemcode'] ?? '',
-                'size' => $order['cart']['size'] ?? '',
-                'color' => $order['cart']['color'] ?? '',
-                'description' => $order['cart']['description'] ?? '',
-                'image' => $order['cart']['image'] ?? '',
-                'marketplace_vendor' => $order['cart']['marketplace_vendor'] ?? '',
-                'quantity' => $order['cart']['qty'] ?? '',
-                'options' => $order['cart']['options'] ?? 0,
                 
+                foreach ($order['cart'] as $item) {                
+                $data = [
+                'order_number' => $order['orderid'] ?? '',
+                'title' => $item['title'] ?? '',
+                'item_code' => $item['itemcode'] ?? '',
+                'size' => $item['size'] ?? '',
+                'color' => $item['color'] ?? '',
+                'description' => $item['description'] ?? '',
+                'image' => $item['image'] ?? '',
+                'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
+                'quantity' => $item['qty'] ?? '',
+                'options' => $item['options'] ?? 0,
+                 ];
+                $totalorder++;
+                }
                 // Add other fields as needed
-            ]);
-            if ($result) $imported++;
+           
+            // echo "<br>";
+            // print_r($data);
+            // echo "<br>";
+            //$totalorder = count($data);
+            $result[] = $ordersModel->insertOrder($data);
+            // if ($result){
+            //     if (is_array($result) && isset($result['success']) && $result['success'] === false) {
+            //         // Handle error case
+            //         renderTemplateClean('views/errors/error.php', ['message' => $result['message']], 'Import Error');
+            //         return;
+            //     }
+            // }else {
+            //     renderTemplateClean('views/errors/error.php', ['message' => 'Failed to insert order.'], 'Import Error');                
+            //     return;
+            // }
+            $imported++;
         }
+        //print_r($result);
 
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
-            'total' => count($orders)
+            'result' => $result,
+            'total' => $totalorder
         ], 'Import Orders Result');
     }
 }

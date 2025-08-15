@@ -16,22 +16,88 @@ class Order{
         }
         return $orders;
     }
-    public function insertOrder($data) {
-        print_r($data);
+    /*public function insertOrder($data) {
+        //print_r($data);
+        //echo "<br>";
         // Assuming $data is an associative array with keys matching the database columns
-        if(empty($data['order_number']) || empty($data['customer_name']) || empty($data['amount']) || empty($data['order_date'])) {
+        if(empty($data['order_number'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
         if(!empty($data)) {
-        $sql = "INSERT INTO vp_orders (order_number, customer_name, amount, order_date) VALUES (?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_orders (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssds', $data['order_number'], $data['customer_name'], $data['amount'], $data['order_date']);
+        $stmt->bind_param('ssssssssis', 
+            $data['order_number'], 
+            $data['title'],
+            $data['item_code'],
+            $data['size'],
+            $data['color'],
+            $data['description'],
+            $data['image'],
+            $data['marketplace_vendor'],
+            $data['quantity'],
+            $data['options']
+        );
         $stmt->execute();
+        if ($stmt->error) {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
         return $stmt->insert_id;
+
         } else {
             return false;
         }
+    }*/
+    public function insertOrder($data) {
+        $required = ['order_number', 'item_code', 'title', 'quantity'];
+        foreach ($required as $field) {
+            if (empty($data[$field])) {
+                return ['success' => false, 'message' => "Missing required field: {$field}"];
+            }
+        }
+
+        // ✅ Check for duplicate combination
+        $checkSql = "SELECT COUNT(*) FROM vp_orders WHERE order_number = ? AND item_code = ?";
+        $checkStmt = $this->db->prepare($checkSql);
+        $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
+        $checkStmt->execute();
+        $checkStmt->bind_result($count);
+        $checkStmt->fetch();
+        $checkStmt->close();
+
+        if ($count > 0) {
+            return ['success' => false, 'message' => 'Duplicate '.$data['order_number'].'-'.$data['item_code'].' order_number + item_code combination.'];
+        }
+
+        // Insert
+        $sql = "INSERT INTO vp_orders 
+            (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, options) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssssssssis', 
+            $data['order_number'], 
+            $data['title'],
+            $data['item_code'],
+            $data['size'],
+            $data['color'],
+            $data['description'],
+            $data['image'],
+            $data['marketplace_vendor'],
+            $data['quantity'],
+            $data['options']
+        );
+
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+
+        $insertId = $stmt->insert_id;
+        $stmt->close();
+
+        return ['success' => true, 'insert_id' => $insertId];
     }
+
 
 }
 ?> 

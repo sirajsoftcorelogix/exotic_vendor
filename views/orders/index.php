@@ -75,18 +75,30 @@ if (isset($data['message'])) {
                 </ul>
                 </div>
                 <div class="col">
-                    <div class="dropdown ms-auto btn border-light-grey" >
+                  <?php
+                    $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+                    $page = $page < 1 ? 1 : $page;
+                    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page, default 20
+                    $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+                    $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
+                    $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+                    ?>
+                    <div class="dropdown ms-auto btn border-light-grey">
                         <span class="dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            50 Orders per page
+                            <?= $limit ?> Orders per page
                         </span>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">10 Orders per page</a></li>
-                            <li><a class="dropdown-item" href="#">20 Orders per page</a></li>
-                            <li><a class="dropdown-item" href="#">50 Orders per page</a></li>
-                            <li><a class="dropdown-item" href="#">100 Orders per page</a></li>
+                            <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                                <li>
+                                    <a class="dropdown-item<?= $limit == $opt ? ' active' : '' ?>"
+                                      href="?page=orders&page_no=1&limit=<?= $opt ?>">
+                                      <?= $opt ?> Orders per page
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
                         </ul>
-                    </div>
-                </div>
+                    </div>               
+                 </div>
                
             </div>
         </div>
@@ -123,41 +135,129 @@ if (isset($data['message'])) {
     <h2>Orders</h2>
     <!-- <a href="index.php?page=orders&action=add" class="btn btn-primary">Add New Order</a> -->
 </div>
-<table class="table table-bordered">
-  <thead>
-    <tr>    
-        <th scope="col">#</th>
-        <th scope="col">Order Number</th>
-        <th scope="col">Title</th>
-        <th scope="col">Item Code</th>
-        <th scope="col">Size</th>
-        <th scope="col">Color</th>
-        <th scope="col">Marketplace Vendor</th>
-        <th scope="col">Quantity</th>
-        <th scope="col">Status</th>
-    </th>
-  </thead>
-  <tbody>
-    <?php   
-    if (!empty($data['orders'])) {
-        foreach ($data['orders'] as $order) { 
-    ?>  
-    <tr data-id="<?= $order['id'] ?>">
-        <td><?= $order['id'] ?></td>
-        <td><?= htmlspecialchars($order['order_number']) ?></td>
-        <td><?= htmlspecialchars($order['title']) ?></td>
-        <td><?= htmlspecialchars($order['item_code']) ?></td>
-        <td><?= htmlspecialchars($order['size']) ?></td>
-        <td><?= htmlspecialchars($order['color']) ?></td>
-        <td><?= htmlspecialchars($order['marketplace_vendor']) ?></td>
-        <td><?= htmlspecialchars($order['quantity']) ?></td>
-        <td><?= htmlspecialchars($order['status']) ?></td>
-        <td>
-            <a href="index.php?page=orders&action=update&id=<?= $order['id'] ?>" class="btn btn-sm btn-warning" title="Edit"><i class="fa fa-edit"></i></a>
-            <button class="btn btn-sm btn-danger mt-0" onclick="deleteData(<?= $order['id'] ?>)" title="Delete"><i class="fa fa-trash"></i></button>
-        </td>
-    </tr>
-    <script>
+
+<div class="row">
+    <!-- Order List Table (left column) -->
+<div class="col-md-12">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title">Order List</h5>
+        </div>
+        <div class="card-body scrollable-column">
+            <table class="table table-striped">
+                <thead>
+                    <tr>  
+                        <th scope="col">#</th>
+                        <th scope="col">Order Number</th>
+                        <th scope="col">Title</th>
+                        <th scope="col">Item Code</th>
+                        <th scope="col">Size</th>
+                        <th scope="col">Color</th>
+                        <th scope="col">Marketplace Vendor</th>
+                        <th scope="col">Quantity</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
+                    </tr> 
+                </thead>
+                <tbody>
+                    <?php 
+                    if (!empty($data['orders'])) {
+                        foreach ($data['orders'] as $order) { 
+                    ?>  
+                    <tr data-id="<?= $order['id'] ?>">
+                        <td><?= $order['id'] ?></td>
+                        <td>
+                            <a href="#" class="order-detail-link" 
+                               data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'>
+                               <?= htmlspecialchars($order['order_number']) ?>
+                            </a>
+                        </td>
+                        <td><?= htmlspecialchars($order['title']) ?></td> 
+                        <td><?= htmlspecialchars($order['item_code']) ?></td>
+                        <td><?= htmlspecialchars($order['size']) ?></td>
+                        <td><?= htmlspecialchars($order['color']) ?></td>
+                        <td><?= htmlspecialchars($order['marketplace_vendor']) ?></td>
+                        <td><?= htmlspecialchars($order['quantity']) ?></td>
+                        <td><?= htmlspecialchars($order['status']) ?></td>
+                        <td>
+                            <a href="index.php?page=orders&action=update&id=<?= $order['id'] ?>" class="btn btn-sm btn-warning" title="Edit"><i class="fa fa-edit"></i></a>
+                            <button class="btn btn-sm btn-danger mt-0" onclick="deleteData(<?= $order['id'] ?>)" title="Delete"><i class="fa fa-trash"></i></button>
+                        </td>
+                    </tr>
+                    <?php
+                        }
+                    } else {
+                        echo "<tr><td colspan='10' class='text-center'>No orders found.</td></tr>";
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Order Details Popup Modal -->
+<!-- <div class="modal fade" id="orderDetailModal" tabindex="-1" aria-labelledby="orderDetailModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="orderDetailModalLabel">Order Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="orderDetailModalBody">
+               
+          <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>  
+          </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" onclick="deleteData(<?php // echo $order['id']; ?>)">Delete Order</button>
+      </div>
+    </div>
+  </div>
+</div> -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="orderDetailOffcanvas" aria-labelledby="orderDetailOffcanvasLabel" style="width:600px; max-width:100vw;">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title" id="orderDetailOffcanvasLabel">Order Details</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body" id="orderDetailOffcanvasBody">
+    <!-- Order details will be injected here -->
+    <div class="text-center">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>     
+  </div>
+  <div class=" m-3">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Close</button>
+      <button type="button" class="btn btn-danger" onclick="deleteData(<?= $order['id'] ?>)">Delete Order</button>
+    </div> 
+</div>
+<!-- Paging controls -->
+<?php if ($total_pages > 1): ?>
+<nav aria-label="Order pagination">
+  <ul class="pagination justify-content-center">
+    <li class="page-item<?= $page <= 1 ? ' disabled' : '' ?>">
+      <a class="page-link" href="?page=orders&page_no=<?= $page-1 ?>&limit=<?= $limit ?>" tabindex="-1">Previous</a>
+    </li>
+    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+      <li class="page-item<?= $i == $page ? ' active' : '' ?>">
+        <a class="page-link" href="?page=orders&page_no=<?= $i ?>&limit=<?= $limit ?>"><?= $i ?></a>
+      </li>
+    <?php endfor; ?>
+    <li class="page-item<?= $page >= $total_pages ? ' disabled' : '' ?>">
+      <a class="page-link" href="?page=orders&page_no=<?= $page+1 ?>&limit=<?= $limit ?>">Next</a>
+    </li>
+  </ul>
+</nav>
+<?php endif; ?>
+</div>
+<script>
 function deleteData(id) {
     if (confirm('Are you sure you want to delete this order?')) {
         fetch('?page=orders&action=delete', {       
@@ -182,12 +282,48 @@ function deleteData(id) {
         });
 
     }
-}
+  }
+// Popup for order detail
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.order-detail-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const order = JSON.parse(this.getAttribute('data-order'));
+            let html = `
+                <p><strong>Order Number:</strong> ${order.order_number}</p>
+                <p><strong>Title:</strong> ${order.title}</p>
+                <p><strong>Item Code:</strong> ${order.item_code}</p>
+                <p><strong>Size:</strong> ${order.size}</p>
+                <p><strong>Color:</strong> ${order.color}</p>
+                <p><strong>Marketplace Vendor:</strong> ${order.marketplace_vendor}</p>
+                <p><strong>Quantity:</strong> ${order.quantity}</p>
+                <p><strong>Status:</strong> ${order.status}</p>
+            `;
+            document.getElementById('orderDetailOffcanvasBody').innerHTML = html;
+            var offcanvas = new bootstrap.Offcanvas(document.getElementById('orderDetailOffcanvas'));
+            offcanvas.show();
+        });
+    });
+});
+// document.addEventListener('DOMContentLoaded', function() {
+//     document.querySelectorAll('.order-detail-link').forEach(function(link) {
+//         link.addEventListener('click', function(e) {
+//             e.preventDefault();
+//             const order = JSON.parse(this.getAttribute('data-order'));
+//             let html = `
+//                 <p><strong>Order Number:</strong> ${order.order_number}</p>
+//                 <p><strong>Title:</strong> ${order.title}</p>
+//                 <p><strong>Item Code:</strong> ${order.item_code}</p>
+//                 <p><strong>Size:</strong> ${order.size}</p>
+//                 <p><strong>Color:</strong> ${order.color}</p>
+//                 <p><strong>Marketplace Vendor:</strong> ${order.marketplace_vendor}</p>
+//                 <p><strong>Quantity:</strong> ${order.quantity}</p>
+//                 <p><strong>Status:</strong> ${order.status}</p>
+//             `;
+//             document.getElementById('orderDetailModalBody').innerHTML = html;
+//             var modal = new bootstrap.Modal(document.getElementById('orderDetailModal'));
+//             modal.show();
+//         });
+//     });
+// });
 </script>
-    <?php
-        }
-    }
-    ?>
-  </tbody>
-</table>
-</div>

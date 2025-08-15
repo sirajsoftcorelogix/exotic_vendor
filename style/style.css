@@ -599,6 +599,10 @@ button:hover {
     color: crimson;
     font-size: 0.9rem;
   }
+  .scrollable-column {
+      height: 300px !important;
+      overflow-y: scroll !important; /* or auto */
+  }
 @media (max-width: 768px) {
     .sidebar {
         display: none;
