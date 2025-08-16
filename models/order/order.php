@@ -49,7 +49,13 @@ class Order{
         }
     }*/
     public function insertOrder($data) {
-        $required = ['order_number', 'item_code', 'title', 'quantity'];
+        print_r($data);
+        echo "<br>";
+        // Assuming $data is an associative array with keys matching the database columns
+        if (empty($data) || !is_array($data)) {
+            return ['success' => false, 'message' => 'Data is empty or not an array.'];
+        }
+        $required = ['order_number', 'item_code', 'quantity'];
         foreach ($required as $field) {
             if (empty($data[$field])) {
                 return ['success' => false, 'message' => "Missing required field: {$field}"];
@@ -71,10 +77,10 @@ class Order{
 
         // Insert
         $sql = "INSERT INTO vp_orders 
-            (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, options) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, options, order_date) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssssssis', 
+        $stmt->bind_param('ssssssssiss', 
             $data['order_number'], 
             $data['title'],
             $data['item_code'],
@@ -84,7 +90,8 @@ class Order{
             $data['image'],
             $data['marketplace_vendor'],
             $data['quantity'],
-            $data['options']
+            $data['options'],
+            $data['order_date']
         );
 
         if (!$stmt->execute()) {

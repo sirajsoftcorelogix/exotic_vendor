@@ -113,6 +113,7 @@ class OrdersController {
                 'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                 'quantity' => $item['qty'] ?? '',
                 'options' => $item['options'] ?? 0,
+                'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
                  ];
                 $totalorder++;
                 }
