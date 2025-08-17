@@ -1,5 +1,8 @@
 <?php
-
+	function base_url($path = '') {
+		$base_url = 'http://' . $_SERVER['HTTP_HOST'] . '/exotic_vendor/';
+		return $base_url . ltrim($path, '/');
+	}
 	function print_array($data){
 		echo "<pre>";
 		print_r($data);

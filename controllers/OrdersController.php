@@ -144,6 +144,21 @@ class OrdersController {
             'total' => $totalorder
         ], 'Import Orders Result');
     }
+    public function createPurchaseOrder() {
+        global $ordersModel;
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id > 0) {
+            $order = $ordersModel->getOrderById($id);
+            if ($order) {
+                renderTemplate('views/orders/create_purchase_order.php', ['order' => $order], 'Create Purchase Order');
+            } else {
+                renderTemplate('views/errors/not_found.php', [], 'Order Not Found');
+            }
+        } else {
+            renderTemplate('views/errors/not_found.php', [], 'Invalid Order ID');
+        }
+        exit;
+    }
 }
 ?>
 

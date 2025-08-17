@@ -82,11 +82,40 @@ switch ($page) {
             case 'view':
                 $controller->viewOrder();   
                 break;
+            // case 'create_po':
+            //     $controller->createPurchaseOrder();
+            //     break;
+            // case 'create_po_post':
+            //     $controller->createPurchaseOrderPost();
+            //     break;
             default:
                 $controller->index();
                 break;
         }
         break;
+    case 'purchase_orders':
+        require_once 'controllers/PurchaseOrdersController.php';
+        $controller = new PurchaseOrdersController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'view':
+                $controller->viewPurchaseOrder();
+                break;
+            case 'create':
+                $controller->createPurchaseOrder();
+                break;
+            case 'createPost':
+                $controller->createPurchaseOrderPost();
+                break;
+            case 'delete':
+                $controller->deletePurchaseOrder(); 
+                break;
+            default:
+                $controller->index();
+                break;
+        }
     case 'dashboard':
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();

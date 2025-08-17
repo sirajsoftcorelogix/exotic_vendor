@@ -16,6 +16,17 @@ class Order{
         }
         return $orders;
     }
+    public function getOrderById($id) {
+        $sql = "SELECT * FROM vp_orders WHERE id = ?";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
     /*public function insertOrder($data) {
         //print_r($data);
         //echo "<br>";

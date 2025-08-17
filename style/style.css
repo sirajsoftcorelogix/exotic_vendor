@@ -603,6 +603,12 @@ button:hover {
       height: 300px !important;
       overflow-y: scroll !important; /* or auto */
   }
+  .border-dotted{
+    border-top: 1px dotted #000;
+    height: 1px;
+
+  }
+
 @media (max-width: 768px) {
     .sidebar {
         display: none;

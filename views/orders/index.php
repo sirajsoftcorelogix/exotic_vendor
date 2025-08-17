@@ -130,10 +130,13 @@ if (isset($data['message'])) {
     </div>
   </div>
 </nav>
-
+<form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Orders</h2>
-    <!-- <a href="index.php?page=orders&action=add" class="btn btn-primary">Add New Order</a> -->
+    
+    <!-- <a href="javascript:void(0)" class="btn btn-primary" onclick="openPOPopup()">Create PO</a> -->
+    <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
+    
 </div>
 
 <div class="row">
@@ -165,7 +168,7 @@ if (isset($data['message'])) {
                         foreach ($data['orders'] as $order) { 
                     ?>  
                     <tr data-id="<?= $order['id'] ?>">
-                        <td><?= $order['id'] ?></td>
+                        <td><input type="checkbox" name="poitem[]" value="<?=$order['id']?>">  <?= $order['id'] ?></td>
                         <td>
                             <a href="#" class="order-detail-link" 
                                data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'>
@@ -194,7 +197,9 @@ if (isset($data['message'])) {
             </table>
         </div>
     </div>
-</div>
+
+  </div>
+</form>
 </div>
 
 <!-- Order Details Popup Modal -->
@@ -238,6 +243,7 @@ if (isset($data['message'])) {
       <button type="button" class="btn btn-danger" onclick="deleteData(<?= $order['id'] ?>)">Delete Order</button>
     </div> 
 </div>
+
 <!-- Paging controls -->
 <?php if ($total_pages > 1): ?>
 <nav aria-label="Order pagination">
@@ -258,6 +264,15 @@ if (isset($data['message'])) {
 <?php endif; ?>
 </div>
 <script>
+function checkPoItmes() {
+    const checkedRows = document.querySelectorAll('input[name="poitem[]"]:checked');
+    if (checkedRows.length === 0) {
+        alert("Please select at least one order to create a Purchase Order.");
+        event.preventDefault(); // Prevent form submission
+        return false;
+    }
+    return true; // Allow form submission if at least one item is checked
+}
 function deleteData(id) {
     if (confirm('Are you sure you want to delete this order?')) {
         fetch('?page=orders&action=delete', {       
@@ -305,6 +320,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+
 // document.addEventListener('DOMContentLoaded', function() {
 //     document.querySelectorAll('.order-detail-link').forEach(function(link) {
 //         link.addEventListener('click', function(e) {
