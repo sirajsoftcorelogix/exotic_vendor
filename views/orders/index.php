@@ -132,9 +132,7 @@ if (isset($data['message'])) {
 </nav>
 <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Orders</h2>
-    
-    <!-- <a href="javascript:void(0)" class="btn btn-primary" onclick="openPOPopup()">Create PO</a> -->
+    <h2>Orders</h2>   
     <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
     
 </div>
