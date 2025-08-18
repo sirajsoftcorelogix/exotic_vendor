@@ -1,15 +1,15 @@
 <div class="container">
     <h4 class="">Create Purchase Order</h4>
     <div class="border-dotted my-3" style=""> </div>
-    <form action="<?php echo base_url('purchase_orders/create_po_post'); ?>" method="post">
+    <form action="<?php echo base_url('purchase_orders/create_post'); ?>" id="create_po" method="post">
         <div class="row mb-3">
           <div class="col-sm-2">Vendor :</div>
           <div class="col-sm mr-3">            
-            <select id="vendor" name="vendor" class="form-select" required>
-                <option value="manufacturer">Vendor1</option>
-                <option value="wholesaler">Vendor2</option>
-                <option value="retailer">Vendor3</option>
-                <option value="service_provider">Vendor4</option>
+            <select id="vendor" name="vendor" class="form-select"  required>
+              <option value="">Select Vendor</option>
+              <?php foreach ($vendors as $vendor): ?>
+                <option value="<?= $vendor['id'] ?>"><?= htmlspecialchars($vendor['contact_name']) ?></option>
+              <?php endforeach; ?>          
             </select>
           </div>
           
@@ -42,19 +42,19 @@
               <th>HSN</th>
               <th>GST</th>
               <th>Quantity</th>
-              <th>Amount</th>              
-              <th>Total</th>
+              <th>Rate</th>              
+              <th>Amount</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($data as $index => $item): ?>
             <tr>
               <td><?= $index++ ?></td>
-              <td><?= htmlspecialchars($item['title']) ?></td>  
-              <td><?= htmlspecialchars($item['item_code']) ?></td>
+              <td><input type="hidden" name="title[]" value="<?= $item['title'] ?>" > <?= htmlspecialchars($item['title']) ?></td>  
+              <td><input type="hidden" name="hsn[]" value="<?= $item['item_code'] ?>"><?= htmlspecialchars($item['item_code']) ?></td>
               <td><input type="number" name="gst[]" class="form-control gst" value="" oninput="calculateTotals()" required></td>
               <td><input type="number" name="quantity[]" class="form-control quantity" value="<?php echo $item['quantity'];  ?>" oninput="calculateTotals()" required></td>
-              <td><input type="number" name="amount[]" class="form-control amount" value="" oninput="calculateTotals()" required></td>
+              <td><input type="number" name="rate[]" class="form-control amount" value="" oninput="calculateTotals()" required></td>
               <td class="rowTotal"></td>
             </tr>
             <?php endforeach; ?>
@@ -116,9 +116,9 @@
         </div>
 
         <div class="text-end">
-            <input type="hidden" name="total_amount" id="total_amount" value="">
+            <!-- <input type="hidden" name="total_amount" id="total_amount" value="">
             <input type="hidden" name="vendor_id" id="vendor_id" value="">
-            <input type="hidden" name="delivery_due_date" id="delivery_due_date_hidden" value="">
+            <input type="hidden" name="delivery_due_date" id="delivery_due_date_hidden" value=""> -->
         </div>
         <button type="submit" class="btn btn-primary">Create Purchase Order</button>
     </form>
@@ -159,22 +159,60 @@
   </div>
 </div>
 <script>
-    function calculateTotals() {
+function calculateTotals() {
+    let subtotal = 0;
+    let totalGST = 0;
     let grandTotal = 0;
+
     document.querySelectorAll("#poTable tbody tr").forEach(tr => {
         const amount = parseFloat(tr.querySelector(".amount").value) || 0;
-        const gst = parseFloat(tr.querySelector(".gst").value) || 0;
-        const rowTotal = amount + gst;
+        const gstPercent = parseFloat(tr.querySelector(".gst").value) || 0;
+        const quantity = parseFloat(tr.querySelector(".quantity").value) || 0;
+
+        const lineSubtotal = amount * quantity;
+        const gstAmount = (lineSubtotal * gstPercent) / 100;
+        const rowTotal = lineSubtotal + gstAmount;
+
         tr.querySelector(".rowTotal").innerText = rowTotal.toFixed(2);
+
+        subtotal += lineSubtotal;
+        totalGST += gstAmount;
         grandTotal += rowTotal;
     });
+
+    document.getElementById("subtotal").value = subtotal.toFixed(2);
+    document.getElementById("total_gst").value = totalGST.toFixed(2);
     document.getElementById("grandTotal").value = grandTotal.toFixed(2);
-    
-
 }
-function openPOPopup() {    
+    document.querySelectorAll(".gst, .quantity, .amount").forEach(input => {
+        input.addEventListener("input", calculateTotals);
+    });
 
+
+function openPOPopup() {
     // Show modal
     new bootstrap.Modal(document.getElementById("createPOModal")).show();
 }
+document.getElementById("create_po").addEventListener("submit", function(event) {
+    event.preventDefault(); // Prevent default form submission
+    const formData = new FormData(this);
+    
+    fetch(<?php echo "'".base_url('?page=purchase_orders&action=create_post')."'"; ?>, {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())  
+    .then(data => {
+        if (data.success) {
+            alert("Purchase Order created successfully!");
+            window.location.href = "<?php echo base_url('?page=purchase_orders&acton=list'); ?>"; // Redirect to the list page
+        } else {
+            alert("Error: " + data.message);  
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        alert("An error occurred while creating the Purchase Order.");
+    });
+});
 </script>

@@ -82,12 +82,7 @@ switch ($page) {
             case 'view':
                 $controller->viewOrder();   
                 break;
-            // case 'create_po':
-            //     $controller->createPurchaseOrder();
-            //     break;
-            // case 'create_po_post':
-            //     $controller->createPurchaseOrderPost();
-            //     break;
+           
             default:
                 $controller->index();
                 break;
@@ -106,7 +101,7 @@ switch ($page) {
             case 'create':
                 $controller->createPurchaseOrder();
                 break;
-            case 'createPost':
+            case 'create_post':
                 $controller->createPurchaseOrderPost();
                 break;
             case 'delete':
