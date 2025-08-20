@@ -3,6 +3,7 @@ require_once 'bootstrap/init/init.php';
 $page = $_GET['page'] ?? 'dashboard';
 $action = $_GET['action'] ?? 'list';
 //$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
+
 switch ($page) {
 	
 	case 'users':
@@ -90,7 +91,7 @@ switch ($page) {
         break;
     case 'purchase_orders':
         require_once 'controllers/PurchaseOrdersController.php';
-        $controller = new PurchaseOrdersController($conn);
+        $controller = new PurchaseOrdersController($conn);        
         switch ($action) {
             case 'list':
                 $controller->index();
@@ -111,7 +112,8 @@ switch ($page) {
                 $controller->index();
                 break;
         }
-    case 'dashboard':
+        break;
+    case 'dashboard':        
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
         $controller->index();
