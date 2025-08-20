@@ -52,9 +52,10 @@ class PurchaseOrdersController {
         //$amount = isset($_POST['amount']) ? $_POST['amount'] : [];
         //$total = isset($_POST['total']) ? $_POST['total'] : 0;
         $grand_total = isset($_POST['grand_total']) ? $_POST['grand_total'] : 0;
-        $gst = isset($_POST['gst']) ? $_POST['gst'] : []; 
+        $gst = isset($_POST['gst']) ? $_POST['gst'] : [];
+        $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : []; 
         $data = isset($_POST) ? $_POST : [];      
-
+        
         if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
             exit;
@@ -91,12 +92,18 @@ class PurchaseOrdersController {
                 break; // Stop processing if any item creation fails
             }
         }
+        //Update order status
+        $statusupdate = [];
+        foreach($orderid as $index=>$id){
+           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing');
+        }
+        
         if (!$itemsCreated) {
             echo json_encode(['success' => false, 'message' => 'Failed to create Purchase Order Items.']);
             exit;
         }
         // If everything is successful, return success response
-        echo json_encode(['success' => true, 'message' => 'Purchase Order created successfully.', 'po_id' => $poId]);
+        echo json_encode(['success' => true, 'message' => 'Purchase Order created successfully.', 'po_id' => $poId, 'status'=>$statusupdate,'orderid'=>$orderid]);
         exit;
 
 

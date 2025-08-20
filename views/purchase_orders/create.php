@@ -49,7 +49,7 @@
           <tbody>
             <?php foreach ($data as $index => $item): ?>
             <tr>
-              <td><?= $index++ ?></td>
+              <td><?= $index++ ?><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"> </td>
               <td><input type="hidden" name="title[]" value="<?= $item['title'] ?>" > <?= htmlspecialchars($item['title']) ?></td>  
               <td><input type="hidden" name="hsn[]" value="<?= $item['item_code'] ?>"><?= htmlspecialchars($item['item_code']) ?></td>
               <td><input type="number" name="gst[]" class="form-control gst" value="" oninput="calculateTotals()" required></td>
