@@ -1,7 +1,7 @@
 <?php
 	function base_url($path = '') {
-		$base_url = 'http://' . $_SERVER['HTTP_HOST'] . '/';
-		return $base_url . ltrim($path, '/');
+		global $domain;
+		return $domain . '/' . ltrim($path, '/');
 	}
 	function print_array($data){
 		echo "<pre>";

@@ -15,12 +15,14 @@ $_SESSION['store_code']='DL001';
 $_SESSION['user_id']=1;
 $_SESSION['user_full_name']='Siraj Ali';
 
+$domain = "http://" . $_SERVER['SERVER_NAME'].'/exotic_vendor';
+$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
+
 // Load helpers
 require_once 'helpers/html_helpers.php';
 //require_once 'helpers/menu_helpers.php'; // ← we'll move menu functions here
 
 // Optionally include more common setup like error reporting, timezone, etc.
 
-$domain = "http://" . $_SERVER['SERVER_NAME'].'/exotic_vendor';
-$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
+
 ?>
