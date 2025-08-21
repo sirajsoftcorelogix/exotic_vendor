@@ -184,9 +184,9 @@ function calculateTotals() {
     document.getElementById("total_gst").value = totalGST.toFixed(2);
     document.getElementById("grandTotal").value = grandTotal.toFixed(2);
 }
-    document.querySelectorAll(".gst, .quantity, .amount").forEach(input => {
-        input.addEventListener("input", calculateTotals);
-    });
+document.querySelectorAll(".gst, .quantity, .amount").forEach(input => {
+    input.addEventListener("input", calculateTotals);
+});
 
 
 function openPOPopup() {
@@ -215,4 +215,5 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
         alert("An error occurred while creating the Purchase Order.");
     });
 });
+
 </script>

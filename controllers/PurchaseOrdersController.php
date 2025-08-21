@@ -93,6 +93,7 @@ class PurchaseOrdersController {
             }
         }
         //Update order status
+        
         $statusupdate = [];
         foreach($orderid as $index=>$id){
            $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing');
