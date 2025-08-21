@@ -132,9 +132,7 @@ if (isset($data['message'])) {
 </nav>
 <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Orders</h2>
-    
-    <!-- <a href="javascript:void(0)" class="btn btn-primary" onclick="openPOPopup()">Create PO</a> -->
+    <h2>Orders</h2>   
     <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
     
 </div>
@@ -159,7 +157,7 @@ if (isset($data['message'])) {
                         <th scope="col">Marketplace Vendor</th>
                         <th scope="col">Quantity</th>
                         <th scope="col">Status</th>
-                        <th scope="col">Actions</th>
+                        <!-- <th scope="col">Actions</th> -->
                     </tr> 
                 </thead>
                 <tbody>
@@ -182,10 +180,10 @@ if (isset($data['message'])) {
                         <td><?= htmlspecialchars($order['marketplace_vendor']) ?></td>
                         <td><?= htmlspecialchars($order['quantity']) ?></td>
                         <td><?= htmlspecialchars($order['status']) ?></td>
-                        <td>
+                        <!-- <td>
                             <a href="index.php?page=orders&action=update&id=<?= $order['id'] ?>" class="btn btn-sm btn-warning" title="Edit"><i class="fa fa-edit"></i></a>
                             <button class="btn btn-sm btn-danger mt-0" onclick="deleteData(<?= $order['id'] ?>)" title="Delete"><i class="fa fa-trash"></i></button>
-                        </td>
+                        </td> -->
                     </tr>
                     <?php
                         }

@@ -15,6 +15,22 @@ class PurchaseOrder {
             }
         }
         return $purchaseOrders;
+    }
+    public function createPurchaseOrder($data) {
+        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, expected_delivery_date, delivery_address, total_gst, total_cost) VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("sissdd",
+            $data['po_number'],  
+            $data['vendor_id'], 
+            $data['expected_delivery_date'], 
+            $data['delivery_address'], 
+            $data['total_gst'], 
+            $data['grand_total']
+        );
+        if ($stmt->execute()) {
+            return $this->db->insert_id; // Return the ID of the newly created purchase order
+        }
+        return false; // Return false on failure
     }   
     
 }

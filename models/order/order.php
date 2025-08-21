@@ -115,7 +115,38 @@ class Order{
 
         return ['success' => true, 'insert_id' => $insertId];
     }
+    public function updateOrderStatus($id, $status) {
+        // Validate inputs
+        if (empty($id) || empty($status)) {
+            return ['success' => false, 'message' => 'ID or status is missing.'];
+        }
 
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET status = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $stmt->bind_param('si', $status, $id);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        if ($affectedRows === 0) {
+            return ['success' => false, 'message' => 'No record updated. ID may not exist.'];
+        }
+
+        return ['success' => true, 'message' => 'Status updated successfully.'];
+    }
 
 }
 ?> 

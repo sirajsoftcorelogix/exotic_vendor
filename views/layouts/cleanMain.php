@@ -17,7 +17,7 @@ global $domain, $root_path;
 	<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
 	<!-- jQuery (required for AJAX, DOM manipulation, etc.) -->
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
-<link rel="stylesheet" href="style/style.css" />
+<link rel="stylesheet" href="style/login.css" />
 </head>
 <body>
 <div id="app" class="viewport">
