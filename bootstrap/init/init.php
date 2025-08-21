@@ -7,10 +7,10 @@ $conn = Database::getConnection();
 
 $_SESSION['tenant_id']=1;
 $_SESSION['currency_symbol']='₹';
-$_SESSION['tenant_Name'] = 'Say Sir Services';
+$_SESSION['tenant_Name'] = 'Exotic India Art';
 
 $_SESSION['store_id']=1;
-$_SESSION['store_code']='DDW07';
+$_SESSION['store_code']='DL001';
 
 $_SESSION['user_id']=1;
 $_SESSION['user_full_name']='Siraj Ali';
@@ -21,6 +21,6 @@ require_once 'helpers/html_helpers.php';
 
 // Optionally include more common setup like error reporting, timezone, etc.
 
-$domain = "http://" . $_SERVER['SERVER_NAME'] . "/exotic_vendor";
-$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
+$domain = "http://" . $_SERVER['SERVER_NAME'];
+$root_path = $_SERVER['DOCUMENT_ROOT'];
 ?>
