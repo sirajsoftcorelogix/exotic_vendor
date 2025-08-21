@@ -30,6 +30,7 @@ class UsersController {
     }
 
     public function logout() {
+        global $domain;
         session_start();
         session_destroy();
         header('Location: ' . $domain . '?page=users&action=login');
