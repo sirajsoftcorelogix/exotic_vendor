@@ -31,6 +31,11 @@ class PurchaseOrder {
             return $this->db->insert_id; // Return the ID of the newly created purchase order
         }
         return false; // Return false on failure
-    }   
-    
+    }
+    public function cancelPurchaseOrder($id) {
+        $sql = "UPDATE purchase_orders SET status = 'cancelled' WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("i", $id);
+        return $stmt->execute();
+    }
 }

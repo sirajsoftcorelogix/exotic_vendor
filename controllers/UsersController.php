@@ -37,7 +37,7 @@ class UsersController {
     }   
     public function forgotPassword() {
         
-        renderTemplate('views/users/forgot_password.php', [], 'Forgot Password');
+        renderTemplateClean('views/users/forgot_password.php', [], 'Forgot Password');
     }
 
     public function sendResetLink() {

@@ -109,6 +109,30 @@ class PurchaseOrdersController {
 
 
     }
-    
+    public function cancelPurchaseOrder() {
+        global $purchaseOrdersModel;
+        global $ordersModel;
+
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+
+        // Cancel the purchase order
+        $isCancelled = $purchaseOrdersModel->cancelPurchaseOrder($poId);
+        if (!$isCancelled) {
+            echo json_encode(['success' => false, 'message' => 'Failed to cancel Purchase Order.']);
+            exit;
+        }
+
+        // Update order status
+        $statusUpdate = $ordersModel->updateOrderStatus($poId, 'cancelled');
+
+        // If everything is successful, return success response
+        echo json_encode(['success' => true, 'message' => 'Purchase Order cancelled successfully.', 'status' => $statusUpdate]);
+        exit;
+    }
 
 }
