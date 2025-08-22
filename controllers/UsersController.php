@@ -6,7 +6,7 @@ global $root_path;
 global $domain;
 
 class UsersController {
-    public function login() {
+    public function login() {          
        // echo "This is the login page.";
         renderTemplateClean('views/users/login.php', [], 'Login');
     }
@@ -83,6 +83,11 @@ class UsersController {
         exit;
     }
     public function index() {
+        global $domain;
+        if (!isset($_SESSION) || !isset($_SESSION['user'])) {
+            header('Location: ' . $domain . '?page=users&action=login');
+            exit;
+        }
         global $usersModel;
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $search = isset($_GET['search']) ? trim($_GET['search']) : '';

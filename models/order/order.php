@@ -60,8 +60,8 @@ class Order{
         }
     }*/
     public function insertOrder($data) {
-        print_r($data);
-        echo "<br>";
+        //print_r($data);
+        //echo "<br>";
         // Assuming $data is an associative array with keys matching the database columns
         if (empty($data) || !is_array($data)) {
             return ['success' => false, 'message' => 'Data is empty or not an array.'];

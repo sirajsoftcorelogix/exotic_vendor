@@ -42,7 +42,12 @@ class OrdersController {
         exit;
     }
     public function importOrders() {
-        global $ordersModel;    
+        global $ordersModel;
+        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+            http_response_code(403); // Forbidden
+            die('Unauthorized access.');
+        }
+    
         // Set your date range (example: last 7 days)
         $from_date = strtotime('-1 days');
         //echo "<br>";
