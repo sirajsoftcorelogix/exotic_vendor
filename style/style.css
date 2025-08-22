@@ -157,3 +157,54 @@ body {
 .nav-link.active svg {
     color: #4b5563;
 }
+/* Login css */
+/* Styling the decorative circles on the left panel */
+.left-panel-bg {
+    position: relative;
+    overflow: hidden;
+}
+.left-panel-bg::before,
+.left-panel-bg::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    z-index: 0;
+}
+/* Styles with the exact dimensions */
+.left-panel-bg::before {
+    width: 461.33px;
+    height: 461.33px;
+    top: 690.69px;
+    left: -166.08px;
+}
+.left-panel-bg::after {
+    width: 461.33px;
+    height: 461.33px;
+    top: 706.63px;
+    left: -105.69px;
+}
+/* Custom font styles */
+.portal-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 22px;
+    font-weight: 700; /* bold */
+    line-height: 29px;
+}
+.portal-subtitle {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 29px;
+}
+/* Custom gradient for the left panel */
+.left-panel-gradient {
+    background: linear-gradient(179.96deg, rgba(255, 153, 51, 0.99) 20.88%, #AC5402 99.97%);
+}
+/* Typography for Read More button */
+.read-more-btn {
+    font-family: 'Instrument Sans', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 29px;
+}
