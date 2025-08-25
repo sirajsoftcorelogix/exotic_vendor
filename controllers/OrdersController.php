@@ -6,6 +6,7 @@ global $domain;
 class OrdersController { 
      
     public function index() {
+        is_login();
         global $ordersModel;
         // Fetch all orders
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;

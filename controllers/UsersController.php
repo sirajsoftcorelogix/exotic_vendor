@@ -44,6 +44,7 @@ class UsersController {
     public function sendResetLink() {
         //echo "Sending reset link...";
         global $usersModel;
+        global $domain;
         $login = trim($_POST['login'] ?? '');
         if (empty($login)) {
             echo json_encode(['success' => false, 'message' => 'Please enter your email or phone.']);
@@ -53,8 +54,17 @@ class UsersController {
         $user = $usersModel->findByLogin($login);
         if ($user) {
             // Generate token, save to DB, and send email/SMS (implement as needed)
+            /*$token = bin2hex(random_bytes(6));
+            $usersModel->saveResetToken($user['id'], $token);
+            
+            $resetLink = "$domain/?page=reset_password&token=$token";
+            mail($login, "Password Reset", "Click here to reset your password: $resetLink");*/
+
             // ...
-            echo json_encode(['success' => true, 'message' => 'Reset link sent.']);
+            //for test only
+            $token = rand(100000, 999999);
+            $usersModel->saveResetToken($user['id'], $token);
+            echo json_encode(['success' => true, 'message' => 'Reset link sent.', 'token' => $token]);
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found.']);
         }
@@ -82,12 +92,90 @@ class UsersController {
         }
         exit;
     }
-    public function index() {
-        global $domain;
-        if (!isset($_SESSION) || !isset($_SESSION['user'])) {
-            header('Location: ' . $domain . '?page=users&action=login');
+    public function verifyResetToken(){
+        global $usersModel;
+        $token = $_POST['token'] ?? '';
+        $login = $_POST['login'] ?? '';
+        if (!$token) {
+            echo json_encode(['success' => false, 'message' => 'Invalid token.']);
             exit;
         }
+        if (!$login) {
+            echo json_encode(['success' => false, 'message' => 'Invalid login.']);
+            exit;
+        }
+        if (!$usersModel->verifyResetToken($login, $token)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid token or login.']);
+            exit;
+        }
+        echo json_encode(['success' => true, 'message' => 'Token is valid.']);
+    }
+    public function resetPassword() {
+        global $usersModel;
+        $token = $_GET['token'] ?? '';
+        $login = $_GET['login'] ?? '';
+        if (!$token) {
+            echo json_encode(['success' => false, 'message' => 'Invalid token.']);
+            exit;
+        }
+        if (!$login) {
+            echo json_encode(['success' => false, 'message' => 'Invalid login.']);
+            exit;
+        }
+        if (!$usersModel->verifyResetToken($login, $token)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid token or login.']);
+            exit;
+        }
+        // Validate token and show reset password form
+
+        renderTemplateClean('views/users/reset_password.php', ['token' => $token, 'login' => $login], 'Reset Password');
+    }
+    public function resetPasswordProcess() {
+        global $usersModel;
+        $newPassword = $_POST['newPassword'] ?? '';
+        $login = $_POST['login'] ?? '';
+        if (empty($newPassword) || empty($login)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid request.']);
+            exit;
+        }
+        $user = $usersModel->findByLogin($login);
+        if (!$user) {
+            echo json_encode(['success' => false, 'message' => 'User not found.']);
+            exit;
+        }
+        if ($usersModel->updatePassword($user['id'], $newPassword)) {
+            // Clear the reset token
+            $usersModel->saveResetToken($user['id'], null);
+            echo json_encode(['success' => true, 'message' => 'Password updated successfully.']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to update password.']);
+        }
+        exit;
+    }
+    public function updateCaptcha() {
+        // Generate a random 5-character alphanumeric string
+        $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        $captcha = '';
+        for ($i = 0; $i < 5; $i++) {
+            $captcha .= $characters[rand(0, strlen($characters) - 1)];
+        }
+        @session_start();
+        $_SESSION['captcha'] = $captcha;
+        echo json_encode(['success'=>'true', 'captcha' => $captcha]);        
+        exit;
+    }
+    public function validateCaptcha(){
+        @session_start();
+        $captcha = $_POST['captcha'] ?? '';
+        if ($captcha === $_SESSION['captcha'] ?? '') {
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid captcha.']);
+        }
+        exit;
+    }
+    public function index() {
+        is_login();
         global $usersModel;
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $search = isset($_GET['search']) ? trim($_GET['search']) : '';

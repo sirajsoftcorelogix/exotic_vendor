@@ -1,4 +1,11 @@
 <?php
+	function is_login(){
+		global $domain;
+        if (!isset($_SESSION) || !isset($_SESSION['user'])) {
+            header('Location: ' . $domain . '?page=users&action=login');
+            exit;
+        }
+	}
 	function base_url($path = '') {
 		global $domain;
 		return $domain . '/' . ltrim($path, '/');

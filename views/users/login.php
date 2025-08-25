@@ -2,7 +2,7 @@
 global $domain, $root_path;
 ?>
   
-  
+<div class="flex flex-col md:flex-row w-full min-h-screen">  
  <!-- Left Panel -->
     <div class="w-full md:w-3/5 p-8 lg:p-12 text-white flex flex-col justify-center left-panel-bg left-panel-gradient">
         <div class="relative z-10 max-w-md mx-auto">
@@ -59,6 +59,7 @@ global $domain, $root_path;
             </form>
         </div>
     </div>
+</div>
 <script>
   document.getElementById('loginForm').addEventListener('submit', function(e) {
     e.preventDefault();

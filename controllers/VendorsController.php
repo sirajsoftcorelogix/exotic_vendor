@@ -6,6 +6,7 @@ global $root_path;
 global $domain;
 class VendorsController {
     public function index() {
+        is_login();
         global $vendorsModel;
         $vendors = $vendorsModel->getAllVendors();
         renderTemplate('views/vendors/index.php', ['vendors' => $vendors], 'Manage Vendors');

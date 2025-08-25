@@ -11,12 +11,14 @@ global $root_path;
  
 class PurchaseOrdersController {
     public function index() {
+        is_login();
         global $purchaseOrdersModel;
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders();
         renderTemplate('views/purchase_orders/index.php', ['purchaseOrders' => $purchaseOrders], 'Manage Purchase Orders');
     }
     public function createPurchaseOrder(){
+        is_login();
         global $purchaseOrdersModel;
         global $ordersModel;        
         global $vendorsModel;

@@ -64,7 +64,21 @@ class User {
         $stmt->execute();
         return $stmt->affected_rows > 0;
     }
-   
+    public function saveResetToken($id, $token) {
+        $sql = "UPDATE vp_users SET remember_token = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('si', $token, $id);
+        $stmt->execute();
+        return $stmt->affected_rows > 0;
+    }
+    public function verifyResetToken($login, $token) {
+        $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND remember_token = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $login, $login, $token);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->num_rows > 0;
+    }
     public function insert($data) {
         // Check if email already exists
         $checkSql = "SELECT id FROM vp_users WHERE email = ?";

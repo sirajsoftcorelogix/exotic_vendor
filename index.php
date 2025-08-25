@@ -44,7 +44,19 @@ switch ($page) {
                 break; 
             case 'sendResetLink':
                 $controller->sendResetLink();
-                break;       
+                break;  
+            case 'resetPassword':
+                $controller->resetPassword();
+                break;
+            case 'updateCaptcha':
+                $controller->updateCaptcha();
+                break;            
+            case 'validateCaptcha':
+                $controller->validateCaptcha();
+                break;
+            case 'resetPasswordProcess':
+                $controller->resetPasswordProcess();
+                break;
             default:
                 $controller->index();
                 break;

@@ -30,8 +30,8 @@ global $domain, $root_path;
 </head>
 <body class="bg-white">
     <!-- Main container for the two panels, now taking full screen height -->
-    <div class="flex flex-col md:flex-row w-full min-h-screen">
+    
         <?= $content ?? '' ?>
-    </div>
+    
 </body>
 </html>
