@@ -57,6 +57,9 @@ switch ($page) {
             case 'resetPasswordProcess':
                 $controller->resetPasswordProcess();
                 break;
+            case 'verifyResetToken':
+                $controller->verifyResetToken();
+                break;
             default:
                 $controller->index();
                 break;

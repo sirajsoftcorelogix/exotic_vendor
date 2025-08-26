@@ -30,6 +30,7 @@ global $domain, $root_path;
             <p class="text-gray-500 mb-8">Welcome Back</p>
 
             <form id="loginForm">
+                <div id="loginError" style="color:red; margin-bottom:10px;"></div>
                 <!-- Email Input -->
                 <div class="relative mb-4">
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -55,7 +56,7 @@ global $domain, $root_path;
                 <div class="text-center mt-3">                  
                     <a href="<?php echo $domain; ?>/?page=users&action=forgotPassword" class="text-sm text-[#C2C2C2] hover:text-orange-600 transition duration-300">Forgot Password</a>
                 </div>
-                <div id="loginError" style="color:red;margin-top:10px;"></div>
+                
             </form>
         </div>
     </div>

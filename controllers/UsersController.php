@@ -64,7 +64,7 @@ class UsersController {
             //for test only
             $token = rand(100000, 999999);
             $usersModel->saveResetToken($user['id'], $token);
-            echo json_encode(['success' => true, 'message' => 'Reset link sent.', 'token' => $token]);
+            echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found.']);
         }

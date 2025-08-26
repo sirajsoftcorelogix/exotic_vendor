@@ -75,7 +75,7 @@ global $domain, $root_path;
                   <i class="fa-solid fa-lock text-2xl text-gray-800"></i>
                   <h3 class="text-2xl font-bold text-gray-800">Forgot Password</h3>
               </div>
-              <p class="text-gray-500 text-sm">Enter your email for the verification process, we will send 4 digits code to your email.</p>
+              <p class="text-gray-500 text-sm">Enter your email for the verification process, we will send 6 digits code to your email.</p>
           </div>
 
           <form action="#" id="forgotPasswordForm">
@@ -107,6 +107,10 @@ global $domain, $root_path;
               <button type="submit" class="w-full bg-[#D06706] text-white font-bold py-3 rounded-lg shadow-lg hover:bg-orange-700 transition duration-300">
                   Continue
               </button>
+              <!-- Login Link -->
+                <div class="text-center mt-3">                  
+                    <a href="<?php echo $domain; ?>/?page=users&action=login" class="text-sm text-[#C2C2C2] hover:text-orange-600 transition duration-300">Login</a>
+                </div>
           </form>
       </div>
       <!-- SVG squiggle-->
@@ -122,7 +126,7 @@ global $domain, $root_path;
 <div id="verificationPopup" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
     <div class="bg-white p-8 rounded-lg shadow-xl text-center max-w-md w-full m-4">
         <h2 class="text-2xl font-bold mb-2">Verification</h2>
-        <p class="text-gray-500 mb-6">Enter your 4 digits code that you received on your email.</p>
+        <p class="text-gray-500 mb-6">Enter your 6 digits code that you received on your email.</p>
         <div id="verifyPasswordMsg" style="margin-top:10px;"></div>
         <div class="flex justify-center space-x-2 mb-6" id="otp-inputs">
             <input type="text" maxlength="1" class="w-12 h-12 text-center text-xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400">
@@ -246,11 +250,14 @@ global $domain, $root_path;
                   // Show verification popup
                   verificationPopup.style.display = 'none';
                   clearInterval(timerInterval);
-                  
+                // Redirect to reset password page or show reset password form
+                window.location.href = '?page=users&action=resetPassword&login=' + encodeURIComponent(login) +'&token=' + otp;      
+              }else{
+                //alert('Invalid OTP. Please try again.');
+                msgDivVerify.textContent = 'Invalid OTP. Please try again.';
               }
             });
-            // Redirect to reset password page or show reset password form
-            window.location.href = '?page=users&action=resetPassword&login=' + encodeURIComponent(login) +'&token=' + otp;
+            
         } else {
             alert('Please enter the complete 6-digit code.');
         }
@@ -284,21 +291,45 @@ global $domain, $root_path;
         e.preventDefault();
         if (!resendLink.classList.contains('pointer-events-none')) {
             startTimer();
+            // Resend OTP logic here
+            var login = document.getElementById('login').value.trim();
+            var msgDivVerify = document.getElementById('verifyPasswordMsg');
+            fetch('?page=users&action=sendResetLink', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'login=' + encodeURIComponent(login)
+            })
+            .then(r => r.json())
+            .then(data => {
+                msgDivVerify.textContent = data.message;
+                msgDivVerify.style.color = data.success ? 'green' : 'red';
+                if (data.success) {
+                    // Show verification popup
+                    verificationPopup.style.display = 'flex';
+                    startTimer();
+                    alert('For demo purpose only, your OTP is: ' + data.token);
+                }
+            });
         }
     });
 
     function startTimer() {
         clearInterval(timerInterval);
-        let timeLeft = 59;
+        let timeLeft = 180;
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
 
         resendLink.classList.add('text-gray-400', 'pointer-events-none');
         resendLink.classList.remove('text-orange-500');
         timerEl.style.display = 'block';
 
-        timerEl.textContent = `00:${timeLeft}`;
+        timerEl.textContent = `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        //timerEl.textContent = `00:${timeLeft}`;
         timerInterval = setInterval(() => {
             timeLeft--;
-            timerEl.textContent = `00:${timeLeft < 10 ? '0' : ''}${timeLeft}`;
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timerEl.textContent = `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
             if (timeLeft <= 0) {
                 clearInterval(timerInterval);
                 timerEl.style.display = 'none';
