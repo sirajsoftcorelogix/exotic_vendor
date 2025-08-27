@@ -229,4 +229,51 @@ body {
     color: #555;
     user-select: none;
 }
+/* Style for listing */
+::placeholder {
+    color: #9ca3af; /* Gray-400 */
+}
+/* Custom styling for date input icon */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+}
+/* Custom styling for the active tab */
+.tab-active {
+    color: rgba(208, 103, 6, 1);
+    font-weight: 600;
+}
+/* The pill-shaped underline for the active tab */
+.tab-active .underline-pill {
+    background-color: rgba(208, 103, 6, 1);
+    height: 4px;
+    border-radius: 9999px; /* Make it a pill shape */
+}
+/* Use border-spacing to create margin between table rows */
+.table-spacing {
+    border-collapse: separate;
+    border-spacing: 0 1rem; /* 0 horizontal, 1rem vertical */
+}
+.icon-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem; /* 4px */
+}
+/* Accordion transition */
+.accordion-content {
+    transition: max-height 0.3s ease-out;
+    overflow: hidden;
+}
 
+.btn-success {
+    background-color: #d06706;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+.btn-success:hover {
+    background-color: #45a049; /* Darker green */
+}

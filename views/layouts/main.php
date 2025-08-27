@@ -149,7 +149,7 @@ global $domain, $root_path, $page, $action;
 		});
 	</script> -->
 	<!-- End Top Navbar -->
-	<main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200">
+	<main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100">
 	<?= $content ?? '' ?>
 	</main>
 	
