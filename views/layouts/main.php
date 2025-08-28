@@ -24,6 +24,8 @@ global $domain, $root_path, $page, $action;
 	<!-- jQuery (required for AJAX, DOM manipulation, etc.) -->
 	<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script> -->
 	<link rel="stylesheet" href="style/style.css" />
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
 </head>
 <body class="bg-gray-100">
 <div class="flex h-screen ">

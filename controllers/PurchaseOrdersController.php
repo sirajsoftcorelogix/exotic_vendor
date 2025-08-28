@@ -13,9 +13,25 @@ class PurchaseOrdersController {
     public function index() {
         is_login();
         global $purchaseOrdersModel;
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
+        $offset = ($page - 1) * $limit;
+
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders();
-        renderTemplate('views/purchase_orders/index.php', ['purchaseOrders' => $purchaseOrders], 'Manage Purchase Orders');
+    
+        $total_orders = count($purchaseOrders);
+        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+        // Paginate orders
+        $orders = array_slice($purchaseOrders, $offset, $limit);
+
+        renderTemplate('views/purchase_orders/index.php', [
+            'purchaseOrders' => $orders,
+            'total_orders' => $total_orders,
+            'total_pages' => $total_pages,
+            'current_page' => $page
+        ], 'Manage Purchase Orders');
     }
     public function createPurchaseOrder(){
         is_login();
@@ -69,7 +85,8 @@ class PurchaseOrdersController {
             'expected_delivery_date' => $deliveryDueDate,
             'delivery_address' => $deliveryAddress,
             'total_gst' => $total_gst,
-            'grand_total' => $grand_total
+            'grand_total' => $grand_total,
+            'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
         ];
         $poId = $purchaseOrdersModel->createPurchaseOrder($poData);
         if (!$poId) {
