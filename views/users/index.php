@@ -70,14 +70,13 @@
     
     <!-- Pagination -->
         <?php         
-        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page, default 20
-        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+			$page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+			$page = $page < 1 ? 1 : $page;
+			$limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page, default 20
+			$limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
 
-        $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
-        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
-        
+			$total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
+			$total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         ?>
     <div class="bg-white rounded-xl shadow-md p-4">
       <div class="flex items-center justify-center">
@@ -85,7 +84,7 @@
             <?php if ($total_pages > 1): ?>
             <span >Page</span>
             <button id="prev-page" class="p-2 rounded-full hover:bg-gray-100">
-                <a class="page-link" href="?page=purchase_orders&acton=list&page_no=<?= $page-1 ?>&limit=<?= $limit ?>" tabindex="-1">
+                <a class="page-link" href="?page=users&acton=list&page_no=<?= $page-1 ?>&limit=<?= $limit ?>" tabindex="-1">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
                 </a>
             </button>
@@ -95,7 +94,7 @@
             <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page ?></span>
             <?php if ($page < $total_pages): ?>
             <button id="next-page" class="p-2 rounded-full hover:bg-gray-100">
-                <a class="page-link" href="?page=purchase_orders&acton=list&page_no=<?= $page+1 ?>&limit=<?= $limit ?>">
+                <a class="page-link" href="?page=users&acton=list&page_no=<?= $page+1 ?>&limit=<?= $limit ?>">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                 </a>
             </button>
@@ -103,7 +102,7 @@
             <?php endif; ?>
             <?php endif; ?>
             <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
-                    onchange="location.href='?page=purchase_orders&acton=list&page_no=1&limit=' + this.value;">
+                    onchange="location.href='?page=users&acton=list&page_no=1&limit=' + this.value;">
                 <?php foreach ([10, 20, 50, 100] as $opt): ?>
                     <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                         <?= $opt ?>
