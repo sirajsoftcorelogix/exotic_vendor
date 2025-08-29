@@ -23,7 +23,7 @@
 			<td><?= htmlspecialchars($item['name']) ?></td>      
 			<td><?= htmlspecialchars($item['email']) ?></td>
 			<td><?= htmlspecialchars($item['phone']) ?></td>
-			<td><?= htmlspecialchars($item['role']) ?></td>
+			<td><?= $item['role']; ?></td>
 			<td><?= $item['is_active'] == 1 ? 'Yes' : 'No' ?></td>
 			<td>
 				<a href="index.php?page=users&action=update&id=<?= $item['id'] ?>" class="btn btn-sm btn-warning" title="Edit"><i class="fa fa-edit"></i></a>
