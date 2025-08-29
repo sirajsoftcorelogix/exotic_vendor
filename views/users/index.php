@@ -16,7 +16,7 @@
 		<?php //print_r($data);
 			if (!empty($data)){
 			$i=0;
-			foreach($data['users'] as $item){ 
+			foreach($data['users'] as $item):
 		?> 
 		<tr>
 			<td><?= $item['id'] ?></td>
