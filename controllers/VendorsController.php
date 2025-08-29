@@ -8,10 +8,25 @@ class VendorsController {
     public function index() {
         is_login();
         global $vendorsModel;
-        $vendors = $vendorsModel->getAllVendors();
-        renderTemplate('views/vendors/index.php', ['vendors' => $vendors], 'Manage Vendors');
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
+        $offset = ($page - 1) * $limit;
+
+        $vendors = $vendorsModel->getAllVendors($limit, $offset);
+        $total_vendors = count($vendors);
+        $total_pages = ceil($total_vendors / $limit);
+        renderTemplate('views/vendors/index.php', [
+            'vendors' => $vendors,
+            'total_vendors' => $total_vendors,
+            'limit' => $limit,
+            'offset' => $offset,
+            'total_pages' => $total_pages
+            ], 
+             'Manage Vendors');
     }
     public function addEditVendor() {
+        echo 'Hedya';
         global $vendorsModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
