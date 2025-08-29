@@ -57,11 +57,11 @@
                         </td>
                     </tr>
                     <?php endforeach; ?>
-                    <?php else: ?>
+						<?php }else{ ?>
                         <tr>
                             <td colspan="7" class="text-center">No purchase orders found.</td>
                         </tr>
-                    <?php endif; ?>
+						<?php } ?>
 
                     </tbody>
                 </table>
