@@ -169,6 +169,15 @@ class User {
         }
         return $roles;
     }
+    public function getAllUsers() {
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
+        $result = $this->db->query($sql);
+        $users = [];        
+        while ($row = $result->fetch_assoc()) {
+            $users[$row['id']] = $row['name'];
+        }
+        return $users;
+    }
 }
 
 

@@ -3,10 +3,12 @@ require_once 'models/order/purchaseOrder.php';
 require_once 'models/order/order.php';
 require_once 'models/order/purchaseOrderItem.php';
 require_once 'models/vendor/vendor.php';
+require_once 'models/user/user.php';
 $purchaseOrdersModel = new PurchaseOrder($conn);
 $ordersModel = new Order($conn);
 $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
 $vendorsModel = new Vendor($conn);
+$usersModel = new User($conn);
 global $root_path;
  
 class PurchaseOrdersController {
@@ -39,10 +41,12 @@ class PurchaseOrdersController {
         global $ordersModel;        
         global $vendorsModel;
         global $domain;
+        global $usersModel;
         //print_r($_POST);
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
         if (empty($itemIds)) {
-            echo json_encode(['success' => false, 'message' => 'No items selected for Purchase Order.']);
+            //echo json_encode(['success' => false, 'message' => 'No items selected for Purchase Order.']);
+            renderTemplate('views/errors/not_found.php', ['message' => 'No items selected for Purchase Order.'], 'No items selected for Purchase Order');
             exit;
         }
         $data = [];
@@ -53,6 +57,7 @@ class PurchaseOrdersController {
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
         $data['domain'] = $domain;
         //print_array($data);
+        $data['users'] = $usersModel->getAllUsers();
         // Render the create purchase order form
         renderTemplate('views/purchase_orders/create.php', $data, 'Create Purchase Order');
         exit;

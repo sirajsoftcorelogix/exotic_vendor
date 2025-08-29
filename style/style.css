@@ -313,7 +313,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .subtotal-text {
     font-family: 'Inter', sans-serif;
     font-weight: 500;
-    font-size: 20px;
+    font-size: 19px;
     line-height: 150%; /* Reduced line-height */
     letter-spacing: -0.02em;
     color: rgba(0, 0, 0, 1);
@@ -321,7 +321,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .final-total-text {
     font-family: 'Inter', sans-serif;
     font-weight: 500;
-    font-size: 20px;
+    font-size: 19px;
     line-height: 150%; /* Reduced line-height */
     letter-spacing: -0.02em;
     color: rgba(208, 103, 6, 1);
