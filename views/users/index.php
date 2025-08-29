@@ -17,6 +17,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Role</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Active</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
                     </tr>
@@ -30,9 +31,7 @@
 					?> 
                     <tr class="table-content-text">
 
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600"><?= $item['id'] ?></div>
-                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap"><?= $item['id'] ?></td>
                         <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($item['name']) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($item['email']) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($item['phone']) ?></td>
