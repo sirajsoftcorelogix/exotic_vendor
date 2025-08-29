@@ -2,6 +2,11 @@
 require_once 'models/user/user.php';
 $usersModel = new User($conn);
 //$root_path1 = $_SERVER['SERVER_NAME'];
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+require 'vendor/autoload.php';
+
 global $root_path;
 global $domain;
 
@@ -64,7 +69,36 @@ class UsersController {
             //for test only
             $token = rand(100000, 999999);
             $usersModel->saveResetToken($user['id'], $token);
-            echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
+
+             // Send email using PHPMailer
+            
+
+            $mail = new PHPMailer(true);
+            try {
+                //Server settings
+                $mail->isSMTP();
+                $mail->Host       = 'glacier.mxrouting.net'; // Set SMTP server
+                $mail->SMTPAuth   = true;
+                $mail->Username   = 'vendoradmin@exoticindia.com';   // SMTP username
+                $mail->Password   = 'xah5VfXUrdVaju576bpa';     // SMTP password
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                $mail->Port       = 587;
+
+                //Recipients
+                $mail->setFrom('vendoradmin@exoticindia.com', 'Admin');
+                $mail->addAddress($login); // Send to user email
+
+                // Content
+                $mail->isHTML(true);
+                $mail->Subject = 'Password Reset OTP';
+                $mail->Body    = "Your OTP for password reset is: <b>$token</b>";
+
+                $mail->send();
+
+                echo json_encode(['success' => true, 'message' => 'OTP sent.', 'token' => $token]);
+                } catch (Exception $e) {
+                    echo json_encode(['success' => false, 'message' => 'Mailer Error: ' . $mail->ErrorInfo]);
+                }
         } else {
             echo json_encode(['success' => false, 'message' => 'User not found.']);
         }

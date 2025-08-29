@@ -87,7 +87,7 @@ if (isset($data['user']['id'])) {
   <input type="hidden" name="action" value="addPost">
   <input type="hidden" name="page" value="users"> 
 
-  </div>
+  
   <button type="submit" class=" ">Add User</button>
 </form>
 <?php } ?>

@@ -26,18 +26,20 @@ class VendorsController {
              'Manage Vendors');
     }
     public function addEditVendor() {
-        echo 'Hedya';
+        
         global $vendorsModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
             $vendor = $vendorsModel->getVendorById($id);    
             if ($vendor) {
-                renderTemplate('views/vendors/add_edit.php', ['vendor' => $vendor], 'Edit Vendor');
+                renderTemplateClean('views/vendors/add_edit.php', ['vendor' => $vendor], 'Edit Vendor');
+                //renderTemplate('views/vendors/add_edit.php', ['vendor' => $vendor], 'Edit Vendor');
             } else {
                 renderTemplate('views/errors/not_found.php', [], 'Vendor Not Found');
             }   
         } else {
-            renderTemplate('views/vendors/add_edit.php', [], 'Add New Vendor');
+            renderTemplateClean('views/vendors/add_edit.php', [], 'Add New Vendor');
+            //renderTemplate('views/vendors/add_edit.php', [], 'Add New Vendor');
         }
         exit;
     }

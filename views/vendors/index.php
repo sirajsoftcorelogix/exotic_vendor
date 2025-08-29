@@ -9,6 +9,7 @@
            <div class="flex flex-wrap items-center gap-4">
                 <a href="<?php echo base_url('?page=vendors&action=add') ?>" >Create Vendor</a>
             </div>
+            <div id="open-popup-btn" class="text-center font-medium"> Add Vendor</div>
         </div>
         
     </div>
@@ -143,4 +144,48 @@
     </div>
 
 </div>
+<!-- Right Side Popup -->
+<div id="right-popup" class="popup fixed top-0 right-0 h-full bg-white shadow-2xl transform translate-x-full z-50 overflow-y-auto" style="width: 45%; min-width: 600px;">
+    <div class="p-8">        
+
         
+
+    </div>
+    <div class="flex justify-end items-center gap-4 pt-6 border-t">
+        <button type="button" id="cancel-btn" class="action-btn cancel-btn">Cancel</button>
+        <!-- <button type="submit" class="action-btn save-btn">Save</button> -->
+    </div>
+</div>        
+<script>
+    const openPopupBtn = document.getElementById('open-popup-btn');
+    const rightPopup = document.getElementById('right-popup');
+    const cancelBtn = document.getElementById('cancel-btn');    
+
+    // --- Popup Logic ---
+    openPopupBtn.addEventListener('click', () => {
+        rightPopup.classList.remove('translate-x-full');
+        addFormCall();
+    });
+
+    cancelBtn.addEventListener('click', () => {
+        rightPopup.classList.add('translate-x-full');
+    });
+
+    // Form submission
+    // document.getElementById('right-form').addEventListener('submit', (e) => {
+    //     e.preventDefault();
+    //     // Add your save logic here
+    //     console.log('right form submitted');
+    //     rightPopup.classList.add('translate-x-full');
+    // });
+    function addFormCall(){
+        fetch('?page=vendors&action=add')
+        .then(response => response.text())
+        .then(html => {
+            document.querySelector('#right-popup .p-8').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error fetching form:', error);
+        });
+    }
+</script>

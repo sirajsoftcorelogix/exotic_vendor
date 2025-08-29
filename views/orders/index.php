@@ -304,8 +304,8 @@
                 <thead class="bg-gray-50 rounded-md ">
                 <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky">
                     <th class="p-4">#</th>
-                    <th class="px-6 py-3">Order Date</th>
                     <th class="px-6 py-3">Order ID</th>
+                    <th class="px-6 py-3">Order Date</th>                   
                     <!-- <th class="px-6 py-3">Customer</th>
                     <th class="px-6 py-3">Vendor Name</th> -->
                     <th class="px-6 py-3">Item</th>
@@ -327,14 +327,21 @@
                         foreach ($data['orders'] as $order) { 
                     ?> 
                 <tr class="bg-white rounded-md shadow-sm" data-id="<?= $order['id'] ?>">
-                    <td class="p-4 whitespace-nowrap rounded-l-md"><input type="checkbox" name="poitem[]" value="<?=$order['id']?>" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500">  <?= $order['id'] ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600">21/05/25</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <a href="#" class="order-detail-link" 
-                               data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'>
-                               <?= htmlspecialchars($order['order_number']) ?>
-                            </a>
+                    <td class="p-4 whitespace-nowrap rounded-l-md">
+                        <?php if($order['status']=='pending'): ?>
+                            <input type="checkbox" name="poitem[]" value="<?=$order['id']?>" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500">  
+                        <?php endif; ?>                    
                     </td>
+                    <td class="p-4 whitespace-nowrap rounded-l-md">                        
+                        <a href="#" class="order-detail-link" 
+                            data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'>
+                            <?= htmlspecialchars($order['order_number']) ?>
+                        </a>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600">21/05/25</td>
+                    <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            
+                    </td> -->
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Swati Nagar</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">

@@ -180,6 +180,7 @@ document.getElementById('addVendorForm').addEventListener('submit', function(eve
 document.getElementById('addVendorForm').addEventListener('submit', function(event) {
     event.preventDefault(); 
     const formData = new FormData(this);
+    alert('Form submitted');
     // Optionally log form data keys for debugging
     //for (let pair of formData.entries()) { console.log(pair[0]+ ': ' + pair[1]); }
     

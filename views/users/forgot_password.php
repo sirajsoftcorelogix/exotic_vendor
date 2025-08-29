@@ -208,6 +208,11 @@ global $domain, $root_path;
       var login = document.getElementById('login').value.trim();
       var msgDiv = document.getElementById('forgotPasswordMsg');
       msgDiv.textContent = '';
+        // Disable the button and change text
+        const submitBtn = forgotPasswordForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Processing...';
 
       fetch('?page=users&action=sendResetLink', {
         method: 'POST',
@@ -224,7 +229,11 @@ global $domain, $root_path;
           startTimer();
           alert('For demo purpose only, your OTP is: ' + data.token); 
         }
-      });
+      }).finally(() => {
+            // Re-enable the button and restore text
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        });
     });
     document.getElementById('continueButton').addEventListener('click', function() {
         var login = document.getElementById('login').value.trim();
