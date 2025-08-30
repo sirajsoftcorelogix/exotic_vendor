@@ -1,4 +1,9 @@
 <div class="max-w-7xl mx-auto space-y-6">
+    <div class="p-8">
+        <button id="open-vendor-popup-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition">
+            Open Vendor Invoice
+        </button>
+    </div>
     <!-- Page Header -->
     <div class="flex flex-wrap items-center justify-between gap-4 mt-5">
         <!-- Header Section with Filters and Actions -->
@@ -45,6 +50,13 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div class="flex items-center space-x-4">
+                                <a href="<?= base_url('?page=purchase_orders&action=view&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
+                                    <i class="fa fa-eye"></i>
+                                </a>
+                                <a href="#" class="text-gray-400 hover:text-black">
+                                    <i class="fa fa-pencil-alt"></i>
+                                </a>
+                                
                                 <a href="#" class="text-gray-400 hover:text-black">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                         <path d="M12.0465 8.20171C10.6474 9.47037 9.33829 11.0991 7.90075 12.3041C7.56581 12.5845 7.25417 12.7388 6.8125 12.7978C6.09762 12.8939 5.09165 12.9659 4.36744 12.9883C3.50508 13.0154 2.73585 12.5712 2.75448 11.6359C2.76884 10.909 2.86781 9.93098 2.95164 9.19835C2.992 8.84595 3.04983 8.53545 3.24582 8.2299L11.1585 0.415632C11.9227 -0.178697 12.8029 -0.120026 13.5279 0.491828C14.0922 0.968052 15.0966 1.93688 15.5631 2.49426C16.1484 3.19335 16.1422 4.07837 15.5631 4.77785C14.5839 5.96041 13.1029 7.05649 12.0461 8.20209L12.0465 8.20171ZM12.2572 1.03396C12.1435 1.04272 11.9914 1.11244 11.8971 1.17873C11.5144 1.44732 11.1364 2.00355 10.7525 2.30224L13.6765 5.13787C14.091 4.59726 15.3764 3.97665 14.7694 3.19678C14.2393 2.51559 13.2993 1.87897 12.7319 1.19664C12.6112 1.0972 12.416 1.02139 12.2568 1.03396H12.2572ZM3.89279 11.8744C3.9382 11.9216 4.10004 11.9635 4.17145 11.962C4.89643 11.9464 5.93228 11.858 6.65687 11.7692C6.78689 11.7532 6.92699 11.7174 7.03916 11.6492L12.8693 5.94022L9.99496 3.04591L4.13652 8.79985C4.00651 8.99529 3.98516 9.58505 3.96032 9.84602C3.9153 10.323 3.85631 10.8968 3.84195 11.368C3.83846 11.4842 3.82022 11.7989 3.8924 11.8744H3.89279Z" fill="black"/>
@@ -122,4 +134,189 @@
     </div>    
 
 </div>
-    
+
+<!-- Right Side Popup Wrapper -->
+<div id="popup-wrapper" class="hidden">
+    <!-- Background Overlay -->
+    <!-- <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div> -->
+
+    <!-- Sliding Container -->
+    <div id="modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: calc(45% + 61px); min-width: 661px;">
+
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-vendor-popup-btn" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Popup Panel -->
+        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
+            <div class="h-full w-full overflow-y-auto">
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Vendor Invoice</h2>
+
+                    <div class="flex items-start mb-6 pb-6 border-b">
+                        <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover">
+                        <div class="ml-6 text-sm text-gray-600 space-y-1">
+                            <p><strong>Order ID:</strong> 123456</p>
+                            <p><strong>Order Date:</strong> 20th July 25</p>
+                            <p><strong>Item:</strong> 12" Painting</p>
+                            <p><strong>Vendorr ID:</strong> 47635</p>
+                            <p><strong>Vendor Name:</strong> ABC Pvt. Ltd.</p>
+                            <p><strong>Vendor Phone:</strong> +9810865978 <i class="fab fa-whatsapp text-green-500 ml-1"></i> <span class="text-blue-600">info@vendor1.com</span></p>
+                        </div>
+                    </div>
+
+                    <form id="invoice-form">
+                        <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
+                            <div>
+                                <label for="invoice-date" class="text-sm font-medium text-gray-700">Invoice Date:</label>
+                                <input type="date" id="invoice-date" class="form-input w-full mt-1">
+                            </div>
+                            <div>
+                                <label for="gst-reg" class="text-sm font-medium text-gray-700">GST Reg:</label>
+                                <select id="gst-reg" class="form-input w-full bg-white mt-1">
+                                    <option>Yes</option>
+                                    <option>No</option>
+                                </select>
+                                <p class="text-xs text-red-500 text-right mt-1">Advance, Partial, Full</p>
+                            </div>
+                            <div>
+                                <label for="sub-total" class="text-sm font-medium text-gray-700">Sub Total ₹:</label>
+                                <input type="number" id="sub-total" value="10000" class="form-input w-full mt-1">
+                            </div>
+                            <div>
+                                <label for="gst-total" class="text-sm font-medium text-gray-700">GST Total:</label>
+                                <input type="number" id="gst-total" class="form-input w-full mt-1">
+                            </div>
+                            <div>
+                                <label for="shipping" class="text-sm font-medium text-gray-700">Shipping ₹:</label>
+                                <input type="number" id="shipping" value="10000" class="form-input w-full mt-1">
+                            </div>
+                            <div>
+                                <label for="grand-total" class="text-sm font-medium text-gray-700">Grand Total ₹:</label>
+                                <input type="number" id="grand-total" value="10000" class="form-input w-full mt-1 bg-gray-100">
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="text-sm font-medium text-gray-700 mb-1 block">Invoice PDF:</label>
+                            <div id="file-drop-area" class="file-drop-area">
+                                <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-500">Drag & Drop your invoice file here or</p>
+                                <button type="button" id="choose-file-btn" class="mt-2 bg-white border border-gray-300 text-gray-700 px-4 py-1 rounded-md text-sm hover:bg-gray-50">Choose file</button>
+                                <input type="file" id="file-input" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
+                                <p class="text-xs text-gray-400 mt-2">Only PDF, JPG, PNG</p>
+                            </div>
+                        </div>
+
+                        <div id="uploaded-file-section" class="hidden mb-6">
+                            <h3 class="text-sm font-medium text-gray-700 mb-2">Uploaded Invoice:</h3>
+                            <div id="file-info" class="border rounded-md p-3 flex items-center justify-between">
+                                <!-- File info will be injected here by JS -->
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end items-center gap-4 pt-6 border-t">
+                            <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Cancel</button>
+                            <button type="submit" class="action-btn save-btn">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
+    const popupWrapper = document.getElementById('popup-wrapper');
+    const modalSlider = document.getElementById('modal-slider');
+    const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
+    const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
+
+    function openVendorPopup() {
+        popupWrapper.classList.remove('hidden');
+        setTimeout(() => {
+            modalSlider.classList.remove('translate-x-full');
+        }, 10);
+    }
+    function closeVendorPopup() {
+        modalSlider.classList.add('translate-x-full');
+    }
+
+    modalSlider.addEventListener('transitionend', (event) => {
+        if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
+            popupWrapper.classList.add('hidden');
+        }
+    });
+
+    openVendorPopupBtn.addEventListener('click', openVendorPopup);
+    cancelVendorBtn.addEventListener('click', closeVendorPopup);
+    closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
+
+    const fileDropArea = document.getElementById('file-drop-area');
+    const fileInput = document.getElementById('file-input');
+    const chooseFileBtn = document.getElementById('choose-file-btn');
+    const uploadedFileSection = document.getElementById('uploaded-file-section');
+    const fileInfoDiv = document.getElementById('file-info');
+
+    chooseFileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        fileDropArea.addEventListener(eventName, preventDefaults, false);
+    });
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        fileDropArea.addEventListener(eventName, () => fileDropArea.classList.add('dragover'), false);
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        fileDropArea.addEventListener(eventName, () => fileDropArea.classList.remove('dragover'), false);
+    });
+
+    fileDropArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+
+    function handleFiles(files) {
+        if (files.length === 0) return;
+        const file = files[0];
+
+        const fileType = file.type;
+        let iconClass = 'fa-file';
+        if (fileType.includes('pdf')) iconClass = 'fa-file-pdf';
+        if (fileType.includes('image')) iconClass = 'fa-file-image';
+
+        fileInfoDiv.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas ${iconClass} text-2xl text-gray-600"></i>
+                    <div class="ml-3 text-sm">
+                        <p class="font-medium text-gray-800">${file.name}</p>
+                        <p class="text-gray-500">${(file.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                </div>
+                <button type="button" id="delete-file-btn" class="text-gray-500 hover:text-red-600">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            `;
+        uploadedFileSection.classList.remove('hidden');
+
+        document.getElementById('delete-file-btn').addEventListener('click', () => {
+            fileInput.value = '';
+            uploadedFileSection.classList.add('hidden');
+            fileInfoDiv.innerHTML = '';
+        });
+    }
+
+    document.getElementById('invoice-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        console.log('Invoice form submitted');
+        closeVendorPopup();
+    });
+</script>

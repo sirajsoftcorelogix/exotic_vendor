@@ -474,3 +474,89 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
     background-color: black;
     color: white;
 }
+
+    .po-title {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+    .payment-details-title {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+    }
+    .payment-details-header {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+    }
+    .payment-details-text {
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+      font-size: 13px;
+      line-height: 100%;
+      letter-spacing: -0.02em;
+    }
+    .amount-box-text {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 20px;
+      line-height: 100%;
+      letter-spacing: -0.02em;
+      color: white;
+    }
+.timeline-title {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+    }
+    .timeline-text {
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+      font-size: 13px;
+      letter-spacing: 0%;
+    }
+    .timeline-date {
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0%;
+    }
+    /* Styles for the timeline connector lines */
+    .timeline-step {
+      position: relative;
+    }
+    /* Default grey line before each step (except the first) */
+    .timeline-step:not(:first-child)::before {
+      content: '';
+      position: absolute;
+      top: 9px; /* Vertically centered in the 20px (h-5) dot container */
+      right: 50%; /* Start from the right edge of the container */
+      width: 100%; /* Span the full width of the grid cell */
+      height: 2px;
+      background-color: rgba(186, 186, 186, 1); /* Gray for incomplete steps */
+      z-index: 0;
+    }
+    /* Green line for completed steps */
+    .timeline-step.completed:not(:first-child)::before {
+      background-color: rgba(39, 174, 96, 1); /* Green for completed steps */
+    }
+.popup-transition {
+    transition: transform 0.3s ease-in-out;
+}         
+.file-drop-area {
+    border: 2px dashed #d1d5db;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    background-color: #f9fafb;
+}
+.file-drop-area.dragover {
+    background-color: #f3f4f6;
+    border-color: #9ca3af;
+}

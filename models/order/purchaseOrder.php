@@ -39,4 +39,12 @@ class PurchaseOrder {
         $stmt->bind_param("i", $id);
         return $stmt->execute();
     }
+    public function getPurchaseOrder($id) {
+        $sql = "SELECT * FROM purchase_orders WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_assoc();
+    }
 }

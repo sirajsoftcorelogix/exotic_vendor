@@ -158,5 +158,38 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Purchase Order cancelled successfully.', 'status' => $statusUpdate]);
         exit;
     }
+    function viewPurchaseOrder(){
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+        global $vendorsModel;
+        global $usersModel;
+        global $domain;
+
+        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        $data = [];
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        $data['purchaseOrder'] = $purchaseOrder;
+        $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
+        $data['items'] = $purchaseOrderItems;
+        $data['vendors'] = $vendorsModel->getAllVendors();
+        //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
+        $data['domain'] = $domain;
+        //print_array($data);
+        $data['users'] = $usersModel->getAllUsers();
+        renderTemplate('views/purchase_orders/view.php', $data, 'View Purchase Order');
+
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }
+
+        //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
+        exit;
+    }
 
 }

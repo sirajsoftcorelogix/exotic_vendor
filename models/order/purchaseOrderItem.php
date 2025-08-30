@@ -22,7 +22,7 @@ class PurchaseOrderItem {
         $stmt->bind_param("i", $po_id);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        return $result->fetch_all(MYSQLI_ASSOC);
     }
     public function createPurchaseOrderItem($data) {
         $query = "INSERT INTO vp_po_items (purchase_orders_id, title, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ? )";
