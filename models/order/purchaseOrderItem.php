@@ -42,4 +42,22 @@ class PurchaseOrderItem {
             return false; // Return false on failure
         }
     }
+    public function deletePurchaseOrderItem($id) {
+        $query = "DELETE FROM vp_po_items WHERE id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $id);
+        return $stmt->execute();
+    }
+    public function updatePurchaseOrderItems($id, $data) {
+        $query = "UPDATE vp_po_items SET gst = ?, quantity = ?, price = ?, amount = ? WHERE id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("iiddd",             
+            $data['gst'],
+            $data['quantity'],
+            $data['price'],
+            $data['amount'],
+            $id
+        );
+        return $stmt->execute();
+    }
 }

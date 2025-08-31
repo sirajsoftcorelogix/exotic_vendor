@@ -191,5 +191,99 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
         exit;
     }
+    function editPurchaseOrder() {
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+        global $vendorsModel;
+        global $usersModel;
+        global $domain;
+
+        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+
+        $data = [];
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        $data['purchaseOrder'] = $purchaseOrder;
+        $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
+        $data['items'] = $purchaseOrderItems;
+        $data['vendors'] = $vendorsModel->getAllVendors();
+        //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
+        $data['domain'] = $domain;
+        //print_array($data);
+        $data['users'] = $usersModel->getAllUsers();
+        renderTemplate('views/purchase_orders/edit.php', $data, 'Edit Purchase Order');
+
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }
+
+        //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
+        exit;
+    }
+    function updatePurchaseOrder() {
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        $poData = [
+            'vendor_id' => $_POST['vendor_id'],
+            'user_id' => $_POST['user_id'],
+            'expected_delivery_date' => $_POST['delivery_due_date'],
+            'delivery_address' => $_POST['delivery_address'],
+            'total_gst' => $_POST['total_gst'],
+            'grand_total' => $_POST['grand_total'],
+            'subtotal' => $_POST['subtotal'],
+            'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
+        ];
+        // Update the purchase order
+        $isUpdated = $purchaseOrdersModel->updatePurchaseOrder($poId, $poData);
+        if (!$isUpdated) {
+            echo json_encode(['success' => false, 'message' => 'Failed to update Purchase Order.']);
+            exit;
+        }
+        $gst = isset($_POST['gst']) ? $_POST['gst'] : [];
+        $quantity = isset($_POST['quantity']) ? $_POST['quantity'] : [];
+        $amount = isset($_POST['amount']) ? $_POST['amount'] : [];
+        $price = isset($_POST['price']) ? $_POST['price'] : [];
+        // Update purchase order items
+        $itemsUpdated = true;
+        foreach ($gst as $index => $gstValue) {
+            $items = [
+                'purchase_orders_id' => $poId,
+                'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',
+                'hsn' => isset($data['hsn'][$index]) ? $data['hsn'][$index] : '',
+                'gst' => $gstValue,
+                'quantity' => isset($quantity[$index]) ? $quantity[$index] : 0,
+                'price' => isset($price[$index]) ? $price[$index] : 0,
+                'amount' => isset($amount[$index]) ? $amount[$index] * (1 + ($gstValue / 100)) : 0,
+                
+            ];
+            $id = isset($_POST['item_ids'][$index]) ? $_POST['item_ids'][$index] : 0;
+            $itemId = $purchaseOrderItemsModel->updatePurchaseOrderItems($id, $items);
+            if (!$itemId) {
+                $itemsUpdated = false;
+                break; // Stop processing if any item creation fails
+            }
+        }
+
+        if (!$itemsUpdated) {
+            echo json_encode(['success' => false, 'message' => 'Failed to update Purchase Order items.']);
+            exit;
+        }
+
+        // If everything is successful, return success response
+        echo json_encode(['success' => true, 'message' => 'Purchase Order updated successfully.']);
+        exit;
+    }
 
 }

@@ -122,8 +122,14 @@ switch ($page) {
             case 'create':
                 $controller->createPurchaseOrder();
                 break;
+            case 'edit':
+                $controller->editPurchaseOrder();
+                break;
             case 'create_post':
                 $controller->createPurchaseOrderPost();
+                break;
+            case 'edit_post':
+                $controller->updatePurchaseOrder();
                 break;
             case 'delete':
                 $controller->deletePurchaseOrder(); 
