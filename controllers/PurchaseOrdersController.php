@@ -4,11 +4,14 @@ require_once 'models/order/order.php';
 require_once 'models/order/purchaseOrderItem.php';
 require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
+require_once 'models/comman/tables.php';
+
 $purchaseOrdersModel = new PurchaseOrder($conn);
 $ordersModel = new Order($conn);
 $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
 $vendorsModel = new Vendor($conn);
 $usersModel = new User($conn);
+$commanModel = new Tables($conn);
 global $root_path;
  
 class PurchaseOrdersController {
@@ -42,6 +45,7 @@ class PurchaseOrdersController {
         global $vendorsModel;
         global $domain;
         global $usersModel;
+        global $commanModel;
         //print_r($_POST);
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
         if (empty($itemIds)) {
@@ -58,6 +62,9 @@ class PurchaseOrdersController {
         $data['domain'] = $domain;
         //print_array($data);
         $data['users'] = $usersModel->getAllUsers();
+        $data['exotic_address'] = $commanModel->get_exotic_address();
+        $data['terms_and_conditions'] = $commanModel->get_terms_and_conditions();
+        //print_array($data);
         // Render the create purchase order form
         renderTemplate('views/purchase_orders/create.php', $data, 'Create Purchase Order');
         exit;
@@ -70,11 +77,12 @@ class PurchaseOrdersController {
         $vendor = isset($_POST['vendor']) ? $_POST['vendor'] : '';
         $deliveryDueDate = isset($_POST['delivery_due_date']) ? $_POST['delivery_due_date'] : '';
         $deliveryAddress = isset($_POST['delivery_address']) ? $_POST['delivery_address'] : '';
-        $total_gst = isset($_POST['total_gst']) ? $_POST['total_gst'] : [];
+        $total_gst = isset($_POST['total_gst']) ? $_POST['total_gst'] : [];        
         //$quantity = isset($_POST['quantity']) ? $_POST['quantity'] : [];
         //$amount = isset($_POST['amount']) ? $_POST['amount'] : [];
         //$total = isset($_POST['total']) ? $_POST['total'] : 0;
         $grand_total = isset($_POST['grand_total']) ? $_POST['grand_total'] : 0;
+        $shipping_cost = isset($_POST['shipping_cost']) ? $_POST['shipping_cost'] : 0;
         $gst = isset($_POST['gst']) ? $_POST['gst'] : [];
         $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : []; 
         $data = isset($_POST) ? $_POST : [];      
@@ -91,6 +99,7 @@ class PurchaseOrdersController {
             'delivery_address' => $deliveryAddress,
             'total_gst' => $total_gst,
             'grand_total' => $grand_total,
+            'shipping_cost' => $shipping_cost,
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
         ];
         $poId = $purchaseOrdersModel->createPurchaseOrder($poData);
@@ -103,12 +112,14 @@ class PurchaseOrdersController {
         foreach ($gst as $index => $gstValue) {
             $items = [
                 'purchase_orders_id' => $poId,
+                'order_number' => isset($data['ordernumber'][$index]) ? $data['ordernumber'][$index] : '',
                 'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',
+                'image' => isset($data['img'][$index]) ? $data['img'][$index] : '',
                 'hsn' => isset($data['hsn'][$index]) ? $data['hsn'][$index] : '',
                 'gst' => $gstValue,
                 'quantity' => isset($quantity[$index]) ? $quantity[$index] : 0,
-                'price' => isset($amount[$index]) ? $amount[$index] : 0,
-                'amount' => isset($amount[$index]) ? $amount[$index] * (1 + ($gstValue / 100)) : 0
+                'price' => isset($rate[$index]) ? $rate[$index] : 0,
+                'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0
             ];
             $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);
             if (!$itemId) {

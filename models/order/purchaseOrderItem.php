@@ -25,11 +25,13 @@ class PurchaseOrderItem {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     public function createPurchaseOrderItem($data) {
-        $query = "INSERT INTO vp_po_items (purchase_orders_id, title, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ? )";
+        $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ? )";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("issiddd", 
-            $data['purchase_orders_id'], 
+        $stmt->bind_param("iisssiddd", 
+            $data['purchase_orders_id'],
+            $data['order_number'], 
             $data['title'],
+            $data['image'],
             $data['hsn'],
             $data['gst'],
             $data['quantity'],

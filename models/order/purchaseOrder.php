@@ -17,16 +17,18 @@ class PurchaseOrder {
         return $purchaseOrders;
     }
     public function createPurchaseOrder($data) {
-        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, expected_delivery_date, delivery_address, notes, total_gst, total_cost) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, user_id, expected_delivery_date, delivery_address, notes, total_gst, total_cost, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("sisssdd",
+        $stmt->bind_param("siisssddd",
             $data['po_number'],  
-            $data['vendor_id'], 
+            $data['vendor_id'],
+            $data['user_id'],
             $data['expected_delivery_date'], 
             $data['delivery_address'], 
             $data['notes'],
             $data['total_gst'], 
-            $data['grand_total']
+            $data['grand_total'],
+            $data['shipping_cost']
         );
         if ($stmt->execute()) {
             return $this->db->insert_id; // Return the ID of the newly created purchase order
