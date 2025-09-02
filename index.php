@@ -129,7 +129,13 @@ switch ($page) {
                 $controller->createPurchaseOrderPost();
                 break;
             case 'edit_post':
-                $controller->updatePurchaseOrder();
+                $controller->updatePurchaseOrderPost();
+                break;
+            case 'order_items':
+                $controller->viewOrderItems();
+                break;
+            case 'download':
+                $controller->downloadPurchaseOrder();
                 break;
             case 'delete':
                 $controller->deletePurchaseOrder(); 

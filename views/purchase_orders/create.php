@@ -166,6 +166,29 @@
     </div>
     </form>
 </div>
+<!-- Order Item Modal -->
+<div id="orderModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative">
+        <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
+        <h2 class="text-xl font-bold mb-4">Select Order Item</h2>
+        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search order items...">
+        <div class="max-h-72 overflow-y-auto">
+            <table class="w-full border">
+                <thead>
+                    <tr>
+                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-left">HSN</th>
+                        <th class="p-2 text-left">Image</th>
+                        <th class="p-2 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="orderList">
+                    <!-- Dynamic rows here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 <script>
 function calculateTotals() {
     let subtotal = 0;
@@ -215,10 +238,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-function openPOPopup() {
-    // Show modal
-    new bootstrap.Modal(document.getElementById("createPOModal")).show();
-}
+// function openPOPopup() {
+//     // Show modal
+//     new bootstrap.Modal(document.getElementById("createPOModal")).show();
+// }
 document.getElementById("create_po").addEventListener("submit", function(event) {
     event.preventDefault(); // Prevent default form submission
     // Disable the button and change text
@@ -250,4 +273,123 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     });
 });
 
+// add item
+// Show modal and fetch order items
+document.querySelector('.action-button').addEventListener('click', function(e) {
+    if (e.target.textContent.trim() === 'Add Item') {
+        document.getElementById('orderModal').style.display = 'flex';
+        document.getElementById('orderSearch').value = '';
+        fetchOrderItems('');
+    }
+});
+
+// Close modal
+document.getElementById('closeOrderModal').onclick = function() {
+    document.getElementById('orderModal').style.display = 'none';
+};
+
+// Search filter (fetches filtered items)
+document.getElementById('orderSearch').addEventListener('input', function() {
+    if (this.value.length < 3 && this.value.length > 0) return; // Minimum 3 characters to search
+    fetchOrderItems(this.value);
+});
+
+// Fetch order items dynamically
+function fetchOrderItems(query) {
+    fetch('?page=purchase_orders&action=order_items&search=' + encodeURIComponent(query))
+        .then(r => r.json())
+        .then(data => {
+            console.log(data);
+            const tbody = document.getElementById('orderList');
+            tbody.innerHTML = '';
+            if (Array.isArray(data) && data.length > 0) {
+                data.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="p-2">${item.title}</td>
+                        <td class="p-2">${item.item_code}</td>
+                        <td class="p-2"><img src="${item.image}" alt="" class="w-10 h-10 rounded"></td>
+                        <td class="p-2">
+                            <button type="button" class="select-order bg-blue-500 text-white px-3 py-1 rounded"
+                                data-id="${item.id}"
+                                data-title="${item.title.replace(/"/g, '&quot;')}"
+                                data-hsn="${item.item_code.replace(/"/g, '&quot;')}"
+                                data-image="${item.image.replace(/"/g, '&quot;')}"
+                                >Select</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                    //alert('Item added to the list.');
+                });
+            } else {
+                //alert('No items found.');
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4 text-gray-500">No items found.</td></tr>';
+            }
+            addSelectOrderListeners();
+        });
+}
+
+// Insert selected order into poTable
+function addSelectOrderListeners() {
+    document.querySelectorAll('.select-order').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            const title = this.getAttribute('data-title');
+            const hsn = this.getAttribute('data-hsn');
+            const image = this.getAttribute('data-image');
+            const poTable = document.querySelector('#poTable tbody');
+            const rowCount = poTable.querySelectorAll('tr').length + 1;
+
+            // Prevent duplicate items
+            let exists = false;
+            poTable.querySelectorAll('input[name="orderid[]"]').forEach(function(input) {
+                if (input.value == id) exists = true;
+            });
+            if (exists) {
+                alert('This item is already added.');
+                return;
+            }
+
+            const tr = document.createElement('tr');
+            tr.className = 'bg-white';
+            tr.innerHTML = `
+                <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}">${rowCount}</td>
+                <td class="p-4"><input type="hidden" name="title[]" value="${title}">${title}</td>
+                <td class="p-4"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
+                <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" class="rounded-lg" style="width:40px;height:40px;"></td>
+                <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="18" oninput="calculateTotals()" required></td>
+                <td class="p-4">
+                    <div class="flex items-center space-x-2">
+                        <input type="number" name="quantity[]" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="1" oninput="calculateTotals()" required>
+                    </div>
+                </td>
+                <td class="p-4">Nos</td>
+                <td class="p-4">
+                    <div class="flex items-center space-x-2">
+                        <input type="number" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
+                        <label>GST inclusive</label>
+                    </div>
+                </td>
+                <td class="p-4 rowTotal"></td>
+                <td class="p-2 align-top text-right">
+                    <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item">&times;</button>
+                </td>
+            `;
+            poTable.appendChild(tr);
+
+            // Add event listeners for new inputs
+            tr.querySelectorAll('.gst, .quantity, .amount').forEach(input => {
+                input.addEventListener('input', calculateTotals);
+            });
+            tr.querySelector('.remove-row').addEventListener('click', function() {
+                tr.remove();
+                calculateTotals();
+            });
+
+            calculateTotals();
+            document.getElementById('orderModal').style.display = 'none';
+        });
+    });
+}
 </script>

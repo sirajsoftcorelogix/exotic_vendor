@@ -50,15 +50,17 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div class="flex items-center space-x-4">
-                                <a href="<?= base_url('?page=purchase_orders&action=view&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
+                                <a title="View Purchase Order" href="<?= base_url('?page=purchase_orders&action=view&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
                                     <i class="fa fa-eye"></i>
                                 </a>
-                                <a href="<?= base_url('?page=purchase_orders&action=edit&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
+                                <a title="Edit Purchase Order" href="<?= base_url('?page=purchase_orders&action=edit&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
                                     <i class="fa fa-pencil-alt"></i>
-                                </a>                               
-                                
-                                <a href="<?= base_url('?page=purchase_orders&action=delete&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black" onclick="return confirm('Are you sure you want to delete this purchase order?');">
+                                </a>
+                                <a title="Delete Purchase Order" href="<?= base_url('?page=purchase_orders&action=delete&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black" onclick="return confirm('Are you sure you want to delete this purchase order?');">
                                     <i class="fa fa-trash-alt"></i>
+                                </a>
+                                <a title="Download Purchase Order" target="_blank" href="<?= base_url('?page=purchase_orders&action=download&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
+                                    <i class="fa fa-download"></i>
                                 </a>
                             </div>
                         </td>

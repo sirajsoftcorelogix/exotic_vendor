@@ -22,7 +22,14 @@
             </div>
             <div class="flex items-center">
                 <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address :</label>
-                <input type="text" id="delivery_address" name="delivery_address" value="<?php echo htmlspecialchars($data['purchaseOrder']['delivery_address']); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[300px]">
+                <select id="delivery_address" name="delivery_address" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-full md:w-[300px]">
+                    <option value="">Select Delivery Address</option>
+                    <?php foreach ($data['deliveryAddresses'] as $address): ?>
+                        <option value="<?php echo $address['id']; ?>" <?php if ($data['purchaseOrder']['delivery_address'] == $address['id']) echo 'selected'; ?>>
+                            <?php echo htmlspecialchars($address['address']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
         </div>
         <!-- Right Column -->
@@ -92,20 +99,25 @@
         <div class="totals">
             <div class="flex justify-between">
                 <span class="font-bold">Subtotal:</span>
-                <span class="subtotal">₹<?php echo number_format(($data['purchaseOrder']['subtotal']), 2); ?></span>
+                <span class="subtotal"><?php echo number_format(($data['purchaseOrder']['subtotal']), 2); ?></span>
             </div>
             <div class="flex justify-between">
                 <span class="font-bold">Total GST:</span>
-                <span class="total-gst">₹<?php echo number_format(($data['purchaseOrder']['total_gst']), 2); ?></span>
+                <span class="total-gst"><?php echo number_format(($data['purchaseOrder']['total_gst']), 2); ?></span>
+            </div>
+            <div class="flex justify-between">
+                <span class="font-bold">Shipping Cost:</span>
+                <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php echo number_format(($data['purchaseOrder']['shipping_cost']), 2); ?>" class="form-input w-[80px] " /></span>
             </div>
             <div class="flex justify-between">
                 <span class="font-bold">Grand Total:</span>
-                <span class="grand-total">₹<?php echo number_format(($data['purchaseOrder']['total_cost']), 2); ?></span>
+                <span class="grand-total"><?php echo number_format(($data['purchaseOrder']['total_cost']), 2); ?></span>
             </div>
         </div>
         <input type="hidden" name="total_gst" value="<?php echo htmlspecialchars($data['purchaseOrder']['total_gst']); ?>" />
         <input type="hidden" name="grand_total" value="<?php echo htmlspecialchars($data['purchaseOrder']['total_cost']); ?>" />
         <input type="hidden" name="subtotal" value="<?php echo htmlspecialchars($data['purchaseOrder']['subtotal']); ?>" />
+        
     </div>
 
     <hr class="my-8 border-gray-200">
@@ -139,6 +151,7 @@
         const subtotalElement = document.querySelector('.subtotal');
         const totalGstElement = document.querySelector('.total-gst');
         const grandTotalElement = document.querySelector('.grand-total');
+        const shippingCostElement = document.querySelector('input[name="shipping_cost"]');
 
         function updateTotals() {
             let subtotal = 0;
@@ -155,7 +168,7 @@
                 totalGst += (amount * gst) / 100;
             });
 
-            const grandTotal = subtotal + totalGst;
+            const grandTotal = subtotal + totalGst + (parseFloat(shippingCostElement.value) || 0);
 
             subtotalElement.textContent = `${subtotal.toFixed(2)}`;
             totalGstElement.textContent = `${totalGst.toFixed(2)}`;
@@ -163,9 +176,11 @@
             document.querySelector('input[name="subtotal"]').value = subtotal.toFixed(2);
             document.querySelector('input[name="total_gst"]').value = totalGst.toFixed(2);
             document.querySelector('input[name="grand_total"]').value = grandTotal.toFixed(2);
+            //document.querySelector('input[name="shipping_cost"]').value = (parseFloat(shippingCostElement.textContent.replace('₹', '')) || 0).toFixed(2);
         }
 
         itemTable.addEventListener('input', updateTotals);
+        shippingCostElement.addEventListener('input', updateTotals);
             // Remove item row and update totals
         /*itemTable.addEventListener('click', function(e) {
             if (e.target.classList.contains('remove-row')) {
@@ -179,8 +194,13 @@
     });
     document.getElementById("edit_po").addEventListener("submit", function(event) {
         event.preventDefault(); // Prevent default form submission
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Processing...';
+   
         const formData = new FormData(this);
-
+        
         fetch(<?php echo "'".base_url('?page=purchase_orders&action=edit_post')."'"; ?>, {
             method: "POST",
             body: formData
@@ -189,13 +209,18 @@
         .then(data => {
             if (data.success) {
                 alert("Purchase Order created successfully!");
+                submitBtn.textContent = originalText;
                 window.location.href = "<?php echo base_url('?page=purchase_orders&acton=list'); ?>"; // Redirect to the list page
             } else {
-                alert("Error: " + data.message);  
+                alert("Error: " + data.message);
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             }
         })
         .catch(error => {
             console.error("Error:", error);
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
             alert("An error occurred while creating the Purchase Order.");
         });
     });

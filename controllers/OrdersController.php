@@ -29,6 +29,7 @@ class OrdersController {
     }
         
     public function viewOrder() {
+        global $ordersModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
             $order = $ordersModel->getOrderById($id); 

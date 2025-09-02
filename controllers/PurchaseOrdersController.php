@@ -6,6 +6,7 @@ require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 
+
 $purchaseOrdersModel = new PurchaseOrder($conn);
 $ordersModel = new Order($conn);
 $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
@@ -75,11 +76,12 @@ class PurchaseOrdersController {
         global $ordersModel;
         // Validate and process the form submission
         $vendor = isset($_POST['vendor']) ? $_POST['vendor'] : '';
+        $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : '';
         $deliveryDueDate = isset($_POST['delivery_due_date']) ? $_POST['delivery_due_date'] : '';
         $deliveryAddress = isset($_POST['delivery_address']) ? $_POST['delivery_address'] : '';
         $total_gst = isset($_POST['total_gst']) ? $_POST['total_gst'] : [];        
-        //$quantity = isset($_POST['quantity']) ? $_POST['quantity'] : [];
-        //$amount = isset($_POST['amount']) ? $_POST['amount'] : [];
+        $quantity = isset($_POST['quantity']) ? $_POST['quantity'] : [];
+        $rate = isset($_POST['rate']) ? $_POST['rate'] : [];
         //$total = isset($_POST['total']) ? $_POST['total'] : 0;
         $grand_total = isset($_POST['grand_total']) ? $_POST['grand_total'] : 0;
         $shipping_cost = isset($_POST['shipping_cost']) ? $_POST['shipping_cost'] : 0;
@@ -95,6 +97,7 @@ class PurchaseOrdersController {
         $poData = [
             'po_number' => 'PO-' . time(), // Example PO number, you can customize this
             'vendor_id' => $vendor,
+            'user_id' => $user_id,
             'expected_delivery_date' => $deliveryDueDate,
             'delivery_address' => $deliveryAddress,
             'total_gst' => $total_gst,
@@ -121,23 +124,26 @@ class PurchaseOrdersController {
                 'price' => isset($rate[$index]) ? $rate[$index] : 0,
                 'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0
             ];
+            //Print_array($items);
             $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);
             if (!$itemId) {
                 $itemsCreated = false;
                 break; // Stop processing if any item creation fails
             }
         }
-        //Update order status
-        
+
+        if (!$itemsCreated) {
+            echo json_encode(['success' => false, 'message' => 'Failed to create Purchase Order Items.']);
+            exit;
+        }
+
+        //Update order status        
         $statusupdate = [];
         foreach($orderid as $index=>$id){
            $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing');
         }
         
-        if (!$itemsCreated) {
-            echo json_encode(['success' => false, 'message' => 'Failed to create Purchase Order Items.']);
-            exit;
-        }
+        
         // If everything is successful, return success response
         echo json_encode(['success' => true, 'message' => 'Purchase Order created successfully.', 'po_id' => $poId, 'status'=>$statusupdate,'orderid'=>$orderid]);
         exit;
@@ -208,6 +214,7 @@ class PurchaseOrdersController {
         global $vendorsModel;
         global $usersModel;
         global $domain;
+        global $commanModel;
 
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
 
@@ -226,6 +233,7 @@ class PurchaseOrdersController {
         $data['domain'] = $domain;
         //print_array($data);
         $data['users'] = $usersModel->getAllUsers();
+        $data['deliveryAddresses'] = $commanModel->get_exotic_address();
         renderTemplate('views/purchase_orders/edit.php', $data, 'Edit Purchase Order');
 
         if (!$purchaseOrder) {
@@ -236,7 +244,7 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
         exit;
     }
-    function updatePurchaseOrder() {
+    function updatePurchaseOrderPost() {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
 
@@ -254,6 +262,7 @@ class PurchaseOrdersController {
             'total_gst' => $_POST['total_gst'],
             'grand_total' => $_POST['grand_total'],
             'subtotal' => $_POST['subtotal'],
+            'shipping_cost' => $_POST['shipping_cost'],
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
         ];
         // Update the purchase order
@@ -296,5 +305,105 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Purchase Order updated successfully.']);
         exit;
     }
+    function viewOrderItems() {
+        global $ordersModel;
 
+        $search = isset($_GET['search']) ? $_GET['search'] : 0;
+
+        if (!$search) {
+            $orderItems = $ordersModel->getOrderItems('');
+        }else{
+            $orderItems = $ordersModel->getOrderItems($search);
+        }
+        if ($orderItems === false) {
+            echo json_encode(['success' => false, 'message' => 'Failed to fetch order items.']);
+            exit;
+        }
+
+        //echo json_encode(['success' => true, 'data' => $orderItems]);
+        echo json_encode($orderItems);
+        exit;
+    }
+    function downloadPurchaseOrder() {
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+
+        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }else{
+            // Fetch purchase order items
+            $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
+            //print_array($purchaseOrderItems);
+           
+            if ($purchaseOrderItems === false) {
+                echo json_encode(['success' => false, 'message' => 'Failed to fetch Purchase Order items.']);
+                exit;
+            }
+            $tbody = '';
+            foreach ($purchaseOrderItems as $index => $item) {
+                $tbody .= '<tr>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px;">';
+                $tbody .= '<b>' . htmlspecialchars($item['title']) . ' |</b><br>';                
+                $tbody .= '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['hsn']) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
+                $tbody .= '</tr>';
+                
+            }
+        }
+        
+        
+        // Generate PDF or any other format for download
+        require_once('vendor/tc/vendor/autoload.php'); // Adjust path if needed
+
+        // Create new PDF document
+        $pdf = new TCPDF();
+        $pdf->SetCreator('Hedayat Technologies');
+        $pdf->SetAuthor('Exotic India Art Pvt. Ltd.');
+        $pdf->SetTitle('Purchase Order #568217');
+        $pdf->setFont('helvetica', '', 10);
+
+        // Generate PDF or any other format for download
+        require_once('vendor/tc/vendor/autoload.php'); // Adjust path if needed
+
+        // Create new PDF document
+        $pdf = new TCPDF();
+        $pdf->SetCreator('Hedayat Technologies');
+        $pdf->SetAuthor('Exotic India Art Pvt. Ltd.');
+        $pdf->SetTitle('Purchase Order #568217');
+        $pdf->setFont('helvetica', '', 10);
+        $pdf->SetMargins(10, 10, 10);
+        $pdf->AddPage();
+
+        
+        $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
+        // Define HTML content
+        $html = str_replace(
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}'],
+            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost']],
+            $temphtml
+        );
+
+        // Output the HTML content
+        $pdf->writeHTML($html, true, false, true, false, '');
+        ob_end_clean();
+        // Force download
+        $pdf->Output($purchaseOrder['po_number'] . '.pdf', 'D');
+        //echo 'Hedyat';
+        //echo json_encode(['success' => true, 'message' => 'Purchase Order downloaded successfully.']);
+        //exit;
+    }
 }

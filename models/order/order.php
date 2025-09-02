@@ -147,6 +147,34 @@ class Order{
 
         return ['success' => true, 'message' => 'Status updated successfully.'];
     }
+    public function getOrderItems($searchTerm) {
+        $sql = "SELECT * FROM vp_orders WHERE order_number LIKE ? OR item_code LIKE ? OR title LIKE ?";
+        $stmt = $this->db->prepare($sql);
+        $searchTerm = "%{$searchTerm}%";
+        $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],
+                    'order_number' => $row['order_number'],
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    'price' => $row['unit_price'],
+                    'gst' => $row['tax'],
+                    // 'description' => $row['description'],
+                    'image' => $row['image'],
+                    // 'marketplace_vendor' => $row['marketplace_vendor'],
+                    'quantity' => $row['quantity'],
+                    'options' => $row['options'],
+                    'order_date' => $row['order_date'],
+                ];
+            }
+        }
+        return $orderItems;
+    }
 
 }
 ?> 
