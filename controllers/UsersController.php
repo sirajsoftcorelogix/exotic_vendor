@@ -244,9 +244,7 @@ class UsersController {
                 }
             }
             if ($id > 0) {
-                //echo "Hedayat";
                 $data['user'] = $usersModel->getUserById($id);
-                //print_r($data['user']);
             }
         } catch (Exception $e) {
             $data['message'] = ['success' => false, 'error' => $e->getMessage()];
@@ -280,6 +278,7 @@ class UsersController {
         global $usersModel;
         $id = $_POST['id'] ?? 0;
         $result = $usersModel->delete($id);
+        
         echo json_encode($result);
         // if ($usersModel->delete($id)) {
         //     echo json_encode(['success' => true, 'message' => 'User deleted.']);

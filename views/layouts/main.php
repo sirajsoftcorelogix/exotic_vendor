@@ -1,7 +1,12 @@
 <?php $loginUser = getloginUser();?>
 <?php //$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
 //$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor";
-global $domain, $root_path, $page, $action;
+global $domain, $root_path, $page, $action, $conn;
+
+require_once 'models/user/user.php';
+$usersModel = new User($conn);
+$userDetails = $usersModel->getUserById($_SESSION['user_id']);
+unset($usersModel);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,6 +30,10 @@ global $domain, $root_path, $page, $action;
 	<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script> -->
 	<link rel="stylesheet" href="style/style.css" />
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+	<script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ96j3p6QhL6pG6L7Jz4uB4pB7I9fX6p5z5w2k4t5N6g9/5o5e+n8t1t2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
 </head>
 <body class="bg-gray-100">
@@ -119,14 +128,15 @@ global $domain, $root_path, $page, $action;
 					</div>
 
 					<!-- User Profile -->
-					<div class="relative flex-shrink-0">
+					<?php require_once 'user_header_menu.php'; ?>
+					<?php /*<div class="relative flex-shrink-0">
 						<img class="h-10 w-10 rounded-full object-cover"
 							src="https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
 							alt="User profile"
 							onerror="this.onerror=null;this.src='https://placehold.co/40x40/E0E0E0/000000?text=U'">
 						<!-- Status Dot -->
 						<span class="absolute bottom-0 right-0 block h-[5px] w-[5px] rounded-full bg-[#27ae60] ring-2 ring-white"></span>
-					</div>
+					</div> */?>
 				</div>
 			</div>
 		</div>
