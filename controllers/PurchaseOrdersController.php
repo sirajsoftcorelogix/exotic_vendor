@@ -84,6 +84,7 @@ class PurchaseOrdersController {
         $rate = isset($_POST['rate']) ? $_POST['rate'] : [];
         //$total = isset($_POST['total']) ? $_POST['total'] : 0;
         $grand_total = isset($_POST['grand_total']) ? $_POST['grand_total'] : 0;
+        $subtotal = isset($_POST['subtotal']) ? $_POST['subtotal'] : 0;
         $shipping_cost = isset($_POST['shipping_cost']) ? $_POST['shipping_cost'] : 0;
         $gst = isset($_POST['gst']) ? $_POST['gst'] : [];
         $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : []; 
@@ -102,6 +103,7 @@ class PurchaseOrdersController {
             'delivery_address' => $deliveryAddress,
             'total_gst' => $total_gst,
             'grand_total' => $grand_total,
+            'subtotal' => $subtotal,
             'shipping_cost' => $shipping_cost,
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
         ];
@@ -140,7 +142,7 @@ class PurchaseOrdersController {
         //Update order status        
         $statusupdate = [];
         foreach($orderid as $index=>$id){
-           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing');
+           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing', $poData['po_number'], $poId);
         }
         
         
@@ -351,15 +353,15 @@ class PurchaseOrdersController {
             $tbody = '';
             foreach ($purchaseOrderItems as $index => $item) {
                 $tbody .= '<tr>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px;">';
+                $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
+                $tbody .= '<td style="width:30% !important; border:1px solid #000; padding:6px;">';
                 $tbody .= '<b>' . htmlspecialchars($item['title']) . ' |</b><br>';                
                 $tbody .= '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['hsn']) . '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
+                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['hsn']) . '</td>';
+                $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
+                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
+                $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
                 $tbody .= '</tr>';
                 
             }
@@ -384,7 +386,7 @@ class PurchaseOrdersController {
         $pdf->SetCreator('Hedayat Technologies');
         $pdf->SetAuthor('Exotic India Art Pvt. Ltd.');
         $pdf->SetTitle('Purchase Order #568217');
-        $pdf->setFont('notosans', '', 10);
+        $pdf->SetFont('notosansdisplay', '', 12);
         $pdf->SetMargins(10, 10, 10);
         $pdf->AddPage();
 

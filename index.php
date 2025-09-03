@@ -5,7 +5,7 @@ error_reporting(E_ALL);
 date_default_timezone_set('Asia/Kolkata');
 
 require_once 'bootstrap/init/init.php';
-$page = $_GET['page'] ?? 'dashboard';
+$page = $_GET['page'] ?? 'orders';
 $action = $_GET['action'] ?? 'list';
 //$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
 

@@ -17,17 +17,18 @@ class PurchaseOrder {
         return $purchaseOrders;
     }
     public function createPurchaseOrder($data) {
-        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, user_id, expected_delivery_date, delivery_address, notes, total_gst, total_cost, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, user_id, expected_delivery_date, delivery_address, notes, total_gst, total_cost, subtotal, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("siisssddd",
+        $stmt->bind_param("siisssdddd",
             $data['po_number'],  
             $data['vendor_id'],
             $data['user_id'],
             $data['expected_delivery_date'], 
             $data['delivery_address'], 
             $data['notes'],
-            $data['total_gst'], 
+            $data['total_gst'],            
             $data['grand_total'],
+            $data['subtotal'],
             $data['shipping_cost']
         );
         if ($stmt->execute()) {

@@ -117,14 +117,14 @@ class Order{
 
         return ['success' => true, 'insert_id' => $insertId];
     }
-    public function updateOrderStatus($id, $status) {
+    public function updateOrderStatus($id, $status, $po_number, $po_id) {
         // Validate inputs
         if (empty($id) || empty($status)) {
             return ['success' => false, 'message' => 'ID or status is missing.'];
         }
 
         // Prepare SQL statement
-        $sql = "UPDATE vp_orders SET status = ? WHERE id = ?";
+        $sql = "UPDATE vp_orders SET status = ?, po_number = ?, po_id = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
 
         if (!$stmt) {
@@ -132,7 +132,7 @@ class Order{
         }
 
         // Bind parameters
-        $stmt->bind_param('si', $status, $id);
+        $stmt->bind_param('ssii', $status, $po_number, $po_id, $id);
 
         // Execute and check result
         if (!$stmt->execute()) {

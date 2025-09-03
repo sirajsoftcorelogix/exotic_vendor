@@ -77,7 +77,7 @@ global $domain, $root_path;
     .then(data => {
       if (data.success) {
         //alert('Login successful!');
-        window.location.href = "<?php echo $domain; ?>/?page=dashboard&action=list";
+        window.location.href = "<?php echo $domain; ?>/?page=orders&action=list";
       } else {
         //alert('Login failed: ' + data.message);
         errorDiv.textContent = data.message;
