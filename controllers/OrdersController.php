@@ -119,6 +119,8 @@ class OrdersController {
                 'image' => $item['image'] ?? '',
                 'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                 'quantity' => $item['qty'] ?? '',
+                'gst' => $item['gst'] ?? '',
+                'hsn' => $item['hscode'] ?? '',
                 'options' => $item['options'] ?? 0,
                 'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
                  ];
@@ -126,25 +128,29 @@ class OrdersController {
                 }
                 // Add other fields as needed
            
+            //echo "<br>";
+            //print_r($data);
             // echo "<br>";
-            // print_r($data);
-            // echo "<br>";
+           
             //$totalorder = count($data);
-            $result[] = $ordersModel->insertOrder($data);
-            // if ($result){
-            //     if (is_array($result) && isset($result['success']) && $result['success'] === false) {
-            //         // Handle error case
-            //         renderTemplateClean('views/errors/error.php', ['message' => $result['message']], 'Import Error');
-            //         return;
-            //     }
-            // }else {
+            $rdata = $ordersModel->insertOrder($data);
+            $result[] = $rdata;
+            //print_array($rdata);
+            //if ($result){
+                if (isset($rdata['success']) && $rdata['success'] == 1) {
+                    // Handle error case
+                    //renderTemplateClean('views/errors/error.php', ['message' => $result['message']], 'Import Error');
+                    //return;
+                     $imported++;
+                }
+            //} else {
             //     renderTemplateClean('views/errors/error.php', ['message' => 'Failed to insert order.'], 'Import Error');                
             //     return;
             // }
-            $imported++;
+           
         }
         //print_r($result);
-
+        
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
             'result' => $result,

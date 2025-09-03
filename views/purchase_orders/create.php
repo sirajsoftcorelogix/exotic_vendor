@@ -68,9 +68,9 @@
             <tr class="bg-white">
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
                 <td class="p-4"><input type="hidden" name="title[]" value="<?= $item['title'] ?>" ><?php echo $item['title']; ?></td>
-                <td class="p-4"><input type="hidden" name="hsn[]" value="<?= $item['item_code'] ?>"><?php echo $item['item_code']; ?></td>
+                <td class="p-4"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
                 <td class="p-4"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img src="<?php echo $item['image']; ?>" class="rounded-lg"></td>
-                <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="18" oninput="calculateTotals()" required></td>
+                <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
                         <input type="number" name="quantity[]" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['quantity'];  ?>" oninput="calculateTotals()" required>

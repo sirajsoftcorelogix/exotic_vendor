@@ -384,7 +384,7 @@ class PurchaseOrdersController {
         $pdf->SetCreator('Hedayat Technologies');
         $pdf->SetAuthor('Exotic India Art Pvt. Ltd.');
         $pdf->SetTitle('Purchase Order #568217');
-        $pdf->setFont('helvetica', '', 10);
+        $pdf->setFont('notosans', '', 10);
         $pdf->SetMargins(10, 10, 10);
         $pdf->AddPage();
 

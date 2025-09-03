@@ -1,4 +1,5 @@
 <?php
+//print_array($data);
 if(isset($data['imported']) && isset($data['total'])) {
     $imported = $data['imported'];
     $total = $data['total'];

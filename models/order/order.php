@@ -88,10 +88,10 @@ class Order{
 
         // Insert
         $sql = "INSERT INTO vp_orders 
-            (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, options, order_date) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, gst, hsn, options, order_date) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssssssiss', 
+        $stmt->bind_param('ssssssssissss', 
             $data['order_number'], 
             $data['title'],
             $data['item_code'],
@@ -101,6 +101,8 @@ class Order{
             $data['image'],
             $data['marketplace_vendor'],
             $data['quantity'],
+            $data['gst'],
+            $data['hsn'],
             $data['options'],
             $data['order_date']
         );
@@ -163,8 +165,8 @@ class Order{
                     'item_code' => $row['item_code'],
                     'title' => $row['title'],
                     'price' => $row['unit_price'],
-                    'gst' => $row['tax'],
-                    // 'description' => $row['description'],
+                    'gst' => $row['gst'],
+                    'description' => $row['description'],
                     'image' => $row['image'],
                     // 'marketplace_vendor' => $row['marketplace_vendor'],
                     'quantity' => $row['quantity'],
