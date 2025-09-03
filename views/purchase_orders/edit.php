@@ -95,7 +95,9 @@
     </div>
     <!-- Add Item Button and Totals -->
     <div class="mt-4 flex justify-between items-start">
-        <button type="button" class="add-item bg-blue-500 text-white px-4 py-2 rounded">Add Item</button>
+        <div>
+            <!-- <button type="button" class="add-item bg-blue-500 text-white px-4 py-2 rounded">Add Item</button> -->
+        </div> 
         <div class="totals">
             <div class="flex justify-between">
                 <span class="font-bold">Subtotal:</span>

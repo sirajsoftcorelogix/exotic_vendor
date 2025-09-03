@@ -4,7 +4,7 @@
 ?>
   <div class="flex justify-between items-center">
     <h2 class="po-title">Purchase Order: <?= htmlspecialchars($purchaseOrder['po_number']) ?></h2>
-    <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Edit</button>
+    <a href="?page=purchase_orders&action=edit&po_id=<?= htmlspecialchars($purchaseOrder['id']) ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Edit</button></a>
   </div>
   <hr class="my-8">
   <div class="flex justify-between mb-8">
@@ -12,7 +12,7 @@
     <div class="space-y-2">
       <div class="flex items-center">
         <label for="vendor" class="block text-gray-700 form-label">Vendor :</label>
-        <select id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
+        <select readonly id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
           <?php foreach ($vendors as $vendor): ?>
             <option value="<?= htmlspecialchars($vendor['id']) ?>" <?= $vendor['id'] == $purchaseOrder['vendor_id'] ? 'selected' : '' ?>><?= htmlspecialchars($vendor['contact_name']) ?></option>
           <?php endforeach; ?>
@@ -20,11 +20,11 @@
       </div>
       <div class="flex items-center">
         <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address :</label>
-        <input type="text" name="delivery-address" id="delivery-address" value="<?= htmlspecialchars($purchaseOrder['delivery_address']) ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[300px]">
+        <input readonly type="text" name="delivery-address" id="delivery-address" value="<?= htmlspecialchars($purchaseOrder['delivery_address']) ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[300px]">
       </div>
       <div class="flex items-center">
         <label for="po-status" class="block text-gray-700 form-label">PO Status :</label>
-        <select id="po-status" name="po-status" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
+        <select readonly id="po-status" name="po-status" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
           <option value="sent" <?= $purchaseOrder['status'] == 'sent' ? 'selected' : '' ?>>Sent to the Vendor</option>
           <option value="pending" <?= $purchaseOrder['status'] == 'pending' ? 'selected' : '' ?>>Pending</option>
           <option value="approved" <?= $purchaseOrder['status'] == 'approved' ? 'selected' : '' ?>>Approved</option>
@@ -37,15 +37,15 @@
     <div class="space-y-2">
       <div class="flex items-center">
         <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
-        <input type="date" value="<?= htmlspecialchars($purchaseOrder['expected_delivery_date']) ?>" name="delivery-due-date" id="delivery-due-date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[150px]">
+        <input readonly type="date" value="<?= htmlspecialchars($purchaseOrder['expected_delivery_date']) ?>" name="delivery-due-date" id="delivery-due-date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[150px]">
       </div>
       <div class="flex items-center">
         <label for="order-id" class="block text-gray-700 form-label">Order ID</label>
-        <input type="text" name="order-id" id="order-id" placeholder="2142086" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 placeholder-gray-400 w-[150px]">
+        <input readonly type="text" name="order-id" id="order-id" placeholder="2142086" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 placeholder-gray-400 w-[150px]">
       </div>
       <div class="flex items-center">
         <label for="employee-name" class="block text-gray-700 form-label">Employee Name</label>
-        <select id="employee-name" name="employee_name" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
+        <select readonly id="employee-name" name="employee_name" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
           <?php foreach ($users as $id => $name): ?>
             <option value="<?= htmlspecialchars($id) ?>" <?= $id == $purchaseOrder['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
           <?php endforeach; ?>
@@ -76,7 +76,7 @@
         <div class="col-span-1"><?= $index + 1 ?></div>
         <div class="col-span-3"><?= htmlspecialchars($item['title']) ?></div>
         <div class="col-span-1"><?= htmlspecialchars($item['hsn']) ?></div>
-        <div class="col-span-1"><img src="<?= htmlspecialchars($item['image']) ?>" class="rounded-lg" onerror="this.onerror=null;this.src='https://placehold.co/56x88/cccccc/ffffff?text=Image';"></div>
+        <div class="col-span-1"><img src="<?= $item['image'] ?>" class="rounded-lg" onerror="this.onerror=null;this.src='https://placehold.co/56x88/cccccc/ffffff?text=Image';"></div>
         <div class="col-span-1"><?= htmlspecialchars($item['gst']) ?>%</div>
         <div class="col-span-1">
           <input type="text" value="<?= htmlspecialchars($item['quantity']) ?>" class="w-[50px] h-[25px] text-center border rounded-md focus:ring-0 form-input" readonly>
@@ -94,7 +94,7 @@
   <div class="mt-4 flex justify-between items-start">
     <!-- Add Item Button -->
     <div>
-      <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
+      <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button> -->
     </div>
     <!-- Totals Section -->
     <div class="w-1/3">
@@ -131,14 +131,14 @@
       <div class="flex justify-between items-center mb-1" style="height: 37px;">
         <label for="notes" class="block text-sm font-medium text-gray-700 notes-label">Add Note:</label>
       </div>
-      <textarea id="notes" name="notes" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important note to remember" style="min-height: 148px;"><?= $purchaseOrder['notes'] ?></textarea>
+      <textarea readonly id="notes" name="notes" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important note to remember" style="min-height: 148px;"><?= $purchaseOrder['notes'] ?></textarea>
     </div>
     <div>
       <div class="flex justify-between items-center mb-1">
         <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
         <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
       </div>
-      <textarea id="terms" name="terms" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
+      <textarea readonly id="terms" name="terms" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
     </div>
   </div>
 
