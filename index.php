@@ -31,13 +31,13 @@ switch ($page) {
             case 'add':
                 $controller->addEditUser();
                 break;
-            case 'addPost':
+            case 'addUser':
                 $controller->addPost();
                 break;
-            case 'update':
+            case 'updateUser':
                 $controller->addEditUser();
                 break;
-            case 'delete':
+            case 'deleteUser':
                 $controller->delete();
                 break;    
             case 'forgotPassword':

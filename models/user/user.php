@@ -9,21 +9,21 @@ class User {
         $this->db = $db;
     }
     public function login($login, $password) {
-    $sql = "SELECT * FROM vp_users WHERE email = ? OR phone = ?";
-    $stmt = $this->db->prepare($sql);   
-    $stmt->bind_param('ss', $login, $login);
-    $stmt->execute();
-    $result = $stmt->get_result();  
-    if ($result->num_rows > 0) {
-        $user = $result->fetch_assoc();
-        if (password_verify($password, $user['password'])) {
-            @session_start();
-            $_SESSION['user'] = $user;
-            return true;
-        }
-    }   
-    return false;
-}
+        $sql = "SELECT * FROM vp_users WHERE email = ? OR phone = ?";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('ss', $login, $login);
+        $stmt->execute();
+        $result = $stmt->get_result();  
+        if ($result->num_rows > 0) {
+            $user = $result->fetch_assoc();
+            if (password_verify($password, $user['password'])) {
+                @session_start();
+                $_SESSION['user'] = $user;
+                return true;
+            }
+        }   
+        return false;
+    }
     public function logout() {
         session_start();
         session_destroy();
@@ -119,11 +119,11 @@ class User {
             $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role = ?, is_active = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            $stmt->bind_param('ssssiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('sssssii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $id);
         } else {
             $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role = ?, is_active = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('sssiii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('ssssii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $id);
         }
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'User updated successfully.'];
@@ -138,7 +138,7 @@ class User {
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $id);
         if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'User deleted successfully. SQL: '.$stmt->error];
+            return ['success' => true, 'message' => 'User deleted successfully.'];
         }
         return ['success' => false, 'error' => 'Failed: ' . $stmt->error];
     }
