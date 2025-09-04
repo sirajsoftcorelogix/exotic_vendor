@@ -177,6 +177,12 @@ class Order{
         }
         return $orderItems;
     }
+    public function updateOrderStatusByPO($po_id, $status) {
+        $sql = "UPDATE vp_orders SET status = ? WHERE po_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('si', $status, $po_id);
+        return $stmt->execute();
+    }
 
 }
 ?> 

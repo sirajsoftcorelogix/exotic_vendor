@@ -62,4 +62,10 @@ class PurchaseOrderItem {
         );
         return $stmt->execute();
     }
+    public function deletePurchaseOrderItemsByPOId($po_id) {
+        $query = "DELETE FROM vp_po_items WHERE purchase_orders_id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $po_id);
+        return $stmt->execute();
+    }
 }

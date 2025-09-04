@@ -140,6 +140,9 @@ switch ($page) {
             case 'delete':
                 $controller->deletePurchaseOrder(); 
                 break;
+            case 'update_status':
+                $controller->updateStatus();
+                break;
             default:
                 $controller->index();
                 break;
