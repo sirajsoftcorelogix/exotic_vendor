@@ -1,8 +1,6 @@
 <div class="container">
-
-<?php 
+<?php
 if (isset($data['user']['id'])) {
-  //echo "<h3>Edit User: " . htmlspecialchars($data['user']['name']) . "</h3>";
 ?>
 <div class="h-full w-full overflow-y-auto">
     <div class="p-8">
@@ -54,60 +52,11 @@ if (isset($data['user']['id'])) {
         </form>
     </div>
 </div>
-<?php 
-}/*else {?>
-<h3>Add New User</h3> 
-<form id="addUserForm">
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <label for="inputEmail4" class="form-label">Email</label> 
-      <input type="email" id="email" name="email" class="form-control" required>
-    </div>
-    <div class="col-md-6">
-      <label for="inputName4" class="form-label">Name</label>
-      <input type="text" id="name" name="name" class="form-control" required>
-    </div>
-  </div>
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <label for="inputPhone4" class="form-label">Phone</label>
-      <input type="text" id="phone" name="phone" class="form-control" required>
-    </div>
-    <div class="col-md-6">
-      <label for="inputPassword4" class="form-label">Password</label>
-      <input type="password" id="password" name="password" class="form-control" required>
-    </div>
-  </div>
-  <div class="row mb-3">  
-    <div class="col-md-6">
-      <label for="inputRole4" class="form-label">Role</label>
-      <select id="role" name="role" class="form-select">
-        <option value="admin">Admin</option>
-        <option value="user">User</option>
-      </select>
-    </div>
-    <div class="col-md-6">
-      <label for="inputActive4" class="form-label">Active</label>
-      <select id="is_active" name="is_active" class="form-select">
-        <option value="1">Yes</option>
-        <option value="0">No</option>
-      </select>
-    </div>
-  </div>  
-  <input type="hidden" name="action" value="addPost">
-  <input type="hidden" name="page" value="users"> 
-
-  <button type="submit" class=" ">Add User</button>
-</form>
-<div id="addUserMsg" style="margin-top:10px;"> </div>
-<?php }*/ ?>
 <script>
   document.getElementById('addUserForm').onsubmit = function(e) {
     e.preventDefault();
     var form = new FormData(this);
     var params = new URLSearchParams(form).toString();
-    var msgDiv = document.getElementById('addUserMsg');
-    msgDiv.textContent = '';
     fetch('?page=users&action=addUser', {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -115,15 +64,26 @@ if (isset($data['user']['id'])) {
     })
     .then(r => r.json())
     .then(data => {
-      console.log("Success:", data);
-      msgDiv.textContent = data.message;
-      msgDiv.style.color = data.success ? 'green' : 'red';
-      if (data.success) { 
-          setTimeout(() => {
-            location.reload();
-          }, 1000); // refresh after 1 sec
+      var msgBox = document.getElementById('addUserMsg');
+      msgBox.innerHTML = '';
+      if (data.success) {
+        msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
+                            ✅ ${data.message}
+        </div>`;
+      } else {
+        msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
+            ❌ ${data.message}
+        </div>`;
       }
+      setTimeout(() => {
+        window.location.href = '?page=users&action=list';
+      }, 1000); // redirect after 1 sec
     });
   };
 </script>
+<?php 
+} else {
+  echo "<h3>User not found.</h3>";
+}
+?>
 </div>
