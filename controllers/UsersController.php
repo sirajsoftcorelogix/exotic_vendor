@@ -211,23 +211,36 @@ class UsersController {
     public function index() {
         is_login();
         global $usersModel;
-        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $search = isset($_GET['search']) ? trim($_GET['search']) : '';
+        /*$page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;*/
+        $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+        $role_filter = isset($_GET['role_filter']) ? trim($_GET['role_filter']) : '';
+        $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
+
         $sort_by = isset($_GET['sort_by']) ? $_GET['sort_by'] : 'id';
         $sort_order = isset($_GET['sort_order']) ? $_GET['sort_order'] : 'asc';
-        $limit = 20;
-        $offset = ($page_no - 1) * $limit;
 
-        $users_data = $usersModel->getAll($search, $sort_by, $sort_order, $limit, $offset);
-        $total_records = $usersModel->countAll($search);    
+        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Users per page, default 5
+        $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
+        
+        //$users_data = $usersModel->getAll($search, $sort_by, $sort_order, $limit, $offset);
+        //$total_records = $usersModel->countAll($search);
+        $users_data = $usersModel->getAllUsersListing($page_no, $limit, $search, $role_filter, $status_filter);
         $data = [
-            'users' => $users_data,
+            'users' => $users_data["users"],
             'page_no' => $page_no,
-            'total_pages' => ceil($total_records / $limit),
+            'total_pages' => $users_data["totalPages"],
             'sort_by' => $sort_by,
             'sort_order' => $sort_order,
-            'search' => $search
+            'search' => $search,
+            'totalPages'   => $users_data["totalPages"],
+            'currentPage'  => $users_data["currentPage"],
+            'limit'        => $limit,
+            'totalRecords' => $users_data["totalRecords"],
+            'role_filter'  => $role_filter,
+            'status_filter'=> $status_filter
         ];
+
         renderTemplate('views/users/index.php', $data, 'Users');
     }
     public function addEditUser() {
@@ -255,21 +268,12 @@ class UsersController {
         global $usersModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;
-            $data['role'] = 'user';
-            $data['is_active'] = 1;
-            //print_r($data);
             if (isset($data['id']) && $data['id'] > 0) {
                 $result = $usersModel->update($data['id'], $data);
             }else {
                 $data['id'] = 0; // Ensure id is set for insert
                 $result = $usersModel->insert($data);
             }
-            // if (!$result) {
-            //     echo json_encode(['success' => false, 'message' => 'Database operation failed.']);
-            // } else {
-            //     echo json_encode(['success' => true, 'message' => 'User saved successfully.']);
-            // }
-            
             echo json_encode($result);
         }
         exit;
@@ -280,14 +284,7 @@ class UsersController {
         $result = $usersModel->delete($id);
         
         echo json_encode($result);
-        // if ($usersModel->delete($id)) {
-        //     echo json_encode(['success' => true, 'message' => 'User deleted.']);
-        // } else {
-        //     echo json_encode(['success' => false, 'message' => 'Delete failed.']);
-        // }
         exit;
     }
-
 }
-
 ?>

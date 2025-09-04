@@ -33,7 +33,7 @@ if (isset($data['user']['id'])) {
                     <label for="role" class="text-sm font-medium text-gray-700">Role:</label>
                     <select id="role" name="role" class="form-select w-full mt-1" required>
                         <option value="admin" <?= $data['user']['role'] == 'admin' ? 'selected' : '' ?>>Admin</option>
-                        <option value="user" <?= $data['user']['role'] == 'user' ? 'selected' : '' ?>>User</option>
+                        <option value="onboarding_executive" <?= $data['user']['role'] == 'onboarding_executive' ? 'selected' : '' ?>>Onboarding Executive</option>
                     </select>
                 </div>
 

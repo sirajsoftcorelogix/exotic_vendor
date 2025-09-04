@@ -178,6 +178,87 @@ class User {
         }
         return $users;
     }
+    public function getAllUsersListing($page = 1, $limit = 10, $search = '', $role_filter = '', $status_filter = '') {
+        // sanitize
+        $page = (int)$page;
+        if ($page < 1) $page = 1;
+
+        $limit = (int)$limit;
+        if ($limit < 1) $limit = 10;
+
+        // calculate offset
+        $offset = ($page - 1) * $limit;
+
+        if (!empty($status_filter)) {
+            if($status_filter == 'active') {
+                $status_filter = 1;
+            } else if($status_filter == 'inactive') {
+                $status_filter = 0;
+            }
+        }
+
+        // 🔹 Build search condition
+        $where = "";
+        if (!empty($search) && !empty($role_filter) && !empty($status_filter)) {
+            $search = $this->db->real_escape_string($search);
+            $role_filter = $this->db->real_escape_string($role_filter);
+            $status_filter = $this->db->real_escape_string($status_filter);
+            $where = "WHERE (name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%') AND role = '$role_filter' AND is_active = '$status_filter'";
+        } else if (!empty($search) && !empty($role_filter)) {
+            $search = $this->db->real_escape_string($search);
+            $role_filter = $this->db->real_escape_string($role_filter);
+            $where = "WHERE (name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%') AND role = '$role_filter'";
+        } else if (!empty($search) && !empty($status_filter)) {
+            $search = $this->db->real_escape_string($search);
+            $status_filter = $this->db->real_escape_string($status_filter);
+            $where = "WHERE (name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%') AND is_active = '$status_filter'";
+        } else if (!empty($role_filter) && !empty($status_filter)) {
+            $role_filter = $this->db->real_escape_string($role_filter);
+            $status_filter = $this->db->real_escape_string($status_filter);
+            $where = "WHERE role = '$role_filter' AND is_active = '$status_filter'";
+        } else {
+            if (!empty($search)) {
+                $search = $this->db->real_escape_string($search);
+                $where = "WHERE name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%'";
+            }
+
+            if (!empty($role_filter)) {
+                $search = $this->db->real_escape_string($role_filter);
+                $where = "WHERE role = '$role_filter'";
+            }
+
+            if (!empty($status_filter)) {
+                $search = $this->db->real_escape_string($status_filter);   
+                $where = "WHERE is_active = '$status_filter'";
+            }
+        }
+
+        // total records
+        $resultCount = $this->db->query("SELECT COUNT(*) AS total FROM vp_users $where");
+        $rowCount = $resultCount->fetch_assoc();
+        $totalRecords = $rowCount['total'];
+
+        $totalPages = ceil($totalRecords / $limit);
+
+        // fetch data
+        $sql = "SELECT * FROM vp_users $where LIMIT $limit OFFSET $offset";
+        $result = $this->db->query($sql);
+
+        $users = [];
+        while ($row = $result->fetch_assoc()) {
+            $users[] = $row;
+        }
+
+        // return structured data
+        return [
+            'users'        => $users,
+            'totalPages'   => $totalPages,
+            'currentPage'  => $page,
+            'limit'        => $limit,
+            'totalRecords' => $totalRecords,
+            'search'       => $search
+        ];
+    }
 }
 
 
