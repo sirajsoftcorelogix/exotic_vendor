@@ -42,6 +42,9 @@ switch ($page) {
                 break;
             case 'deleteUser':
                 $controller->delete();
+                break;
+            case 'updateProfile':
+                $controller->updateUserProfile();
                 break;    
             case 'forgotPassword':
                 $controller->forgotPassword();

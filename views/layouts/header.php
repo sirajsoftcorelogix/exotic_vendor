@@ -45,7 +45,7 @@
                     <button id="profile-menu-button" class="flex-shrink-0 focus:outline-none">
                         <div class="relative">
                             <img class="h-10 w-10 rounded-full object-cover"
-                                 src="https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                 src="images/user_pic.png"
                                  alt="User profile"
                                  onerror="this.onerror=null;this.src='https://placehold.co/40x40/E0E0E0/000000?text=U'">
                             <span class="absolute bottom-0 right-0 block h-[5px] w-[5px] rounded-full bg-[#27ae60] ring-2 ring-white"></span>
@@ -59,14 +59,14 @@
                             <div class="flex items-center space-x-3">
                                 <div class="relative flex-shrink-0">
                                     <img class="h-10 w-10 rounded-full object-cover"
-                                         src="https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG0by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                         src="images/user_pic.png"
                                          alt="User profile"
                                          onerror="this.onerror=null;this.src='https://placehold.co/40x40/E0E0E0/000000?text=U'">
                                     <span class="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white"></span>
                                 </div>
                                 <div>
-                                    <p class="profile-name text-gray-800">Mukul Joshi</p>
-                                    <p class="profile-title">Onboarding Executive</p>
+                                    <p class="profile-name text-gray-800"><?php echo($userDetails["name"]);?></p>
+                                    <p class="profile-title"><?= ($userDetails['role'] != "") ? ucwords(str_replace("_", " ", $userDetails['role'])) : '' ?></p>
                                 </div>
                             </div>
                         </div>
@@ -74,7 +74,7 @@
                         <!-- Menu Items -->
                         <div class="mt-2">
                             <!-- Profile Setting -->
-                            <a href="#" class="flex items-center space-x-3 px-3 py-1 hover:bg-gray-100 rounded-md transition-colors">
+                            <a href="#" onclick="openUserProfileEditModal(<?php echo $userDetails['id']; ?>)" class="flex items-center space-x-3 px-3 py-1 hover:bg-gray-100 rounded-md transition-colors">
                                 <svg class="w-[17px] h-[17px] text-gray-400" width="19" height="19" viewBox="0 0 19 19" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M9.5 18C14.1944 18 18 14.1944 18 9.5C18 4.80558 14.1944 1 9.5 1C4.80558 1 1 4.80558 1 9.5C1 14.1944 4.80558 18 9.5 18Z" stroke="#5D6772" stroke-width="1.5" stroke-miterlimit="10" stroke-linejoin="round"/>
                                     <path d="M15.1666 15.7333C15.1666 12.6036 12.6297 10.0667 9.49998 10.0667C6.37028 10.0667 3.83331 12.6036 3.83331 15.7333" stroke="#5D6772" stroke-width="1.5" stroke-miterlimit="10" stroke-linejoin="round"/>
@@ -124,6 +124,67 @@
         </div>
     </div>
 </header>
+
+<!-- Edit User Modal -->
+<div class="modal fade hidden" id="editUserProfileModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <!-- Sliding Container -->
+    <div id="modal-slider-edit" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: 35%; min-width: 400px;">
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-vendor-popup-btn-edit" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Popup Panel -->
+        <div class="h-full bg-white shadow-2xl" style="width: 100%;">
+            <div class="h-full w-full overflow-y-auto">
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Profile</h2>
+                    <div id="editUserProfileMsg" style="margin-top:10px;"></div>
+                    <form id="editUserProfile">
+                        <input type="hidden" id="editUserId" name="id" value="">
+                        <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
+                            <div>
+                                <label for="name" class="text-sm font-medium text-gray-700">Name:</label>
+                                <input type="text" id="editName" name="name" class="form-input w-full mt-1" required>
+                            </div>
+
+                            <div>
+                                <label for="email" class="text-sm font-medium text-gray-700">Email:</label>
+                                <input type="email" id="editEmail" name="email" class="form-input w-full mt-1" readonly>
+                            </div>
+
+                            <div>
+                                <label for="phone" class="text-sm font-medium text-gray-700">Phone:</label>
+                                <input type="number" id="EditPhone" name="phone" class="form-input w-full mt-1" required>
+                            </div>
+
+                            <div>
+                                <label for="password" class="text-sm font-medium text-gray-700">Password:</label>
+                                <input type="password" id="editPassword" name="password" class="form-input w-full mt-1">
+                            </div>
+
+                        </div>
+
+                        <div class="flex justify-center items-center gap-4 pt-6 border-t">
+                            <button type="button" id="cancel-vendor-btn-edit" class="action-btn cancel-btn">Back</button>
+                            <button type="submit" class="action-btn save-btn">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+  </div>
+</div>
+<!-- End Model Popup -->
+
 <!-- JavaScript for Popup Toggle -->
 <script>
     const profileMenuButton = document.getElementById('profile-menu-button');
@@ -165,4 +226,68 @@
     logoutPopup.addEventListener('click', (event) => {
         event.stopPropagation();
     });
+
+    // Edit User Modal Logic    
+    const popupWrapperEdit = document.getElementById('editUserProfileModal');
+    const modalSliderEdit = document.getElementById('modal-slider-edit');
+    const cancelVendorBtnEdit = document.getElementById('cancel-vendor-btn-edit');
+    const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
+
+    function openUserProfileEditModal(id) {
+        fetch("?page=users&action=userDetails&id=" + id)
+        .then(res => res.json())
+        .then(user => {
+            if (user.status === "error") {
+                alert(user.message);
+                return;
+            }
+            document.getElementById("editUserId").value   = user.id;
+            document.getElementById("editName").value = user.name;
+            document.getElementById("editEmail").value= user.email;
+            document.getElementById("EditPhone").value= user.phone;
+
+            popupWrapperEdit.classList.remove('hidden');
+            setTimeout(() => {
+                modalSliderEdit.classList.remove('translate-x-full');
+            }, 10);
+            //document.getElementById('editUserModal').show();
+        });
+    }
+
+    function closeVendorPopupEdit() {
+        modalSliderEdit.classList.add('translate-x-full');
+    }
+
+    closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
+
+    document.getElementById('editUserProfile').onsubmit = function(e) {
+        e.preventDefault();
+        var form = new FormData(this);
+        var params = new URLSearchParams(form).toString();
+        fetch('?page=users&action=updateProfile', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: params
+        })
+        .then(r => r.json())
+        .then(data => {
+            var msgBox = document.getElementById('editUserProfileMsg');
+            msgBox.innerHTML = '';
+            if (data.success) {
+                msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
+                                    ✅ ${data.message}
+                </div>`;
+            } else {
+                msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
+                    ❌ ${data.message}
+                </div>`;
+            }
+            setTimeout(() => {
+                msgBox.innerHTML = '';
+                closeVendorPopupEdit();
+                location.reload();
+            }, 1000); // redirect after 1 sec
+        });
+    };
 </script>

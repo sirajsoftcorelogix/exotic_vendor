@@ -133,6 +133,26 @@ class User {
             'message' => 'Update failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
+    public function updateUserPriofile($id, $data) {
+
+        if (!empty($data['password'])) {
+            $sql = "UPDATE vp_users SET name = ?, phone = ?, password = ? WHERE id = ?";
+            $stmt = $this->db->prepare($sql);
+            $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
+            $stmt->bind_param('sssi', $data['name'], $data['email'], $data['phone'], $hashedPassword, $id);
+        } else {
+            $sql = "UPDATE vp_users SET name = ?, phone = ? WHERE id = ?";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('ssi', $data['name'], $data['phone'], $id);
+        }
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Your profile updated successfully.'];
+        }
+        return [
+            'success' => false,
+            'message' => 'Update failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+        ];
+    }
     public function delete($id) {
         $sql = "DELETE FROM vp_users WHERE id = ?";
         $stmt = $this->db->prepare($sql);
