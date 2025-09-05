@@ -383,7 +383,7 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Purchase Order deleted successfully.', 'status' => $statusUpdate]);
         exit;
     }
-    function downloadPurchaseOrder() {
+    function downloadPurchaseOrder_old() {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
 
@@ -425,29 +425,30 @@ class PurchaseOrdersController {
         }
         
         
+        // // Generate PDF or any other format for download
+        // require_once('vendor/tc/vendor/autoload.php'); // Adjust path if needed
+
+        // // Create new PDF document
+        // $pdf = new TCPDF();
+        // $pdf->SetCreator('Hedayat Technologies');
+        // $pdf->SetAuthor('Exotic India Art Pvt. Ltd.');
+        // $pdf->SetTitle('Purchase Order #568217');
+        // $pdf->setFont('helvetica', '', 10);
+
         // Generate PDF or any other format for download
         require_once('vendor/tc/vendor/autoload.php'); // Adjust path if needed
 
         // Create new PDF document
-        $pdf = new TCPDF();
+        //$pdf = new TCPDF();
+        $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
         $pdf->SetCreator('Hedayat Technologies');
         $pdf->SetAuthor('Exotic India Art Pvt. Ltd.');
         $pdf->SetTitle('Purchase Order #568217');
-        $pdf->setFont('helvetica', '', 10);
-
-        // Generate PDF or any other format for download
-        require_once('vendor/tc/vendor/autoload.php'); // Adjust path if needed
-
-        // Create new PDF document
-        $pdf = new TCPDF();
-        $pdf->SetCreator('Hedayat Technologies');
-        $pdf->SetAuthor('Exotic India Art Pvt. Ltd.');
-        $pdf->SetTitle('Purchase Order #568217');
-        $pdf->SetFont('notosansdisplay', '', 12);
+        //$pdf->SetFont('notosansdisplay', '', 12);
         $pdf->SetMargins(10, 10, 10);
         $pdf->AddPage();
-
-        
+        $fontname = TCPDF_FONTS::addTTFfont('vendor/tc/fonts/MangalRegular.ttf', 'TrueTypeUnicode', '', 96);
+        $pdf->SetFont($fontname, '', 14, '', false);    
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         // Define HTML content
         $html = str_replace(
@@ -464,6 +465,88 @@ class PurchaseOrdersController {
         //echo 'Hedyat';
         //echo json_encode(['success' => true, 'message' => 'Purchase Order downloaded successfully.']);
         //exit;
+    }
+    function downloadPurchaseOrder(){    
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+
+        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }else{
+            // Fetch purchase order items
+            $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
+            //print_array($purchaseOrderItems);
+           
+            if ($purchaseOrderItems === false) {
+                echo json_encode(['success' => false, 'message' => 'Failed to fetch Purchase Order items.']);
+                exit;
+            }
+            $tbody = '';
+            foreach ($purchaseOrderItems as $index => $item) {
+                $tbody .= '<tr>';
+                $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
+                $tbody .= '<td style="width:30% !important; border:1px solid #000; padding:6px;">';
+                $tbody .= '<b>' . htmlspecialchars($item['title']) . ' |</b><br>';                
+                $tbody .= '</td>';
+                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['hsn']) . '</td>';
+                $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
+                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
+                $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
+                $tbody .= '</tr>';
+                
+            }
+        }
+        
+        require_once('vendor/autoload.php');
+        define('_MPDF_TTFONTPATH',  __DIR__ . '/../templates/fonts/');      
+
+        $mpdf = new \Mpdf\Mpdf([
+            'mode' => 'utf-8',
+            'default_font_size' => 12,
+            'autoScriptToLang' => true,
+            'autoLangToFont' => true
+        ]);
+
+        $mpdf->fontdata['noto_devanagari'] = [
+            'R' => 'NotoSansDevanagari-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+
+        $mpdf->fontdata['noto_tamil'] = [
+            'R' => 'NotoSansTamil-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+
+        $mpdf->fontdata['noto_bengali'] = [
+            'R' => 'NotoSansBengali-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+
+        $mpdf->fontdata['noto_gujarati'] = [
+            'R' => 'NotoSansGujarati-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+
+        $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
+        // Define HTML content
+        $html = str_replace(
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}'],
+            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost']],
+            $temphtml
+        );
+
+        $mpdf->WriteHTML($html);
+        $mpdf->Output($purchaseOrder['po_number'] . '.pdf', 'D');
     }
     function toggleStar() {
         global $purchaseOrdersModel;

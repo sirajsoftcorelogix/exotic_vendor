@@ -1,7 +1,7 @@
 <div class="max-w-7xl mx-auto space-y-6">
-    <div class="p-8">
+    <!-- <div class="p-8">
         
-    </div>
+    </div> -->
     <!-- Page Header -->
     <div class="flex flex-wrap items-center justify-between gap-4 mt-5">
         <!-- Header Section with Filters and Actions -->
