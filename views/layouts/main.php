@@ -43,6 +43,8 @@ unset($usersModel);
 
 <?php include 'views/layouts/left_menu.php'; ?>
 <div class="flex-1 flex flex-col overflow-hidden">
+	<?php require_once 'header.php'; ?>
+	<?php /*?>
 	<header class="bg-white border-b border-[rgba(226,228,230,1)]">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 			<div class="flex justify-between items-center py-3">
@@ -129,18 +131,11 @@ unset($usersModel);
 
 					<!-- User Profile -->
 					<?php require_once 'user_header_menu.php'; ?>
-					<?php /*<div class="relative flex-shrink-0">
-						<img class="h-10 w-10 rounded-full object-cover"
-							src="https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-							alt="User profile"
-							onerror="this.onerror=null;this.src='https://placehold.co/40x40/E0E0E0/000000?text=U'">
-						<!-- Status Dot -->
-						<span class="absolute bottom-0 right-0 block h-[5px] w-[5px] rounded-full bg-[#27ae60] ring-2 ring-white"></span>
-					</div> */?>
 				</div>
 			</div>
 		</div>
 	</header>
+	<?php */?>
 	<!-- JavaScript for Popup Toggle -->
 	<!-- <script>
 		const profileMenuButton = document.getElementById('profile-menu-button');

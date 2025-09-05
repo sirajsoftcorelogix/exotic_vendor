@@ -37,6 +37,9 @@ switch ($page) {
             case 'updateUser':
                 $controller->addEditUser();
                 break;
+            case 'userDetails':
+                $controller->getUserDetails();
+                break;
             case 'deleteUser':
                 $controller->delete();
                 break;    
