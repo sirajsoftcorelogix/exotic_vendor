@@ -278,6 +278,23 @@ class UsersController {
         }
         exit;
     }
+    public function updateUserProfile()  {
+        global $usersModel;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data = $_POST;
+            if (isset($data['id']) && $data['id'] > 0) {
+                $result = $usersModel->updateUserPriofile($data['id'], $data);
+            } else {
+                $result = [
+                    'success' => false,
+                    'message' => 'Error occurred. Please check your input and fill all required fields correctly.'
+                ];
+            }
+            echo json_encode($result);
+        }
+        exit;
+    }
+    
     public function delete() {
         global $usersModel;
         $id = $_POST['id'] ?? 0;
