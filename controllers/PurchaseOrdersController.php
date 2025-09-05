@@ -326,6 +326,63 @@ class PurchaseOrdersController {
         echo json_encode($orderItems);
         exit;
     }
+    public function updateStatus() {
+        global $purchaseOrdersModel;
+        $po_id = $_POST['po_id'] ?? 0;
+        $status = $_POST['status'] ?? '';
+        // Validate and update status in DB...
+        if (!$po_id || !$status) {
+            echo json_encode(['success' => false, 'message' => 'Invalid input.']);
+            exit;
+        }
+
+        $isUpdated = $purchaseOrdersModel->updateStatus($po_id, $status);
+        if (!$isUpdated) {
+            echo json_encode(['success' => false, 'message' => 'Failed to update status.']);
+            exit;
+        }
+
+        // Return JSON:
+        echo json_encode(['success' => true]);
+        exit;
+    }
+    public function deletePurchaseOrder() {
+        global $purchaseOrdersModel;
+        global $ordersModel;
+        global $purchaseOrderItemsModel;
+
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        //check if purchase order is cancelled
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if ($purchaseOrder['status'] != 'cancelled') {
+            echo json_encode(['success' => false, 'message' => 'Only cancelled Purchase Orders can be deleted.']);
+            exit;
+        }
+        //delete purchase order items
+        $isItemsDeleted = $purchaseOrderItemsModel->deletePurchaseOrderItemsByPOId($poId);
+        if (!$isItemsDeleted) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete Purchase Order items.']);
+            exit;
+        }   
+        // Delete the purchase order
+        $isDeleted = $purchaseOrdersModel->deletePurchaseOrder($poId);
+        if (!$isDeleted) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete Purchase Order.']);
+            exit;
+        }
+        
+        // Update order status
+        $statusUpdate = $ordersModel->updateOrderStatusByPO($poId, 'pending');
+
+        // If everything is successful, return success response
+        echo json_encode(['success' => true, 'message' => 'Purchase Order deleted successfully.', 'status' => $statusUpdate]);
+        exit;
+    }
     function downloadPurchaseOrder() {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
@@ -408,4 +465,25 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'message' => 'Purchase Order downloaded successfully.']);
         //exit;
     }
+    function toggleStar() {
+        global $purchaseOrdersModel;
+
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+       
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+
+        // Toggle the star flag
+        $isToggled = $purchaseOrdersModel->toggleStar($poId);
+        if ($isToggled === false) {
+            echo json_encode(['success' => false, 'message' => 'Failed to toggle star flag.']);
+            exit;
+        }
+
+        // If everything is successful, return success response
+        echo json_encode(['success' => true, 'message' => 'Star flag toggled successfully.', 'flag_star' => $isToggled]);
+        exit;
+    }   
 }

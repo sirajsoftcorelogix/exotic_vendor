@@ -1,8 +1,6 @@
 <div class="max-w-7xl mx-auto space-y-6">
     <div class="p-8">
-        <button id="open-vendor-popup-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition">
-            Open Vendor Invoice
-        </button>
+        
     </div>
     <!-- Page Header -->
     <div class="flex flex-wrap items-center justify-between gap-4 mt-5">
@@ -18,14 +16,14 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                     <tr>
-                        
+                        <th><i class="fa fa-star"></i></th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Number</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Expected Delivery Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Delivery Address</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Total GST</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Grand Total</th>
-                        
+                        <th scope="col" class="relative px-6 py-3"> <span class="table-header-text">Status</span></th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
                     </tr>
                     </thead>
@@ -34,7 +32,12 @@
                      <?php if (!empty($purchaseOrders)): ?>
                         <?php foreach ($purchaseOrders as $order): ?>
                     <tr class="table-content-text">
-
+                        <td class=" whitespace-nowrap cursor-pointer text-yellow-400" title="<?= $order['flag_star'] ? 'Unmark as Important' : 'Mark as Important' ?>">
+                            <?= $order['flag_star'] 
+                                ? '<i class="fa fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Unmark as Important\'></i>' 
+                                : '<i class="far fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Mark as Important\'></i>' 
+                            ?>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600"><?= htmlspecialchars($order['vendor_id']) ?></div>
                         </td>
@@ -48,8 +51,40 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                         <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= htmlspecialchars($order['total_cost']) ?></span>
                         </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <?php
+                                $status = strtolower($order['status']);
+                                $statusClasses = [
+                                    'pending' => 'bg-yellow-100 text-yellow-800',
+                                    'ordered' => 'bg-blue-100 text-blue-800',
+                                    'received' => 'bg-green-100 text-green-800',
+                                    'delivered' => 'bg-purple-100 text-purple-800',
+                                    'cancelled' => 'bg-red-100 text-red-800'
+                                ];
+                                $badgeClass = $statusClasses[$status] ?? 'bg-gray-100 text-gray-800';
+                            ?>
+                            <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md <?= $badgeClass ?>"><?= ucfirst($status) ?></span>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div class="flex items-center space-x-4">
+                            <!-- Three-dot menu container -->
+                            <div class="menu-wrapper">
+                            <button class="menu-button" onclick="toggleMenu(this)">
+                                &#x22EE; <!-- Vertical ellipsis -->
+                            </button>
+                            <ul class="menu-popup">
+                                <li onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-eye"></i> View PO</li>
+                                <li onclick="handleAction('Edit', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-pencil-alt"></i> Edit PO</li>
+                                <li onclick="handleAction('ChangeStatus', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-exchange-alt"></i> Change Status</li>
+                                <?php if ($order['status'] == 'cancelled'): ?>
+                                <li onclick="handleAction('Delete', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-trash-alt"></i> Delete PO</li>
+                                <?php endif; ?>
+                                <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
+                                <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
+                                <li id="open-vendor-popup-btn" ><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
+                            </ul>
+                            </div>
+
+                            <!-- <div class="flex items-center space-x-4">
                                 <a title="View Purchase Order" href="<?= base_url('?page=purchase_orders&action=view&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
                                     <i class="fa fa-eye"></i>
                                 </a>
@@ -62,7 +97,7 @@
                                 <a title="Download Purchase Order" target="_blank" href="<?= base_url('?page=purchase_orders&action=download&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
                                     <i class="fa fa-download"></i>
                                 </a>
-                            </div>
+                            </div> -->
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -222,7 +257,28 @@
         </div>
     </div>
 </div>
-
+<!-- Change Status Popup -->
+<div id="status-popup-overlay" class="fixed inset-0 bg-black bg-opacity-30 z-50 hidden flex items-center justify-center">
+  <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
+    <h3 class="text-lg font-bold mb-4">Change Order Status</h3>
+    <form id="status-form">
+      <input type="hidden" id="status-po-id">
+      <label for="status-select" class="block mb-2 text-sm font-medium text-gray-700">Select Status:</label>
+      <select id="status-select" class="w-full border rounded-md p-2 mb-4">
+        <option value="pending">Pending</option>
+        <option value="ordered">Ordered</option>
+        <option value="received">Received</option>
+        <!-- <option value="delivered">Delivered</option> -->
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <div class="flex justify-end gap-2">
+        <button type="button" id="status-cancel-btn" class="bg-gray-200 px-4 py-1 rounded">Cancel</button>
+        <button type="submit" class="bg-blue-600 text-white px-4 py-1 rounded">Update</button>
+      </div>
+    </form>
+    <div id="status-msg" class="text-sm mt-2"></div>
+  </div>
+</div>
 <script>
     const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
     const popupWrapper = document.getElementById('popup-wrapper');
@@ -311,4 +367,129 @@
         console.log('Invoice form submitted');
         closeVendorPopup();
     });
+
+    // Toggle menu visibility
+function toggleMenu(button) {
+  const popup = button.nextElementSibling;
+  popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+
+  // Close other open menus
+  document.querySelectorAll('.menu-popup').forEach(menu => {
+    if (menu !== popup) menu.style.display = 'none';
+  });
+}
+
+// Handle action clicks
+function handleAction(action, poId, el) {
+  // Close the menu after action
+  if (el && el.parentElement && el.parentElement.parentElement && el.parentElement.parentElement.classList.contains('menu-popup')) {
+    el.parentElement.parentElement.style.display = 'none';
+  } else if (el && el.parentElement && el.parentElement.classList.contains('menu-popup')) {
+    el.parentElement.style.display = 'none';
+  }
+  if (action === 'View') {
+      // Redirect to view page
+      window.location.href = '?page=purchase_orders&action=view&po_id='+ poId;
+  } else if (action === 'Edit') {
+      // Redirect to edit page
+      window.location.href = '?page=purchase_orders&action=edit&po_id='+ poId;
+  } else if (action === 'Delete') {
+      // Confirm and redirect to delete action
+      if (confirm('Are you sure you want to delete this cancelled purchase order?')) {
+          //window.location.href = '?page=purchase_orders&action=delete&po_id='+ poId;
+            fetch('?page=purchase_orders&action=delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'po_id=' + encodeURIComponent(poId)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Purchase order deleted successfully.');
+                    location.reload();
+                } else {
+                    alert(data.message || 'Failed to delete purchase order.');
+                }
+            })
+            .catch(() => {
+                alert('Error deleting purchase order.');
+            });
+      }
+  } else if (action === 'Download') {
+      // Redirect to download action
+      window.open('?page=purchase_orders&action=download&po_id='+ poId, '_blank');
+  } else if (action === 'ChangeStatus') {
+        document.getElementById('status-po-id').value = poId;
+        document.getElementById('status-popup-overlay').classList.remove('hidden');
+        document.getElementById('status-msg').textContent = '';
+ 
+  }
+}
+
+// Close menu on outside click
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.menu-wrapper')) {
+    document.querySelectorAll('.menu-popup').forEach(menu => {
+      menu.style.display = 'none';
+    });
+  }
+});
+// Close popup
+document.getElementById('status-cancel-btn').onclick = function() {
+  document.getElementById('status-popup-overlay').classList.add('hidden');
+};
+// Submit status change
+document.getElementById('status-form').onsubmit = function(e) {
+  e.preventDefault();
+  const poId = document.getElementById('status-po-id').value;
+  const status = document.getElementById('status-select').value;
+  const msgDiv = document.getElementById('status-msg');
+  msgDiv.textContent = 'Updating...';
+
+  fetch('?page=purchase_orders&action=update_status', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'po_id=' + encodeURIComponent(poId) + '&status=' + encodeURIComponent(status)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      msgDiv.textContent = 'Status updated!';
+      setTimeout(() => {
+        document.getElementById('status-popup-overlay').classList.add('hidden');
+        location.reload();
+      }, 800);
+    } else {
+      msgDiv.textContent = data.message || 'Failed to update status.';
+    }
+  })
+  .catch(() => {
+    msgDiv.textContent = 'Error updating status.';
+  });
+};
+
+// Optional: Close popup on overlay click
+document.getElementById('status-popup-overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.add('hidden');
+});
+
+// Toggle star flag
+function toggleStar(poId) {
+    fetch('?page=purchase_orders&action=toggle_star', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'po_id=' + encodeURIComponent(poId)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to update star flag.');
+        }
+    })
+    .catch(() => {
+        alert('Error updating star flag.');
+    });
+}
 </script>

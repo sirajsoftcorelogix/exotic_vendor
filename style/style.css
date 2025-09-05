@@ -601,3 +601,42 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
     background-color: #f3f4f6;
     border-color: #9ca3af;
 }
+
+/* Basic styling three dots menu */
+.menu-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.menu-button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.menu-popup {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  list-style: none;
+  padding: 5px 0;
+  margin: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  display: none;
+  z-index: 1000;
+  min-width: 120px;
+}
+
+.menu-popup li {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.menu-popup li:hover {
+  background-color: #f0f0f0;
+}
