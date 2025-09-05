@@ -90,4 +90,21 @@ class PurchaseOrder {
         }        
         return $stmt->execute();
     }
+    public function toggleStar($id) {
+        // First, get the current star status
+        $sql = "SELECT flag_star FROM purchase_orders WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($row = $result->fetch_assoc()) {
+            $newStatus = $row['flag_star'] ? 0 : 1; // Toggle the status
+            // Update the star status
+            $updateSql = "UPDATE purchase_orders SET flag_star = ? WHERE id = ?";
+            $updateStmt = $this->db->prepare($updateSql);
+            $updateStmt->bind_param("ii", $newStatus, $id);
+            return $updateStmt->execute();
+        }
+        return false; // Return false if the purchase order was not found
+    }
 }

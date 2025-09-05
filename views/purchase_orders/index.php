@@ -1,8 +1,6 @@
 <div class="max-w-7xl mx-auto space-y-6">
     <div class="p-8">
-        <button id="open-vendor-popup-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition">
-            Open Vendor Invoice
-        </button>
+        
     </div>
     <!-- Page Header -->
     <div class="flex flex-wrap items-center justify-between gap-4 mt-5">
@@ -18,7 +16,7 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                     <tr>
-                        
+                        <th><i class="fa fa-star"></i></th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Number</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Expected Delivery Date</th>
@@ -34,7 +32,12 @@
                      <?php if (!empty($purchaseOrders)): ?>
                         <?php foreach ($purchaseOrders as $order): ?>
                     <tr class="table-content-text">
-
+                        <td class=" whitespace-nowrap cursor-pointer text-yellow-400" title="<?= $order['flag_star'] ? 'Unmark as Important' : 'Mark as Important' ?>">
+                            <?= $order['flag_star'] 
+                                ? '<i class="fa fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Unmark as Important\'></i>' 
+                                : '<i class="far fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Mark as Important\'></i>' 
+                            ?>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600"><?= htmlspecialchars($order['vendor_id']) ?></div>
                         </td>
@@ -76,6 +79,8 @@
                                 <li onclick="handleAction('Delete', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-trash-alt"></i> Delete PO</li>
                                 <?php endif; ?>
                                 <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
+                                <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
+                                <li id="open-vendor-popup-btn" ><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
                             </ul>
                             </div>
 
@@ -467,4 +472,24 @@ document.getElementById('status-form').onsubmit = function(e) {
 document.getElementById('status-popup-overlay').addEventListener('click', function(e) {
   if (e.target === this) this.classList.add('hidden');
 });
+
+// Toggle star flag
+function toggleStar(poId) {
+    fetch('?page=purchase_orders&action=toggle_star', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'po_id=' + encodeURIComponent(poId)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to update star flag.');
+        }
+    })
+    .catch(() => {
+        alert('Error updating star flag.');
+    });
+}
 </script>

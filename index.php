@@ -143,6 +143,9 @@ switch ($page) {
             case 'update_status':
                 $controller->updateStatus();
                 break;
+            case 'toggle_star':
+                $controller->toggleStar();
+                break;
             default:
                 $controller->index();
                 break;

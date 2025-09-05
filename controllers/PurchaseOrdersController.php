@@ -465,4 +465,25 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'message' => 'Purchase Order downloaded successfully.']);
         //exit;
     }
+    function toggleStar() {
+        global $purchaseOrdersModel;
+
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+       
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+
+        // Toggle the star flag
+        $isToggled = $purchaseOrdersModel->toggleStar($poId);
+        if ($isToggled === false) {
+            echo json_encode(['success' => false, 'message' => 'Failed to toggle star flag.']);
+            exit;
+        }
+
+        // If everything is successful, return success response
+        echo json_encode(['success' => true, 'message' => 'Star flag toggled successfully.', 'flag_star' => $isToggled]);
+        exit;
+    }   
 }
