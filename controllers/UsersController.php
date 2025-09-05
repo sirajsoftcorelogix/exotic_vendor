@@ -286,5 +286,20 @@ class UsersController {
         echo json_encode($result);
         exit;
     }
+    public function getUserDetails() {
+        global $usersModel;
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id > 0) {
+            $user = $usersModel->getUserById($id);
+            if ($user) {
+                echo json_encode($user);
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'User not found.']);
+            }
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid user ID.']);
+        }
+        exit;
+    }
 }
 ?>

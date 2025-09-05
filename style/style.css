@@ -32,6 +32,47 @@ body {
     vertical-align: middle;
 }
 
+/* 05-09-2025 */
+/* Typography for Onboarding Dashboard text */
+.breadcrumb-current {
+    font-family: 'Instrument Sans', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 21px;
+    color: rgba(5, 19, 33, 1);
+    vertical-align: middle;
+}
+
+/* --- Dropdown Typography --- */
+.profile-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.profile-title {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: 10px;
+    line-height: 18px;
+    color: rgba(93, 103, 114, 1);
+}
+
+.menu-text {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 24px; /* Reduced line-height to fix spacing */
+    color: rgba(93, 103, 114, 1);
+}
+
+/* Custom styles for the NEW toggle switch */
+.toggle-bg-active {
+    background-color: #4A90E2; /* blue */
+}
+/* 05-09-2025 */
+
 /* ManageOrders styles from ManageOrders.html */
 .font-poppins {
     font-family: 'Poppins', sans-serif;
