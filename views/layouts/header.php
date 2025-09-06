@@ -1,3 +1,9 @@
+<?php
+require_once 'models/user/user.php';
+$usersModel = new User($conn);
+$userDetails = $usersModel->getUserById($_SESSION['user']['id']);
+unset($usersModel);
+?>
 <!-- Header Component -->
 <header class="bg-white border-b border-[rgba(226,228,230,1)]">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
