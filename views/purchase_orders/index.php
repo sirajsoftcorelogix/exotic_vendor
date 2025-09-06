@@ -32,7 +32,7 @@
                      <?php if (!empty($purchaseOrders)): ?>
                         <?php foreach ($purchaseOrders as $order): ?>
                     <tr class="table-content-text">
-                        <td class=" whitespace-nowrap cursor-pointer text-yellow-400" title="<?= $order['flag_star'] ? 'Unmark as Important' : 'Mark as Important' ?>">
+                        <td class=" whitespace-nowrap cursor-pointer text-lg text-yellow-400" title="<?= $order['flag_star'] ? 'Unmark as Important' : 'Mark as Important' ?>">
                             <?= $order['flag_star'] 
                                 ? '<i class="fa fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Unmark as Important\'></i>' 
                                 : '<i class="far fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Mark as Important\'></i>' 

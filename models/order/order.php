@@ -162,6 +162,7 @@ class Order{
                 $orderItems[] = [
                     'id' => $row['id'],
                     'order_number' => $row['order_number'],
+                    'order_date' => $row['order_date'],
                     'item_code' => $row['item_code'],
                     'title' => $row['title'],
                     'price' => $row['unit_price'],

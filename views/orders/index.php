@@ -173,7 +173,7 @@
             </svg>
         </button>
 
-        <div id="accordion-content" class="accordion-content hidden">
+        <div id="accordion-content" class="bg-white rounded-xl p-4 accordion-content hidden">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
 
@@ -350,7 +350,14 @@
                         </a>
                     </td> -->
                     <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= htmlspecialchars($order['title']) ?></td>
-                    <td class="px-6 py-4"><img class="h-12 w-12 rounded-md object-cover" src="<?= htmlspecialchars($order['image']) ?>" alt=""></td>
+                    <td class="px-6 py-4">
+                        <img 
+                            class="h-12 w-12 rounded-md object-cover cursor-pointer" 
+                            src="<?= htmlspecialchars($order['image']) ?>" 
+                            alt="" 
+                            onclick="openImagePopup('<?= htmlspecialchars($order['image']) ?>')"
+                        >
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">
                             <span><?= htmlspecialchars($order['status']) ?></span>
@@ -438,6 +445,19 @@
   <button class="mt-4 bg-blue-500 text-white px-4 py-2 rounded">Close</button>
 </div>
 
+<!-- Image Popup -->
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
+<script>
+function closeImagePopup(e) {
+    // If called from button or outside click
+    document.getElementById('imagePopup').classList.add('hidden');
+}
+</script>
 <script>
     function checkPoItmes() {
         const checkedRows = document.querySelectorAll('input[name="poitem[]"]:checked');
@@ -523,4 +543,9 @@
 
         clearButton.addEventListener('click', clearFilters);
     });
+    // Image popup functionality
+    function openImagePopup(imageUrl) {
+        popupImage.src = imageUrl;
+        document.getElementById('imagePopup').classList.remove('hidden');
+    }
 </script>

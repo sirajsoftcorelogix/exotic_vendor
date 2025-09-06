@@ -92,7 +92,7 @@
                 </td>
                 <td class="p-4 rowTotal"></td>
                 <td class="p-2 align-top text-right">
-                        <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item"> &times; </button>
+                        <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item"> <span class="text-lg">&times;</span> </button>
                     </td>
                 <!-- <td class="p-4 text-right rounded-r-lg"><button>
                     <svg width="14" height="16" viewBox="0 0 14 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.2198 2.46658L13.5732 2.48141C14.142 2.57241 14.1239 3.51406 13.6281 3.62287C13.4664 3.65814 13.1578 3.57143 13.1049 3.74156L11.7041 14.1792C11.4162 15.0615 10.6479 15.653 9.72717 15.7357C8.33059 15.861 5.74347 15.8501 4.33736 15.739C3.36304 15.6622 2.57373 15.0773 2.28587 14.1287L0.898821 3.74156L0.80254 3.64496C-0.0761549 3.87476 -0.309794 2.57241 0.488063 2.47482C0.982945 2.41415 3.62001 2.56813 3.78366 2.4669C4.1494 1.59977 4.1402 0.663395 5.11879 0.234443C5.84468 -0.083726 8.27177 -0.0863637 8.96973 0.277635C9.90232 0.763627 9.85106 1.60867 10.2194 2.4669L10.2198 2.46658ZM8.92636 2.47746C8.78341 2.05774 8.80214 1.41876 8.28689 1.2849C7.98818 1.20742 5.94721 1.21467 5.67216 1.30402C5.19601 1.45898 5.21934 2.07059 5.07738 2.47746H8.92636ZM11.9413 3.63605H2.06242L3.47148 13.9045C3.60687 14.2458 3.90985 14.4762 4.27558 14.5135C6.0057 14.4096 7.8919 14.6516 9.60263 14.5161C10.2805 14.4624 10.5135 14.1409 10.642 13.4993L11.9417 3.63605H11.9413Z" fill="#DF0000"/><path d="M5.82431 5.84744C5.9058 5.92921 5.96857 6.05846 5.9781 6.17616C5.81445 8.00275 6.18709 10.19 5.97678 11.9731C5.89627 12.6556 4.98209 12.6978 4.82436 12.0325L4.81812 6.17649C4.86741 5.69479 5.5003 5.52334 5.82464 5.84777L5.82431 5.84744Z" fill="#DF0000"/><path d="M9.03183 5.84744C9.11332 5.92921 9.17609 6.05846 9.18562 6.17616C9.02197 8.00275 9.39461 10.19 9.1843 11.9731C9.10379 12.6556 8.18961 12.6978 8.03188 12.0325L8.02563 6.17649C8.07493 5.69479 8.70782 5.52334 9.03216 5.84777L9.03183 5.84744Z" fill="#DF0000"/></svg>
@@ -168,16 +168,17 @@
 </div>
 <!-- Order Item Modal -->
 <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
-    <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative">
         <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
         <h2 class="text-xl font-bold mb-4">Select Order Item</h2>
-        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search order items...">
+        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with order id, item code, or title...">
         <div class="max-h-72 overflow-y-auto">
             <table class="w-full border">
                 <thead>
                     <tr>
                         <th class="p-2 text-left">Title</th>
-                        <th class="p-2 text-left">HSN</th>
+                        <th class="p-2 text-left">Order ID</th>
+                        <th class="p-2 text-left">Order Date</th>
                         <th class="p-2 text-left">Image</th>
                         <th class="p-2 text-left">Action</th>
                     </tr>
@@ -304,18 +305,20 @@ function fetchOrderItems(query) {
             tbody.innerHTML = '';
             if (Array.isArray(data) && data.length > 0) {
                 data.forEach(item => {
+                    console.log(item);
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td class="p-2">${item.title}</td>
-                        <td class="p-2">${item.item_code}</td>
+                        <td class="p-2">${item.order_number}</td>
+                        <td class="p-2">${item.order_date}</td>
                         <td class="p-2"><img src="${item.image}" alt="" class="w-10 h-10 rounded"></td>
                         <td class="p-2">
-                            <button type="button" class="select-order bg-blue-500 text-white px-3 py-1 rounded"
+                            <button type="button" title="Select" class="select-order bg-blue-500 text-white px-3 py-1 rounded"
                                 data-id="${item.id}"
                                 data-title="${item.title.replace(/"/g, '&quot;')}"
                                 data-hsn="${item.item_code.replace(/"/g, '&quot;')}"
                                 data-image="${item.image.replace(/"/g, '&quot;')}"
-                                >Select</button>
+                                >+</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -373,7 +376,7 @@ function addSelectOrderListeners() {
                 </td>
                 <td class="p-4 rowTotal"></td>
                 <td class="p-2 align-top text-right">
-                    <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item">&times;</button>
+                    <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item"><span class="text-lg">&times;</span></button>
                 </td>
             `;
             poTable.appendChild(tr);

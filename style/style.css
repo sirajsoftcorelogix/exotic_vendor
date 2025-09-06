@@ -293,7 +293,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 /* Use border-spacing to create margin between table rows */
 .table-spacing {
     border-collapse: separate;
-    border-spacing: 0 1rem; /* 0 horizontal, 1rem vertical */
+    border-spacing: 0 .5rem; /* 0 horizontal, .5rem vertical */
 }
 .icon-link {
     display: inline-flex;
