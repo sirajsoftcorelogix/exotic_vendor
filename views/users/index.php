@@ -4,7 +4,7 @@
         <!-- Header Section with Filters and Actions -->
         <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow mt-[10px]">
             <!-- Filters -->
-            <form method="get" action="">
+            <form method="get" id="filterForm">
                 <input type="hidden" name="page" value="users">
                 <input type="hidden" name="action" value="list">
                 <div class="flex flex-wrap items-center gap-4">
