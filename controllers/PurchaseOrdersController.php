@@ -526,17 +526,14 @@ class PurchaseOrdersController {
             'R' => 'NotoSansDevanagari-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-
-        $mpdf->fontdata['noto_tamil'] = [
-            'R' => 'NotoSansTamil-Regular.ttf',
-            'useOTL' => 0xFF,
-        ];
-
         $mpdf->fontdata['noto_bengali'] = [
             'R' => 'NotoSansBengali-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-
+        $mpdf->fontdata['noto_tamil'] = [
+            'R' => 'NotoSansTamil-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
         $mpdf->fontdata['noto_gujarati'] = [
             'R' => 'NotoSansGujarati-Regular.ttf',
             'useOTL' => 0xFF,
@@ -615,8 +612,14 @@ class PurchaseOrdersController {
         // For simplicity, we'll just send a basic email without attachment
 
         $to = $vendor['vendor_email'];
-        $subject = "Purchase Order " . $purchaseOrder['po_number'];
-        $message = "Dear " . $vendor['contact_name'] . ",\n\nPlease find attached the Purchase Order " . $purchaseOrder['po_number'] . ".\n\nBest regards,\nExotic India Art Pvt. Ltd.";
+        $subject = "Purchase Order " . $purchaseOrder['po_number'] . " from Exotic India Art Pvt. Ltd.";
+        $message = "Dear " . $vendor['contact_name'] . ",\n\nPlease find attached the Purchase Order " . $purchaseOrder['po_number'] . ".  dated " . date('d-m-Y') . ". \nWe request you to review the order details and confirm acceptance at the earliest.";
+        $message .= "\n\n PO Number: " . $purchaseOrder['po_number'];
+        $message .= "\n Expected Delivery Date: " . date('d-m-Y', strtotime($purchaseOrder['expected_delivery_date']));
+        $message .= "\n Delivery Location: " . $purchaseOrder['delivery_address'];
+        $message .= "\n Kindly acknowledge receipt of this PO and share an estimated delivery schedule.\n\nThank you for your continued support.";
+
+        $message .= "\n\n\nBest regards,\nExotic India Art Pvt. Ltd.";
         $headers = "From: no-reply@exoticindiaart.com";
 
         // Send the email
