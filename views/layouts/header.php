@@ -136,10 +136,10 @@ unset($usersModel);
   <div class="modal-dialog">
     <div class="modal-content">
       <!-- Sliding Container -->
-    <div id="modal-slider-edit" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: 35%; min-width: 400px;">
+    <div id="modal-slider-edit-profile" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: 35%; min-width: 400px;">
         <!-- Close Button -->
         <div class="flex-shrink-0 flex items-start pt-5">
-            <button id="close-vendor-popup-btn-edit" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+            <button id="close-vendor-popup-btn-edit-profile" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
@@ -153,32 +153,32 @@ unset($usersModel);
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Profile</h2>
                     <div id="editUserProfileMsg" style="margin-top:10px;"></div>
                     <form id="editUserProfile">
-                        <input type="hidden" id="editUserId" name="id" value="">
+                        <input type="hidden" id="editUserProfileId" name="id" value="">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                             <div>
                                 <label for="name" class="text-sm font-medium text-gray-700">Name:</label>
-                                <input type="text" id="editName" name="name" class="form-input w-full mt-1" required>
+                                <input type="text" id="editProfileName" name="name" class="form-input w-full mt-1" required>
                             </div>
 
                             <div>
                                 <label for="email" class="text-sm font-medium text-gray-700">Email:</label>
-                                <input type="email" id="editEmail" name="email" class="form-input w-full mt-1" readonly>
+                                <input type="email" id="editProfileEmail" name="email" class="form-input w-full mt-1" readonly>
                             </div>
 
                             <div>
                                 <label for="phone" class="text-sm font-medium text-gray-700">Phone:</label>
-                                <input type="number" id="EditPhone" name="phone" class="form-input w-full mt-1" required>
+                                <input type="number" id="EditProfilePhone" name="phone" class="form-input w-full mt-1" required>
                             </div>
 
                             <div>
                                 <label for="password" class="text-sm font-medium text-gray-700">Password:</label>
-                                <input type="password" id="editPassword" name="password" class="form-input w-full mt-1">
+                                <input type="password" id="editProfilePassword" name="password" class="form-input w-full mt-1">
                             </div>
 
                         </div>
 
                         <div class="flex justify-center items-center gap-4 pt-6 border-t">
-                            <button type="button" id="cancel-vendor-btn-edit" class="action-btn cancel-btn">Back</button>
+                            <button type="button" id="cancel-vendor-btn-edit-profile" class="action-btn cancel-btn">Back</button>
                             <button type="submit" class="action-btn save-btn">Save</button>
                         </div>
                     </form>
@@ -234,10 +234,10 @@ unset($usersModel);
     });
 
     // Edit User Modal Logic    
-    const popupWrapperEdit = document.getElementById('editUserProfileModal');
-    const modalSliderEdit = document.getElementById('modal-slider-edit');
-    const cancelVendorBtnEdit = document.getElementById('cancel-vendor-btn-edit');
-    const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
+    const popupWrapperEditProfile = document.getElementById('editUserProfileModal');
+    const modalSliderEditProfile = document.getElementById('modal-slider-edit-profile');
+    const cancelVendorBtnEditProfile = document.getElementById('cancel-vendor-btn-edit-profile');
+    const closeVendorPopupBtnEditProfile = document.getElementById('close-vendor-popup-btn-edit-profile');
 
     function openUserProfileEditModal(id) {
         fetch("?page=users&action=userDetails&id=" + id)
@@ -247,25 +247,24 @@ unset($usersModel);
                 alert(user.message);
                 return;
             }
-            document.getElementById("editUserId").value   = user.id;
-            document.getElementById("editName").value = user.name;
-            document.getElementById("editEmail").value= user.email;
-            document.getElementById("EditPhone").value= user.phone;
+            document.getElementById("editUserProfileId").value   = user.id;
+            document.getElementById("editProfileName").value = user.name;
+            document.getElementById("editProfileEmail").value= user.email;
+            document.getElementById("EditProfilePhone").value= user.phone;
 
-            popupWrapperEdit.classList.remove('hidden');
+            popupWrapperEditProfile.classList.remove('hidden');
             setTimeout(() => {
-                modalSliderEdit.classList.remove('translate-x-full');
+                modalSliderEditProfile.classList.remove('translate-x-full');
             }, 10);
-            //document.getElementById('editUserModal').show();
         });
     }
 
-    function closeVendorPopupEdit() {
-        modalSliderEdit.classList.add('translate-x-full');
+    function closeVendorPopupEditProfile() {
+        modalSliderEditProfile.classList.add('translate-x-full');
     }
 
-    closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
-    cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    closeVendorPopupBtnEditProfile.addEventListener('click', closeVendorPopupEditProfile);
+    cancelVendorBtnEditProfile.addEventListener('click', closeVendorPopupEditProfile);
 
     document.getElementById('editUserProfile').onsubmit = function(e) {
         e.preventDefault();
