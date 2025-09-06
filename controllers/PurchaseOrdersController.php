@@ -6,6 +6,9 @@ require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+require 'vendor/autoload.php';
 
 $purchaseOrdersModel = new PurchaseOrder($conn);
 $ordersModel = new Order($conn);
@@ -466,12 +469,14 @@ class PurchaseOrdersController {
         //echo json_encode(['success' => true, 'message' => 'Purchase Order downloaded successfully.']);
         //exit;
     }
-    function downloadPurchaseOrder(){    
+    function downloadPurchaseOrder($generateOnly = 0) {    
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
-
+        
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
-
+        if($generateOnly){
+            $poId = $generateOnly;
+        }
         if (!$poId) {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
             exit;
@@ -546,7 +551,14 @@ class PurchaseOrdersController {
         );
 
         $mpdf->WriteHTML($html);
-        $mpdf->Output($purchaseOrder['po_number'] . '.pdf', 'D');
+        if($generateOnly){
+            $filePath = __DIR__ . '/../generated_pdfs/' . $purchaseOrder['po_number'] . '.pdf';
+            $mpdf->Output($filePath, 'F'); // Save the PDF to a file
+            return $filePath; // Return the file path for further use
+        }else{
+            $mpdf->Output($purchaseOrder['po_number'] . '.pdf', 'D');
+        }
+
     }
     function toggleStar() {
         global $purchaseOrdersModel;
@@ -569,4 +581,75 @@ class PurchaseOrdersController {
         echo json_encode(['success' => true, 'message' => 'Star flag toggled successfully.', 'flag_star' => $isToggled]);
         exit;
     }   
-}
+    function emailToVendor() {
+        global $purchaseOrdersModel;
+        global $vendorsModel;
+        
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID']);
+            exit;
+        }
+
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }
+
+        $vendor = $vendorsModel->getVendorById($purchaseOrder['vendor_id']);
+        if (!$vendor) {
+            echo json_encode(['success' => false, 'message' => 'Vendor not found.']);
+            exit;
+        }
+        //print_array($vendor);
+        // Here you would typically generate the PDF and attach it to the email
+        $pdfFilePath = $this->downloadPurchaseOrder($poId); // This will generate the PDF
+        $attachments = [];
+        //$pdfFilePath = 'path/to/generated/pdf/' . $purchaseOrder['po_number'] . '.pdf';
+        if (file_exists($pdfFilePath)) {
+            $attachments[] = $pdfFilePath;
+        }
+
+        // For simplicity, we'll just send a basic email without attachment
+
+        $to = $vendor['vendor_email'];
+        $subject = "Purchase Order " . $purchaseOrder['po_number'];
+        $message = "Dear " . $vendor['contact_name'] . ",\n\nPlease find attached the Purchase Order " . $purchaseOrder['po_number'] . ".\n\nBest regards,\nExotic India Art Pvt. Ltd.";
+        $headers = "From: no-reply@exoticindiaart.com";
+
+        // Send the email
+        $mail = new PHPMailer(true);
+        try {
+            //Server settings
+            $mail->isSMTP();
+            $mail->Host       = smtpHost; // Set the SMTP server to send through
+            $mail->SMTPAuth   = true;
+            $mail->Username   = smtpUser;
+            $mail->Password   = smtpPass;
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = smtpPort;
+
+            //Recipients
+            $mail->setFrom('no-reply@exoticindiaart.com', 'Exotic India Art Pvt. Ltd.');
+            $mail->addAddress($to, $vendor['contact_name']);
+            // Attachments
+            foreach ($attachments as $filePath) {
+                $mail->addAttachment($filePath);
+            }
+
+            // Content
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body    = nl2br($message);
+
+            $mail->send();
+            echo json_encode(['success' => true, 'message' => 'Purchase order emailed to vendor successfully.']);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to send email to ' . $to . ': ' . $mail->ErrorInfo]);
+        }
+        exit;
+    }
+
+}   

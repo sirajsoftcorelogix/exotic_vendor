@@ -152,6 +152,9 @@ switch ($page) {
             case 'toggle_star':
                 $controller->toggleStar();
                 break;
+            case 'emailToVendor':
+                $controller->emailToVendor();
+                break;
             default:
                 $controller->index();
                 break;

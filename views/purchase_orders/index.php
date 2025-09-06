@@ -83,21 +83,7 @@
                                 <li id="open-vendor-popup-btn" ><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
                             </ul>
                             </div>
-
-                            <!-- <div class="flex items-center space-x-4">
-                                <a title="View Purchase Order" href="<?= base_url('?page=purchase_orders&action=view&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
-                                    <i class="fa fa-eye"></i>
-                                </a>
-                                <a title="Edit Purchase Order" href="<?= base_url('?page=purchase_orders&action=edit&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
-                                    <i class="fa fa-pencil-alt"></i>
-                                </a>
-                                <a title="Delete Purchase Order" href="<?= base_url('?page=purchase_orders&action=delete&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black" onclick="return confirm('Are you sure you want to delete this purchase order?');">
-                                    <i class="fa fa-trash-alt"></i>
-                                </a>
-                                <a title="Download Purchase Order" target="_blank" href="<?= base_url('?page=purchase_orders&action=download&po_id=' . htmlspecialchars($order['id'])) ?>" class="text-gray-400 hover:text-black">
-                                    <i class="fa fa-download"></i>
-                                </a>
-                            </div> -->
+                            
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -423,6 +409,26 @@ function handleAction(action, poId, el) {
         document.getElementById('status-popup-overlay').classList.remove('hidden');
         document.getElementById('status-msg').textContent = '';
  
+  } else if (action === 'Email') {
+      // Redirect to email action
+      if (confirm('Send purchase order to vendor via email?')) {
+          fetch('?page=purchase_orders&action=emailToVendor', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+              body: 'po_id=' + encodeURIComponent(poId)
+          })
+          .then(r => r.json())
+          .then(data => {
+              if (data.success) {
+                  alert('Purchase order emailed to vendor successfully.');
+              } else {
+                  alert(data.message || 'Failed to email purchase order.');
+              }
+          })
+          .catch(() => {
+              alert('Error emailing purchase order.');
+          });
+      }
   }
 }
 
