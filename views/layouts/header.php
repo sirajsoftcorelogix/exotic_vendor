@@ -178,7 +178,6 @@ unset($usersModel);
                         </div>
 
                         <div class="flex justify-center items-center gap-4 pt-6 border-t">
-                            <button type="button" id="cancel-vendor-btn-edit-profile" class="action-btn cancel-btn">Back</button>
                             <button type="submit" class="action-btn save-btn">Save</button>
                         </div>
                     </form>
@@ -236,7 +235,6 @@ unset($usersModel);
     // Edit User Modal Logic    
     const popupWrapperEditProfile = document.getElementById('editUserProfileModal');
     const modalSliderEditProfile = document.getElementById('modal-slider-edit-profile');
-    const cancelVendorBtnEditProfile = document.getElementById('cancel-vendor-btn-edit-profile');
     const closeVendorPopupBtnEditProfile = document.getElementById('close-vendor-popup-btn-edit-profile');
 
     function openUserProfileEditModal(id) {
@@ -264,7 +262,6 @@ unset($usersModel);
     }
 
     closeVendorPopupBtnEditProfile.addEventListener('click', closeVendorPopupEditProfile);
-    cancelVendorBtnEditProfile.addEventListener('click', closeVendorPopupEditProfile);
 
     document.getElementById('editUserProfile').onsubmit = function(e) {
         e.preventDefault();
@@ -290,7 +287,7 @@ unset($usersModel);
             }
             setTimeout(() => {
                 msgBox.innerHTML = '';
-                closeVendorPopupEdit();
+                closeVendorPopupEditProfile();
                 location.reload();
             }, 1000); // redirect after 1 sec
         });
