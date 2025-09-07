@@ -2,6 +2,28 @@
     <form action="<?php echo base_url('purchase_orders/create_post'); ?>" id="create_po" method="post">
     <div class="flex flex-col md:flex-row justify-between mb-8">
         <!-- Left Column -->
+         <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
+            <div class="flex items-center">
+                <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
+                <input type="date" id="delivery_due_date" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
+            </div>
+            <!-- <div class="flex items-center">
+                <label for="order-id" class="block text-gray-700 form-label">Order ID</label>
+                <input type="text" name="order_id" id="order_id" placeholder="2142086" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 placeholder-gray-400 w-full md:w-[150px]">
+            </div> -->
+            <div class="flex items-center">
+                <label for="employee-name" class="block text-gray-700 form-label">User Name</label>
+                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
+                    <option value="">Select User</option>
+                    <?php foreach ($users as $id => $name): ?>
+                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        
+
+        <!-- Right Column -->
         <div class="space-y-2 w-full md:w-auto">
             <div class="flex items-center">
                 <label for="vendor" class="block text-gray-700 form-label">Vendor :</label>
@@ -21,27 +43,6 @@
                         <option value="<?= $address['id'] ?>"><?= htmlspecialchars($address['address']) ?></option>
                     <?php endforeach; ?>
                 </select>   
-            </div>
-        </div>
-
-        <!-- Right Column -->
-        <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
-            <div class="flex items-center">
-                <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
-                <input type="date" id="delivery_due_date" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
-            </div>
-            <!-- <div class="flex items-center">
-                <label for="order-id" class="block text-gray-700 form-label">Order ID</label>
-                <input type="text" name="order_id" id="order_id" placeholder="2142086" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 placeholder-gray-400 w-full md:w-[150px]">
-            </div> -->
-            <div class="flex items-center">
-                <label for="employee-name" class="block text-gray-700 form-label">Employee Name</label>
-                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
-                    <option value="">Select Employee</option>
-                    <?php foreach ($users as $id => $name): ?>
-                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
-                    <?php endforeach; ?>
-                </select>
             </div>
         </div>
     </div>
@@ -152,9 +153,9 @@
         <div>
             <div class="flex justify-between items-center mb-1">
                 <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
-                <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
+                <button id="loadTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
             </div>
-            <textarea id="terms" name="terms" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
+            <textarea id="terms" name="terms_and_conditions" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
         </div>  
     </div>
 
@@ -190,7 +191,57 @@
         </div>
     </div>
 </div>
+<div id="loadTemplateModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative">
+        <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeLoadTemplateModal">&times;</button>
+        <h2 class="text-xl font-bold mb-4">Select Terms & Conditions Template</h2>
+        <div class="max-h-72 overflow-y-auto">
+            <table class="w-full border">
+                <thead>
+                    <tr>
+                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-left">Content</th>
+                        <th class="p-2 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="templateList">
+                    <?php foreach ($templates as $template): ?>
+                    <tr class="border-b">
+                        <td class="p-2"><input type="checkbox" class="select-template-checkbox" data-content="<?= htmlspecialchars($template['description']) ?>"></td>
+                        <td class="p-2"><?= htmlspecialchars(substr($template['description'], 0, 100)) ?>...</td>                       
+                    </tr>
+                    <?php endforeach; ?>
+                    <tr>
+                        <td colspan="3" class="p-2 text-right">
+                            <button id="applyTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Apply Selected</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 <script>
+// Load Template Modal
+document.getElementById('loadTemplate').addEventListener('click', function() {
+    document.getElementById('loadTemplateModal').style.display = 'flex';
+});
+document.getElementById('closeLoadTemplateModal').onclick = function() {
+    document.getElementById('loadTemplateModal').style.display = 'none';
+};  
+// Apply selected template
+document.getElementById('applyTemplate').addEventListener('click', function() {
+    const checkboxes = document.querySelectorAll('.select-template-checkbox:checked');
+    let combinedContent = '';
+    checkboxes.forEach((checkbox, idx) => {
+        combinedContent += (idx + 1) + '. ' + checkbox.getAttribute('data-content') + '\n\n';    
+    });
+    if (combinedContent) {
+        document.getElementById('terms').value = combinedContent.trim();
+    }
+    document.getElementById('loadTemplateModal').style.display = 'none';
+});
+// Calculate totals
 function calculateTotals() {
     let subtotal = 0;
     let totalGST = 0;
@@ -300,12 +351,12 @@ function fetchOrderItems(query) {
     fetch('?page=purchase_orders&action=order_items&search=' + encodeURIComponent(query))
         .then(r => r.json())
         .then(data => {
-            console.log(data);
+            //console.log(data);
             const tbody = document.getElementById('orderList');
             tbody.innerHTML = '';
             if (Array.isArray(data) && data.length > 0) {
                 data.forEach(item => {
-                    console.log(item);
+                    //console.log(item);
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td class="p-2">${item.title}</td>
@@ -315,6 +366,7 @@ function fetchOrderItems(query) {
                         <td class="p-2">
                             <button type="button" title="Select" class="select-order bg-blue-500 text-white px-3 py-1 rounded"
                                 data-id="${item.id}"
+                                data-order-number="${item.order_number.replace(/"/g, '&quot;')}"
                                 data-title="${item.title.replace(/"/g, '&quot;')}"
                                 data-hsn="${item.item_code.replace(/"/g, '&quot;')}"
                                 data-image="${item.image.replace(/"/g, '&quot;')}"
@@ -337,6 +389,7 @@ function addSelectOrderListeners() {
     document.querySelectorAll('.select-order').forEach(function(btn) {
         btn.addEventListener('click', function() {
             const id = this.getAttribute('data-id');
+            const orderNumber = this.getAttribute('data-order-number');
             const title = this.getAttribute('data-title');
             const hsn = this.getAttribute('data-hsn');
             const image = this.getAttribute('data-image');
@@ -356,7 +409,7 @@ function addSelectOrderListeners() {
             const tr = document.createElement('tr');
             tr.className = 'bg-white';
             tr.innerHTML = `
-                <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}">${rowCount}</td>
+                <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
                 <td class="p-4"><input type="hidden" name="title[]" value="${title}">${title}</td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
                 <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" class="rounded-lg" style="width:40px;height:40px;"></td>

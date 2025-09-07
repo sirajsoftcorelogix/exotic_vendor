@@ -165,15 +165,15 @@
         </div>
     </div>
     <!-- Advance Search Accordion -->
-    <div class="mt-6 mb-8">
-        <button id="accordion-button" class="w-full flex justify-between items-center mb-6">
+    <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
+        <button id="accordion-button" class="w-full flex justify-between items-center mb-2">
             <h2 class="text-xl font-bold text-gray-900">Advance Search</h2>
             <svg id="accordion-icon" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
         </button>
 
-        <div id="accordion-content" class="bg-white rounded-xl p-4 accordion-content hidden">
+        <div id="accordion-content" class="accordion-content hidden">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
 

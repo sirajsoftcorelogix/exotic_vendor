@@ -5,7 +5,7 @@ class PurchaseOrder {
         $this->db = $db;
     }
     public function getAllPurchaseOrders() {
-        $sql = "SELECT * FROM purchase_orders ORDER BY id DESC";
+        $sql = "SELECT purchase_orders.*, vp_vendors.contact_name AS vendor_name FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id ORDER BY purchase_orders.id DESC";
         $result = $this->db->query($sql);   
         $purchaseOrders = [];
         if ($result && $result->num_rows > 0) {
@@ -17,15 +17,16 @@ class PurchaseOrder {
         return $purchaseOrders;
     }
     public function createPurchaseOrder($data) {
-        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, user_id, expected_delivery_date, delivery_address, notes, total_gst, total_cost, subtotal, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, user_id, expected_delivery_date, delivery_address, notes, terms_and_conditions, total_gst, total_cost, subtotal, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("siisssdddd",
+        $stmt->bind_param("siissssdddd",
             $data['po_number'],  
             $data['vendor_id'],
             $data['user_id'],
             $data['expected_delivery_date'], 
             $data['delivery_address'], 
             $data['notes'],
+            $data['terms_and_conditions'],
             $data['total_gst'],            
             $data['grand_total'],
             $data['subtotal'],

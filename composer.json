@@ -1,6 +1,7 @@
 {
     "require": {
         "phpmailer/phpmailer": "^6.10",
-        "mpdf/mpdf": "^8.2"
+        "mpdf/mpdf": "^8.2",
+        "pear/text_languagedetect": "^1.0"
     }
 }

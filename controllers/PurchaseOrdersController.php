@@ -29,7 +29,7 @@ class PurchaseOrdersController {
 
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders();
-    
+        // Calculate total pages
         $total_orders = count($purchaseOrders);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         // Paginate orders
@@ -67,7 +67,7 @@ class PurchaseOrdersController {
         //print_array($data);
         $data['users'] = $usersModel->getAllUsers();
         $data['exotic_address'] = $commanModel->get_exotic_address();
-        $data['terms_and_conditions'] = $commanModel->get_terms_and_conditions();
+        $data['templates'] = $commanModel->get_terms_and_conditions();
         //print_array($data);
         // Render the create purchase order form
         renderTemplate('views/purchase_orders/create.php', $data, 'Create Purchase Order');
@@ -109,6 +109,7 @@ class PurchaseOrdersController {
             'subtotal' => $subtotal,
             'shipping_cost' => $shipping_cost,
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
+            'terms_and_conditions' => isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '',
         ];
         $poId = $purchaseOrdersModel->createPurchaseOrder($poData);
         if (!$poId) {
@@ -495,13 +496,29 @@ class PurchaseOrdersController {
                 echo json_encode(['success' => false, 'message' => 'Failed to fetch Purchase Order items.']);
                 exit;
             }
+            $fontMap = [
+                'hindi' => 'noto_devanagari',
+                'tamil' => 'noto_tamil',
+                'bengali' => 'noto_bengali',
+                'gujarati' => 'noto_gujarati',
+                'english' => 'sans-serif', // fallback
+            ];
+            require_once 'Text/LanguageDetect.php'; 
+            $detector = new Text_LanguageDetect();
+            
             $tbody = '';
             foreach ($purchaseOrderItems as $index => $item) {
+                $text = explode(':', $item['title']);
+                $lang1 = $detector->detectSimple($text[0]); // returns 'hi', 'ta', etc.
+                $lang2 = isset($text[1]) ? $detector->detectSimple($text[1]) : 'english';
+                $font = $fontMap[$lang1] ?? 'sans-serif'; // fallback if unknown
+                $font2 = $fontMap[$lang2] ?? 'sans-serif'; // fallback if unknown
+
                 $tbody .= '<tr>';
                 $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
                 $tbody .= '<td style="width:30% !important; border:1px solid #000; padding:6px;">';
-                $tbody .= '<b>' . htmlspecialchars($item['title']) . ' |</b><br>';                
-                $tbody .= '</td>';
+                //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
+                $tbody .= '<p>' . htmlspecialchars($item['title']) . '</p>';
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['hsn']) . '</td>';
                 $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
@@ -526,12 +543,13 @@ class PurchaseOrdersController {
             'R' => 'NotoSansDevanagari-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-        $mpdf->fontdata['noto_bengali'] = [
-            'R' => 'NotoSansBengali-Regular.ttf',
-            'useOTL' => 0xFF,
-        ];
+        
         $mpdf->fontdata['noto_tamil'] = [
             'R' => 'NotoSansTamil-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+        $mpdf->fontdata['noto_bengali'] = [
+            'R' => 'NotoSansBengali-Regular.ttf',
             'useOTL' => 0xFF,
         ];
         $mpdf->fontdata['noto_gujarati'] = [
@@ -540,13 +558,19 @@ class PurchaseOrdersController {
         ];
 
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
-        // Define HTML content
+        //Define HTML content
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}'],
-            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost']],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}'],
+            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost'], $purchaseOrder['terms_and_conditions']],
             $temphtml
         );
-
+        // $html = '
+        //     <h2 style="font-family: sans-serif;">English: Hello World</h2>
+        //     <p style="font-family: noto_devanagari;">हिंदी: नमस्ते दुनिया</p>
+        //     <p style="font-family: noto_tamil;">தமிழ்: வணக்கம் உலகம்</p>
+        //     <p style="font-family: noto_bengali;">বাংলা: হ্যালো ওয়ার্ল্ড</p>
+        //     <p style="font-family: noto_gujarati;">ગુજરાતી: હેલો વર્લ્ડ</p>
+        //     ';
         $mpdf->WriteHTML($html);
         if($generateOnly){
             $filePath = __DIR__ . '/../generated_pdfs/' . $purchaseOrder['po_number'] . '.pdf';
@@ -604,7 +628,7 @@ class PurchaseOrdersController {
         // Here you would typically generate the PDF and attach it to the email
         $pdfFilePath = $this->downloadPurchaseOrder($poId); // This will generate the PDF
         $attachments = [];
-        //$pdfFilePath = 'path/to/generated/pdf/' . $purchaseOrder['po_number'] . '.pdf';
+        
         if (file_exists($pdfFilePath)) {
             $attachments[] = $pdfFilePath;
         }

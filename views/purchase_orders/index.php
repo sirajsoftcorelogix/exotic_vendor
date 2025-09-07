@@ -17,11 +17,11 @@
                     <thead>
                     <tr>
                         <th><i class="fa fa-star"></i></th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
+                        
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Number</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Expected Delivery Date</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Delivery Address</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Total GST</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Delivery Date</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
+                        <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Total GST</th> -->
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Grand Total</th>
                         <th scope="col" class="relative px-6 py-3"> <span class="table-header-text">Status</span></th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
@@ -38,15 +38,15 @@
                                 : '<i class="far fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Mark as Important\'></i>' 
                             ?>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600"><?= htmlspecialchars($order['vendor_id']) ?></div>
-                        </td>
+                        
                         <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($order['po_number']) ?></td>
-                        <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($order['expected_delivery_date']) ?></td>
-                        <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($order['delivery_address']) ?></td>
+                        <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'])) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= htmlspecialchars($order['total_gst']) ?></span>
+                            <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
                         </td>
+                        <!-- <td class="px-6 py-4 whitespace-nowrap">
+                            <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= htmlspecialchars($order['total_gst']) ?></span>
+                        </td> -->   
                         
                         <td class="px-6 py-4 whitespace-nowrap">
                         <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= htmlspecialchars($order['total_cost']) ?></span>
@@ -73,7 +73,9 @@
                             </button>
                             <ul class="menu-popup">
                                 <li onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-eye"></i> View PO</li>
+                                <?php if ($order['status'] == 'pending'): ?>
                                 <li onclick="handleAction('Edit', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-pencil-alt"></i> Edit PO</li>
+                                <?php endif; ?>
                                 <li onclick="handleAction('ChangeStatus', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-exchange-alt"></i> Change Status</li>
                                 <?php if ($order['status'] == 'cancelled'): ?>
                                 <li onclick="handleAction('Delete', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-trash-alt"></i> Delete PO</li>

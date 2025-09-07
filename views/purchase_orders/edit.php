@@ -4,6 +4,26 @@
         <input type="hidden" name="po_id" value="<?php echo $data['purchaseOrder']['id']; ?>">
         <div class="flex flex-col md:flex-row justify-between mb-8">
         <!-- Left Column -->
+        <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
+            <div class="flex items-center">
+                <label for="po_number" class="block text-gray-700 form-label">PO Number :</label>
+                <input type="text" id="po_number" name="po_number" value="<?php echo htmlspecialchars($data['purchaseOrder']['po_number']); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" readonly>
+            </div>
+            <div class="flex items-center">
+                <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
+                <input type="date" id="delivery_due_date" value="<?php echo $data['purchaseOrder']['expected_delivery_date'] ? date('Y-m-d', strtotime($data['purchaseOrder']['expected_delivery_date'])) : ''; ?>" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
+            </div>
+            <div class="flex items-center">
+                <label for="employee-name" class="block text-gray-700 form-label">User Name</label>
+                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
+                    <option value="">Select User</option>
+                    <?php foreach ($users as $id => $name): ?>
+                        <option value="<?= $id ?>" <?php if ($data['purchaseOrder']['user_id'] == $id) echo 'selected'; ?>><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <!-- Right Column -->
         <div class="space-y-2 w-full md:w-auto">
             <div class="flex items-center">
                 <label for="vendor" class="block text-gray-700 form-label">Vendor :</label>
@@ -32,22 +52,8 @@
                 </select>
             </div>
         </div>
-        <!-- Right Column -->
-        <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
-            <div class="flex items-center">
-                <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
-                <input type="date" id="delivery_due_date" value="<?php echo $data['purchaseOrder']['expected_delivery_date'] ? date('Y-m-d', strtotime($data['purchaseOrder']['expected_delivery_date'])) : ''; ?>" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
-            </div>
-            <div class="flex items-center">
-                <label for="employee-name" class="block text-gray-700 form-label">Employee Name</label>
-                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
-                    <option value="">Select Employee</option>
-                    <?php foreach ($users as $id => $name): ?>
-                        <option value="<?= $id ?>" <?php if ($data['purchaseOrder']['user_id'] == $id) echo 'selected'; ?>><?= htmlspecialchars($name) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        </div>
+        
+
     </div>
     <!-- Item Table -->
     <div class="bg-[rgba(245,245,245,1)] p-4 rounded-lg">
@@ -137,7 +143,7 @@
                 <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
                 <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
             </div>
-            <textarea id="terms" name="terms" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php //echo htmlspecialchars($purchaseOrder['terms']); ?></textarea>
+            <textarea id="terms" name="terms_and_conditions" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo htmlspecialchars($purchaseOrder['terms_and_conditions']); ?></textarea>
         </div>
     </div>
     <!-- Action Buttons -->
