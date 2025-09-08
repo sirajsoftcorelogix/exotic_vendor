@@ -5,6 +5,7 @@ require_once 'models/order/purchaseOrderItem.php';
 require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
+require_once 'models/order/po_invoice.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -16,6 +17,7 @@ $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
 $vendorsModel = new Vendor($conn);
 $usersModel = new User($conn);
 $commanModel = new Tables($conn);
+$poInvoiceModel = new POInvoice($conn);
 global $root_path;
  
 class PurchaseOrdersController {
@@ -679,5 +681,159 @@ class PurchaseOrdersController {
         }
         exit;
     }
+    function uploadInvoice() {
+        global $purchaseOrdersModel;
+        global $poInvoiceModel;
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+        $id = isset($_POST['id']) ? $_POST['id'] : 0; // for update
 
-}   
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        
+        
+        if (!isset($_FILES['file_input']) || $_FILES['file_input']['error'] !== 0) {
+            if(isset($id) && $id){
+                //update without file
+                $poInvoiceData = [
+                    'po_id' => $poId,
+                    'invoice_date' => $_POST['invoice_date'] ?? '',
+                    'gst_reg' => $_POST['gst_reg'] ?? '',
+                    'sub_total' => $_POST['sub_total'] ?? 0,
+                    'gst_total' => $_POST['gst_total'] ?? 0,
+                    'shipping' => $_POST['shipping'] ?? 0,
+                    'grand_total' => $_POST['grand_total'] ?? 0,
+                ];
+                $isUpdated = $poInvoiceModel->updateInvoice($id, $poInvoiceData);
+                if (!$isUpdated) {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update invoice details in database.']);
+                    exit;
+                }
+                echo json_encode(['success' => true, 'message' => 'Invoice updated successfully.']);
+                exit;
+            }
+            echo json_encode(['success' => false, 'message' => 'File upload error.']);
+            exit;
+        }
+        if (!isset($_FILES['file_input']) || $_FILES['file_input']['error'] !== 0) {
+            echo json_encode(['success' => false, 'message' => 'File upload error.']);
+            exit;
+        }
+        $uploadDir = __DIR__ . '/../uploads/invoices/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $fileTmpPath = $_FILES['file_input']['tmp_name'];
+        $fileName = $_FILES['file_input']['name'];
+        $fileSize = $_FILES['file_input']['size'];
+        $fileType = $_FILES['file_input']['type'];
+        $fileNameCmps = explode(".", $fileName);
+        $fileExtension = strtolower(end($fileNameCmps));
+
+        // Sanitize file name
+        $newFileName = 'PO_' . $poId . '_' . time() . '.' . $fileExtension;
+
+        // Check if file type is allowed (e.g., pdf, jpg, png)
+        $allowedfileExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+        if (!in_array($fileExtension, $allowedfileExtensions)) {
+            echo json_encode(['success' => false, 'message' => 'Upload failed. Allowed file types: ' . implode(',', $allowedfileExtensions)]);
+            exit;
+        }
+
+        $dest_path = $uploadDir . $newFileName;
+
+        if (move_uploaded_file($fileTmpPath, $dest_path)) {
+            $invoice = 'uploads/invoices/' . $newFileName;
+            $poInvoiceData = [
+                'po_id' => $poId,
+                'invoice_date' => $_POST['invoice_date'] ?? '',
+                'gst_reg' => $_POST['gst_reg'] ?? '',
+                'sub_total' => $_POST['sub_total'] ?? 0,
+                'gst_total' => $_POST['gst_total'] ?? 0,
+                'shipping' => $_POST['shipping'] ?? 0,
+                'grand_total' => $_POST['grand_total'] ?? 0,
+                'invoice' => $invoice,
+            ];
+            if(isset($id) && $id){
+                //update
+                $isUpdated = $poInvoiceModel->updateInvoice($id, $poInvoiceData);
+                if (!$isUpdated) {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update invoice details in database.']);
+                    exit;
+                }
+                echo json_encode(['success' => true, 'message' => 'Invoice updated successfully.', 'invoice_path' => 'uploads/invoices/' . $newFileName]);
+                exit;
+            }
+            // Save invoice details to database
+            $isSaved = $poInvoiceModel->addPoInvoice($poInvoiceData);
+            if (!$isSaved) {
+                echo json_encode(['success' => false, 'message' => 'Failed to save invoice details to database.']);
+                exit;
+            }
+            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully.', 'invoice_path' => 'uploads/invoices/' . $newFileName]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
+        }
+    }
+    
+    public function getPoDetails() {
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+        global $poInvoiceModel;
+        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }
+        
+        $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
+        $poInvoice = $poInvoiceModel->getInvoiceByPoId($poId);
+        if ($poInvoice && isset($poInvoice['invoice_date'])) {
+        $poInvoice['invoice_date'] = date('Y-m-d', strtotime($poInvoice['invoice_date']));
+        }
+
+        echo json_encode(['success' => true, 'data' => [
+            'purchaseOrder' => $purchaseOrder,
+            'items' => $purchaseOrderItems,
+            'invoiceData' => $poInvoice ?? '',
+        ]]);
+        exit;
+    }
+    public function deleteInvoice() {
+        global $poInvoiceModel;
+
+        $invoiceId = isset($_POST['invoice_id']) ? $_POST['invoice_id'] : 0;
+
+        if (!$invoiceId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Invoice ID.']);
+            exit;
+        }
+
+        $invoice = $poInvoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            echo json_encode(['success' => false, 'message' => 'Invoice not found.']);
+            exit;
+        }
+
+        $invoicePath = __DIR__ . '/../' . $invoice['invoice'];
+        if (file_exists($invoicePath)) {
+            unlink($invoicePath); // Delete the file
+        }
+
+        // Delete the invoice record from the database
+        $isDeleted = $poInvoiceModel->updateFile($invoiceId, ['invoice' => '']);
+        if (!$isDeleted) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete invoice from database.']);
+            exit;
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Invoice deleted successfully.']);
+    }
+}

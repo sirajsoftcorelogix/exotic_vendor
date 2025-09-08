@@ -44,7 +44,7 @@ class PurchaseOrder {
         return $stmt->execute();
     }
     public function getPurchaseOrder($id) {
-        $sql = "SELECT * FROM purchase_orders WHERE id = ?";
+        $sql = "SELECT *, vp_vendors.contact_name AS vendor_name, vp_vendors.vendor_phone AS vendor_phone, vp_vendors.vendor_email AS vendor_email FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id WHERE purchase_orders.id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param("i", $id);
         $stmt->execute();

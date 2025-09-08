@@ -155,6 +155,15 @@ switch ($page) {
             case 'emailToVendor':
                 $controller->emailToVendor();
                 break;
+            case 'upload_invoice':
+                $controller->uploadInvoice();
+                break;
+            case 'get_po_details':
+                $controller->getPoDetails();
+                break;
+            case 'delete_invoice':
+                $controller->deleteInvoice();
+                break;
             default:
                 $controller->index();
                 break;

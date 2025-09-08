@@ -82,7 +82,7 @@
                                 <?php endif; ?>
                                 <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
-                                <li id="open-vendor-popup-btn" ><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
+                                <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
                             </ul>
                             </div>
                             
@@ -176,44 +176,43 @@
                     <div class="flex items-start mb-6 pb-6 border-b">
                         <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover">
                         <div class="ml-6 text-sm text-gray-600 space-y-1">
-                            <p><strong>Order ID:</strong> 123456</p>
-                            <p><strong>Order Date:</strong> 20th July 25</p>
-                            <p><strong>Item:</strong> 12" Painting</p>
-                            <p><strong>Vendorr ID:</strong> 47635</p>
-                            <p><strong>Vendor Name:</strong> ABC Pvt. Ltd.</p>
+                            <p><strong>PO Number:</strong> </p>
+                            <p><strong>PO Date:</strong> </p>
+                            <p><strong>Item:</strong> </p>                            
+                            <p><strong>Vendor Name:</strong> </p>
                             <p><strong>Vendor Phone:</strong> +9810865978 <i class="fab fa-whatsapp text-green-500 ml-1"></i> <span class="text-blue-600">info@vendor1.com</span></p>
                         </div>
                     </div>
 
-                    <form id="invoice-form">
+                    <form id="invoice-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                             <div>
-                                <label for="invoice-date" class="text-sm font-medium text-gray-700">Invoice Date:</label>
-                                <input type="date" id="invoice-date" class="form-input w-full mt-1">
+                                <label for="invoice_date" class="text-sm font-medium text-gray-700">Invoice Date:</label>
+                                <input type="date" id="invoice_date" name="invoice_date" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="gst-reg" class="text-sm font-medium text-gray-700">GST Reg:</label>
-                                <select id="gst-reg" class="form-input w-full bg-white mt-1">
-                                    <option>Yes</option>
-                                    <option>No</option>
+                                <label for="gst_reg" class="text-sm font-medium text-gray-700">GST Reg:</label>
+                                <select id="gst_reg" name="gst_reg" class="form-input w-full bg-white mt-1">
+                                    <option value="1">Yes</option>
+                                    <option value="0">No</option>
                                 </select>
                                 <p class="text-xs text-red-500 text-right mt-1">Advance, Partial, Full</p>
                             </div>
                             <div>
-                                <label for="sub-total" class="text-sm font-medium text-gray-700">Sub Total ₹:</label>
-                                <input type="number" id="sub-total" value="10000" class="form-input w-full mt-1">
+                                <label for="sub_total" class="text-sm font-medium text-gray-700">Sub Total ₹:</label>
+                                <input type="number" id="sub_total" name="sub_total" value="10000" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="gst-total" class="text-sm font-medium text-gray-700">GST Total:</label>
-                                <input type="number" id="gst-total" class="form-input w-full mt-1">
+                                <label for="gst_total" class="text-sm font-medium text-gray-700">GST Total:</label>
+                                <input type="number" id="gst_total" name="gst_total" class="form-input w-full mt-1">
                             </div>
                             <div>
                                 <label for="shipping" class="text-sm font-medium text-gray-700">Shipping ₹:</label>
-                                <input type="number" id="shipping" value="10000" class="form-input w-full mt-1">
+                                <input type="number" id="shipping" name="shipping" value="10000" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="grand-total" class="text-sm font-medium text-gray-700">Grand Total ₹:</label>
-                                <input type="number" id="grand-total" value="10000" class="form-input w-full mt-1 bg-gray-100">
+                                <label for="grand_total" class="text-sm font-medium text-gray-700">Grand Total ₹:</label>
+                                <input type="number" id="grand_total" name="grand_total" value="10000" class="form-input w-full mt-1 bg-gray-100">
                             </div>
                         </div>
 
@@ -223,7 +222,7 @@
                                 <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
                                 <p class="text-sm text-gray-500">Drag & Drop your invoice file here or</p>
                                 <button type="button" id="choose-file-btn" class="mt-2 bg-white border border-gray-300 text-gray-700 px-4 py-1 rounded-md text-sm hover:bg-gray-50">Choose file</button>
-                                <input type="file" id="file-input" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
+                                <input type="file" id="file-input" name="file_input" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
                                 <p class="text-xs text-gray-400 mt-2">Only PDF, JPG, PNG</p>
                             </div>
                         </div>
@@ -236,6 +235,8 @@
                         </div>
 
                         <div class="flex justify-end items-center gap-4 pt-6 border-t">
+                            <input type="hidden" id="invoice-upload-po-id" name="po_id" >
+                            <input type="hidden" id="invoice-id" name="id" >
                             <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Cancel</button>
                             <button type="submit" class="action-btn save-btn">Save</button>
                         </div>
@@ -268,93 +269,7 @@
   </div>
 </div>
 <script>
-    const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
-    const popupWrapper = document.getElementById('popup-wrapper');
-    const modalSlider = document.getElementById('modal-slider');
-    const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
-    const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
-
-    function openVendorPopup() {
-        popupWrapper.classList.remove('hidden');
-        setTimeout(() => {
-            modalSlider.classList.remove('translate-x-full');
-        }, 10);
-    }
-    function closeVendorPopup() {
-        modalSlider.classList.add('translate-x-full');
-    }
-
-    modalSlider.addEventListener('transitionend', (event) => {
-        if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
-            popupWrapper.classList.add('hidden');
-        }
-    });
-
-    openVendorPopupBtn.addEventListener('click', openVendorPopup);
-    cancelVendorBtn.addEventListener('click', closeVendorPopup);
-    closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
-
-    const fileDropArea = document.getElementById('file-drop-area');
-    const fileInput = document.getElementById('file-input');
-    const chooseFileBtn = document.getElementById('choose-file-btn');
-    const uploadedFileSection = document.getElementById('uploaded-file-section');
-    const fileInfoDiv = document.getElementById('file-info');
-
-    chooseFileBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        fileDropArea.addEventListener(eventName, preventDefaults, false);
-    });
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        fileDropArea.addEventListener(eventName, () => fileDropArea.classList.add('dragover'), false);
-    });
-    ['dragleave', 'drop'].forEach(eventName => {
-        fileDropArea.addEventListener(eventName, () => fileDropArea.classList.remove('dragover'), false);
-    });
-
-    fileDropArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
-
-    function handleFiles(files) {
-        if (files.length === 0) return;
-        const file = files[0];
-
-        const fileType = file.type;
-        let iconClass = 'fa-file';
-        if (fileType.includes('pdf')) iconClass = 'fa-file-pdf';
-        if (fileType.includes('image')) iconClass = 'fa-file-image';
-
-        fileInfoDiv.innerHTML = `
-                <div class="flex items-center">
-                    <i class="fas ${iconClass} text-2xl text-gray-600"></i>
-                    <div class="ml-3 text-sm">
-                        <p class="font-medium text-gray-800">${file.name}</p>
-                        <p class="text-gray-500">${(file.size / 1024).toFixed(1)} KB</p>
-                    </div>
-                </div>
-                <button type="button" id="delete-file-btn" class="text-gray-500 hover:text-red-600">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-            `;
-        uploadedFileSection.classList.remove('hidden');
-
-        document.getElementById('delete-file-btn').addEventListener('click', () => {
-            fileInput.value = '';
-            uploadedFileSection.classList.add('hidden');
-            fileInfoDiv.innerHTML = '';
-        });
-    }
-
-    document.getElementById('invoice-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        console.log('Invoice form submitted');
-        closeVendorPopup();
-    });
+    
 
     // Toggle menu visibility
 function toggleMenu(button) {
@@ -431,6 +346,192 @@ function handleAction(action, poId, el) {
               alert('Error emailing purchase order.');
           });
       }
+  } else if (action === 'UploadInvoice') {
+      // Open the invoice upload popup
+      //alert('Feature coming soon!');
+        const popupWrapper = document.getElementById('popup-wrapper');
+        const modalSlider = document.getElementById('modal-slider');
+        const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
+        const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
+        
+        function openVendorPopup() {
+            popupWrapper.classList.remove('hidden');
+            setTimeout(() => {
+                modalSlider.classList.remove('translate-x-full');
+            }, 10);
+        }
+        function closeVendorPopup() {
+            modalSlider.classList.add('translate-x-full');
+        }
+
+        modalSlider.addEventListener('transitionend', (event) => {
+            if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
+                popupWrapper.classList.add('hidden');
+            }
+        });
+        openVendorPopup();
+        cancelVendorBtn.addEventListener('click', closeVendorPopup);
+        closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
+        // Store the PO ID if needed for form submission
+        document.getElementById('invoice-upload-po-id').value = poId;
+        // File upload handling
+        const fileDropArea = document.getElementById('file-drop-area');
+        const fileInput = document.getElementById('file-input');
+        const chooseFileBtn = document.getElementById('choose-file-btn');
+        const uploadedFileSection = document.getElementById('uploaded-file-section');
+        const fileInfoDiv = document.getElementById('file-info');
+
+        // Fetch and populate invoice po details
+        fetchPoDetails(poId).then(data => {
+            if (data.success) {
+                console.log(data.data);
+                const purchaseOrder = data.data.purchaseOrder;
+                const invoiceData = data.data.invoiceData;
+                const invItem = Array.isArray(data.data.items) && data.data.items.length > 0 ? data.data.items[0] : {};
+                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(1)').innerHTML = `<strong>PO Number:</strong> ${purchaseOrder.po_number}`;
+                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(2)').innerHTML = `<strong>PO Date:</strong> ${new Date(purchaseOrder.po_date).toLocaleDateString()}`;
+                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Item:</strong> ${invItem.title || 'N/A'}`;
+                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(4)').innerHTML = `<strong>Vendor Name:</strong> ${purchaseOrder.vendor_name || 'N/A'}`;
+                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(5)').innerHTML = `<strong>Vendor Phone:</strong> ${purchaseOrder.vendor_phone || 'N/A'} <i class="fab fa-whatsapp text-green-500 ml-1"></i> <span class="text-blue-600">${purchaseOrder.vendor_email || 'N/A'}</span>`;
+                document.getElementById('sub_total').value = invoiceData.sub_total || '';
+                document.getElementById('gst_total').value = invoiceData.gst_total || '';
+                document.getElementById('shipping').value = invoiceData.shipping || '';
+                document.getElementById('grand_total').value = invoiceData.grand_total || '';
+                document.getElementById('gst_reg').value = invoiceData && invoiceData.gst_reg ? '1' : '0';
+                document.getElementById('invoice_date').value = invoiceData && invoiceData.invoice_date ? invoiceData.invoice_date : '';
+                document.getElementById('invoice-id').value = invoiceData && invoiceData.id ? invoiceData.id : '';
+                //uploadedFileSection.innerHTML = '';
+                
+                if (invoiceData && invoiceData.invoice) {                    
+                    const file = { name: invoiceData.invoice, size: 0, type: invoiceData.invoice.endsWith('.pdf') ? 'application/pdf' : 'image/*', id: invoiceData.id };
+                    let iconClass = 'fa-file';
+                    if (file.type.includes('pdf')) iconClass = 'fa-file-pdf';
+                    if (file.type.includes('image')) iconClass = 'fa-file-image';
+                    fileInfoDiv.innerHTML = `
+                            <div class="flex items-center">
+                                <i class="fas ${iconClass} text-2xl text-gray-600"></i>
+                                <div class="ml-3 text-sm">
+                                    <div class="font-medium">${file.name}</div>
+                                    <div class="text-gray-500">${formatFileSize(file.size)}</div>
+                                </div>
+                            </div>
+                        `;
+                    fileInfoDiv.innerHTML += `
+                        <button type="button" id="delete-file-btn" class="text-gray-500 hover:text-red-600">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    `;                    
+                    uploadedFileSection.classList.remove('hidden');
+                    document.getElementById('delete-file-btn')?.addEventListener('click', () => {
+                        if (confirm('Are you sure you want to delete the uploaded invoice?')) {
+                            fetch('?page=purchase_orders&action=delete_invoice', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                                body: 'invoice_id=' + encodeURIComponent(file.id) + '&po_id=' + encodeURIComponent(poId)
+                            })
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.success) {
+                                    alert('Invoice deleted successfully.');
+                                    fileInput.value = '';
+                                    uploadedFileSection.classList.add('hidden');
+                                    fileInfoDiv.innerHTML = '';
+                                } else {
+                                    alert(data.message || 'Failed to delete invoice.');
+                                }
+                            })
+                            .catch(() => {
+                                alert('Error deleting invoice.');
+                            });
+                        }
+                    });
+                } else {
+                    fileInput.value = '';
+                }
+
+            } else {
+                console.debug('PO details fetch error:', data);
+                alert(data.message || 'Failed to fetch purchase order details.');
+            }
+        }).catch((err) => {            
+            console.debug('Fetch error:', err);
+            alert('Error fetching purchase order details.' + err.message);
+        }); 
+
+        chooseFileBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            fileDropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            fileDropArea.addEventListener(eventName, () => fileDropArea.classList.add('dragover'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            fileDropArea.addEventListener(eventName, () => fileDropArea.classList.remove('dragover'), false);
+        });
+
+        fileDropArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            const file = files[0];
+
+            const fileType = file.type;
+            let iconClass = 'fa-file';
+            if (fileType.includes('pdf')) iconClass = 'fa-file-pdf';
+            if (fileType.includes('image')) iconClass = 'fa-file-image';
+
+            fileInfoDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas ${iconClass} text-2xl text-gray-600"></i>
+                        <div class="ml-3 text-sm">
+                            <p class="font-medium text-gray-800">${file.name}</p>
+                            <p class="text-gray-500">${(file.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                    </div>
+                    <button type="button" id="delete-file-btn" class="text-gray-500 hover:text-red-600">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                `;
+            uploadedFileSection.classList.remove('hidden');
+
+            document.getElementById('delete-file-btn').addEventListener('click', () => {
+                fileInput.value = '';
+                uploadedFileSection.classList.add('hidden');
+                fileInfoDiv.innerHTML = '';
+            });
+        }
+
+        document.getElementById('invoice-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            //console.log('Invoice form submitted');
+            // Here you would handle the form submission, e.g., via AJAX
+            const formData = new FormData(document.getElementById('invoice-form'));
+            fetch('?page=purchase_orders&action=upload_invoice', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Invoice uploaded successfully!');
+                    location.reload();
+                } else {
+                    alert(data.message || 'Failed to upload invoice.');
+                }
+            })
+            .catch(() => {
+                alert('Error uploading invoice.');
+            });
+            closeVendorPopup();
+        });
+
   }
 }
 
@@ -499,5 +600,18 @@ function toggleStar(poId) {
     .catch(() => {
         alert('Error updating star flag.');
     });
+}
+function fetchPoDetails(poId) {
+    return fetch('?page=purchase_orders&action=get_po_details&po_id=' + encodeURIComponent(poId))
+        .then(r => r.json());
+}
+function formatFileSize(size) {
+    if (size >= 1048576) {
+        return (size / 1048576).toFixed(2) + ' MB';
+    } else if (size >= 1024) {
+        return (size / 1024).toFixed(2) + ' KB';
+    } else {
+        return size + ' bytes';
+    }
 }
 </script>
