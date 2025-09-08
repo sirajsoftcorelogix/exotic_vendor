@@ -70,7 +70,7 @@
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
                 <td class="p-4"><input type="hidden" name="title[]" value="<?= $item['title'] ?>" ><?php echo $item['title']; ?></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
-                <td class="p-4"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img src="<?php echo $item['image']; ?>" class="rounded-lg"></td>
+                <td class="p-4"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
                 <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
@@ -221,7 +221,24 @@
         </div>
     </div>
 </div>
+<!-- Image Popup -->
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
 <script>
+// Image popup functionality
+function openImagePopup(imageUrl) {
+    popupImage.src = imageUrl;
+    document.getElementById('imagePopup').classList.remove('hidden');
+}
+function closeImagePopup(e) {
+    // If called from button or outside click
+    document.getElementById('imagePopup').classList.add('hidden');
+}
+
 // Load Template Modal
 document.getElementById('loadTemplate').addEventListener('click', function() {
     document.getElementById('loadTemplateModal').style.display = 'flex';
@@ -412,7 +429,7 @@ function addSelectOrderListeners() {
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
                 <td class="p-4"><input type="hidden" name="title[]" value="${title}">${title}</td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
-                <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" class="rounded-lg" style="width:40px;height:40px;"></td>
+                <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" style="width:40px;height:40px;"></td>
                 <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="18" oninput="calculateTotals()" required></td>
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
