@@ -4,7 +4,7 @@
         <!-- Left Column -->
          <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
             <div class="flex items-center">
-                <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
+                <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :<span class="text-red-500"> *</span></label>
                 <input type="date" id="delivery_due_date" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
             </div>
             <!-- <div class="flex items-center">
@@ -12,7 +12,7 @@
                 <input type="text" name="order_id" id="order_id" placeholder="2142086" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 placeholder-gray-400 w-full md:w-[150px]">
             </div> -->
             <div class="flex items-center">
-                <label for="employee-name" class="block text-gray-700 form-label">User Name</label>
+                <label for="employee-name" class="block text-gray-700 form-label">User Name: <span class="text-red-500"> *</span></label>
                 <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
                     <option value="">Select User</option>
                     <?php foreach ($users as $id => $name): ?>
@@ -26,7 +26,7 @@
         <!-- Right Column -->
         <div class="space-y-2 w-full md:w-auto">
             <div class="flex items-center">
-                <label for="vendor" class="block text-gray-700 form-label">Vendor :</label>
+                <label for="vendor" class="block text-gray-700 form-label">Vendor : <span class="text-red-500"> *</span></label>
                 <select id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-full md:w-[300px]">
                     <option value="">Select Vendor</option>
                     <?php foreach ($vendors as $vendor): ?>
@@ -36,7 +36,7 @@
                 
             </div>
             <div class="flex items-center">
-                <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address :</label>
+                <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address : <span class="text-red-500"> *</span></label>
                 <select id="delivery_address" name="delivery_address" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[300px]">
                     <option value="">Select Delivery Address</option>
                     <?php foreach ($exotic_address as $address): ?>
@@ -152,7 +152,7 @@
         </div>
         <div>
             <div class="flex justify-between items-center mb-1">
-                <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
+                <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions: <span class="text-red-500"> *</span></label>
                 <button id="loadTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
             </div>
             <textarea id="terms" name="terms_and_conditions" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>

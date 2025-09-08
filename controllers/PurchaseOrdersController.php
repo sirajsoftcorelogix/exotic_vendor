@@ -91,9 +91,10 @@ class PurchaseOrdersController {
         $shipping_cost = isset($_POST['shipping_cost']) ? $_POST['shipping_cost'] : 0;
         $gst = isset($_POST['gst']) ? $_POST['gst'] : [];
         $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : []; 
-        $data = isset($_POST) ? $_POST : [];      
-        
-        if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst)) {
+        $data = isset($_POST) ? $_POST : [];  
+        $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
+
+        if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($terms_and_conditions) || empty($user_id)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
             exit;
         }
@@ -109,7 +110,7 @@ class PurchaseOrdersController {
             'subtotal' => $subtotal,
             'shipping_cost' => $shipping_cost,
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
-            'terms_and_conditions' => isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '',
+            'terms_and_conditions' => $terms_and_conditions,
         ];
         $poId = $purchaseOrdersModel->createPurchaseOrder($poData);
         if (!$poId) {
