@@ -79,18 +79,32 @@ switch ($page) {
             case 'list':
                 $controller->index();   
                 break;
-            case 'add':
-                $controller->addEditVendor();
-                break;
-            case 'addPost':
-                $controller->addPost();
-                break;
-            case 'update':
-                $controller->addEditVendor();
+            case 'addPost': // Method to Add / Edit Vendor
+                $controller->addVendorRecord();
                 break;
             case 'delete':
                 $controller->delete();
                 break;
+            case 'vendorDetails':
+                $controller->getVendorDetails();
+            case 'allCountries':
+                $controller->getAllCountries();
+                break;
+            case 'getStates':
+                $controller->getStatesByCountry(105); // India ID = 105
+                break;
+            case 'getBankDetails':
+                $controller->getBankDetails();
+                break;
+            case 'bankDetails':
+                $controller->addBankDetails();
+            /*case 'add':
+                $controller->addEditVendor();
+                break;*/
+            
+            /*case 'update':
+                $controller->addEditVendor();
+                break;*/
             default:
                 $controller->index();
                 break;

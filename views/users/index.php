@@ -138,7 +138,7 @@
                 <div class="flex items-center gap-4 text-sm text-gray-600">
                     <span>Page</span>
                     <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no <= 1 ? 'disabled' : '' ?>" >
-                        <a class="page-link" href="?page=users&acton=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>" tabindex="-1">
+                        <a class="page-link" <?php if(($page_no-1) >= 1) { ?> href="?page=users&acton=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                         </a>
                     </button>
