@@ -1,6 +1,11 @@
 <?php
 require_once 'models/vendor/vendor.php';
+require_once 'models/country/country.php';
+require_once 'models/country/state.php';
+
 $vendorsModel = new Vendor($conn);
+$countryModel = new Country($conn);
+$stateModel = new State($conn);
 
 global $root_path;
 global $domain;
@@ -8,63 +13,50 @@ class VendorsController {
     public function index() {
         is_login();
         global $vendorsModel;
-        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
-        $offset = ($page - 1) * $limit;
+        global $countryModel;
+        global $stateModel;
 
-        $vendors = $vendorsModel->getAllVendors($limit, $offset);
-        $total_vendors = count($vendors);
-        $total_pages = ceil($total_vendors / $limit);
-        renderTemplate('views/vendors/index.php', [
-            'vendors' => $vendors,
-            'total_vendors' => $total_vendors,
-            'limit' => $limit,
-            'offset' => $offset,
-            'total_pages' => $total_pages
-            ], 
-             'Manage Vendors');
-    }
-    public function addEditVendor() {
+        $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+        $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
         
+        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Users per page, default 5
+        $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
+
+        $vendors_data = $vendorsModel->getAllVendorsListing($page_no, $limit, $search, $status_filter); //$vendorsModel->getAllVendors($limit, $offset);
+
+        $countryList = $countryModel->getAllCountries();
+        $stateList = $stateModel->getAllStates(105); // India ID = 105
+
+        $data = [
+            'vendors' => $vendors_data["vendors"],
+            'page_no' => $page_no,
+            'total_pages' => $vendors_data["totalPages"],
+            'search' => $search,
+            'totalPages'   => $vendors_data["totalPages"],
+            'currentPage'  => $vendors_data["currentPage"],
+            'limit'        => $limit,
+            'totalRecords' => $vendors_data["totalRecords"],
+            'status_filter'=> $status_filter,
+            'countryList' => $countryList["countries"],
+            'stateList' => $stateList["states"],
+        ];
+        
+        renderTemplate('views/vendors/index.php', $data, 'Manage Vendors');
+    }
+    public function addVendorRecord() {
         global $vendorsModel;
-        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-        if ($id > 0) {
-            $vendor = $vendorsModel->getVendorById($id);    
-            if ($vendor) {
-                renderTemplateClean('views/vendors/add_edit.php', ['vendor' => $vendor], 'Edit Vendor');
-                //renderTemplate('views/vendors/add_edit.php', ['vendor' => $vendor], 'Edit Vendor');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data = $_POST;
+            $id = isset($data['id']) ? (int)$data['id'] : 0;
+            if ($id > 0) {
+                $result = $vendorsModel->updateVendor($id, $data);
             } else {
-                renderTemplate('views/errors/not_found.php', [], 'Vendor Not Found');
-            }   
-        } else {
-            renderTemplateClean('views/vendors/add_edit.php', [], 'Add New Vendor');
-            //renderTemplate('views/vendors/add_edit.php', [], 'Add New Vendor');
+                $result = $vendorsModel->addVendor($data);            
+            }
+            echo json_encode($result);
         }
         exit;
-    }
-    public function addPost() {
-        global $vendorsModel;
-        $data = $_POST;
-        $id = isset($data['id']) ? (int)$data['id'] : 0;
-        if ($id > 0) {
-            $result = $vendorsModel->updateVendor($id, $data);
-            //$message = $result ? 'Vendor updated successfully.' : 'Failed to update vendor.';
-        } else {
-            $result = $vendorsModel->addVendor($data);            
-            //$message = $result ? 'Vendor added successfully.' : 'Failed to add vendor.';
-        }
-        echo json_encode($result);
-        // if (!$result) {
-        //     echo json_encode(['success' => false, 'message' => 'Database operation failed.']);
-        //     exit;
-        // }else {
-        //     echo json_encode(['success' => true, 'message' => 'Vendor saved successfully.']);
-        // }
-        
-        exit;
-        //$vendors = $vendorsModel->getAllVendors();
-        //renderTemplate('views/vendors/index.php', ['vendors' => $vendors, 'message' => $message], 'Manage Vendors');
     }
     public function delete() {
         global $vendorsModel;
@@ -83,6 +75,64 @@ class VendorsController {
         }
         exit;
     }
-    
+    public function getVendorDetails() {
+        global $vendorsModel;
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id > 0) {
+            $vendor = $vendorsModel->getVendorById($id);
+            if ($vendor) {
+                echo json_encode($vendor);
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Vendor not found.']);
+            }
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid vendor ID.']);
+        }
+        exit;
+    }
+    public function getAllCountries() {
+        global $countryModel;
+        $countries = $countryModel->getAllCountries();
+        echo json_encode($countries);
+        exit;
+    }
+    public function getStatesByCountry($country_id) {
+        global $stateModel;
+        $states = $stateModel->getAllStates($country_id);
+        echo json_encode($states["states"]);
+        exit;
+    }
+    public function getBankDetails() {
+        global $vendorsModel;
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id > 0) {
+            $bankdtls = $vendorsModel->getBankDetailsById($id);
+            if (!empty($bankdtls) && is_array($bankdtls)) {
+                echo json_encode($bankdtls);
+            } else {
+                echo json_encode(['status' => 'success', 'message' => '']);
+            }
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid vendor ID.']);
+        }
+        exit;
+    }
+    public function addBankDetails() {
+        global $vendorsModel;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data = $_POST;
+            $vendor_id = isset($data['vendor_id']) ? (int)$data['vendor_id'] : 0;
+            $bankdtls = $vendorsModel->getBankDetailsById($vendor_id);
+            if ($bankdtls) {
+                $result = $vendorsModel->updateBankDetails($data);
+            } else {
+                print_array($bankdtls); exit;
+                $result = $vendorsModel->saveBankDetails($data);            
+            }
+            echo json_encode($result);
+        }
+        exit;
+    }
+
 }
 ?>

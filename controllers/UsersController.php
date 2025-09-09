@@ -223,8 +223,6 @@ class UsersController {
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Users per page, default 5
         $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
         
-        //$users_data = $usersModel->getAll($search, $sort_by, $sort_order, $limit, $offset);
-        //$total_records = $usersModel->countAll($search);
         $users_data = $usersModel->getAllUsersListing($page_no, $limit, $search, $role_filter, $status_filter);
         $data = [
             'users' => $users_data["users"],
