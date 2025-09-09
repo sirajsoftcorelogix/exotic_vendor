@@ -629,6 +629,8 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
   display: none;
   z-index: 1000;
   min-width: 120px;
+  max-height: 250px;
+  overflow-y: auto;
 }
 
 .menu-popup li {
@@ -639,4 +641,9 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
 
 .menu-popup li:hover {
   background-color: #f0f0f0;
+}
+.table-container {
+  position: relative;
+  overflow: visible; /* Not auto/hidden */
+  z-index: 1;
 }

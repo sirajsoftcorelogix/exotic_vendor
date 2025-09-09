@@ -828,7 +828,7 @@ class PurchaseOrdersController {
         }
 
         // Delete the invoice record from the database
-        $isDeleted = $poInvoiceModel->updateFile($invoiceId, ['invoice' => '']);
+        $isDeleted = $poInvoiceModel->updateFile($invoiceId, '');
         if (!$isDeleted) {
             echo json_encode(['success' => false, 'message' => 'Failed to delete invoice from database.']);
             exit;
