@@ -598,13 +598,13 @@ document.getElementById('status-popup-overlay').addEventListener('click', functi
   if (e.target === this) this.classList.add('hidden');
 });
    
-body.addEventListener('click', (event) => {
-    if (!event.target.closest('.menu-popup') && !event.target.closest('.menu-button')) {
-        document.querySelectorAll('.menu-popup').forEach(menu => {
-            menu.style.display = 'none';
-        });
-    }
-});
+// document.addEventListener('click', (event) => {
+//     if (!event.target.closest('.menu-popup') && !event.target.closest('.menu-button')) {
+//         document.querySelectorAll('.menu-popup').forEach(menu => {
+//             menu.style.display = 'none';
+//         });
+//     }
+// });
 // Toggle star flag
 function toggleStar(poId) {
     fetch('?page=purchase_orders&action=toggle_star', {

@@ -55,9 +55,19 @@ class PurchaseOrdersController {
         //print_r($_POST);
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
         if (empty($itemIds)) {
-            //echo json_encode(['success' => false, 'message' => 'No items selected for Purchase Order.']);
-            renderTemplate('views/errors/not_found.php', ['message' => 'No items selected for Purchase Order.'], 'No items selected for Purchase Order');
-            exit;
+            if(isset($_SESSION['poitem']) && !empty($_SESSION['poitem'])){
+                $itemIds = $_SESSION['poitem'];
+            }else{
+                // No items selected, handle the error (e.g., redirect back with an error message)
+                // For simplicity, we'll just exit here
+                //echo json_encode(['success' => false, 'message' => 'No items selected for Purchase Order.']);
+                renderTemplate('views/errors/not_found.php', ['message' => 'No items selected for Purchase Order.'], 'No items selected for Purchase Order');
+                exit;
+            }
+            
+        }
+        if(!empty($itemIds)){
+            $_SESSION['poitem'] = $itemIds;
         }
         $data = [];
         foreach ($itemIds as $id) {

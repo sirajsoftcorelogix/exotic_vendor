@@ -7,7 +7,7 @@
         <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
             <div class="flex items-center">
                 <label for="po_number" class="block text-gray-700 form-label">PO Number :</label>
-                <input type="text" id="po_number" name="po_number" value="<?php echo htmlspecialchars($data['purchaseOrder']['po_number']); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" readonly>
+                <input type="text" id="po_number" name="po_number" value="<?php echo htmlspecialchars($data['purchaseOrder']['po_number'] ?? ''); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" readonly>
             </div>
             <div class="flex items-center">
                 <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
@@ -31,7 +31,7 @@
                     <option value="">Select Vendor</option>
                     <?php foreach ($data['vendors'] as $vendor): ?>
                         <option value="<?php echo $vendor['id']; ?>" <?php if ($data['purchaseOrder']['vendor_id'] == $vendor['id']) echo 'selected'; ?>>
-                            <?php echo htmlspecialchars($vendor['contact_name']); ?>
+                            <?php echo htmlspecialchars($vendor['contact_name'] ?? ''); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -46,7 +46,7 @@
                     <option value="">Select Delivery Address</option>
                     <?php foreach ($data['deliveryAddresses'] as $address): ?>
                         <option value="<?php echo $address['id']; ?>" <?php if ($data['purchaseOrder']['delivery_address'] == $address['id']) echo 'selected'; ?>>
-                            <?php echo htmlspecialchars($address['address']); ?>
+                            <?php echo htmlspecialchars($address['address'] ?? ''); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -76,21 +76,21 @@
             <?php foreach($items as $item): ?>
                 <tr class="bg-white shadow-sm rounded-lg">
                     <td class="p-2 align-top"><input type="hidden" name="item_ids[]" value="<?php echo $item['id']; ?>"><?php echo $item['id']; ?></td>
-                    <td class="p-2 align-top"> <?php echo htmlspecialchars($item['title']); ?></td>
-                    <td class="p-2 align-top"><?php echo htmlspecialchars($item['hsn']); ?></td>
+                    <td class="p-2 align-top"> <?php echo htmlspecialchars($item['title'] ?? ''); ?></td>
+                    <td class="p-2 align-top"><?php echo htmlspecialchars($item['hsn'] ?? ''); ?></td>
                     <td class="p-2 align-top">
                         <?php if (!empty($item['image'])): ?>
-                            <img src="<?php echo htmlspecialchars($item['image']); ?>" alt="Item Image" class="h-12 w-12 object-cover rounded">
+                            <img src="<?php echo htmlspecialchars($item['image'] ?? ''); ?>" alt="Item Image" class="h-12 w-12 object-cover rounded">
                         <?php else: ?>
                             N/A
                         <?php endif; ?>
                     </td>
-                    <td class="p-2 align-top"><input type="text" name="gst[]" value="<?php echo htmlspecialchars($item['gst']); ?>" class="form-input w-[80px] " /></td>
-                    <td class="p-2 align-top"><input type="text" name="quantity[]" value="<?php echo htmlspecialchars($item['quantity']); ?>" class="form-input w-[80px] " /></td>
+                    <td class="p-2 align-top"><input type="text" name="gst[]" value="<?php echo htmlspecialchars($item['gst'] ?? ''); ?>" class="form-input w-[80px] " /></td>
+                    <td class="p-2 align-top"><input type="text" name="quantity[]" value="<?php echo htmlspecialchars($item['quantity'] ?? ''); ?>" class="form-input w-[80px] " /></td>
                     <td class="p-2 align-top"></td>
-                    <td class="p-2 align-top"><input type="text" name="price[]" value="<?php echo htmlspecialchars($item['price']); ?>" class="form-input w-[80px] " />
+                    <td class="p-2 align-top"><input type="text" name="price[]" value="<?php echo htmlspecialchars($item['price'] ?? ''); ?>" class="form-input w-[80px] " />
                     </td>
-                    <td class="p-2 align-top"><input type="text" name="amount[]" value="<?php echo htmlspecialchars($item['amount']); ?>" class="form-input w-[80px] " /></td>
+                    <td class="p-2 align-top"><input type="text" name="amount[]" value="<?php echo htmlspecialchars($item['amount'] ?? ''); ?>" class="form-input w-[80px] " /></td>
                     <td class="p-2 align-top text-right">
                         <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item">&times;</button>
                     </td>
@@ -107,24 +107,24 @@
         <div class="totals">
             <div class="flex justify-between">
                 <span class="font-bold">Subtotal:</span>
-                <span class="subtotal"><?php echo number_format(($data['purchaseOrder']['subtotal']), 2); ?></span>
+                <span class="subtotal"><?php echo number_format(($data['purchaseOrder']['subtotal'] ?? 0), 2); ?></span>
             </div>
             <div class="flex justify-between">
                 <span class="font-bold">Total GST:</span>
-                <span class="total-gst"><?php echo number_format(($data['purchaseOrder']['total_gst']), 2); ?></span>
+                <span class="total-gst"><?php echo number_format(($data['purchaseOrder']['total_gst'] ?? 0), 2); ?></span>
             </div>
             <div class="flex justify-between">
                 <span class="font-bold">Shipping Cost:</span>
-                <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php echo number_format(($data['purchaseOrder']['shipping_cost']), 2); ?>" class="form-input w-[80px] " /></span>
+                <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php echo number_format(($data['purchaseOrder']['shipping_cost'] ?? 0), 2); ?>" class="form-input w-[80px] " /></span>
             </div>
             <div class="flex justify-between">
                 <span class="font-bold">Grand Total:</span>
-                <span class="grand-total"><?php echo number_format(($data['purchaseOrder']['total_cost']), 2); ?></span>
+                <span class="grand-total"><?php echo number_format(($data['purchaseOrder']['total_cost'] ?? 0), 2); ?></span>
             </div>
         </div>
-        <input type="hidden" name="total_gst" value="<?php echo htmlspecialchars($data['purchaseOrder']['total_gst']); ?>" />
-        <input type="hidden" name="grand_total" value="<?php echo htmlspecialchars($data['purchaseOrder']['total_cost']); ?>" />
-        <input type="hidden" name="subtotal" value="<?php echo htmlspecialchars($data['purchaseOrder']['subtotal']); ?>" />
+        <input type="hidden" name="total_gst" value="<?php echo htmlspecialchars($data['purchaseOrder']['total_gst'] ?? 0); ?>" />
+        <input type="hidden" name="grand_total" value="<?php echo htmlspecialchars($data['purchaseOrder']['total_cost'] ?? 0); ?>" />
+        <input type="hidden" name="subtotal" value="<?php echo htmlspecialchars($data['purchaseOrder']['subtotal'] ?? 0); ?>" />
         
     </div>
 
@@ -143,13 +143,13 @@
                 <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
                 <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
             </div>
-            <textarea id="terms" name="terms_and_conditions" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo htmlspecialchars($purchaseOrder['terms_and_conditions']); ?></textarea>
+            <textarea id="terms" name="terms_and_conditions" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo htmlspecialchars($purchaseOrder['terms_and_conditions'] ?? ''); ?></textarea>
         </div>
     </div>
     <!-- Action Buttons -->
     <div class="mt-8 flex justify-end space-x-4">
         <button type="submit" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md">Save Changes</button>
-        <button type="button" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md">Cancel</button>
+        <a href="<?php echo base_url('?page=purchase_orders&action=list'); ?>" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md">Cancel</a>
     </div>
     </form>
 </div>
