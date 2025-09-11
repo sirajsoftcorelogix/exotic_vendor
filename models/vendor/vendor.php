@@ -173,10 +173,27 @@ class vendor {
         ];
     }
     public function deleteVendor($id) {
+        // Check if Order(s) exists
+        $checkOrdersSql = "SELECT id FROM vp_orders WHERE vendor_id = ?";
+        $checkOrdersStmt = $this->conn->prepare($checkOrdersSql);
+        $checkOrdersStmt->bind_param('i', $id);
+        $checkOrdersStmt->execute();
+        $checkOrdersStmt->store_result();
+        if ($checkOrdersStmt->num_rows > 0) {
+            return ['success' => false, 'message' => 'Vendor can not be deleted. Order(s) exists in the database.'];
+        }
+        $checkOrdersStmt->close();
+
         $sql = "DELETE FROM vp_vendors WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);
-        return $stmt->execute();
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Vendor deleted successfully.'];
+        }
+        return [
+            'success' => false,
+            'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
+        ];
     }
     public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '') {
         // sanitize
@@ -189,24 +206,16 @@ class vendor {
         // calculate offset
         $offset = ($page - 1) * $limit;
 
-        if (!empty($status_filter)) {
-            if($status_filter == 'active') {
-                $status_filter = 1;
-            } else if($status_filter == 'inactive') {
-                $status_filter = 0;
-            }
-        }
-
         // 🔹 Build search condition
         $where = "";
         if (!empty($search) && !empty($status_filter)) {
             $search = $this->conn->real_escape_string($search);
             $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE (contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%') AND is_active = '$status_filter'";
+            $where = "WHERE (vendor_name LIKE '%$search%' OR contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%' OR city LIKE '%$search%' OR state LIKE '%$search%') AND is_active = '$status_filter'";
         } else {
             if (!empty($search)) {
                 $search = $this->conn->real_escape_string($search);
-                $where = "WHERE contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%'";
+                $where = "WHERE vendor_name LIKE '%$search%' OR contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%' OR city LIKE '%$search%' OR state LIKE '%$search%'";
             }
 
             if (!empty($status_filter)) {

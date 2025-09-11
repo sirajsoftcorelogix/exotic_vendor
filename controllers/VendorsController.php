@@ -65,11 +65,7 @@ class VendorsController {
         $id = isset($data['id']) ? (int)$data['id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
         if ($id > 0) {
             $result = $vendorsModel->deleteVendor($id);
-            if ($result) {
-                echo json_encode(['success' => true, 'message' => 'Vendor deleted successfully.']);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Failed to delete vendor.']);
-            }
+            echo json_encode($result);
         } else {
             echo json_encode(['success' => false, 'message' => 'Invalid vendor ID.'.$id]);
         }
@@ -121,12 +117,12 @@ class VendorsController {
         global $vendorsModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;
+            $data['bdStatus'] = 1;
             $vendor_id = isset($data['vendor_id']) ? (int)$data['vendor_id'] : 0;
             $bankdtls = $vendorsModel->getBankDetailsById($vendor_id);
             if ($bankdtls) {
                 $result = $vendorsModel->updateBankDetails($data);
             } else {
-                print_array($bankdtls); exit;
                 $result = $vendorsModel->saveBankDetails($data);            
             }
             echo json_encode($result);
