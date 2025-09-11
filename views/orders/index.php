@@ -436,15 +436,87 @@
     </div>
 </div>
 <!-- Order Details Popup Modal -->
-<div class="fixed inset-y-0 right-0 w-[400px] bg-white shadow-lg p-4" id="orderDetailOffcanvas" style="display: none; z-index: 1000;">
-  <!-- Popup content goes here -->
+<!-- <div class="fixed inset-y-0 right-0 w-[400px] bg-white shadow-lg p-4" id="orderDetailOffcanvas" style="display: none; z-index: 1000;">
+  Popup content goes here
   <h2 class="text-xl font-bold mb-4">Order Details</h2>
   <div id="orderDetailOffcanvasBody">
-      <!-- Order details will be populated here -->
+      Order details will be populated here
   </div>
   <button class="mt-4 bg-blue-500 text-white px-4 py-2 rounded">Close</button>
-</div>
+</div> -->
+<!-- Right Side Popup Wrapper -->
+<div id="popup-wrapper" class="hidden">
+    <!-- Background Overlay -->
+    <!-- <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div> -->
 
+    <!-- Sliding Container -->
+    <div id="modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: calc(45% + 61px); min-width: 661px;">
+
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-vendor-popup-btn" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Popup Panel -->
+        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
+            <div class="h-full w-full overflow-y-auto">
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Order Details</h2>
+
+                    <div class="flex items-start mb-6 pb-6 border-b">
+                        <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover">
+                        <div class="ml-6 text-sm text-gray-600 space-y-1">
+                            <p><strong>Order Number:</strong> </p>
+                            <p><strong>Order Date:</strong> </p>
+                            <p><strong>Item:</strong> </p>                            
+                            <p><strong>Item Code:</strong> </p>
+                           
+                        </div>
+                    </div>
+
+                    <form id="invoice-form" enctype="multipart/form-data">
+                        <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Description: </label>
+                                <span class="text-gray-600" id="description">Order for electronic items</span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">GST: </label>
+                                <span class="text-gray-600" id="gst">18%</span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">HSN: </label>
+                                <span class="text-gray-600" id="hsn">8471</span>
+                            </div>
+                            <div>
+                                <label for="po_number" class="text-sm font-medium text-gray-700">PO Number: </label>
+                                <span class="text-gray-600" id="po_number">PO123456</span>
+                            </div>
+                            <div>
+                                <label for="quantity" class="text-sm font-medium text-gray-700">Quantity: </label>
+                                <span class="text-gray-600" id="quantity"></span>
+                            </div>
+                            <div>
+                                <label for="price" class="text-sm font-medium text-gray-700">Price: </label>
+                                <span class="text-gray-600" id="price">₹00</span>
+                            </div>
+                            <div>
+                                <label for="status" class="text-sm font-medium text-gray-700">Status: </label>
+                                <span class="text-gray-600" id="status">Pending</span>
+                            </div>
+                        </div>
+
+                        
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 <!-- Image Popup -->
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
@@ -459,6 +531,64 @@ function closeImagePopup(e) {
 }
 </script>
 <script>
+    // Popup functionality
+    const popupWrapper = document.getElementById('popup-wrapper');
+    const modalSlider = document.getElementById('modal-slider');
+    const closePopupBtn = document.getElementById('close-vendor-popup-btn');
+    const popupImage = document.getElementById('popupImage');
+    const orderDetailLinks = document.querySelectorAll('.order-detail-link');
+    orderDetailLinks.forEach(link => {
+        link.addEventListener('click', function (event) {
+            event.preventDefault();
+            const orderData = JSON.parse(this.getAttribute('data-order'));
+            fetchOrderDetails(orderData.id).then(orderDetails => {
+                //console.log(orderDetails.order);
+                // Populate the popup with order details
+                document.getElementById('description').textContent = orderDetails.order.description || 'N/A';
+                document.getElementById('gst').textContent = orderDetails.order.gst || 'N/A';
+                document.getElementById('hsn').textContent = orderDetails.order.hsn || 'N/A';
+                document.getElementById('po_number').textContent = orderDetails.order.po_number || 'N/A';
+                document.getElementById('quantity').textContent = orderDetails.order.quantity || 'N/A';
+                document.getElementById('price').textContent = orderDetails.order.total_price ? '₹' + orderDetails.order.total_price : 'N/A';
+                document.getElementById('status').textContent = orderDetails.status ? orderDetails.status.charAt(0).toUpperCase() + orderDetails.status.slice(1) : 'N/A';
+                
+                // Other details
+                const imgElem = document.querySelector('#vendor-popup-panel img');
+                imgElem.src = orderDetails.order.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
+                const infoDiv = imgElem.nextElementSibling;
+                infoDiv.innerHTML = `
+                    <p><strong>Order Number:</strong> ${orderDetails.order.order_number || 'N/A'}</p>
+                    <p><strong>Order Date:</strong> ${orderDetails.order.order_date || 'N/A'}</p>
+                    <p><strong>Item:</strong> ${orderDetails.order.title || 'N/A'}</p>                    
+                    <p><strong>Item Code:</strong> ${orderDetails.order.item_code || 'N/A'}</p>                    
+                `;
+            });
+            openPopup();
+        });
+    });
+    function openPopup() {
+        popupWrapper.classList.remove('hidden');
+        setTimeout(() => {
+            modalSlider.classList.remove('translate-x-full');
+        }, 10); // Slight delay to allow transition
+    }
+    closePopupBtn.addEventListener('click', () => {
+        modalSlider.classList.add('translate-x-full');
+        setTimeout(() => {
+            popupWrapper.classList.add('hidden');
+        }, 300); // Match the duration of the CSS transition
+    });
+    // function populateOrderDetails(order) {
+    //     document.getElementById('description').textContent = order.title || 'N/A';
+    //     document.getElementById('gst').textContent = order.gst || 'N/A';
+    //     document.getElementById('hsn').textContent = order.hsn || 'N/A';
+    //     document.getElementById('po_number').textContent = order.po_number || 'N/A';
+    //     document.getElementById('quantity').textContent = order.quantity || 'N/A';
+    // }
+    function fetchOrderDetails(id) {
+        return fetch('?page=orders&action=get_order_details&id=' + encodeURIComponent(id))
+            .then(r => r.json());
+    }
     function checkPoItmes() {
         const checkedRows = document.querySelectorAll('input[name="poitem[]"]:checked');
         if (checkedRows.length === 0) {
@@ -468,32 +598,7 @@ function closeImagePopup(e) {
         }
         return true; // Allow form submission if at least one item is checked
     }
-    // Popup for order detail
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.order-detail-link').forEach(function(link) {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const order = JSON.parse(this.getAttribute('data-order'));
-                let html = `
-                    <p><strong>Order Number:</strong> ${order.order_number}</p>
-                    <p><strong>Title:</strong> ${order.title}</p>
-                    <p><strong>Item Code:</strong> ${order.item_code}</p>
-                    <p><strong>Size:</strong> ${order.size}</p>
-                    <p><strong>Color:</strong> ${order.color}</p>
-                    <p><strong>Marketplace Vendor:</strong> ${order.marketplace_vendor}</p>
-                    <p><strong>Quantity:</strong> ${order.quantity}</p>
-                    <p><strong>Status:</strong> ${order.status}</p>
-                `;
-                document.getElementById('orderDetailOffcanvasBody').innerHTML = html;
-                document.getElementById('orderDetailOffcanvas').style.display = 'block';
-                
-            });
-        });
-    });
-    // Close button functionality
-    document.getElementById('orderDetailOffcanvas').querySelector('button').addEventListener('click', function() {
-        document.getElementById('orderDetailOffcanvas').style.display = 'none';
-    });
+    
     document.addEventListener('DOMContentLoaded', function () {
         // Accordion functionality
         const accordionButton = document.getElementById('accordion-button');

@@ -172,6 +172,22 @@ class OrdersController {
         }
         exit;
     }
+    public function getOrderDetails() {
+        global $ordersModel;
+        header('Content-Type: application/json');
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id > 0) {
+            $order = $ordersModel->getOrderById($id);
+            if ($order) {
+                echo json_encode(['success' => true, 'order' => $order]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Order not found.']);
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid Order ID.']);
+        }
+        exit;
+    }
 }
 ?>
 
