@@ -47,7 +47,21 @@
     <!-- Vendor Listing -->
     <div class="bg-white rounded-xl shadow-md overflow-hidden">
         <div class="p-6">
-            <div id="deleteMsgBox" style="margin-top: 10px; margin: botton 10px;" class="text-sm font-bold"></div>
+            <!-- <div id="deleteMsgBox" style="margin-top: 10px; margin: botton 10px;" class="text-sm font-bold"></div> -->
+            <!-- Success Modal -->
+            <div id="deleteMsgBox" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+                <div class="bg-white rounded-lg shadow-lg w-[400px] p-8 text-center">
+                    <h2 id="modalTitle" class="text-xl font-bold text-green-600 mb-4">Alert Box</h2>
+                    <p id="showMessage" class="text-gray-700"></p>
+
+                    <div class="mt-6">
+                    <button onclick="closeDeleteModal()" 
+                            class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        OK
+                    </button>
+                    </div>
+                </div>
+            </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
@@ -735,15 +749,16 @@
         });
     };
 
+    let successModalTimer;
     // Delete Vendor
     document.addEventListener("DOMContentLoaded", () => {
         const deleteButtons = document.querySelectorAll(".delete-btn");
-
+        
         deleteButtons.forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.preventDefault();
                 const id = btn.getAttribute("data-id");
-
+                window.closeAllMenus();
                 if (!confirm("Are you sure you want to delete this record?")) return;
 
                 fetch("?page=vendors&action=delete", {
@@ -753,25 +768,25 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    
-                    var msgBox = document.getElementById('deleteMsgBox');
-                    msgBox.innerHTML = '';
-                    if (data.success) {
-                        msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
-                                            ✅ ${data.message}
-                        </div>`;
-                        msgBox.focus();
-                        msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                    } else {
-                        msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                            ❌ ${data.message}
-                        </div>`;
-                        msgBox.focus();
-                        msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                    const title = document.getElementById("modalTitle");
+                    var type = "error";
+                    title.innerText = "Error ⚠️";
+                    title.className = "text-2xl font-bold text-red-600 mb-4";
+                    if(data.success) {
+                        title.innerText = "Success 🎉";
+                        title.className = "text-2xl font-bold text-green-600 mb-4";
                     }
-                    setTimeout(() => {
-                        window.location.href = '?page=vendors&action=list';
-                    }, 1000); // refresh after 1 sec
+
+                    document.getElementById("showMessage").innerText = data.message;
+                    const modal = document.getElementById("deleteMsgBox");
+                    modal.classList.remove("hidden");
+
+                    // Auto-close after 3 seconds
+                    clearTimeout(successModalTimer);
+                    /*successModalTimer = setTimeout(() => {
+                        closeDeleteModal();
+                    }, 3000);*/
+                    
                 })
                 .catch(err => {
                     console.error("AJAX Error:", err);
@@ -779,6 +794,11 @@
             });
         });
     });
+
+    function closeDeleteModal() {
+        document.getElementById("deleteMsgBox").classList.add("hidden");
+        clearTimeout(successModalTimer);
+    }
 
     // Edit User Modal Logic    
     const popupWrapperEdit = document.getElementById('editVendorModal');
@@ -837,8 +857,6 @@
                     document.getElementById('editStateBlock').innerHTML = stateSelect.outerHTML;
                     document.getElementById("editState").value = vendor.state;
                     document.getElementById("editPreviousState").value = vendor.state;
-                    let menu = document.querySelector('.menu-wrapper');
-                    menu.classList.toggle('hidden'); // Tailwind's "hidden" class
                     return;
                 });
             }

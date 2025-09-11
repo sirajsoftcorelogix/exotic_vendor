@@ -184,6 +184,12 @@ class vendor {
         }
         $checkOrdersStmt->close();
 
+        // Delete Bank details of the Vendor
+        $sql = "DELETE FROM vendor_bank_details WHERE vendor_id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+
         $sql = "DELETE FROM vp_vendors WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);
