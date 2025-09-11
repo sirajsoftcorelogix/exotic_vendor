@@ -47,6 +47,7 @@
     <!-- Vendor Listing -->
     <div class="bg-white rounded-xl shadow-md overflow-hidden">
         <div class="p-6">
+            <div id="deleteMsgBox" style="margin-top: 10px; margin: botton 10px;" class="text-sm font-bold"></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
@@ -85,9 +86,9 @@
                                             <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <li onclick="openBankDtlsModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
                                             <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
-                                            <li><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
-                                            <li><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
-                                            <li><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
+                                            <li style="color: lightgray;"><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
+                                            <li style="color: lightgray;"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
+                                            <li style="color: lightgray;"><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
                                         </ul>
                                     </div>
 
@@ -490,13 +491,13 @@
                                     <label class="text-sm font-medium text-gray-700"> IFSC Code <span class="text-red-500">*</span></label>
                                     <input type="text" class="form-input w-full mt-1" name="ifsc_code" id="ifsc_code" />
                                 </div>
-                                <div>
+                                <?php /* ?><div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
                                     <select class="form-input w-full mt-1" name="bdStatus" id="bdStatus">
                                         <option value="1">Active</option>
                                         <option value="0">Inactive </option>
                                     </select>
-                                </div>
+                                </div><? */?>
                             </div>
                         </div>
 
@@ -752,13 +753,25 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    if (!data.success) {
-                        alert("Error: " + data.message);
-                        return;
+                    
+                    var msgBox = document.getElementById('deleteMsgBox');
+                    msgBox.innerHTML = '';
+                    if (data.success) {
+                        msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
+                                            ✅ ${data.message}
+                        </div>`;
+                        msgBox.focus();
+                        msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
+                    } else {
+                        msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
+                            ❌ ${data.message}
+                        </div>`;
+                        msgBox.focus();
+                        msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
                     }
                     setTimeout(() => {
-                        location.reload();
-                    }, 500); // refresh after 1 sec
+                        window.location.href = '?page=vendors&action=list';
+                    }, 1000); // refresh after 1 sec
                 })
                 .catch(err => {
                     console.error("AJAX Error:", err);
@@ -907,14 +920,12 @@
                 document.getElementById("ifsc_code").value = bankdtls.ifsc_code;
                 document.getElementById("bank_name").value = bankdtls.bank_name;
                 document.getElementById("branch_name").value = bankdtls.branch_name;
-                document.getElementById("bdStatus").value = bankdtls.is_active;
             } else {
                 document.getElementById("account_name").value = "";
                 document.getElementById("account_number").value = "";
                 document.getElementById("ifsc_code").value = "";
                 document.getElementById("bank_name").value = "";
                 document.getElementById("branch_name").value = "";
-                document.getElementById("bdStatus").value = 1;
             }
 
             popupWrapperBD.classList.remove('hidden');
