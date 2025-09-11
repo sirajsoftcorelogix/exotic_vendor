@@ -10,9 +10,9 @@
         </div>
     </div>
     <!-- PO Table Container -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <div class="p-6">
-            <div class="overflow-x-auto">
+    <div class="bg-white rounded-xl shadow-md ">
+        <div class="p-6 ">
+            <div class="table-container">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                     <tr>
@@ -187,11 +187,11 @@
                     <form id="invoice-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                             <div>
-                                <label for="invoice_date" class="text-sm font-medium text-gray-700">Invoice Date:</label>
+                                <label for="invoice_date" class="text-sm font-medium text-gray-700">Invoice Date: <span class="text-red-500">*</span></label>
                                 <input type="date" id="invoice_date" name="invoice_date" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="gst_reg" class="text-sm font-medium text-gray-700">GST Reg:</label>
+                                <label for="gst_reg" class="text-sm font-medium text-gray-700">GST Reg: <span class="text-red-500">*</span></label>
                                 <select id="gst_reg" name="gst_reg" class="form-input w-full bg-white mt-1">
                                     <option value="1">Yes</option>
                                     <option value="0">No</option>
@@ -199,25 +199,25 @@
                                 <p class="text-xs text-red-500 text-right mt-1">Advance, Partial, Full</p>
                             </div>
                             <div>
-                                <label for="sub_total" class="text-sm font-medium text-gray-700">Sub Total ₹:</label>
+                                <label for="sub_total" class="text-sm font-medium text-gray-700">Sub Total ₹: <span class="text-red-500">*</span></label>
                                 <input type="number" id="sub_total" name="sub_total" value="10000" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="gst_total" class="text-sm font-medium text-gray-700">GST Total:</label>
+                                <label for="gst_total" class="text-sm font-medium text-gray-700">GST Total ₹: <span class="text-red-500">*</span></label>
                                 <input type="number" id="gst_total" name="gst_total" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="shipping" class="text-sm font-medium text-gray-700">Shipping ₹:</label>
+                                <label for="shipping" class="text-sm font-medium text-gray-700">Shipping ₹: </label>
                                 <input type="number" id="shipping" name="shipping" value="10000" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="grand_total" class="text-sm font-medium text-gray-700">Grand Total ₹:</label>
+                                <label for="grand_total" class="text-sm font-medium text-gray-700">Grand Total ₹: <span class="text-red-500">*</span></label>
                                 <input type="number" id="grand_total" name="grand_total" value="10000" class="form-input w-full mt-1 bg-gray-100">
                             </div>
                         </div>
 
                         <div class="mb-6">
-                            <label class="text-sm font-medium text-gray-700 mb-1 block">Invoice PDF:</label>
+                            <label class="text-sm font-medium text-gray-700 mb-1 block">Invoice PDF: <span class="text-red-500">*</span></label>
                             <div id="file-drop-area" class="file-drop-area">
                                 <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
                                 <p class="text-sm text-gray-500">Drag & Drop your invoice file here or</p>
@@ -511,7 +511,22 @@ function handleAction(action, poId, el) {
         document.getElementById('invoice-form').addEventListener('submit', (e) => {
             e.preventDefault();
             //console.log('Invoice form submitted');
-            // Here you would handle the form submission, e.g., via AJAX
+            //validation is added here
+            const invoiceDate = document.getElementById('invoice_date').value;
+            const subTotal = document.getElementById('sub_total').value;
+            const grandTotal = document.getElementById('grand_total').value;
+            const file = document.getElementById('file-input').files[0];
+            let isValid = true;
+
+            if (!invoiceDate || !subTotal || !grandTotal || (!file && !document.getElementById('invoice-id').value)) {
+                isValid = false;
+            }
+            //alert('Validation status: ' + isValid);
+            if (!isValid) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+            // Here we handle the form submission, e.g., via AJAX
             const formData = new FormData(document.getElementById('invoice-form'));
             fetch('?page=purchase_orders&action=upload_invoice', {
                 method: 'POST',
@@ -521,6 +536,7 @@ function handleAction(action, poId, el) {
             .then(data => {
                 if (data.success) {
                     alert('Invoice uploaded successfully!');
+                    closeVendorPopup();
                     location.reload();
                 } else {
                     alert(data.message || 'Failed to upload invoice.');
@@ -529,7 +545,7 @@ function handleAction(action, poId, el) {
             .catch(() => {
                 alert('Error uploading invoice.');
             });
-            closeVendorPopup();
+            
         });
 
   }
@@ -581,7 +597,14 @@ document.getElementById('status-form').onsubmit = function(e) {
 document.getElementById('status-popup-overlay').addEventListener('click', function(e) {
   if (e.target === this) this.classList.add('hidden');
 });
-
+   
+// document.addEventListener('click', (event) => {
+//     if (!event.target.closest('.menu-popup') && !event.target.closest('.menu-button')) {
+//         document.querySelectorAll('.menu-popup').forEach(menu => {
+//             menu.style.display = 'none';
+//         });
+//     }
+// });
 // Toggle star flag
 function toggleStar(poId) {
     fetch('?page=purchase_orders&action=toggle_star', {

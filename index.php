@@ -123,7 +123,9 @@ switch ($page) {
             case 'view':
                 $controller->viewOrder();   
                 break;
-           
+            case 'get_order_details':
+                $controller->getOrderDetails();
+                break;
             default:
                 $controller->index();
                 break;
