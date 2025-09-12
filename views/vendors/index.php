@@ -783,9 +783,9 @@
 
                     // Auto-close after 3 seconds
                     clearTimeout(successModalTimer);
-                    /*successModalTimer = setTimeout(() => {
+                    successModalTimer = setTimeout(() => {
                         closeDeleteModal();
-                    }, 3000);*/
+                    }, 1500);
                     
                 })
                 .catch(err => {
@@ -798,6 +798,7 @@
     function closeDeleteModal() {
         document.getElementById("deleteMsgBox").classList.add("hidden");
         clearTimeout(successModalTimer);
+        window.location.reload();
     }
 
     // Edit User Modal Logic    
