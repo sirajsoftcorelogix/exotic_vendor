@@ -1,15 +1,15 @@
 <?php
-class Country {
+class PaymentTerms {
     private $conn;
 
     public function __construct($db) {
         $this->conn = $db;
     }
 
-    public function getAllCountries() {
+    public function getAll() {
 		
-		$sql = "SELECT id, name FROM countries";
-		$sql .= " ORDER BY name ASC";
+		$sql = "SELECT id, term_conditions FROM vp_po_term_conditions";
+		$sql .= " ORDER BY id DESC";
 
 		$stmt = $this->conn->prepare($sql);
 		$stmt->execute();
@@ -21,11 +21,11 @@ class Country {
 			$data[] = $row;
 		}
 
-		return ['countries' => $data];
+		return ['terms_condition' => $data];
 	}
 	
-	public function getCountry($id) {
-		$sql = "SELECT id, name FROM countries WHERE id = ?";
+	public function getTCRecord($id) {
+		$sql = "SELECT id, term_conditions FROM vp_po_term_conditions WHERE id = ?";
 
 		$stmt = $this->conn->prepare($sql);
 		$stmt->bind_param("i", $id);
