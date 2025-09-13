@@ -185,6 +185,29 @@ switch ($page) {
                 break;
         }
         break;
+    case 'payemnt_terms':        
+        require_once 'controllers/PaymenetTermsController.php';
+        $controller = new PaymenetTermsController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addPTRecord();
+                break;
+            case 'updateRecord':
+                $controller->addPTRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'paymentTermsDetails':
+                $controller->getPTDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'dashboard':        
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
