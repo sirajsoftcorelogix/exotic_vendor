@@ -2,7 +2,7 @@
 // echo "<pre>";
 // print_r($purchaseOrder);
 ?>
-  <div class="flex justify-between items-center">
+  <div class="flex justify-between items-center mt-8">
     <h2 class="po-title">Purchase Order: <?= htmlspecialchars($purchaseOrder['po_number']) ?></h2>
     <a href="?page=purchase_orders&action=edit&po_id=<?= htmlspecialchars($purchaseOrder['id']) ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Edit</button></a>
   </div>
@@ -136,16 +136,16 @@
     <div>
       <div class="flex justify-between items-center mb-1">
         <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
-        <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
+        <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button> -->
       </div>
-      <textarea readonly id="terms" name="terms" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
+      <textarea readonly id="terms" name="terms" class="mt-5 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
     </div>
   </div>
 
   <!-- Action Buttons -->
   <div class="mt-8 flex justify-end space-x-4">
     <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
-    <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button>
+    <a href="<?= base_url('?page=purchase_orders&action=list') ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button></a>
   </div>
 
   <hr class="my-8 border-gray-200">

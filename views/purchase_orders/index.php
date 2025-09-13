@@ -174,18 +174,22 @@
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Vendor Invoice</h2>
 
                     <div class="flex items-start mb-6 pb-6 border-b">
-                        <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover">
+                        <!-- <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover"> -->
                         <div class="ml-6 text-sm text-gray-600 space-y-1">
                             <p><strong>PO Number:</strong> </p>
                             <p><strong>PO Date:</strong> </p>
-                            <p><strong>Item:</strong> </p>                            
+                            <!-- <p><strong>Item:</strong> </p>                             -->
                             <p><strong>Vendor Name:</strong> </p>
-                            <p><strong>Vendor Phone:</strong> +9810865978 <i class="fab fa-whatsapp text-green-500 ml-1"></i> <span class="text-blue-600">info@vendor1.com</span></p>
+                            <p><strong>Vendor Phone:</strong>  <a href="https://wa.me/"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a> <span class="text-blue-600"><a href="mailto:info@vendor1.com">info@vendor1.com</a></span></p>
                         </div>
                     </div>
 
                     <form id="invoice-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
+                             <div>
+                                <label for="invoice_no" class="text-sm font-medium text-gray-700">Invoice No: <span class="text-red-500">*</span></label>
+                                <input type="text" id="invoice_no" name="invoice_no" value="" class="form-input w-full mt-1">
+                            </div>
                             <div>
                                 <label for="invoice_date" class="text-sm font-medium text-gray-700">Invoice Date: <span class="text-red-500">*</span></label>
                                 <input type="date" id="invoice_date" name="invoice_date" class="form-input w-full mt-1">
@@ -196,11 +200,11 @@
                                     <option value="1">Yes</option>
                                     <option value="0">No</option>
                                 </select>
-                                <p class="text-xs text-red-500 text-right mt-1">Advance, Partial, Full</p>
+                                <!-- <p class="text-xs text-gray-500 mt-1">If yes, please provide your GST number</p> -->
                             </div>
                             <div>
                                 <label for="sub_total" class="text-sm font-medium text-gray-700">Sub Total ₹: <span class="text-red-500">*</span></label>
-                                <input type="number" id="sub_total" name="sub_total" value="10000" class="form-input w-full mt-1">
+                                <input type="number" id="sub_total" name="sub_total" value="" class="form-input w-full mt-1">
                             </div>
                             <div>
                                 <label for="gst_total" class="text-sm font-medium text-gray-700">GST Total ₹: <span class="text-red-500">*</span></label>
@@ -208,11 +212,11 @@
                             </div>
                             <div>
                                 <label for="shipping" class="text-sm font-medium text-gray-700">Shipping ₹: </label>
-                                <input type="number" id="shipping" name="shipping" value="10000" class="form-input w-full mt-1">
+                                <input type="number" id="shipping" name="shipping" value="" class="form-input w-full mt-1">
                             </div>
                             <div>
                                 <label for="grand_total" class="text-sm font-medium text-gray-700">Grand Total ₹: <span class="text-red-500">*</span></label>
-                                <input type="number" id="grand_total" name="grand_total" value="10000" class="form-input w-full mt-1 bg-gray-100">
+                                <input type="number" id="grand_total" name="grand_total" value="" class="form-input w-full mt-1 bg-gray-100" readonly>
                             </div>
                         </div>
 
@@ -269,7 +273,18 @@
   </div>
 </div>
 <script>
-    
+//calculate grand total
+document.getElementById('sub_total').addEventListener('input', calculateGrandTotal);    
+document.getElementById('shipping').addEventListener('input', calculateGrandTotal);
+document.getElementById('gst_total').addEventListener('input', calculateGrandTotal);
+
+function calculateGrandTotal() {
+    const subTotal = parseFloat(document.getElementById('sub_total').value) || 0;
+    const shipping = parseFloat(document.getElementById('shipping').value) || 0;
+    const gstTotal = parseFloat(document.getElementById('gst_total').value) || 0;
+    const grandTotal = subTotal + shipping + gstTotal;
+    document.getElementById('grand_total').value = grandTotal.toFixed(2);
+}
 
     // Toggle menu visibility
 function toggleMenu(button) {
@@ -390,9 +405,9 @@ function handleAction(action, poId, el) {
                 const invItem = Array.isArray(data.data.items) && data.data.items.length > 0 ? data.data.items[0] : {};
                 document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(1)').innerHTML = `<strong>PO Number:</strong> ${purchaseOrder.po_number}`;
                 document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(2)').innerHTML = `<strong>PO Date:</strong> ${new Date(purchaseOrder.po_date).toLocaleDateString()}`;
-                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Item:</strong> ${invItem.title || 'N/A'}`;
-                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(4)').innerHTML = `<strong>Vendor Name:</strong> ${purchaseOrder.vendor_name || 'N/A'}`;
-                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(5)').innerHTML = `<strong>Vendor Phone:</strong> ${purchaseOrder.vendor_phone || 'N/A'} <i class="fab fa-whatsapp text-green-500 ml-1"></i> <span class="text-blue-600">${purchaseOrder.vendor_email || 'N/A'}</span>`;
+                // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Item:</strong> ${invItem.title || 'N/A'}`;
+                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Vendor Name:</strong> ${purchaseOrder.vendor_name || 'N/A'}`;
+                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(4)').innerHTML = `<strong>Vendor Phone:</strong> ${purchaseOrder.vendor_phone || 'N/A'} <a href="https://wa.me/${purchaseOrder.vendor_phone || 'N/A'}"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a> <span class="text-blue-600"><a href="mailto:${purchaseOrder.vendor_email || 'N/A'}">${purchaseOrder.vendor_email || 'N/A'}</a></span>`;
                 document.getElementById('sub_total').value = invoiceData.sub_total || '';
                 document.getElementById('gst_total').value = invoiceData.gst_total || '';
                 document.getElementById('shipping').value = invoiceData.shipping || '';

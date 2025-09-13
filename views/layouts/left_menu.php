@@ -114,7 +114,7 @@
                                     <path d="M2.35868 3.09936C2.33353 2.94286 2.33658 2.77731 2.28744 2.62562C2.14153 2.17521 1.55468 2.0083 1.20972 2.34019C1.1981 2.34269 1.19925 2.324 1.2021 2.31687C1.21925 2.27446 1.32839 2.16885 1.36877 2.13743C1.97772 1.66273 2.83182 2.22474 2.64706 2.97216L2.35868 3.09917V3.09936Z"
                                           fill="#5D6772"/>
                                 </svg>
-                                <span>Suppliers</span>
+                                <span>Vendors</span>
                             </div>
                         </a>
                     </li>
@@ -124,7 +124,7 @@
             <hr class="my-4 border-gray-200">
 
             <!-- Inventory & Sales Section -->
-            <div>
+            <!-- <div>
                 <h3 class="px-3 py-2 text-gray-700">Inventory & Sales</h3>
                 <ul class="mt-1">
                     <li>
@@ -284,10 +284,10 @@
                 </ul>
             </div>
 
-            <hr class="my-4 border-gray-200">
+            <hr class="my-4 border-gray-200"> -->
 
             <!-- Finances & Accounts Section -->
-            <div>
+            <!-- <div>
                 <h3 class="px-3 py-2 text-gray-700">Finances & Accounts</h3>
                 <ul class="mt-1">
                     <li>
@@ -350,13 +350,13 @@
                 </ul>
             </div>
 
-            <hr class="my-4 border-gray-200">
+            <hr class="my-4 border-gray-200"> -->
 
             <!-- Administration Section -->
             <div>
                 <h3 class="px-3 py-2 text-gray-700">Administration</h3>
                 <ul class="mt-1">
-                    <li>
+                    <!-- <li>
                         <a href="#" class="nav-link text-gray-800">
                             <div class="content-wrapper">
                                 <svg height="15" viewBox="0 0 8 9" class="mr-2 flex-shrink-0" fill="none"
@@ -441,7 +441,7 @@
                                 <span>Settings</span>
                             </div>
                         </a>
-                    </li>
+                    </li> -->
                     <li>
                         <a href="<?=base_url('index.php?page=users&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'users') ? 'active' : '' ?>">
                             <div class="content-wrapper">

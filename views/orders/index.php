@@ -176,42 +176,42 @@
         <div id="accordion-content" class="accordion-content hidden">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
-
+                <form method="GET" class="contents">
                 <!-- Orders From/Till -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
-                        <label for="orders-from" class="block text-sm font-medium text-gray-600 mb-1">Orders From</label>
-                        <input type="date" id="orders-from" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Orders From</label>
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <span class="text-gray-500 pb-2">→</span>
                     <div class="w-1/2">
-                        <label for="orders-till" class="block text-sm font-medium text-gray-600 mb-1">Orders Till</label>
-                        <input type="date" id="orders-till" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Orders Till</label>
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
 
                 <!-- PO Date -->
-                <div>
-                    <label for="po-date" class="block text-sm font-medium text-gray-600 mb-1">PO Date</label>
-                    <input type="text" id="po-date" placeholder="PO Date" onfocus="(this.type='date')" onblur="(this.type='text')" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
-                </div>
+                <!-- <div>
+                    <label for="order-date" class="block text-sm font-medium text-gray-600 mb-1">Order Date</label>
+                    <input type="text" name="order_date" id="order-date" placeholder="Order Date" onfocus="(this.type='date')" onblur="(this.type='text')" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div> -->
 
                 <!-- Receipt Date -->
-                <div>
+                <!-- <div>
                     <label for="receipt-date" class="block text-sm font-medium text-gray-600 mb-1">Receipt Date</label>
-                    <input type="text" id="receipt-date" placeholder="Receipt Date" onfocus="(this.type='date')" onblur="(this.type='text')" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
-                </div>
+                    <input type="text" name="receipt_date" id="receipt-date" placeholder="Receipt Date" onfocus="(this.type='date')" onblur="(this.type='text')" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div> -->
 
                 <!-- Order Number -->
                 <div>
                     <label for="order-number" class="block text-sm font-medium text-gray-600 mb-1">Order Number</label>
-                    <input type="text" id="order-number" placeholder="Order Number" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Status -->
-                <div>
+                <!-- <div>
                     <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                    <select id="status" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="status" name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" disabled selected>Status</option>
                         <option>Pending</option>
                         <option>In Progress</option>
@@ -219,41 +219,53 @@
                         <option>Disputed</option>
                         <option>Returned</option>
                     </select>
-                </div>
+                </div> -->
 
                 <!-- Min/Max Amount -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
                         <label for="min-amount" class="block text-sm font-medium text-gray-600 mb-1">Min Amount</label>
-                        <input type="number" id="min-amount" placeholder="Min Amount" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="number" value="<?= htmlspecialchars($_GET['min_amount'] ?? '') ?>" name="min_amount" id="min-amount" placeholder="Min Amount" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <div class="w-1/2">
                         <label for="max-amount" class="block text-sm font-medium text-gray-600 mb-1">Max Amount</label>
-                        <input type="number" id="max-amount" placeholder="Max Amount" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="number" value="<?= htmlspecialchars($_GET['max_amount'] ?? '') ?>" name="max_amount" id="max-amount" placeholder="Max Amount" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
 
-                <!-- Customer -->
+                <!-- Item Code -->
                 <div>
-                    <label for="customer" class="block text-sm font-medium text-gray-600 mb-1">Customer</label>
-                    <input type="text" id="customer" placeholder="Customer" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Item Name -->
                 <div>
                     <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
-                    <input type="text" id="item-name" placeholder="Item Name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
-                    <button class="w-full bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
-                    <button id="clear-button" class="w-full bg-gray-800 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
+                    <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
+                    <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
                 </div>
+                </form>
+            <!-- clear filter -->
+             <script>
+                function clearFilters() {
+                    const url = new URL(window.location.href);
+                    alert(url.search);
+                    url.search = ''; // Clear all query parameters
+                    const page = 'page=orders&action=list';
+                    window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
+                }
+            </script>
             </div>
         </div>
     </div>
-
+    
+    <!-- End of Advance Search Accordion -->
     <!-- Orders Table Section -->
     <div class="mt-5">
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
@@ -306,11 +318,11 @@
                     <th class="p-4">#</th>
                     <th class="px-6 py-3">Order ID</th>
                     <th class="px-6 py-3">Order Date</th>                   
-                    <!-- <th class="px-6 py-3">Customer</th>
-                    <th class="px-6 py-3">Vendor Name</th> -->
-                    <th class="px-6 py-3">Item</th>
+                    <th class="px-6 py-3">Item Code</th>
+                    <!--<th class="px-6 py-3">Vendor Name</th> -->
+                    <th class="px-12 py-3">Item</th>
                     <th class="px-6 py-3">Image</th>
-                    <th class="px-6 py-3">Status</th>
+                    <!-- <th class="px-6 py-3">Status</th> -->
                     <th class="px-6 py-3">PO Number</th>
                     <!-- <th class="px-6 py-3">Receipt Due</th> -->
                     <!-- <th class="px-6 py-3">Staff</th> -->
@@ -338,7 +350,9 @@
                             <?= $order['order_number'] ?>
                         </a>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600">21/05/25</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['item_code'] ?></td>
+                    
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             
                     </td> -->
@@ -358,12 +372,11 @@
                             onclick="openImagePopup('<?= $order['image'] ?>')"
                         >
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">
-                            <span><?= ucfirst($order['status']) ?></span>
-                            <!-- <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.0462 8.20171C10.6471 9.47037 9.33805 11.0991 7.90051 12.3041C7.56557 12.5845 7.25392 12.7388 6.81226 12.7978C6.09737 12.8939 5.0914 12.9659 4.3672 12.9883C3.50483 13.0154 2.73561 12.5712 2.75424 11.6359C2.7686 10.909 2.86756 9.93098 2.95139 9.19835C2.99176 8.84595 3.04959 8.53545 3.24558 8.2299L11.1583 0.415632C11.9224 -0.178697 12.8027 -0.120026 13.5276 0.491828C14.0919 0.968052 15.0964 1.93688 15.5629 2.49426C16.1481 3.19335 16.1419 4.07837 15.5629 4.77785C14.5837 5.96041 13.1027 7.05649 12.0459 8.20209L12.0462 8.20171ZM12.257 1.03396C12.1433 1.04272 11.9911 1.11244 11.8968 1.17873C11.5141 1.44732 11.1361 2.00355 10.7523 2.30224L13.6763 5.13787C14.0908 4.59726 15.3762 3.97665 14.7692 3.19678C14.239 2.51559 13.299 1.87897 12.7316 1.19664C12.6109 1.0972 12.4157 1.02139 12.2566 1.03396H12.257ZM3.89255 11.8744C3.93796 11.9216 4.0998 11.9635 4.17121 11.962C4.89619 11.9464 5.93204 11.858 6.65663 11.7692C6.78664 11.7532 6.92675 11.7174 7.03891 11.6492L12.869 5.94022L9.99472 3.04591L4.13628 8.79985C4.00626 8.99529 3.98492 9.58505 3.96008 9.84602C3.91506 10.323 3.85607 10.8968 3.84171 11.368C3.83821 11.4842 3.81997 11.7989 3.89216 11.8744H3.89255Z" fill="#D06706"/><path d="M2.04958 2.33194C3.16732 2.2085 4.46941 2.40014 5.60695 2.32394C6.18289 2.447 6.14176 3.26687 5.56736 3.34687C4.59787 3.48174 3.31946 3.26344 2.30922 3.34878C1.6281 3.4063 1.1127 3.92444 1.04788 4.58696V13.695C1.10687 14.4322 1.64634 14.9138 2.38684 14.9713H11.5488C13.652 14.8079 12.6526 11.8801 12.8886 10.5337C13.0523 9.99611 13.7703 9.99839 13.9326 10.5337C13.8247 12.6089 14.6599 15.6335 11.7045 16.0003H2.2316C1.06845 15.9165 0.137389 15.0174 0 13.8859L0.00620967 4.36409C0.140494 3.35906 1.00791 2.447 2.04997 2.33194H2.04958Z" fill="#D06706"/></svg> -->
+                            <span><?= ucfirst($order['status']) ?></span>                  
                         </a>
-                    </td>
+                    </td> -->
                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link">
                             <span><?php echo $order['po_number']; ?></span>
@@ -404,10 +417,20 @@
             <div>
                 <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($orders) ?></span> of <span class="font-medium"><?= $total_orders ?></span> orders</p>
             </div>
-            <?php if ($total_pages > 1): ?>
+            <?php 
+            // Prepare query string for pagination links
+            $search_params = $_GET;
+            unset($search_params['page_no'], $search_params['limit']);
+            $query_string = http_build_query($search_params);
+            $query_string = $query_string ? '&' . $query_string : '';
+
+            //echo '****************************************  '.$query_string;
+            if ($total_pages > 1): ?>
             <span class="text-gray-600">Page</span>
             <button id="prev-page" class="text-gray-600 hover:text-gray-900">
-                <a class="page-link" href="?page=orders&page_no=<?= $page-1 ?>&limit=<?= $limit ?>" tabindex="-1">
+                
+                <a class="page-link" href="?page=orders&action=list&page_no=<?= $page-1 ?>&limit=<?= $limit ?><?= $query_string ?>" tabindex="-1">
+
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
                 </a>
             </button>
@@ -417,13 +440,13 @@
             <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page ?></span>
 
             <button id="next-page" class="text-gray-600 hover:text-gray-900">
-                <a class="page-link" href="?page=orders&page_no=<?= $page+1 ?>&limit=<?= $limit ?>">
+                <a class="page-link" href="?page=orders&action=list&page_no=<?= $page+1 ?>&limit=<?= $limit ?><?= $query_string ?>">    
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                 </a>
             </button>
             <?php endif; ?>
             <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
-                    onchange="location.href='?page=orders&page_no=1&limit=' + this.value;">
+                onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
                 <?php foreach ([10, 20, 50, 100] as $opt): ?>
                     <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                         <?= $opt ?>

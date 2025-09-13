@@ -14,7 +14,31 @@ class OrdersController {
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
         $offset = ($page - 1) * $limit;
 
-        $orders = $ordersModel->getAllOrders();
+        //Advanced Search Filters
+        $filters = [];
+        if (!empty($_GET['order_number'])) {
+            $filters['order_number'] = $_GET['order_number'];            
+        }
+        if (!empty($_GET['item_code'])) {
+            $filters['item_code'] = $_GET['item_code'];            
+        }
+        if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
+            $filters['order_from'] = $_GET['order_from'];
+            $filters['order_till'] = $_GET['order_till'];
+        }
+        if (!empty($_GET['item_name'])) {
+            $filters['title'] = $_GET['item_name'];            
+        }
+        if (!empty($_GET['min_amount'])) {
+            $filters['min_amount'] = $_GET['min_amount'];            
+        }
+        if (!empty($_GET['max_amount'])) {
+            $filters['max_amount'] = $_GET['max_amount'];            
+        }
+       
+
+        //print_array($filters);
+        $orders = $ordersModel->getAllOrders($filters);
         $total_orders = count($orders);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         // Paginate orders

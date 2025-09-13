@@ -141,9 +141,9 @@
         <div>
             <div class="flex justify-between items-center mb-1">
                 <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
-                <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
+                <!-- <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button> -->
             </div>
-            <textarea id="terms" name="terms_and_conditions" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo htmlspecialchars($purchaseOrder['terms_and_conditions'] ?? ''); ?></textarea>
+            <textarea id="terms" name="terms_and_conditions" class="mt-5 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo htmlspecialchars($purchaseOrder['terms_and_conditions'] ?? ''); ?></textarea>
         </div>
     </div>
     <!-- Action Buttons -->

@@ -5,9 +5,43 @@ class Order{
     public function __construct($db) {
         $this->db = $db;
     }
-    public function getAllOrders() {
-        $sql = "SELECT * FROM vp_orders ORDER BY order_date DESC";
-        $result = $this->db->query($sql);
+    public function getAllOrders($filters = []) {
+
+        $sql = "SELECT * FROM vp_orders WHERE 1=1";
+        $params = [];
+        if (!empty($filters['order_number'])) {
+            $sql .= " AND order_number LIKE ?";
+            $params[] = '%' . $filters['order_number'] . '%';
+        }
+        if (!empty($filters['item_code'])) {
+            $sql .= " AND item_code LIKE ?";
+            $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
+            $sql .= " AND order_date BETWEEN ? AND ?";
+            $params[] = $filters['order_from'];
+            $params[] = $filters['order_till'];
+        }
+        if (!empty($filters['title'])) {
+            $sql .= " AND title LIKE ?";
+            $params[] = '%' . $filters['title'] . '%';
+        }
+        if (!empty($filters['min_amount'])) {
+            $sql .= " AND total_price >= ?";
+            $params[] = $filters['min_amount'];
+        }
+        if (!empty($filters['max_amount'])) {
+            $sql .= " AND total_price <= ?";
+            $params[] = $filters['max_amount'];
+        }
+        
+        $sql .= " ORDER BY order_date DESC";
+        $stmt = $this->db->prepare($sql);
+        if ($params) {
+            $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
         $orders = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
