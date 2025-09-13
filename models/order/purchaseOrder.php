@@ -4,9 +4,19 @@ class PurchaseOrder {
     public function __construct($db) {
         $this->db = $db;
     }
-    public function getAllPurchaseOrders() {
-        $sql = "SELECT purchase_orders.*, vp_vendors.contact_name AS vendor_name FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id ORDER BY purchase_orders.id DESC";
-        $result = $this->db->query($sql);   
+    public function getAllPurchaseOrders( $filters = [] ) {
+        $sql = "SELECT purchase_orders.*, vp_vendors.contact_name AS vendor_name FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id WHERE 1=1";
+        if (!empty($filters['search_text'])) {
+            $searchText = $this->db->real_escape_string($filters['search_text']);
+            $sql .= " AND (purchase_orders.po_number LIKE '%$searchText%' OR vp_vendors.contact_name LIKE '%$searchText%')";
+        }
+        if (!empty($filters['status_filter'])) {
+            $statusFilter = $this->db->real_escape_string($filters['status_filter']);
+            $sql .= " AND purchase_orders.status = '$statusFilter'";
+        }   
+        
+        $sql .= " ORDER BY purchase_orders.id DESC";
+        $result = $this->db->query($sql);
         $purchaseOrders = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {

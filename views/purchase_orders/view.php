@@ -39,10 +39,10 @@
         <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
         <input readonly type="date" value="<?= htmlspecialchars($purchaseOrder['expected_delivery_date']) ?>" name="delivery-due-date" id="delivery-due-date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[150px]">
       </div>
-      <div class="flex items-center">
+      <!-- <div class="flex items-center">
         <label for="order-id" class="block text-gray-700 form-label">Order ID</label>
         <input readonly type="text" name="order-id" id="order-id" placeholder="2142086" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 placeholder-gray-400 w-[150px]">
-      </div>
+      </div> -->
       <div class="flex items-center">
         <label for="employee-name" class="block text-gray-700 form-label">Employee Name</label>
         <select readonly id="employee-name" name="employee_name" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
@@ -138,7 +138,7 @@
         <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
         <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button> -->
       </div>
-      <textarea readonly id="terms" name="terms" class="mt-5 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
+      <textarea readonly id="terms" name="terms" class="mt-5 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo $purchaseOrder['terms_and_conditions']; ?></textarea>
     </div>
   </div>
 
@@ -146,6 +146,66 @@
   <div class="mt-8 flex justify-end space-x-4">
     <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
     <a href="<?= base_url('?page=purchase_orders&action=list') ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button></a>
+  </div>
+
+  <!-- invoice section -->
+  <hr class="my-8 border-gray-200">
+  <div class="space-y-1.5">
+    <div>
+      <h2 class="invoice-title mb-4">Invoices:</h2>
+      <?php 
+      
+      if (empty($invoice)) { ?>
+        <p class="text-gray-600">No invoices found for this purchase order.</p>
+      <?php } else { ?>
+        <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-x-8 gap-y-2">
+            <div class="col-span-2">
+              <h4 class="invoice-header">Invoice Number</h4>
+              <p class="invoice-text mt-2"><?php echo $invoice['invoice_no']; ?></p>
+            </div>
+          <div class="col-span-2">
+            <h4 class="invoice-header">Invoice Date</h4>
+            <p class="invoice-text mt-2"><?php echo $invoice['invoice_date']; ?></p>
+          </div>
+          <!-- <div class="col-span-2">
+            <h4 class="invoice-header">Due Date</h4>
+            <p class="invoice-text mt-2"><?php echo $invoice['due_date']; ?></p>
+          </div> -->
+          <div class="col-span-2">
+            <h4 class="invoice-header">Total Amount</h4>
+            <p class="invoice-text mt-2">₹<?php echo $invoice['grand_total']; ?></p>
+          </div>            
+        
+        <?php //extension
+        $iconClass = '';
+        $inv_name = basename($invoice['invoice'], "/");
+        if (!empty($invoice['invoice'])) {
+          $file_extension = pathinfo($invoice['invoice'], PATHINFO_EXTENSION);
+          switch (strtolower($file_extension)) {
+              case 'pdf':
+                  $iconClass = 'fa-file-pdf';
+                  break;             
+              case 'png':
+              case 'jpg':
+              case 'jpeg':
+              case 'gif':
+                  $iconClass = 'fa-file-image';
+                  break;
+              default:
+                  $iconClass = 'fa-file'; // Generic file icon
+          }          
+        } 
+        ?>
+        <div class="col-span-2 ">
+            <!-- <p class="amount-box-text"> <i class="fas <?php //echo $iconClass ?> text-2xl text-gray-600"></i></p> -->
+            <!-- <p class="amount-box-text"><a href="<?php //echo $invoice['invoice']; ?>" target="_blank"><?php //echo $inv_name; ?></a></p> -->
+        <a href="<?php echo $invoice['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button" style="width: 220px;">
+          <i class="fas <?php echo $iconClass ?> text-2xl text-gray-600"></i> Download</button>
+        </a>
+          </div>
+      <?php } ?>
+      </div>
+    </div>
   </div>
 
   <hr class="my-8 border-gray-200">
@@ -236,8 +296,8 @@
           <div class="relative w-full h-5 flex justify-center items-center">
             <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
           </div>
-          <p class="timeline-text mt-2">Approved</p>
-          <p class="timeline-date">1 May, 2025</p>
+          <p class="timeline-text mt-2">Created</p>
+          <p class="timeline-date"><?php echo date('d M, Y', strtotime($purchaseOrder['created_at'])); ?></p>
         </div>
       </div>
       <!-- Step 2: Sent to the Vendor -->
@@ -246,12 +306,12 @@
           <div class="relative w-full h-5 flex justify-center items-center">
             <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
           </div>
-          <p class="timeline-text mt-2">Sent to the Vendor</p>
-          <p class="timeline-date">1 May, 2025</p>
+          <p class="timeline-text mt-2"><?php echo ucfirst($purchaseOrder['status']); ?></p>
+          <p class="timeline-date"><?php echo date('d M, Y', strtotime($purchaseOrder['updated_at'])); ?></p>
         </div>
       </div>
       <!-- Step 3: In Production -->
-      <div class="timeline-step completed">
+      <!-- <div class="timeline-step completed">
         <div class="flex flex-col items-center text-center">
           <div class="relative w-full h-5 flex justify-center items-center">
             <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
@@ -259,9 +319,9 @@
           <p class="timeline-text mt-2">In Production</p>
           <p class="timeline-date">3 May, 2025</p>
         </div>
-      </div>
+      </div> -->
       <!-- Step 4: Shipped -->
-      <div class="timeline-step">
+      <!-- <div class="timeline-step">
         <div class="flex flex-col items-center text-center">
           <div class="relative w-full h-5 flex justify-center items-center">
             <div class="w-[12px] h-[12px] rounded-full bg-[rgba(186,186,186,1)] z-10"></div>
@@ -269,50 +329,11 @@
           <p class="timeline-text mt-2 text-gray-400">Shipped</p>
           <p class="timeline-date text-gray-400">6 May, 2025</p>
         </div>
-      </div>
-      <!-- Step 5: Received -->
-      <div class="timeline-step">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[12px] h-[12px] rounded-full bg-[rgba(186,186,186,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2 text-gray-400">Received</p>
-          <p class="timeline-date text-gray-400">7 May, 2025</p>
-        </div>
-      </div>
-      <!-- Step 6: Invoiced -->
-      <div class="timeline-step">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[12px] h-[12px] rounded-full bg-[rgba(186,186,186,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2 text-gray-400">Invoiced</p>
-          <p class="timeline-date text-gray-400">7 May, 2025</p>
-        </div>
-      </div>
-      <!-- Step 7: Payment Done -->
-      <div class="timeline-step">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[12px] h-[12px] rounded-full bg-[rgba(186,186,186,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2 text-gray-400">Payment Done</p>
-          <p class="timeline-date text-gray-400">10 May, 2025</p>
-        </div>
-      </div>
-      <!-- Step 8: Closed -->
-      <div class="timeline-step">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[12px] h-[12px] rounded-full bg-[rgba(186,186,186,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2 text-gray-400">Closed</p>
-          <p class="timeline-date text-gray-400">10 May, 2025</p>
-        </div>
-      </div>
+      </div> -->
+      
     </div>
   </div>
   <div class="mt-8 flex justify-end space-x-4">
-    <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Save</button>
-    <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button>
+    <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Save</button> -->
+    <a href="<?php echo $_SERVER['HTTP_REFERER']; ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Back</button></a>
   </div>

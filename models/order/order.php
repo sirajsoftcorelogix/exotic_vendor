@@ -19,8 +19,8 @@ class Order{
         }
         if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
             $sql .= " AND order_date BETWEEN ? AND ?";
-            $params[] = $filters['order_from'];
-            $params[] = $filters['order_till'];
+            $params[] = $filters['order_from'].' 00:00:00';
+            $params[] = $filters['order_till'].' 23:59:59';
         }
         if (!empty($filters['title'])) {
             $sql .= " AND title LIKE ?";

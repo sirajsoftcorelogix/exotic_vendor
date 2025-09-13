@@ -20,6 +20,7 @@ class POInvoice{
         // Build SQL dynamically based on whether 'invoice' is set
         $fields = [
             'po_id = ?',
+            'invoice_no = ?',
             'invoice_date = ?',
             'gst_reg = ?',
             'sub_total = ?',
@@ -29,6 +30,7 @@ class POInvoice{
         ];
         $params = [
             $data['po_id'],
+            $data['invoice_no'],
             $data['invoice_date'],
             $data['gst_reg'],
             $data['sub_total'],
@@ -36,7 +38,7 @@ class POInvoice{
             $data['shipping'],
             $data['grand_total']
         ];
-        $types = 'issssss';
+        $types = 'isssssss';
 
         if (isset($data['invoice'])) {
             $fields[] = 'invoice = ?';
@@ -58,9 +60,9 @@ class POInvoice{
         return false; // Return false on failure
     }
     public function addPoInvoice($data){
-        $sql = "INSERT into vp_po_invoice (po_id, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT into vp_po_invoice (po_id, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?,?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('isssssss', $data['po_id'], $data['invoice_date'], $data['gst_reg'], $data['sub_total'], $data['gst_total'], $data['shipping'], $data['grand_total'], $data['invoice']);
+        $stmt->bind_param('issssssss', $data['po_id'], $data['invoice_no'], $data['invoice_date'], $data['gst_reg'], $data['sub_total'], $data['gst_total'], $data['shipping'], $data['grand_total'], $data['invoice']);
         $stmt->execute();
         if ($stmt->error) {
             return false;

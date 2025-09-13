@@ -7,6 +7,40 @@
         <!-- Header Section with Filters and Actions -->
         <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow">
            <span class="text-gray-600 font-medium">Purchase orders</span>
+        
+        <!-- Filters -->
+            <form method="get" id="filterForm">
+                <input type="hidden" name="page" value="purchase_orders">
+                <input type="hidden" name="action" value="list">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M14 1H1L5.5 6.5V12L8.5 14V6.5L14 1Z" stroke="#797A7C" stroke-width="2" stroke-linejoin="round"/>
+                        </svg>
+                        <span class="text-gray-600 font-medium">Filters:</span>
+                    </div>
+                    <div class="flex flex-wrap items-left gap-4">
+                        <div class="relative flex items-left gap-2">
+                            <input type="text" name="search_text" placeholder="Search by PO Number or Vendor" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
+                        </div>
+                    </div>
+                     <div class="relative">
+                        <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
+                            <option value="" selected>All Status</option>
+                            <option value="pending" <?php echo ($data['status_filter'] == "pending") ? "selected" : ""?>>Pending</option>
+                            <option value="ordered" <?php echo ($data['status_filter'] == "ordered") ? "selected" : ""?>>Ordered</option>
+                            <option value="received" <?php echo ($data['status_filter'] == "received") ? "selected" : ""?>>Received</option>
+                            <option value="cancelled" <?php echo ($data['status_filter'] == "cancelled") ? "selected" : ""?>>Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="relative">
+                        <input type="submit" value="Search" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2">
+                    </div>
+                    <div class="relative">
+                        <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=purchase_orders&action=list';">
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
     <!-- PO Table Container -->
@@ -414,6 +448,7 @@ function handleAction(action, poId, el) {
                 document.getElementById('grand_total').value = invoiceData.grand_total || '';
                 document.getElementById('gst_reg').value = invoiceData && invoiceData.gst_reg ? '1' : '0';
                 document.getElementById('invoice_date').value = invoiceData && invoiceData.invoice_date ? invoiceData.invoice_date : '';
+                document.getElementById('invoice_no').value = invoiceData && invoiceData.invoice_no ? invoiceData.invoice_no : '';
                 document.getElementById('invoice-id').value = invoiceData && invoiceData.id ? invoiceData.id : '';
                 //uploadedFileSection.innerHTML = '';
                 

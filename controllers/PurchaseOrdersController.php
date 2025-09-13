@@ -29,8 +29,17 @@ class PurchaseOrdersController {
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
         $offset = ($page - 1) * $limit;
 
+        // Apply filters
+        $filters = [];
+        if (!empty($_GET['search_text'])) {
+            $filters['search_text'] = $_GET['search_text'];
+        }
+        if (!empty($_GET['status_filter'])) {
+            $filters['status_filter'] = $_GET['status_filter'];
+        }
+
         // Fetch all purchase orders
-        $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders();
+        $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
         // Calculate total pages
         $total_orders = count($purchaseOrders);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
@@ -41,7 +50,9 @@ class PurchaseOrdersController {
             'purchaseOrders' => $orders,
             'total_orders' => $total_orders,
             'total_pages' => $total_pages,
-            'current_page' => $page
+            'current_page' => $page,
+            'search' => $_GET['search_text'] ?? '',
+            'status_filter' => $_GET['status_filter'] ?? ''
         ], 'Manage Purchase Orders');
     }
     public function createPurchaseOrder(){
@@ -199,6 +210,7 @@ class PurchaseOrdersController {
         global $purchaseOrderItemsModel;
         global $vendorsModel;
         global $usersModel;
+        global $poInvoiceModel;
         global $domain;
 
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
@@ -217,6 +229,7 @@ class PurchaseOrdersController {
         $data['domain'] = $domain;
         //print_array($data);
         $data['users'] = $usersModel->getAllUsers();
+        $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId);
         renderTemplate('views/purchase_orders/view.php', $data, 'View Purchase Order');
 
         if (!$purchaseOrder) {
@@ -708,6 +721,7 @@ class PurchaseOrdersController {
                 //update without file
                 $poInvoiceData = [
                     'po_id' => $poId,
+                    'invoice_no' => $_POST['invoice_no'] ?? '',
                     'invoice_date' => $_POST['invoice_date'] ?? '',
                     'gst_reg' => $_POST['gst_reg'] ?? '',
                     'sub_total' => $_POST['sub_total'] ?? 0,
@@ -758,6 +772,7 @@ class PurchaseOrdersController {
             $invoice = 'uploads/invoices/' . $newFileName;
             $poInvoiceData = [
                 'po_id' => $poId,
+                'invoice_no' => $_POST['invoice_no'] ?? '',
                 'invoice_date' => $_POST['invoice_date'] ?? '',
                 'gst_reg' => $_POST['gst_reg'] ?? '',
                 'sub_total' => $_POST['sub_total'] ?? 0,
