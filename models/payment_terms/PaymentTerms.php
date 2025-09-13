@@ -18,11 +18,11 @@ class PaymentTerms {
 		if (!empty($search) && !empty($status_filter)) {
             $search = $this->conn->real_escape_string($search);
             $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE MATCH(term_conditions) AGAINST('%$search%') AND is_active = '$status_filter'";
+            $where = "WHERE term_conditions LIKE('%$search%') AND is_active = '$status_filter'";
         } else {
             if (!empty($search)) {
                 $search = $this->conn->real_escape_string($search);
-                $where = "WHERE MATCH(term_conditions) AGAINST('%$search%')";
+                $where = "WHERE term_conditions LIKE('%$search%')";
             }
 
             if (!empty($status_filter)) {
