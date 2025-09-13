@@ -391,7 +391,7 @@
                         </a>
                     </li>
                     <li>
-                        <a href="#" class="nav-link text-gray-800">
+                        <a href="<?=base_url('index.php?page=payemnt_terms&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'payemnt_terms') ? 'active' : '' ?>">
                             <div class="content-wrapper">
                                 <svg height="15" viewBox="0 0 8 9" class="mr-2 flex-shrink-0" fill="none"
                                      xmlns="http://www.w3.org/2000/svg">
