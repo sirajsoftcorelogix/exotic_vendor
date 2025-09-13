@@ -47,6 +47,21 @@
     <!-- Vendor Listing -->
     <div class="bg-white rounded-xl shadow-md overflow-hidden">
         <div class="p-6">
+            <!-- <div id="deleteMsgBox" style="margin-top: 10px; margin: botton 10px;" class="text-sm font-bold"></div> -->
+            <!-- Success Modal -->
+            <div id="deleteMsgBox" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
+                <div class="bg-white rounded-lg shadow-lg w-[400px] p-8 text-center">
+                    <h2 id="modalTitle" class="text-xl font-bold text-green-600 mb-4">Alert Box</h2>
+                    <p id="showMessage" class="text-gray-700"></p>
+
+                    <div class="mt-6">
+                    <button onclick="closeDeleteModal()" 
+                            class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        OK
+                    </button>
+                    </div>
+                </div>
+            </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
@@ -85,9 +100,9 @@
                                             <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <li onclick="openBankDtlsModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
                                             <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
-                                            <li><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
-                                            <li><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
-                                            <li><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
+                                            <li style="color: lightgray;"><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
+                                            <li style="color: lightgray;"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
+                                            <li style="color: lightgray;"><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
                                         </ul>
                                     </div>
 
@@ -490,13 +505,13 @@
                                     <label class="text-sm font-medium text-gray-700"> IFSC Code <span class="text-red-500">*</span></label>
                                     <input type="text" class="form-input w-full mt-1" name="ifsc_code" id="ifsc_code" />
                                 </div>
-                                <div>
+                                <?php /* ?><div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
                                     <select class="form-input w-full mt-1" name="bdStatus" id="bdStatus">
                                         <option value="1">Active</option>
                                         <option value="0">Inactive </option>
                                     </select>
-                                </div>
+                                </div><? */?>
                             </div>
                         </div>
 
@@ -734,15 +749,16 @@
         });
     };
 
+    let successModalTimer;
     // Delete Vendor
     document.addEventListener("DOMContentLoaded", () => {
         const deleteButtons = document.querySelectorAll(".delete-btn");
-
+        
         deleteButtons.forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.preventDefault();
                 const id = btn.getAttribute("data-id");
-
+                window.closeAllMenus();
                 if (!confirm("Are you sure you want to delete this record?")) return;
 
                 fetch("?page=vendors&action=delete", {
@@ -752,13 +768,25 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    if (!data.success) {
-                        alert("Error: " + data.message);
-                        return;
+                    const title = document.getElementById("modalTitle");
+                    var type = "error";
+                    title.innerText = "Error ⚠️";
+                    title.className = "text-2xl font-bold text-red-600 mb-4";
+                    if(data.success) {
+                        title.innerText = "Success 🎉";
+                        title.className = "text-2xl font-bold text-green-600 mb-4";
                     }
-                    setTimeout(() => {
-                        location.reload();
-                    }, 500); // refresh after 1 sec
+
+                    document.getElementById("showMessage").innerText = data.message;
+                    const modal = document.getElementById("deleteMsgBox");
+                    modal.classList.remove("hidden");
+
+                    // Auto-close after 3 seconds
+                    clearTimeout(successModalTimer);
+                    successModalTimer = setTimeout(() => {
+                        closeDeleteModal();
+                    }, 1500);
+                    
                 })
                 .catch(err => {
                     console.error("AJAX Error:", err);
@@ -766,6 +794,12 @@
             });
         });
     });
+
+    function closeDeleteModal() {
+        document.getElementById("deleteMsgBox").classList.add("hidden");
+        clearTimeout(successModalTimer);
+        window.location.reload();
+    }
 
     // Edit User Modal Logic    
     const popupWrapperEdit = document.getElementById('editVendorModal');
@@ -824,8 +858,6 @@
                     document.getElementById('editStateBlock').innerHTML = stateSelect.outerHTML;
                     document.getElementById("editState").value = vendor.state;
                     document.getElementById("editPreviousState").value = vendor.state;
-                    let menu = document.querySelector('.menu-wrapper');
-                    menu.classList.toggle('hidden'); // Tailwind's "hidden" class
                     return;
                 });
             }
@@ -907,14 +939,12 @@
                 document.getElementById("ifsc_code").value = bankdtls.ifsc_code;
                 document.getElementById("bank_name").value = bankdtls.bank_name;
                 document.getElementById("branch_name").value = bankdtls.branch_name;
-                document.getElementById("bdStatus").value = bankdtls.is_active;
             } else {
                 document.getElementById("account_name").value = "";
                 document.getElementById("account_number").value = "";
                 document.getElementById("ifsc_code").value = "";
                 document.getElementById("bank_name").value = "";
                 document.getElementById("branch_name").value = "";
-                document.getElementById("bdStatus").value = 1;
             }
 
             popupWrapperBD.classList.remove('hidden');
