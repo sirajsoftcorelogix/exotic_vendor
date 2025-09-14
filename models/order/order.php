@@ -225,6 +225,32 @@ class Order{
         $stmt->bind_param('si', $status, $po_id);
         return $stmt->execute();
     }
-
+    public function orderImportLog($data) {
+        if(empty($data['start_time'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        $sql = "INSERT INTO order_import_log (start_time) VALUES (?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $data['start_time']);
+            
+        if ($stmt->execute()) {
+            return ['success' => true, 'insert_id' => $stmt->insert_id];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function updateOrderImportLog($log_id, $data) {
+        if(empty($log_id) || empty($data['end_time'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        $sql = "UPDATE order_import_log SET end_time = ?, successful_imports = ?, total_orders = ?, error = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssdis', $data['end_time'], $data['successful_imports'], $data['total_orders'], $data['error'], $log_id);
+        if ($stmt->execute()) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
 ?> 

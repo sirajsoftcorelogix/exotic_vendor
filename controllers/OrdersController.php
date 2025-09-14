@@ -78,8 +78,16 @@ class OrdersController {
             http_response_code(403); // Forbidden
             die('Unauthorized access.');
         }
-    
-        // Set your date range (example: last 7 days)
+         
+        //log create
+        $log_data = [
+            'start_time' => date('Y-m-d H:i:s')            
+        ];
+        $log_id = 0;
+        if($logs = $ordersModel->orderImportLog($log_data)){
+            $log_id = $logs['insert_id'];
+        }        // Set your date range (example: last 7 days)
+        
         $from_date = strtotime('-1 days');
         //echo "<br>";
         $to_date = time();
@@ -179,7 +187,17 @@ class OrdersController {
            
         }
         //print_r($result);
-        
+        //update log end time and imported count
+        if($log_id > 0){
+            $log_update_data = [
+                'end_time' => date('Y-m-d H:i:s'),
+                'successful_imports' => $imported,
+                'total_orders' => $totalorder,
+                'error' => isset($error) ? $error : '',
+                'log_details' => json_encode($result)
+            ];
+            $ordersModel->updateOrderImportLog($log_id, $log_update_data);
+        }
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
             'result' => $result,
