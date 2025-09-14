@@ -255,7 +255,7 @@
              <script>
                 function clearFilters() {
                     const url = new URL(window.location.href);
-                    alert(url.search);
+                    //alert(url.search);
                     url.search = ''; // Clear all query parameters
                     const page = 'page=orders&action=list';
                     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
