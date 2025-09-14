@@ -275,15 +275,15 @@
         <!-- Tabs -->
         <div class="relative border-b-[4px] border-white">
             <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
-                <a href="#" class="tab tab-active text-center relative py-4">
+                <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status'])) ? 'tab-active' : ''; ?> text-center relative py-4">
                     <span class="px-1 text-sm">All Orders</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                <a href="<?php echo base_url('?page=orders&action=list&status=no_po'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'no_po') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">No PO</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                 <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                 <a href="<?php echo base_url('?page=orders&action=list&status=po_ready'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'po_ready') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">PO Ready</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
@@ -641,14 +641,14 @@ function closeImagePopup(e) {
         });
 
         // Tab functionality
-        const tabs = document.querySelectorAll('.tab');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', function (event) {
-                event.preventDefault();
-                tabs.forEach(t => t.classList.remove('tab-active'));
-                this.classList.add('tab-active');
-            });
-        });
+        // const tabs = document.querySelectorAll('.tab');
+        // tabs.forEach(tab => {
+        //     tab.addEventListener('click', function (event) {
+        //         event.preventDefault();
+        //         tabs.forEach(t => t.classList.remove('tab-active'));
+        //         this.classList.add('tab-active');
+        //     });
+        // });
 
         // Date validation and clear functionality
         const fromDateInput = document.getElementById('orders-from');

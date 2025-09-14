@@ -53,6 +53,7 @@
                         <th><i class="fa fa-star"></i></th>
                         
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Number</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Delivery Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
                         <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Total GST</th> -->
@@ -74,6 +75,7 @@
                         </td>
                         
                         <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($order['po_number']) ?></td>
+                        <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['po_date'])) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'])) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
@@ -85,7 +87,7 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                         <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= htmlspecialchars($order['total_cost']) ?></span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
                             <?php
                                 $status = strtolower($order['status']);
                                 $statusClasses = [
@@ -99,13 +101,13 @@
                             ?>
                             <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md <?= $badgeClass ?>"><?= ucfirst($status) ?></span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
                             <!-- Three-dot menu container -->
-                            <div class="menu-wrapper">
-                            <button class="menu-button" onclick="toggleMenu(this)">
+                            <div class="menu-wrapper ">
+                            <button class="menu-button text-gray-500 hover:text-gray-700 " onclick="toggleMenu(this)">
                                 &#x22EE; <!-- Vertical ellipsis -->
                             </button>
-                            <ul class="menu-popup">
+                            <ul class="menu-popup text-left">
                                 <li onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-eye"></i> View PO</li>
                                 <?php if ($order['status'] == 'pending'): ?>
                                 <li onclick="handleAction('Edit', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-pencil-alt"></i> Edit PO</li>

@@ -34,6 +34,13 @@ class Order{
             $sql .= " AND total_price <= ?";
             $params[] = $filters['max_amount'];
         }
+        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
+            if ($filters['status_filter'] === 'no_po') {
+                $sql .= " AND (po_number IS NULL OR po_number = '')";
+            } elseif ($filters['status_filter'] === 'po_ready') {
+                $sql .= " AND (po_number IS NOT NULL AND po_number != '')";
+            }
+        }
         
         $sql .= " ORDER BY order_date DESC";
         $stmt = $this->db->prepare($sql);
