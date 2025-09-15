@@ -73,10 +73,10 @@
                                 : '<i class="far fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Mark as Important\'></i>' 
                             ?>
                         </td>
-                        
-                        <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($order['po_number']) ?></td>
-                        <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['po_date'])) ?></td>
-                        <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'])) ?></td>
+
+                        <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($order['po_number'] ?? 'N/A') ?></td>
+                        <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['po_date'] ?? '')) ?></td>
+                        <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
                         </td>
