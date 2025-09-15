@@ -17,6 +17,10 @@ class Order{
             $sql .= " AND item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
         }
+        if (!empty($filters['po_no'])) {
+            $sql .= " AND po_number LIKE ?";
+            $params[] = '%' . $filters['po_no'] . '%';
+        }
         if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
             $sql .= " AND order_date BETWEEN ? AND ?";
             $params[] = $filters['order_from'].' 00:00:00';

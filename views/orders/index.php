@@ -180,12 +180,12 @@
                 <!-- Orders From/Till -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
-                        <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Orders From</label>
+                        <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <span class="text-gray-500 pb-2">→</span>
                     <div class="w-1/2">
-                        <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Orders Till</label>
+                        <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Order To</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
@@ -204,7 +204,7 @@
 
                 <!-- Order Number -->
                 <div>
-                    <label for="order-number" class="block text-sm font-medium text-gray-600 mb-1">Order Number</label>
+                    <label for="order-number" class="block text-sm font-medium text-gray-600 mb-1">Order No</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
@@ -235,8 +235,13 @@
 
                 <!-- Item Code -->
                 <div>
-                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
+                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item No</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <!-- PO No -->
+                <div>
+                    <label for="po-no" class="block text-sm font-medium text-gray-600 mb-1">PO No</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Item Name -->
@@ -378,15 +383,18 @@
                         </a>
                     </td> -->
                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link">
+                        <a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link text-blue-600 hover:underline">
                             <span><?php echo $order['po_number']; ?></span>
 
                         </a>
                     </td>
                     <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">20/06/25</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₹<?= $order['total_price'] ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <?= isset($order['total_price']) ? '₹' . $order['total_price'] : '-' ?>
+                    </td>
+
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['shipping_address'] ?></td> -->
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium rounded-r-md">
                         <a href="#" class="text-gray-500 hover:text-gray-700">

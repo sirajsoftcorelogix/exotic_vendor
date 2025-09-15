@@ -35,6 +35,9 @@ class OrdersController {
         if (!empty($_GET['max_amount'])) {
             $filters['max_amount'] = $_GET['max_amount'];            
         }
+        if(!empty($_GET['po_no'])){
+            $filters['po_no'] = $_GET['po_no'];  
+        }
         if (!empty($_GET['status']) && in_array($_GET['status'], ['all', 'no_po', 'po_ready'])) {
             $filters['status_filter'] = $_GET['status'];
         } else {
