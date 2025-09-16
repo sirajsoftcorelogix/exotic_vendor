@@ -185,7 +185,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'payemnt_terms':        
+    case 'payement_terms':        
         require_once 'controllers/PaymenetTermsController.php';
         $controller = new PaymenetTermsController();
         switch ($action) {
