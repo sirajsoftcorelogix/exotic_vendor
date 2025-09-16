@@ -29,7 +29,7 @@
         <nav id="main-nav" class="flex-1 overflow-y-auto p-4">
             <!-- Purchases Section -->
             <div>
-                <h3 class="px-3 py-2 text-gray-700">Purchases</h3>
+                <h3 class="px-3 py-2 text-gray-700">Orders</h3>
                 <ul class="mt-1">
                     <!-- Active Link Example -->
                     <li>
