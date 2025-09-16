@@ -48,6 +48,17 @@ class Tables {
         }
         return $data;
     }
+    public function get_payment_terms_and_conditions() {
+        $sql = "SELECT * FROM vp_payment_term_conditions WHERE is_active = 'active'";
+        $result = $this->ci->query($sql);
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[] = $row;
+            }
+        }
+        return $data;
+    }
 
 }
 ?>

@@ -90,7 +90,7 @@ class PurchaseOrdersController {
         //print_array($data);
         $data['users'] = $usersModel->getAllUsers();
         $data['exotic_address'] = $commanModel->get_exotic_address();
-        $data['templates'] = $commanModel->get_terms_and_conditions();
+        $data['templates'] = $commanModel->get_payment_terms_and_conditions();
         //print_array($data);
         // Render the create purchase order form
         renderTemplate('views/purchase_orders/create.php', $data, 'Create Purchase Order');
@@ -867,5 +867,18 @@ class PurchaseOrdersController {
         }
 
         echo json_encode(['success' => true, 'message' => 'Invoice deleted successfully.']);
+    }
+    public function getPO(){
+        // echo 'hedayat';
+        // print_array($_POST);
+        global $purchaseOrdersModel;
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }
+        echo json_encode(['success' => true, 'data' => $purchaseOrder]);
+        exit;
     }
 }

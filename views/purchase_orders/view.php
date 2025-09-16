@@ -3,8 +3,8 @@
 // print_r($purchaseOrder);
 ?>
   <div class="flex justify-between items-center mt-8">
-    <h2 class="po-title">Purchase Order: <?= htmlspecialchars($purchaseOrder['po_number']) ?></h2>
-    <a href="?page=purchase_orders&action=edit&po_id=<?= htmlspecialchars($purchaseOrder['id']) ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Edit</button></a>
+    <h2 class="po-title">Purchase Order: <?= htmlspecialchars($purchaseOrder['po_number'] ?? '') ?></h2>
+    <a href="?page=purchase_orders&action=edit&po_id=<?= htmlspecialchars($purchaseOrder['id'] ?? '') ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Edit</button></a>
   </div>
   <hr class="my-8">
   <div class="flex justify-between mb-8">
@@ -14,13 +14,13 @@
         <label for="vendor" class="block text-gray-700 form-label">Vendor :</label>
         <select readonly id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
           <?php foreach ($vendors as $vendor): ?>
-            <option value="<?= htmlspecialchars($vendor['id']) ?>" <?= $vendor['id'] == $purchaseOrder['vendor_id'] ? 'selected' : '' ?>><?= htmlspecialchars($vendor['contact_name']) ?></option>
+            <option value="<?= htmlspecialchars($vendor['id'] ?? '') ?>" <?= $vendor['id'] == $purchaseOrder['vendor_id'] ? 'selected' : '' ?>><?= htmlspecialchars($vendor['contact_name'] ?? '') ?></option>
           <?php endforeach; ?>
         </select>
       </div>
       <div class="flex items-center">
         <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address :</label>
-        <input readonly type="text" name="delivery-address" id="delivery-address" value="<?= htmlspecialchars($purchaseOrder['delivery_address']) ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[300px]">
+        <input readonly type="text" name="delivery-address" id="delivery-address" value="<?= htmlspecialchars($purchaseOrder['delivery_address'] ?? '') ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[300px]">
       </div>
       <div class="flex items-center">
         <label for="po-status" class="block text-gray-700 form-label">PO Status :</label>

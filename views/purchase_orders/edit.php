@@ -92,7 +92,7 @@
                     </td>
                     <td class="p-2 align-top"><input type="text" name="amount[]" value="<?php echo htmlspecialchars($item['amount'] ?? ''); ?>" class="form-input w-[80px] " /></td>
                     <td class="p-2 align-top text-right">
-                        <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item">&times;</button>
+                        <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button>
                     </td>
                 </tr>
             <?php endforeach; ?>

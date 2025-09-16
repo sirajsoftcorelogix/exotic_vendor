@@ -2,3 +2,4 @@ bootstrap/init/init.php
 settings/database/database.php
 vendor/*
 uploads/*
+generated_pdfs/*

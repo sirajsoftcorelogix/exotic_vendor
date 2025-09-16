@@ -11,12 +11,13 @@
                 <label for="order-id" class="block text-gray-700 form-label">Order ID</label>
                 <input type="text" name="order_id" id="order_id" placeholder="2142086" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 placeholder-gray-400 w-full md:w-[150px]">
             </div> -->
+            
             <div class="flex items-center">
                 <label for="employee-name" class="block text-gray-700 form-label">User Name: <span class="text-red-500"> *</span></label>
                 <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
                     <option value="">Select User</option>
                     <?php foreach ($users as $id => $name): ?>
-                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                        <option value="<?= $id ?>" <?= ($id == $_SESSION['user']['id']) ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -71,10 +72,10 @@
                 <td class="p-4"><input type="hidden" name="title[]" value="<?= $item['title'] ?>" ><?php echo $item['title']; ?></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
                 <td class="p-4"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
-                <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
+                <td class="p-4"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
-                        <input type="number" name="quantity[]" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['quantity'];  ?>" oninput="calculateTotals()" required>
+                        <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['quantity'];  ?>" oninput="calculateTotals()" required>
                         <!-- <button class="text-[#D06706]">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_427_430)"><path d="M12.0465 8.20171C10.6474 9.47037 9.33829 11.0991 7.90075 12.3041C7.56581 12.5845 7.25417 12.7388 6.8125 12.7978C6.09762 12.8939 5.09165 12.9659 4.36744 12.9883C3.50508 13.0154 2.73585 12.5712 2.75448 11.6359C2.76884 10.909 2.86781 9.93098 2.95164 9.19835C2.992 8.84595 3.04983 8.53545 3.24582 8.2299L11.1585 0.415632C11.9227 -0.178697 12.8029 -0.120026 13.5279 0.491828C14.0922 0.968052 15.0966 1.93688 15.5631 2.49426C16.1484 3.19335 16.1422 4.07837 15.5631 4.77785C14.5839 5.96041 13.1029 7.05649 12.0461 8.20209L12.0465 8.20171ZM12.2572 1.03396C12.1435 1.04272 11.9914 1.11244 11.8971 1.17873C11.5144 1.44732 11.1364 2.00355 10.7525 2.30224L13.6765 5.13787C14.091 4.59726 15.3764 3.97665 14.7694 3.19678C14.2393 2.51559 13.2993 1.87897 12.7319 1.19664C12.6112 1.0972 12.416 1.02139 12.2568 1.03396H12.2572ZM3.89279 11.8744C3.9382 11.9216 4.10004 11.9635 4.17145 11.962C4.89643 11.9464 5.93228 11.858 6.65687 11.7692C6.78689 11.7532 6.92699 11.7174 7.03916 11.6492L12.8693 5.94022L9.99496 3.04591L4.13652 8.79985C4.00651 8.99529 3.98516 9.58505 3.96032 9.84602C3.9153 10.323 3.85631 10.8968 3.84195 11.368C3.83846 11.4842 3.82022 11.7989 3.8924 11.8744H3.89279Z" fill="currentColor"/><path d="M2.04958 2.33194C3.16732 2.2085 4.46941 2.40014 5.60695 2.32394C6.18289 2.447 6.14176 3.26687 5.56736 3.34687C4.59787 3.48174 3.31946 3.26344 2.30922 3.34878C1.6281 3.4063 1.1127 3.92444 1.04788 4.58696V13.695C1.10687 14.4322 1.64634 14.9138 2.38684 14.9713H11.5488C13.652 14.8079 12.6526 11.8801 12.8886 10.5337C13.0523 9.99611 13.7703 9.99839 13.9326 10.5337C13.8247 12.6089 14.6599 15.6335 11.7045 16.0003H2.2316C1.06845 15.9165 0.137389 15.0174 0 13.8859L0.00620967 4.36409C0.140494 3.35906 1.00791 2.447 2.04997 2.33194H2.04958Z" fill="currentColor"/></g><defs><clipPath id="clip0_427_430"><rect width="16" height="16" fill="white"/></clipPath></defs></svg>
                         </button> -->
@@ -83,7 +84,7 @@
                 <td class="p-4">Nos</td>
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
-                        <input type="number" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="number" min="0" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         <input type="checkbox" id="gst_inclusive" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
                         <label for="gst_inclusive">GST inclusive</label>
                         <!-- <button class="text-[#D06706]">
@@ -93,8 +94,8 @@
                 </td>
                 <td class="p-4 rowTotal"></td>
                 <td class="p-2 align-top text-right">
-                        <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item"> <span class="text-lg">&times;</span> </button>
-                    </td>
+                        <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"> <span class="text-lg"><i class="fa fa-trash-alt"></i></span> </button>
+                </td>
                 <!-- <td class="p-4 text-right rounded-r-lg"><button>
                     <svg width="14" height="16" viewBox="0 0 14 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.2198 2.46658L13.5732 2.48141C14.142 2.57241 14.1239 3.51406 13.6281 3.62287C13.4664 3.65814 13.1578 3.57143 13.1049 3.74156L11.7041 14.1792C11.4162 15.0615 10.6479 15.653 9.72717 15.7357C8.33059 15.861 5.74347 15.8501 4.33736 15.739C3.36304 15.6622 2.57373 15.0773 2.28587 14.1287L0.898821 3.74156L0.80254 3.64496C-0.0761549 3.87476 -0.309794 2.57241 0.488063 2.47482C0.982945 2.41415 3.62001 2.56813 3.78366 2.4669C4.1494 1.59977 4.1402 0.663395 5.11879 0.234443C5.84468 -0.083726 8.27177 -0.0863637 8.96973 0.277635C9.90232 0.763627 9.85106 1.60867 10.2194 2.4669L10.2198 2.46658ZM8.92636 2.47746C8.78341 2.05774 8.80214 1.41876 8.28689 1.2849C7.98818 1.20742 5.94721 1.21467 5.67216 1.30402C5.19601 1.45898 5.21934 2.07059 5.07738 2.47746H8.92636ZM11.9413 3.63605H2.06242L3.47148 13.9045C3.60687 14.2458 3.90985 14.4762 4.27558 14.5135C6.0057 14.4096 7.8919 14.6516 9.60263 14.5161C10.2805 14.4624 10.5135 14.1409 10.642 13.4993L11.9417 3.63605H11.9413Z" fill="#DF0000"/><path d="M5.82431 5.84744C5.9058 5.92921 5.96857 6.05846 5.9781 6.17616C5.81445 8.00275 6.18709 10.19 5.97678 11.9731C5.89627 12.6556 4.98209 12.6978 4.82436 12.0325L4.81812 6.17649C4.86741 5.69479 5.5003 5.52334 5.82464 5.84777L5.82431 5.84744Z" fill="#DF0000"/><path d="M9.03183 5.84744C9.11332 5.92921 9.17609 6.05846 9.18562 6.17616C9.02197 8.00275 9.39461 10.19 9.1843 11.9731C9.10379 12.6556 8.18961 12.6978 8.03188 12.0325L8.02563 6.17649C8.07493 5.69479 8.70782 5.52334 9.03216 5.84777L9.03183 5.84744Z" fill="#DF0000"/></svg>
                 </button></td> -->
@@ -192,7 +193,7 @@
     </div>
 </div>
 <div id="loadTemplateModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
-    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative">
         <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeLoadTemplateModal">&times;</button>
         <h2 class="text-xl font-bold mb-4">Select Terms & Conditions Template</h2>
         <div class="max-h-72 overflow-y-auto">
@@ -201,14 +202,14 @@
                     <tr>
                         <th class="p-2 text-left">Title</th>
                         <th class="p-2 text-left">Content</th>
-                        <th class="p-2 text-left">Action</th>
+                        <!-- <th class="p-2 text-left">Action</th> -->
                     </tr>
                 </thead>
                 <tbody id="templateList">
                     <?php foreach ($templates as $template): ?>
                     <tr class="border-b">
-                        <td class="p-2"><input type="checkbox" class="select-template-checkbox" data-content="<?= htmlspecialchars($template['description']) ?>"></td>
-                        <td class="p-2"><?= htmlspecialchars(substr($template['description'], 0, 100)) ?>...</td>                       
+                        <td class="p-2"><input type="checkbox" class="select-template-checkbox" data-content="<?= htmlspecialchars($template['term_conditions'] ?? '') ?>"></td>
+                        <td class="p-2"><?= htmlspecialchars(substr($template['title'], 0, 100)) ?>...</td>                       
                     </tr>
                     <?php endforeach; ?>
                     <tr>
@@ -446,7 +447,7 @@ function addSelectOrderListeners() {
                 </td>
                 <td class="p-4 rowTotal"></td>
                 <td class="p-2 align-top text-right">
-                    <button type="button" class="remove-row text-red-500 hover:text-red-700" title="Remove Item"><span class="text-lg">&times;</span></button>
+                    <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button>
                 </td>
             `;
             poTable.appendChild(tr);

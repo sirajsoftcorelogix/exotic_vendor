@@ -180,6 +180,9 @@ switch ($page) {
             case 'delete_invoice':
                 $controller->deleteInvoice();
                 break;
+            case 'get_po':
+                $controller->getPO();                
+                break;
             default:
                 $controller->index();
                 break;

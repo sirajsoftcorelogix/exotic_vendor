@@ -228,7 +228,7 @@
                             </div>
                             <div>
                                 <label for="invoice_date" class="text-sm font-medium text-gray-700">Invoice Date: <span class="text-red-500">*</span></label>
-                                <input type="date" id="invoice_date" name="invoice_date" class="form-input w-full mt-1">
+                                <input type="date" id="invoice_date" name="invoice_date" class="form-input w-full mt-1" max="<?= date('Y-m-d') ?>">
                             </div>
                             <div>
                                 <label for="gst_reg" class="text-sm font-medium text-gray-700">GST Reg: <span class="text-red-500">*</span></label>
@@ -243,7 +243,7 @@
                                 <input type="number" id="sub_total" name="sub_total" value="" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="gst_total" class="text-sm font-medium text-gray-700">GST Total ₹: <span class="text-red-500">*</span></label>
+                                <label for="gst_total" class="text-sm font-medium text-gray-700">GST Total ₹: </label>
                                 <input type="number" id="gst_total" name="gst_total" class="form-input w-full mt-1">
                             </div>
                             <div>
@@ -308,6 +308,37 @@
     <div id="status-msg" class="text-sm mt-2"></div>
   </div>
 </div>
+<!-- email popup -->
+<div id="email-popup" class="fixed inset-0 bg-black bg-opacity-30 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+        <h3 class="text-lg font-bold mb-4">Email PO to Vendor</h3>
+        <div class="mb-4 flex items-center">
+            <label for="po-date-emailToPo" class="w-36 text-sm font-medium text-gray-700 mr-2">PO Date:</label>
+            <span id="po-date-emailToPo" class="text-gray-800 font-medium"></span>
+        </div>
+        <div class="mb-4 flex items-center">
+            <label for="PO-numberToPo" class="w-36 text-sm font-medium text-gray-700 mr-2">PO Number:</label>
+            <span id="PO-numberToPo" class="text-gray-800 font-medium"></span>
+        </div>
+        <div class="mb-4 flex items-center">
+            <label for="vendorToPo" class="w-36 text-sm font-medium text-gray-700 mr-2">Vendor:</label>
+            <span id="vendorToPo" class="text-gray-800 font-medium"></span>
+        </div>
+        <div class="mb-4 flex items-center">
+            <label for="contactToPo" class="w-36 text-sm font-medium text-gray-700 mr-2">Contact:</label>
+            <span id="contactToPo" class="text-gray-800 font-medium"></span>
+        </div>
+        <div class="mb-4 flex items-center">
+            <label for="vendor-emailToPo" class="w-36 text-sm font-medium text-gray-700 mr-2">Vendor Email:</label>
+            <span id="vendor-emailToPo" class="text-gray-800 font-medium"></span>
+        </div>
+        <div class="flex justify-end gap-2">
+            <button type="button" id="emailToPo-cancel-btn" class="bg-gray-200 px-4 py-1 rounded">Cancel</button>
+            <button type="button" id="emailToPo-submit-btn" class="bg-blue-600 text-white px-4 py-1 rounded">Send Email</button>
+        </div>
+        <div id="emailToPo-msg" class="text-sm mt-2"></div>
+    </div>
+</div>
 <script>
 //calculate grand total
 document.getElementById('sub_total').addEventListener('input', calculateGrandTotal);    
@@ -321,7 +352,17 @@ function calculateGrandTotal() {
     const grandTotal = subTotal + shipping + gstTotal;
     document.getElementById('grand_total').value = grandTotal.toFixed(2);
 }
-
+//gst reg change handler
+document.getElementById('gst_reg').addEventListener('change', function() {
+    const gstReg = this.value;
+    if (gstReg === '0') {
+        document.getElementById('gst_total').value = '0.00';
+        document.getElementById('gst_total').setAttribute('readonly', true);
+    } else {
+        document.getElementById('gst_total').removeAttribute('readonly');
+    }
+    calculateGrandTotal();
+});
     // Toggle menu visibility
 function toggleMenu(button) {
   const popup = button.nextElementSibling;
@@ -378,25 +419,82 @@ function handleAction(action, poId, el) {
         document.getElementById('status-msg').textContent = '';
  
   } else if (action === 'Email') {
+    // Show email popup
+        fetch('?page=purchase_orders&action=get_po', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'po_id=' + encodeURIComponent(poId)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('po-date-emailToPo').textContent = data.data.po_date;
+                document.getElementById('vendor-emailToPo').textContent = data.data.vendor_email;
+                document.getElementById('vendorToPo').textContent = data.data.vendor_name;
+                document.getElementById('PO-numberToPo').textContent = data.data.po_number;
+                document.getElementById('contactToPo').textContent = data.data.vendor_phone;
+            } else {
+                alert(data.message || 'Failed to retrieve purchase order details.');
+            }
+        })
+        .catch(() => {
+            alert('Error retrieving purchase order details.');
+        });
+        document.getElementById('PO-numberToPo').textContent = poId;
+        document.getElementById('vendorToPo').textContent = poId;
+        document.getElementById('email-popup').classList.remove('hidden');
+        // Close email popup handlers
+        document.getElementById('emailToPo-cancel-btn').addEventListener('click', function() {
+            document.getElementById('email-popup').classList.add('hidden');
+        });
+        document.getElementById('emailToPo-submit-btn').addEventListener('click', function() {   
+            document.getElementById('emailToPo-msg').textContent = 'Please wait...';
+            // Disable buttons to prevent multiple clicks
+            document.getElementById('emailToPo-submit-btn').textContent = 'Sending...';
+            document.getElementById('emailToPo-submit-btn').disabled = true; 
+            document.getElementById('emailToPo-cancel-btn').disabled = true;        
+            // Send email request
+            fetch('?page=purchase_orders&action=emailToVendor', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'po_id=' + encodeURIComponent(poId)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('emailToPo-submit-btn').disabled = false;
+                    document.getElementById('emailToPo-cancel-btn').disabled = false;
+                    document.getElementById('emailToPo-msg').textContent = 'Email sent successfully.';
+                    document.getElementById('emailToPo-submit-btn').textContent = 'Sent';                    
+                    alert('Purchase order emailed to vendor successfully.');
+                    document.getElementById('email-popup').classList.add('hidden');
+                } else {
+                    alert(data.message || 'Failed to email purchase order.');
+                }
+            })
+            .catch(() => {
+                alert('Error emailing purchase order.');
+            });
+        });
       // Redirect to email action
-      if (confirm('Send purchase order to vendor via email?')) {
-          fetch('?page=purchase_orders&action=emailToVendor', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-              body: 'po_id=' + encodeURIComponent(poId)
-          })
-          .then(r => r.json())
-          .then(data => {
-              if (data.success) {
-                  alert('Purchase order emailed to vendor successfully.');
-              } else {
-                  alert(data.message || 'Failed to email purchase order.');
-              }
-          })
-          .catch(() => {
-              alert('Error emailing purchase order.');
-          });
-      }
+    //   if (confirm('Send purchase order to vendor via email?')) {
+    //       fetch('?page=purchase_orders&action=emailToVendor', {
+    //           method: 'POST',
+    //           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    //           body: 'po_id=' + encodeURIComponent(poId)
+    //       })
+    //       .then(r => r.json())
+    //       .then(data => {
+    //           if (data.success) {
+    //               alert('Purchase order emailed to vendor successfully.');
+    //           } else {
+    //               alert(data.message || 'Failed to email purchase order.');
+    //           }
+    //       })
+    //       .catch(() => {
+    //           alert('Error emailing purchase order.');
+    //       });
+    //   }
   } else if (action === 'UploadInvoice') {
       // Open the invoice upload popup
       //alert('Feature coming soon!');
@@ -435,7 +533,7 @@ function handleAction(action, poId, el) {
         // Fetch and populate invoice po details
         fetchPoDetails(poId).then(data => {
             if (data.success) {
-                console.log(data.data);
+                //console.log(data.data);
                 const purchaseOrder = data.data.purchaseOrder;
                 const invoiceData = data.data.invoiceData;
                 const invItem = Array.isArray(data.data.items) && data.data.items.length > 0 ? data.data.items[0] : {};
@@ -448,7 +546,7 @@ function handleAction(action, poId, el) {
                 document.getElementById('gst_total').value = invoiceData.gst_total || '';
                 document.getElementById('shipping').value = invoiceData.shipping || '';
                 document.getElementById('grand_total').value = invoiceData.grand_total || '';
-                document.getElementById('gst_reg').value = invoiceData && invoiceData.gst_reg ? '1' : '0';
+                document.getElementById('gst_reg').value = invoiceData && invoiceData.gst_reg ? invoiceData.gst_reg : '1';
                 document.getElementById('invoice_date').value = invoiceData && invoiceData.invoice_date ? invoiceData.invoice_date : '';
                 document.getElementById('invoice_no').value = invoiceData && invoiceData.invoice_no ? invoiceData.invoice_no : '';
                 document.getElementById('invoice-id').value = invoiceData && invoiceData.id ? invoiceData.id : '';
@@ -499,6 +597,8 @@ function handleAction(action, poId, el) {
                     });
                 } else {
                     fileInput.value = '';
+                    uploadedFileSection.classList.add('hidden');
+                    fileInfoDiv.innerHTML = '';
                 }
 
             } else {
