@@ -78,6 +78,15 @@ class PurchaseOrder {
         );
         return $stmt->execute();
     }
+    public function updatePurchaseOrderNumber($id, $data) {
+        $sql = "UPDATE purchase_orders SET po_number = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("si",
+            $data['po_number'],
+            $id
+        );
+        return $stmt->execute();
+    }
     public function deletePurchaseOrder($id) {
         $sql = "DELETE FROM purchase_orders WHERE id = ?";
         $stmt = $this->db->prepare($sql);

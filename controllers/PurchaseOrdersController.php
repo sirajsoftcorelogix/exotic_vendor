@@ -123,7 +123,7 @@ class PurchaseOrdersController {
         }
         // Create the purchase order  
         $poData = [
-            'po_number' => 'PO-' . time(), // Example PO number, you can customize this
+            'po_number' => '', // Example PO number, you can customize this
             'vendor_id' => $vendor,
             'user_id' => $user_id,
             'expected_delivery_date' => $deliveryDueDate,
@@ -140,6 +140,12 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Failed to create Purchase Order.']);
             exit;
         }
+        // Generate unique po_number
+        $po_number = 'PO-' . date('Y') . '-' . str_pad($poId, 6, '0', STR_PAD_LEFT);
+
+        // Update the purchase order with po_number
+        $purchaseOrdersModel->updatePurchaseOrderNumber($poId, ['po_number' => $po_number]);
+
         // Create purchase order items
         $itemsCreated = true;
         foreach ($gst as $index => $gstValue) {
@@ -170,7 +176,7 @@ class PurchaseOrdersController {
         //Update order status        
         $statusupdate = [];
         foreach($orderid as $index=>$id){
-           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing', $poData['po_number'], $poId);
+           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing', $po_number, $poId);
         }
         
         
@@ -180,6 +186,7 @@ class PurchaseOrdersController {
 
 
     }
+   
     public function cancelPurchaseOrder() {
         global $purchaseOrdersModel;
         global $ordersModel;
