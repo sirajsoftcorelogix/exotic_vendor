@@ -139,7 +139,7 @@ class User {
             $sql = "UPDATE vp_users SET name = ?, phone = ?, password = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            $stmt->bind_param('sssi', $data['name'], $data['email'], $data['phone'], $hashedPassword, $id);
+            $stmt->bind_param('sssi', $data['name'], $data['phone'], $hashedPassword, $id);
         } else {
             $sql = "UPDATE vp_users SET name = ?, phone = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);

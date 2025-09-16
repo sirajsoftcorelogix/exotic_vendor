@@ -276,9 +276,36 @@ class UsersController {
         }
         exit;
     }
+    function checkPasswords($password, $confirmPassword) {
+        if (empty($password)) {
+            return "Password cannot be empty.";
+        }
+
+        if ($password !== $confirmPassword) {
+            return "Passwords do not match.";
+        }
+
+        /*if (strlen($password) < 8) {
+            return "Password must be at least 8 characters long.";
+        }*/
+
+        return true;
+    }
     public function updateUserProfile()  {
         global $usersModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $password = $_POST['password'] ?? '';
+            $confirmPassword = $_POST['confirm_password'] ?? '';
+
+            $resultChk = $this->checkPasswords($password, $confirmPassword);
+
+            if ($resultChk !== true) {
+                $result = [
+                    'success' => false,
+                    'message' => 'Error occurred. '.$resultChk
+                ];
+                echo json_encode($result); exit;
+            }
             $data = $_POST;
             if (isset($data['id']) && $data['id'] > 0) {
                 $result = $usersModel->updateUserPriofile($data['id'], $data);
