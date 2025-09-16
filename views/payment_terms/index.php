@@ -5,7 +5,7 @@
         <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow mt-[10px]">
             <!-- Filters -->
             <form method="get" id="filterForm">
-                <input type="hidden" name="page" value="payemnt_terms">
+                <input type="hidden" name="page" value="payement_terms">
                 <input type="hidden" name="action" value="list">
                 <div class="flex flex-wrap items-center gap-4">
                     <div class="flex items-center gap-2">
@@ -31,7 +31,7 @@
                         <input type="submit" value="Search" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2">
                     </div>
                     <div class="relative">
-                        <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=payemnt_terms&action=list';">
+                        <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=payement_terms&action=list';">
                     </div>
                 </div>
             </form>
@@ -118,17 +118,17 @@
                 <div class="flex items-center gap-4 text-sm text-gray-600">
                     <span>Page</span>
                     <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no <= 1 ? 'disabled' : '' ?>" >
-                        <a class="page-link" <?php if(($page_no-1) >= 1) { ?> href="?page=payemnt_terms&acton=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?>  tabindex="-1">
+                        <a class="page-link" <?php if(($page_no-1) >= 1) { ?> href="?page=payement_terms&acton=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?>  tabindex="-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                         </a>
                     </button>
                     <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page_no ?></span>
                     <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no >= $total_pages ? 'disabled' : '' ?>">
-                        <a class="page-link" <?php if($page_no < $total_pages) { ?> href="?page=payemnt_terms&acton=list&page_no=<?= $page_no+1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
+                        <a class="page-link" <?php if($page_no < $total_pages) { ?> href="?page=payement_terms&acton=list&page_no=<?= $page_no+1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></a>
                     </button>
                     <div class="relative">
-                        <select id="rows-per-page" class="custom-select bg-transparent border-b border-gray-300 text-gray-900 text-sm focus:ring-0 focus:border-gray-500 block w-full p-1" onchange="location.href='?page=payemnt_terms&acton=list&page_no=1&limit=' + this.value;">
+                        <select id="rows-per-page" class="custom-select bg-transparent border-b border-gray-300 text-gray-900 text-sm focus:ring-0 focus:border-gray-500 block w-full p-1" onchange="location.href='?page=payement_terms&acton=list&page_no=1&limit=' + this.value;">
                             <?php foreach ([10, 20, 50, 100] as $opt): ?>
                                 <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                                     <?= $opt ?>
@@ -392,9 +392,14 @@
 
     document.getElementById('addVendorForm').onsubmit = function(e) {
         e.preventDefault();
+        // Ensure CKEditor updates <textarea>
+        for (var instance in CKEDITOR.instances) {
+            CKEDITOR.instances[instance].updateElement();
+        }
+
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
-        fetch('?page=payemnt_terms&action=addRecord', {
+        fetch('?page=payement_terms&action=addRecord', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: params
@@ -434,7 +439,7 @@
                 window.closeAllMenus();
                 if (!confirm("Are you sure you want to delete this record?")) return;
 
-                fetch("?page=payemnt_terms&action=deleteRecord", {
+                fetch("?page=payement_terms&action=deleteRecord", {
                     method: "POST",
                     headers: { "Content-Type": "application/x-www-form-urlencoded" },
                     body: "id=" + id
@@ -482,7 +487,7 @@
 
     function openEditModal(id) {
         closeAllMenus();
-        fetch("?page=payemnt_terms&action=paymentTermsDetails&id=" + id)
+        fetch("?page=payement_terms&action=paymentTermsDetails&id=" + id)
         .then(res => res.json())
         .then(data => {
             console.log(data);
@@ -512,9 +517,13 @@
 
     document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
+        // Ensure CKEditor updates <textarea>
+        for (var instance in CKEDITOR.instances) {
+            CKEDITOR.instances[instance].updateElement();
+        }
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
-        fetch('?page=payemnt_terms&action=addRecord', {
+        fetch('?page=payement_terms&action=addRecord', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: params
@@ -530,7 +539,7 @@
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
                 setTimeout(() => {
-                    window.location.href = '?page=payemnt_terms&action=list';
+                    window.location.href = '?page=payement_terms&action=list';
                 }, 1000); // redirect after 1 sec
             } else {
                 msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
