@@ -58,9 +58,10 @@ class PaymentTerms {
         ];
 	}
 	public function addPTRecord($data) {
-        $sql = "INSERT INTO vp_payment_term_conditions (term_conditions, is_active) VALUES (?, ?)";
+        $sql = "INSERT INTO vp_payment_term_conditions (title, term_conditions, is_active) VALUES (?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ss',
+        $stmt->bind_param('sss',
+            $data['addTitle'],
             $data['addNotes'],
             $data['addStatus']
         );
@@ -73,9 +74,10 @@ class PaymentTerms {
         ];
     }
     public function updatePTRecord($id, $data) {
-        $sql = "UPDATE vp_payment_term_conditions SET term_conditions = ?, is_active = ? WHERE id = ?";
+        $sql = "UPDATE vp_payment_term_conditions SET title = ?, term_conditions = ?, is_active = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssi', 
+        $stmt->bind_param('sssi',
+            $data['editTitle'],
             $data['editNotes'],
             $data['editStatus'],
             $id
@@ -102,17 +104,7 @@ class PaymentTerms {
     }
 	
 	public function getTCRecord($id) {
-		/*$sql = "SELECT * FROM vp_payment_term_conditions WHERE id = ?";
-
-		$stmt = $this->conn->prepare($sql);
-		$stmt->bind_param("i", $id);
-		$stmt->execute();
-
-		$result = $stmt->get_result();
-		$data = $result->fetch_assoc();  // Get only one row as associative array
-
-		return json_encode($data);*/
-        $result = $this->conn->query("SELECT id, term_conditions, is_active 
+        $result = $this->conn->query("SELECT id, title, term_conditions, is_active 
                       FROM vp_payment_term_conditions 
                       WHERE id = $id");
         $row = $result->fetch_assoc();
