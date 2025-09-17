@@ -66,6 +66,7 @@
                     <thead>
                     <tr>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Title</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Term & Conditions</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Action</th>
@@ -76,6 +77,7 @@
                         <?php foreach ($terms_condition as $index => $tc): ?>
                             <tr class="table-content-text">
                                 <td class="px-6 py-4 whitespace-nowrap"><?= $index + 1 ?></td>
+                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($tc['title']) ?? '' ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap"><?=mb_substr($tc['term_conditions'], 0, 100) ?> ...</td>
                                 <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars(ucfirst($tc['is_active'])) ?>
                                 </td>
@@ -168,6 +170,10 @@
                     <form id="addVendorForm">
                         <div class="pt-4">
                             <div>
+                                <label class="text-sm font-medium text-gray-700">Title <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1" required name="addTitle" id="addTitle" />
+                            </div>
+                            <div>
                                 <label class="text-sm font-medium text-gray-700">Payment Terms:</label>
                                 <textarea class="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="addNotes" id="addNotes"></textarea>
                             </div>
@@ -218,6 +224,10 @@
                     <form id="editUserForm">
                         <input type="hidden" id="editId" name="id" value="">
                         <div class="pt-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Title <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1" required name="editTitle" id="editTitle" />
+                            </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Payment Terms</label>
                                 <textarea class="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="editNotes" id="editNotes"></textarea>
@@ -498,6 +508,7 @@
             }
             // Populate form fields data
             document.getElementById("editId").value   = datas.id;
+            document.getElementById("editTitle").value   = datas.title;
             CKEDITOR.instances['editNotes'].setData(datas.term_conditions);
             document.getElementById("editStatus").value = datas.is_active;
 
