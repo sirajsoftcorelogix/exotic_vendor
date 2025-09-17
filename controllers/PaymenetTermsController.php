@@ -1,4 +1,4 @@
-<?php
+ <?php
 require_once 'models/payment_terms/PaymentTerms.php';
 
 $paymentTermsModel = new PaymentTerms($conn);

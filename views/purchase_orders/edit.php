@@ -185,7 +185,7 @@
 </div>
 <script>
     // Load Template Modal
-    document.getElementById('loadTemplate').addEventListener('click', function() {
+   /* document.getElementById('loadTemplate').addEventListener('click', function() {
         document.getElementById('loadTemplateModal').style.display = 'flex';
         // Pre-select checkboxes for templates that are present in the current terms_and_conditions
         var termsValue = document.getElementById('terms').value;
@@ -214,7 +214,7 @@
             document.getElementById('terms').value = combinedContent.trim();
         }
         document.getElementById('loadTemplateModal').style.display = 'none';
-    });
+    });*/
     document.addEventListener('DOMContentLoaded', function () {
         const itemTable = document.querySelector('#poTable tbody');
         const subtotalElement = document.querySelector('.subtotal');
