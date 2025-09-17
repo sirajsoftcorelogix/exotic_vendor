@@ -31,7 +31,7 @@
                     <option value="">Select Vendor</option>
                     <?php foreach ($data['vendors'] as $vendor): ?>
                         <option value="<?php echo $vendor['id']; ?>" <?php if ($data['purchaseOrder']['vendor_id'] == $vendor['id']) echo 'selected'; ?>>
-                            <?php echo htmlspecialchars($vendor['contact_name'] ?? ''); ?>
+                            <?php echo htmlspecialchars($vendor['vendor_name'] ?? ''); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

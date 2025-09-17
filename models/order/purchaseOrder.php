@@ -62,14 +62,15 @@ class PurchaseOrder {
         return $result->fetch_assoc();
     }
     public function updatePurchaseOrder($id, $data) {
-        $sql = "UPDATE purchase_orders SET vendor_id = ?, user_id = ?, expected_delivery_date = ?, delivery_address = ?, notes = ?, total_gst = ?, total_cost = ?, subtotal = ?, shipping_cost = ? WHERE id = ?";
+        $sql = "UPDATE purchase_orders SET vendor_id = ?, user_id = ?, expected_delivery_date = ?, delivery_address = ?, notes = ?, terms_and_conditions = ?, total_gst = ?, total_cost = ?, subtotal = ?, shipping_cost = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("iissssdddi",
+        $stmt->bind_param("iisssssdddi",
             $data['vendor_id'],
             $data['user_id'],
             $data['expected_delivery_date'],
             $data['delivery_address'],
             $data['notes'],
+            $data['terms_and_conditions'],
             $data['total_gst'],
             $data['grand_total'],
             $data['subtotal'],
