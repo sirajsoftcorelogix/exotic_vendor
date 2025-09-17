@@ -546,10 +546,10 @@ function handleAction(action, poId, el) {
                 // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Item:</strong> ${invItem.title || 'N/A'}`;
                 document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Vendor Name:</strong> ${purchaseOrder.vendor_name || 'N/A'}`;
                 document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(4)').innerHTML = `<strong>Vendor Phone:</strong> ${purchaseOrder.vendor_phone || 'N/A'} <a href="https://wa.me/${purchaseOrder.vendor_phone || 'N/A'}"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a> <span class="text-blue-600"><a href="mailto:${purchaseOrder.vendor_email || 'N/A'}">${purchaseOrder.vendor_email || 'N/A'}</a></span>`;
-                document.getElementById('sub_total').value = invoiceData.sub_total || '';
-                document.getElementById('gst_total').value = invoiceData.gst_total || '';
-                document.getElementById('shipping').value = invoiceData.shipping || '';
-                document.getElementById('grand_total').value = invoiceData.grand_total || '';
+                document.getElementById('sub_total').value = invoiceData.sub_total || 0.00;
+                document.getElementById('gst_total').value = invoiceData.gst_total || 0.00;
+                document.getElementById('shipping').value = invoiceData.shipping || 0.00;
+                document.getElementById('grand_total').value = invoiceData.grand_total || 0.00;
                 document.getElementById('gst_reg').value = invoiceData && invoiceData.gst_reg ? invoiceData.gst_reg : '1';
                 document.getElementById('invoice_date').value = invoiceData && invoiceData.invoice_date ? invoiceData.invoice_date : '';
                 document.getElementById('invoice_no').value = invoiceData && invoiceData.invoice_no ? invoiceData.invoice_no : '';

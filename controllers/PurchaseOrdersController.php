@@ -325,6 +325,7 @@ class PurchaseOrdersController {
             'subtotal' => $_POST['subtotal'],
             'shipping_cost' => $_POST['shipping_cost'],
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
+            'terms_and_conditions' => isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '',
         ];
         // Update the purchase order
         $isUpdated = $purchaseOrdersModel->updatePurchaseOrder($poId, $poData);
@@ -763,7 +764,7 @@ class PurchaseOrdersController {
                     'po_id' => $poId,
                     'invoice_no' => $_POST['invoice_no'] ?? '',
                     'invoice_date' => $_POST['invoice_date'] ?? '',
-                    'gst_reg' => $_POST['gst_reg'] ?? '',
+                    'gst_reg' => $_POST['gst_reg'] ?? 0,
                     'sub_total' => $_POST['sub_total'] ?? 0,
                     'gst_total' => $_POST['gst_total'] ?? 0,
                     'shipping' => empty($_POST['shipping']) ? 0.00 : $_POST['shipping'],
@@ -815,7 +816,7 @@ class PurchaseOrdersController {
                 'po_id' => $poId,
                 'invoice_no' => $_POST['invoice_no'] ?? '',
                 'invoice_date' => $_POST['invoice_date'] ?? '',
-                'gst_reg' => $_POST['gst_reg'] ?? '',
+                'gst_reg' => $_POST['gst_reg'] ?? 0,
                 'sub_total' => $_POST['sub_total'] ?? 0,
                 'gst_total' => $_POST['gst_total'] ?? 0,
                 'shipping' => $_POST['shipping'] ?? 0,
@@ -845,7 +846,7 @@ class PurchaseOrdersController {
                 exit;
             }
             
-            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully', 'invoice_path' => 'uploads/invoices/' . $newFileName . ' po:' . $isUpdated]);
+            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully', 'invoice_path' => 'uploads/invoices/' . $newFileName . ' po:' . $isUpdatedInv]);
         } else {
             echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
         }

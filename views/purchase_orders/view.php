@@ -21,7 +21,7 @@
       </div>
       <div class="flex items-center">
         <label for="po-status" class="block text-gray-700 form-label">PO Status :</label>
-        <div class="ml-2 px-2 py-1 rounded-md font-semibold <?= $purchaseOrder['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : ($purchaseOrder['status'] == 'approved' ? 'bg-green-100 text-green-800' : ($purchaseOrder['status'] == 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')) ?>">
+        <div class="px-2 py-1 rounded-md font-semibold <?= $purchaseOrder['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : ($purchaseOrder['status'] == 'approved' ? 'bg-green-100 text-green-800' : ($purchaseOrder['status'] == 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')) ?>">
           <?= htmlspecialchars(ucfirst($purchaseOrder['status'])) ?>
         </div>
       </div>
