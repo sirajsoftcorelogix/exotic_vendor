@@ -31,7 +31,7 @@
                 <select id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-full md:w-[300px]">
                     <option value="">Select Vendor</option>
                     <?php foreach ($vendors as $vendor): ?>
-                        <option value="<?= $vendor['id'] ?>"><?= htmlspecialchars($vendor['contact_name']) ?></option>
+                        <option value="<?= $vendor['id'] ?>"><?= htmlspecialchars($vendor['vendor_name']) ?></option>
                     <?php endforeach; ?>  
                 </select>
                 
@@ -329,7 +329,7 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     .then(data => {
         if (data.success) {
             alert("Purchase Order created successfully!");
-            window.location.href = "<?php echo base_url('?page=purchase_orders&acton=list'); ?>"; // Redirect to the list page
+            window.location.href = "<?php echo base_url('?page=purchase_orders&action=list'); ?>"; // Redirect to the list page
         } else {
             alert("Error: " + data.message);
             // Re-enable the button and restore text

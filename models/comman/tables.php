@@ -59,6 +59,15 @@ class Tables {
         }
         return $data;
     }
+    public function add_po_status_log($data) {
+        $sql = "INSERT INTO vp_po_status_log (po_id, status, changed_by, change_date) VALUES (?, ?, ?, ?)";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('isis', $data['po_id'], $data['status'], $data['changed_by'], $data['change_date']);
+        if ($stmt->execute()) {
+            return true;
+        }
+        return false;
+    }
 
 }
 ?>

@@ -12,24 +12,18 @@
     <div class="space-y-2">
       <div class="flex items-center">
         <label for="vendor" class="block text-gray-700 form-label">Vendor :</label>
-        <select readonly id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
-          <?php foreach ($vendors as $vendor): ?>
-            <option value="<?= htmlspecialchars($vendor['id'] ?? '') ?>" <?= $vendor['id'] == $purchaseOrder['vendor_id'] ? 'selected' : '' ?>><?= htmlspecialchars($vendor['contact_name'] ?? '') ?></option>
-          <?php endforeach; ?>
-        </select>
+        <?php echo $purchaseOrder['vendor_name'] ?? '' ?>
       </div>
+      
       <div class="flex items-center">
         <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address :</label>
-        <input readonly type="text" name="delivery-address" id="delivery-address" value="<?= htmlspecialchars($purchaseOrder['delivery_address'] ?? '') ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[300px]">
+        <?= $purchaseOrder['delivery_address'] ?? '' ?>
       </div>
       <div class="flex items-center">
         <label for="po-status" class="block text-gray-700 form-label">PO Status :</label>
-        <select readonly id="po-status" name="po-status" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
-          <option value="sent" <?= $purchaseOrder['status'] == 'sent' ? 'selected' : '' ?>>Sent to the Vendor</option>
-          <option value="pending" <?= $purchaseOrder['status'] == 'pending' ? 'selected' : '' ?>>Pending</option>
-          <option value="approved" <?= $purchaseOrder['status'] == 'approved' ? 'selected' : '' ?>>Approved</option>
-          <option value="rejected" <?= $purchaseOrder['status'] == 'rejected' ? 'selected' : '' ?>>Rejected</option>
-        </select>
+        <div class="ml-2 px-2 py-1 rounded-md font-semibold <?= $purchaseOrder['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : ($purchaseOrder['status'] == 'approved' ? 'bg-green-100 text-green-800' : ($purchaseOrder['status'] == 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')) ?>">
+          <?= htmlspecialchars(ucfirst($purchaseOrder['status'])) ?>
+        </div>
       </div>
     </div>
 
@@ -37,7 +31,9 @@
     <div class="space-y-2">
       <div class="flex items-center">
         <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
-        <input readonly type="date" value="<?= htmlspecialchars($purchaseOrder['expected_delivery_date']) ?>" name="delivery-due-date" id="delivery-due-date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-[150px]">
+        
+          <?= htmlspecialchars(date('d M, Y', strtotime($purchaseOrder['expected_delivery_date']))) ?>
+       
       </div>
       <!-- <div class="flex items-center">
         <label for="order-id" class="block text-gray-700 form-label">Order ID</label>
@@ -45,11 +41,7 @@
       </div> -->
       <div class="flex items-center">
         <label for="employee-name" class="block text-gray-700 form-label">Employee Name</label>
-        <select readonly id="employee-name" name="employee_name" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-[300px]">
-          <?php foreach ($users as $id => $name): ?>
-            <option value="<?= htmlspecialchars($id) ?>" <?= $id == $purchaseOrder['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
-          <?php endforeach; ?>
-        </select>
+        <?= htmlspecialchars($purchaseOrder['user_name'] ?? '') ?>
       </div>
     </div>
   </div>
@@ -165,7 +157,7 @@
             </div>
           <div class="col-span-2">
             <h4 class="invoice-header">Invoice Date</h4>
-            <p class="invoice-text mt-2"><?php echo $invoice['invoice_date']; ?></p>
+            <p class="invoice-text mt-2"><?php echo date('d M Y', strtotime($invoice['invoice_date'])); ?></p>
           </div>
           <!-- <div class="col-span-2">
             <h4 class="invoice-header">Due Date</h4>
@@ -200,7 +192,7 @@
             <!-- <p class="amount-box-text"> <i class="fas <?php //echo $iconClass ?> text-2xl text-gray-600"></i></p> -->
             <!-- <p class="amount-box-text"><a href="<?php //echo $invoice['invoice']; ?>" target="_blank"><?php //echo $inv_name; ?></a></p> -->
         <a href="<?php echo $invoice['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button" style="width: 220px;">
-          <i class="fas <?php echo $iconClass ?> text-2xl text-gray-600"></i> Download</button>
+          <i class="fas <?php echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
         </a>
           </div>
       <?php } ?>
@@ -300,16 +292,30 @@
           <p class="timeline-date"><?php echo date('d M, Y', strtotime($purchaseOrder['created_at'])); ?></p>
         </div>
       </div>
+      <!-- status log -->
+      <?php if (!empty($status_log)) {
+        foreach ($status_log as $log) { ?>
+          <div class="timeline-step completed">
+            <div class="flex flex-col items-center text-center">
+              <div class="relative w-full h-5 flex justify-center items-center">
+                <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+              </div>
+              <p class="timeline-text mt-2"><?php echo ucfirst($log['status']); ?></p>
+              <p class="timeline-date"><?php echo date('d M, Y', strtotime($log['change_date'])); ?></p>
+            </div>
+          </div>
+        <?php }
+      } ?>
       <!-- Step 2: Sent to the Vendor -->
-      <div class="timeline-step completed">
+      <!-- <div class="timeline-step completed">
         <div class="flex flex-col items-center text-center">
           <div class="relative w-full h-5 flex justify-center items-center">
             <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
           </div>
-          <p class="timeline-text mt-2"><?php echo ucfirst($purchaseOrder['status']); ?></p>
-          <p class="timeline-date"><?php echo date('d M, Y', strtotime($purchaseOrder['updated_at'])); ?></p>
+          <p class="timeline-text mt-2"><?php //echo ucfirst($purchaseOrder['status']); ?></p>
+          <p class="timeline-date"><?php //echo date('d M, Y', strtotime($purchaseOrder['updated_at'])); ?></p>
         </div>
-      </div>
+      </div> -->
       <!-- Step 3: In Production -->
       <!-- <div class="timeline-step completed">
         <div class="flex flex-col items-center text-center">
@@ -335,5 +341,5 @@
   </div>
   <div class="mt-8 flex justify-end space-x-4">
     <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Save</button> -->
-    <a href="<?php echo $_SERVER['HTTP_REFERER']; ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Back</button></a>
+    <a href="<?php echo isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : base_url('?page=purchase_orders&action=list'); ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Back</button></a>
   </div>

@@ -56,7 +56,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Delivery Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
-                        <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Total GST</th> -->
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Invoice</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Grand Total</th>
                         <th scope="col" class="relative px-6 py-3"> <span class="table-header-text">Status</span></th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
@@ -80,9 +80,13 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
                         </td>
-                        <!-- <td class="px-6 py-4 whitespace-nowrap">
-                            <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= htmlspecialchars($order['total_gst']) ?></span>
-                        </td> -->   
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <?php if (!empty($order['vendor_invoice'])): ?>
+                                <a href="<?= base_url($order['vendor_invoice']) ?>" target="_blank" class="text-blue-600 hover:underline">View Invoice</a>
+                            <?php else: ?>
+                                <span class="text-gray-400">No Invoice</span>
+                            <?php endif; ?>
+                        </td>   
                         
                         <td class="px-6 py-4 whitespace-nowrap">
                         <span style="width: 75px; height: 25px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= htmlspecialchars($order['total_cost']) ?></span>

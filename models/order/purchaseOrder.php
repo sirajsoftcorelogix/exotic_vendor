@@ -5,7 +5,7 @@ class PurchaseOrder {
         $this->db = $db;
     }
     public function getAllPurchaseOrders( $filters = [] ) {
-        $sql = "SELECT purchase_orders.*, vp_vendors.contact_name AS vendor_name FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id WHERE 1=1";
+        $sql = "SELECT purchase_orders.*, vp_vendors.vendor_name AS vendor_name FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id WHERE 1=1";
         if (!empty($filters['search_text'])) {
             $searchText = $this->db->real_escape_string($filters['search_text']);
             $sql .= " AND (purchase_orders.po_number LIKE '%$searchText%' OR vp_vendors.contact_name LIKE '%$searchText%')";
@@ -54,7 +54,7 @@ class PurchaseOrder {
         return $stmt->execute();
     }
     public function getPurchaseOrder($id) {
-        $sql = "SELECT *, vp_vendors.contact_name AS vendor_name, vp_vendors.vendor_phone AS vendor_phone, vp_vendors.vendor_email AS vendor_email FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id WHERE purchase_orders.id = ?";
+        $sql = "SELECT purchase_orders.*, vp_vendors.contact_name AS vendor_name, vp_vendors.vendor_phone AS vendor_phone, vp_vendors.vendor_email AS vendor_email FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id WHERE purchase_orders.id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param("i", $id);
         $stmt->execute();
@@ -126,5 +126,25 @@ class PurchaseOrder {
             return $updateStmt->execute();
         }
         return false; // Return false if the purchase order was not found
+    }
+    public function get_po_status_log($po_id) {
+        $sql = "SELECT vpl.*, u.name AS changed_by_username FROM vp_po_status_log vpl LEFT JOIN vp_users u ON vpl.changed_by = u.id WHERE vpl.po_id = ? ORDER BY vpl.change_date DESC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $logs = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $logs[] = $row;
+            }
+        }
+        return $logs;
+    }
+    public function updateInvoicePath($id, $invoicePath) {
+        $sql = "UPDATE purchase_orders SET vendor_invoice = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("si", $invoicePath, $id);
+        return $stmt->execute();
     }
 }

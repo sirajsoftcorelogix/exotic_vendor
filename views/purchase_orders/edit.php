@@ -11,7 +11,7 @@
             </div>
             <div class="flex items-center">
                 <label for="delivery-due-date" class="block text-gray-700 form-label">Delivery Due Date :</label>
-                <input type="date" id="delivery_due_date" value="<?php echo $data['purchaseOrder']['expected_delivery_date'] ? date('Y-m-d', strtotime($data['purchaseOrder']['expected_delivery_date'])) : ''; ?>" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
+                <input readonly type="date" id="delivery_due_date" value="<?php echo $data['purchaseOrder']['expected_delivery_date'] ? date('Y-m-d', strtotime($data['purchaseOrder']['expected_delivery_date'])) : ''; ?>" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
             </div>
             <div class="flex items-center">
                 <label for="employee-name" class="block text-gray-700 form-label">User Name</label>
@@ -38,7 +38,7 @@
             </div>
             <div class="flex items-center">
                 <label for="po_date" class="block text-gray-700 form-label">Order Date :</label>
-                <input type="date" id="po_date" name="po_date" value="<?php echo date('Y-m-d', strtotime($data['purchaseOrder']['po_date'])); ?>" class="mt-1 block w-full md:w-[300px] border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm form-input">
+                <input readonly type="date" id="po_date" name="po_date" value="<?php echo date('Y-m-d', strtotime($data['purchaseOrder']['po_date'])); ?>" class="mt-1 block w-full md:w-[300px] border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm form-input">
             </div>
             <div class="flex items-center">
                 <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address :</label>
@@ -141,7 +141,7 @@
         <div>
             <div class="flex justify-between items-center mb-1">
                 <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
-                <!-- <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button> -->
+                <!-- <button id="loadTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button> -->
             </div>
             <textarea id="terms" name="terms_and_conditions" class="mt-5 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo htmlspecialchars($purchaseOrder['terms_and_conditions'] ?? ''); ?></textarea>
         </div>
@@ -153,7 +153,68 @@
     </div>
     </form>
 </div>
+<div id="loadTemplateModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 relative">
+        <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeLoadTemplateModal">&times;</button>
+        <h2 class="text-xl font-bold mb-4">Select Terms & Conditions Template</h2>
+        <div class="max-h-72 overflow-y-auto">
+            <table class="w-full border">
+                <thead>
+                    <tr>
+                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-left">Content</th>
+                        <!-- <th class="p-2 text-left">Action</th> -->
+                    </tr>
+                </thead>
+                <tbody id="templateList">
+                    <?php foreach ($templates as $template): ?>
+                    <tr class="border-b">
+                        <td class="p-2"><input type="checkbox" class="select-template-checkbox" data-content="<?= htmlspecialchars($template['term_conditions'] ?? '') ?>"></td>
+                        <td class="p-2"><?= htmlspecialchars(substr($template['title'], 0, 100)) ?>...</td>                       
+                    </tr>
+                    <?php endforeach; ?>
+                    <tr>
+                        <td colspan="3" class="p-2 text-right">
+                            <button id="applyTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Apply Selected</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 <script>
+    // Load Template Modal
+    document.getElementById('loadTemplate').addEventListener('click', function() {
+        document.getElementById('loadTemplateModal').style.display = 'flex';
+        // Pre-select checkboxes for templates that are present in the current terms_and_conditions
+        var termsValue = document.getElementById('terms').value;
+        document.querySelectorAll('.select-template-checkbox').forEach(function(checkbox) {
+            var content = checkbox.getAttribute('data-content');
+            // Check if the content exists in the textarea (simple substring match)
+            if (termsValue.includes(content)) {
+                checkbox.checked = true;
+            } else {
+                checkbox.checked = false;
+            }
+        });
+    });
+   
+    document.getElementById('closeLoadTemplateModal').onclick = function() {
+        document.getElementById('loadTemplateModal').style.display = 'none';
+    };  
+    // Apply selected template
+    document.getElementById('applyTemplate').addEventListener('click', function() {
+        const checkboxes = document.querySelectorAll('.select-template-checkbox:checked');
+        let combinedContent = '';
+        checkboxes.forEach((checkbox, idx) => {
+            combinedContent += (idx + 1) + '. ' + checkbox.getAttribute('data-content') + '\n\n';    
+        });
+        if (combinedContent) {
+            document.getElementById('terms').value = combinedContent.trim();
+        }
+        document.getElementById('loadTemplateModal').style.display = 'none';
+    });
     document.addEventListener('DOMContentLoaded', function () {
         const itemTable = document.querySelector('#poTable tbody');
         const subtotalElement = document.querySelector('.subtotal');
@@ -218,7 +279,7 @@
             if (data.success) {
                 alert("Purchase Order created successfully!");
                 submitBtn.textContent = originalText;
-                window.location.href = "<?php echo base_url('?page=purchase_orders&acton=list'); ?>"; // Redirect to the list page
+                //window.location.href = "<?php //echo base_url('?page=purchase_orders&acton=list'); ?>"; // Redirect to the list page
             } else {
                 alert("Error: " + data.message);
                 submitBtn.disabled = false;

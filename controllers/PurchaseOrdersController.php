@@ -52,7 +52,7 @@ class PurchaseOrdersController {
             'total_pages' => $total_pages,
             'current_page' => $page,
             'search' => $_GET['search_text'] ?? '',
-            'status_filter' => $_GET['status_filter'] ?? ''
+            'status_filter' => $_GET['status_filter'] ?? '',
         ], 'Manage Purchase Orders');
     }
     public function createPurchaseOrder(){
@@ -219,6 +219,7 @@ class PurchaseOrdersController {
         global $usersModel;
         global $poInvoiceModel;
         global $domain;
+        global $commanModel;
 
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
 
@@ -235,8 +236,28 @@ class PurchaseOrdersController {
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
         $data['domain'] = $domain;
         //print_array($data);
-        $data['users'] = $usersModel->getAllUsers();
+        
         $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId);
+        $data['status_log'] = $purchaseOrdersModel->get_po_status_log($poId);
+        $address = $commanModel->get_exotic_address();
+        foreach($address as $addr){
+            if($addr['id'] == $purchaseOrder['delivery_address']){
+                $data['purchaseOrder']['delivery_address'] = $addr['address'];
+                break;
+            }
+        }
+        $users = $usersModel->getAllUsers();
+        foreach($users as $id => $user){
+            if($id == $purchaseOrder['user_id']){
+                $data['purchaseOrder']['user_name'] = $user;
+                break;
+            }
+        }   
+        //$data['exotic_address'] = $address;
+         //print_array($data);
+         // Render the create purchase order form
+         //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
+         //exit;
         renderTemplate('views/purchase_orders/view.php', $data, 'View Purchase Order');
 
         if (!$purchaseOrder) {
@@ -273,6 +294,7 @@ class PurchaseOrdersController {
         //print_array($data);
         $data['users'] = $usersModel->getAllUsers();
         $data['deliveryAddresses'] = $commanModel->get_exotic_address();
+        $data['templates'] = $commanModel->get_payment_terms_and_conditions();
         renderTemplate('views/purchase_orders/edit.php', $data, 'Edit Purchase Order');
 
         if (!$purchaseOrder) {
@@ -310,6 +332,7 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Failed to update Purchase Order.']);
             exit;
         }
+        //echo $isUpdated;
         $gst = isset($_POST['gst']) ? $_POST['gst'] : [];
         $quantity = isset($_POST['quantity']) ? $_POST['quantity'] : [];
         $amount = isset($_POST['amount']) ? $_POST['amount'] : [];
@@ -339,6 +362,7 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Failed to update Purchase Order items.']);
             exit;
         }
+        //echo 'Itme:'.$itemsUpdated;
 
         // If everything is successful, return success response
         echo json_encode(['success' => true, 'message' => 'Purchase Order updated successfully.']);
@@ -365,6 +389,7 @@ class PurchaseOrdersController {
     }
     public function updateStatus() {
         global $purchaseOrdersModel;
+        global $commanModel;
         $po_id = $_POST['po_id'] ?? 0;
         $status = $_POST['status'] ?? '';
         // Validate and update status in DB...
@@ -378,6 +403,14 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Failed to update status.']);
             exit;
         }
+        //log status change
+        $logData = [
+            'po_id' => $po_id,
+            'status' => $status,
+            'changed_by' => $_SESSION['user']['id'],
+            'change_date' => date('Y-m-d H:i:s')
+        ];
+        $commanModel->add_po_status_log($logData);
 
         // Return JSON:
         echo json_encode(['success' => true]);
@@ -733,9 +766,10 @@ class PurchaseOrdersController {
                     'gst_reg' => $_POST['gst_reg'] ?? '',
                     'sub_total' => $_POST['sub_total'] ?? 0,
                     'gst_total' => $_POST['gst_total'] ?? 0,
-                    'shipping' => $_POST['shipping'] ?? 0,
+                    'shipping' => empty($_POST['shipping']) ? 0.00 : $_POST['shipping'],
                     'grand_total' => $_POST['grand_total'] ?? 0,
                 ];
+                //print_array($poInvoiceData);
                 $isUpdated = $poInvoiceModel->updateInvoice($id, $poInvoiceData);
                 if (!$isUpdated) {
                     echo json_encode(['success' => false, 'message' => 'Failed to update invoice details in database.']);
@@ -788,6 +822,12 @@ class PurchaseOrdersController {
                 'grand_total' => $_POST['grand_total'] ?? 0,
                 'invoice' => $invoice,
             ];
+            //update purchase order invoice path
+            $isUpdatedInv = $purchaseOrdersModel->updateInvoicePath($poId, 'uploads/invoices/' . $newFileName);
+            if (!$isUpdatedInv) {
+                echo json_encode(['success' => false, 'message' => 'Failed to update purchase order invoice path.']);
+                exit;
+            }
             if(isset($id) && $id){
                 //update
                 $isUpdated = $poInvoiceModel->updateInvoice($id, $poInvoiceData);
@@ -804,7 +844,8 @@ class PurchaseOrdersController {
                 echo json_encode(['success' => false, 'message' => 'Failed to save invoice details to database.']);
                 exit;
             }
-            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully.', 'invoice_path' => 'uploads/invoices/' . $newFileName]);
+            
+            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully', 'invoice_path' => 'uploads/invoices/' . $newFileName . ' po:' . $isUpdated]);
         } else {
             echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
         }
