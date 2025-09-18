@@ -2,7 +2,8 @@
 // echo "<pre>";
 // print_r($purchaseOrder);
 ?>
-  <div class="flex justify-between items-center mt-8">
+<div class="container mx-auto p-6 bg-white rounded-lg shadow-md">
+  <div class="flex justify-between items-center">
     <h2 class="po-title">Purchase Order: <?= htmlspecialchars($purchaseOrder['po_number'] ?? '') ?></h2>
     <a href="?page=purchase_orders&action=edit&po_id=<?= htmlspecialchars($purchaseOrder['id'] ?? '') ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Edit</button></a>
   </div>
@@ -136,7 +137,7 @@
 
   <!-- Action Buttons -->
   <div class="mt-8 flex justify-end space-x-4">
-    <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
+    <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button> -->
     <a href="<?= base_url('?page=purchase_orders&action=list') ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button></a>
   </div>
 
@@ -343,3 +344,4 @@
     <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Save</button> -->
     <a href="<?php echo isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : base_url('?page=purchase_orders&action=list'); ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Back</button></a>
   </div>
+</div>
