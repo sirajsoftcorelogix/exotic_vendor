@@ -14,13 +14,8 @@
                 <input readonly type="date" id="delivery_due_date" value="<?php echo $data['purchaseOrder']['expected_delivery_date'] ? date('Y-m-d', strtotime($data['purchaseOrder']['expected_delivery_date'])) : ''; ?>" name="delivery_due_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
             </div>
             <div class="flex items-center">
-                <label for="employee-name" class="block text-gray-700 form-label">User Name</label>
-                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
-                    <option value="">Select User</option>
-                    <?php foreach ($users as $id => $name): ?>
-                        <option value="<?= $id ?>" <?php if ($data['purchaseOrder']['user_id'] == $id) echo 'selected'; ?>><?= htmlspecialchars($name) ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <label for="po_date" class="block text-gray-700 form-label">Order Date :</label>
+                <input readonly type="date" id="po_date" name="po_date" value="<?php echo date('Y-m-d', strtotime($data['purchaseOrder']['po_date'])); ?>" class="mt-1 block w-full md:w-[300px] border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm form-input">
             </div>
         </div>
         <!-- Right Column -->
@@ -36,9 +31,15 @@
                     <?php endforeach; ?>
                 </select>
             </div>
+            
             <div class="flex items-center">
-                <label for="po_date" class="block text-gray-700 form-label">Order Date :</label>
-                <input readonly type="date" id="po_date" name="po_date" value="<?php echo date('Y-m-d', strtotime($data['purchaseOrder']['po_date'])); ?>" class="mt-1 block w-full md:w-[300px] border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm form-input">
+                <label for="employee-name" class="block text-gray-700 form-label">User Name</label>
+                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
+                    <option value="">Select User</option>
+                    <?php foreach ($users as $id => $name): ?>
+                        <option value="<?= $id ?>" <?php if ($data['purchaseOrder']['user_id'] == $id) echo 'selected'; ?>><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="flex items-center">
                 <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address :</label>
@@ -149,7 +150,7 @@
     <!-- Action Buttons -->
     <div class="mt-8 flex justify-end space-x-4">
         <button type="submit" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md">Save Changes</button>
-        <a href="<?php echo base_url('?page=purchase_orders&action=list'); ?>" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md">Cancel</a>
+        <a href="<?php echo base_url('?page=purchase_orders&action=list'); ?>" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md">Back</a>
     </div>
     </form>
 </div>
@@ -279,7 +280,8 @@
             if (data.success) {
                 alert("Purchase Order created successfully!");
                 submitBtn.textContent = originalText;
-                //window.location.href = "<?php //echo base_url('?page=purchase_orders&acton=list'); ?>"; // Redirect to the list page
+                submitBtn.disabled = false;
+                //window.location.href = "<?php echo base_url('?page=purchase_orders&action=list'); ?>"; // Redirect to the list page
             } else {
                 alert("Error: " + data.message);
                 submitBtn.disabled = false;
