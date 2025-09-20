@@ -183,6 +183,9 @@ switch ($page) {
             case 'get_po':
                 $controller->getPO();                
                 break;
+            case 'preview_pdf':
+                $controller->previewPDF();
+                break;
             default:
                 $controller->index();
                 break;

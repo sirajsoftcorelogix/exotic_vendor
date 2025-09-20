@@ -69,7 +69,7 @@
                 <?php foreach ($data as $index => $item): ?>
             <tr class="bg-white">
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
-                <td class="p-4"><input type="hidden" name="title[]" value="<?= $item['title'] ?>" ><?php echo $item['title']; ?></td>
+                <td class="p-4"><input type="text" class="w-[180px] h-[25px] text-center border rounded-md focus:ring-0 form-input" name="title[]" value="<?= $item['title'] ?>" ><?php //echo $item['title']; ?></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
                 <td class="p-4"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
                 <td class="p-4"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
@@ -93,7 +93,7 @@
                     </div>
                 </td>
                 <td class="p-4 rowTotal"></td>
-                <td class="p-2 align-top text-right">
+                <td class="">
                         <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"> <span class="text-lg"><i class="fa fa-trash-alt"></i></span> </button>
                 </td>
                 <!-- <td class="p-4 text-right rounded-r-lg"><button>
@@ -119,10 +119,10 @@
                         <span>Subtotal :</span>
                         <span id="subtotal_view"></span>
                     </div>
-                    <div class="flex justify-between subtotal-text">
+                    <!-- <div class="flex justify-between subtotal-text">
                         <span>Shipping :</span> 
                         <input type="text" name="shipping_cost" id="shipping_cost" class="w-[100px] h-[25px] text-right border rounded-md focus:ring-0 form-input" value="0" oninput="calculateTotals()" required>
-                    </div>
+                    </div> -->
                     <div class="flex justify-between subtotal-text">
                         <span>GST :</span>
                         <span id="total_gst_view"></span>
@@ -163,7 +163,7 @@
     <!-- Action Buttons -->
     <div class="mt-8 flex justify-end space-x-4">
         <button type="submit" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Create</button>
-        <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
+        <button type="button" id="previewButton" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
         <button type="button" class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button>
     </div>
     </form>
@@ -229,7 +229,44 @@
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
+<!-- Preview PDF Popup -->
+<div id="previewPdfModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display:none;">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-4xl p-6 relative">
+        <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closePreviewPdf">&times;</button>
+        <h2 class="text-xl font-bold mb-4">Purchase Order Preview</h2>
+        <iframe id="previewPdfFrame" src="" style="width:100%;height:70vh;border:none;"></iframe>
+    </div>
+</div>
 <script>
+// Preview button handler
+document.querySelector('#previewButton').addEventListener('click', function() {
+    // Collect form data
+    const form = document.getElementById('create_po');
+    const formData = new FormData(form);
+
+    // Send data to backend to generate PDF preview (without saving)
+    fetch('<?php echo base_url("?page=purchase_orders&action=preview_pdf"); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.pdf_url) {
+            document.getElementById('previewPdfFrame').src = data.pdf_url + '?t=' + Date.now();
+            document.getElementById('previewPdfModal').style.display = 'flex';
+        } else {
+            alert('Failed to generate preview.');
+        }
+    })
+    .catch(() => alert('Error generating preview.'));
+});
+
+// Close preview popup
+document.getElementById('closePreviewPdf').onclick = function() {
+    document.getElementById('previewPdfModal').style.display = 'none';
+    document.getElementById('previewPdfFrame').src = '';
+};
+
 // Image popup functionality
 function openImagePopup(imageUrl) {
     popupImage.src = imageUrl;
@@ -282,8 +319,8 @@ function calculateTotals() {
         grandTotal += rowTotal;
     });
 
-    const shipping_cost = parseFloat(document.getElementById("shipping_cost").value) || 0;
-    grandTotal += shipping_cost;
+    // const shipping_cost = parseFloat(document.getElementById("shipping_cost").value) || 0;
+    // grandTotal += shipping_cost;
 
     document.getElementById("subtotal").value = subtotal.toFixed(2);
     document.getElementById("total_gst").value = totalGST.toFixed(2);
@@ -329,7 +366,7 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     .then(data => {
         if (data.success) {
             alert("Purchase Order created successfully!");
-            window.location.href = "<?php echo base_url('?page=purchase_orders&action=list'); ?>"; // Redirect to the list page
+            window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&viewpo=true'); ?>"; // Redirect to the list page
         } else {
             alert("Error: " + data.message);
             // Re-enable the button and restore text
@@ -388,6 +425,7 @@ function fetchOrderItems(query) {
                                 data-title="${item.title.replace(/"/g, '&quot;')}"
                                 data-hsn="${item.item_code.replace(/"/g, '&quot;')}"
                                 data-image="${item.image.replace(/"/g, '&quot;')}"
+                                data-gst="${item.gst || 18}"
                                 >+</button>
                         </td>
                     `;
@@ -413,6 +451,7 @@ function addSelectOrderListeners() {
             const image = this.getAttribute('data-image');
             const poTable = document.querySelector('#poTable tbody');
             const rowCount = poTable.querySelectorAll('tr').length + 1;
+            const gst = this.getAttribute('data-gst') || 18; // Default GST
 
             // Prevent duplicate items
             let exists = false;
@@ -428,10 +467,10 @@ function addSelectOrderListeners() {
             tr.className = 'bg-white';
             tr.innerHTML = `
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
-                <td class="p-4"><input type="hidden" name="title[]" value="${title}">${title}</td>
+                <td class="p-4"><input type="text" class="w-[180px] h-[25px] text-center border rounded-md focus:ring-0 form-input" name="title[]" value="${title}"></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
                 <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" style="width:40px;height:40px;"></td>
-                <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="18" oninput="calculateTotals()" required></td>
+                <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${gst}" oninput="calculateTotals()" required></td>
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
                         <input type="number" name="quantity[]" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="1" oninput="calculateTotals()" required>
@@ -446,7 +485,7 @@ function addSelectOrderListeners() {
                     </div>
                 </td>
                 <td class="p-4 rowTotal"></td>
-                <td class="p-2 align-top text-right">
+                <td class="">
                     <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button>
                 </td>
             `;

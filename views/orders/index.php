@@ -285,11 +285,11 @@
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
                 <a href="<?php echo base_url('?page=orders&action=list&status=no_po'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'no_po') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">No PO</span>
+                    <span class="px-1 text-sm">Pending</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
                  <a href="<?php echo base_url('?page=orders&action=list&status=po_ready'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'po_ready') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">PO Ready</span>
+                    <span class="px-1 text-sm">Processed</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
                 <!--<a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
@@ -325,7 +325,7 @@
                     <th class="px-6 py-3">Order Date</th>                   
                     <th class="px-6 py-3">Item Code</th>
                     <!--<th class="px-6 py-3">Vendor Name</th> -->
-                    <th class="px-12 py-3">Item</th>
+                    <!-- <th class="px-12 py-3">Item</th> -->
                     <th class="px-6 py-3">Image</th>
                     <!-- <th class="px-6 py-3">Status</th> -->
                     <th class="px-6 py-3">PO Number</th>
@@ -368,10 +368,10 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.0462 8.20171C10.6471 9.47037 9.33805 11.0991 7.90051 12.3041C7.56557 12.5845 7.25392 12.7388 6.81226 12.7978C6.09737 12.8939 5.0914 12.9659 4.3672 12.9883C3.50483 13.0154 2.73561 12.5712 2.75424 11.6359C2.7686 10.909 2.86756 9.93098 2.95139 9.19835C2.99176 8.84595 3.04959 8.53545 3.24558 8.2299L11.1583 0.415632C11.9224 -0.178697 12.8027 -0.120026 13.5276 0.491828C14.0919 0.968052 15.0964 1.93688 15.5629 2.49426C16.1481 3.19335 16.1419 4.07837 15.5629 4.77785C14.5837 5.96041 13.1027 7.05649 12.0459 8.20209L12.0462 8.20171ZM12.257 1.03396C12.1433 1.04272 11.9911 1.11244 11.8968 1.17873C11.5141 1.44732 11.1361 2.00355 10.7523 2.30224L13.6763 5.13787C14.0908 4.59726 15.3762 3.97665 14.7692 3.19678C14.239 2.51559 13.299 1.87897 12.7316 1.19664C12.6109 1.0972 12.4157 1.02139 12.2566 1.03396H12.257ZM3.89255 11.8744C3.93796 11.9216 4.0998 11.9635 4.17121 11.962C4.89619 11.9464 5.93204 11.858 6.65663 11.7692C6.78664 11.7532 6.92675 11.7174 7.03891 11.6492L12.869 5.94022L9.99472 3.04591L4.13628 8.79985C4.00626 8.99529 3.98492 9.58505 3.96008 9.84602C3.91506 10.323 3.85607 10.8968 3.84171 11.368C3.83821 11.4842 3.81997 11.7989 3.89216 11.8744H3.89255Z" fill="#D06706"/><path d="M2.04958 2.33194C3.16732 2.2085 4.46941 2.40014 5.60695 2.32394C6.18289 2.447 6.14176 3.26687 5.56736 3.34687C4.59787 3.48174 3.31946 3.26344 2.30922 3.34878C1.6281 3.4063 1.1127 3.92444 1.04788 4.58696V13.695C1.10687 14.4322 1.64634 14.9138 2.38684 14.9713H11.5488C13.652 14.8079 12.6526 11.8801 12.8886 10.5337C13.0523 9.99611 13.7703 9.99839 13.9326 10.5337C13.8247 12.6089 14.6599 15.6335 11.7045 16.0003H2.2316C1.06845 15.9165 0.137389 15.0174 0 13.8859L0.00620967 4.36409C0.140494 3.35906 1.00791 2.447 2.04997 2.33194H2.04958Z" fill="#D06706"/></svg>
                         </a>
                     </td> -->
-                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td>
+                    <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td> -->
                     <td class="px-6 py-4">
                         <img 
-                            class="h-12 w-12 rounded-md object-cover cursor-pointer" 
+                            class="h-16 w-16 rounded-md object-cover cursor-pointer" 
                             src="<?= $order['image'] ?>" 
                             alt="" 
                             onclick="openImagePopup('<?= $order['image'] ?>')"
@@ -659,8 +659,8 @@ function closeImagePopup(e) {
         // });
 
         // Date validation and clear functionality
-        const fromDateInput = document.getElementById('orders-from');
-        const toDateInput = document.getElementById('orders-till');
+        const fromDateInput = document.getElementById('order-from');
+        const toDateInput = document.getElementById('order-till');
         const clearButton = document.getElementById('clear-button');
 
         fromDateInput.addEventListener('input', function() {

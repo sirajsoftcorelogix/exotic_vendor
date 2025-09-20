@@ -77,7 +77,7 @@
             <?php foreach($items as $item): ?>
                 <tr class="bg-white shadow-sm rounded-lg">
                     <td class="p-2 align-top"><input type="hidden" name="item_ids[]" value="<?php echo $item['id']; ?>"><?php echo $item['id']; ?></td>
-                    <td class="p-2 align-top"> <?php echo htmlspecialchars($item['title'] ?? ''); ?></td>
+                    <td class="p-2 align-top"><input type="text" name="title[]" value="<?php echo htmlspecialchars($item['title'] ?? ''); ?>" class="form-input w-full" /></td>
                     <td class="p-2 align-top"><?php echo htmlspecialchars($item['hsn'] ?? ''); ?></td>
                     <td class="p-2 align-top">
                         <?php if (!empty($item['image'])): ?>
@@ -114,10 +114,10 @@
                 <span class="font-bold">Total GST:</span>
                 <span class="total-gst"><?php echo number_format(($data['purchaseOrder']['total_gst'] ?? 0), 2); ?></span>
             </div>
-            <div class="flex justify-between">
+            <!-- <div class="flex justify-between">
                 <span class="font-bold">Shipping Cost:</span>
-                <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php echo number_format(($data['purchaseOrder']['shipping_cost'] ?? 0), 2); ?>" class="form-input w-[80px] " /></span>
-            </div>
+                <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php //echo number_format(($data['purchaseOrder']['shipping_cost'] ?? 0), 2); ?>" class="form-input w-[80px] " /></span>
+            </div> -->
             <div class="flex justify-between">
                 <span class="font-bold">Grand Total:</span>
                 <span class="grand-total"><?php echo number_format(($data['purchaseOrder']['total_cost'] ?? 0), 2); ?></span>
@@ -238,7 +238,7 @@
                 totalGst += (amount * gst) / 100;
             });
 
-            const grandTotal = subtotal + totalGst + (parseFloat(shippingCostElement.value) || 0);
+            const grandTotal = subtotal + totalGst; //+ (parseFloat(shippingCostElement.value) || 0);
 
             subtotalElement.textContent = `${subtotal.toFixed(2)}`;
             totalGstElement.textContent = `${totalGst.toFixed(2)}`;
@@ -250,7 +250,7 @@
         }
 
         itemTable.addEventListener('input', updateTotals);
-        shippingCostElement.addEventListener('input', updateTotals);
+        //shippingCostElement.addEventListener('input', updateTotals);
             // Remove item row and update totals
         /*itemTable.addEventListener('click', function(e) {
             if (e.target.classList.contains('remove-row')) {

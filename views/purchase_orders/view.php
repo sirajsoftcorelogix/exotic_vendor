@@ -140,6 +140,68 @@
     <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button> -->
     <a href="<?= base_url('?page=purchase_orders&action=list') ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button></a>
   </div>
+  <hr class="my-8 border-gray-200"> 
+  <!-- Order Tracking Timeline -->
+  <div class="w-full">
+    <h2 class="timeline-title mb-8">Order Tracking:</h2>
+    <div class="grid grid-cols-8">
+      <!-- Step 1: Approved -->
+      <div class="timeline-step completed">
+        <div class="flex flex-col items-center text-center">
+          <div class="relative w-full h-5 flex justify-center items-center">
+            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+          </div>
+          <p class="timeline-text mt-2">Created</p>
+          <p class="timeline-date"><?php echo date('d M, Y', strtotime($purchaseOrder['created_at'])); ?></p>
+        </div>
+      </div>
+      <!-- status log -->
+      <?php if (!empty($status_log)) {
+        foreach ($status_log as $log) { ?>
+          <div class="timeline-step completed">
+            <div class="flex flex-col items-center text-center">
+              <div class="relative w-full h-5 flex justify-center items-center">
+                <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+              </div>
+              <p class="timeline-text mt-2"><?php echo ucfirst($log['status']); ?></p>
+              <p class="timeline-date"><?php echo date('d M, Y', strtotime($log['change_date'])); ?></p>
+            </div>
+          </div>
+        <?php }
+      } ?>
+      <!-- Step 2: Sent to the Vendor -->
+      <!-- <div class="timeline-step completed">
+        <div class="flex flex-col items-center text-center">
+          <div class="relative w-full h-5 flex justify-center items-center">
+            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+          </div>
+          <p class="timeline-text mt-2"><?php //echo ucfirst($purchaseOrder['status']); ?></p>
+          <p class="timeline-date"><?php //echo date('d M, Y', strtotime($purchaseOrder['updated_at'])); ?></p>
+        </div>
+      </div> -->
+      <!-- Step 3: In Production -->
+      <!-- <div class="timeline-step completed">
+        <div class="flex flex-col items-center text-center">
+          <div class="relative w-full h-5 flex justify-center items-center">
+            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+          </div>
+          <p class="timeline-text mt-2">In Production</p>
+          <p class="timeline-date">3 May, 2025</p>
+        </div>
+      </div> -->
+      <!-- Step 4: Shipped -->
+      <!-- <div class="timeline-step">
+        <div class="flex flex-col items-center text-center">
+          <div class="relative w-full h-5 flex justify-center items-center">
+            <div class="w-[12px] h-[12px] rounded-full bg-[rgba(186,186,186,1)] z-10"></div>
+          </div>
+          <p class="timeline-text mt-2 text-gray-400">Shipped</p>
+          <p class="timeline-date text-gray-400">6 May, 2025</p>
+        </div>
+      </div> -->
+      
+    </div>
+  </div>
 
   <!-- invoice section -->
   <hr class="my-8 border-gray-200">
@@ -279,67 +341,7 @@
   </div>
   <hr class="my-8 border-gray-200">
 
-  <!-- Order Tracking Timeline -->
-  <div class="w-full">
-    <h2 class="timeline-title mb-8">Order Tracking:</h2>
-    <div class="grid grid-cols-8">
-      <!-- Step 1: Approved -->
-      <div class="timeline-step completed">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2">Created</p>
-          <p class="timeline-date"><?php echo date('d M, Y', strtotime($purchaseOrder['created_at'])); ?></p>
-        </div>
-      </div>
-      <!-- status log -->
-      <?php if (!empty($status_log)) {
-        foreach ($status_log as $log) { ?>
-          <div class="timeline-step completed">
-            <div class="flex flex-col items-center text-center">
-              <div class="relative w-full h-5 flex justify-center items-center">
-                <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
-              </div>
-              <p class="timeline-text mt-2"><?php echo ucfirst($log['status']); ?></p>
-              <p class="timeline-date"><?php echo date('d M, Y', strtotime($log['change_date'])); ?></p>
-            </div>
-          </div>
-        <?php }
-      } ?>
-      <!-- Step 2: Sent to the Vendor -->
-      <!-- <div class="timeline-step completed">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2"><?php //echo ucfirst($purchaseOrder['status']); ?></p>
-          <p class="timeline-date"><?php //echo date('d M, Y', strtotime($purchaseOrder['updated_at'])); ?></p>
-        </div>
-      </div> -->
-      <!-- Step 3: In Production -->
-      <!-- <div class="timeline-step completed">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2">In Production</p>
-          <p class="timeline-date">3 May, 2025</p>
-        </div>
-      </div> -->
-      <!-- Step 4: Shipped -->
-      <!-- <div class="timeline-step">
-        <div class="flex flex-col items-center text-center">
-          <div class="relative w-full h-5 flex justify-center items-center">
-            <div class="w-[12px] h-[12px] rounded-full bg-[rgba(186,186,186,1)] z-10"></div>
-          </div>
-          <p class="timeline-text mt-2 text-gray-400">Shipped</p>
-          <p class="timeline-date text-gray-400">6 May, 2025</p>
-        </div>
-      </div> -->
-      
-    </div>
-  </div>
+  
   <div class="mt-8 flex justify-end space-x-4">
     <!-- <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Save</button> -->
     <a href="<?php echo isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : base_url('?page=purchase_orders&action=list'); ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Back</button></a>
