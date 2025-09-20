@@ -75,6 +75,7 @@ class OrdersController {
         }
         exit;
     }
+	
     public function importOrders() {
         global $ordersModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
@@ -83,14 +84,13 @@ class OrdersController {
         }
          
         //log create
-        $log_data = [
-            'start_time' => date('Y-m-d H:i:s')            
-        ];
+        $log_data = ['start_time' => date('Y-m-d H:i:s')];
         $log_id = 0;
+		
         if($logs = $ordersModel->orderImportLog($log_data)){
             $log_id = $logs['insert_id'];
         }        // Set your date range (example: last 7 days)
-        
+
         $from_date = strtotime('-1 days');
         //echo "<br>";
         $to_date = time();
@@ -107,7 +107,7 @@ class OrdersController {
             'x-adminapitest: 1',
             'Content-Type: application/x-www-form-urlencoded'
         ];
-        
+
         // Initialize cURL
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
