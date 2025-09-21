@@ -162,14 +162,14 @@ class Order{
 
         return ['success' => true, 'insert_id' => $insertId];
     }
-    public function updateOrderStatus($id, $status, $po_number, $po_id) {
+    public function updateOrderStatus($id, $status, $po_number, $po_id = null, $deliveryDueDate = null) {
         // Validate inputs
         if (empty($id) || empty($status)) {
             return ['success' => false, 'message' => 'ID or status is missing.'];
         }
 
         // Prepare SQL statement
-        $sql = "UPDATE vp_orders SET status = ?, po_number = ?, po_id = ? WHERE id = ?";
+        $sql = "UPDATE vp_orders SET status = ?, po_number = ?, po_id = ?, delivery_due_date = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
 
         if (!$stmt) {
@@ -177,7 +177,7 @@ class Order{
         }
 
         // Bind parameters
-        $stmt->bind_param('ssii', $status, $po_number, $po_id, $id);
+        $stmt->bind_param('ssisi', $status, $po_number, $po_id, $deliveryDueDate, $id);
 
         // Execute and check result
         if (!$stmt->execute()) {

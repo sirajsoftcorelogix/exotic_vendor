@@ -329,7 +329,7 @@
                     <th class="px-6 py-3">Image</th>
                     <!-- <th class="px-6 py-3">Status</th> -->
                     <th class="px-6 py-3">PO Number</th>
-                    <!-- <th class="px-6 py-3">Receipt Due</th> -->
+                    <th class="px-6 py-3">PO Date</th>
                     <!-- <th class="px-6 py-3">Staff</th> -->
                     <th class="px-6 py-3">Amount</th>
                     <th class="px-6 py-3">Unit</th>
@@ -388,8 +388,17 @@
 
                         </a>
                     </td>
-                    <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">20/06/25</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?php 
+                    if ($order['delivery_due_date']) {
+                        $days = ceil((strtotime($order['delivery_due_date']) - time()) / (60 * 60 * 24));
+                        echo date('d/m/Y', strtotime($order['delivery_due_date'])) . ' <br>' . $days . ' Days Remaining';
+                    } else {
+                        echo '-';
+                    }
+                    ?>
+                    
+                    </td>
+                    <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <?= isset($order['total_price']) ? '₹' . $order['total_price'] : '-' ?>
                     </td>

@@ -176,7 +176,7 @@ class PurchaseOrdersController {
         //Update order status        
         $statusupdate = [];
         foreach($orderid as $index=>$id){
-           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing', $po_number, $poId);
+           $statusupdate[] = $ordersModel->updateOrderStatus($id, 'processing', $po_number, $poId, $deliveryDueDate);
         }
         
         
@@ -568,7 +568,9 @@ class PurchaseOrdersController {
             $vendorInfo = '';
             $vendor = $vendorsModel->getVendorById($purchaseOrder['vendor_id']);
             if($vendor && !empty($vendor['address'])){
-                $vendorInfo = htmlspecialchars($vendor['address']);
+                
+                $vendorInfo = '<span style="font-size:14px; font-weight:bold;">' . htmlspecialchars($vendor['vendor_name'] ?? '') . '</span><br>';
+                $vendorInfo .= htmlspecialchars($vendor['address']);
                 $vendorInfo .= '<br><span style="font-size:12px;">';
                 if(!empty($vendor['phone'])){
                     $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['phone']);
@@ -879,6 +881,7 @@ class PurchaseOrdersController {
     }
     
     public function previewPDF() {
+        global $vendorsModel;
         // Collect POST data (from form, not DB)
         $data = $_POST;
 
@@ -891,8 +894,35 @@ class PurchaseOrdersController {
         $gst = $data['total_gst'] ?? 0;
         $grand_total = $data['grand_total'] ?? 0;
         $terms = $data['terms_and_conditions'] ?? '';
-        $vendor_info = $data['vendor_info'] ?? '';
+        $vendor_id = $data['vendor'] ?? '';
 
+        // Fetch vendor info
+        $vendorInfo = '';
+        $vendor = $vendorsModel->getVendorById($vendor_id);
+        if($vendor && !empty($vendor['address'])){
+            
+            $vendorInfo = '<span style="font-size:14px; font-weight:bold;">' . htmlspecialchars($vendor['vendor_name'] ?? '') . '</span><br>';
+            $vendorInfo .= htmlspecialchars($vendor['address']);
+            $vendorInfo .= '<br><span style="font-size:12px;">';
+            if(!empty($vendor['phone'])){
+                $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['phone']);
+            }
+            if(!empty($vendor['email'])){
+                $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['email']);
+            }
+            if(!empty($vendor['website'])){
+                $vendorInfo .= '<br>Website: '.htmlspecialchars($vendor['website']);
+            }
+            if(!empty($vendor['contact_person'])){
+                $vendorInfo .= '<br>Contact Person: '.htmlspecialchars($vendor['contact_person']);
+            }
+            if(!empty($vendor['gst_number'])){
+                $vendorInfo .= '<br>GST No.: '.htmlspecialchars($vendor['gst_number']);
+            }
+            $vendorInfo .= '</span>';
+        }else{
+            $vendorInfo = 'N/A';
+        }
         // Build tbody from items
         $tbody = '';
         if (!empty($data['title']) && is_array($data['title'])) {
@@ -900,7 +930,7 @@ class PurchaseOrdersController {
                 $tbody .= '<tr>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . ($i + 1) . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px;">' . htmlspecialchars($title) . '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['hsn'][$i] ?? '') . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;"><img src="' . htmlspecialchars($data['image'][$i] ?? '') . '" style="width:auto; max-height:150px;"></td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['quantity'][$i] ?? '') . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($data['rate'][$i] ?? 0, 2) . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['gst'][$i] ?? '') . '%</td>';
@@ -913,7 +943,7 @@ class PurchaseOrdersController {
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         $html = str_replace(
             ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}'],
-            [$po_number, $date, $delivery_due, $tbody, $subtotal, $shipping, $gst, $grand_total, $terms, $vendor_info],
+            [$po_number, $date, $delivery_due, $tbody, $subtotal, $shipping, $gst, $grand_total, $terms, $vendorInfo],
             $temphtml
         );
 
