@@ -621,6 +621,7 @@ function closeImagePopup(e) {
             .then(r => r.json());
     }
     function checkPoItmes() {
+        
         const checkedRows = document.querySelectorAll('input[name="poitem[]"]:checked');
         if (checkedRows.length === 0) {
             alert("Please select at least one order to create a Purchase Order.");
@@ -684,4 +685,79 @@ function closeImagePopup(e) {
         popupImage.src = imageUrl;
         document.getElementById('imagePopup').classList.remove('hidden');
     }
+    
+    // Key for localStorage
+    const STORAGE_KEY = 'selected_po_orders';
+
+    // Save checked IDs to localStorage (merge with previous selections)
+    function saveCheckedOrders() {
+        // Get all previously checked IDs
+        let checked = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        // Get all checkboxes on current page
+        const allCbs = Array.from(document.querySelectorAll('input[name="poitem[]"]'));
+        // Get checked on current page
+        const checkedOnPage = allCbs.filter(cb => cb.checked).map(cb => cb.value);
+        // Get unchecked on current page
+        const uncheckedOnPage = allCbs.filter(cb => !cb.checked).map(cb => cb.value);
+
+        // Remove unchecked from previous selection
+        checked = checked.filter(id => !uncheckedOnPage.includes(id));
+        // Add newly checked
+        checkedOnPage.forEach(id => {
+            if (!checked.includes(id)) checked.push(id);
+        });
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(checked));
+    }
+
+    // Restore checked IDs from localStorage
+    function restoreCheckedOrders() {
+        const checked = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        document.querySelectorAll('input[name="poitem[]"]').forEach(cb => {
+            cb.checked = checked.includes(cb.value);
+        });
+    }
+
+    // Listen for checkbox changes
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.name === 'poitem[]') {
+            saveCheckedOrders();
+        }
+    });
+
+    // Restore on page load
+    document.addEventListener('DOMContentLoaded', restoreCheckedOrders);
+
+    // Optional: Clear storage on successful PO creation
+    // document.querySelector('form[action*="purchase_orders&action=create"]').addEventListener('submit', function() {
+    //     localStorage.removeItem(STORAGE_KEY);
+    // });
+
+    // On form submit, add hidden inputs for all selected IDs
+    document.querySelector('form[action*="purchase_orders&action=create"]').addEventListener('submit', function(e) {
+        // Remove previous hidden inputs (if any)
+        document.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+
+        // Get all selected IDs from localStorage
+        const checked = JSON.parse(localStorage.getItem('selected_po_orders') || '[]');
+
+        // Get all visible checked checkboxes on the current page
+        const visibleChecked = Array.from(document.querySelectorAll('input[name="poitem[]"]:checked')).map(cb => cb.value);
+
+        // For each ID in localStorage, add a hidden input ONLY if it's not already checked and visible
+        checked.forEach(id => {
+            if (!visibleChecked.includes(id)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'poitem[]';
+                input.value = id;
+                input.className = 'poitem_hidden';
+                this.appendChild(input);
+            }
+        });
+
+        // Optionally clear localStorage after submit
+        localStorage.removeItem('selected_po_orders');
+    });
+    
 </script>
