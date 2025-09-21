@@ -371,7 +371,7 @@
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td> -->
                     <td class="px-6 py-1">
                         <img 
-                            class="h-20 w-20 rounded-md object-cover cursor-pointer" 
+                            class="h-20 rounded-md object-cover cursor-pointer" 
                             src="<?= $order['image'] ?>" 
                             alt="" 
                             onclick="openImagePopup('<?= $order['image'] ?>')"
