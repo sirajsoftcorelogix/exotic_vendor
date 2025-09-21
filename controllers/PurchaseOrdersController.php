@@ -540,6 +540,7 @@ class PurchaseOrdersController {
     function downloadPurchaseOrder($generateOnly = 0) {    
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
+        global $vendorsModel;
         
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
         if($generateOnly){
@@ -563,6 +564,31 @@ class PurchaseOrdersController {
                 echo json_encode(['success' => false, 'message' => 'Failed to fetch Purchase Order items.']);
                 exit;
             }
+            //vendor info
+            $vendorInfo = '';
+            $vendor = $vendorsModel->getVendorById($purchaseOrder['vendor_id']);
+            if($vendor && !empty($vendor['address'])){
+                $vendorInfo = htmlspecialchars($vendor['address']);
+                $vendorInfo .= '<br><span style="font-size:12px;">';
+                if(!empty($vendor['phone'])){
+                    $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['phone']);
+                }
+                if(!empty($vendor['email'])){
+                    $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['email']);
+                }
+                if(!empty($vendor['website'])){
+                    $vendorInfo .= '<br>Website: '.htmlspecialchars($vendor['website']);
+                }
+                if(!empty($vendor['contact_person'])){
+                    $vendorInfo .= '<br>Contact Person: '.htmlspecialchars($vendor['contact_person']);
+                }
+                if(!empty($vendor['gst_number'])){
+                    $vendorInfo .= '<br>GST No.: '.htmlspecialchars($vendor['gst_number']);
+                }
+                $vendorInfo .= '</span>';
+            }else{
+                $vendorInfo = 'N/A';
+            }
             $fontMap = [
                 'hindi' => 'noto_devanagari',
                 'tamil' => 'noto_tamil',
@@ -583,13 +609,13 @@ class PurchaseOrdersController {
 
                 $tbody .= '<tr>';
                 $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
-                $tbody .= '<td style="width:30% !important; border:1px solid #000; padding:6px;">';
+                $tbody .= '<td style="width:37% !important; border:1px solid #000; padding:6px;">';
                 //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
                 $tbody .= '<p>' . htmlspecialchars($item['title']) . '</p>';
-                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['hsn']) . '</td>';
-                $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+                $tbody .= '<td style="width:13% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
+                $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
-                $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
+                $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
                 $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
                 $tbody .= '</tr>';
                 
@@ -627,8 +653,8 @@ class PurchaseOrdersController {
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         //Define HTML content
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}'],
-            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost'], $purchaseOrder['terms_and_conditions']],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}'],
+            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost'], $purchaseOrder['terms_and_conditions'], $vendorInfo],
             $temphtml
         );
         // $html = '
@@ -711,7 +737,7 @@ class PurchaseOrdersController {
         $message .= "\n Kindly acknowledge receipt of this PO and share an estimated delivery schedule.\n\nThank you for your continued support.";
 
         $message .= "\n\n\nBest regards,\nExotic India Art Pvt. Ltd.";
-        $headers = "From: no-reply@exoticindiaart.com";
+        $headers = "From: onboarding@exoticindia.com";
 
         // Send the email
         $mail = new PHPMailer(true);
@@ -726,7 +752,7 @@ class PurchaseOrdersController {
             $mail->Port       = smtpPort;
 
             //Recipients
-            $mail->setFrom('no-reply@exoticindiaart.com', 'Exotic India Art Pvt. Ltd.');
+            $mail->setFrom('onboarding@exoticindia.com', 'Exotic India Art Pvt. Ltd.');
             $mail->addAddress($to, $vendor['contact_name']);
             // Attachments
             foreach ($attachments as $filePath) {
@@ -852,6 +878,91 @@ class PurchaseOrdersController {
         }
     }
     
+    public function previewPDF() {
+        // Collect POST data (from form, not DB)
+        $data = $_POST;
+
+        // Prepare variables for template
+        $po_number = 'PREVIEW PO'; // or generate a temp number
+        $date = date('d M Y');
+        $delivery_due = isset($data['delivery_due_date']) ? date('d M Y', strtotime($data['delivery_due_date'])) : '';
+        $subtotal = $data['subtotal'] ?? 0;
+        $shipping = $data['shipping_cost'] ?? 0;
+        $gst = $data['total_gst'] ?? 0;
+        $grand_total = $data['grand_total'] ?? 0;
+        $terms = $data['terms_and_conditions'] ?? '';
+        $vendor_info = $data['vendor_info'] ?? '';
+
+        // Build tbody from items
+        $tbody = '';
+        if (!empty($data['title']) && is_array($data['title'])) {
+            foreach ($data['title'] as $i => $title) {
+                $tbody .= '<tr>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . ($i + 1) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px;">' . htmlspecialchars($title) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['hsn'][$i] ?? '') . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['quantity'][$i] ?? '') . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($data['rate'][$i] ?? 0, 2) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['gst'][$i] ?? '') . '%</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($data['amount'][$i] ?? 0, 2) . '</td>';
+                $tbody .= '</tr>';
+            }
+        }
+
+        // Load template
+        $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
+        $html = str_replace(
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}'],
+            [$po_number, $date, $delivery_due, $tbody, $subtotal, $shipping, $gst, $grand_total, $terms, $vendor_info],
+            $temphtml
+        );
+
+        // Generate PDF (using mPDF or TCPDF)
+        require_once('vendor/autoload.php');
+        //$mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'default_font_size' => 12]);
+        $mpdf = new \Mpdf\Mpdf([
+            'mode' => 'utf-8',
+            'default_font_size' => 12,
+            'autoScriptToLang' => true,
+            'autoLangToFont' => true
+        ]);
+        // Add watermark
+        $mpdf->SetWatermarkText('PREVIEW PO');
+        $mpdf->showWatermarkText = true;
+
+        $mpdf->fontdata['noto_devanagari'] = [
+            'R' => 'NotoSansDevanagari-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+        
+        $mpdf->fontdata['noto_tamil'] = [
+            'R' => 'NotoSansTamil-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+        $mpdf->fontdata['noto_bengali'] = [
+            'R' => 'NotoSansBengali-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+        $mpdf->fontdata['noto_gujarati'] = [
+            'R' => 'NotoSansGujarati-Regular.ttf',
+            'useOTL' => 0xFF,
+        ];
+        $mpdf->WriteHTML($html);
+
+        // Save to temp file
+        $fileName = 'po_preview_' . uniqid() . '.pdf';
+        //$filePath = sys_get_temp_dir() . '/' . $fileName;
+        $mpdf->Output('tmp/'.$fileName, 'F');
+
+        // Return URL to temp file (make sure your web server can serve from /tmp or move to a public temp folder)
+        echo json_encode([
+            'success' => true,
+            'message' => 'PDF preview generated successfully.',
+            'temp_file_path' => 'tmp/' . $fileName,
+            'pdf_url' => 'tmp/' . $fileName
+        ]);
+        exit;
+    }
     public function getPoDetails() {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;

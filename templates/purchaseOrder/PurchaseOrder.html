@@ -4,7 +4,7 @@
         <tr>
             <td style="width:50%; vertical-align:top;">
                 <img src="images/po_logo.png" style="width:150px; height:auto; margin-bottom:5px;">
-                <div style="font-size:12px; color:#666; text-decoration:underline;">www.exoticindiaart.com</div>
+                <!-- <div style="font-size:12px; color:#666; text-decoration:underline;">www.exoticindiaart.com</div> -->
             </td>
             <td style="width:50%; text-align:right; vertical-align:top;">
                 <span style="font-size:26px; font-weight:bold;">Purchase Order</span>
@@ -25,7 +25,7 @@
                     Email: info@exoticindiaart.com<br>
                     Website: www.exoticindiaart.com<br>
                     Contact Person: Mr. Abhinav Sharma<br>
-                    Designation: Sales Manager<br>
+                    <!-- Designation: Sales Manager<br> -->
                     GST No. 07AAACE1234F1Z5
                 </span>
             </td>
@@ -33,18 +33,7 @@
             <td style="width:48%; vertical-align:top;">
                 <span style="font-size:12px; font-weight:bold; text-transform:uppercase;">Vendor</span><br>
                 <span style="font-size:14px; font-weight:bold;">Kalamkari Heritage Arts</span><br>
-                Shop No. 12, Handloom Lane<br>
-                Near Rajiv Nagar, Sri Kalahasti<br>
-                Tirupati District - 517644<br>
-                Andhra Pradesh, India<br>
-                <span style="font-size:12px;">
-                    Phone: +91-98450-12345<br>
-                    Email: sales@kalamkariheritage.in<br>
-                    Website: www.kalamkariheritage.in<br>
-                    Contact Person: Ms. Anitha Reddy<br>
-                    Designation: Artisan Liaison & Sales Manager<br>
-                    GST No. 37AAACB85678K1Z3
-                </span>
+               {{vendor_info}}
             </td>
         </tr>
     </table>
@@ -53,7 +42,7 @@
     <div style="border-top:2px dotted #000; margin-top:20px;"></div>
 
     <!-- Order Info & Delivery Address -->
-    <table style="width:100%; border-collapse:collapse; margin-top:20px; margin-bottom:20px;">
+    <table style="width:100%; border-collapse:collapse; margin-top:10px; margin-bottom:10px;">
         <tr>
             <td style="width:60%; vertical-align:top;">
                 <span style="font-size:11px;">Purchase Order No.: <b>{{po_number}}</b></span><br>
@@ -75,13 +64,13 @@
     <div style="font-size:12px; font-weight:bold; margin-bottom:10px;">Order Details:</div>
     <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
         <thead>
-            <tr>
+            <tr>    
                 <th style="width:5% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">#</th>
-                <th style="width:30% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
-                <th style="width:13% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">HSN</th>
-                <th style="width:10% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Qty</th>
+                <th style="width:37% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
+                <th style="width:13% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
+                <th style="width:8% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Qty</th>
                 <th style="width:13% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:right; font-size:11px;">Unit Price</th>
-                <th style="width:13% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">GST</th>
+                <th style="width:8% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">GST</th>
                 <th style="width:16% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:right; font-size:11px;">Amount</th>
             </tr>
         </thead>
@@ -98,20 +87,20 @@
             <td style="width: 40%; vertical-align:top;">
                 <table>
                     <tr>
-                        <th style="padding:5px 10px; text-align:right; font-size:11px; font-weight:normal;">Subtotal:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:11px;">{{subtotal}}</td>
+                        <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">{{subtotal}}</td>
                     </tr>
                     <tr>
-                        <th style="padding:5px 10px; text-align:right; font-size:11px; font-weight:normal;">Shipping:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:11px;">{{shipping}}</td>
+                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">Shipping:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">{{shipping}}</td>
                     </tr>
                     <tr>
-                        <th style="padding:5px 10px; text-align:right; font-size:11px; font-weight:normal;">GST:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:11px;">{{gst}}</td>
+                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">{{gst}}</td>
                     </tr>
                     <tr>
-                        <th style="padding:5px 10px; text-align:right; background-color:#000 !important; color:#fff; border-top:2px solid #000; font-size:11px;">Grand Total:</th>
-                        <td style="padding:5px 10px; text-align:right; background-color:#000 !important; color:#fff; border-top:2px solid #000; font-size:11px;">{{grand_total}}</td>
+                        <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
+                        <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">{{grand_total}}</td>
                     </tr>
                 </table>
             </td>
