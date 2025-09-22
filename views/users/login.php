@@ -68,7 +68,7 @@ global $domain, $root_path;
     var password = document.getElementById('password').value;
     var errorDiv = document.getElementById('loginError');
     errorDiv.textContent = '';
-    fetch("<?php echo $domain.'/?page=users&action=loginProcess';?>", {
+    fetch('?page=users&action=loginProcess', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'login=' + encodeURIComponent(login) + '&password=' + encodeURIComponent(password)
@@ -77,7 +77,7 @@ global $domain, $root_path;
     .then(data => {
       if (data.success) {
         //alert('Login successful!');
-        window.location.href = "<?php echo $domain; ?>/?page=orders&action=list";
+        window.location.href = "?page=orders&action=list";
       } else {
         //alert('Login failed: ' + data.message);
         errorDiv.textContent = data.message;
