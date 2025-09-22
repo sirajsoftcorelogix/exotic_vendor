@@ -432,8 +432,15 @@ function handleAction(action, poId, el) {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
+                document.getElementById('emailToPo-submit-btn').disabled = false;
                 document.getElementById('po-date-emailToPo').textContent = data.data.po_date;
-                document.getElementById('vendor-emailToPo').textContent = data.data.vendor_email;
+                if (data.data.vendor_email) {
+                    document.getElementById('vendor-emailToPo').textContent = data.data.vendor_email;
+                } else {
+                    document.getElementById('vendor-emailToPo').textContent = 'N/A';                    
+                    document.getElementById('emailToPo-submit-btn').disabled = true;
+                }
+                
                 document.getElementById('vendorToPo').textContent = data.data.vendor_name;
                 document.getElementById('PO-numberToPo').textContent = data.data.po_number;
                 document.getElementById('contactToPo').textContent = data.data.vendor_phone;

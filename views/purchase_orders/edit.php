@@ -77,7 +77,7 @@
             <?php foreach($items as $item): ?>
                 <tr class="bg-white shadow-sm rounded-lg">
                     <td class="p-2 align-top"><input type="hidden" name="item_ids[]" value="<?php echo $item['id']; ?>"><?php echo $item['id']; ?></td>
-                    <td class="p-2 align-top"><input type="text" name="title[]" value="<?php echo htmlspecialchars($item['title'] ?? ''); ?>" class="form-input w-full" /></td>
+                    <td class="p-2 align-top"><textarea name="title[]" class="form-input h-16 w-full"><?php echo htmlspecialchars($item['title'] ?? ''); ?></textarea></td>
                     <td class="p-2 align-top"><?php echo htmlspecialchars($item['hsn'] ?? ''); ?></td>
                     <td class="p-2 align-top">
                         <?php if (!empty($item['image'])): ?>
@@ -93,7 +93,7 @@
                     </td>
                     <td class="p-2 align-top"><input type="text" name="amount[]" value="<?php echo htmlspecialchars($item['amount'] ?? ''); ?>" class="form-input w-[80px] " /></td>
                     <td class="p-2 align-top text-right">
-                        <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button>
+                        <!-- <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button> -->
                     </td>
                 </tr>
             <?php endforeach; ?>

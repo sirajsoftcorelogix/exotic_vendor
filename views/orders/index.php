@@ -181,12 +181,12 @@
                 <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
-                        <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <span class="text-gray-500 pb-2">→</span>
                     <div class="w-1/2">
                         <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Order To</label>
-                        <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
 
@@ -205,7 +205,7 @@
                 <!-- Order Number -->
                 <div>
                     <label for="order-number" class="block text-sm font-medium text-gray-600 mb-1">Order No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Status -->
@@ -222,7 +222,7 @@
                 </div> -->
 
                 <!-- Min/Max Amount -->
-                <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
+                <!-- <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
                         <label for="min-amount" class="block text-sm font-medium text-gray-600 mb-1">Min Amount</label>
                         <input type="number" value="<?= htmlspecialchars($_GET['min_amount'] ?? '') ?>" name="min_amount" id="min-amount" placeholder="Min Amount" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
@@ -231,29 +231,29 @@
                         <label for="max-amount" class="block text-sm font-medium text-gray-600 mb-1">Max Amount</label>
                         <input type="number" value="<?= htmlspecialchars($_GET['max_amount'] ?? '') ?>" name="max_amount" id="max-amount" placeholder="Max Amount" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
-                </div>
+                </div> -->
 
                 <!-- Item Code -->
                 <div>
                     <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 <!-- PO No -->
                 <div>
                     <label for="po-no" class="block text-sm font-medium text-gray-600 mb-1">PO No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Item Name -->
                 <div>
                     <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
-                    <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
-                    <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
+                    <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
+                    <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
                 </div>
                 </form>
             <!-- clear filter -->
@@ -284,22 +284,23 @@
                     <span class="px-1 text-sm">All Orders</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                <a href="<?php echo base_url('?page=orders&action=list&status=no_po'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'no_po') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                <a href="<?php echo base_url('?page=orders&action=list&status=pending'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">Pending</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                 <a href="<?php echo base_url('?page=orders&action=list&status=po_ready'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'po_ready') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                 <a href="<?php echo base_url('?page=orders&action=list&status=processed'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'processed') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">Processed</span>
+                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                </a>
+                <a href="<?php echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                    <span class="px-1 text-sm">Cancelled</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
                 <!--<a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">In Progress</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">Late</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
+                
                 <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">Received</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
@@ -329,7 +330,7 @@
                     <th class="px-6 py-3">Image</th>
                     <!-- <th class="px-6 py-3">Status</th> -->
                     <th class="px-6 py-3">PO Number</th>
-                    <th class="px-6 py-3">PO Date</th>
+                    <th class="px-6 py-3">PO Due Date</th>
                     <!-- <th class="px-6 py-3">Staff</th> -->
                     <th class="px-6 py-3">Amount</th>
                     <th class="px-6 py-3">Unit</th>
@@ -356,7 +357,7 @@
                         </a>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['item_code'] ?></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
                     
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             
@@ -425,8 +426,8 @@
          <?php
             $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
             $page = $page < 1 ? 1 : $page;
-            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page, default 20
-            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
+            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
             $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
             $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
             ?>

@@ -11,7 +11,7 @@ class OrdersController {
         // Fetch all orders
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
         $offset = ($page - 1) * $limit;
 
         //Advanced Search Filters
@@ -38,19 +38,17 @@ class OrdersController {
         if(!empty($_GET['po_no'])){
             $filters['po_no'] = $_GET['po_no'];  
         }
-        if (!empty($_GET['status']) && in_array($_GET['status'], ['all', 'no_po', 'po_ready'])) {
+        if (!empty($_GET['status']) && in_array($_GET['status'], ['all', 'processed', 'pending', 'cancelled'])) {
             $filters['status_filter'] = $_GET['status'];
         } else {
             $filters['status_filter'] = 'all';
         }
        
 
-        //print_array($filters);
-        $orders = $ordersModel->getAllOrders($filters);
-        $total_orders = count($orders);
+        // Use pagination in the database query for better performance
+        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
+        $total_orders = $ordersModel->getOrdersCount($filters);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
-        // Paginate orders
-        $orders = array_slice($orders, $offset, $limit);
         // Render the orders view
         renderTemplate('views/orders/index.php', [
             'orders' => $orders,
