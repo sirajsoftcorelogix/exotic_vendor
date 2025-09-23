@@ -5,7 +5,7 @@ class vendor {
         $this->conn = $conn;
     }
     public function getAllVendors() {
-        $sql = "SELECT * FROM vp_vendors ORDER BY contact_name ASC";
+        $sql = "SELECT * FROM vp_vendors WHERE is_active=1 ORDER BY contact_name ASC";
         $result = $this->conn->query($sql);
         $vendors = [];
         if ($result && $result->num_rows > 0) {

@@ -5,7 +5,7 @@ class Order{
     public function __construct($db) {
         $this->db = $db;
     }
-    public function getAllOrders($filters = []) {
+    public function getAllOrders($filters = [], $limit = 50, $offset = 0) {
 
         $sql = "SELECT * FROM vp_orders WHERE 1=1";
         $params = [];
@@ -39,18 +39,22 @@ class Order{
             $params[] = $filters['max_amount'];
         }
         if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
-            if ($filters['status_filter'] === 'no_po') {
+            if ($filters['status_filter'] === 'pending') {
                 $sql .= " AND (po_number IS NULL OR po_number = '')";
-            } elseif ($filters['status_filter'] === 'po_ready') {
+            } elseif ($filters['status_filter'] === 'processed') {
                 $sql .= " AND (po_number IS NOT NULL AND po_number != '')";
+            } elseif ($filters['status_filter'] === 'cancelled') {
+                $sql .= " AND ('status' = 'cancel')";
             }
         }
-        
-        $sql .= " ORDER BY order_date DESC";
+
+        $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
-        if ($params) {
-            $stmt->bind_param(str_repeat('s', count($params)), ...$params);
-        }
+        // Add limit and offset to params and types
+        $params[] = $limit;
+        $params[] = $offset;
+        $types = str_repeat('s', count($params) - 2) . 'ii';
+        $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $result = $stmt->get_result();
         $orders = [];
@@ -60,6 +64,60 @@ class Order{
             }
         }
         return $orders;
+    }
+    public function getOrdersCount($filters = []) {
+        $sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
+        $params = [];
+        if (!empty($filters['order_number'])) {
+            $sql .= " AND order_number LIKE ?";
+            $params[] = '%' . $filters['order_number'] . '%';
+        }
+        if (!empty($filters['item_code'])) {
+            $sql .= " AND item_code LIKE ?";
+            $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['po_no'])) {
+            $sql .= " AND po_number LIKE ?";
+            $params[] = '%' . $filters['po_no'] . '%';
+        }
+        if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
+            $sql .= " AND order_date BETWEEN ? AND ?";
+            $params[] = $filters['order_from'].' 00:00:00';
+            $params[] = $filters['order_till'].' 23:59:59';
+        }
+        if (!empty($filters['title'])) {
+            $sql .= " AND title LIKE ?";
+            $params[] = '%' . $filters['title'] . '%';
+        }
+        if (!empty($filters['min_amount'])) {
+            $sql .= " AND total_price >= ?";
+            $params[] = $filters['min_amount'];
+        }
+        if (!empty($filters['max_amount'])) {
+            $sql .= " AND total_price <= ?";
+            $params[] = $filters['max_amount'];
+        }
+        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
+            if ($filters['status_filter'] === 'pending') {
+                $sql .= " AND (po_number IS NULL OR po_number = '')";
+            } elseif ($filters['status_filter'] === 'processed') {
+                $sql .= " AND (po_number IS NOT NULL AND po_number != '')";
+            } elseif ($filters['status_filter'] === 'cancelled') {
+                $sql .= " AND ('status' = 'cancel')";
+            }
+        }
+
+        $stmt = $this->db->prepare($sql);
+        if ($params) {
+            $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return (int)$row['count'];
+        }
+        return 0;
     }
     public function getOrderById($id) {
         $sql = "SELECT * FROM vp_orders WHERE id = ?";

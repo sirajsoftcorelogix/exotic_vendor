@@ -25,7 +25,7 @@ class Tables {
     
 
     public function get_exotic_address() {
-        $sql = "SELECT * FROM exotic_address";
+        $sql = "SELECT * FROM exotic_address WHERE is_active = 1";
         $result = $this->ci->query($sql);
         $data = [];
         if ($result && $result->num_rows > 0) {

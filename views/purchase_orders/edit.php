@@ -67,7 +67,7 @@
                 <th class="p-2 text-left w-1/12">Image</th>
                 <th class="p-2 text-left w-1/12">GST %</th>
                 <th class="p-2 text-left w-2/12">Quantity</th>
-                <th class="p-2 text-left w-1/12">Unit</th>
+                <!-- <th class="p-2 text-left w-1/12">Unit</th> -->
                 <th class="p-2 text-left w-2/12">Rate</th>
                 <th class="p-2 text-left w-1/12">Amount</th>
                 <th class="p-2 text-right w-1/12"></th>
@@ -77,7 +77,7 @@
             <?php foreach($items as $item): ?>
                 <tr class="bg-white shadow-sm rounded-lg">
                     <td class="p-2 align-top"><input type="hidden" name="item_ids[]" value="<?php echo $item['id']; ?>"><?php echo $item['id']; ?></td>
-                    <td class="p-2 align-top"><input type="text" name="title[]" value="<?php echo htmlspecialchars($item['title'] ?? ''); ?>" class="form-input w-full" /></td>
+                    <td class="p-2 align-top"><textarea name="title[]" class="form-input h-16 w-full"><?php echo htmlspecialchars($item['title'] ?? ''); ?></textarea></td>
                     <td class="p-2 align-top"><?php echo htmlspecialchars($item['hsn'] ?? ''); ?></td>
                     <td class="p-2 align-top">
                         <?php if (!empty($item['image'])): ?>
@@ -88,12 +88,12 @@
                     </td>
                     <td class="p-2 align-top"><input type="text" name="gst[]" value="<?php echo htmlspecialchars($item['gst'] ?? ''); ?>" class="form-input w-[80px] " /></td>
                     <td class="p-2 align-top"><input type="text" name="quantity[]" value="<?php echo htmlspecialchars($item['quantity'] ?? ''); ?>" class="form-input w-[80px] " /></td>
-                    <td class="p-2 align-top"></td>
+                    <!-- <td class="p-2 align-top"></td> -->
                     <td class="p-2 align-top"><input type="text" name="price[]" value="<?php echo htmlspecialchars($item['price'] ?? ''); ?>" class="form-input w-[80px] " />
                     </td>
                     <td class="p-2 align-top"><input type="text" name="amount[]" value="<?php echo htmlspecialchars($item['amount'] ?? ''); ?>" class="form-input w-[80px] " /></td>
                     <td class="p-2 align-top text-right">
-                        <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button>
+                        <!-- <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button> -->
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -149,7 +149,12 @@
     </div>
     <!-- Action Buttons -->
     <div class="mt-8 flex justify-end space-x-4">
-        <button type="submit" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md">Save Changes</button>
+        
+        <?php if($purchaseOrder['status'] == 'draft'): ?>
+        <button type="button" id="saveDraft" class="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-md">Save as Draft</button>
+        <button type="button" id="submitToApprove" class="bg-green-500 text-white font-semibold py-2 px-4 rounded-md">Submit to Approve</button>
+        <?php endif; ?>
+        <button type="button" id="saveChanges" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md">Save Changes</button>
         <a href="<?php echo base_url('?page=purchase_orders&action=list'); ?>" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md">Back</a>
     </div>
     </form>
@@ -262,9 +267,11 @@
             }
         });*/
     });
-    document.getElementById("edit_po").addEventListener("submit", function(event) {
+    // document.getElementById("edit_po").addEventListener("submit", function(event) {
+    //     event.preventDefault(); // Prevent default form submission
+    function formSubmitHandler(event) {
         event.preventDefault(); // Prevent default form submission
-        const submitBtn = this.querySelector('button[type="submit"]');
+        const submitBtn = this.querySelector('#saveChanges');
         submitBtn.disabled = true;
         const originalText = submitBtn.textContent;
         submitBtn.textContent = 'Processing...';
@@ -294,5 +301,41 @@
             submitBtn.textContent = originalText;
             alert("An error occurred while creating the Purchase Order.");
         });
+    }
+    //});
+    // Save Changes
+    document.getElementById('saveChanges').addEventListener('click', function() {
+        const form = document.getElementById('edit_po');
+        // Remove any existing status input to avoid duplicates
+        const existingStatusInput = form.querySelector('input[name="status"]');
+        if (existingStatusInput) {
+            existingStatusInput.remove();
+        }
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'status';
+        statusInput.value = '<?php echo $purchaseOrder['status']; ?>'; // Keep the current status
+        form.appendChild(statusInput);
+        formSubmitHandler.call(form, new Event('submit'));
+    });
+    // Save as Draft
+    document.getElementById('saveDraft').addEventListener('click', function() {
+        const form = document.getElementById('edit_po');
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'status';
+        statusInput.value = 'draft';
+        form.appendChild(statusInput);
+        formSubmitHandler.call(form, new Event('submit'));
+    });
+    // Submit to Approve
+    document.getElementById('submitToApprove').addEventListener('click', function() {
+        const form = document.getElementById('edit_po');
+        const statusInput = document.createElement('input');
+        statusInput.type = 'hidden';
+        statusInput.name = 'status';
+        statusInput.value = 'pending';
+        form.appendChild(statusInput);
+        formSubmitHandler.call(form, new Event('submit'));
     });
 </script>

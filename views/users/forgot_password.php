@@ -227,7 +227,7 @@ global $domain, $root_path;
           // Show verification popup
           verificationPopup.style.display = 'flex';
           startTimer();
-          alert('For demo purpose only, your OTP is: ' + data.token); 
+          //alert('For demo purpose only, your OTP is: ' + data.token); 
         }
       }).finally(() => {
             // Re-enable the button and restore text

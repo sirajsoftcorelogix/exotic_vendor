@@ -59,7 +59,7 @@
                 <th class="p-2 text-left w-1/12">Image</th>
                 <th class="p-2 text-left w-1/12">GST %</th>
                 <th class="p-2 text-left w-2/12">Quantity</th>
-                <th class="p-2 text-left w-1/12">Unit</th>
+                <!-- <th class="p-2 text-left w-1/12">Unit</th> -->
                 <th class="p-2 text-left w-2/12">Rate</th>
                 <th class="p-2 text-left w-1/12">Amount</th>
                 <th class="p-2 text-right w-1/12"></th>
@@ -67,9 +67,9 @@
             </thead>
             <tbody class="table-row-text">
                 <?php foreach ($data as $index => $item): ?>
-            <tr class="bg-white">
+            <tr class="bg-white ">
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
-                <td class="p-4"><input type="text" class="w-[180px] h-[25px] text-center border rounded-md focus:ring-0 form-input" name="title[]" value="<?= $item['title'] ?>" ><?php //echo $item['title']; ?></td>
+                <td class="p-4 "><textarea name="title[]" class="w-[240px] h-[60px] border rounded-md focus:ring-0 form-input"><?= $item['title'] ?></textarea></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
                 <td class="p-4"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
                 <td class="p-4"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
@@ -81,12 +81,12 @@
                         </button> -->
                     </div>
                 </td>
-                <td class="p-4">Nos</td>
+                <!-- <td class="p-4">Nos</td> -->
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
                         <input type="number" min="0" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
-                        <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
-                        <label for="gst_inclusive">GST inclusive</label>
+                        <!-- <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
+                        <label for="gst_inclusive">GST inclusive</label> -->
                         <!-- <button class="text-[#D06706]">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_427_430)"><path d="M12.0465 8.20171C10.6474 9.47037 9.33829 11.0991 7.90075 12.3041C7.56581 12.5845 7.25417 12.7388 6.8125 12.7978C6.09762 12.8939 5.09165 12.9659 4.36744 12.9883C3.50508 13.0154 2.73585 12.5712 2.75448 11.6359C2.76884 10.909 2.86781 9.93098 2.95164 9.19835C2.992 8.84595 3.04983 8.53545 3.24582 8.2299L11.1585 0.415632C11.9227 -0.178697 12.8029 -0.120026 13.5279 0.491828C14.0922 0.968052 15.0966 1.93688 15.5631 2.49426C16.1484 3.19335 16.1422 4.07837 15.5631 4.77785C14.5839 5.96041 13.1029 7.05649 12.0461 8.20209L12.0465 8.20171ZM12.2572 1.03396C12.1435 1.04272 11.9914 1.11244 11.8971 1.17873C11.5144 1.44732 11.1364 2.00355 10.7525 2.30224L13.6765 5.13787C14.091 4.59726 15.3764 3.97665 14.7694 3.19678C14.2393 2.51559 13.2993 1.87897 12.7319 1.19664C12.6112 1.0972 12.416 1.02139 12.2568 1.03396H12.2572ZM3.89279 11.8744C3.9382 11.9216 4.10004 11.9635 4.17145 11.962C4.89643 11.9464 5.93228 11.858 6.65687 11.7692C6.78689 11.7532 6.92699 11.7174 7.03916 11.6492L12.8693 5.94022L9.99496 3.04591L4.13652 8.79985C4.00651 8.99529 3.98516 9.58505 3.96032 9.84602C3.9153 10.323 3.85631 10.8968 3.84195 11.368C3.83846 11.4842 3.82022 11.7989 3.8924 11.8744H3.89279Z" fill="currentColor"/><path d="M2.04958 2.33194C3.16732 2.2085 4.46941 2.40014 5.60695 2.32394C6.18289 2.447 6.14176 3.26687 5.56736 3.34687C4.59787 3.48174 3.31946 3.26344 2.30922 3.34878C1.6281 3.4063 1.1127 3.92444 1.04788 4.58696V13.695C1.10687 14.4322 1.64634 14.9138 2.38684 14.9713H11.5488C13.652 14.8079 12.6526 11.8801 12.8886 10.5337C13.0523 9.99611 13.7703 9.99839 13.9326 10.5337C13.8247 12.6089 14.6599 15.6335 11.7045 16.0003H2.2316C1.06845 15.9165 0.137389 15.0174 0 13.8859L0.00620967 4.36409C0.140494 3.35906 1.00791 2.447 2.04997 2.33194H2.04958Z" fill="currentColor"/></g><defs><clipPath id="clip0_427_430"><rect width="16" height="16" fill="white"/></clipPath></defs></svg>
                         </button> -->
@@ -153,7 +153,7 @@
         </div>
         <div>
             <div class="flex justify-between items-center mb-1">
-                <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions: <span class="text-red-500"> *</span></label>
+                <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions: </label>
                 <button id="loadTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
             </div>
             <textarea id="terms" name="terms_and_conditions" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"></textarea>
@@ -163,6 +163,7 @@
     <!-- Action Buttons -->
     <div class="mt-8 flex justify-end space-x-4">
         <button type="submit" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Create</button>
+        <button type="button" id="draftButton" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md action-button">Draft</button>
         <button type="button" id="previewButton" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
         <button type="button" class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button>
     </div>
@@ -332,11 +333,12 @@ function calculateTotals() {
 document.querySelectorAll(".gst, .quantity, .amount").forEach(input => {
     input.addEventListener("input", calculateTotals);
 });
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function () { 
     const itemTable = document.querySelector('#poTable tbody');
     itemTable.addEventListener('click', function(e) {
-            if (e.target.classList.contains('remove-row')) {
-                const row = e.target.closest('tr');
+            const removeBtn = e.target.closest('.remove-row');
+            if (removeBtn) {
+                const row = removeBtn.closest('tr');
                 if (row) {
                     row.remove();
                     calculateTotals();
@@ -403,6 +405,12 @@ document.getElementById('orderSearch').addEventListener('input', function() {
 
 // Fetch order items dynamically
 function fetchOrderItems(query) {
+    const loadingIcon = document.createElement('img');
+    loadingIcon.src = '<?php echo base_url("images/loading.gif"); ?>';
+    loadingIcon.alt = 'Loading...';
+    loadingIcon.className = 'mx-2 my-4 text-center';
+    const tbody = document.getElementById('orderList');
+    tbody.innerHTML = loadingIcon.outerHTML;
     fetch('?page=purchase_orders&action=order_items&search=' + encodeURIComponent(query))
         .then(r => r.json())
         .then(data => {
@@ -467,7 +475,7 @@ function addSelectOrderListeners() {
             tr.className = 'bg-white';
             tr.innerHTML = `
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
-                <td class="p-4"><input type="text" class="w-[180px] h-[25px] text-center border rounded-md focus:ring-0 form-input" name="title[]" value="${title}"></td>
+                <td class="p-4"><textarea class="w-[240px] h-[60px] text-center border rounded-md focus:ring-0 form-input" name="title[]">${title}</textarea></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
                 <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" style="width:40px;height:40px;"></td>
                 <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${gst}" oninput="calculateTotals()" required></td>
@@ -476,12 +484,11 @@ function addSelectOrderListeners() {
                         <input type="number" name="quantity[]" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="1" oninput="calculateTotals()" required>
                     </div>
                 </td>
-                <td class="p-4">Nos</td>
+                
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
                         <input type="number" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
-                        <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
-                        <label>GST inclusive</label>
+                        
                     </div>
                 </td>
                 <td class="p-4 rowTotal"></td>
@@ -505,4 +512,29 @@ function addSelectOrderListeners() {
         });
     });
 }
+
+//draft button
+document.getElementById("draftButton").addEventListener("click", function() {
+    const form = document.getElementById('create_po');
+    const formData = new FormData(form);
+    formData.append('status', 'draft'); // Add status=draft
+
+    fetch(<?php echo "'".base_url('?page=purchase_orders&action=create_post')."'"; ?>, {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())  
+    .then(data => {
+        if (data.success) {
+            alert("Purchase Order saved as draft!");
+            window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&viewpo=true'); ?>"; // Redirect to the list page
+        } else {
+            alert("Error: " + data.message);
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        alert("An error occurred while saving the Purchase Order.");
+    });
+});
 </script>

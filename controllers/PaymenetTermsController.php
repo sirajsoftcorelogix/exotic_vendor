@@ -34,6 +34,7 @@ class PaymenetTermsController {
         renderTemplate('views/payment_terms/index.php', $data, 'Manage Payment Terms');
     }
     public function addPTRecord() {
+        is_login();
         global $paymentTermsModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;

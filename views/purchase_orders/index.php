@@ -27,6 +27,7 @@
                      <div class="relative">
                         <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
                             <option value="" selected>All Status</option>
+                            <option value="draft" <?php echo ($data['status_filter'] == "draft") ? "selected" : ""?>>Draft</option>
                             <option value="pending" <?php echo ($data['status_filter'] == "pending") ? "selected" : ""?>>Pending</option>
                             <option value="ordered" <?php echo ($data['status_filter'] == "ordered") ? "selected" : ""?>>Ordered</option>
                             <option value="received" <?php echo ($data['status_filter'] == "received") ? "selected" : ""?>>Received</option>
@@ -113,9 +114,12 @@
                             </button>
                             <ul class="menu-popup text-left">
                                 <li onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-eye"></i> View PO</li>
-                                <?php if ($order['status'] == 'pending'): ?>
+                                <?php if ($order['status'] == 'pending' || $order['status'] == 'draft'): ?>
                                 <li onclick="handleAction('Edit', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-pencil-alt"></i> Edit PO</li>
                                 <?php endif; ?>
+                                <?php if ($order['status'] == 'draft'): ?>
+                                <li onclick="handleAction('Approved', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-check-circle"></i> Approve PO</li>                                
+                                <?php else: ?>
                                 <li onclick="handleAction('ChangeStatus', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-exchange-alt"></i> Change Status</li>
                                 <?php if ($order['status'] == 'cancelled'): ?>
                                 <li onclick="handleAction('Delete', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-trash-alt"></i> Delete PO</li>
@@ -123,6 +127,7 @@
                                 <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
                                 <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
+                                <?php endif; ?>
                             </ul>
                             </div>
                             
@@ -432,8 +437,15 @@ function handleAction(action, poId, el) {
         .then(r => r.json())
         .then(data => {
             if (data.success) {
+                document.getElementById('emailToPo-submit-btn').disabled = false;
                 document.getElementById('po-date-emailToPo').textContent = data.data.po_date;
-                document.getElementById('vendor-emailToPo').textContent = data.data.vendor_email;
+                if (data.data.vendor_email) {
+                    document.getElementById('vendor-emailToPo').textContent = data.data.vendor_email;
+                } else {
+                    document.getElementById('vendor-emailToPo').textContent = 'N/A';                    
+                    document.getElementById('emailToPo-submit-btn').disabled = true;
+                }
+                
                 document.getElementById('vendorToPo').textContent = data.data.vendor_name;
                 document.getElementById('PO-numberToPo').textContent = data.data.po_number;
                 document.getElementById('contactToPo').textContent = data.data.vendor_phone;
@@ -704,6 +716,27 @@ function handleAction(action, poId, el) {
             
         });
 
+  } else if (action === 'Approved') {
+        // Redirect to approve action
+        if (confirm('Mark this purchase order as approved?')) {
+            fetch('?page=purchase_orders&action=approve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'po_id=' + encodeURIComponent(poId) + '&status=pending'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Purchase order marked as approved.');
+                    location.reload();
+                } else {
+                    alert(data.message || 'Failed to approve purchase order.');
+                }
+            })
+            .catch(() => {
+                alert('Error approving purchase order.');
+            });
+        }
   }
 }
 

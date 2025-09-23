@@ -116,8 +116,9 @@ class PurchaseOrdersController {
         $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : []; 
         $data = isset($_POST) ? $_POST : [];  
         $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
+        $status = isset($_POST['status']) ? $_POST['status'] : 'pending';
 
-        if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($terms_and_conditions) || empty($user_id)) {
+        if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($user_id)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
             exit;
         }
@@ -134,6 +135,7 @@ class PurchaseOrdersController {
             'shipping_cost' => $shipping_cost,
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
             'terms_and_conditions' => $terms_and_conditions,
+            'status' => $status,
         ];
         $poId = $purchaseOrdersModel->createPurchaseOrder($poData);
         if (!$poId) {
@@ -213,6 +215,7 @@ class PurchaseOrdersController {
         exit;
     }
     function viewPurchaseOrder(){
+        is_login();
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $vendorsModel;
@@ -269,6 +272,7 @@ class PurchaseOrdersController {
         exit;
     }
     function editPurchaseOrder() {
+        is_login();
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $vendorsModel;
@@ -321,12 +325,14 @@ class PurchaseOrdersController {
             'expected_delivery_date' => $_POST['delivery_due_date'],
             'delivery_address' => $_POST['delivery_address'],
             'total_gst' => $_POST['total_gst'],
-            'grand_total' => $_POST['grand_total'],
+            'total_cost' => $_POST['grand_total'],
             'subtotal' => $_POST['subtotal'],
-            'shipping_cost' => $_POST['shipping_cost'],
+            //'shipping_cost' => $_POST['shipping_cost'],
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
             'terms_and_conditions' => isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '',
+            'status' => isset($_POST['status']) ? $_POST['status'] : 'pending',
         ];
+        
         // Update the purchase order
         $isUpdated = $purchaseOrdersModel->updatePurchaseOrder($poId, $poData);
         if (!$isUpdated) {
@@ -541,6 +547,8 @@ class PurchaseOrdersController {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $vendorsModel;
+        global $usersModel;
+
         
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
         if($generateOnly){
@@ -564,28 +572,41 @@ class PurchaseOrdersController {
                 echo json_encode(['success' => false, 'message' => 'Failed to fetch Purchase Order items.']);
                 exit;
             }
+            
+            $user = $usersModel->getUserById($purchaseOrder['user_id']);
+            $contactPerson = '';
+            if($user){
+                $contactPerson = 'Contact Person: '.$user['name'].'<br>';
+                $contactPerson .= 'Phone: '.$user['phone'].'<br>';
+                $purchaseOrder['created_by'] = $user['name'];
+                $purchaseOrder['created_email'] = $user['email'];
+            }
             //vendor info
             $vendorInfo = '';
             $vendor = $vendorsModel->getVendorById($purchaseOrder['vendor_id']);
             if($vendor && !empty($vendor['address'])){
                 
                 $vendorInfo = '<span style="font-size:14px; font-weight:bold;">' . htmlspecialchars($vendor['vendor_name'] ?? '') . '</span><br>';
-                $vendorInfo .= htmlspecialchars($vendor['address']);
-                $vendorInfo .= '<br><span style="font-size:12px;">';
-                if(!empty($vendor['phone'])){
-                    $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['phone']);
+                $vendorInfo .= htmlspecialchars($vendor['address']); 
+                $vendorInfo .= ', '.htmlspecialchars($vendor['city']);               
+                $vendorInfo .= ', '.htmlspecialchars($vendor['state']);
+                $vendorInfo .= ', '.htmlspecialchars($vendor['country']).' - '.$vendor['postal_code'];
+                $vendorInfo .= '<span style="font-size:12px;">';
+                if(!empty($vendor['vendor_phone'])){
+                    $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['vendor_phone']);
                 }
-                if(!empty($vendor['email'])){
-                    $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['email']);
+                if(!empty($vendor['vendor_email'])){
+                    $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['vendor_email']);
                 }
-                if(!empty($vendor['website'])){
-                    $vendorInfo .= '<br>Website: '.htmlspecialchars($vendor['website']);
-                }
+                
                 if(!empty($vendor['contact_person'])){
                     $vendorInfo .= '<br>Contact Person: '.htmlspecialchars($vendor['contact_person']);
                 }
                 if(!empty($vendor['gst_number'])){
                     $vendorInfo .= '<br>GST No.: '.htmlspecialchars($vendor['gst_number']);
+                }
+                if(!empty($vendor['pan_number'])){
+                    $vendorInfo .= '<br>PAN No.: '.htmlspecialchars($vendor['pan_number']);
                 }
                 $vendorInfo .= '</span>';
             }else{
@@ -655,8 +676,8 @@ class PurchaseOrdersController {
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         //Define HTML content
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}'],
-            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost'], $purchaseOrder['terms_and_conditions'], $vendorInfo],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
+            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost'], $purchaseOrder['terms_and_conditions'], $vendorInfo, $contactPerson],
             $temphtml
         );
         // $html = '
@@ -882,6 +903,7 @@ class PurchaseOrdersController {
     
     public function previewPDF() {
         global $vendorsModel;
+        global $usersModel;
         // Collect POST data (from form, not DB)
         $data = $_POST;
 
@@ -895,6 +917,16 @@ class PurchaseOrdersController {
         $grand_total = $data['grand_total'] ?? 0;
         $terms = $data['terms_and_conditions'] ?? '';
         $vendor_id = $data['vendor'] ?? '';
+        $user_id = $data['user_id'] ?? '';
+
+        $user = $usersModel->getUserById($user_id);
+        $contactPerson = '';
+        if($user){
+            $contactPerson = 'Contact Person: '.$user['name'].'<br>';
+            $contactPerson .= 'Phone: '.$user['phone'].'<br>';
+            $purchaseOrder['created_by'] = $user['name'];
+            $purchaseOrder['created_email'] = $user['email'];
+        }
 
         // Fetch vendor info
         $vendorInfo = '';
@@ -902,23 +934,29 @@ class PurchaseOrdersController {
         if($vendor && !empty($vendor['address'])){
             
             $vendorInfo = '<span style="font-size:14px; font-weight:bold;">' . htmlspecialchars($vendor['vendor_name'] ?? '') . '</span><br>';
-            $vendorInfo .= htmlspecialchars($vendor['address']);
-            $vendorInfo .= '<br><span style="font-size:12px;">';
-            if(!empty($vendor['phone'])){
-                $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['phone']);
+            $vendorInfo .= htmlspecialchars($vendor['address']);            
+            $vendorInfo .= ', '.htmlspecialchars($vendor['city']);               
+            $vendorInfo .= ', '.htmlspecialchars($vendor['state']);
+            $vendorInfo .= ', '.htmlspecialchars($vendor['country']).' - '.$vendor['postal_code'];
+            $vendorInfo .= '<span style="font-size:12px;">';
+            if(!empty($vendor['vendor_phone'])){
+                $vendorInfo .= '<br>Phone: '.htmlspecialchars($vendor['vendor_phone']);
             }
-            if(!empty($vendor['email'])){
-                $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['email']);
+            if(!empty($vendor['vendor_email'])){
+                $vendorInfo .= '<br>Email: '.htmlspecialchars($vendor['vendor_email']);
             }
-            if(!empty($vendor['website'])){
-                $vendorInfo .= '<br>Website: '.htmlspecialchars($vendor['website']);
-            }
+            // if(!empty($vendor['website'])){
+            //     $vendorInfo .= '<br>Website: '.htmlspecialchars($vendor['website']);
+            // }
             if(!empty($vendor['contact_person'])){
                 $vendorInfo .= '<br>Contact Person: '.htmlspecialchars($vendor['contact_person']);
             }
             if(!empty($vendor['gst_number'])){
                 $vendorInfo .= '<br>GST No.: '.htmlspecialchars($vendor['gst_number']);
             }
+            if(!empty($vendor['pan_number'])){
+                    $vendorInfo .= '<br>PAN No.: '.htmlspecialchars($vendor['pan_number']);
+                }
             $vendorInfo .= '</span>';
         }else{
             $vendorInfo = 'N/A';
@@ -930,7 +968,7 @@ class PurchaseOrdersController {
                 $tbody .= '<tr>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . ($i + 1) . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px;">' . htmlspecialchars($title) . '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;"><img src="' . htmlspecialchars($data['image'][$i] ?? '') . '" style="width:auto; max-height:150px;"></td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;"><img src="' . htmlspecialchars($data['img'][$i] ?? '') . '" style="width:auto; max-height:150px;"></td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['quantity'][$i] ?? '') . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($data['rate'][$i] ?? 0, 2) . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['gst'][$i] ?? '') . '%</td>';
