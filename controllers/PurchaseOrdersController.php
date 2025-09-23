@@ -117,7 +117,7 @@ class PurchaseOrdersController {
         $data = isset($_POST) ? $_POST : [];  
         $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
 
-        if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($terms_and_conditions) || empty($user_id)) {
+        if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($user_id)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
             exit;
         }
