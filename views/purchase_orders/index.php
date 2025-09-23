@@ -113,8 +113,11 @@
                             </button>
                             <ul class="menu-popup text-left">
                                 <li onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-eye"></i> View PO</li>
-                                <?php if ($order['status'] == 'pending'): ?>
+                                <?php if ($order['status'] == 'pending' || $order['status'] == 'draft'): ?>
                                 <li onclick="handleAction('Edit', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-pencil-alt"></i> Edit PO</li>
+                                <?php endif; ?>
+                                <?php if ($order['status'] == 'draft'): ?>
+                                <li onclick="handleAction('Approved', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-check-circle"></i> Approve PO</li>                                
                                 <?php endif; ?>
                                 <li onclick="handleAction('ChangeStatus', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-exchange-alt"></i> Change Status</li>
                                 <?php if ($order['status'] == 'cancelled'): ?>
@@ -711,6 +714,27 @@ function handleAction(action, poId, el) {
             
         });
 
+  } else if (action === 'Approved') {
+        // Redirect to approve action
+        if (confirm('Mark this purchase order as approved?')) {
+            fetch('?page=purchase_orders&action=approve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'po_id=' + encodeURIComponent(poId) + '&status=pending'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Purchase order marked as approved.');
+                    location.reload();
+                } else {
+                    alert(data.message || 'Failed to approve purchase order.');
+                }
+            })
+            .catch(() => {
+                alert('Error approving purchase order.');
+            });
+        }
   }
 }
 

@@ -59,7 +59,7 @@
                 <th class="p-2 text-left w-1/12">Image</th>
                 <th class="p-2 text-left w-1/12">GST %</th>
                 <th class="p-2 text-left w-2/12">Quantity</th>
-                <th class="p-2 text-left w-1/12">Unit</th>
+                <!-- <th class="p-2 text-left w-1/12">Unit</th> -->
                 <th class="p-2 text-left w-2/12">Rate</th>
                 <th class="p-2 text-left w-1/12">Amount</th>
                 <th class="p-2 text-right w-1/12"></th>
@@ -81,7 +81,7 @@
                         </button> -->
                     </div>
                 </td>
-                <td class="p-4">Nos</td>
+                <!-- <td class="p-4">Nos</td> -->
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
                         <input type="number" min="0" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
@@ -163,6 +163,7 @@
     <!-- Action Buttons -->
     <div class="mt-8 flex justify-end space-x-4">
         <button type="submit" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Create</button>
+        <button type="button" id="draftButton" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md action-button">Draft</button>
         <button type="button" id="previewButton" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
         <button type="button" class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button>
     </div>
@@ -483,7 +484,7 @@ function addSelectOrderListeners() {
                         <input type="number" name="quantity[]" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="1" oninput="calculateTotals()" required>
                     </div>
                 </td>
-                <td class="p-4">Nos</td>
+                
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
                         <input type="number" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
@@ -511,4 +512,29 @@ function addSelectOrderListeners() {
         });
     });
 }
+
+//draft button
+document.getElementById("draftButton").addEventListener("click", function() {
+    const form = document.getElementById('create_po');
+    const formData = new FormData(form);
+    formData.append('status', 'draft'); // Add status=draft
+
+    fetch(<?php echo "'".base_url('?page=purchase_orders&action=create_post')."'"; ?>, {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())  
+    .then(data => {
+        if (data.success) {
+            alert("Purchase Order saved as draft!");
+            window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&viewpo=true'); ?>"; // Redirect to the list page
+        } else {
+            alert("Error: " + data.message);
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        alert("An error occurred while saving the Purchase Order.");
+    });
+});
 </script>

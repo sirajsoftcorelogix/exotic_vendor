@@ -116,6 +116,7 @@ class PurchaseOrdersController {
         $orderid = isset($_POST['orderid']) ? $_POST['orderid'] : []; 
         $data = isset($_POST) ? $_POST : [];  
         $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
+        $status = isset($_POST['status']) ? $_POST['status'] : 'pending';
 
         if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($user_id)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
@@ -134,6 +135,7 @@ class PurchaseOrdersController {
             'shipping_cost' => $shipping_cost,
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
             'terms_and_conditions' => $terms_and_conditions,
+            'status' => $status,
         ];
         $poId = $purchaseOrdersModel->createPurchaseOrder($poData);
         if (!$poId) {
@@ -328,6 +330,7 @@ class PurchaseOrdersController {
             //'shipping_cost' => $_POST['shipping_cost'],
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
             'terms_and_conditions' => isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '',
+            'status' => isset($_POST['status']) ? $_POST['status'] : 'pending',
         ];
         // Update the purchase order
         $isUpdated = $purchaseOrdersModel->updatePurchaseOrder($poId, $poData);

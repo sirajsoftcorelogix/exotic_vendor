@@ -27,9 +27,9 @@ class PurchaseOrder {
         return $purchaseOrders;
     }
     public function createPurchaseOrder($data) {
-        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, user_id, expected_delivery_date, delivery_address, notes, terms_and_conditions, total_gst, total_cost, subtotal, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO purchase_orders (po_number, vendor_id, user_id, expected_delivery_date, delivery_address, notes, terms_and_conditions, total_gst, total_cost, subtotal, shipping_cost, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("siissssdddd",
+        $stmt->bind_param("siissssdddds",
             $data['po_number'],  
             $data['vendor_id'],
             $data['user_id'],
@@ -40,7 +40,8 @@ class PurchaseOrder {
             $data['total_gst'],            
             $data['grand_total'],
             $data['subtotal'],
-            $data['shipping_cost']
+            $data['shipping_cost'],
+            $data['status']
         );
         if ($stmt->execute()) {
             return $this->db->insert_id; // Return the ID of the newly created purchase order
@@ -62,9 +63,9 @@ class PurchaseOrder {
         return $result->fetch_assoc();
     }
     public function updatePurchaseOrder($id, $data) {
-        $sql = "UPDATE purchase_orders SET vendor_id = ?, user_id = ?, expected_delivery_date = ?, delivery_address = ?, notes = ?, terms_and_conditions = ?, total_gst = ?, total_cost = ?, subtotal = ?, shipping_cost = ? WHERE id = ?";
+        $sql = "UPDATE purchase_orders SET vendor_id = ?, user_id = ?, expected_delivery_date = ?, delivery_address = ?, notes = ?, terms_and_conditions = ?, total_gst = ?, total_cost = ?, subtotal = ?, shipping_cost = ?, status = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("iisssssdddi",
+        $stmt->bind_param("iisssssdddis",
             $data['vendor_id'],
             $data['user_id'],
             $data['expected_delivery_date'],
@@ -75,6 +76,7 @@ class PurchaseOrder {
             $data['grand_total'],
             $data['subtotal'],
             $data['shipping_cost'],
+            $data['status'],
             $id
         );
         return $stmt->execute();

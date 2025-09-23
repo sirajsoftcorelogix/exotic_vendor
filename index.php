@@ -186,6 +186,9 @@ switch ($page) {
             case 'preview_pdf':
                 $controller->previewPDF();
                 break;
+            case 'approve':
+                $controller->updateStatus();
+                break;
             default:
                 $controller->index();
                 break;
