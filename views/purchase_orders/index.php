@@ -119,7 +119,7 @@
                                 <?php endif; ?>
                                 <?php if ($order['status'] == 'draft'): ?>
                                 <li onclick="handleAction('Approved', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-check-circle"></i> Approve PO</li>                                
-                                <?php endif; ?>
+                                <?php else: ?>
                                 <li onclick="handleAction('ChangeStatus', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-exchange-alt"></i> Change Status</li>
                                 <?php if ($order['status'] == 'cancelled'): ?>
                                 <li onclick="handleAction('Delete', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-trash-alt"></i> Delete PO</li>
@@ -127,6 +127,7 @@
                                 <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
                                 <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
+                                <?php endif; ?>
                             </ul>
                             </div>
                             

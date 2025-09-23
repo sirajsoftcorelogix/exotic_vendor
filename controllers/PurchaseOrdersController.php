@@ -332,6 +332,7 @@ class PurchaseOrdersController {
             'terms_and_conditions' => isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '',
             'status' => isset($_POST['status']) ? $_POST['status'] : 'pending',
         ];
+        
         // Update the purchase order
         $isUpdated = $purchaseOrdersModel->updatePurchaseOrder($poId, $poData);
         if (!$isUpdated) {

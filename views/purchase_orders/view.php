@@ -4,7 +4,7 @@
 ?>
 <div class="container mx-auto p-6 bg-white rounded-lg shadow-md">
   <div class="flex justify-between items-center">
-    <h2 class="po-title">Purchase Order: <?= htmlspecialchars($purchaseOrder['po_number'] ?? '') ?></h2>
+    <h2 class="po-title">Purchase Order: <?= ($purchaseOrder['status'] == 'draft') ? 'DRAFT' : htmlspecialchars($purchaseOrder['po_number'] ?? '') ?></h2>
     <a href="?page=purchase_orders&action=edit&po_id=<?= htmlspecialchars($purchaseOrder['id'] ?? '') ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Edit</button></a>
   </div>
   <hr class="my-8">

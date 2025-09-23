@@ -65,7 +65,7 @@ class PurchaseOrder {
     public function updatePurchaseOrder($id, $data) {
         $sql = "UPDATE purchase_orders SET vendor_id = ?, user_id = ?, expected_delivery_date = ?, delivery_address = ?, notes = ?, terms_and_conditions = ?, total_gst = ?, total_cost = ?, subtotal = ?, shipping_cost = ?, status = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param("iisssssdddis",
+        $stmt->bind_param("iisssssdddsi",
             $data['vendor_id'],
             $data['user_id'],
             $data['expected_delivery_date'],
@@ -73,7 +73,7 @@ class PurchaseOrder {
             $data['notes'],
             $data['terms_and_conditions'],
             $data['total_gst'],
-            $data['grand_total'],
+            $data['total_cost'],
             $data['subtotal'],
             $data['shipping_cost'],
             $data['status'],
