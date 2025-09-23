@@ -404,6 +404,12 @@ document.getElementById('orderSearch').addEventListener('input', function() {
 
 // Fetch order items dynamically
 function fetchOrderItems(query) {
+    const loadingIcon = document.createElement('img');
+    loadingIcon.src = '<?php echo base_url("images/loading.gif"); ?>';
+    loadingIcon.alt = 'Loading...';
+    loadingIcon.className = 'mx-2 my-4 text-center';
+    const tbody = document.getElementById('orderList');
+    tbody.innerHTML = loadingIcon.outerHTML;
     fetch('?page=purchase_orders&action=order_items&search=' + encodeURIComponent(query))
         .then(r => r.json())
         .then(data => {
