@@ -90,8 +90,11 @@ class UsersController {
 
                 // Content
                 $mail->isHTML(true);
-                $mail->Subject = 'Password Reset OTP';
-                $mail->Body    = "Your OTP for password reset is: <b>$token</b>";
+                $mail->Subject = 'VendorDesk - Password Recovery - OTP Inside';
+                $htmlBody = file_get_contents('templates/password_recovery.html');
+                $htmlBody = str_replace('{{OTP_CODE}}', $token, $htmlBody);
+                $htmlBody = str_replace('{{CURRENT_YEAR}}', date('Y'), $htmlBody);
+                $mail->Body    = $htmlBody;
 
                 $mail->send();
 

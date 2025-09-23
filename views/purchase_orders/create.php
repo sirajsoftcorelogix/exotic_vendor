@@ -487,8 +487,7 @@ function addSelectOrderListeners() {
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
                         <input type="number" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
-                        <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
-                        <label>GST inclusive</label>
+                        
                     </div>
                 </td>
                 <td class="p-4 rowTotal"></td>
