@@ -27,6 +27,7 @@
                      <div class="relative">
                         <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
                             <option value="" selected>All Status</option>
+                            <option value="draft" <?php echo ($data['status_filter'] == "draft") ? "selected" : ""?>>Draft</option>
                             <option value="pending" <?php echo ($data['status_filter'] == "pending") ? "selected" : ""?>>Pending</option>
                             <option value="ordered" <?php echo ($data['status_filter'] == "ordered") ? "selected" : ""?>>Ordered</option>
                             <option value="received" <?php echo ($data['status_filter'] == "received") ? "selected" : ""?>>Received</option>
