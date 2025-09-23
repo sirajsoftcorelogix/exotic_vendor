@@ -213,6 +213,7 @@ class PurchaseOrdersController {
         exit;
     }
     function viewPurchaseOrder(){
+        is_login();
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $vendorsModel;

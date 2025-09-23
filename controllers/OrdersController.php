@@ -59,6 +59,7 @@ class OrdersController {
     }
         
     public function viewOrder() {
+        is_login();
         global $ordersModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
@@ -75,6 +76,7 @@ class OrdersController {
     }
 	
     public function importOrders() {
+        is_login();
         global $ordersModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
@@ -206,6 +208,7 @@ class OrdersController {
         ], 'Import Orders Result');
     }
     public function createPurchaseOrder() {
+        is_login();
         global $ordersModel;
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {

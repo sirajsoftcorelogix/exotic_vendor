@@ -242,6 +242,7 @@ class UsersController {
         renderTemplate('views/users/index.php', $data, 'Users');
     }
     public function addEditUser() {
+        is_login();
         global $usersModel;
         $data = []; 
         try {
@@ -263,6 +264,7 @@ class UsersController {
         renderTemplate('views/users/add_edit_user.php', $data, 'Add/Edit User');
     }
     public function addPost() {
+        is_login();
         global $usersModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;
@@ -292,6 +294,7 @@ class UsersController {
         return true;
     }
     public function updateUserProfile()  {
+        is_login();
         global $usersModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = $_POST['password'] ?? '';

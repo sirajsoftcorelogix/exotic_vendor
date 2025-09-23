@@ -45,6 +45,7 @@ class VendorsController {
         renderTemplate('views/vendors/index.php', $data, 'Manage Vendors');
     }
     public function addVendorRecord() {
+        is_login();
         global $vendorsModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = $_POST;

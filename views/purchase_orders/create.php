@@ -468,7 +468,7 @@ function addSelectOrderListeners() {
             tr.className = 'bg-white';
             tr.innerHTML = `
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
-                <td class="p-4"><input type="text" class="w-[180px] h-[25px] text-center border rounded-md focus:ring-0 form-input" name="title[]" value="${title}"></td>
+                <td class="p-4"><textarea class="w-[240px] h-[60px] text-center border rounded-md focus:ring-0 form-input" name="title[]">${title}</textarea></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
                 <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" style="width:40px;height:40px;"></td>
                 <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${gst}" oninput="calculateTotals()" required></td>
