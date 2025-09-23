@@ -325,7 +325,7 @@ class PurchaseOrdersController {
             'expected_delivery_date' => $_POST['delivery_due_date'],
             'delivery_address' => $_POST['delivery_address'],
             'total_gst' => $_POST['total_gst'],
-            'grand_total' => $_POST['grand_total'],
+            'total_cost' => $_POST['grand_total'],
             'subtotal' => $_POST['subtotal'],
             //'shipping_cost' => $_POST['shipping_cost'],
             'notes' => isset($_POST['notes']) ? $_POST['notes'] : '',
