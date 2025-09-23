@@ -50,10 +50,11 @@ class Order{
 
         $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
-        if ($params) {
-            $stmt->bind_param(str_repeat('s', count($params)), ...$params);
-        }
-        $stmt->bind_param('ii', $limit, $offset);
+        // Add limit and offset to params and types
+        $params[] = $limit;
+        $params[] = $offset;
+        $types = str_repeat('s', count($params) - 2) . 'ii';
+        $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $result = $stmt->get_result();
         $orders = [];
