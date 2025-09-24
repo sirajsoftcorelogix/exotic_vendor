@@ -62,21 +62,21 @@
             <thead class="table-header">
             <tr>
                 <th class="p-2 text-left w-1/12">S.No</th>
-                <th class="p-2 text-left w-3/12">Item Summary</th>
+                <th class="p-2 text-left w-4/12">Item Summary</th>
                 <th class="p-2 text-left w-1/12">HSN</th>
                 <th class="p-2 text-left w-1/12">Image</th>
                 <th class="p-2 text-left w-1/12">GST %</th>
-                <th class="p-2 text-left w-2/12">Quantity</th>
+                <th class="p-2 text-left w-1/12">Quantity</th>
                 <!-- <th class="p-2 text-left w-1/12">Unit</th> -->
-                <th class="p-2 text-left w-2/12">Rate</th>
+                <th class="p-2 text-left w-1/12">Rate</th>
                 <th class="p-2 text-left w-1/12">Amount</th>
                 <th class="p-2 text-right w-1/12"></th>
             </tr>
             </thead>
             <tbody class="table-row-text">
-            <?php foreach($items as $item): ?>
+            <?php foreach($items as $index => $item): ?>
                 <tr class="bg-white shadow-sm rounded-lg">
-                    <td class="p-2 align-top"><input type="hidden" name="item_ids[]" value="<?php echo $item['id']; ?>"><?php echo $item['id']; ?></td>
+                    <td class="p-2 align-top"><input type="hidden" name="item_ids[]" value="<?php echo $item['id']; ?>"><?php echo $index + 1; ?></td>
                     <td class="p-2 align-top"><textarea name="title[]" class="form-input h-16 w-full p-2"><?php echo htmlspecialchars($item['title'] ?? ''); ?></textarea></td>
                     <td class="p-2 align-top"><?php echo htmlspecialchars($item['hsn'] ?? ''); ?></td>
                     <td class="p-1 align-top">
@@ -105,22 +105,29 @@
         <div>
             <!-- <button type="button" class="add-item bg-blue-500 text-white px-4 py-2 rounded">Add Item</button> -->
         </div> 
-        <div class="totals">
-            <div class="flex justify-between">
-                <span class="font-bold">Subtotal:</span>
-                <span class="subtotal"><?php echo number_format(($data['purchaseOrder']['subtotal'] ?? 0), 2); ?></span>
-            </div>
-            <div class="flex justify-between">
-                <span class="font-bold">Total GST:</span>
-                <span class="total-gst"><?php echo number_format(($data['purchaseOrder']['total_gst'] ?? 0), 2); ?></span>
-            </div>
-            <!-- <div class="flex justify-between">
-                <span class="font-bold">Shipping Cost:</span>
-                <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php //echo number_format(($data['purchaseOrder']['shipping_cost'] ?? 0), 2); ?>" class="form-input w-[80px] " /></span>
-            </div> -->
-            <div class="flex justify-between">
-                <span class="font-bold">Grand Total:</span>
-                <span class="grand-total"><?php echo number_format(($data['purchaseOrder']['total_cost'] ?? 0), 2); ?></span>
+        <div class="w-1/3">
+            <div class="bg-[rgba(245,245,245,1)] p-4 rounded-lg">
+                <div class="space-y-1">
+                    <div class="flex justify-between subtotal-text">
+                        <span >Subtotal:</span>
+                        <span class="subtotal"><?php echo number_format(($data['purchaseOrder']['subtotal'] ?? 0), 2); ?></span>
+                    </div>
+                    <div class="flex justify-between subtotal-text">
+                        <span >Total GST:</span>
+                        <span class="total-gst"><?php echo number_format(($data['purchaseOrder']['total_gst'] ?? 0), 2); ?></span>
+                    </div>
+                    <!-- <div class="flex justify-between">
+                        <span class="font-bold">Shipping Cost:</span>
+                        <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php //echo number_format(($data['purchaseOrder']['shipping_cost'] ?? 0), 2); ?>" class="form-input w-[80px] " /></span>
+                    </div> -->
+                </div>
+                <div class="mt-1 border-t border-gray-300 pt-1">
+                    <div class="flex justify-between final-total-text">
+                        <span >Grand Total:</span>
+                        <span class="grand-total"><?php echo number_format(($data['purchaseOrder']['total_cost'] ?? 0), 2); ?></span>
+                    </div>
+                </div>
+                
             </div>
         </div>
         <input type="hidden" name="total_gst" value="<?php echo htmlspecialchars($data['purchaseOrder']['total_gst'] ?? 0); ?>" />
@@ -173,7 +180,7 @@
             <table class="w-full border">
                 <thead>
                     <tr>
-                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-right">#</th>
                         <th class="p-2 text-left">Content</th>
                         <!-- <th class="p-2 text-left">Action</th> -->
                     </tr>
@@ -181,8 +188,8 @@
                 <tbody id="templateList">
                     <?php foreach ($templates as $template): ?>
                     <tr class="border-b">
-                        <td class="p-2"><input type="checkbox" class="select-template-checkbox" data-content="<?= strip_tags($template['term_conditions'] ?? '') ?>"></td>
-                        <td class="p-2"><?= strip_tags(substr($template['title'], 0, 100)) ?>...</td>                       
+                        <td class="p-2 text-right"><input type="checkbox" class="select-template-checkbox" data-content="<?= strip_tags($template['term_conditions'] ?? '') ?>"></td>
+                        <td class="p-2" onclick="this.parentNode.querySelector('.select-template-checkbox').click();"><?= strip_tags(substr($template['title'], 0, 100)) ?>...</td>                       
                     </tr>
                     <?php endforeach; ?>
                     <tr>
