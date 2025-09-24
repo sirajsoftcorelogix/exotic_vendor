@@ -253,7 +253,7 @@ class Order{
         return ['success' => true, 'message' => 'Status updated successfully.'];
     }
     public function getOrderItems($searchTerm) {
-        $sql = "SELECT * FROM vp_orders WHERE order_number LIKE ? OR item_code LIKE ? OR title LIKE ?";
+        $sql = "SELECT * FROM vp_orders WHERE status = 'pending' AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
         $stmt = $this->db->prepare($sql);
         $searchTerm = "%{$searchTerm}%";
         $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);

@@ -68,12 +68,12 @@
             <tbody class="table-row-text">
                 <?php foreach ($data as $index => $item): ?>
             <tr class="bg-white ">
-                <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
-                <td class="p-4 "><textarea name="title[]" class="w-[240px] h-[60px] border rounded-md focus:ring-0 form-input"><?= $item['title'] ?></textarea></td>
-                <td class="p-4"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
-                <td class="p-4"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
-                <td class="p-4"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
-                <td class="p-4">
+                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
+                <td class="p-1 "><textarea name="title[]" class="w-[240px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?></textarea></td>
+                <td class="p-1"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
+                <td class="p-1"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
+                <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
+                <td class="p-1">
                     <div class="flex items-center space-x-2">
                         <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['quantity'];  ?>" oninput="calculateTotals()" required>
                         <!-- <button class="text-[#D06706]">
@@ -82,7 +82,7 @@
                     </div>
                 </td>
                 <!-- <td class="p-4">Nos</td> -->
-                <td class="p-4">
+                <td class="p-1">
                     <div class="flex items-center space-x-2">
                         <input type="number" min="0" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         <!-- <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
@@ -92,8 +92,8 @@
                         </button> -->
                     </div>
                 </td>
-                <td class="p-4 rowTotal"></td>
-                <td class="">
+                <td class="p-1 rowTotal"></td>
+                <td class="p-1">
                         <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"> <span class="text-lg"><i class="fa fa-trash-alt"></i></span> </button>
                 </td>
                 <!-- <td class="p-4 text-right rounded-r-lg"><button>
@@ -475,7 +475,7 @@ function addSelectOrderListeners() {
             tr.className = 'bg-white';
             tr.innerHTML = `
                 <td class="p-4 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
-                <td class="p-4"><textarea class="w-[240px] h-[60px] text-center border rounded-md focus:ring-0 form-input" name="title[]">${title}</textarea></td>
+                <td class="p-4"><textarea class="w-[240px] h-[60px] text-center border rounded-md focus:ring-0 form-input p-2" name="title[]">${title}</textarea></td>
                 <td class="p-4"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
                 <td class="p-4"><input type="hidden" name="img[]" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" style="width:40px;height:40px;"></td>
                 <td class="p-4"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${gst}" oninput="calculateTotals()" required></td>

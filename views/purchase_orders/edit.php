@@ -15,7 +15,7 @@
             </div>
             <div class="flex items-center">
                 <label for="po_date" class="block text-gray-700 form-label">Order Date :</label>
-                <input readonly type="date" id="po_date" name="po_date" value="<?php echo date('Y-m-d', strtotime($data['purchaseOrder']['po_date'])); ?>" class="mt-1 block w-full md:w-[300px] border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm form-input">
+                <input readonly type="date" id="po_date" name="po_date" value="<?php echo date('Y-m-d', strtotime($data['purchaseOrder']['po_date'])); ?>" class="mt-1 block w-full md:w-[150px] border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm form-input">
             </div>
         </div>
         <!-- Right Column -->
@@ -34,7 +34,7 @@
             
             <div class="flex items-center">
                 <label for="employee-name" class="block text-gray-700 form-label">User Name</label>
-                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[150px]">
+                <select name="user_id" id="employee_name" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md bg-white form-input px-3 w-full md:w-[300px]">
                     <option value="">Select User</option>
                     <?php foreach ($users as $id => $name): ?>
                         <option value="<?= $id ?>" <?php if ($data['purchaseOrder']['user_id'] == $id) echo 'selected'; ?>><?= htmlspecialchars($name) ?></option>
@@ -77,11 +77,11 @@
             <?php foreach($items as $item): ?>
                 <tr class="bg-white shadow-sm rounded-lg">
                     <td class="p-2 align-top"><input type="hidden" name="item_ids[]" value="<?php echo $item['id']; ?>"><?php echo $item['id']; ?></td>
-                    <td class="p-2 align-top"><textarea name="title[]" class="form-input h-16 w-full"><?php echo htmlspecialchars($item['title'] ?? ''); ?></textarea></td>
+                    <td class="p-2 align-top"><textarea name="title[]" class="form-input h-16 w-full p-2"><?php echo htmlspecialchars($item['title'] ?? ''); ?></textarea></td>
                     <td class="p-2 align-top"><?php echo htmlspecialchars($item['hsn'] ?? ''); ?></td>
-                    <td class="p-2 align-top">
+                    <td class="p-1 align-top">
                         <?php if (!empty($item['image'])): ?>
-                            <img src="<?php echo htmlspecialchars($item['image'] ?? ''); ?>" alt="Item Image" class="h-12 w-12 object-cover rounded">
+                            <img src="<?php echo htmlspecialchars($item['image'] ?? ''); ?>" alt="Item Image" class="h-20 object-cover rounded">
                         <?php else: ?>
                             N/A
                         <?php endif; ?>
@@ -137,12 +137,12 @@
             <div class="flex justify-between items-center mb-1" style="height: 37px;">
                 <label for="notes" class="block text-sm font-medium text-gray-700 notes-label">Add Note:</label>
             </div>
-            <textarea id="notes" name="notes" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important note to remember" style="min-height: 148px;"><?php echo $purchaseOrder['notes']; ?></textarea>
+            <textarea id="notes" name="notes" class="mt-5 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important note to remember" style="min-height: 148px;"><?php echo $purchaseOrder['notes']; ?></textarea>
         </div>
         <div>
             <div class="flex justify-between items-center mb-1">
                 <label for="terms" class="block text-sm font-medium text-gray-700 notes-label">Terms & Conditions:</label>
-                <!-- <button id="loadTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button> -->
+                <button id="loadTemplate" type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Load Template</button>
             </div>
             <textarea id="terms" name="terms_and_conditions" class="mt-5 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-2" placeholder="Important terms & conditions to remember" style="min-height: 148px;"><?php echo htmlspecialchars($purchaseOrder['terms_and_conditions'] ?? ''); ?></textarea>
         </div>
@@ -150,10 +150,16 @@
     <!-- Action Buttons -->
     <div class="mt-8 flex justify-end space-x-4">
         
-        <?php if($purchaseOrder['status'] == 'draft'): ?>
+        <?php /*if($purchaseOrder['status'] == 'draft'): ?>
         <button type="button" id="saveDraft" class="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-md">Save as Draft</button>
         <button type="button" id="submitToApprove" class="bg-green-500 text-white font-semibold py-2 px-4 rounded-md">Submit to Approve</button>
+        <?php endif; */?>
+        <?php if($purchaseOrder['status'] == 'draft'): ?>
+            <input type=checkbox id="isDraft" name="status" value="draft" checked style="transform: scale(1.5); margin-right: 8px;">
+        <?php else: ?>
+            <input type=checkbox id="isDraft" name="status" value="draft" style="transform: scale(1.5); margin-right: 8px;">
         <?php endif; ?>
+        <label for="isDraft" class="block text-gray-700 form-label" style="margin-top: 4px;">Save as Draft</label>
         <button type="button" id="saveChanges" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md">Save Changes</button>
         <a href="<?php echo base_url('?page=purchase_orders&action=list'); ?>" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md">Back</a>
     </div>
@@ -175,8 +181,8 @@
                 <tbody id="templateList">
                     <?php foreach ($templates as $template): ?>
                     <tr class="border-b">
-                        <td class="p-2"><input type="checkbox" class="select-template-checkbox" data-content="<?= htmlspecialchars($template['term_conditions'] ?? '') ?>"></td>
-                        <td class="p-2"><?= htmlspecialchars(substr($template['title'], 0, 100)) ?>...</td>                       
+                        <td class="p-2"><input type="checkbox" class="select-template-checkbox" data-content="<?= strip_tags($template['term_conditions'] ?? '') ?>"></td>
+                        <td class="p-2"><?= strip_tags(substr($template['title'], 0, 100)) ?>...</td>                       
                     </tr>
                     <?php endforeach; ?>
                     <tr>
@@ -191,19 +197,19 @@
 </div>
 <script>
     // Load Template Modal
-   /* document.getElementById('loadTemplate').addEventListener('click', function() {
+    document.getElementById('loadTemplate').addEventListener('click', function() {
         document.getElementById('loadTemplateModal').style.display = 'flex';
         // Pre-select checkboxes for templates that are present in the current terms_and_conditions
-        var termsValue = document.getElementById('terms').value;
-        document.querySelectorAll('.select-template-checkbox').forEach(function(checkbox) {
-            var content = checkbox.getAttribute('data-content');
-            // Check if the content exists in the textarea (simple substring match)
-            if (termsValue.includes(content)) {
-                checkbox.checked = true;
-            } else {
-                checkbox.checked = false;
-            }
-        });
+        // var termsValue = document.getElementById('terms').value;
+        // document.querySelectorAll('.select-template-checkbox').forEach(function(checkbox) {
+        //     var content = checkbox.getAttribute('data-content');
+        //     // Check if the content exists in the textarea (simple substring match)
+        //     if (termsValue.includes(content)) {
+        //         checkbox.checked = true;
+        //     } else {
+        //         checkbox.checked = false;
+        //     }
+        // });
     });
    
     document.getElementById('closeLoadTemplateModal').onclick = function() {
@@ -220,7 +226,7 @@
             document.getElementById('terms').value = combinedContent.trim();
         }
         document.getElementById('loadTemplateModal').style.display = 'none';
-    });*/
+    });
     document.addEventListener('DOMContentLoaded', function () {
         const itemTable = document.querySelector('#poTable tbody');
         const subtotalElement = document.querySelector('.subtotal');
@@ -307,35 +313,35 @@
     document.getElementById('saveChanges').addEventListener('click', function() {
         const form = document.getElementById('edit_po');
         // Remove any existing status input to avoid duplicates
-        const existingStatusInput = form.querySelector('input[name="status"]');
-        if (existingStatusInput) {
-            existingStatusInput.remove();
-        }
-        const statusInput = document.createElement('input');
-        statusInput.type = 'hidden';
-        statusInput.name = 'status';
-        statusInput.value = '<?php echo $purchaseOrder['status']; ?>'; // Keep the current status
-        form.appendChild(statusInput);
+        // const existingStatusInput = form.querySelector('input[name="status"]');
+        // if (existingStatusInput) {
+        //     existingStatusInput.remove();
+        // }
+        // const statusInput = document.createElement('input');
+        // statusInput.type = 'hidden';
+        // statusInput.name = 'status';
+        // statusInput.value = '<?php //echo $purchaseOrder['status']; ?>'; // Keep the current status
+        // form.appendChild(statusInput);
         formSubmitHandler.call(form, new Event('submit'));
     });
-    // Save as Draft
-    document.getElementById('saveDraft').addEventListener('click', function() {
-        const form = document.getElementById('edit_po');
-        const statusInput = document.createElement('input');
-        statusInput.type = 'hidden';
-        statusInput.name = 'status';
-        statusInput.value = 'draft';
-        form.appendChild(statusInput);
-        formSubmitHandler.call(form, new Event('submit'));
-    });
-    // Submit to Approve
-    document.getElementById('submitToApprove').addEventListener('click', function() {
-        const form = document.getElementById('edit_po');
-        const statusInput = document.createElement('input');
-        statusInput.type = 'hidden';
-        statusInput.name = 'status';
-        statusInput.value = 'pending';
-        form.appendChild(statusInput);
-        formSubmitHandler.call(form, new Event('submit'));
-    });
+    // // Save as Draft
+    // document.getElementById('saveDraft').addEventListener('click', function() {
+    //     const form = document.getElementById('edit_po');
+    //     const statusInput = document.createElement('input');
+    //     statusInput.type = 'hidden';
+    //     statusInput.name = 'status';
+    //     statusInput.value = 'draft';
+    //     form.appendChild(statusInput);
+    //     formSubmitHandler.call(form, new Event('submit'));
+    // });
+    // // Submit to Approve
+    // document.getElementById('submitToApprove').addEventListener('click', function() {
+    //     const form = document.getElementById('edit_po');
+    //     const statusInput = document.createElement('input');
+    //     statusInput.type = 'hidden';
+    //     statusInput.name = 'status';
+    //     statusInput.value = 'pending';
+    //     form.appendChild(statusInput);
+    //     formSubmitHandler.call(form, new Event('submit'));
+    // });
 </script>
