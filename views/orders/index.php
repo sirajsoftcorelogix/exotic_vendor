@@ -517,7 +517,7 @@
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Order Details</h2>
 
                     <div class="flex items-start mb-6 pb-6 border-b">
-                        <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md h-28
+                        <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md h-36
                          object-cover">
                         <div class="ml-6 text-sm text-gray-600 space-y-1">
                             <p><strong>Order Number:</strong> <span id="order_number"></span></p>
