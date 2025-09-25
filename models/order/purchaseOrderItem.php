@@ -51,9 +51,10 @@ class PurchaseOrderItem {
         return $stmt->execute();
     }
     public function updatePurchaseOrderItems($id, $data) {
-        $query = "UPDATE vp_po_items SET gst = ?, quantity = ?, price = ?, amount = ? WHERE id = ?";
+        $query = "UPDATE vp_po_items SET title = ?, gst = ?, quantity = ?, price = ?, amount = ? WHERE id = ?";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("iiddd",             
+        $stmt->bind_param("siiddi",
+            $data['title'],             
             $data['gst'],
             $data['quantity'],
             $data['price'],

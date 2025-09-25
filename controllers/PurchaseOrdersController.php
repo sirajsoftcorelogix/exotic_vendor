@@ -344,6 +344,7 @@ class PurchaseOrdersController {
         $quantity = isset($_POST['quantity']) ? $_POST['quantity'] : [];
         $amount = isset($_POST['amount']) ? $_POST['amount'] : [];
         $price = isset($_POST['price']) ? $_POST['price'] : [];
+        $data = isset($_POST) ? $_POST : [];
         // Update purchase order items
         $itemsUpdated = true;
         foreach ($gst as $index => $gstValue) {
@@ -358,6 +359,7 @@ class PurchaseOrdersController {
                 
             ];
             $id = isset($_POST['item_ids'][$index]) ? $_POST['item_ids'][$index] : 0;
+            
             $itemId = $purchaseOrderItemsModel->updatePurchaseOrderItems($id, $items);
             if (!$itemId) {
                 $itemsUpdated = false;
@@ -403,6 +405,15 @@ class PurchaseOrdersController {
         if (!$po_id || !$status) {
             echo json_encode(['success' => false, 'message' => 'Invalid input.']);
             exit;
+        }
+        if ($status === 'cancelled') {
+            $reason = $_POST['reason'] ?? '';
+            if (empty($reason)) {
+                echo json_encode(['success' => false, 'message' => 'Cancellation reason is required.']);
+                exit;
+            }
+            // Update cancellation reason in DB
+            $purchaseOrdersModel->updateCancellationReason($po_id, $reason);
         }
 
         $isUpdated = $purchaseOrdersModel->updateStatus($po_id, $status);
