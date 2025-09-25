@@ -509,45 +509,67 @@
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Order Details</h2>
 
                     <div class="flex items-start mb-6 pb-6 border-b">
-                        <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover">
+                        <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md h-28
+                         object-cover">
                         <div class="ml-6 text-sm text-gray-600 space-y-1">
-                            <p><strong>Order Number:</strong> </p>
-                            <p><strong>Order Date:</strong> </p>
-                            <p><strong>Item:</strong> </p>                            
-                            <p><strong>Item Code:</strong> </p>
-                           
+                            <p><strong>Order Number:</strong> <span id="order_number"></span></p>
+                            <p><strong>Order Date:</strong> <span id="order_date"></span></p>
+                            <p><strong>HSN Code:</strong> <span id="hsn"></span></p>
+                            <p><strong>Category:</strong> <span id="category"></span></p>
+                            <p><strong>Quantity:</strong> <span id="quantity"></span></p>
+                            <p><strong>Shipping Country:</strong> <span id="shipping_country"></span></p>  
                         </div>
                     </div>
 
                     <form id="invoice-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Description: </label>
-                                <span class="text-gray-600" id="description">Order for electronic items</span>
+                                <label class="text-sm font-medium text-gray-700">Title: </label>
+                                <span class="text-gray-600" id="item"></span>
+                            </div>                            
+                             <div>
+                                <label class="text-sm font-medium text-gray-700">Sub Category: </label>
+                                <span class="text-gray-600" id="sub_category"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Size: </label>
+                                <span class="text-gray-600" id="size"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Color: </label>
+                                <span class="text-gray-600" id="color"></span>
+                            </div>
+                            <div>
+                                <label for="item_price" class="text-sm font-medium text-gray-700">Item Price: </label>
+                                <span class="text-gray-600" id="item_price">₹00</span>
+                            </div>
+                            <div>
+                                <label for="final_price" class="text-sm font-medium text-gray-700">Final Price: </label>
+                                <span class="text-gray-600" id="final_price">₹00</span>
+                            </div>
+                            <div>
+                                <label for="cost_price" class="text-sm font-medium text-gray-700">Cost Price: </label>
+                                <span class="text-gray-600" id="cost_price">₹00</span>
+                            </div>
+                            <div>
+                                <label for="currency" class="text-sm font-medium text-gray-700">Currency: </label>
+                                <span class="text-gray-600" id="currency">₹00</span>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">GST: </label>
                                 <span class="text-gray-600" id="gst">18%</span>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">HSN: </label>
-                                <span class="text-gray-600" id="hsn">8471</span>
+                                <label for="marketplace" class="text-sm font-medium text-gray-700">Marketplace: </label>
+                                <span class="text-gray-600" id="marketplace"></span>
                             </div>
                             <div>
-                                <label for="po_number" class="text-sm font-medium text-gray-700">PO Number: </label>
-                                <span class="text-gray-600" id="po_number">PO123456</span>
+                                <label for="local_stock" class="text-sm font-medium text-gray-700">Local Stock: </label>
+                                <span class="text-gray-600" id="local_stock"></span>
                             </div>
                             <div>
-                                <label for="quantity" class="text-sm font-medium text-gray-700">Quantity: </label>
-                                <span class="text-gray-600" id="quantity"></span>
-                            </div>
-                            <div>
-                                <label for="price" class="text-sm font-medium text-gray-700">Price: </label>
-                                <span class="text-gray-600" id="price">₹00</span>
-                            </div>
-                            <div>
-                                <label for="status" class="text-sm font-medium text-gray-700">Status: </label>
-                                <span class="text-gray-600" id="status">Pending</span>
+                                <label for="location" class="text-sm font-medium text-gray-700">Location: </label>
+                                <span class="text-gray-600" id="location"></span>
                             </div>
                         </div>
 
@@ -585,13 +607,19 @@ function closeImagePopup(e) {
             fetchOrderDetails(orderData.id).then(orderDetails => {
                 //console.log(orderDetails.order);
                 // Populate the popup with order details
-                document.getElementById('description').textContent = orderDetails.order.description || 'N/A';
-                document.getElementById('gst').textContent = orderDetails.order.gst || 'N/A';
-                document.getElementById('hsn').textContent = orderDetails.order.hsn || 'N/A';
-                document.getElementById('po_number').textContent = orderDetails.order.po_number || 'N/A';
-                document.getElementById('quantity').textContent = orderDetails.order.quantity || 'N/A';
-                document.getElementById('price').textContent = orderDetails.order.total_price ? '₹' + orderDetails.order.total_price : 'N/A';
-                document.getElementById('status').textContent = orderDetails.status ? orderDetails.status.charAt(0).toUpperCase() + orderDetails.status.slice(1) : 'N/A';
+                document.getElementById('gst').textContent = orderDetails.order.gst || 'N/A';                       
+                
+                document.getElementById('final_price').textContent = orderDetails.order.finalprice ? '₹' + orderDetails.order.finalprice : 'N/A';
+                document.getElementById('item_price').textContent = orderDetails.order.itemprice ? '₹' + orderDetails.order.itemprice : 'N/A';
+                document.getElementById('cost_price').textContent = orderDetails.order.cost_price ? '₹' + orderDetails.order.cost_price : 'N/A';
+                document.getElementById('currency').textContent = orderDetails.order.currency || 'N/A';
+                document.getElementById('item').textContent = orderDetails.order.title || 'N/A';
+                document.getElementById('sub_category').textContent = orderDetails.order.subcategories || 'N/A';
+                document.getElementById('size').textContent = orderDetails.order.size || 'N/A';
+                document.getElementById('color').textContent = orderDetails.order.color || 'N/A';
+                document.getElementById('marketplace').textContent = orderDetails.order.marketplace_vendor || 'N/A';
+                document.getElementById('local_stock').textContent = orderDetails.order.local_stock || 'N/A';
+                document.getElementById('location').textContent = orderDetails.order.location || 'N/A';
                 
                 // Other details
                 const imgElem = document.querySelector('#vendor-popup-panel img');
@@ -600,8 +628,10 @@ function closeImagePopup(e) {
                 infoDiv.innerHTML = `
                     <p><strong>Order Number:</strong> ${orderDetails.order.order_number || 'N/A'}</p>
                     <p><strong>Order Date:</strong> ${orderDetails.order.order_date || 'N/A'}</p>
-                    <p><strong>Item:</strong> ${orderDetails.order.title || 'N/A'}</p>                    
-                    <p><strong>Item Code:</strong> ${orderDetails.order.item_code || 'N/A'}</p>                    
+                    <p><strong>HSN Code:</strong> ${orderDetails.order.hsn || 'N/A'}</p>
+                    <p><strong>Category:</strong> ${orderDetails.order.groupname || 'N/A'}</p>
+                    <p><strong>Quantity:</strong> ${orderDetails.order.quantity || 'N/A'}</p>
+                    <p><strong>Shipping Country:</strong> ${orderDetails.order.shipping_country || 'N/A'}</p>
                 `;
             });
             openPopup();
