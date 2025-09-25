@@ -97,7 +97,7 @@ class PurchaseOrder {
         return $stmt->execute();
     }
     public function updateStatus($id, $status) {
-        $allowedStatuses = ['pending', 'ordered', 'received', 'cancelled']; // Define allowed statuses
+        $allowedStatuses = ['pending', 'ordered', 'received', 'cancelled', 'draft']; // Define allowed statuses
         if (!in_array($status, $allowedStatuses)) {
             return false; // Invalid status
         }
@@ -148,6 +148,12 @@ class PurchaseOrder {
         $sql = "UPDATE purchase_orders SET vendor_invoice = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param("si", $invoicePath, $id);
+        return $stmt->execute();
+    }
+    public function updateCancellationReason($id, $reason) {
+        $sql = "UPDATE purchase_orders SET cancellation_reason = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("si", $reason, $id);
         return $stmt->execute();
     }
 }

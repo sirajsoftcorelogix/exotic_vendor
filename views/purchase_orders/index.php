@@ -117,9 +117,9 @@
                                 <?php if ($order['status'] == 'pending' || $order['status'] == 'draft'): ?>
                                 <li onclick="handleAction('Edit', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-pencil-alt"></i> Edit PO</li>
                                 <?php endif; ?>
-                                <?php if ($order['status'] == 'draft'): ?>
-                                <li onclick="handleAction('Approved', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-check-circle"></i> Approve PO</li>                                
-                                <?php else: ?>
+                                <?php /*if ($order['status'] == 'draft'): ?>
+                                <li onclick="handleAction('Approved', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-check-circle"></i> Draft to Create PO</li>                                
+                                <?php else: */?>
                                 <li onclick="handleAction('ChangeStatus', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-exchange-alt"></i> Change Status</li>
                                 <?php if ($order['status'] == 'cancelled'): ?>
                                 <li onclick="handleAction('Delete', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-trash-alt"></i> Delete PO</li>
@@ -127,7 +127,7 @@
                                 <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
                                 <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
-                                <?php endif; ?>
+                                <?php //endif; ?>
                             </ul>
                             </div>
                             
@@ -303,12 +303,15 @@
       <input type="hidden" id="status-po-id">
       <label for="status-select" class="block mb-2 text-sm font-medium text-gray-700">Select Status:</label>
       <select id="status-select" class="w-full border rounded-md p-2 mb-4">
+        <option value="" disabled selected>Select status</option>
+        <option value="draft">Draft</option>
         <option value="pending">Pending</option>
         <option value="ordered">Ordered</option>
         <option value="received">Received</option>
         <!-- <option value="delivered">Delivered</option> -->
         <option value="cancelled">Cancelled</option>
       </select>
+      <textarea name="cancelation_reason" id="cancelation_reason" class="w-full border rounded-md p-2 mb-4 hidden" rows="3" placeholder="Enter cancellation reason..."></textarea>
       <div class="flex justify-end gap-2">
         <button type="button" id="status-cancel-btn" class="bg-gray-200 px-4 py-1 rounded">Cancel</button>
         <button type="submit" class="bg-blue-600 text-white px-4 py-1 rounded">Update</button>
@@ -758,12 +761,20 @@ document.getElementById('status-form').onsubmit = function(e) {
   const poId = document.getElementById('status-po-id').value;
   const status = document.getElementById('status-select').value;
   const msgDiv = document.getElementById('status-msg');
+  if (status === 'cancelled') {
+      const reason = document.getElementById('cancelation_reason').value.trim();
+      if (!reason) {
+          msgDiv.textContent = 'Please provide a cancellation reason.';
+          msgDiv.style.color = 'red';
+          return;
+      }
+  }
   msgDiv.textContent = 'Updating...';
 
   fetch('?page=purchase_orders&action=update_status', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: 'po_id=' + encodeURIComponent(poId) + '&status=' + encodeURIComponent(status)
+    body: 'po_id=' + encodeURIComponent(poId) + '&status=' + encodeURIComponent(status) + (status === 'cancelled' ? '&reason=' + encodeURIComponent(document.getElementById('cancelation_reason').value.trim()) : '')   
   })
   .then(r => r.json())
   .then(data => {
@@ -781,6 +792,15 @@ document.getElementById('status-form').onsubmit = function(e) {
     msgDiv.textContent = 'Error updating status.';
   });
 };
+// Show/hide cancelation reason based on status
+document.getElementById('status-select').addEventListener('change', function() {
+    const reasonField = document.getElementById('cancelation_reason');
+    if (this.value === 'cancelled') {
+        reasonField.classList.remove('hidden');
+    } else {
+        reasonField.classList.add('hidden');
+    }
+    });
 
 // Optional: Close popup on overlay click
 document.getElementById('status-popup-overlay').addEventListener('click', function(e) {
