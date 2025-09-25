@@ -314,6 +314,14 @@
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a> -->
             </div>
+            <div class="right-0 top-0 absolute p-4">
+                <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <option value="painting" disabled selected>Painting</option>
+                    <option value="sculpture">Sculpture</option>
+                    <option value="handicraft">Handicraft</option>
+                    <option value="all">All</option>
+                </select>
+            </div>
         </div>
 
         <!-- Table h-96 overflow-y-scroll-->
