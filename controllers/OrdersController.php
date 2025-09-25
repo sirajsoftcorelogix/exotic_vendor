@@ -151,6 +151,7 @@ class OrdersController {
                 foreach ($order['cart'] as $item) {                
                 $data = [
                 'order_number' => $order['orderid'] ?? '',
+                'shipping_country' => $order['shipping_country'] ?? '',
                 'title' => $item['title'] ?? '',
 				'description' => $item['description'] ?? '',
                 'item_code' => $item['itemcode'] ?? '',
@@ -169,6 +170,7 @@ class OrdersController {
                 'hsn' => $item['hscode'] ?? '',
                 'local_stock' => $item['local_stock'] ?? '',
                 'cost_price' => $item['cp'] ?? '',
+                'location' => $item['location'] ?? '',
                 'location' => $item['location'] ?? '',
                 'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
                  ];
