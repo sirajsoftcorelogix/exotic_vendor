@@ -177,7 +177,7 @@ class Order{
         }
 
         // ✅ Check for duplicate combination
-        $checkSql = "SELECT COUNT(*) FROM vp_orders WHERE order_number = ? AND item_code = ?";
+        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1";
         $checkStmt = $this->db->prepare($checkSql);
         $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
         $checkStmt->execute();
@@ -219,7 +219,7 @@ class Order{
 			} else {
 				$types .= 's';
 			}
-			$values[] = $value;
+			$value = isset($data[$field]) ? $data[$field] : null;
 		}
 
 		// Debug (remove later)
@@ -230,13 +230,12 @@ class Order{
 		// Bind dynamically
 		$stmt->bind_param($types, ...$values);
 
+		// After execute
 		if (!$stmt->execute()) {
 			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
 		}
-
-		echo "</br>".'insert_id: '. $insertId = $stmt->insert_id;
+		$insertId = $this->db->insert_id; // ✅ use db object, not stmt
 		$stmt->close();
-
 		return ['success' => true, 'insert_id' => $insertId];
     }
 	
