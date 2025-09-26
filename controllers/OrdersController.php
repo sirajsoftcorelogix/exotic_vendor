@@ -209,7 +209,7 @@ class OrdersController {
                 'error' => isset($error) ? $error : '',
                 'log_details' => json_encode($result)
             ];
-            $ordersModel->updateOrderImportLog($log_id, $log_update_data);
+            //$ordersModel->updateOrderImportLog($log_id, $log_update_data);
         }
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
@@ -217,6 +217,7 @@ class OrdersController {
             'total' => $totalorder
         ], 'Import Orders Result');
     }
+	
     public function createPurchaseOrder() {
         is_login();
         global $ordersModel;
