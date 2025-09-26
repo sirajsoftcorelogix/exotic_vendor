@@ -232,6 +232,7 @@ class Order{
 
 		// After execute
 		if (!$stmt->execute()) {
+			echo "</br>".'Failed';
 			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
 		}
 		echo "insert_id: ".$insertId = $this->db->insert_id; // ✅ use db object, not stmt
