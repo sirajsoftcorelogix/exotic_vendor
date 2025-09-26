@@ -47,6 +47,10 @@ class Order{
                 $sql .= " AND ('status' = 'cancel')";
             }
         }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            $sql .= " AND groupname LIKE ?";
+            $params[] = '%' . $filters['category'] . '%';
+        }
 
         $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
@@ -105,6 +109,10 @@ class Order{
             } elseif ($filters['status_filter'] === 'cancelled') {
                 $sql .= " AND ('status' = 'cancel')";
             }
+        }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            $sql .= " AND groupname LIKE ?";
+            $params[] = '%' . $filters['category'] . '%';
         }
 
         $stmt = $this->db->prepare($sql);

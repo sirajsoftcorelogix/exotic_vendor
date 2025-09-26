@@ -245,4 +245,14 @@
 			? ['success' => true]
 			: ['success' => false, 'error' => 'Missing: ' . implode(', ', $missing)];
 	}
+
+	function getCategories() {
+		return [			
+			'paintings' => 'Paintings',
+			'sculptures' => 'Sculptures',
+			'textiles' => 'Textiles',
+			'jewelry' => 'Jewelry',
+			'homeandliving' => 'Home and Living'
+		];
+	}
 ?>

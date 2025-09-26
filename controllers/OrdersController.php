@@ -43,6 +43,11 @@ class OrdersController {
         } else {
             $filters['status_filter'] = 'all';
         }
+        if (!empty($_GET['category']) && in_array($_GET['category'], array_keys(getCategories()))) {
+            $filters['category'] = $_GET['category'];
+        } else {
+            $filters['category'] = 'all';
+        }
        
 
         // Use pagination in the database query for better performance

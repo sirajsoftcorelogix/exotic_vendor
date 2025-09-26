@@ -315,12 +315,13 @@
                 </a> -->
             </div>
             <div class="right-0 top-0 absolute p-4">
-                <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                    <option value="all" selected>All</option>    
-                    <option value="painting">Painting</option>
-                    <option value="sculpture">Sculpture</option>
-                    <option value="handicraft">Handicraft</option>
+                <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                    onchange="location.href='?page=orders&action=list&category=' + this.value;">
                     
+                    <option value="all" selected disabled>All Categories</option>
+                    <?php foreach (getCategories() as $key => $value): ?>
+                        <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                    <?php endforeach; ?>                    
                 </select>
             </div>
         </div>
