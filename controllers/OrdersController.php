@@ -149,32 +149,32 @@ class OrdersController {
             // Map API fields to your table columns
                 
                 foreach ($order['cart'] as $item) {                
-                $data = [
-                'order_number' => $order['orderid'] ?? '',
-                'shipping_country' => $order['shipping_country'] ?? '',
-                'title' => $item['title'] ?? '',
-				'description' => $item['description'] ?? '',
-                'item_code' => $item['itemcode'] ?? '',
-                'size' => $item['size'] ?? '',
-                'color' => $item['color'] ?? '',
-                'groupname' => $item['groupname'] ?? '',
-                'subcategories' => $item['subcategories'] ?? '',
-                'currency' => $item['currency'] ?? '',
-                'itemprice' => $item['itemprice'] ?? '',
-                'finalprice' => $item['finalprice'] ?? '',
-                'image' => $item['image'] ?? '',
-                'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
-                'quantity' => $item['qty'] ?? '',
-				'options' => $item['options'] ?? 0,
-                'gst' => $item['gst'] ?? '',
-                'hsn' => $item['hscode'] ?? '',
-                'local_stock' => $item['local_stock'] ?? '',
-                'cost_price' => $item['cp'] ?? '',
-                'location' => $item['location'] ?? '',
-                'location' => $item['location'] ?? '',
-                'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
-                 ];
-                $totalorder++;
+					$data = [
+					'order_number' => $order['orderid'] ?? '',
+					'shipping_country' => $order['shipping_country'] ?? '',
+					'title' => $item['title'] ?? '',
+					'description' => $item['description'] ?? '',
+					'item_code' => $item['itemcode'] ?? '',
+					'size' => $item['size'] ?? '',
+					'color' => $item['color'] ?? '',
+					'groupname' => $item['groupname'] ?? '',
+					'subcategories' => $item['subcategories'] ?? '',
+					'currency' => $item['currency'] ?? '',
+					'itemprice' => $item['itemprice'] ?? '',
+					'finalprice' => $item['finalprice'] ?? '',
+					'image' => $item['image'] ?? '',
+					'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
+					'quantity' => $item['qty'] ?? '',
+					'options' => $item['options'] ?? 0,
+					'gst' => $item['gst'] ?? '',
+					'hsn' => $item['hscode'] ?? '',
+					'local_stock' => $item['local_stock'] ?? '',
+					'cost_price' => $item['cp'] ?? '',
+					'location' => $item['location'] ?? '',
+					'location' => $item['location'] ?? '',
+					'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
+					 ];
+					$totalorder++;
                 }
                 // Add other fields as needed
            
