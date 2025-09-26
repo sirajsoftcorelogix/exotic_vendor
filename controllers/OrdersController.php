@@ -149,7 +149,7 @@ class OrdersController {
             // Map API fields to your table columns
                 
                 foreach ($order['cart'] as $item) {                
-					$data = [
+					$rdata = [
 					'order_number' => $order['orderid'] ?? '',
 					'shipping_country' => $order['shipping_country'] ?? '',
 					'title' => $item['title'] ?? '',
@@ -177,11 +177,11 @@ class OrdersController {
                 }
                 // Add other fields as needed
            
-            //print_array($data);
+            //print_array($rdata);
            
             //$totalorder = count($data);
-            //$rdata = $ordersModel->insertOrder($data);
-            $result[] = $data;
+            $data = $ordersModel->insertOrder($rdata);
+            $result[] = $rdata;
             //print_array($rdata);
             //if ($result){
                 if (isset($rdata['success']) && $rdata['success'] == 1) {
@@ -206,7 +206,7 @@ class OrdersController {
                 'error' => isset($error) ? $error : '',
                 'log_details' => json_encode($result)
             ];
-            //$ordersModel->updateOrderImportLog($log_id, $log_update_data);
+            $ordersModel->updateOrderImportLog($log_id, $log_update_data);
         }
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
