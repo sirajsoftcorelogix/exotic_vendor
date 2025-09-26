@@ -178,12 +178,12 @@ class OrdersController {
                 }
                 // Add other fields as needed
            
-            //echo "<br>";
-            //print_r($data);
-            // echo "<br>";
+            echo "<br>";
+            print_r($data);
+            echo "<br>";
            
             //$totalorder = count($data);
-            $rdata = $ordersModel->insertOrder($data);
+            //$rdata = $ordersModel->insertOrder($data);
             $result[] = $rdata;
             //print_array($rdata);
             //if ($result){
