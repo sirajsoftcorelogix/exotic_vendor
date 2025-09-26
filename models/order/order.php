@@ -191,39 +191,54 @@ class Order{
 
         // Insert
 		$table_name = 'vp_orders';
-		$InsertFields = ['order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 'cost_price', 'location', 'order_date'];
+		$InsertFields = [
+			'order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
+			'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 
+			'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 
+			'cost_price', 'location', 'order_date'
+		];
+
 		// Build SQL query
 		$columns = implode(', ', $InsertFields);
 		$placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
+		$sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 
-		echo $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
-		
 		$stmt = $this->conn->prepare($sql);
 		if (!$stmt) {
-			return ['success' => false, 'error' => 'Prepare failed: ' . $conn->error];
+			return ['success' => false, 'error' => 'Prepare failed: ' . $this->conn->error];
 		}
 
 		$types = '';
 		$values = [];
 		foreach ($InsertFields as $field) {
 			$value = isset($data[$field]) ? $data[$field] : null;
-			$types .= is_int($value) ? 'i' : 's';
+			if (is_int($value)) {
+				$types .= 'i';
+			} elseif (is_float($value) || is_double($value)) {
+				$types .= 'd';
+			} else {
+				$types .= 's';
+			}
 			$values[] = $value;
 		}
-		
-		echo "</br>".$types;
-		print_array($values);
+
+		// Debug (remove later)
+		echo "<br>SQL: " . $sql;
+		echo "<br>Types: " . $types;
+		echo "<pre>"; print_r($values); echo "</pre>";
+
 		// Bind dynamically
 		$stmt->bind_param($types, ...$values);
 
-        if (!$stmt->execute()) {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-        }
+		if (!$stmt->execute()) {
+			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+		}
 
-        $insertId = $stmt->insert_id;
-        $stmt->close();
+		$insertId = $stmt->insert_id;
+		$stmt->close();
 
-        return ['success' => true, 'insert_id' => $insertId];
+		return ['success' => true, 'insert_id' => $insertId];
+
     }
 	
     public function updateOrderStatus($id, $status, $po_number, $po_id = null, $deliveryDueDate = null) {
