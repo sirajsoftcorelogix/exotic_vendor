@@ -331,18 +331,19 @@
                 <thead class="bg-gray-50 rounded-md ">
                 <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky">
                     <th class="p-4">#</th>
-                    <th class="px-6 py-3">Order ID</th>
-                    <th class="px-6 py-3">Order Date</th>                   
-                    <th class="px-6 py-3">Item Code</th>
-                    <th class="px-6 py-3">Marketplace</th>
+                    <th class="px-2 py-3">Order ID</th>
+                    <th class="px-2 py-3">Order Date</th>                   
+                    <th class="px-2 py-3">Item Code</th>
+                    
                     <!-- <th class="px-12 py-3">Item</th> -->
-                    <th class="px-6 py-3">Image</th>
+                    <th class="px-2 py-3">Image</th>
+                    <th class="px-2 py-3">Marketplace</th>
                     <!-- <th class="px-6 py-3">Status</th> -->
-                    <th class="px-6 py-3">PO Number</th>
-                    <th class="px-6 py-3">PO Due Date</th>
+                    <th class="px-2 py-3">PO Number</th>
+                    <th class="px-2 py-3">PO Due Date</th>
                     <!-- <th class="px-6 py-3">Staff</th> -->
-                    <th class="px-6 py-3">Amount</th>
-                    <th class="px-6 py-3">Unit</th>
+                    <th class="px-2 py-3">Amount</th>
+                    <th class="px-2 py-3">Unit</th>
                     <!-- <th class="px-6 py-3">Location</th> -->
                     <!-- <th class="relative px-6 py-3"><span class="sr-only">Actions</span></th> -->
                 </tr>
@@ -365,22 +366,10 @@
                             <?= $order['order_number'] ?>
                         </a>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
+                    <td class="px-2 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
+                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
                     
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <?php 
-                            if($order['marketplace_vendor']=='Etsy'){
-                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Etsy</span>';
-                            } elseif($order['marketplace_vendor']=='Amazon'){
-                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Amazon</span>';
-                            } elseif($order['marketplace_vendor']=='eBay'){
-                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">eBay</span>';
-                            } else {
-                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-pink-100 text-pink-800">'.htmlspecialchars($order['marketplace_vendor'] ?? '').'</span>';
-                            }
-                        ?>
-                    </td>
+                   
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Swati Nagar</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">
@@ -389,7 +378,7 @@
                         </a>
                     </td> -->
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td> -->
-                    <td class="px-6 py-1">
+                    <td class="px-2 py-1">
                         <img 
                             class="h-28 rounded-md object-cover cursor-pointer" 
                             src="<?= $order['image'] ?>" 
@@ -397,18 +386,23 @@
                             onclick="openImagePopup('<?= $order['image'] ?>')"
                         >
                     </td>
+                     <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal">
+                        <?php 
+                           echo wordwrap($order['marketplace_vendor'], 15, "<br>\n", true);
+                        ?>
+                    </td>
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">
                             <span><?= ucfirst($order['status']) ?></span>                  
                         </a>
                     </td> -->
-                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                     <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal ">
                         <a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link text-blue-600 hover:underline">
                             <span><?php echo $order['po_number']; ?></span>
 
                         </a>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?php 
+                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?php 
                     if ($order['delivery_due_date']) {
                         $days = ceil((strtotime($order['delivery_due_date']) - time()) / (60 * 60 * 24));
                         echo date('d/m/Y', strtotime($order['delivery_due_date'])) . ' <br>' . $days . ' Days Remaining';
@@ -419,11 +413,11 @@
                     
                     </td>
                     <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
                         <?= isset($order['total_price']) ? '₹' . $order['total_price'] : '-' ?>
                     </td>
 
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
+                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['shipping_address'] ?></td> -->
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium rounded-r-md">
                         <a href="#" class="text-gray-500 hover:text-gray-700">
