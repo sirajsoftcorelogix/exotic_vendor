@@ -318,7 +318,7 @@
                 <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                     onchange="location.href='?page=orders&action=list&category=' + this.value;">
                     
-                    <option value="all" selected disabled>All Categories</option>
+                    <option value="all" selected >All Categories</option>
                     <?php foreach (getCategories() as $key => $value): ?>
                         <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                     <?php endforeach; ?>                    
