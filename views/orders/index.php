@@ -342,7 +342,7 @@
                     <th class="px-2 py-3">PO Number</th>
                     <th class="px-2 py-3">PO Due Date</th>
                     <!-- <th class="px-6 py-3">Staff</th> -->
-                    <th class="px-2 py-3">Amount</th>
+                    <!-- <th class="px-2 py-3">Amount</th> -->
                     <th class="px-2 py-3">Unit</th>
                     <!-- <th class="px-6 py-3">Location</th> -->
                     <!-- <th class="relative px-6 py-3"><span class="sr-only">Actions</span></th> -->
@@ -380,7 +380,7 @@
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td> -->
                     <td class="px-2 py-1">
                         <img 
-                            class="h-28 rounded-md object-cover cursor-pointer" 
+                            class="h-28 max-w-[100px] w-full mx-auto rounded-md object-cover cursor-pointer" 
                             src="<?= $order['image'] ?>" 
                             alt="" 
                             onclick="openImagePopup('<?= $order['image'] ?>')"
@@ -413,9 +413,9 @@
                     
                     </td>
                     <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
-                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <!-- <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
                         <?= isset($order['total_price']) ? '₹' . $order['total_price'] : '-' ?>
-                    </td>
+                    </td> -->
 
                     <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['shipping_address'] ?></td> -->
