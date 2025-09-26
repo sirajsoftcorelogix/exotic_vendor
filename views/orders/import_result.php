@@ -24,7 +24,7 @@ if(isset($data['imported']) && isset($data['total'])) {
 <?php
 if(isset($data['result']) && is_array($data['result'])) {
     foreach ($data['result'] as $order) {
-		print_array($order);
+		echo $order['success'];
         if (is_array($order) && isset($order['success'])) {
             if ($order['success'] === false) {
                 echo flash_message($order['message'], 'error');
