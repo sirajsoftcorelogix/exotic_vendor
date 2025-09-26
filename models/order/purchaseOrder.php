@@ -131,7 +131,7 @@ class PurchaseOrder {
         return false; // Return false if the purchase order was not found
     }
     public function get_po_status_log($po_id) {
-        $sql = "SELECT vpl.*, u.name AS changed_by_username FROM vp_po_status_log vpl LEFT JOIN vp_users u ON vpl.changed_by = u.id WHERE vpl.po_id = ? ORDER BY vpl.change_date DESC, vpl.id ASC";
+        $sql = "SELECT vpl.*, u.name AS changed_by_username FROM vp_po_status_log vpl LEFT JOIN vp_users u ON vpl.changed_by = u.id WHERE vpl.po_id = ? ORDER BY vpl.id ASC";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param("i", $po_id);
         $stmt->execute();
