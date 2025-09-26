@@ -177,7 +177,7 @@ class OrdersController {
                 }
                 // Add other fields as needed
            
-            print_array($data);
+            //print_array($data);
            
             //$totalorder = count($data);
             //$rdata = $ordersModel->insertOrder($data);
