@@ -230,15 +230,10 @@ class Order{
 		// Bind dynamically
 		$stmt->bind_param($types, ...$values);
 
-		if (!$stmt->execute()) {
-			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-		}
-
-		$insertId = $stmt->insert_id;
-		$stmt->close();
-
-		return ['success' => true, 'insert_id' => $insertId];
-
+		if ($stmt->execute()) {
+            return true; // Return true on success
+        }
+        return false; // Return false on failure
     }
 	
     public function updateOrderStatus($id, $status, $po_number, $po_id = null, $deliveryDueDate = null) {
