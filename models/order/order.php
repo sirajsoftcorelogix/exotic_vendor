@@ -195,16 +195,15 @@ class Order{
 		// Build SQL query
 		$columns = implode(', ', $InsertFields);
 		$placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
+
+		$sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 		
-        $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
-		
-        $stmt = $this->db->prepare($sql);
-		
+		$stmt = $this->conn->prepare($sql);
 		if (!$stmt) {
 			return ['success' => false, 'error' => 'Prepare failed: ' . $conn->error];
 		}
-		
-        $types = '';
+
+		$types = '';
 		$values = [];
 		foreach ($InsertFields as $field) {
 			$value = isset($data[$field]) ? $data[$field] : null;
