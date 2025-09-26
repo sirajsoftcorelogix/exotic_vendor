@@ -196,7 +196,7 @@ class Order{
 		$columns = implode(', ', $InsertFields);
 		$placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
 
-		$sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
+		echo $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 		
 		$stmt = $this->conn->prepare($sql);
 		if (!$stmt) {
@@ -210,7 +210,9 @@ class Order{
 			$types .= is_int($value) ? 'i' : 's';
 			$values[] = $value;
 		}
-
+		
+		echo "</br>".$types;
+		print_array($values);
 		// Bind dynamically
 		$stmt->bind_param($types, ...$values);
 
