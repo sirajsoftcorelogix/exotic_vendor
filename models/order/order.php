@@ -190,34 +190,30 @@ class Order{
         }
 
         // Insert
-        $sql = "INSERT INTO vp_orders 
-            (order_number, shipping_country, title, description, item_code, size, color, groupname, subcategories, currency, itemprice, finalprice, image, marketplace_vendor, quantity, options, gst, hsn, local_stock, cost_price, location, order_date) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+		$table_name = 'vp_orders';
+		$InsertFields = ['order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 'cost_price', 'location', 'order_date'];
+		// Build SQL query
+		$columns = implode(', ', $InsertFields);
+		$placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
+		
+        $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
+		
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssssssissss', 
-            $data['order_number'], 
-            $data['shipping_country'], 
-            $data['title'],
-            $data['description'],
-            $data['item_code'],
-            $data['size'],
-            $data['color'],
-            $data['groupname'],
-            $data['subcategories'],
-            $data['currency'],
-            $data['itemprice'],
-            $data['finalprice'],
-            $data['image'],
-            $data['marketplace_vendor'],
-            $data['quantity'],
-            $data['options'],
-            $data['gst'],
-            $data['hsn'],
-            $data['local_stock'],
-            $data['cost_price'],
-            $data['location'],
-            $data['order_date']
-        );
+		
+		if (!$stmt) {
+			return ['success' => false, 'error' => 'Prepare failed: ' . $conn->error];
+		}
+		
+        $types = '';
+		$values = [];
+		foreach ($InsertFields as $field) {
+			$value = isset($data[$field]) ? $data[$field] : null;
+			$types .= is_int($value) ? 'i' : 's';
+			$values[] = $value;
+		}
+
+		// Bind dynamically
+		$stmt->bind_param($types, ...$values);
 
         if (!$stmt->execute()) {
             $stmt->close();
