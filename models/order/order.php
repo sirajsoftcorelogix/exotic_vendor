@@ -163,7 +163,7 @@ class Order{
         }
     }*/
     public function insertOrder($data) {
-        //print_r($data);
+        //print_array($data);
         //echo "<br>";
         // Assuming $data is an associative array with keys matching the database columns
         if (empty($data) || !is_array($data)) {
@@ -211,21 +211,21 @@ class Order{
 		$types = '';
 		$values = [];
 		foreach ($InsertFields as $field) {
-			$value = isset($data[$field]) ? $data[$field] : null;
-			if (is_int($value)) {
+			$values[] = isset($data[$field]) ? $data[$field] : null;
+			if (is_int($values)) {
 				$types .= 'i';
-			} elseif (is_float($value) || is_double($value)) {
+			} elseif (is_float($values) || is_double($values)) {
 				$types .= 'd';
 			} else {
 				$types .= 's';
 			}
-			$value = isset($data[$field]) ? $data[$field] : null;
+			//$value = isset($data[$field]) ? $data[$field] : null;
 		}
 
 		// Debug (remove later)
-		echo "<br>SQL: " . $sql;
-		echo "<br>Types: " . $types;
-		echo "<pre>"; print_r($values); echo "</pre>";
+		//echo "<br>SQL: " . $sql;
+		//echo "<br>Types: " . $types;
+		//echo "<pre>"; print_r($values); echo "</pre>";
 
 		// Bind dynamically
 		$stmt->bind_param($types, ...$values);
@@ -235,7 +235,7 @@ class Order{
 			echo "</br>".'Failed';
 			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
 		}
-		echo "insert_id: ".$insertId = $this->db->insert_id; // ✅ use db object, not stmt
+		$insertId = $this->db->insert_id; // ✅ use db object, not stmt
 		$stmt->close();
 		return ['success' => true, 'insert_id' => $insertId];
     }
