@@ -169,7 +169,7 @@ class Order{
         if (empty($data) || !is_array($data)) {
             return ['success' => false, 'message' => 'Data is empty or not an array.'];
         }
-        $required = ['order_number', 'item_code', 'quantity'];
+        $required = ['order_number', 'item_code'];
         foreach ($required as $field) {
             if (empty($data[$field])) {
                 return ['success' => false, 'message' => "Missing required field: {$field}"];
