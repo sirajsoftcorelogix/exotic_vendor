@@ -186,10 +186,10 @@ class OrdersController {
            
             //$totalorder = count($data);
             $data = $ordersModel->insertOrder($rdata);
-            $result[] = $rdata;
+            $result[] = $data;
             //print_array($rdata);
             //if ($result){
-                if (isset($rdata['success']) && $rdata['success'] == 1) {
+                if (isset($data['success']) && $data['success'] == 1) {
                     // Handle error case
                     //renderTemplateClean('views/errors/error.php', ['message' => $result['message']], 'Import Error');
                     //return;

@@ -314,7 +314,7 @@
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a> -->
             </div>
-            <div class="right-0 top-0 absolute p-4">
+            <div class="right-0 top-0 absolute p-4 size">
                 <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                     onchange="location.href='?page=orders&action=list&category=' + this.value;">
                     
