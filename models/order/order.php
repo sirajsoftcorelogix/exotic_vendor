@@ -234,7 +234,7 @@ class Order{
 		if (!$stmt->execute()) {
 			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
 		}
-		$insertId = $this->db->insert_id; // ✅ use db object, not stmt
+		echo "insert_id: ".$insertId = $this->db->insert_id; // ✅ use db object, not stmt
 		$stmt->close();
 		return ['success' => true, 'insert_id' => $insertId];
     }
