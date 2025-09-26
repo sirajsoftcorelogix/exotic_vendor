@@ -292,11 +292,11 @@
                     <span class="px-1 text-sm">Processed</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                <a href="<?php echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                <!--<a href="<?php //echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">Cancelled</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                <!--<a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">In Progress</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
@@ -316,10 +316,11 @@
             </div>
             <div class="right-0 top-0 absolute p-4">
                 <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <option value="all" selected>All</option>    
                     <option value="painting">Painting</option>
                     <option value="sculpture">Sculpture</option>
                     <option value="handicraft">Handicraft</option>
-                    <option value="all">All</option>
+                    
                 </select>
             </div>
         </div>
@@ -333,7 +334,7 @@
                     <th class="px-6 py-3">Order ID</th>
                     <th class="px-6 py-3">Order Date</th>                   
                     <th class="px-6 py-3">Item Code</th>
-                    <!--<th class="px-6 py-3">Vendor Name</th> -->
+                    <th class="px-6 py-3">Marketplace</th>
                     <!-- <th class="px-12 py-3">Item</th> -->
                     <th class="px-6 py-3">Image</th>
                     <!-- <th class="px-6 py-3">Status</th> -->
@@ -367,9 +368,19 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
                     
-                    <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            
-                    </td> -->
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <?php 
+                            if($order['marketplace_vendor']=='Etsy'){
+                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Etsy</span>';
+                            } elseif($order['marketplace_vendor']=='Amazon'){
+                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Amazon</span>';
+                            } elseif($order['marketplace_vendor']=='eBay'){
+                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">eBay</span>';
+                            } else {
+                                echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-pink-100 text-pink-800">'.htmlspecialchars($order['marketplace_vendor'] ?? '').'</span>';
+                            }
+                        ?>
+                    </td>
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Swati Nagar</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">
