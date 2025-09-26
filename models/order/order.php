@@ -217,7 +217,6 @@ class Order{
 		$stmt->bind_param($types, ...$values);
 
         if (!$stmt->execute()) {
-            $stmt->close();
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
 
