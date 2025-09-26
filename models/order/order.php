@@ -47,6 +47,10 @@ class Order{
                 $sql .= " AND ('status' = 'cancel')";
             }
         }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            $sql .= " AND groupname LIKE ?";
+            $params[] = '%' . $filters['category'] . '%';
+        }
 
         $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
@@ -106,6 +110,10 @@ class Order{
                 $sql .= " AND ('status' = 'cancel')";
             }
         }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            $sql .= " AND groupname LIKE ?";
+            $params[] = '%' . $filters['category'] . '%';
+        }
 
         $stmt = $this->db->prepare($sql);
         if ($params) {
@@ -163,13 +171,13 @@ class Order{
         }
     }*/
     public function insertOrder($data) {
-        //print_r($data);
+        //print_array($data);
         //echo "<br>";
         // Assuming $data is an associative array with keys matching the database columns
         if (empty($data) || !is_array($data)) {
             return ['success' => false, 'message' => 'Data is empty or not an array.'];
         }
-        $required = ['order_number', 'item_code', 'quantity'];
+        $required = ['order_number', 'item_code'];
         foreach ($required as $field) {
             if (empty($data[$field])) {
                 return ['success' => false, 'message' => "Missing required field: {$field}"];
@@ -177,7 +185,7 @@ class Order{
         }
 
         // ✅ Check for duplicate combination
-        $checkSql = "SELECT COUNT(*) FROM vp_orders WHERE order_number = ? AND item_code = ?";
+        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1";
         $checkStmt = $this->db->prepare($checkSql);
         $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
         $checkStmt->execute();
@@ -190,36 +198,56 @@ class Order{
         }
 
         // Insert
-        $sql = "INSERT INTO vp_orders 
-            (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, gst, hsn, options, order_date) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssssssissss', 
-            $data['order_number'], 
-            $data['title'],
-            $data['item_code'],
-            $data['size'],
-            $data['color'],
-            $data['description'],
-            $data['image'],
-            $data['marketplace_vendor'],
-            $data['quantity'],
-            $data['gst'],
-            $data['hsn'],
-            $data['options'],
-            $data['order_date']
-        );
+		$table_name = 'vp_orders';
+		$InsertFields = [
+			'order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
+			'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 
+			'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 
+			'cost_price', 'location', 'order_date'
+		];
 
-        if (!$stmt->execute()) {
-            $stmt->close();
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-        }
+		// Build SQL query
+		$columns = implode(', ', $InsertFields);
+		$placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
+		$sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 
-        $insertId = $stmt->insert_id;
-        $stmt->close();
+		$stmt = $this->db->prepare($sql);
+		if (!$stmt) {
+			return ['success' => false, 'error' => 'Prepare failed: ' . $this->db->error];
+		}
 
-        return ['success' => true, 'insert_id' => $insertId];
+		$types = '';
+		$values = [];
+		foreach ($InsertFields as $field) {
+			$values[] = isset($data[$field]) ? $data[$field] : null;
+			if (is_int($values)) {
+				$types .= 'i';
+			} elseif (is_float($values) || is_double($values)) {
+				$types .= 'd';
+			} else {
+				$types .= 's';
+			}
+			//$value = isset($data[$field]) ? $data[$field] : null;
+		}
+
+		// Debug (remove later)
+		//echo "<br>SQL: " . $sql;
+		//echo "<br>Types: " . $types;
+		//echo "<pre>"; print_r($values); echo "</pre>";
+
+		// Bind dynamically
+		$stmt->bind_param($types, ...$values);
+
+		// After execute
+		if (!$stmt->execute()) {
+			echo "</br>".'Failed';
+			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+		}
+		$insertId = $this->db->insert_id; // ✅ use db object, not stmt
+		$stmt->close();
+		return ['success' => true, 'insert_id' => $insertId];
     }
+	
     public function updateOrderStatus($id, $status, $po_number, $po_id = null, $deliveryDueDate = null) {
         // Validate inputs
         if (empty($id) || empty($status)) {
@@ -252,6 +280,7 @@ class Order{
 
         return ['success' => true, 'message' => 'Status updated successfully.'];
     }
+	
     public function getOrderItems($searchTerm) {
         $sql = "SELECT * FROM vp_orders WHERE status = 'pending' AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
         $stmt = $this->db->prepare($sql);
@@ -281,6 +310,7 @@ class Order{
         }
         return $orderItems;
     }
+	
     public function updateOrderStatusByPO($po_id, $status) {
         $sql = "UPDATE vp_orders SET status = ? WHERE po_id = ?";
         $stmt = $this->db->prepare($sql);
@@ -301,6 +331,7 @@ class Order{
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+	
     public function updateOrderImportLog($log_id, $data) {
         if(empty($log_id) || empty($data['end_time'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];

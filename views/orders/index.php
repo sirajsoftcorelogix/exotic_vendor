@@ -292,11 +292,11 @@
                     <span class="px-1 text-sm">Processed</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                <a href="<?php echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                <!--<a href="<?php //echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">Cancelled</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
-                <!--<a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                     <span class="px-1 text-sm">In Progress</span>
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
@@ -315,11 +315,13 @@
                 </a> -->
             </div>
             <div class="right-0 top-0 absolute p-4">
-                <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                    <option value="painting">Painting</option>
-                    <option value="sculpture">Sculpture</option>
-                    <option value="handicraft">Handicraft</option>
-                    <option value="all">All</option>
+                <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                    onchange="location.href='?page=orders&action=list&category=' + this.value;">
+                    
+                    <option value="all" selected disabled>All Categories</option>
+                    <?php foreach (getCategories() as $key => $value): ?>
+                        <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                    <?php endforeach; ?>                    
                 </select>
             </div>
         </div>
@@ -330,18 +332,19 @@
                 <thead class="bg-gray-50 rounded-md ">
                 <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky">
                     <th class="p-4">#</th>
-                    <th class="px-6 py-3">Order ID</th>
-                    <th class="px-6 py-3">Order Date</th>                   
-                    <th class="px-6 py-3">Item Code</th>
-                    <!--<th class="px-6 py-3">Vendor Name</th> -->
+                    <th class="px-2 py-3">Order ID</th>
+                    <th class="px-2 py-3">Order Date</th>                   
+                    <th class="px-2 py-3">Item Code</th>
+                    
                     <!-- <th class="px-12 py-3">Item</th> -->
-                    <th class="px-6 py-3">Image</th>
+                    <th class="px-2 py-3">Image</th>
+                    <th class="px-2 py-3">Marketplace</th>
                     <!-- <th class="px-6 py-3">Status</th> -->
-                    <th class="px-6 py-3">PO Number</th>
-                    <th class="px-6 py-3">PO Due Date</th>
+                    <th class="px-2 py-3">PO Number</th>
+                    <th class="px-2 py-3">PO Due Date</th>
                     <!-- <th class="px-6 py-3">Staff</th> -->
-                    <th class="px-6 py-3">Amount</th>
-                    <th class="px-6 py-3">Unit</th>
+                    <!-- <th class="px-2 py-3">Amount</th> -->
+                    <th class="px-2 py-3">Unit</th>
                     <!-- <th class="px-6 py-3">Location</th> -->
                     <!-- <th class="relative px-6 py-3"><span class="sr-only">Actions</span></th> -->
                 </tr>
@@ -364,12 +367,10 @@
                             <?= $order['order_number'] ?>
                         </a>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
+                    <td class="px-2 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
+                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
                     
-                    <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            
-                    </td> -->
+                   
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Swati Nagar</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">
@@ -378,26 +379,31 @@
                         </a>
                     </td> -->
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td> -->
-                    <td class="px-6 py-1">
+                    <td class="px-2 py-1">
                         <img 
-                            class="h-28 rounded-md object-cover cursor-pointer" 
+                            class="h-28 max-w-[100px] w-full mx-auto rounded-md object-cover cursor-pointer" 
                             src="<?= $order['image'] ?>" 
                             alt="" 
                             onclick="openImagePopup('<?= $order['image'] ?>')"
                         >
+                    </td>
+                     <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal">
+                        <?php 
+                           echo wordwrap($order['marketplace_vendor'], 15, "<br>\n", true);
+                        ?>
                     </td>
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <a href="#" class="icon-link">
                             <span><?= ucfirst($order['status']) ?></span>                  
                         </a>
                     </td> -->
-                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                     <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal ">
                         <a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link text-blue-600 hover:underline">
                             <span><?php echo $order['po_number']; ?></span>
 
                         </a>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?php 
+                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?php 
                     if ($order['delivery_due_date']) {
                         $days = ceil((strtotime($order['delivery_due_date']) - time()) / (60 * 60 * 24));
                         echo date('d/m/Y', strtotime($order['delivery_due_date'])) . ' <br>' . $days . ' Days Remaining';
@@ -408,11 +414,11 @@
                     
                     </td>
                     <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <!-- <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
                         <?= isset($order['total_price']) ? '₹' . $order['total_price'] : '-' ?>
-                    </td>
+                    </td> -->
 
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
+                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
                     <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['shipping_address'] ?></td> -->
                     <!-- <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium rounded-r-md">
                         <a href="#" class="text-gray-500 hover:text-gray-700">

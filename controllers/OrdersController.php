@@ -43,6 +43,11 @@ class OrdersController {
         } else {
             $filters['status_filter'] = 'all';
         }
+        if (!empty($_GET['category']) && in_array($_GET['category'], array_keys(getCategories()))) {
+            $filters['category'] = $_GET['category'];
+        } else {
+            $filters['category'] = 'all';
+        }
        
 
         // Use pagination in the database query for better performance
@@ -149,7 +154,7 @@ class OrdersController {
             // Map API fields to your table columns
                 
                 foreach ($order['cart'] as $item) {                
-					$data = [
+					$rdata = [
 					'order_number' => $order['orderid'] ?? '',
 					'shipping_country' => $order['shipping_country'] ?? '',
 					'title' => $item['title'] ?? '',
@@ -171,19 +176,16 @@ class OrdersController {
 					'local_stock' => $item['local_stock'] ?? '',
 					'cost_price' => $item['cp'] ?? '',
 					'location' => $item['location'] ?? '',
-					'location' => $item['location'] ?? '',
 					'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
 					 ];
 					$totalorder++;
                 }
                 // Add other fields as needed
            
-            //echo "<br>";
-            //print_r($data);
-            // echo "<br>";
+            //print_array($rdata);
            
             //$totalorder = count($data);
-            $rdata = $ordersModel->insertOrder($data);
+            $data = $ordersModel->insertOrder($rdata);
             $result[] = $rdata;
             //print_array($rdata);
             //if ($result){
@@ -217,6 +219,7 @@ class OrdersController {
             'total' => $totalorder
         ], 'Import Orders Result');
     }
+	
     public function createPurchaseOrder() {
         is_login();
         global $ordersModel;
