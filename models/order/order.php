@@ -203,9 +203,9 @@ class Order{
 		$placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
 		$sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 
-		$stmt = $this->conn->prepare($sql);
+		$stmt = $this->db->prepare($sql);
 		if (!$stmt) {
-			return ['success' => false, 'error' => 'Prepare failed: ' . $this->conn->error];
+			return ['success' => false, 'error' => 'Prepare failed: ' . $this->db->error];
 		}
 
 		$types = '';
