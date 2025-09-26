@@ -538,51 +538,51 @@
                     <form id="invoice-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Title: </label>
+                                <label class="text-sm font-bold text-gray-700 ">Title: </label>
                                 <span class="text-gray-600" id="item"></span>
                             </div>                            
                              <div>
-                                <label class="text-sm font-medium text-gray-700">Sub Category: </label>
+                                <label class="text-sm font-bold text-gray-700">Sub Category: </label>
                                 <span class="text-gray-600" id="sub_category"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Size: </label>
+                                <label class="text-sm font-bold text-gray-700">Size: </label>
                                 <span class="text-gray-600" id="size"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Color: </label>
+                                <label class="text-sm font-bold text-gray-700">Color: </label>
                                 <span class="text-gray-600" id="color"></span>
                             </div>
                             <div>
-                                <label for="item_price" class="text-sm font-medium text-gray-700">Item Price: </label>
+                                <label for="item_price" class="text-sm font-bold text-gray-700">Item Price: </label>
                                 <span class="text-gray-600" id="item_price">₹00</span>
                             </div>
                             <div>
-                                <label for="final_price" class="text-sm font-medium text-gray-700">Final Price: </label>
+                                <label for="final_price" class="text-sm font-bold text-gray-700">Final Price: </label>
                                 <span class="text-gray-600" id="final_price">₹00</span>
                             </div>
                             <div>
-                                <label for="cost_price" class="text-sm font-medium text-gray-700">Cost Price: </label>
+                                <label for="cost_price" class="text-sm font-bold text-gray-700">Cost Price: </label>
                                 <span class="text-gray-600" id="cost_price">₹00</span>
                             </div>
                             <div>
-                                <label for="currency" class="text-sm font-medium text-gray-700">Currency: </label>
+                                <label for="currency" class="text-sm font-bold text-gray-700">Currency: </label>
                                 <span class="text-gray-600" id="currency">₹00</span>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">GST: </label>
+                                <label class="text-sm font-bold text-gray-700">GST: </label>
                                 <span class="text-gray-600" id="gst">18%</span>
                             </div>
                             <div>
-                                <label for="marketplace" class="text-sm font-medium text-gray-700">Marketplace: </label>
+                                <label for="marketplace" class="text-sm font-bold text-gray-700">Marketplace: </label>
                                 <span class="text-gray-600" id="marketplace"></span>
                             </div>
                             <div>
-                                <label for="local_stock" class="text-sm font-medium text-gray-700">Local Stock: </label>
+                                <label for="local_stock" class="text-sm font-bold text-gray-700">Local Stock: </label>
                                 <span class="text-gray-600" id="local_stock"></span>
                             </div>
                             <div>
-                                <label for="location" class="text-sm font-medium text-gray-700">Location: </label>
+                                <label for="location" class="text-sm font-bold text-gray-700">Location: </label>
                                 <span class="text-gray-600" id="location"></span>
                             </div>
                         </div>
