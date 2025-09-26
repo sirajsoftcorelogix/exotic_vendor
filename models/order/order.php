@@ -191,22 +191,31 @@ class Order{
 
         // Insert
         $sql = "INSERT INTO vp_orders 
-            (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, gst, hsn, options, order_date) 
+            (order_number, shipping_country, title, description, item_code, size, color, groupname, subcategories, currency, itemprice, finalprice, image, marketplace_vendor, quantity, options, gst, hsn, local_stock, cost_price, location, order_date) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ssssssssissss', 
             $data['order_number'], 
+            $data['shipping_country'], 
             $data['title'],
+            $data['description'],
             $data['item_code'],
             $data['size'],
             $data['color'],
-            $data['description'],
+            $data['groupname'],
+            $data['subcategories'],
+            $data['currency'],
+            $data['itemprice'],
+            $data['finalprice'],
             $data['image'],
             $data['marketplace_vendor'],
             $data['quantity'],
+            $data['options'],
             $data['gst'],
             $data['hsn'],
-            $data['options'],
+            $data['local_stock'],
+            $data['cost_price'],
+            $data['location'],
             $data['order_date']
         );
 
@@ -220,6 +229,7 @@ class Order{
 
         return ['success' => true, 'insert_id' => $insertId];
     }
+	
     public function updateOrderStatus($id, $status, $po_number, $po_id = null, $deliveryDueDate = null) {
         // Validate inputs
         if (empty($id) || empty($status)) {
@@ -252,6 +262,7 @@ class Order{
 
         return ['success' => true, 'message' => 'Status updated successfully.'];
     }
+	
     public function getOrderItems($searchTerm) {
         $sql = "SELECT * FROM vp_orders WHERE status = 'pending' AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
         $stmt = $this->db->prepare($sql);
@@ -281,6 +292,7 @@ class Order{
         }
         return $orderItems;
     }
+	
     public function updateOrderStatusByPO($po_id, $status) {
         $sql = "UPDATE vp_orders SET status = ? WHERE po_id = ?";
         $stmt = $this->db->prepare($sql);
@@ -301,6 +313,7 @@ class Order{
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+	
     public function updateOrderImportLog($log_id, $data) {
         if(empty($log_id) || empty($data['end_time'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];

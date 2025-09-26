@@ -171,7 +171,6 @@ class OrdersController {
 					'local_stock' => $item['local_stock'] ?? '',
 					'cost_price' => $item['cp'] ?? '',
 					'location' => $item['location'] ?? '',
-					'location' => $item['location'] ?? '',
 					'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
 					 ];
 					$totalorder++;
