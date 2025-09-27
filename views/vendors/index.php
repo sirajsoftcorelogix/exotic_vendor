@@ -371,6 +371,15 @@
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Category</label>
+                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory" id="addVendorCategory">
+                                        <option value="">Select Categories</option>
+                                        <?php foreach(getVendorCategory() as $key => $value): ?>
+                                            <option value="<?php echo $key; ?>"><?php echo $value; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
