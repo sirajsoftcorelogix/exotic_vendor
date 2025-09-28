@@ -95,7 +95,7 @@
                                     <div class="menu-wrapper">
                                         <button class="menu-button" onclick="toggleMenu(this)">
                                             &#x22EE; <!-- Vertical ellipsis -->
-                                        </button>
+                                        </button> 
                                         <ul class="menu-popup">
                                             <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <li onclick="openBankDtlsModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
