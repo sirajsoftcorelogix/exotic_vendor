@@ -221,7 +221,7 @@
                                     <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="addVendorCategory">
                                         <option value="" disabled>Select Categories</option>
                                         <?php foreach($category as $key => $value): ?>
-                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['name']; ?></option>
+                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -376,7 +376,7 @@
                                     <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="editVendorCategory">
                                         <option value="" disabled>Select Categories</option>
                                         <?php foreach($category as $key => $value): ?>
-                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['name']; ?></option>
+                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
