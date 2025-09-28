@@ -40,6 +40,7 @@ class VendorsController {
             'status_filter'=> $status_filter,
             'countryList' => $countryList["countries"],
             'stateList' => $stateList["states"],
+            'category' => $vendorsModel->listCategory()
         ];
         
         renderTemplate('views/vendors/index.php', $data, 'Manage Vendors');
@@ -77,6 +78,7 @@ class VendorsController {
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
             $vendor = $vendorsModel->getVendorById($id);
+            $vendor['categories'] = $vendorsModel->getVendorCategories($id);
             if ($vendor) {
                 echo json_encode($vendor);
             } else {
