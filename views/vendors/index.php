@@ -218,10 +218,10 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Category</label>
-                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory" id="addVendorCategory">
-                                        <option value="">Select Categories</option>
-                                        <?php foreach(getVendorCategory() as $key => $value): ?>
-                                            <option value="<?php echo $key; ?>"><?php echo $value; ?></option>
+                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                        <option value="" disabled>Select Categories</option>
+                                        <?php foreach($category as $key => $value): ?>
+                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -373,10 +373,10 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Category</label>
-                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory" id="addVendorCategory">
-                                        <option value="">Select Categories</option>
-                                        <?php foreach(getVendorCategory() as $key => $value): ?>
-                                            <option value="<?php echo $key; ?>"><?php echo $value; ?></option>
+                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                        <option value="" disabled>Select Categories</option>
+                                        <?php foreach($category as $key => $value): ?>
+                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -884,7 +884,29 @@
             document.getElementById("editRating").value = vendor.rating;
             document.getElementById("editNotes").value = vendor.notes;
             document.getElementById("editStatus").value = vendor.is_active;
+            //vendor category
+            // Fix for vendor.categories type
+           
+            const categorySelect = document.getElementById("editVendorCategory");
+            // Ensure vendor.categories is always an array
+            let categoriesArr = Array.isArray(vendor.categories)
+                ? vendor.categories
+                : (typeof vendor.categories === "string" && vendor.categories.length > 0
+                    ? vendor.categories.split(",")
+                    : []);
+            //console.log("Categories Array:", categoriesArr.includes(4) ? "Includes 4" : "Does not include 4", categoriesArr);
 
+            Array.from(categorySelect.options).forEach(option => {
+                
+                if (categoriesArr.map(String).includes(String(option.value))) {
+                    option.selected = true;
+                    //console.log(option.value + " - " + option.selected);
+                } else {
+                    option.selected = false;
+                    //console.log(option.value + " --- " + option.selected);
+                }
+            });
+            
             popupWrapperEdit.classList.remove('hidden');
             setTimeout(() => {
                 modalSliderEdit.classList.remove('translate-x-full');
@@ -901,7 +923,7 @@
 
     document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
-        var form = new FormData(this);
+        var form = new FormData(this);        
         var params = new URLSearchParams(form).toString();
         fetch('?page=vendors&action=addPost', {
             method: 'POST',
@@ -919,7 +941,7 @@
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
                 setTimeout(() => {
-                    window.location.href = '?page=vendors&action=list';
+                   window.location.href = '?page=vendors&action=list';
                 }, 1000); // redirect after 1 sec
             } else {
                 msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">

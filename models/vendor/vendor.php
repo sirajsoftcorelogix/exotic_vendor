@@ -136,8 +136,17 @@ class vendor {
             $data['addStatus']
         );
         if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Vendor added successfully.'];
+            // Get the last inserted vendor id
+            $vendor_id = $this->conn->insert_id;
+            $cat_status = '';
+            // Add vendor categories if provided
+            if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
+               $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
+            }
+            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status];
         }
+
+           
         return [
             'success' => false,
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
@@ -165,7 +174,15 @@ class vendor {
             $id
         );
         if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Vendor updated successfully.'];
+            // Get the last inserted vendor id
+            $vendor_id = $id;
+            $cat_status = '';
+            // Add vendor categories if provided
+            if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
+               $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
+            }
+            
+            return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status];
         }
         return [
             'success' => false,
@@ -255,6 +272,56 @@ class vendor {
             'totalRecords' => $totalRecords,
             'search'       => $search
         ];
+    }
+    public function listCategory(){
+        $sql = "SELECT * FROM category WHERE is_active=1";
+        $result = $this->conn->query($sql);
+        $category = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $category[] = $row;
+            }
+        }
+        return $category;
+    }
+    public function addVendorCategory($vendor_id,$category){       
+        if (empty($vendor_id)) {
+            return ['success' => false, 'message' => 'Vendor ID is required.'];
+        }
+
+        if (empty($category) || !is_array($category)) {
+            return ['success' => false, 'message' => 'Category is required and must be an array.'];
+        }
+
+        // Delete previous categories for this vendor
+        $deleteSql = "DELETE FROM vendors_category WHERE vendor_id = ?";
+        $deleteStmt = $this->conn->prepare($deleteSql);
+        $deleteStmt->bind_param('i', $vendor_id);
+        $deleteStmt->execute();
+        $deleteStmt->close();
+
+        // Insert new categories
+        $sql = "INSERT INTO vendors_category (vendor_id, category_id) VALUES (?, ?)";
+        $stmt = $this->conn->prepare($sql);
+        foreach ($category as $cat_id) {
+            $stmt->bind_param('ii', $vendor_id, $cat_id);
+            $stmt->execute();
+        }
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Categories updated successfully.'];
+    }
+    public function getVendorCategories($vendor_id) {
+        $sql = "SELECT category_id FROM vendors_category WHERE vendor_id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('i', $vendor_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $categories = [];
+        while ($row = $result->fetch_assoc()) {
+            $categories[] = $row['category_id'];
+        }
+        return $categories;
     }
 }
 ?>
