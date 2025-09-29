@@ -274,12 +274,16 @@ class vendor {
         ];
     }
     public function listCategory(){
-        $sql = "SELECT * FROM category WHERE is_active=1";
+        $sql = "SELECT * FROM category WHERE is_active=1 ORDER BY parent_id ASC, display_name ASC";
         $result = $this->conn->query($sql);
         $category = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $category[] = $row;
+            $parent_id = $row['parent_id'];
+            if (!isset($category[$parent_id])) {
+                $category[$parent_id] = [];
+            }
+            $category[$parent_id][] = $row;
             }
         }
         return $category;

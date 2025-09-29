@@ -216,15 +216,32 @@
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Category</label>
-                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="addVendorCategory">
-                                        <option value="" disabled>Select Categories</option>
-                                        <?php foreach($category as $key => $value): ?>
-                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
+                                
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Category</label>
+                                <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                    <option value="" disabled>Select Categories</option>
+                                    <?php /*foreach($category as $key => $value): ?>
+                                        <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
+                                    <?php endforeach; */ ?>
+                                    
+                                    <?php foreach($category[0] as $key => $value): ?>
+                                        <?php if ($value['parent_id'] == 0): // Only show parent categories ?>
+                                            <optgroup label="<?php echo $value['display_name']; ?>" style="font-weight: bold;">
+                                                <?php 
+                                                // Show subcategories if exist
+                                                foreach($category[$value['id']] as $subKey => $subValue): 
+                                                    if ($subValue['parent_id'] == $value['id']): ?>
+                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['display_name']; ?></option>
+                                                <?php 
+                                                    endif; 
+                                                endforeach; ?>
+                                                </optgroup>                                            
+                                        <?php endif; 
+                                        endforeach;
+                                        ?>
+                                </select>
                             </div>
                         </div>
 
@@ -371,17 +388,53 @@
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Category</label>
-                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="editVendorCategory">
-                                        <option value="" disabled>Select Categories</option>
-                                        <?php foreach($category as $key => $value): ?>
-                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
+                                
 								<div>
 								</div>
+                            </div>
+                            <div>
+                                <?php //print_array($category); ?>
+                                <label class="text-sm font-medium text-gray-700">Category</label>
+                                <select class="form-input w-full mt-1 h-32 select-checkbox" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                    <option value="" disabled>Select Categories</option>
+                                    <?php /* foreach($category as $key => $value): ?>
+                                        <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
+                                    <?php endforeach;*/
+                                    
+                                    if (isset($category[0]) && is_array($category[0])) {
+                                        foreach ($category[0] as $parent) {
+                                            $parentId = $parent['id'];
+                                            $parentName = $parent['display_name'];
+
+                                            // Only show parent as optgroup label, not as selectable option
+                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '" style="font-weight: bold;">';
+
+                                            // Show subcategories if exist
+                                            if (isset($category[$parentId]) && is_array($category[$parentId])) {
+                                                foreach ($category[$parentId] as $child) {
+                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['display_name']) . '</option>';
+                                                }
+                                            }
+
+                                            echo '</optgroup>';
+                                        }
+                                    }
+                                    ?>
+                                </select>
+                                <script>
+                                $('option').mousedown(function(e) {
+                                    e.preventDefault();
+                                    var originalScrollTop = $(this).parent().parent().scrollTop();
+                                    $(this).prop('selected', $(this).prop('selected') ? false : true);
+                                    var self = this;
+                                    $(this).parent().parent().focus();
+                                    setTimeout(function() {
+                                        $(self).parent().parent().scrollTop(originalScrollTop);
+                                    }, 0);
+                                    
+                                    return false;
+                                });
+                                </script>   
                             </div>
                         </div>
 
