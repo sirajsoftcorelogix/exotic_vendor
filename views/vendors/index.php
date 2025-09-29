@@ -81,21 +81,21 @@
                     <?php if (!empty($vendors)): ?>
                         <?php foreach ($vendors as $index => $vendor): ?>
                             <tr class="table-content-text">
-                                <td class="px-6 py-4 whitespace-nowrap"><?= $index + 1 ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($vendor['vendor_name']) ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($vendor['contact_name']) ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($vendor['city']) ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($vendor['state']) ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars(ucfirst($vendor['is_active'])) ?>
+                                <td class="px-6 py-4 whitespace-wrap"><?= $index + 1 ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['city']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['state']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'])) ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
                                     <div class="menu-wrapper">
                                         <button class="menu-button" onclick="toggleMenu(this)">
                                             &#x22EE; <!-- Vertical ellipsis -->
-                                        </button>
+                                        </button> 
                                         <ul class="menu-popup">
                                             <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <li onclick="openBankDtlsModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
