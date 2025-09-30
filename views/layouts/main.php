@@ -22,7 +22,7 @@ global $domain, $root_path, $page, $action, $conn;
 	<!-- Font Awesome (icons) -->
 	<!-- <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" /> -->
 	<!-- jQuery (required for AJAX, DOM manipulation, etc.) -->
-	<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script> -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
 	<link rel="stylesheet" href="style/style.css" />
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
@@ -30,6 +30,12 @@ global $domain, $root_path, $page, $action, $conn;
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ96j3p6QhL6pG6L7Jz4uB4pB7I9fX6p5z5w2k4t5N6g9/5o5e+n8t1t2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>
+	
+	<!-- Select2 CSS -->
+	<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+	<!-- Select2 JS -->
+	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 </head>
 <body class="bg-gray-100">
 <div class="flex h-screen ">

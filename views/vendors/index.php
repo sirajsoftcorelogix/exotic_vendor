@@ -216,17 +216,48 @@
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Category</label>
-                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="addVendorCategory">
-                                        <option value="" disabled>Select Categories</option>
-                                        <?php foreach($category as $key => $value): ?>
-                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
+                                
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Category</label>
+                               <?php /*?>
+                                <select class="form-input w-full mt-1 h-32 select-checkbox" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                    <option value="" disabled>Select Categories</option>
+                                    
+                                    <?php foreach($category[0] as $key => $value): ?>
+                                        <?php if ($value['parent_id'] == 0): // Only show parent categories ?>
+                                            <optgroup label="<?php echo $value['display_name']; ?>" style="font-weight: bold;">
+                                                <?php 
+                                                // Show subcategories if exist
+                                                foreach($category[$value['id']] as $subKey => $subValue): 
+                                                    if ($subValue['parent_id'] == $value['id']): ?>
+                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['display_name']; ?></option>
+                                                <?php 
+                                                    endif; 
+                                                endforeach; ?>
+                                                </optgroup>                                            
+                                        <?php endif; 
+                                        endforeach;
+                                        ?>
+                                </select>
+                                <?php */?>
+                                <br/>
+                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                    <option value="" disabled>Select Categories</option>
+                                    <?php foreach($category[0] as $key => $value): ?>
+                                        <?php if ($value['parent_id'] == 0): ?>
+                                            <optgroup label="<?php echo $value['display_name']; ?>">
+                                                <?php foreach($category[$value['id']] as $subKey => $subValue): 
+                                                    if ($subValue['parent_id'] == $value['id']): ?>
+                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['display_name']; ?></option>
+                                                <?php endif; endforeach; ?>
+                                            </optgroup>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                         </div>
+                        
 
                         <!-- Address -->
                         <div class="pt-4">
@@ -371,17 +402,37 @@
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Category</label>
-                                    <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="editVendorCategory">
-                                        <option value="" disabled>Select Categories</option>
-                                        <?php foreach($category as $key => $value): ?>
-                                            <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
+                                
 								<div>
 								</div>
+                            </div>
+                            <div>
+                                <?php //print_array($category); ?>
+                                <label class="text-sm font-medium text-gray-700">Category</label>
+                                <select class="form-input w-full mt-1 h-32 edit-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                    <option value="" disabled>Select Categories</option>
+                                    <?php                                     
+                                    if (isset($category[0]) && is_array($category[0])) {
+                                        foreach ($category[0] as $parent) {
+                                            $parentId = $parent['id'];
+                                            $parentName = $parent['display_name'];
+
+                                            // Only show parent as optgroup label, not as selectable option
+                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '" style="font-weight: bold;">';
+
+                                            // Show subcategories if exist
+                                            if (isset($category[$parentId]) && is_array($category[$parentId])) {
+                                                foreach ($category[$parentId] as $child) {
+                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['display_name']) . '</option>';
+                                                }
+                                            }
+
+                                            echo '</optgroup>';
+                                        }
+                                    }
+                                    ?>
+                                </select>
+                                
                             </div>
                         </div>
 
@@ -896,19 +947,23 @@
                 : (typeof vendor.categories === "string" && vendor.categories.length > 0
                     ? vendor.categories.split(",")
                     : []);
-            //console.log("Categories Array:", categoriesArr.includes(4) ? "Includes 4" : "Does not include 4", categoriesArr);
 
+            // Pre-select options
             Array.from(categorySelect.options).forEach(option => {
-                
-                if (categoriesArr.map(String).includes(String(option.value))) {
-                    option.selected = true;
-                    //console.log(option.value + " - " + option.selected);
-                } else {
-                    option.selected = false;
-                    //console.log(option.value + " --- " + option.selected);
-                }
+                option.selected = categoriesArr.map(String).includes(String(option.value));
             });
+
             
+            // Initialize Select2
+            $(document).ready(function() {
+                $('#editVendorCategory').select2({
+                    placeholder: "Select Categories",
+                    allowClear: true,
+                    width: '100%',
+                    closeOnSelect: false
+                });
+            });
+
             popupWrapperEdit.classList.remove('hidden');
             setTimeout(() => {
                 modalSliderEdit.classList.remove('translate-x-full');
@@ -1036,4 +1091,14 @@
             }
         });
     };
+</script>
+<script>
+    $(document).ready(function() {
+        $('#addVendorCategory').select2({
+            placeholder: "Select Categories",
+            allowClear: true,
+            width: '400',
+            closeOnSelect: false
+        });
+    });
 </script>

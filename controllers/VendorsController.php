@@ -27,7 +27,7 @@ class VendorsController {
 
         $countryList = $countryModel->getAllCountries();
         $stateList = $stateModel->getAllStates(105); // India ID = 105
-
+        //print_array($vendorsModel->listCategory());
         $data = [
             'vendors' => $vendors_data["vendors"],
             'page_no' => $page_no,
@@ -79,6 +79,7 @@ class VendorsController {
         if ($id > 0) {
             $vendor = $vendorsModel->getVendorById($id);
             $vendor['categories'] = $vendorsModel->getVendorCategories($id);
+            //print_array($vendor['categories']);
             if ($vendor) {
                 echo json_encode($vendor);
             } else {

@@ -647,3 +647,22 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
   overflow: visible; /* Not auto/hidden */
   z-index: 1;
 }
+/*select checkbox styles*/
+/* Target the Select2 container */
+.select2-container .select2-selection--multiple {
+    font-size: 12px; /* Adjust as needed */
+}
+
+/* Target dropdown options */
+.select2-results__option {
+    font-size: 12px; /* Adjust as needed */
+}
+
+/* Optional: placeholder text */
+.select2-container .select2-selection__placeholder {
+    font-size: 12px;
+}
+.advanced-multiselect + .select2-container .select2-selection--multiple {
+    font-size: 12px;
+}
+
