@@ -220,7 +220,7 @@
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Category</label>
-                                <select class="form-input w-full mt-1 h-32" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                <select class="form-input w-full mt-1 h-32 select-checkbox" multiple name="addVendorCategory[]" id="addVendorCategory">
                                     <option value="" disabled>Select Categories</option>
                                     <?php /*foreach($category as $key => $value): ?>
                                         <option value="<?php echo $value['id']; ?>"><?php echo $value['display_name']; ?></option>
