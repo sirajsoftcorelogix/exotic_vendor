@@ -648,23 +648,21 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
   z-index: 1;
 }
 /*select checkbox styles*/
-.select-checkbox option::before {
-  content: "\2610";
-  width: 1.3em;
-  text-align: center;
-  display: inline-block;
-}
-.select-checkbox option:checked::before {
-  content: "\2611";
+/* Target the Select2 container */
+.select2-container .select2-selection--multiple {
+    font-size: 12px; /* Adjust as needed */
 }
 
+/* Target dropdown options */
+.select2-results__option {
+    font-size: 12px; /* Adjust as needed */
+}
 
-.select-checkbox optgroup::before {
-  content: "\2610";
-  width: 1.3em;
-  text-align: center;
-  display: inline-block;
+/* Optional: placeholder text */
+.select2-container .select2-selection__placeholder {
+    font-size: 12px;
 }
-.select-checkbox optgroup:checked::before {
-  content: "\2611";
+.advanced-multiselect + .select2-container .select2-selection--multiple {
+    font-size: 12px;
 }
+
