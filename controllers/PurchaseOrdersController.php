@@ -304,6 +304,10 @@ class PurchaseOrdersController {
             exit;
            
         }
+        if(!$invoiceId){
+            echo json_encode(['success' => false, 'message' => 'Invoice ID is required.']);
+            exit;
+        }
         // Add payment to the invoice
         $paymentData = [
             'id' => isset($_POST['id']) ? $_POST['id'] : 0,
