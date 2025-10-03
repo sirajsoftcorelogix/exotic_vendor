@@ -127,6 +127,7 @@
                                 <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
                                 <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
+                                
                                 <?php //endif; ?>
                             </ul>
                             </div>
@@ -295,6 +296,8 @@
         </div>
     </div>
 </div>
+
+
 <!-- Change Status Popup -->
 <div id="status-popup-overlay" class="fixed inset-0 bg-black bg-opacity-30 z-50 hidden flex items-center justify-center">
   <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
@@ -740,9 +743,48 @@ function handleAction(action, poId, el) {
                 alert('Error approving purchase order.');
             });
         }
-  }
-}
+  } else if (action === 'AddPaymentDetails') {
+    //     // Open the add payment details popup
+    //     const popupWrapper = document.getElementById('payment-popup');
+    //     const modalSlider = document.getElementById('payment-modal-slider');
+    //     const cancelPaymentBtn = document.getElementById('cancel-payment-btn');
+    //     const closePaymentPopupBtn = document.getElementById('close-payment-popup-btn');
+        
+    //     function openPaymentPopup() {
+    //         popupWrapper.classList.remove('hidden');
+    //         setTimeout(() => {
+    //             modalSlider.classList.remove('translate-x-full');
+    //         }, 10);
+    //     }
+    //     function closePaymentPopup() {
+    //         modalSlider.classList.add('translate-x-full');
+    //     }
 
+    //     modalSlider.addEventListener('transitionend', (event) => {
+    //         if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
+    //             popupWrapper.classList.add('hidden');
+    //         }
+    //     });
+    //     openPaymentPopup();
+    //     cancelPaymentBtn.addEventListener('click', closePaymentPopup);
+    //     closePaymentPopupBtn.addEventListener('click', closePaymentPopup);
+    //     // Store the PO ID if needed for form submission
+    //     document.getElementById('payment-po-id').value = poId;
+
+    //     // Fetch and populate po details
+    //     fetchPoDetails(poId).then(data => {
+    //         if (data.success) {
+    //         }
+    //     }).catch((err) => {            
+    //         console.debug('Fetch error:', err);
+    //     });
+    } else {
+      alert('Unknown action: ' + action);
+      console.debug('Unknown action:', action);
+      // Optionally, you could also log the entire data object
+      console.debug('Fetch data:', data);
+    }
+}
 // Close menu on outside click
 document.addEventListener('click', function (e) {
   if (!e.target.closest('.menu-wrapper')) {

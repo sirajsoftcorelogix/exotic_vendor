@@ -189,6 +189,15 @@ switch ($page) {
             case 'approve':
                 $controller->updateStatus();
                 break;
+            case 'add_payment':
+                $controller->addPayment();
+                break;
+            case 'get_payment':
+                $controller->getPayments();
+                break;
+            case 'remove_payment':
+                $controller->removePayment();
+                break;
             default:
                 $controller->index();
                 break;
