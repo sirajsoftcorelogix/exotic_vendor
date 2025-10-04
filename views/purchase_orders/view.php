@@ -221,9 +221,10 @@
             <div class="col-span-2 ">
                 <!-- <p class="amount-box-text"> <i class="fas <?php //echo $iconClass ?> text-2xl text-gray-600"></i></p> -->
                 <!-- <p class="amount-box-text"><a href="<?php //echo $invoice['invoice']; ?>" target="_blank"><?php //echo $inv_name; ?></a></p> -->
-                <a href="<?php echo $invoice['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button" style="width: 220px;">
+                <a href="<?php echo $invoice['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button mb-2" >
                   <i class="fas <?php echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
                 </a>
+                <button id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</button>
             </div>
           </div>
           <?php } ?>
@@ -278,8 +279,7 @@
     </div>
     <?php } ?>
     <div class="mt-8 flex justify-end space-x-4">
-      <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button" style="width: 220px;">Pending Amount : ₹<?php echo $purchaseOrder['total_cost'] - $data['total_amount_paid']; ?></button>
-      <button id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</button>
+      <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button" style="width: 220px;">Pending Amount : ₹<?php echo $purchaseOrder['total_cost'] - $data['total_amount_paid']; ?></button>      
     </div>
   </div>
   
