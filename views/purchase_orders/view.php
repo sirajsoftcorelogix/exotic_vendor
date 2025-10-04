@@ -1,6 +1,3 @@
-<?php
-//echo '*******************************body start*******************************';
-?>
 <div class="container mx-auto p-6 bg-white rounded-lg shadow-md">
   <div class="flex justify-between items-center">
     <h2 class="po-title">Purchase Order: <?= ($purchaseOrder['status'] == 'draft') ? 'DRAFT' : htmlspecialchars($purchaseOrder['po_number'] ?? '') ?></h2>
@@ -232,8 +229,8 @@
       </div>
     </div>
   </div>
-
-  <hr class="my-8 border-gray-200">
+<div class="container mx-auto p-6 bg-white rounded-lg shadow-md mt-8">
+  <!-- <hr class="my-8 border-gray-200"> -->
 
   <!-- Payment Details -->
   <div class="space-y-1.5">    
@@ -279,10 +276,10 @@
     </div>
     <?php } ?>
     <div class="mt-8 flex justify-end space-x-4">
-      <button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button" style="width: 220px;">Pending Amount : ₹<?php echo $purchaseOrder['total_cost'] - $data['total_amount_paid']; ?></button>      
+      <span class="bg-red-100 text-red-800 border font-semibold py-2 px-4 rounded-md action-button" style="width: 220px;">Pending Amount : ₹<?php echo $purchaseOrder['total_cost'] - $data['total_amount_paid']; ?></span>      
     </div>
   </div>
-  
+</div>
   <hr class="my-8 border-gray-200">
 
   
@@ -580,6 +577,4 @@ document.getElementById('amount_paid').addEventListener('input', function() {
     balanceDueField.value = newBalanceDue.toFixed(2);
 });
 </script>
-<?php
-//echo '*******************************body end*******************************';
-?>
+
