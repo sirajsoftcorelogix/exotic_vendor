@@ -108,7 +108,7 @@ document.getElementById('addVendorForm').addEventListener('submit', function(eve
     <div class="row mb-3">
     <div class="col-md-6">
         <lable for="gst_number" class="form-label">GST Number</lable>
-        <input type="text" id="gst_number" name="gst_number" class="form-control" required> 
+        <input type="text" id="gst_number" name="gst_number" class="form-control" > 
     </div>
     <div class="col-md-6">
         <label for="pan_number" class="form-label">PAN Number</label>

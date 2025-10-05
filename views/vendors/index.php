@@ -301,8 +301,8 @@
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Tax Information</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">GST Number <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addGstNumber" id="addGstNumber" />
+                                    <label class="text-sm font-medium text-gray-700">GST Number </label>
+                                    <input type="text" class="form-input w-full mt-1" name="addGstNumber" id="addGstNumber" />
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">PAN Number</label>
@@ -478,8 +478,8 @@
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Tax Information</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">GST Number <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editGstNumber" id="editGstNumber" />
+                                    <label class="text-sm font-medium text-gray-700">GST Number </label>
+                                    <input type="text" class="form-input w-full mt-1"  name="editGstNumber" id="editGstNumber" />
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">PAN Number</label>
