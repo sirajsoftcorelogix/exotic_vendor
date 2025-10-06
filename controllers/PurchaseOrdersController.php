@@ -227,7 +227,8 @@ class PurchaseOrdersController {
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
 
         if (!$poId) {
-            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            //echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            renderTemplate('views/errors/not_found.php', ['message' => 'Invalid Purchase Order ID.'], 'Invalid Purchase Order ID');
             exit;
         }
         $data = [];
@@ -238,10 +239,13 @@ class PurchaseOrdersController {
         $data['vendors'] = $vendorsModel->getAllVendors();
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
         $data['domain'] = $domain;
-        //print_array($data);
-        
+        //print_array($purchaseOrder);        
         $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId);
         $data['status_log'] = $purchaseOrdersModel->get_po_status_log($poId);
+        $data['poId'] = $poId;
+        $data['payment'] = $poInvoiceModel->getPaymentsByPoId($poId);
+        $data['vendor_bank'] = $poInvoiceModel->getVendorBankInfo($purchaseOrder['vendor_id']);
+        $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
         $address = $commanModel->get_exotic_address();
         foreach($address as $addr){
             if($addr['id'] == $purchaseOrder['delivery_address']){
@@ -270,6 +274,105 @@ class PurchaseOrdersController {
 
         //echo json_encode(['success' => true, 'data' => $purchaseOrder]);
         exit;
+    }
+    function addPayment() {
+        global $purchaseOrdersModel;
+        global $poInvoiceModel;
+        global $vendorsModel;
+        
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+        $invoiceId = isset($_POST['invoice_id']) ? $_POST['invoice_id'] : 0;
+        $vendorId = isset($_POST['vendor_id']) ? $_POST['vendor_id'] : 0;
+        $paymentDate = isset($_POST['payment_date']) ? $_POST['payment_date'] : '';
+        $payment_mode = isset($_POST['payment_mode']) ? $_POST['payment_mode'] : '';
+        $paymentNote = isset($_POST['payment_note']) ? $_POST['payment_note'] : '';
+        $bankTransactionReferenceNo = isset($_POST['bank_transaction_reference_no']) ? $_POST['bank_transaction_reference_no'] : '';
+        $amountPaid = isset($_POST['amount_paid']) ? $_POST['amount_paid'] : 0;
+        if (!$bankTransactionReferenceNo || !$paymentDate || !$payment_mode || !$amountPaid) {
+            echo json_encode(['success' => false, 'message' => 'All * fields are required.']);
+            exit;
+        }
+
+        $vendorBankAccountNumber = isset($_POST['vendor_bank_account_number']) ? $_POST['vendor_bank_account_number'] : '';
+        $vendorBankAccountName = isset($_POST['vendor_bank_account_name']) ? $_POST['vendor_bank_account_name'] : '';
+        $vendorBankName = isset($_POST['vendor_bank_name']) ? $_POST['vendor_bank_name'] : '';
+        $vendorBankIfscCode = isset($_POST['vendor_bank_ifsc_code']) ? $_POST['vendor_bank_ifsc_code'] : '';
+        $vendorBranchName = isset($_POST['vendor_branch_name']) ? $_POST['vendor_branch_name'] : '';
+        if( !$vendorBankAccountNumber || !$vendorBankAccountName || !$vendorBankName || !$vendorBankIfscCode || !$vendorBranchName ) {
+           
+            echo json_encode(['success' => false, 'message' => 'Vendor bank details are required.']);
+            exit;
+           
+        }
+        if(!$invoiceId){
+            echo json_encode(['success' => false, 'message' => 'Invoice ID is required.']);
+            exit;
+        }
+        // Add payment to the invoice
+        $paymentData = [
+            'id' => isset($_POST['id']) ? $_POST['id'] : 0,
+            'po_id' => $poId,
+            'invoice_id' => $invoiceId,
+            'vendor_id' => $vendorId,
+            'payment_date' => $paymentDate,
+            'payment_mode' => $payment_mode,
+            'payment_type' => isset($_POST['payment_type']) ? $_POST['payment_type'] : 'full',
+            'payment_note' => $paymentNote,
+            'payment_currency' => isset($_POST['payment_currency']) ? $_POST['payment_currency'] : 'INR',
+            'vendor_bank_account_number' => $vendorBankAccountNumber,
+            'vendor_bank_account_name' => $vendorBankAccountName,
+            'vendor_bank_name' => $vendorBankName,
+            'vendor_bank_ifsc_code' => $vendorBankIfscCode,
+            'vendor_branch_name' => $vendorBranchName,
+            'bank_transaction_reference_no' => $bankTransactionReferenceNo,
+            'payment_note' => $paymentNote,
+            'amount_paid' => $amountPaid,
+            'user_id' => $_SESSION['user']['id'] ?? 0,
+        ];
+        //print_array($paymentData);
+        $isAdded = $poInvoiceModel->addPayment($paymentData);
+        if (!$isAdded) {
+            echo json_encode(['success' => false, 'message' => 'Failed to add payment.']);
+            exit;
+        }
+
+        // Optionally, update the purchase order status if needed
+        //$purchaseOrdersModel->updateStatus($poId, 'partially_paid');
+
+        // If everything is successful, return success response
+        echo json_encode(['success' => true, 'message' => 'Payment added successfully.']);
+        exit;
+    }   
+    function getPayments(){
+        global $poInvoiceModel;
+        $Id = isset($_GET['id']) ? $_GET['id'] : 0;
+        if (!$Id) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Payment ID.']);
+            exit;
+        }
+        $payments = $poInvoiceModel->getPaymentsById($Id);
+        if ($payments === false) {
+            echo json_encode(['success' => false, 'message' => 'Failed to fetch payments.']);
+            exit;
+        }
+        echo json_encode(['success' => true, 'data' => $payments]);
+        exit;        
+    }
+    function removePayment(){
+        is_login();       
+        global $poInvoiceModel;
+        $Id = isset($_REQUEST['id']) ? $_REQUEST['id'] : 0;
+        if (!$Id) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Payment ID.']);
+            exit;
+        }
+        $isDeleted = $poInvoiceModel->deletePayment($Id);
+        if (!$isDeleted) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete payment.']);
+            exit;
+        }
+        echo json_encode(['success' => true, 'message' => 'Payment deleted successfully.']);
+        exit;        
     }
     function editPurchaseOrder() {
         is_login();

@@ -444,6 +444,20 @@
             $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
             $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
             $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+
+            // Prepare query string for pagination links
+            $search_params = $_GET;
+            unset($search_params['page_no'], $search_params['limit']);
+            $query_string = http_build_query($search_params);
+            $query_string = $query_string ? '&' . $query_string : '';
+
+            // Calculate start/end slot for 10 pages
+            $slot_size = 10;
+            $start = max(1, $page - floor($slot_size / 2));
+            $end = min($total_pages, $start + $slot_size - 1);
+            if ($end - $start < $slot_size - 1) {
+                $start = max(1, $end - $slot_size + 1);
+            }
             ?>
         <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8">
             <div>
@@ -451,31 +465,47 @@
             </div>
             <?php 
             // Prepare query string for pagination links
-            $search_params = $_GET;
-            unset($search_params['page_no'], $search_params['limit']);
-            $query_string = http_build_query($search_params);
-            $query_string = $query_string ? '&' . $query_string : '';
+            // $search_params = $_GET;
+            // unset($search_params['page_no'], $search_params['limit']);
+            // $query_string = http_build_query($search_params);
+            // $query_string = $query_string ? '&' . $query_string : '';
 
             //echo '****************************************  '.$query_string;
             if ($total_pages > 1): ?>
-            <span class="text-gray-600">Page</span>
-            <button id="prev-page" class="text-gray-600 hover:text-gray-900">
+            <!--<span class="text-gray-600">Page</span>
+             <button id="prev-page" class="text-gray-600 hover:text-gray-900">
                 
                 <a class="page-link" href="?page=orders&action=list&page_no=<?= $page-1 ?>&limit=<?= $limit ?><?= $query_string ?>" tabindex="-1">
 
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
                 </a>
-            </button>
-            <?php /*for ($i = 1; $i <= $total_pages; $i++): ?>
-            <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><a class="page-link" href="?page=orders&page_no=<?= $i ?>&limit=<?= $limit ?>"><?= $i ?></a></span>
-            <?php endfor; */?>
-            <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page ?></span>
-
-            <button id="next-page" class="text-gray-600 hover:text-gray-900">
+            </button> -->
+            
+            <!-- <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page ?></span> -->
+            <!-- Page Slots -->
+            
+            <!-- <button id="next-page" class="text-gray-600 hover:text-gray-900">
                 <a class="page-link" href="?page=orders&action=list&page_no=<?= $page+1 ?>&limit=<?= $limit ?><?= $query_string ?>">    
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                 </a>
-            </button>
+            </button> -->
+             <!-- Prev Button -->
+                <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
+                href="?page=orders&action=list&page_no=<?= $page-10 ?>&limit=<?= $limit ?><?= $query_string ?>">
+                    &laquo; Prev
+                </a>
+                <!-- Page Slots -->
+                <?php for ($i = $start; $i <= $end; $i++): ?>
+                    <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
+                    href="?page=orders&action=list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
+                        <?= $i ?>
+                    </a>
+                <?php endfor; ?>
+                <!-- Next Button -->
+                <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
+                href="?page=orders&action=list&page_no=<?= $page+10 ?>&limit=<?= $limit ?><?= $query_string ?>">
+                    Next &raquo;
+                </a>
             <?php endif; ?>
             <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
                 onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
