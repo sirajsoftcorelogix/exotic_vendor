@@ -981,9 +981,9 @@ class PurchaseOrdersController {
                 $tbody .= '<td style="border:1px solid #000; padding:6px;">' . htmlspecialchars($title) . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;"><img src="' . htmlspecialchars($data['img'][$i] ?? '') . '" style="width:auto; max-height:150px;"></td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['quantity'][$i] ?? '') . '</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($data['rate'][$i] ?? 0, 2) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format(isset($data['rate'][$i]) ? $data['rate'][$i] : 0, 2) . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['gst'][$i] ?? '') . '%</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($data['amount'][$i] ?? 0, 2) . '</td>';
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format( $data['quantity'][$i] * (isset($data['rate'][$i]) ? $data['rate'][$i] : 0), 2) . '</td>';
                 $tbody .= '</tr>';
             }
         }
@@ -991,8 +991,8 @@ class PurchaseOrdersController {
         // Load template
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}'],
-            [$po_number, $date, $delivery_due, $tbody, $subtotal, $shipping, $gst, $grand_total, $terms, $vendorInfo],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
+            [$po_number, $date, $delivery_due, $tbody, $subtotal, $shipping, $gst, $grand_total, $terms, $vendorInfo, $contactPerson],
             $temphtml
         );
 
