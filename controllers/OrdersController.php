@@ -81,7 +81,7 @@ class OrdersController {
     }
 	
     public function importOrders() {
-        is_login();
+        //is_login();
         global $ordersModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
