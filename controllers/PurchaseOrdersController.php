@@ -791,7 +791,19 @@ class PurchaseOrdersController {
         //Define HTML content
         $html = str_replace(
             ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
-            [$purchaseOrder['po_number'], date('d M Y', strtotime($purchaseOrder['created_at'])), date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])), $tbody, $purchaseOrder['subtotal'], $purchaseOrder['shipping_cost'], $purchaseOrder['total_gst'], $purchaseOrder['total_cost'], $purchaseOrder['terms_and_conditions'], $vendorInfo, $contactPerson],
+            [
+                $purchaseOrder['po_number'],
+                date('d M Y', strtotime($purchaseOrder['created_at'])),
+                date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])),
+                $tbody,
+                $purchaseOrder['subtotal'],
+                $purchaseOrder['shipping_cost'],
+                $purchaseOrder['total_gst'],
+                $purchaseOrder['total_cost'],
+                nl2br($purchaseOrder['terms_and_conditions']),
+                $vendorInfo,
+                $contactPerson
+            ],
             $temphtml
         );
         // $html = '
@@ -1029,7 +1041,7 @@ class PurchaseOrdersController {
         $shipping = $data['shipping_cost'] ?? 0;
         $gst = $data['total_gst'] ?? 0;
         $grand_total = $data['grand_total'] ?? 0;
-        $terms = $data['terms_and_conditions'] ?? '';
+        $terms = '<p>' . nl2br(htmlspecialchars($data['terms_and_conditions'] ?? '')) . '</p>';
         $vendor_id = $data['vendor'] ?? '';
         $user_id = $data['user_id'] ?? '';
 
@@ -1086,7 +1098,12 @@ class PurchaseOrdersController {
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['quantity'][$i] ?? '') . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format(isset($data['rate'][$i]) ? $data['rate'][$i] : 0, 2) . '</td>';
                 $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($data['gst'][$i] ?? '') . '%</td>';
-                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format( $data['quantity'][$i] * (isset($data['rate'][$i]) ? $data['rate'][$i] : 0), 2) . '</td>';
+                // Calculate amount including GST
+                $qty = isset($data['quantity'][$i]) ? $data['quantity'][$i] : 0;
+                $rate = isset($data['rate'][$i]) ? $data['rate'][$i] : 0;
+                $gstValue = isset($data['gst'][$i]) ? $data['gst'][$i] : 0;
+                $amount = $qty * $rate * (1 + ($gstValue / 100));
+                $tbody .= '<td style="border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($amount, 2) . '</td>';
                 $tbody .= '</tr>';
             }
         }

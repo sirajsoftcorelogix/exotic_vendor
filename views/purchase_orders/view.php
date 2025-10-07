@@ -136,9 +136,9 @@
   </div>
   <hr class="my-8 border-gray-200"> 
   <!-- Order Tracking Timeline -->
-  <div class="space-y-1.5">
+  <div class="w-full">
     <h2 class="timeline-title mb-8">Order Tracking:</h2>
-    <div class="grid grid-cols-8 bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-x-8 gap-y-2">
+    <div class="grid grid-cols-8 bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-y-2">
       <!-- Step 1: Approved -->
       <div class="timeline-step completed">
         <div class="flex flex-col items-center text-center">
