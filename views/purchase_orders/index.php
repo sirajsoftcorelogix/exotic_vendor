@@ -153,24 +153,36 @@
         $page = $page < 1 ? 1 : $page;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page, default 20
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
-
         $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         
+        // Prepare query string for pagination links
+        $search_params = $_GET;
+        unset($search_params['page_no'], $search_params['limit']);
+        $query_string = http_build_query($search_params);
+        $query_string = $query_string ? '&' . $query_string : '';
+
+        // Calculate start/end slot for 10 pages
+        $slot_size = 10;
+        $start = max(1, $page - floor($slot_size / 2));
+        $end = min($total_pages, $start + $slot_size - 1);
+        if ($end - $start < $slot_size - 1) {
+            $start = max(1, $end - $slot_size + 1);
+        }
         ?>
     <div class="bg-white rounded-xl shadow-md p-4">
       <div class="flex items-center justify-center">
         <div id="pagination-controls" class="flex items-center gap-4 text-sm text-gray-600">
-            <?php if ($total_pages > 1): ?>
+            <?php /*if ($total_pages > 1): ?>
             <span >Page</span>
             <button id="prev-page" class="p-2 rounded-full hover:bg-gray-100">
                 <a class="page-link" href="?page=purchase_orders&acton=list&page_no=<?= $page-1 ?>&limit=<?= $limit ?>" tabindex="-1">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
                 </a>
             </button>
-            <?php /*for ($i = 1; $i <= $total_pages; $i++): ?>
+            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
             <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><a class="page-link" href="?page=orders&page_no=<?= $i ?>&limit=<?= $limit ?>"><?= $i ?></a></span>
-            <?php endfor; */?>
+            <?php endfor; ?>
             <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page ?></span>
             <?php if ($page < $total_pages): ?>
             <button id="next-page" class="p-2 rounded-full hover:bg-gray-100">
@@ -180,6 +192,27 @@
             </button>
             <span class="text-sm text-gray-600">of <?= $total_pages ?></span>
             <?php endif; ?>
+            <?php endif; */?>
+            <?php            
+            //echo '****************************************  '.$query_string;
+            if ($total_pages > 1): ?>          
+             <!-- Prev Button -->
+                <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
+                href="?page=purchase_orders&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                    &laquo; Prev
+                </a>
+                <!-- Page Slots -->
+                <?php for ($i = $start; $i <= $end; $i++): ?>
+                    <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
+                    href="?page=purchase_orders&action=list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
+                        <?= $i ?>
+                    </a>
+                <?php endfor; ?>
+                <!-- Next Button -->
+                <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
+                href="?page=purchase_orders&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                    Next &raquo;
+                </a>
             <?php endif; ?>
             <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
                     onchange="location.href='?page=purchase_orders&acton=list&page_no=1&limit=' + this.value;">

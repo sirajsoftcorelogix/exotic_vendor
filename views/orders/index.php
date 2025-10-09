@@ -459,39 +459,16 @@
                 $start = max(1, $end - $slot_size + 1);
             }
             ?>
-        <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8">
+        <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 sticky bottom-0 bg-white py-4">
             <div>
                 <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($orders) ?></span> of <span class="font-medium"><?= $total_orders ?></span> orders</p>
             </div>
-            <?php 
-            // Prepare query string for pagination links
-            // $search_params = $_GET;
-            // unset($search_params['page_no'], $search_params['limit']);
-            // $query_string = http_build_query($search_params);
-            // $query_string = $query_string ? '&' . $query_string : '';
-
+            <?php            
             //echo '****************************************  '.$query_string;
-            if ($total_pages > 1): ?>
-            <!--<span class="text-gray-600">Page</span>
-             <button id="prev-page" class="text-gray-600 hover:text-gray-900">
-                
-                <a class="page-link" href="?page=orders&action=list&page_no=<?= $page-1 ?>&limit=<?= $limit ?><?= $query_string ?>" tabindex="-1">
-
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-                </a>
-            </button> -->
-            
-            <!-- <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page ?></span> -->
-            <!-- Page Slots -->
-            
-            <!-- <button id="next-page" class="text-gray-600 hover:text-gray-900">
-                <a class="page-link" href="?page=orders&action=list&page_no=<?= $page+1 ?>&limit=<?= $limit ?><?= $query_string ?>">    
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-                </a>
-            </button> -->
+            if ($total_pages > 1): ?>          
              <!-- Prev Button -->
                 <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
-                href="?page=orders&action=list&page_no=<?= $page-10 ?>&limit=<?= $limit ?><?= $query_string ?>">
+                href="?page=orders&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                     &laquo; Prev
                 </a>
                 <!-- Page Slots -->
@@ -503,7 +480,7 @@
                 <?php endfor; ?>
                 <!-- Next Button -->
                 <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
-                href="?page=orders&action=list&page_no=<?= $page+10 ?>&limit=<?= $limit ?><?= $query_string ?>">
+                href="?page=orders&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                     Next &raquo;
                 </a>
             <?php endif; ?>
