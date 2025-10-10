@@ -629,8 +629,9 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
   display: none;
   z-index: 1000;
   min-width: 120px;
-  max-height: 250px;
+  max-height: 265px;
   overflow-y: auto;
+  border-radius: 4px;
 }
 
 .menu-popup li {

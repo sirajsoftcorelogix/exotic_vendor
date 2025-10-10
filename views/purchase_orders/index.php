@@ -126,7 +126,9 @@
                                 <?php endif; ?>
                                 <li onclick="handleAction('Download', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-download"></i> Download PO</li>
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
-                                <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice </li>
+                                <li onclick="handleAction('UploadPerforma', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Performa</li>
+                                <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice</li>
+                                
                                 
                                 <?php //endif; ?>
                             </ul>
@@ -250,7 +252,7 @@
         <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Vendor Invoice</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b" id="invoice-title">Vendor Invoice</h2>
 
                     <div class="flex items-start mb-6 pb-6 border-b">
                         <!-- <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover"> -->
@@ -266,11 +268,11 @@
                     <form id="invoice-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                              <div>
-                                <label for="invoice_no" class="text-sm font-medium text-gray-700">Invoice No: <span class="text-red-500">*</span></label>
+                                <label for="invoice_no" class="text-sm font-medium text-gray-700"><span id="invoice-no-label">Invoice No: </span><span class="text-red-500">*</span></label>
                                 <input type="text" id="invoice_no" name="invoice_no" value="" class="form-input w-full mt-1">
                             </div>
                             <div>
-                                <label for="invoice_date" class="text-sm font-medium text-gray-700">Invoice Date: <span class="text-red-500">*</span></label>
+                                <label for="invoice_date" class="text-sm font-medium text-gray-700"><span id="invoice-date-label">Invoice Date: </span><span class="text-red-500">*</span></label>
                                 <input type="date" id="invoice_date" name="invoice_date" class="form-input w-full mt-1" max="<?= date('Y-m-d') ?>">
                             </div>
                             <div>
@@ -300,10 +302,10 @@
                         </div>
 
                         <div class="mb-6">
-                            <label class="text-sm font-medium text-gray-700 mb-1 block">Invoice PDF: <span class="text-red-500">*</span></label>
+                            <label class="text-sm font-medium text-gray-700 mb-1 block"><span id="invoice-pdf-label">Invoice PDF: </span><span class="text-red-500">*</span></label>
                             <div id="file-drop-area" class="file-drop-area">
                                 <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
-                                <p class="text-sm text-gray-500">Drag & Drop your invoice file here or</p>
+                                <p class="text-sm text-gray-500" id="file-drop-area-text">Drag & Drop your invoice file here or</p>
                                 <button type="button" id="choose-file-btn" class="mt-2 bg-white border border-gray-300 text-gray-700 px-4 py-1 rounded-md text-sm hover:bg-gray-50">Choose file</button>
                                 <input type="file" id="file-input" name="file_input" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
                                 <p class="text-xs text-gray-400 mt-2">Only PDF, JPG, PNG</p>
@@ -311,13 +313,14 @@
                         </div>
 
                         <div id="uploaded-file-section" class="hidden mb-6">
-                            <h3 class="text-sm font-medium text-gray-700 mb-2">Uploaded Invoice:</h3>
+                            <h3 class="text-sm font-medium text-gray-700 mb-2" id="uploaded-file-label">Uploaded Invoice:</h3>
                             <div id="file-info" class="border rounded-md p-3 flex items-center justify-between">
                                 <!-- File info will be injected here by JS -->
                             </div>
                         </div>
 
                         <div class="flex justify-end items-center gap-4 pt-6 border-t">
+                            <input type="hidden" id="invoice-type" name="invoice_type" value="invoice">
                             <input type="hidden" id="invoice-upload-po-id" name="po_id" >
                             <input type="hidden" id="invoice-id" name="id" >
                             <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Cancel</button>
@@ -550,7 +553,15 @@ function handleAction(action, poId, el) {
     //           alert('Error emailing purchase order.');
     //       });
     //   }
-  } else if (action === 'UploadInvoice') {
+  } else if (action === 'UploadInvoice' || action === 'UploadPerforma') {
+       document.getElementById('invoice-type').value = action === 'UploadInvoice' ? 'invoice' : 'performa';
+       document.getElementById('invoice-title').textContent = action === 'UploadInvoice' ? 'Vendor Invoice' : 'Performa Invoice';
+       document.getElementById('invoice-no-label').textContent = action === 'UploadInvoice' ? 'Invoice No: ' : 'Performa No: ';
+       document.getElementById('invoice-date-label').textContent = action === 'UploadInvoice' ? 'Invoice Date: ' : 'Performa Date: ';
+       document.getElementById('invoice-pdf-label').textContent = action === 'UploadInvoice' ? 'Invoice PDF: ' : 'Performa PDF: ';
+       document.getElementById('file-drop-area-text').textContent = action === 'UploadInvoice' ? 'Drag & Drop your invoice file here or' : 'Drag & Drop your performa file here or';
+       document.getElementById('uploaded-file-label').textContent = action === 'UploadInvoice' ? 'Uploaded Invoice:' : 'Uploaded Performa:';
+
       // Open the invoice upload popup
       //alert('Feature coming soon!');
         const popupWrapper = document.getElementById('popup-wrapper');
@@ -606,9 +617,15 @@ function handleAction(action, poId, el) {
                 document.getElementById('invoice_no').value = invoiceData && invoiceData.invoice_no ? invoiceData.invoice_no : '';
                 document.getElementById('invoice-id').value = invoiceData && invoiceData.id ? invoiceData.id : '';
                 //uploadedFileSection.innerHTML = '';
-                
-                if (invoiceData && invoiceData.invoice) {                    
-                    const file = { name: invoiceData.invoice, size: 0, type: invoiceData.invoice.endsWith('.pdf') ? 'application/pdf' : 'image/*', id: invoiceData.id };
+                // If invoice type is invoice and existing invoice is performa, clear invoice no/date
+                if(document.getElementById('invoice-type').value === 'invoice' && invoiceData.invoice_type === 'performa') {
+                    document.getElementById('invoice_no').value = '';
+                    document.getElementById('invoice_date').value = '';
+                } 
+                const invoiceName = action === 'UploadPerforma' ? invoiceData.performa : invoiceData.invoice;
+                if (invoiceData && invoiceName) {                    
+                    //document.getElementById('invoice-title').textContent = invoiceName + (invoiceData.invoice ? ' - ' + invoiceData.invoice : '');                    
+                    const file = { name: invoiceName, size: 0, type: invoiceName.endsWith('.pdf') ? 'application/pdf' : 'image/*', id: invoiceData.id, invoice_type: document.getElementById('invoice-type').value };
                     let iconClass = 'fa-file';
                     if (file.type.includes('pdf')) iconClass = 'fa-file-pdf';
                     if (file.type.includes('image')) iconClass = 'fa-file-image';
@@ -776,42 +793,7 @@ function handleAction(action, poId, el) {
                 alert('Error approving purchase order.');
             });
         }
-  } else if (action === 'AddPaymentDetails') {
-    //     // Open the add payment details popup
-    //     const popupWrapper = document.getElementById('payment-popup');
-    //     const modalSlider = document.getElementById('payment-modal-slider');
-    //     const cancelPaymentBtn = document.getElementById('cancel-payment-btn');
-    //     const closePaymentPopupBtn = document.getElementById('close-payment-popup-btn');
-        
-    //     function openPaymentPopup() {
-    //         popupWrapper.classList.remove('hidden');
-    //         setTimeout(() => {
-    //             modalSlider.classList.remove('translate-x-full');
-    //         }, 10);
-    //     }
-    //     function closePaymentPopup() {
-    //         modalSlider.classList.add('translate-x-full');
-    //     }
-
-    //     modalSlider.addEventListener('transitionend', (event) => {
-    //         if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
-    //             popupWrapper.classList.add('hidden');
-    //         }
-    //     });
-    //     openPaymentPopup();
-    //     cancelPaymentBtn.addEventListener('click', closePaymentPopup);
-    //     closePaymentPopupBtn.addEventListener('click', closePaymentPopup);
-    //     // Store the PO ID if needed for form submission
-    //     document.getElementById('payment-po-id').value = poId;
-
-    //     // Fetch and populate po details
-    //     fetchPoDetails(poId).then(data => {
-    //         if (data.success) {
-    //         }
-    //     }).catch((err) => {            
-    //         console.debug('Fetch error:', err);
-    //     });
-    } else {
+  } else {
       alert('Unknown action: ' + action);
       console.debug('Unknown action:', action);
       // Optionally, you could also log the entire data object

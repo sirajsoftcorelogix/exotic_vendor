@@ -937,6 +937,7 @@ class PurchaseOrdersController {
                 //update without file
                 $poInvoiceData = [
                     'po_id' => $poId,
+                    'invoice_type' => $_POST['invoice_type'] ?? NULL,
                     'invoice_no' => $_POST['invoice_no'] ?? '',
                     'invoice_date' => $_POST['invoice_date'] ?? '',
                     'gst_reg' => $_POST['gst_reg'] ?? 0,
@@ -989,21 +990,27 @@ class PurchaseOrdersController {
             $invoice = 'uploads/invoices/' . $newFileName;
             $poInvoiceData = [
                 'po_id' => $poId,
+                'invoice_type' => $_POST['invoice_type'] ?? NULL,
                 'invoice_no' => $_POST['invoice_no'] ?? '',
                 'invoice_date' => $_POST['invoice_date'] ?? '',
                 'gst_reg' => $_POST['gst_reg'] ?? 0,
                 'sub_total' => $_POST['sub_total'] ?? 0,
                 'gst_total' => $_POST['gst_total'] ?? 0,
                 'shipping' => $_POST['shipping'] ?? 0,
-                'grand_total' => $_POST['grand_total'] ?? 0,
-                'invoice' => $invoice,
+                'grand_total' => $_POST['grand_total'] ?? 0,                
             ];
-            //update purchase order invoice path
-            $isUpdatedInv = $purchaseOrdersModel->updateInvoicePath($poId, 'uploads/invoices/' . $newFileName);
-            if (!$isUpdatedInv) {
-                echo json_encode(['success' => false, 'message' => 'Failed to update purchase order invoice path.']);
-                exit;
+            if(isset($_POST['invoice_type']) && $_POST['invoice_type'] == 'performa'){
+                $poInvoiceData['performa'] = $invoice;
+            }else{
+                $poInvoiceData['invoice'] = $invoice;
+                //update purchase order invoice path
+                $isUpdatedInv = $purchaseOrdersModel->updateInvoicePath($poId, 'uploads/invoices/' . $newFileName);
+                if (!$isUpdatedInv) {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update purchase order invoice path.']);
+                    exit;
+                }
             }
+            
             if(isset($id) && $id){
                 //update
                 $isUpdated = $poInvoiceModel->updateInvoice($id, $poInvoiceData);
@@ -1021,7 +1028,7 @@ class PurchaseOrdersController {
                 exit;
             }
             
-            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully', 'invoice_path' => 'uploads/invoices/' . $newFileName . ' po:' . $isUpdatedInv]);
+            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully', 'invoice_path' => 'uploads/invoices/' . $newFileName]);
         } else {
             echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
         }
@@ -1206,13 +1213,13 @@ class PurchaseOrdersController {
             exit;
         }
 
-        $invoicePath = __DIR__ . '/../' . $invoice['invoice'];
+        $invoicePath = __DIR__ . '/../' . ($invoice['invoice_type'] === 'performa' ? $invoice['performa'] : $invoice['invoice']);
         if (file_exists($invoicePath)) {
             unlink($invoicePath); // Delete the file
         }
 
         // Delete the invoice record from the database
-        $isDeleted = $poInvoiceModel->updateFile($invoiceId, '');
+        $isDeleted = $poInvoiceModel->updateFile($invoiceId, $invoice['invoice_type'], '');
         if (!$isDeleted) {
             echo json_encode(['success' => false, 'message' => 'Failed to delete invoice from database.']);
             exit;

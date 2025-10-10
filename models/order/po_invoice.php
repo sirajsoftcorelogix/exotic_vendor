@@ -8,9 +8,13 @@ class POInvoice
         $this->db = $db;
     }
 
-    public function updateFile($id, $invoicePath)
+    public function updateFile($id, $invoiceType, $invoicePath)
     {
-        $sql = "UPDATE vp_po_invoice SET invoice = ? WHERE id = ?";
+        if ($invoiceType === 'performa') {
+            $sql = "UPDATE vp_po_invoice SET performa = ? WHERE id = ?";
+        } else {
+            $sql = "UPDATE vp_po_invoice SET invoice = ? WHERE id = ?";
+        }
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('si', $invoicePath, $id);
         $stmt->execute();
@@ -24,6 +28,7 @@ class POInvoice
         // Build SQL dynamically based on whether 'invoice' is set
         $fields = [
             'po_id = ?',
+            'invoice_type = ?',
             'invoice_no = ?',
             'invoice_date = ?',
             'gst_reg = ?',
@@ -34,6 +39,7 @@ class POInvoice
         ];
         $params = [
             $data['po_id'],
+            $data['invoice_type'],
             $data['invoice_no'],
             $data['invoice_date'],
             $data['gst_reg'],
@@ -42,11 +48,16 @@ class POInvoice
             $data['shipping'],
             $data['grand_total']
         ];
-        $types = 'isssssss';
+        $types = 'issssssss';
 
         if (isset($data['invoice'])) {
             $fields[] = 'invoice = ?';
             $params[] = $data['invoice'];
+            $types .= 's';
+        }
+        if (isset($data['performa'])) {
+            $fields[] = 'performa = ?';
+            $params[] = $data['performa'];
             $types .= 's';
         }
 
@@ -65,9 +76,44 @@ class POInvoice
     }
     public function addPoInvoice($data)
     {
-        $sql = "INSERT into vp_po_invoice (po_id, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?,?, ?, ?, ?, ?, ?)";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('issssssss', $data['po_id'], $data['invoice_no'], $data['invoice_date'], $data['gst_reg'], $data['sub_total'], $data['gst_total'], $data['shipping'], $data['grand_total'], $data['invoice']);
+        //check if po_id already exists
+        $existing = $this->getInvoiceByPoId($data['po_id']);
+        if ($existing) {
+            return false; // PO ID already has an invoice
+        }
+        if ($data['invoice_type'] === 'performa') {
+            $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, performa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param(
+            'isssssssss',
+            $data['po_id'],
+            $data['invoice_type'],
+            $data['invoice_no'],
+            $data['invoice_date'],
+            $data['gst_reg'],
+            $data['sub_total'],
+            $data['gst_total'],
+            $data['shipping'],
+            $data['grand_total'],
+            $data['performa']
+            );
+        } else {
+            $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param(
+            'isssssssss',
+            $data['po_id'],
+            $data['invoice_type'],
+            $data['invoice_no'],
+            $data['invoice_date'],
+            $data['gst_reg'],
+            $data['sub_total'],
+            $data['gst_total'],
+            $data['shipping'],
+            $data['grand_total'],
+            $data['invoice']
+            );
+        }
         $stmt->execute();
         if ($stmt->error) {
             return false;
