@@ -246,6 +246,8 @@ class PurchaseOrdersController {
         $data['payment'] = $poInvoiceModel->getPaymentsByPoId($poId);
         $data['vendor_bank'] = $poInvoiceModel->getVendorBankInfo($purchaseOrder['vendor_id']);
         $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
+        $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
+        //print_array($data['challan']);
         $address = $commanModel->get_exotic_address();
         foreach($address as $addr){
             if($addr['id'] == $purchaseOrder['delivery_address']){
@@ -997,12 +999,10 @@ class PurchaseOrdersController {
                 'sub_total' => $_POST['sub_total'] ?? 0,
                 'gst_total' => $_POST['gst_total'] ?? 0,
                 'shipping' => $_POST['shipping'] ?? 0,
-                'grand_total' => $_POST['grand_total'] ?? 0,                
+                'grand_total' => $_POST['grand_total'] ?? 0,
+                'invoice' => $invoice
             ];
-            if(isset($_POST['invoice_type']) && $_POST['invoice_type'] == 'performa'){
-                $poInvoiceData['performa'] = $invoice;
-            }else{
-                $poInvoiceData['invoice'] = $invoice;
+            if(isset($_POST['invoice_type']) && $_POST['invoice_type'] == 'invoice'){                
                 //update purchase order invoice path
                 $isUpdatedInv = $purchaseOrdersModel->updateInvoicePath($poId, 'uploads/invoices/' . $newFileName);
                 if (!$isUpdatedInv) {
@@ -1173,7 +1173,8 @@ class PurchaseOrdersController {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
         global $poInvoiceModel;
-        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
+        $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;        
+        $invoiceType = isset($_GET['invoice_type']) ? $_GET['invoice_type'] : 'invoice'; // default to 'invoice'
         if (!$poId) {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
             exit;
@@ -1185,7 +1186,7 @@ class PurchaseOrdersController {
         }
         
         $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
-        $poInvoice = $poInvoiceModel->getInvoiceByPoId($poId);
+        $poInvoice = $poInvoiceModel->getInvoiceByPoId($poId, $invoiceType);
         if ($poInvoice && isset($poInvoice['invoice_date'])) {
         $poInvoice['invoice_date'] = date('Y-m-d', strtotime($poInvoice['invoice_date']));
         }
@@ -1239,5 +1240,143 @@ class PurchaseOrdersController {
         }
         echo json_encode(['success' => true, 'data' => $purchaseOrder]);
         exit;
+    }
+    public function addChallan(){
+        global $poInvoiceModel;
+        global $purchaseOrdersModel;
+        
+        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            echo json_encode(['success' => false, 'message' => 'Purchase Order not found.']);
+            exit;
+        }
+        // Validate required fields
+        if (empty($_POST['delivery_challan_no']) || empty($_POST['delivery_challan_date']) || empty($_POST['vendor_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
+            exit;
+        }
+        
+        // file upload handling can be added here if needed
+        if (!empty($_FILES['delivery_challan_copy']['name'])) {
+            if ($_FILES['delivery_challan_copy']['error'] !== 0) {
+                echo json_encode(['success' => false, 'message' => 'File upload error.']);
+                exit;
+            }
+            $uploadDir = __DIR__ . '/../uploads/challans/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            $fileTmpPath = $_FILES['delivery_challan_copy']['tmp_name'];
+            $fileName = $_FILES['delivery_challan_copy']['name'];
+            $fileSize = $_FILES['delivery_challan_copy']['size'];
+            $fileType = $_FILES['delivery_challan_copy']['type'];
+            $fileNameCmps = explode(".", $fileName);
+            $fileExtension = strtolower(end($fileNameCmps));
+
+            // Sanitize file name
+            $newFileName = 'CHALLAN_' . $poId . '_' . time() . '.' . $fileExtension;
+
+            // Check if file type is allowed (e.g., pdf, jpg, png)
+            $allowedfileExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+            if (!in_array($fileExtension, $allowedfileExtensions)) {
+                echo json_encode(['success' => false, 'message' => 'Upload failed. Allowed file types: ' . implode(',', $allowedfileExtensions)]);
+                exit;
+            }
+            //size limit can be added here if needed
+            $maxFileSize = 5 * 1024 * 1024; // 5MB
+            if ($fileSize > $maxFileSize) {
+                echo json_encode(['success' => false, 'message' => 'Upload failed. File size exceeds 5MB limit.']);
+                exit;
+            }
+
+            $dest_path = $uploadDir . $newFileName;
+
+            if (move_uploaded_file($fileTmpPath, $dest_path)) {
+                $_POST['delivery_challan_copy'] = 'uploads/challans/' . $newFileName;
+            } else {
+                echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
+                exit;
+            }
+        } else {
+            $_POST['delivery_challan_copy'] = '';
+        }
+
+        $challanData = [
+            'po_id' => $poId,
+            'invoice_id' => $_POST['invoice_id'] ?? 0,
+            'delivery_challan_no' => $_POST['delivery_challan_no'] ?? '',
+            'delivery_challan_date' => $_POST['delivery_challan_date'] ?? '',
+            'mode_of_transport' => $_POST['mode_of_transport'] ?? '',
+            'vehicle_no' => $_POST['vehicle_no'] ?? '',
+            'transport_purpose' => $_POST['transport_purpose'] ?? '',
+            'vendor_id' => $_POST['vendor_id'] ?? 0,
+            'delivery_challan_copy' => $_POST['delivery_challan_copy'] ?? '',
+            'user_id' => $_SESSION['user_id'] ?? 0
+        ];
+        //echo $_POST['id'];exit;
+        if (!empty($_POST['id'])) {
+            // Update existing challan
+            $isUpdated = $poInvoiceModel->updateChallan($_POST['id'], $challanData);
+            if (!$isUpdated) {
+                echo json_encode(['success' => false, 'message' => 'Failed to update challan.']);
+                exit;
+            }
+            echo json_encode(['success' => true, 'message' => 'Challan updated successfully.']);
+            exit;
+        }
+        $isAdded = $poInvoiceModel->addChallan($challanData);
+        if (!$isAdded) {
+            echo json_encode(['success' => false, 'message' => 'Failed to add challan.']);
+            exit;
+        }
+        echo json_encode(['success' => true, 'message' => 'Challan added successfully.']);
+        exit;
+    }
+    public function getChallans(){
+        global $poInvoiceModel;
+        $id = isset($_GET['id']) ? $_GET['id'] : 0;
+        if (!$id) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        $challans = $poInvoiceModel->getChallansById($id);
+        echo json_encode(['success' => true, 'data' => $challans]);
+        exit;
+    }
+    public function deleteChallan() {
+        global $poInvoiceModel;
+
+        $challanId = isset($_REQUEST['id']) ? $_REQUEST['id'] : 0;
+
+        if (!$challanId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Challan ID.']);
+            exit;
+        }
+
+        $challan = $poInvoiceModel->getChallansById($challanId);
+        if (!$challan) {
+            echo json_encode(['success' => false, 'message' => 'Challan not found.']);
+            exit;
+        }
+
+        $challanPath = __DIR__ . '/../' . $challan[0]['delivery_challan_copy'];
+        if (file_exists($challanPath)) {
+            unlink($challanPath); // Delete the file
+        }
+
+        // Delete the challan record from the database
+        $isDeleted = $poInvoiceModel->deleteChallan($challanId);
+        if (!$isDeleted) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete challan from database.']);
+            exit;
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Challan deleted successfully.']);
     }
 }

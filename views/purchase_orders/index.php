@@ -595,9 +595,9 @@ function handleAction(action, poId, el) {
         const chooseFileBtn = document.getElementById('choose-file-btn');
         const uploadedFileSection = document.getElementById('uploaded-file-section');
         const fileInfoDiv = document.getElementById('file-info');
-
+        const invoiceType = document.getElementById('invoice-type').value;
         // Fetch and populate invoice po details
-        fetchPoDetails(poId).then(data => {
+        fetchPoDetails(poId, invoiceType).then(data => {
             if (data.success) {
                 //console.log(data.data);
                 const purchaseOrder = data.data.purchaseOrder;
@@ -618,10 +618,10 @@ function handleAction(action, poId, el) {
                 document.getElementById('invoice-id').value = invoiceData && invoiceData.id ? invoiceData.id : '';
                 //uploadedFileSection.innerHTML = '';
                 // If invoice type is invoice and existing invoice is performa, clear invoice no/date
-                if(document.getElementById('invoice-type').value === 'invoice' && invoiceData.invoice_type === 'performa') {
-                    document.getElementById('invoice_no').value = '';
-                    document.getElementById('invoice_date').value = '';
-                } 
+                // if(document.getElementById('invoice-type').value === 'invoice' && invoiceData.invoice_type === 'performa') {
+                //     document.getElementById('invoice_no').value = '';
+                //     document.getElementById('invoice_date').value = '';
+                // } 
                 const invoiceName = action === 'UploadPerforma' ? invoiceData.performa : invoiceData.invoice;
                 if (invoiceData && invoiceName) {                    
                     //document.getElementById('invoice-title').textContent = invoiceName + (invoiceData.invoice ? ' - ' + invoiceData.invoice : '');                    
@@ -890,8 +890,8 @@ function toggleStar(poId) {
         alert('Error updating star flag.');
     });
 }
-function fetchPoDetails(poId) {
-    return fetch('?page=purchase_orders&action=get_po_details&po_id=' + encodeURIComponent(poId))
+function fetchPoDetails(poId, invoiceType) {
+    return fetch('?page=purchase_orders&action=get_po_details&po_id=' + encodeURIComponent(poId) + '&invoice_type=' + encodeURIComponent(invoiceType))
         .then(r => r.json());
 }
 function formatFileSize(size) {

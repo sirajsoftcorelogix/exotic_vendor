@@ -459,7 +459,7 @@
                 $start = max(1, $end - $slot_size + 1);
             }
             ?>
-        <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 sticky bottom-0 bg-white py-4">
+        <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 bottom-0 border border-[rgba(226,228,230,1)] py-4">
             <div>
                 <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($orders) ?></span> of <span class="font-medium"><?= $total_orders ?></span> orders</p>
             </div>

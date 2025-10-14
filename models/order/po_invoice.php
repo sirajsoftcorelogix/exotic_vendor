@@ -77,11 +77,11 @@ class POInvoice
     public function addPoInvoice($data)
     {
         //check if po_id already exists
-        $existing = $this->getInvoiceByPoId($data['po_id']);
+        $existing = $this->getInvoiceByPoId($data['po_id'],$data['invoice_type']);
         if ($existing) {
             return false; // PO ID already has an invoice
         }
-        if ($data['invoice_type'] === 'performa') {
+        /*if ($data['invoice_type'] === 'performa') {
             $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, performa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $this->db->prepare($sql);
             $stmt->bind_param(
@@ -97,7 +97,7 @@ class POInvoice
             $data['grand_total'],
             $data['performa']
             );
-        } else {
+        } else {*/
             $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $this->db->prepare($sql);
             $stmt->bind_param(
@@ -113,18 +113,26 @@ class POInvoice
             $data['grand_total'],
             $data['invoice']
             );
-        }
+        //}
         $stmt->execute();
         if ($stmt->error) {
             return false;
         }
         return true;
     }
-    public function getInvoiceByPoId($poId)
+    public function getInvoiceByPoId($poId, $invoiceType = null)
     {
-        $sql = "SELECT * FROM vp_po_invoice WHERE po_id = ?";
+        $sql = "SELECT * FROM vp_po_invoice WHERE po_id = ? ";
+        if ($invoiceType) {
+            $sql .= "AND invoice_type = ?";
+        }
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $poId);
+        
+        if ($invoiceType) {
+            $stmt->bind_param('is', $poId, $invoiceType);
+        }else{
+            $stmt->bind_param('i', $poId);
+        }
         $stmt->execute();
         $result = $stmt->get_result();
         return $result->fetch_assoc();
@@ -203,6 +211,57 @@ class POInvoice
     public function deletePayment($id)
     {
         $sql = "DELETE FROM vp_invoice_payments WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        return $stmt->execute();
+    }
+    public function getChallanByPoId($poId)
+    {
+        $sql = "SELECT * FROM vp_delivery_challans WHERE po_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $poId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_assoc();
+    }
+    public function addChallan($data)
+    {
+        //check if challan for the po_id already exists
+        $existing = $this->getChallanByPoId($data['po_id']);
+        if ($existing) {
+            // If it exists, you might want to update it instead
+            return $this->updateChallan($existing['id'], $data);
+        }
+        $sql = "INSERT INTO vp_delivery_challans (po_id, invoice_id, delivery_challan_no, delivery_challan_date, mode_of_transport, vehicle_no, transport_purpose, delivery_challan_copy, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('isssssssi', $data['po_id'], $data['invoice_id'], $data['delivery_challan_no'], $data['delivery_challan_date'], $data['mode_of_transport'], $data['vehicle_no'], $data['transport_purpose'], $data['delivery_challan_copy'], $data['user_id']);
+        if ($stmt->execute()) {
+            return true;
+        }
+        return false;
+    }
+    public function updateChallan($id, $data)
+    {
+        $sql = "UPDATE vp_delivery_challans SET delivery_challan_no = ?, delivery_challan_date = ?, mode_of_transport = ?, vehicle_no = ?, transport_purpose = ?, delivery_challan_copy = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssssssi', $data['delivery_challan_no'], $data['delivery_challan_date'], $data['mode_of_transport'], $data['vehicle_no'], $data['transport_purpose'], $data['delivery_challan_copy'], $id);
+        if ($stmt->execute()) {
+            return true;
+        }
+        return false;
+    }
+    public function getChallansById($id)
+    {
+        $sql = "SELECT * FROM vp_delivery_challans WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function deleteChallan($id)
+    {
+        $sql = "DELETE FROM vp_delivery_challans WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $id);
         return $stmt->execute();

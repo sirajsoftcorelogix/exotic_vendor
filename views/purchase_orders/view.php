@@ -171,7 +171,7 @@
   <hr class="my-8 border-gray-200">
   <div class="space-y-1.5">
     <div>
-      <h2 class="invoice-title mb-4"><?php echo $invoice['invoice_type'] === 'performa' ? 'Proforma Invoices:' : 'Invoices:'; ?></h2>
+      <h2 class="timeline-title mb-4"><?php echo $invoice['invoice_type'] === 'performa' ? 'Proforma Invoices:' : 'Invoices:'; ?></h2>
       <?php 
       
       if (empty($invoice)) { ?>
@@ -181,22 +181,23 @@
             ?>
             <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-x-8 gap-y-2">
                 <div class="col-span-2">
-                  <h4 class="invoice-header">Invoice Number</h4>
-                  <p class="invoice-text mt-2"><?php echo $invoice['invoice_no']; ?></p>
+                  <h4 class="payment-details-header">Invoice Number</h4>
+                  <p class="payment-details-text mt-2"><?php echo $invoice['invoice_no']; ?></p>
                 </div>
               <div class="col-span-2">
-                <h4 class="invoice-header">Invoice Date</h4>
-                <p class="invoice-text mt-2"><?php echo date('d M Y', strtotime($invoice['invoice_date'])); ?></p>
+                <h4 class="payment-details-header">Invoice Date</h4>
+                <p class="payment-details-text mt-2"><?php echo date('d M Y', strtotime($invoice['invoice_date'])); ?></p>
               </div>
-              <!-- <div class="col-span-2">
-                <h4 class="invoice-header">Due Date</h4>
-                <p class="invoice-text mt-2"><?php //echo $invoice['due_date']; ?></p>
-              </div> -->
+              
               <div class="col-span-2">
-                <h4 class="invoice-header">Total Amount</h4>
-                <p class="invoice-text mt-2">₹<?php echo $invoice['grand_total']; ?></p>
+                <h4 class="payment-details-header">Total Amount</h4>
+                <p class="payment-details-text mt-2">₹<?php echo $invoice['grand_total']; ?></p>
               </div>            
-            
+              <div class="col-span-1">
+                <h4 class="payment-details-header">GST</h4>
+                <p class="payment-details-text mt-2"><?php echo $invoice['gst_total']; ?></p>
+              </div>
+
             <?php //extension
             $iconClass = '';
             $inv_name = basename($invoice['invoice'], "/");
@@ -217,14 +218,34 @@
               }          
             } 
             ?>
-            <div class="col-span-2 ">
-                <!-- <p class="amount-box-text"> <i class="fas <?php //echo $iconClass ?> text-2xl text-gray-600"></i></p> -->
-                <!-- <p class="amount-box-text"><a href="<?php //echo $invoice['invoice']; ?>" target="_blank"><?php //echo $inv_name; ?></a></p> -->
-                <a href="<?php echo $invoice['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button mb-2" >
-                  <i class="fas <?php echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
-                </a>
-                <button id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</button>
+            <div class="col-span-1 flex flex-col items-center justify-center">
+              <!-- <p class="amount-box-text"> <i class="fas <?php //echo $iconClass ?> text-2xl text-gray-600"></i></p> -->
+              <!-- <p class="amount-box-text"><a href="<?php //echo $invoice['invoice']; ?>" target="_blank"><?php //echo $inv_name; ?></a></p> -->
+              <!-- <a href="<?php //echo $invoice['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button mb-2" >
+                <i class="fas <?php //echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
+              </a> -->
+              <!-- <button id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</button> -->
+              <!-- <button id="open-challan-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Delivery Challan</button> -->
+              <div class="menu-wrapper inline-block relative">
+                  <button class="menu-button text-gray-500 hover:text-gray-700 font-semibold" onclick="toggleMenu(this)">
+                  <i class="fas fa-cog"></i> Action<!-- &#x22EE;  Vertical ellipsis -->
+                  </button>
+                  <ul class="menu-popup text-left" style="min-width: 220px;">
+                      <li><a href="<?php echo $invoice['invoice']; ?>" download ><i class="fas fa-download <?php //echo $iconClass ?> text-2xl text-gray-600"></i> Download Invoice</a></li>
+                      <li id="open-payment-popup-btn"><i class="fas fa-money-bill-wave text-2xl text-gray-600"></i> Add Payment</li>
+                      <li id="open-challan-popup-btn"><i class="fas fa-truck text-2xl text-gray-600"></i> Add Delivery Challan</li>
+                      <!-- <li ><a href="#" id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</a></li> -->
+                  </ul> 
+              </div>
             </div>
+            <div class="col-span-2">
+                <h4 class="payment-details-header">Shipping</h4>
+                <p class="payment-details-text mt-2"><?php echo $invoice['shipping']; ?></p>
+              </div>
+              <div class="col-span-2">
+                <h4 class="payment-details-header">Grand Total</h4>
+                <p class="payment-details-text mt-2"><?php echo $invoice['grand_total']; ?></p>
+              </div>
           </div>
           <?php } else if (!empty($invoice['performa'])) { ?>
             <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-x-8 gap-y-2">
@@ -266,6 +287,7 @@
                   <i class="fas <?php echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
                 </a>
                 <button id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</button>
+                
             </div>
           </div>
           <?php }
@@ -326,12 +348,53 @@
     </div>
   </div>
 </div>
-  <hr class="my-8 border-gray-200">
-
-  
-  <div class="mt-8 flex justify-end space-x-4">    
-    <a href="<?php echo isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : base_url('?page=purchase_orders&action=list'); ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Back</button></a>
+    <!--Challan Details-->
+<div class="container mx-auto p-6 bg-white rounded-lg shadow-md mt-8">
+  <div class="space-y-1.5">    
+    <h3 class="payment-details-title mb-4">Delivery Challan Details:</h3>    
+    <?php //foreach($challan as $challanDetails) { 
+    if (!empty($challan)) {
+      
+    ?>     
+    <div class="flex items-stretch mb-4">
+      <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-10 gap-x-8 gap-y-2 flex-grow">
+        <div class="col-span-2">
+          <h4 class="payment-details-header">Delivery Challan Number</h4>
+          <p class="payment-details-text mt-2"><?php echo $challan['delivery_challan_no']; ?></p>
+        </div>
+        <div class="col-span-2">
+          <h4 class="payment-details-header">Delivery Challan Date</h4>
+          <p class="payment-details-text mt-2"><?php echo date('d M Y', strtotime($challan['delivery_challan_date'])); ?></p>
+        </div>        
+        <div class="col-span-2">
+          <h4 class="payment-details-header">Mode of Transport</h4>
+          <p class="payment-details-text mt-2"><?php echo $challan['mode_of_transport']; ?></p>
+        </div>
+        <div class="col-span-2">
+          <h4 class="payment-details-header">Vehicle Number</h4>
+          <p class="payment-details-text mt-2"><?php echo $challan['vehicle_no']; ?></p>
+        </div>
+        <div class="col-span-1">
+          <h4 class="payment-details-header">Challan</h4>
+          <p class="payment-details-text mt-2"><a href="<?php echo base_url($challan['delivery_challan_copy']); ?>" target="_blank" class="text-blue-700 hover:underline"><i class="fa fa-file"></i> View</a></p>
+        </div>
+        <div class="col-span-1">
+          <div class="mt-4 flex justify-center space-x-2">
+            <button type="button" id="editChallan<?php echo $challan['id']; ?>" class="edit-challan text-gray-500 hover:text-red-700 " title="Edit Challan"><span class="text-lg"><i class="fa fa-edit"></i></span></button>
+            <button type="button" id="removeChallan<?php echo $challan['id']; ?>" class="remove-challan text-gray-500 hover:text-red-700" title="Remove Challan"> <span class="text-lg"><i class="fa fa-trash-alt"></i></span> </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <?php } ?>
   </div>
+</div>
+<hr class="my-8 border-gray-200">
+
+
+<div class="mt-8 flex justify-end space-x-4">    
+  <a href="<?php echo isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : base_url('?page=purchase_orders&action=list'); ?>"> <button class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Back</button></a>
+</div>
 
 
 
@@ -363,9 +426,7 @@
                     </div>
                     <form id="payment-form" >
                       <h5 class="font-bold text-gray-800 mb-4 pb-4 border-b">Basic payment details</h5>
-                      <div id="payment-error" class="hidden mb-4">
-                          <p class="text-red-600 text-sm"></p>
-                      </div>
+                      
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">                          
                             <div>
                                 <label for="invoice_id" class="text-sm font-medium text-gray-700">Invoice:<i class="text-red-500">*</i></label>
@@ -461,7 +522,293 @@
         </div>
     </div>
 </div>
+<!-- add delivery challan popup -->
+<div id="delivery-challan-popup" class="hidden">
+    <!-- Background Overlay -->
+    <!-- <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div> -->
+
+    <!-- Sliding Container -->
+    <div id="challan-modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: calc(45% + 61px); min-width: 661px;">
+
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-challan-popup-btn" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Popup Panel -->
+        <div id="challan-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
+            <div class="h-full w-full overflow-y-auto">
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add / Edit Challan Details</h2>
+
+                    <div id="challan-error" class="hidden mb-4">
+                        <p class="text-red-600 text-sm"></p>
+                    </div>
+                    <form id="challan-form" enctype="multipart/form-data">
+                      <!-- <h5 class="font-bold text-gray-800 mb-4 pb-4 border-b">Challan Details</h5> -->
+                      <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
+                        <div>
+                            <label for="po_no" class="text-sm font-medium text-gray-700">PO Number:<i class="text-red-500">*</i></label>
+                            <input type="text" id="po_no" name="po_id" class="form-input w-full mt-1" value="<?= $purchaseOrder['po_number'] ?? '' ?>" readonly>
+                        </div>
+                        <div>
+                            <label for="challan_invoice_id" class="text-sm font-medium text-gray-700">Invoice No:<i class="text-red-500">*</i></label>
+                            <select id="challan_invoice_id" name="invoice_id" class="form-input w-full bg-white mt-1">
+                                <!-- <option value="" disabled selected>Select Invoice</option> -->
+                                <?php
+                                //print_r($invoice);
+                                //foreach ($invoice as $inv): ?>
+                                    <option value="<?= htmlspecialchars($invoice['id'] ?? '') ?>"><?= htmlspecialchars($invoice['invoice_no'] ?? '') ?></option>
+                                <?php //endforeach; ?>
+                            </select>
+                        </div>  
+                        <div>
+                            <label for="delivery_challan_no" class="text-sm font-medium text-gray-700">Delivery Challan Number:<i class="text-red-500">*</i></label>
+                            <input type="text" id="delivery_challan_no" name="delivery_challan_no" class="form-input w-full mt-1" placeholder="Enter Delivery Challan Number">
+                        </div>  
+                        <div>
+                            <label for="delivery_challan_date" class="text-sm font-medium text-gray-700">Delivery Challan Date:<i class="text-red-500">*</i></label>
+                            <input type="date" id="delivery_challan_date" name="delivery_challan_date" class="form-input w-full mt-1" max="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div>
+                            <label for="mode_of_transport" class="text-sm font-medium text-gray-700">Mode of Transport:<i class="text-red-500">*</i></label>
+                            <input type="text" id="mode_of_transport" name="mode_of_transport" class="form-input w-full mt-1" placeholder="Enter Mode of Transport">
+                        </div>
+                        <div>
+                            <label for="vehicle_no" class="text-sm font-medium text-gray-700">Vehicle No:<i class="text-red-500">*</i></label>
+                            <input type="text" id="vehicle_no" name="vehicle_no" class="form-input w-full mt-1" placeholder="Enter Vehicle No">
+                        </div>                        
+                      </div>
+                        <div>
+                            <label for="transport_purpose" class="text-sm font-medium text-gray-700">Purpose of Transport:</label>
+                            <textarea id="transport_purpose" name="transport_purpose" class="form-input w-full mt-1 h-24 p-2" rows="4" maxlength="500" placeholder="Enter Purpose of Transport"></textarea>
+                        </div>                        
+                        <div class="mb-6">
+                            <label class="text-sm font-medium text-gray-700 mb-1 block"><span id="delivery-challan-pdf-label">Delivery Challan Copy: </span><span class="text-red-500">*</span></label>
+                            <div id="file-drop-area" class="file-drop-area">
+                                <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-500" id="file-drop-area-text">Drag & Drop your delivery challan file here or</p>
+                                <button type="button" id="choose-file-btn" class="mt-2 bg-white border border-gray-300 text-gray-700 px-4 py-1 rounded-md text-sm hover:bg-gray-50">Choose file</button>
+                                <input type="file" id="delivery_challan_copy" name="delivery_challan_copy" style="display:none;" accept=".pdf,.jpg,.jpeg,.png">
+                                <p class="text-xs text-gray-400 mt-2">Only PDF, JPG, PNG</p>
+                            </div>
+                        </div>
+
+                        <div id="uploaded-file-section" class="hidden mb-6">
+                            <h3 class="text-sm font-medium text-gray-700 mb-2" id="uploaded-file-label">Uploaded Delivery Challan Copy:</h3>
+                            <div id="file-info" class="border rounded-md p-3 flex items-center justify-between">
+                                <!-- File info will be injected here by JS -->
+                            </div>
+                        </div>
+                        <div class="flex justify-end items-center gap-4 pt-6 border-t">
+                            <input type="hidden" id="challan-po-id" name="po_id" value="<?= $purchaseOrder['id'] ?? '' ?>">
+                            <input type="hidden" id="challan-vendor-id" name="vendor_id" value="<?= $purchaseOrder['vendor_id'] ?? '' ?>">
+
+                            <input type="hidden" id="challan-id" name="id" >
+                            <button type="button" id="cancel-challan-btn" class="action-btn cancel-btn">Cancel</button>
+                            <button type="submit" id="submit-challan-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-btn">Submit</button>
+                        </div>
+                      
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+   
+</div>
+
 <script>
+ // Toggle menu visibility
+function toggleMenu(button) {
+  const popup = button.nextElementSibling;
+  popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+
+  // Close other open menus
+  document.querySelectorAll('.menu-popup').forEach(menu => {
+    if (menu !== popup) menu.style.display = 'none';
+  });
+}
+// Close menu when clicking outside
+document.addEventListener('click', function(event) {
+  if (!event.target.closest('.menu-wrapper')) {
+    document.querySelectorAll('.menu-popup').forEach(menu => {
+      menu.style.display = 'none';
+    });
+  }
+});
+// Delivery Challan Popup Logic
+document.addEventListener('DOMContentLoaded', function() {
+  const openChallanPopupBtn = document.getElementById('open-challan-popup-btn');
+  const closeChallanPopupBtn = document.getElementById('close-challan-popup-btn');
+  const cancelChallanBtn = document.getElementById('cancel-challan-btn');
+  const challanPopup = document.getElementById('delivery-challan-popup');
+  const challanModalSlider = document.getElementById('challan-modal-slider');
+  const challanForm = document.getElementById('challan-form');
+  const challanError = document.getElementById('challan-error');
+  const chooseFileBtn = document.getElementById('choose-file-btn');
+
+  function openChallanPopup() {
+    challanPopup.classList.remove('hidden');
+    toggleMenu(document.querySelector('.menu-button')); // Close the menu if open
+    setTimeout(() => {
+      challanModalSlider.classList.remove('translate-x-full');
+    }, 10);
+  }
+
+  function closeChallanPopup() {
+    challanModalSlider.classList.add('translate-x-full');
+    setTimeout(() => {
+      challanPopup.classList.add('hidden');
+      challanForm.reset();
+      document.getElementById('challan-id').value = '';
+    }, 300);
+  }
+
+  if (openChallanPopupBtn) {
+    openChallanPopupBtn.addEventListener('click', openChallanPopup);
+  }
+  if (closeChallanPopupBtn) {
+    closeChallanPopupBtn.addEventListener('click', closeChallanPopup);
+  }
+  if (cancelChallanBtn) {
+    cancelChallanBtn.addEventListener('click', closeChallanPopup);
+  }
+  // Trigger file input when button is clicked
+  chooseFileBtn.addEventListener('click', function() {
+    document.getElementById('delivery_challan_copy').click();
+  });
+  // handle file input and drag-drop here if needed
+  const deliveryChallanCopyInput = document.getElementById('delivery_challan_copy');
+  const fileDropArea = document.getElementById('file-drop-area');
+
+  // Handle file selection
+  deliveryChallanCopyInput.addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (file) {
+      // Show file name or preview
+      document.getElementById('file-drop-area-text').textContent = file.name;
+    }
+  });
+
+  // Handle drag-and-drop
+  fileDropArea.addEventListener('dragover', function(event) {
+    event.preventDefault();
+    fileDropArea.classList.add('bg-gray-100');
+  });
+
+  fileDropArea.addEventListener('dragleave', function(event) {
+    fileDropArea.classList.remove('bg-gray-100');
+  });
+
+  fileDropArea.addEventListener('drop', function(event) {
+    event.preventDefault();
+    fileDropArea.classList.remove('bg-gray-100');
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+      deliveryChallanCopyInput.files = files;
+      document.getElementById('file-drop-area-text').textContent = files[0].name;
+    }
+  });
+
+  // Handle form submission
+  challanForm.addEventListener('submit', function(event) {
+    event.preventDefault();
+    challanError.classList.add('hidden');
+    challanError.querySelector('p').textContent = '';
+
+    const formData = new FormData(challanForm);
+
+    fetch('<?= base_url("?page=purchase_orders&action=add_challan") ?>', {
+      method: 'POST',
+      body: formData
+      // Do NOT set Content-Type header here!
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert('Challan added successfully!');
+        closeChallanPopup();
+        location.reload(); // Reload the page to reflect changes
+      } else {
+        challanError.classList.remove('hidden');
+        challanError.querySelector('p').textContent = data.message || 'An error occurred. Please try again.';
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      challanError.classList.remove('hidden');
+      challanError.querySelector('p').textContent = 'An error occurred. Please try again.';
+    });
+  });  
+
+  // challan edit and delete logic
+  const editChallanBtn = document.getElementById('editChallan<?php echo $challan['id'] ?? ''; ?>');
+  if (editChallanBtn) {
+    editChallanBtn.addEventListener('click', function() {
+      const challanId = this.id.replace('editChallan', '');
+      fetch(`<?= base_url("?page=purchase_orders&action=get_challan&id=") ?>${challanId}`)
+        .then(response => response.json())
+        .then(data => {          
+          if (data.success) {
+            const challan = data.data[0];
+            document.getElementById('challan-id').value = challan.id;
+            document.getElementById('challan_invoice_id').value = challan.invoice_id;
+            document.getElementById('delivery_challan_no').value = challan.delivery_challan_no;
+            document.getElementById('delivery_challan_date').value = challan.delivery_challan_date;
+            document.getElementById('mode_of_transport').value = challan.mode_of_transport;
+            document.getElementById('vehicle_no').value = challan.vehicle_no;
+            document.getElementById('transport_purpose').value = challan.transport_purpose;
+            // If you want to show the existing file name, you can do so here
+            if (challan.delivery_challan_copy) {  
+              document.getElementById('file-drop-area-text').textContent = challan.delivery_challan_copy.split('/').pop();
+            } else {
+              document.getElementById('file-drop-area-text').textContent = 'Drag & Drop your delivery challan file here or';
+            }
+            // Note: File input cannot be pre-filled for security reasons
+            openChallanPopup();
+          } else {
+            alert(data.message || 'Failed to fetch challan details.');
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching challan details:', error);
+          alert('An error occurred while fetching challan details.');
+        });
+    });
+  }
+  const removeChallanBtn = document.getElementById('removeChallan<?php echo $challan['id'] ?? ''; ?>');
+  if (removeChallanBtn) {
+    removeChallanBtn.addEventListener('click', function() {
+      const challanId = this.id.replace('removeChallan', '');
+      if (confirm('Are you sure you want to remove this challan?')) {
+        fetch(`<?= base_url("?page=purchase_orders&action=remove_challan&id=") ?>${challanId}`, {
+          method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert('Challan removed successfully!');
+            location.reload(); // Reload the page to reflect changes
+          } else {
+            alert(data.message || 'Failed to remove challan.');
+          }
+        })
+        .catch(error => {
+          console.error('Error removing challan:', error);
+          alert('An error occurred while removing the challan.');
+        });
+      }
+    });
+  }
+
+
+});
+
+// payment popup
 document.addEventListener('DOMContentLoaded', function() {
     const openPaymentPopupBtn = document.getElementById('open-payment-popup-btn');
     const closePaymentPopupBtn = document.getElementById('close-payment-popup-btn');
@@ -477,6 +824,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to open the popup
     function openPaymentPopup() {
         paymentPopup.classList.remove('hidden');
+        toggleMenu(document.querySelector('.menu-button')); // Close the menu if open
         setTimeout(() => {
             paymentModalSlider.classList.remove('translate-x-full');
         }, 10); // Slight delay to allow transition
@@ -581,6 +929,7 @@ document.addEventListener('DOMContentLoaded', function() {
             paymentErrorMsg.textContent = 'An error occurred. Please try again.';
         });
     });
+    
 });
 
 // Handle remove payment
@@ -622,5 +971,6 @@ document.getElementById('amount_paid').addEventListener('input', function() {
     const newBalanceDue = totalCost - (totalAmountPaid + amountPaid);
     balanceDueField.value = newBalanceDue.toFixed(2);
 });
+
 </script>
 
