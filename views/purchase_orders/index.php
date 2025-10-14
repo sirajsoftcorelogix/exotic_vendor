@@ -622,7 +622,8 @@ function handleAction(action, poId, el) {
                 //     document.getElementById('invoice_no').value = '';
                 //     document.getElementById('invoice_date').value = '';
                 // } 
-                const invoiceName = action === 'UploadPerforma' ? invoiceData.performa : invoiceData.invoice;
+                //const invoiceName = action === 'UploadPerforma' ? invoiceData.performa : invoiceData.invoice;
+                const invoiceName = invoiceData.invoice;
                 if (invoiceData && invoiceName) {                    
                     //document.getElementById('invoice-title').textContent = invoiceName + (invoiceData.invoice ? ' - ' + invoiceData.invoice : '');                    
                     const file = { name: invoiceName, size: 0, type: invoiceName.endsWith('.pdf') ? 'application/pdf' : 'image/*', id: invoiceData.id, invoice_type: document.getElementById('invoice-type').value };

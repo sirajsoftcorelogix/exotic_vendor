@@ -1214,13 +1214,15 @@ class PurchaseOrdersController {
             exit;
         }
 
-        $invoicePath = __DIR__ . '/../' . ($invoice['invoice_type'] === 'performa' ? $invoice['performa'] : $invoice['invoice']);
+        //$invoicePath = __DIR__ . '/../' . ($invoice['invoice_type'] === 'performa' ? $invoice['performa'] : $invoice['invoice']);
+        $invoicePath = __DIR__ . '/../' . $invoice['invoice'];
+         // Delete the file from the server if it exists
         if (file_exists($invoicePath)) {
             unlink($invoicePath); // Delete the file
         }
 
-        // Delete the invoice record from the database
-        $isDeleted = $poInvoiceModel->updateFile($invoiceId, $invoice['invoice_type'], '');
+        // Delete the invoice record from the database $invoice['invoice_type']
+        $isDeleted = $poInvoiceModel->updateFile($invoiceId, 'invoice', '');
         if (!$isDeleted) {
             echo json_encode(['success' => false, 'message' => 'Failed to delete invoice from database.']);
             exit;
