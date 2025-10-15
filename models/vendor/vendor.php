@@ -39,7 +39,7 @@ class vendor {
     }
     public function saveBankDetails($data) {
         global $secretKey;
-        $sql = "INSERT INTO vendor_bank_details (vendor_id, account_holder_name, account_number, ifsc_code, bank_name, branch_name, is_active) VALUES (?, AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), ?) ON DUPLICATE KEY UPDATE account_holder_name = VALUES(account_holder_name), account_number = VALUES(account_number), ifsc_code = VALUES(ifsc_code), bank_name = VALUES(bank_name), branch_name = VALUES(branch_name), is_active = VALUES(is_active)";
+        $sql = "INSERT INTO vendor_bank_details (vendor_id, account_holder_name, account_number, ifsc_code, bank_name, branch_name, is_active) VALUES (?, AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), ?) ON DUPLICATE KEY UPDATE account_holder_name = VALUES(account_holder_name), account_number = VALUES(account_number), ifsc_code = VALUES(ifsc_code), bank_name = VALUES(bank_name), branch_name = VALUES(branch_name), is_active = VALUES(is_active)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('issssssssssi',
             $data['vendor_id'],
@@ -60,7 +60,7 @@ class vendor {
     }
     public function updateBankDetails($data) {
         global $secretKey;
-        $sql = "UPDATE vendor_bank_details SET account_holder_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), account_number = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), ifsc_code = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), bank_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), branch_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), is_active = ? WHERE vendor_id = ?";
+        $sql = "UPDATE vendor_bank_details SET account_holder_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), account_number = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), ifsc_code = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), bank_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), branch_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), is_active = ? WHERE vendor_id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('ssssssssssii', 
             $data['account_name'], $secretKey, 

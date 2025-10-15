@@ -247,7 +247,7 @@ class PurchaseOrdersController {
         $data['vendor_bank'] = $poInvoiceModel->getVendorBankInfo($purchaseOrder['vendor_id']);
         $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
         $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
-        //print_array($data['challan']);
+        //print_array($data['vendor_bank']);
         $address = $commanModel->get_exotic_address();
         foreach($address as $addr){
             if($addr['id'] == $purchaseOrder['delivery_address']){

@@ -191,7 +191,13 @@ class POInvoice
     }
     public function getVendorBankInfo($vendorId)
     {
-        $sql = "SELECT * FROM vendor_bank_details WHERE vendor_id = ?";
+        global $secretKey;
+        echo $sql = "SELECT CAST(AES_DECRYPT(account_holder_name, UNHEX(SHA2('$secretKey',256))) AS CHAR) AS account_holder_name,
+        CAST(AES_DECRYPT(account_number, UNHEX(SHA2('$secretKey',256))) AS CHAR) AS account_number,
+        CAST(AES_DECRYPT(ifsc_code, UNHEX(SHA2('$secretKey',256))) AS CHAR) AS ifsc_code,
+        CAST(AES_DECRYPT(branch_name, UNHEX(SHA2('$secretKey',256))) AS CHAR) AS branch_name,
+        CAST(AES_DECRYPT(bank_name, UNHEX(SHA2('$secretKey',256))) AS CHAR) AS bank_name
+        FROM vendor_bank_details WHERE vendor_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $vendorId);
         $stmt->execute();
