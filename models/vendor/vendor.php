@@ -25,58 +25,71 @@ class vendor {
     }
     public function getBankDetailsById($vendor_id) {
         global $secretKey;
-        $sql = "SELECT vendor_id,
-                CAST(AES_DECRYPT(account_holder_name, UNHEX(SHA2(?,512))) AS CHAR) AS account_name,
-                CAST(AES_DECRYPT(account_number, UNHEX(SHA2(?,512))) AS CHAR) AS account_number,
-                CAST(AES_DECRYPT(ifsc_code, UNHEX(SHA2(?,512))) AS CHAR) AS ifsc_code,
-                CAST(AES_DECRYPT(bank_name, UNHEX(SHA2(?,512))) AS CHAR) AS bank_name,
-                CAST(AES_DECRYPT(branch_name, UNHEX(SHA2(?,512))) AS CHAR) AS branch_name, is_active FROM vendor_bank_details WHERE vendor_id = ?";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('sssssi', $secretKey, $secretKey, $secretKey, $secretKey, $secretKey, $vendor_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        if (isset($secretKey)) {
+            $sql = "SELECT vendor_id,
+                    CAST(AES_DECRYPT(account_holder_name, UNHEX(SHA2(?,512))) AS CHAR) AS account_name,
+                    CAST(AES_DECRYPT(account_number, UNHEX(SHA2(?,512))) AS CHAR) AS account_number,
+                    CAST(AES_DECRYPT(ifsc_code, UNHEX(SHA2(?,512))) AS CHAR) AS ifsc_code,
+                    CAST(AES_DECRYPT(bank_name, UNHEX(SHA2(?,512))) AS CHAR) AS bank_name,
+                    CAST(AES_DECRYPT(branch_name, UNHEX(SHA2(?,512))) AS CHAR) AS branch_name, is_active FROM vendor_bank_details WHERE vendor_id = ?";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('sssssi', $secretKey, $secretKey, $secretKey, $secretKey, $secretKey, $vendor_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            return $result->fetch_assoc();
+        } else {
+            return ['success' => false, 'message' => 'Secret key is not set. Cannot encrypt bank details.'];
+        }
     }
     public function saveBankDetails($data) {
         global $secretKey;
-        $sql = "INSERT INTO vendor_bank_details (vendor_id, account_holder_name, account_number, ifsc_code, bank_name, branch_name, is_active) VALUES (?, AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), AES_ENCRYPT(?, UNHEX(SHA2(?,256))), ?) ON DUPLICATE KEY UPDATE account_holder_name = VALUES(account_holder_name), account_number = VALUES(account_number), ifsc_code = VALUES(ifsc_code), bank_name = VALUES(bank_name), branch_name = VALUES(branch_name), is_active = VALUES(is_active)";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('issssssssssi',
-            $data['vendor_id'],
-            $data['account_name'], $secretKey,
-            $data['account_number'], $secretKey,
-            $data['ifsc_code'], $secretKey,
-            $data['bank_name'], $secretKey,
-            $data['branch_name'], $secretKey,
-            $data['bdStatus'],
-        );
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Bank details saved successfully.'];
+        if (isset($secretKey)) {
+            $sql = "INSERT INTO vendor_bank_details (vendor_id, account_holder_name, account_number, ifsc_code, bank_name, branch_name, is_active) VALUES (?, AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), AES_ENCRYPT(?, UNHEX(SHA2(?,512))), ?) ON DUPLICATE KEY UPDATE account_holder_name = VALUES(account_holder_name), account_number = VALUES(account_number), ifsc_code = VALUES(ifsc_code), bank_name = VALUES(bank_name), branch_name = VALUES(branch_name), is_active = VALUES(is_active)";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('issssssssssi',
+                $data['vendor_id'],
+                $data['account_name'], $secretKey,
+                $data['account_number'], $secretKey,
+                $data['ifsc_code'], $secretKey,
+                $data['bank_name'], $secretKey,
+                $data['branch_name'], $secretKey,
+                $data['bdStatus'],
+            );
+            if ($stmt->execute()) {
+                return ['success' => true, 'message' => 'Bank details saved successfully.'];
+            }
+            return [
+                'success' => false,
+                'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+            ];
+        } else {
+            return ['success' => false, 'message' => 'Secret key is not set. Cannot encrypt bank details.'];
         }
-        return [
-            'success' => false,
-            'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
-        ];
+        
     }
     public function updateBankDetails($data) {
         global $secretKey;
-        $sql = "UPDATE vendor_bank_details SET account_holder_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), account_number = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), ifsc_code = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), bank_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), branch_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 256))), is_active = ? WHERE vendor_id = ?";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssii', 
-            $data['account_name'], $secretKey, 
-            $data['account_number'], $secretKey,
-            $data['ifsc_code'], $secretKey,
-            $data['bank_name'], $secretKey,
-            $data['branch_name'], $secretKey,
-            $data['bdStatus'], $data["vendor_id"]
-        );
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Bank details updated successfully.'];
+        if (isset($secretKey)) {
+            $sql = "UPDATE vendor_bank_details SET account_holder_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), account_number = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), ifsc_code = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), bank_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), branch_name = AES_ENCRYPT(?, UNHEX(SHA2(?, 512))), is_active = ? WHERE vendor_id = ?";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('ssssssssssii', 
+                $data['account_name'], $secretKey, 
+                $data['account_number'], $secretKey,
+                $data['ifsc_code'], $secretKey,
+                $data['bank_name'], $secretKey,
+                $data['branch_name'], $secretKey,
+                $data['bdStatus'], $data["vendor_id"]
+            );
+            if ($stmt->execute()) {
+                return ['success' => true, 'message' => 'Bank details updated successfully.'];
+            }
+            return [
+                'success' => false,
+                'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+            ];
+        } else {
+            return ['success' => false, 'message' => 'Secret key is not set. Cannot encrypt bank details.'];
         }
-        return [
-            'success' => false,
-            'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
-        ];
     }
     public function addVendor($data) {
         // Check if vendor_email already exists
