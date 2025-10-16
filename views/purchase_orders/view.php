@@ -479,23 +479,23 @@
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                             <div>
                                 <label for="vendor_bank_account_name" class="text-sm font-medium text-gray-700">Vendor Bank Account Name:</label>
-                                <input type="text" id="vendor_bank_account_name" value="<?php echo $vendor_bank[0]['account_holder_name'] ?? ''; ?>" name="vendor_bank_account_name" class="form-input w-full mt-1 bg-gray-100" readonly>
+                                <input type="text" id="vendor_bank_account_name" value="<?php echo $vendor_bank['account_name'] ?? ''; ?>" name="vendor_bank_account_name" class="form-input w-full mt-1 bg-gray-100" readonly>
                             </div>
                             <div>
                                 <label for="vendor_bank_account_number" class="text-sm font-medium text-gray-700">Vendor Bank Account Number:</label>
-                                <input type="text" id="vendor_bank_account_number" value="<?php echo $vendor_bank[0]['account_number'] ?? ''; ?>" name="vendor_bank_account_number" class="form-input w-full mt-1 bg-gray-100" readonly>
+                                <input type="text" id="vendor_bank_account_number" value="<?php echo $vendor_bank['account_number'] ?? ''; ?>" name="vendor_bank_account_number" class="form-input w-full mt-1 bg-gray-100" readonly>
                             </div>
                             <div>
                                 <label for="vendor_bank_ifsc_code" class="text-sm font-medium text-gray-700">Vendor Bank IFSC Code:</label>
-                                <input type="text" id="vendor_bank_ifsc_code" value="<?php echo $vendor_bank[0]['ifsc_code'] ?? ''; ?>" name="vendor_bank_ifsc_code" class="form-input w-full mt-1 bg-gray-100" maxlength="11" readonly>
+                                <input type="text" id="vendor_bank_ifsc_code" value="<?php echo $vendor_bank['ifsc_code'] ?? ''; ?>" name="vendor_bank_ifsc_code" class="form-input w-full mt-1 bg-gray-100" maxlength="11" readonly>
                             </div>
                             <div>
                                 <label for="vendor_branch_name" class="text-sm font-medium text-gray-700">Vendor Bank Branch Name:</label>
-                                <input type="text" id="vendor_branch_name" value="<?php echo $vendor_bank[0]['branch_name'] ?? ''; ?>" name="vendor_branch_name" class="form-input w-full mt-1 bg-gray-100" maxlength="11" readonly>
+                                <input type="text" id="vendor_branch_name" value="<?php echo $vendor_bank['branch_name'] ?? ''; ?>" name="vendor_branch_name" class="form-input w-full mt-1 bg-gray-100" maxlength="11" readonly>
                             </div>
                             <div>
                                 <label for="vendor_bank_name" class="text-sm font-medium text-gray-700">Vendor Bank Name:</label>
-                                <input type="text" id="vendor_bank_name" name="vendor_bank_name" value="<?php echo $vendor_bank[0]['bank_name'] ?? ''; ?>" class="form-input w-full mt-1 bg-gray-100" maxlength="100" readonly>
+                                <input type="text" id="vendor_bank_name" name="vendor_bank_name" value="<?php echo $vendor_bank['bank_name'] ?? ''; ?>" class="form-input w-full mt-1 bg-gray-100" maxlength="100" readonly>
                             </div>
                             <div>
                                 <label for="bank_transaction_reference_no" class="text-sm font-medium text-gray-700">Bank Transaction Reference No. (UTR):<i class="text-red-500">*</i></label>
