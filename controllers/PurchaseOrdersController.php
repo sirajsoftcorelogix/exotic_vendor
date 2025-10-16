@@ -244,7 +244,7 @@ class PurchaseOrdersController {
         $data['status_log'] = $purchaseOrdersModel->get_po_status_log($poId);
         $data['poId'] = $poId;
         $data['payment'] = $poInvoiceModel->getPaymentsByPoId($poId);
-        $data['vendor_bank'] = $poInvoiceModel->getVendorBankInfo($purchaseOrder['vendor_id']);
+        $data['vendor_bank'] = $vendorsModel->getBankDetailsById($purchaseOrder['vendor_id']);
         $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
         $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
         //print_array($data['vendor_bank']);
