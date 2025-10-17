@@ -3,13 +3,13 @@
         
     </div> -->
     <!-- Page Header -->
-    <div class="flex flex-wrap items-center justify-between gap-4 mt-5">
+    <!-- <div class="flex flex-wrap items-center justify-between gap-4 mt-5"> -->
         <!-- Header Section with Filters and Actions -->
-        <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow">
-           <span class="text-gray-600 font-medium">Purchase orders</span>
+        <!-- <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow">
+           <span class="text-gray-600 font-medium">Purchase orders</span> -->
         
         <!-- Filters -->
-            <form method="get" id="filterForm">
+            <!-- <form method="get" id="filterForm">
                 <input type="hidden" name="page" value="purchase_orders">
                 <input type="hidden" name="action" value="list">
                 <div class="flex flex-wrap items-center gap-4">
@@ -41,9 +41,114 @@
                         <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=purchase_orders&action=list';">
                     </div>
                 </div>
-            </form>
+            </form> -->
+        <!-- </div> -->
+        <!-- Advance Search Accordion -->
+    <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
+        <button id="accordion-button" class="w-full flex justify-between items-center mb-2">
+            <h2 class="text-xl font-bold text-gray-900">Purchase Order Advanced Search</h2>
+            <svg id="accordion-icon" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+        </button>
+
+        <div id="accordion-content" class="accordion-content hidden">
+            <!-- Responsive Grid container -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
+                <form method="GET" onsubmit="submitSearchForm()" class="contents">
+                <!-- Orders From/Till -->
+                <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
+                    <div class="w-1/2">
+                        <label for="po-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
+                        <input type="date" value="<?= htmlspecialchars($_GET['po_from'] ?? '') ?>" name="po_from" id="po-from" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    </div>
+                    <span class="text-gray-500 pb-2">→</span>
+                    <div class="w-1/2">
+                        <label for="po-to" class="block text-sm font-medium text-gray-600 mb-1">Order To</label>
+                        <input type="date" value="<?= htmlspecialchars($_GET['po_to'] ?? '') ?>" name="po_to" id="po-to" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    </div>
+                </div>
+                
+
+                <!-- Item Code -->
+                <div>
+                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <!-- PO No -->
+                <div>
+                    <label for="item-category" class="block text-sm font-medium text-gray-600 mb-1">Item Category</label>
+                    <select id="item-category" name="item_category" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected >All Categories</option>
+                        <?php foreach (getCategories() as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['item_category']) && $_GET['item_category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>   
+                    </select>
+                </div>
+
+                <!-- Item Name -->
+                <div>
+                    <label for="item-sub-category" class="block text-sm font-medium text-gray-600 mb-1">Item Sub Category</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_sub_category'] ?? '') ?>" name="item_sub_category" id="item-sub-category" placeholder="Item Sub Category" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <!-- Min/Max Amount -->
+                <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
+                    <div class="w-1/2">
+                        <label for="po-amount-from" class="block text-sm font-medium text-gray-600 mb-1">PO Amount From</label>
+                        <input type="number" value="<?= htmlspecialchars($_GET['po_amount_from'] ?? '') ?>" name="po_amount_from" id="po-amount-from" placeholder="PO Amount From" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    </div>
+                    <span class="text-gray-500 pb-2">→</span>
+                    <div class="w-1/2">
+                        <label for="po-amount-to" class="block text-sm font-medium text-gray-600 mb-1">PO Amount To</label>
+                        <input type="number" value="<?= htmlspecialchars($_GET['po_amount_to'] ?? '') ?>" name="po_amount_to" id="po-amount-to" placeholder="PO Amount To" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    </div>
+                </div>
+                <!-- Order Number -->
+                <div>
+                    <label for="po-number" class="block text-sm font-medium text-gray-600 mb-1">PO No</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['po_number'] ?? '') ?>" name="po_number" id="po-number" placeholder="PO Number" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <div>
+                    <label for="due-date" class="block text-sm font-medium text-gray-600 mb-1">Due Date</label>
+                    <input type="date" name="due_date" id="due-date" placeholder="Due Date" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                 <!-- Status -->
+                <div>
+                    <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
+                    <select id="status" name="status" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected>All Status</option>
+                        <option value="draft" <?php echo ($_GET['status'] ?? '') == "draft" ? "selected" : ""?>>Draft</option>
+                        <option value="pending" <?php echo ($_GET['status'] ?? '') == "pending" ? "selected" : ""?>>Pending</option>
+                        <option value="ordered" <?php echo ($_GET['status'] ?? '') == "ordered" ? "selected" : ""?>>Ordered</option>
+                        <option value="received" <?php echo ($_GET['status'] ?? '') == "received" ? "selected" : ""?>>Received</option>
+                        <option value="cancelled" <?php echo ($_GET['status'] ?? '') == "cancelled" ? "selected" : ""?>>Cancelled</option>                    
+                    </select>
+                </div>
+                <div>
+                    <label for="vendor-name" class="block text-sm font-medium text-gray-600 mb-1">Vendor Name</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['vendor_name'] ?? '') ?>" name="vendor_name" id="vendor-name" placeholder="Vendor Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <!-- Buttons -->
+                <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
+                    <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
+                    <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
+                </div>
+                </form>
+            <!-- clear filter -->
+             <script>
+                function clearFilters() {
+                    const url = new URL(window.location.href);
+                    //alert(url.search);
+                    url.search = ''; // Clear all query parameters
+                    const page = 'page=purchase_orders&action=list';
+                    window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
+                }
+            </script>
+            </div>
         </div>
     </div>
+    <!-- End of Advance Search Accordion -->
+    <!-- </div> -->
     <!-- PO Table Container -->
     <div class="bg-white rounded-xl shadow-md ">
         <div class="p-6 ">
@@ -646,7 +751,7 @@ function handleAction(action, poId, el) {
                     `;                    
                     uploadedFileSection.classList.remove('hidden');
                     document.getElementById('delete-file-btn')?.addEventListener('click', () => {
-                        if (confirm('Are you sure you want to delete the uploaded invoice?')) {
+                        if (confirm('Are you sure you want to delete the uploaded file?')) {
                             fetch('?page=purchase_orders&action=delete_invoice', {
                                 method: 'POST',
                                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -655,16 +760,16 @@ function handleAction(action, poId, el) {
                             .then(r => r.json())
                             .then(data => {
                                 if (data.success) {
-                                    alert('Invoice deleted successfully.');
+                                    alert('File deleted successfully.');
                                     fileInput.value = '';
                                     uploadedFileSection.classList.add('hidden');
                                     fileInfoDiv.innerHTML = '';
                                 } else {
-                                    alert(data.message || 'Failed to delete invoice.');
+                                    alert(data.message || 'Failed to delete file.');
                                 }
                             })
                             .catch(() => {
-                                alert('Error deleting invoice.');
+                                alert('Error deleting file.');
                             });
                         }
                     });
@@ -741,6 +846,7 @@ function handleAction(action, poId, el) {
             const subTotal = document.getElementById('sub_total').value;
             const grandTotal = document.getElementById('grand_total').value;
             const file = document.getElementById('file-input').files[0];
+            const invoiceType = document.getElementById('invoice-type').value;
             let isValid = true;
 
             if (!invoiceDate || !subTotal || !grandTotal || (!file && !document.getElementById('invoice-id').value)) {
@@ -759,8 +865,12 @@ function handleAction(action, poId, el) {
             })
             .then(r => r.json())
             .then(data => {
-                if (data.success) {
-                    alert('Invoice uploaded successfully!');
+                if (data.success) {                   
+                    if (invoiceType === 'invoice') {
+                        alert('Invoice uploaded successfully!');
+                    } else {
+                        alert('Performa invoice uploaded successfully!');
+                    }
                     closeVendorPopup();
                     location.reload();
                 } else {
@@ -903,5 +1013,82 @@ function formatFileSize(size) {
     } else {
         return size + ' bytes';
     }
+}
+// Accordion functionality
+document.addEventListener('DOMContentLoaded', function () {
+    // Accordion functionality
+    const accordionButton = document.getElementById('accordion-button');
+    const accordionContent = document.getElementById('accordion-content');
+    const accordionIcon = document.getElementById('accordion-icon');
+
+    accordionButton.addEventListener('click', () => {
+        const isExpanded = accordionButton.getAttribute('aria-expanded') === 'true';
+        accordionButton.setAttribute('aria-expanded', !isExpanded);
+        if (accordionContent.classList.contains('hidden')) {
+            accordionContent.classList.remove('hidden');
+            accordionIcon.classList.add('rotate-180');
+        } else {
+            accordionContent.classList.add('hidden');
+            accordionIcon.classList.remove('rotate-180');
+        }
+    });
+
+    // Tab functionality
+    // const tabs = document.querySelectorAll('.tab');
+    // tabs.forEach(tab => {
+    //     tab.addEventListener('click', function (event) {
+    //         event.preventDefault();
+    //         tabs.forEach(t => t.classList.remove('tab-active'));
+    //         this.classList.add('tab-active');
+    //     });
+    // });
+
+    // po_from po_to validation and clear functionality
+    const fromDateInput = document.getElementById('po-from');
+    const toDateInput = document.getElementById('po-to');
+    const clearButton = document.getElementById('clear-button');
+    fromDateInput.addEventListener('change', () => {
+        if (fromDateInput.value) {
+            toDateInput.min = fromDateInput.value;
+            if (toDateInput.value && toDateInput.value < fromDateInput.value) {
+                toDateInput.value = fromDateInput.value;
+            }
+        } else {
+            toDateInput.min = null;
+        }
+    });
+
+    function clearFilters() {
+        fromDateInput.value = '';
+        toDateInput.value = '';
+        toDateInput.min = null;
+    }
+
+    clearButton.addEventListener('click', clearFilters);
+
+    //search form submit
+
+});
+function submitSearchForm() {    
+    const form = document.getElementById('search-form') || document.querySelector('#accordion-content form') || document.querySelector('form[method="GET"]');
+    if (!form) return false;
+    
+    function setHidden(name, value){
+        let inp = form.querySelector('input[name="' + name + '"]');
+        if (!inp) {
+            inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = name;
+            form.appendChild(inp);
+        }
+        inp.value = value;
+    }
+
+    // ensure page and action are present in submitted query
+    setHidden('page', 'purchase_orders');
+    setHidden('action', 'list');
+
+    form.submit();
+    return false;
 }
 </script>

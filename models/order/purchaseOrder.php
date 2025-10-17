@@ -13,8 +13,59 @@ class PurchaseOrder {
         if (!empty($filters['status_filter'])) {
             $statusFilter = $this->db->real_escape_string($filters['status_filter']);
             $sql .= " AND purchase_orders.status = '$statusFilter'";
-        }   
+        }       
+        if (!empty($filters['due_date'])) {
+            $dueDate = $this->db->real_escape_string($filters['due_date']);
+            $sql .= " AND purchase_orders.expected_delivery_date = '$dueDate'";
+        }
         
+        // po_amount_from and po_amount_to filter
+        if (!empty($filters['po_amount_from'])) {
+            $poAmountFrom = (float)$filters['po_amount_from'];
+            $sql .= " AND purchase_orders.total_cost >= $poAmountFrom";
+        }
+        if (!empty($filters['po_amount_to'])) {
+            $poAmountTo = (float)$filters['po_amount_to'];
+            $sql .= " AND purchase_orders.total_cost <= $poAmountTo";
+        }
+        //po_number filter
+        if (!empty($filters['po_number'])) {
+            $poNumber = $this->db->real_escape_string($filters['po_number']);
+            $sql .= " AND purchase_orders.po_number LIKE '%$poNumber%'";
+        }
+        //vendor_name filter
+        if (!empty($filters['vendor_name'])) {
+            $vendorName = $this->db->real_escape_string($filters['vendor_name']);
+            $sql .= " AND vp_vendors.vendor_name LIKE '%$vendorName%'";
+        }
+        //po_date_from and po_date_to filter
+        if (!empty($filters['po_from']) && !empty($filters['po_to'])) {
+            $poDateFrom = $this->db->real_escape_string($filters['po_from']);
+            $poDateTo = $this->db->real_escape_string($filters['po_to']);
+            $sql .= " AND purchase_orders.po_date >= '$poDateFrom' AND purchase_orders.po_date < '$poDateTo'";
+        }
+        // item_category filter left join with vp_order
+        // item_category/item_sub_category/item_code filter -> search records in vp_order linked by po_id
+        if (!empty($filters['item_category']) || !empty($filters['item_sub_category']) || !empty($filters['item_code'])) {
+            $conditions = [];
+            if (!empty($filters['item_category'])) {
+            $itemCategory = $this->db->real_escape_string($filters['item_category']);
+            $conditions[] = "vo.groupname = '$itemCategory'";
+            }
+            if (!empty($filters['item_sub_category'])) {
+            $itemSubCategory = $this->db->real_escape_string($filters['item_sub_category']);
+            $conditions[] = "vo.subcategories LIKE '%$itemSubCategory%'";
+            }
+            if (!empty($filters['item_code'])) {
+            $itemCode = $this->db->real_escape_string($filters['item_code']);
+            $conditions[] = "vo.item_code LIKE '%$itemCode%'";
+            }
+            if (!empty($conditions)) {
+            // Use EXISTS to search vp_order (alias vo) linked by po_id to avoid breaking the original FROM/WHERE order
+            $sql .= " AND EXISTS (SELECT 1 FROM vp_orders vo WHERE vo.po_id = purchase_orders.id AND " . implode(' AND ', $conditions) . ")";
+            }
+        }
+
         $sql .= " ORDER BY purchase_orders.id DESC";
         $result = $this->db->query($sql);
         $purchaseOrders = [];

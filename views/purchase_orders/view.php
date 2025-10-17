@@ -166,14 +166,66 @@
       
     </div>
   </div>
-
+  <!--performa section-->
+   <hr class="my-8 border-gray-200">
+  <div class="space-y-1.5">
+    <div>
+      <h2 class="timeline-title mb-4">Proforma Invoice:</h2>
+      <?php
+      if (empty($proforma)) { ?>
+        <p class="text-gray-600">No Proforma found for this purchase order.</p>
+          <?php } else {
+          if (!empty($proforma)) { ?>
+            <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-x-8 gap-y-2">
+              <div class="col-span-2">
+                <h4 class="payment-details-header">Proforma Number</h4>
+                <p class="payment-details-text mt-2"><?php echo $proforma['invoice_no']; ?></p>
+              </div>
+              <div class="col-span-2">
+                <h4 class="payment-details-header">Proforma Date</h4>
+                <p class="payment-details-text mt-2"><?php echo date('d M Y', strtotime($proforma['invoice_date'])); ?></p>
+              </div>              
+              <div class="col-span-2">
+                <h4 class="payment-details-header">Total Amount</h4>
+                <p class="payment-details-text mt-2">₹<?php echo $proforma['grand_total']; ?></p>
+              </div>            
+            
+              <?php //extension
+              $iconClass = '';
+              $inv_name = basename($proforma['invoice'], "/");
+              if (!empty($proforma['invoice'])) {
+                $file_extension = pathinfo($proforma['invoice'], PATHINFO_EXTENSION);
+                switch (strtolower($file_extension)) {
+                    case 'pdf':
+                        $iconClass = 'fa-file-pdf';
+                        break;             
+                    case 'png':
+                    case 'jpg':
+                    case 'jpeg':
+                    case 'gif':
+                        $iconClass = 'fa-file-image';
+                        break;
+                    default:
+                        $iconClass = 'fa-file'; // Generic file icon
+                }          
+              } 
+              ?>            
+            <div class="col-span-2 ">
+                <a href="<?php echo $proforma['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button mb-2" >
+                  <i class="fas <?php echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
+                </a>                
+            </div>
+          </div>
+          <?php }
+        } ?>        
+      </div>    
+  </div>
   <!-- invoice section -->
   <hr class="my-8 border-gray-200">
   <div class="space-y-1.5">
     <div>
-      <h2 class="timeline-title mb-4"><?php echo $invoice['invoice_type'] === 'performa' ? 'Proforma Invoices:' : 'Invoices:'; ?></h2>
-      <?php 
-      
+      <h2 class="timeline-title mb-4">Invoice:</h2>
+      <?php       
       if (empty($invoice)) { ?>
         <p class="text-gray-600">No invoices found for this purchase order.</p>
           <?php } else {
@@ -219,16 +271,9 @@
             } 
             ?>
             <div class="col-span-1 flex flex-col items-center justify-center">
-              <!-- <p class="amount-box-text"> <i class="fas <?php //echo $iconClass ?> text-2xl text-gray-600"></i></p> -->
-              <!-- <p class="amount-box-text"><a href="<?php //echo $invoice['invoice']; ?>" target="_blank"><?php //echo $inv_name; ?></a></p> -->
-              <!-- <a href="<?php //echo $invoice['invoice']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button mb-2" >
-                <i class="fas <?php //echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
-              </a> -->
-              <!-- <button id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</button> -->
-              <!-- <button id="open-challan-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Delivery Challan</button> -->
               <div class="menu-wrapper inline-block relative">
                   <button class="menu-button text-gray-500 hover:text-gray-700 font-semibold" onclick="toggleMenu(this)">
-                  <i class="fas fa-cog"></i> Action<!-- &#x22EE;  Vertical ellipsis -->
+                  <i class="fas fa-ellipsis-v"></i> <!-- &#x22EE;  Vertical ellipsis -->
                   </button>
                   <ul class="menu-popup text-left" style="min-width: 220px;">
                       <li><a href="<?php echo $invoice['invoice']; ?>" download ><i class="fas fa-download <?php //echo $iconClass ?> text-2xl text-gray-600"></i> Download Invoice</a></li>
@@ -246,52 +291,8 @@
                 <h4 class="payment-details-header">Grand Total</h4>
                 <p class="payment-details-text mt-2"><?php echo $invoice['grand_total']; ?></p>
               </div>
-          </div>
-          <?php } else if (!empty($invoice['performa'])) { ?>
-            <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-x-8 gap-y-2">
-                <div class="col-span-2">
-                  <h4 class="invoice-header">Proforma Number</h4>
-                  <p class="invoice-text mt-2"><?php echo $invoice['invoice_no']; ?></p>
-                </div>
-              <div class="col-span-2">
-                <h4 class="invoice-header">Proforma Date</h4>
-                <p class="invoice-text mt-2"><?php echo date('d M Y', strtotime($invoice['invoice_date'])); ?></p>
-              </div>              
-              <div class="col-span-2">
-                <h4 class="invoice-header">Total Amount</h4>
-                <p class="invoice-text mt-2">₹<?php echo $invoice['grand_total']; ?></p>
-              </div>            
-            
-            <?php //extension
-            $iconClass = '';
-            $inv_name = basename($invoice['performa'], "/");
-            if (!empty($invoice['performa'])) {
-              $file_extension = pathinfo($invoice['performa'], PATHINFO_EXTENSION);
-              switch (strtolower($file_extension)) {
-                  case 'pdf':
-                      $iconClass = 'fa-file-pdf';
-                      break;             
-                  case 'png':
-                  case 'jpg':
-                  case 'jpeg':
-                  case 'gif':
-                      $iconClass = 'fa-file-image';
-                      break;
-                  default:
-                      $iconClass = 'fa-file'; // Generic file icon
-              }          
-            } 
-            ?>            
-            <div class="col-span-2 ">
-                <a href="<?php echo $invoice['performa']; ?>" download style="color: white;"><button class="bg-[rgba(208,103,6,1)] text-center text-white font-semibold py-1 px-4 rounded-md action-button mb-2" >
-                  <i class="fas <?php echo $iconClass ?> text-2xl text-white-600"></i> Download</button>
-                </a>
-                <button id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</button>
-                
             </div>
-          </div>
-          <?php }
-
+          <?php } 
         } ?>
         
       </div>
@@ -769,7 +770,12 @@ document.addEventListener('DOMContentLoaded', function() {
               document.getElementById('file-drop-area-text').textContent = 'Drag & Drop your delivery challan file here or';
             }
             // Note: File input cannot be pre-filled for security reasons
-            openChallanPopup();
+            // Open challan popup without toggling the menu (edit button)
+            challanPopup.classList.remove('hidden');
+            setTimeout(() => {
+              challanModalSlider.classList.remove('translate-x-full');
+            }, 10);
+            
           } else {
             alert(data.message || 'Failed to fetch challan details.');
           }

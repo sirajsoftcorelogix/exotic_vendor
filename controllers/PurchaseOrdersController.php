@@ -31,13 +31,38 @@ class PurchaseOrdersController {
 
         // Apply filters
         $filters = [];
-        if (!empty($_GET['search_text'])) {
-            $filters['search_text'] = $_GET['search_text'];
+        // if (!empty($_GET['search_text'])) {
+        //     $filters['search_text'] = $_GET['search_text'];
+        // }
+        if (!empty($_GET['status'])) {
+            $filters['status_filter'] = $_GET['status'];
         }
-        if (!empty($_GET['status_filter'])) {
-            $filters['status_filter'] = $_GET['status_filter'];
+        if(!empty($_GET['po_from']) && !empty($_GET['po_to'])){
+            $filters['po_from'] = $_GET['po_from'];
+            $filters['po_to'] = $_GET['po_to'];
         }
-
+        if (!empty($_GET['item_code'])) {
+            $filters['item_code'] = $_GET['item_code'];
+        }
+        if (!empty($_GET['item_category'])) {
+            $filters['item_category'] = $_GET['item_category'];
+        }
+        if (!empty($_GET['item_sub_category'])) {
+            $filters['item_sub_category'] = $_GET['item_sub_category'];
+        }
+        if (!empty($_GET['po_amount_from']) && !empty($_GET['po_amount_to'])) {
+            $filters['po_amount_from'] = $_GET['po_amount_from'];
+            $filters['po_amount_to'] = $_GET['po_amount_to'];
+        }
+        if (!empty($_GET['po_number'])) {
+            $filters['po_number'] = $_GET['po_number'];
+        }
+        if (!empty($_GET['vendor_name'])) {
+            $filters['vendor_name'] = $_GET['vendor_name'];
+        }
+        if (!empty($_GET['due_date'])) {
+            $filters['due_date'] = $_GET['due_date'];
+        }
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
         // Calculate total pages
@@ -240,14 +265,15 @@ class PurchaseOrdersController {
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
         $data['domain'] = $domain;
         //print_array($purchaseOrder);        
-        $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId);
+        $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId,'invoice');
+        $data['proforma'] = $poInvoiceModel->getInvoiceByPOId($poId,'performa');
         $data['status_log'] = $purchaseOrdersModel->get_po_status_log($poId);
         $data['poId'] = $poId;
         $data['payment'] = $poInvoiceModel->getPaymentsByPoId($poId);
         $data['vendor_bank'] = $vendorsModel->getBankDetailsById($purchaseOrder['vendor_id']);
         $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
         $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
-        //print_array($data['vendor_bank']);
+        //print_array($data['proforma']);
         $address = $commanModel->get_exotic_address();
         foreach($address as $addr){
             if($addr['id'] == $purchaseOrder['delivery_address']){
