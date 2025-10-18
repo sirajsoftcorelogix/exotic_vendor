@@ -120,24 +120,14 @@
         </div>
     </div>
 
-    <!-- Pagination -->
-	<?php      
-		// $page_no = $data["page_no"];
-		// $limit = $data["limit"];
-		// $total_records = $data["totalRecords"] ?? 0;
-        // $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
+    <!-- Pagination Logic -->
+	<?php
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
         $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
         $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
-
-        // Prepare query string for pagination links
-        // $search_params = $_GET;
-        // unset($search_params['page_no'], $search_params['limit']);
-        // $query_string = http_build_query($search_params);
-        // $query_string = $query_string ? '&' . $query_string : '';
 
         // Calculate start/end slot for 10 pages
         $slot_size = 10;
@@ -150,8 +140,7 @@
         <div class="bg-white rounded-xl shadow-md p-4">
             <div class="flex items-center justify-center">
                 <div class="flex items-center gap-4 text-sm text-gray-600">
-                    <?php            
-                    //echo '****************************************  '.$query_string;
+                    <?php
                     if ($total_pages > 1): ?>          
                     <!-- Prev Button -->
                     <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
@@ -182,8 +171,6 @@
                 </div>
             </div>
         </div>
-	
-
 </div>
 
 <!-- Add Vendor Modal -->
