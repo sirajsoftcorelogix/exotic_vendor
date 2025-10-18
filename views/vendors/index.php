@@ -147,7 +147,6 @@
             $start = max(1, $end - $slot_size + 1);
         }
 	?>
-	
         <div class="bg-white rounded-xl shadow-md p-4">
             <div class="flex items-center justify-center">
                 <div class="flex items-center gap-4 text-sm text-gray-600">
