@@ -198,6 +198,15 @@ switch ($page) {
             case 'remove_payment':
                 $controller->removePayment();
                 break;
+            case 'add_challan':
+                $controller->addChallan();
+                break;
+            case 'get_challan':
+                $controller->getChallans();
+                break;
+            case 'remove_challan':
+                $controller->deleteChallan();
+                break;
             default:
                 $controller->index();
                 break;

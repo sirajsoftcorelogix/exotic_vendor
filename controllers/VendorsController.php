@@ -21,7 +21,7 @@ class VendorsController {
         
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Users per page, default 5
-        $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
 
         $vendors_data = $vendorsModel->getAllVendorsListing($page_no, $limit, $search, $status_filter); //$vendorsModel->getAllVendors($limit, $offset);
 

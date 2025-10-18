@@ -121,40 +121,69 @@
     </div>
 
     <!-- Pagination -->
-	<?php         
-		$page_no = $data["page_no"];
-		$limit = $data["limit"];
-		$total_records = $data["totalRecords"] ?? 0;
+	<?php      
+		// $page_no = $data["page_no"];
+		// $limit = $data["limit"];
+		// $total_records = $data["totalRecords"] ?? 0;
+        // $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+        $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
         $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
+
+        // Prepare query string for pagination links
+        // $search_params = $_GET;
+        // unset($search_params['page_no'], $search_params['limit']);
+        // $query_string = http_build_query($search_params);
+        // $query_string = $query_string ? '&' . $query_string : '';
+
+        // Calculate start/end slot for 10 pages
+        $slot_size = 10;
+        $start = max(1, $page - floor($slot_size / 2));
+        $end = min($total_pages, $start + $slot_size - 1);
+        if ($end - $start < $slot_size - 1) {
+            $start = max(1, $end - $slot_size + 1);
+        }
 	?>
-	<?php if ($total_pages > 1): ?>
+	
         <div class="bg-white rounded-xl shadow-md p-4">
             <div class="flex items-center justify-center">
                 <div class="flex items-center gap-4 text-sm text-gray-600">
-                    <span>Page</span>
-                    <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no <= 1 ? 'disabled' : '' ?>" >
-                        <a class="page-link" <?php if(($page_no-1) >= 1) { ?> href="?page=vendors&acton=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?>  tabindex="-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    <?php            
+                    //echo '****************************************  '.$query_string;
+                    if ($total_pages > 1): ?>          
+                    <!-- Prev Button -->
+                    <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
+                    href="?page=vendors&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?>">
+                        &laquo; Prev
+                    </a>
+                    <!-- Page Slots -->
+                    <?php for ($i = $start; $i <= $end; $i++): ?>
+                        <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
+                        href="?page=vendors&action=list&page_no=<?= $i ?>&limit=<?= $limit ?>">
+                            <?= $i ?>
                         </a>
-                    </button>
-                    <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page_no ?></span>
-                    <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no >= $total_pages ? 'disabled' : '' ?>">
-                        <a class="page-link" <?php if($page_no < $total_pages) { ?> href="?page=vendors&acton=list&page_no=<?= $page_no+1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></a>
-                    </button>
-                    <div class="relative">
-                        <select id="rows-per-page" class="custom-select bg-transparent border-b border-gray-300 text-gray-900 text-sm focus:ring-0 focus:border-gray-500 block w-full p-1" onchange="location.href='?page=vendors&acton=list&page_no=1&limit=' + this.value;">
-                            <?php foreach ([10, 20, 50, 100] as $opt): ?>
-                                <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
-                                    <?= $opt ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                    <?php endfor; ?>
+                    <!-- Next Button -->
+                    <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
+                    href="?page=vendors&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?>">
+                        Next &raquo;
+                    </a>
+                    <?php endif; ?>
+                    <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
+                            onchange="location.href='?page=vendors&action=list&page_no=1&limit=' + this.value;">
+                        <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                            <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
+                                <?= $opt ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
         </div>
-	<?php endif; ?>
+	
 
 </div>
 
