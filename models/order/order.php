@@ -7,7 +7,7 @@ class Order{
     }
     public function getAllOrders($filters = [], $limit = 50, $offset = 0) {
 
-        $sql = "SELECT * FROM vp_orders WHERE 1=1";
+        $sql = "SELECT vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
         $params = [];
         if (!empty($filters['order_number'])) {
             $sql .= " AND order_number LIKE ?";
