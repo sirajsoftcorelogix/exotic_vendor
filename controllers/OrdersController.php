@@ -177,6 +177,16 @@ class OrdersController {
 					'cost_price' => $item['cp'] ?? '',
 					'location' => $item['location'] ?? '',
 					'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
+                    'numsold' => $item['numsold'] ?? 0,
+                    'product_weight' => $item['product_weight'] ?? 0.0,
+                    'product_weight_unit' => $item['product_weight_unit'] ?? 'kg',
+                    'prod_height' => $item['prod_height'] ?? 0.0,
+                    'prod_width' => $item['prod_width'] ?? 0.0,
+                    'prod_length' => $item['prod_length'] ?? 0.0,
+                    'length_unit' => $item['length_unit'] ?? '',
+                    'backorder_status' => $item['backorder_status'] ?? 0,
+                    'backorder_percent' => $item['backorder_percent'] ?? 0,
+                    'backorder_delay' => $item['backorder_delay'] ?? ''
 					 ];
 					$totalorder++;
                 }

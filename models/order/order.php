@@ -198,54 +198,61 @@ class Order{
         }
 
         // Insert
-		$table_name = 'vp_orders';
-		$InsertFields = [
-			'order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
-			'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 
-			'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 
-			'cost_price', 'location', 'order_date'
-		];
+        $table_name = 'vp_orders';
+        $InsertFields = [
+            'order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
+            'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 
+            'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 
+            'cost_price', 'location', 'order_date','numsold','product_weight','product_weight_unit',
+            'prod_height',
+            'prod_width',
+            'prod_length',
+            'length_unit',
+            'backorder_status',
+            'backorder_percent',
+            'backorder_delay'
+        ];
 
-		// Build SQL query
-		$columns = implode(', ', $InsertFields);
-		$placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
-		$sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
+        // Build SQL query
+        $columns = implode(', ', $InsertFields);
+        $placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
+        $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 
-		$stmt = $this->db->prepare($sql);
-		if (!$stmt) {
-			return ['success' => false, 'error' => 'Prepare failed: ' . $this->db->error];
-		}
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'error' => 'Prepare failed: ' . $this->db->error];
+        }
 
-		$types = '';
-		$values = [];
-		foreach ($InsertFields as $field) {
-			$values[] = isset($data[$field]) ? $data[$field] : null;
-			if (is_int($values)) {
-				$types .= 'i';
-			} elseif (is_float($values) || is_double($values)) {
-				$types .= 'd';
-			} else {
-				$types .= 's';
-			}
-			//$value = isset($data[$field]) ? $data[$field] : null;
-		}
+        $types = '';
+        $values = [];
+        foreach ($InsertFields as $field) {
+            $value = isset($data[$field]) ? $data[$field] : null;
+            // If the incoming value is an array, encode it to JSON to avoid "Array to string conversion"
+            if (is_array($value)) {
+                $value = json_encode($value);
+            }
+            $values[] = $value;
 
-		// Debug (remove later)
-		//echo "<br>SQL: " . $sql;
-		//echo "<br>Types: " . $types;
-		//echo "<pre>"; print_r($values); echo "</pre>";
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value) || is_double($value)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
 
-		// Bind dynamically
-		$stmt->bind_param($types, ...$values);
+        // Bind dynamically
+        $stmt->bind_param($types, ...$values);
 
-		// After execute
-		if (!$stmt->execute()) {
-			echo "</br>".'Failed';
-			return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-		}
-		$insertId = $this->db->insert_id; // ✅ use db object, not stmt
-		$stmt->close();
-		return ['success' => true, 'insert_id' => $insertId];
+        // After execute
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+        $insertId = $this->db->insert_id; // ✅ use db object, not stmt
+        $stmt->close();
+        return ['success' => true, 'insert_id' => $insertId];
     }
 	
     public function updateOrderStatus($id, $status, $po_number, $po_id = null, $deliveryDueDate = null) {
