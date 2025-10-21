@@ -1,41 +1,108 @@
-
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto:wght@400&display=swap" rel="stylesheet">
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f9fafb;
+    }
+    .product-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: rgba(58, 58, 73, 1);
+    }
+    .item-code, .quantity {
+        font-weight: 400;
+        font-size: 13px;
+        color: rgba(58, 58, 73, 1);
+    }
+    .heading-typography {
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        font-size: 13px;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        color: rgba(121, 122, 124, 1);
+    }
+    .data-typography {
+        font-family: 'Roboto', sans-serif;
+        font-weight: 400;
+        font-size: 14px;
+        line-height: 18px;
+        letter-spacing: 0.2px;
+        color: rgba(0, 0, 0, 1);
+    }
+    .custom-checkbox:checked {
+        background-color: rgba(208, 103, 6, 1);
+        border-color: rgba(208, 103, 6, 1);
+    }
+    .custom-checkbox {
+        appearance: none;
+        -webkit-appearance: none;
+        height: 14px;
+        width: 14px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-block;
+        position: relative;
+    }
+    .custom-checkbox:checked::after {
+        content: '✓';
+        font-size: 10px;
+        color: white;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    .set-priority-title {
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        font-size: 13px;
+        color: rgba(121, 122, 124, 1);
+    }
+    .urgent-text {
+        font-family: 'Roboto', sans-serif;
+        font-weight: 400;
+        font-size: 14px;
+        line-height: 18px;
+        letter-spacing: 0.2px;
+        color: rgba(255, 0, 4, 1);
+    }
+    .download-invoice {
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        font-size: 13px;
+        color: rgba(9, 9, 9, 1);
+    }
+    .note-heading {
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        font-size: 13px;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        color: rgba(121, 122, 124, 1);
+    }
+    .note-content {
+        font-family: 'Inter', sans-serif;
+        font-weight: 400;
+        font-size: 12px;
+        letter-spacing: 0.2px;
+        color: rgba(121, 122, 124, 1);
+    }
+    .pending-text {
+        font-family: 'Roboto', sans-serif;
+        font-weight: 400;
+        font-size: 14px;
+        line-height: 18px;
+        letter-spacing: 0.2px;
+        color: rgba(7, 7, 7, 1);
+    }
+</style>
 <div class="container mx-auto p-4">
     <!-- Header Section -->
-    <!-- <div >
-
-        <div class="relative inline-block text-left">
-            <div>
-                <button type="button" class="inline-flex justify-center items-center w-full rounded-t-md px-4 py-2 bg-custom-orange text-sm font-medium text-white focus:outline-none" id="menu-button" aria-expanded="true" aria-haspopup="true">
-                    Manage Orders
-                    <svg id="menu-arrow" class="-mr-1 ml-2 h-5 w-5 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-        </div>  
-
-        
-        <div id="greeting-banner" class="bg-custom-orange rounded-b-xl rounded-tr-xl p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center text-white">
-            <div>
-                <h1 class="text-xl sm:text-2xl font-bold">Good Morning, <?php //echo htmlspecialchars($_SESSION['user']['name']); ?></h1>
-                <p class="mt-1 text-sm opacity-90">You have 15+ invoices saved to draft that has to send to customers</p>
-                <div class="flex items-center space-x-4 mt-3 text-sm opacity-90">
-                    <div class="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg>
-                        <span id="current-date"><?php //echo date('l, d M Y'); ?></span>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.414L11 10.586V6z" clip-rule="evenodd" /></svg>
-                        <span id="current-time"><?php //echo date('h:i A');?></span>
-                    </div>
-                </div>
-            </div>
-            <div class="hidden lg:block w-40 h-auto self-end">
-                <img src="images/manageOrders.png" />
-            </div>
-        </div>
-    </div> -->
-
     <!-- Stats Section -->
     <div class="mt-6 sm:mt-8">
         <div class="bg-white rounded-xl shadow-sm p-4">
@@ -271,170 +338,294 @@
     </div>
     
     <!-- End of Advance Search Accordion -->
+
     <!-- Orders Table Section -->
     <div class="mt-5">
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
-        <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
-    
+            <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
+        
 
-        <!-- Tabs -->
-        <div class="relative border-b-[4px] border-white">
-            <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
-                <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status'])) ? 'tab-active' : ''; ?> text-center relative py-4">
-                    <span class="px-1 text-sm">All Orders</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
-                <a href="<?php echo base_url('?page=orders&action=list&status=pending'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">Pending</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
-                 <a href="<?php echo base_url('?page=orders&action=list&status=processed'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'processed') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">Processed</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
-                <!--<a href="<?php //echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">Cancelled</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
-                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">In Progress</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
-                
-                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">Received</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
-                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">Disputed</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a>
-                <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                    <span class="px-1 text-sm">Returned</span>
-                    <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                </a> -->
-            </div>
-            <div class="right-0 top-0 absolute p-4 size">
-                <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
-                    onchange="location.href='?page=orders&action=list&category=' + this.value;">
+            <!-- Tabs -->
+            <div class="relative border-b-[4px] border-white">
+                <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
+                    <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status'])) ? 'tab-active' : ''; ?> text-center relative py-4">
+                        <span class="px-1 text-sm">All Orders</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="<?php echo base_url('?page=orders&action=list&status=pending'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Pending</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="<?php echo base_url('?page=orders&action=list&status=processed'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'processed') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Processed</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <!--<a href="<?php //echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Cancelled</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">In Progress</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
                     
-                    <option value="all" selected >All Categories</option>
-                    <?php foreach (getCategories() as $key => $value): ?>
-                        <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                    <?php endforeach; ?>                    
-                </select>
+                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Received</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Disputed</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Returned</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a> -->
+                </div>
+                <div class="right-0 top-0 absolute p-4 size">
+                    <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                        onchange="location.href='?page=orders&action=list&category=' + this.value;">
+                        
+                        <option value="all" selected >All Categories</option>
+                        <?php foreach (getCategories() as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
             </div>
-        </div>
 
-        <!-- Table h-96 overflow-y-scroll-->
-        <div class="overflow-x-auto mt-4 ">
-            <table class="min-w-full table-spacing ">
-                <thead class="bg-gray-50 rounded-md ">
-                <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky">
-                    <th class="p-4">#</th>
-                    <th class="px-2 py-3">Order ID</th>
-                    <th class="px-2 py-3">Order Date</th>                   
-                    <th class="px-2 py-3">Item Code</th>
+            <!-- Table h-96 overflow-y-scroll-->
+            <div class="overflow-x-auto mt-4 ">
+                <?php /*?>
+                <table class="min-w-full table-spacing ">
+                    <thead class="bg-gray-50 rounded-md ">
+                    <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky">
+                        <th class="p-4">#</th>
+                        <th class="px-2 py-3">Order ID</th>
+                        <th class="px-2 py-3">Order Date</th>                   
+                        <th class="px-2 py-3">Item Code</th>
+                        
+                        <!-- <th class="px-12 py-3">Item</th> -->
+                        <th class="px-2 py-3">Image</th>
+                        <th class="px-2 py-3">Marketplace</th>
+                        <!-- <th class="px-6 py-3">Status</th> -->
+                        <th class="px-2 py-3">PO Number</th>
+                        <th class="px-2 py-3">PO Due Date</th>
+                        <!-- <th class="px-6 py-3">Staff</th> -->
+                        <!-- <th class="px-2 py-3">Amount</th> -->
+                        <th class="px-2 py-3">Unit</th>
+                        <!-- <th class="px-6 py-3">Location</th> -->
+                        <!-- <th class="relative px-6 py-3"><span class="sr-only">Actions</span></th> -->
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <!-- Table Row 1 -->
+                    <?php 
+                        if (!empty($data['orders'])) {
+                            foreach ($data['orders'] as $order) { 
+                        ?> 
+                    <tr class="bg-white rounded-md shadow-sm" data-id="<?= $order['id'] ?>">
+                        <td class="p-4 whitespace-nowrap rounded-l-md">
+                            <?php if($order['status']=='pending'): ?>
+                                <input type="checkbox" name="poitem[]" value="<?=$order['id']?>" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500">  
+                            <?php endif; ?>                    
+                        </td>
+                        <td class="p-4 whitespace-nowrap rounded-l-md">                        
+                            <a href="#" class="order-detail-link text-blue-600 hover:underline" 
+                                data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'>
+                                <?= $order['order_number'] ?>
+                            </a>
+                        </td>
+                        <td class="px-2 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
+                        <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
+                        
                     
-                    <!-- <th class="px-12 py-3">Item</th> -->
-                    <th class="px-2 py-3">Image</th>
-                    <th class="px-2 py-3">Marketplace</th>
-                    <!-- <th class="px-6 py-3">Status</th> -->
-                    <th class="px-2 py-3">PO Number</th>
-                    <th class="px-2 py-3">PO Due Date</th>
-                    <!-- <th class="px-6 py-3">Staff</th> -->
-                    <!-- <th class="px-2 py-3">Amount</th> -->
-                    <th class="px-2 py-3">Unit</th>
-                    <!-- <th class="px-6 py-3">Location</th> -->
-                    <!-- <th class="relative px-6 py-3"><span class="sr-only">Actions</span></th> -->
-                </tr>
-                </thead>
-                <tbody>
-                <!-- Table Row 1 -->
-                 <?php 
-                    if (!empty($data['orders'])) {
-                        foreach ($data['orders'] as $order) { 
-                    ?> 
-                <tr class="bg-white rounded-md shadow-sm" data-id="<?= $order['id'] ?>">
-                    <td class="p-4 whitespace-nowrap rounded-l-md">
-                        <?php if($order['status']=='pending'): ?>
-                            <input type="checkbox" name="poitem[]" value="<?=$order['id']?>" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500">  
-                        <?php endif; ?>                    
-                    </td>
-                    <td class="p-4 whitespace-nowrap rounded-l-md">                        
-                        <a href="#" class="order-detail-link text-blue-600 hover:underline" 
-                            data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'>
-                            <?= $order['order_number'] ?>
-                        </a>
-                    </td>
-                    <td class="px-2 py-4 whitespace-nowrap text-sm font-medium text-amber-600"><?= date('d/m/y', strtotime($order['order_date'])) ?></td>
-                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></td>
-                    
-                   
-                    <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Swati Nagar</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <a href="#" class="icon-link">
-                            <span>Kuber</span>
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.0462 8.20171C10.6471 9.47037 9.33805 11.0991 7.90051 12.3041C7.56557 12.5845 7.25392 12.7388 6.81226 12.7978C6.09737 12.8939 5.0914 12.9659 4.3672 12.9883C3.50483 13.0154 2.73561 12.5712 2.75424 11.6359C2.7686 10.909 2.86756 9.93098 2.95139 9.19835C2.99176 8.84595 3.04959 8.53545 3.24558 8.2299L11.1583 0.415632C11.9224 -0.178697 12.8027 -0.120026 13.5276 0.491828C14.0919 0.968052 15.0964 1.93688 15.5629 2.49426C16.1481 3.19335 16.1419 4.07837 15.5629 4.77785C14.5837 5.96041 13.1027 7.05649 12.0459 8.20209L12.0462 8.20171ZM12.257 1.03396C12.1433 1.04272 11.9911 1.11244 11.8968 1.17873C11.5141 1.44732 11.1361 2.00355 10.7523 2.30224L13.6763 5.13787C14.0908 4.59726 15.3762 3.97665 14.7692 3.19678C14.239 2.51559 13.299 1.87897 12.7316 1.19664C12.6109 1.0972 12.4157 1.02139 12.2566 1.03396H12.257ZM3.89255 11.8744C3.93796 11.9216 4.0998 11.9635 4.17121 11.962C4.89619 11.9464 5.93204 11.858 6.65663 11.7692C6.78664 11.7532 6.92675 11.7174 7.03891 11.6492L12.869 5.94022L9.99472 3.04591L4.13628 8.79985C4.00626 8.99529 3.98492 9.58505 3.96008 9.84602C3.91506 10.323 3.85607 10.8968 3.84171 11.368C3.83821 11.4842 3.81997 11.7989 3.89216 11.8744H3.89255Z" fill="#D06706"/><path d="M2.04958 2.33194C3.16732 2.2085 4.46941 2.40014 5.60695 2.32394C6.18289 2.447 6.14176 3.26687 5.56736 3.34687C4.59787 3.48174 3.31946 3.26344 2.30922 3.34878C1.6281 3.4063 1.1127 3.92444 1.04788 4.58696V13.695C1.10687 14.4322 1.64634 14.9138 2.38684 14.9713H11.5488C13.652 14.8079 12.6526 11.8801 12.8886 10.5337C13.0523 9.99611 13.7703 9.99839 13.9326 10.5337C13.8247 12.6089 14.6599 15.6335 11.7045 16.0003H2.2316C1.06845 15.9165 0.137389 15.0174 0 13.8859L0.00620967 4.36409C0.140494 3.35906 1.00791 2.447 2.04997 2.33194H2.04958Z" fill="#D06706"/></svg>
-                        </a>
-                    </td> -->
-                    <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td> -->
-                    <td class="px-2 py-1">
-                        <img 
-                            class="h-28 max-w-[100px] w-full mx-auto rounded-md object-cover cursor-pointer" 
-                            src="<?= $order['image'] ?>" 
-                            alt="" 
-                            onclick="openImagePopup('<?= $order['image'] ?>')"
-                        >
-                    </td>
-                     <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal">
-                        <?php 
-                           echo wordwrap($order['marketplace_vendor'], 15, "<br>\n", true);
+                        <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Swati Nagar</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <a href="#" class="icon-link">
+                                <span>Kuber</span>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.0462 8.20171C10.6471 9.47037 9.33805 11.0991 7.90051 12.3041C7.56557 12.5845 7.25392 12.7388 6.81226 12.7978C6.09737 12.8939 5.0914 12.9659 4.3672 12.9883C3.50483 13.0154 2.73561 12.5712 2.75424 11.6359C2.7686 10.909 2.86756 9.93098 2.95139 9.19835C2.99176 8.84595 3.04959 8.53545 3.24558 8.2299L11.1583 0.415632C11.9224 -0.178697 12.8027 -0.120026 13.5276 0.491828C14.0919 0.968052 15.0964 1.93688 15.5629 2.49426C16.1481 3.19335 16.1419 4.07837 15.5629 4.77785C14.5837 5.96041 13.1027 7.05649 12.0459 8.20209L12.0462 8.20171ZM12.257 1.03396C12.1433 1.04272 11.9911 1.11244 11.8968 1.17873C11.5141 1.44732 11.1361 2.00355 10.7523 2.30224L13.6763 5.13787C14.0908 4.59726 15.3762 3.97665 14.7692 3.19678C14.239 2.51559 13.299 1.87897 12.7316 1.19664C12.6109 1.0972 12.4157 1.02139 12.2566 1.03396H12.257ZM3.89255 11.8744C3.93796 11.9216 4.0998 11.9635 4.17121 11.962C4.89619 11.9464 5.93204 11.858 6.65663 11.7692C6.78664 11.7532 6.92675 11.7174 7.03891 11.6492L12.869 5.94022L9.99472 3.04591L4.13628 8.79985C4.00626 8.99529 3.98492 9.58505 3.96008 9.84602C3.91506 10.323 3.85607 10.8968 3.84171 11.368C3.83821 11.4842 3.81997 11.7989 3.89216 11.8744H3.89255Z" fill="#D06706"/><path d="M2.04958 2.33194C3.16732 2.2085 4.46941 2.40014 5.60695 2.32394C6.18289 2.447 6.14176 3.26687 5.56736 3.34687C4.59787 3.48174 3.31946 3.26344 2.30922 3.34878C1.6281 3.4063 1.1127 3.92444 1.04788 4.58696V13.695C1.10687 14.4322 1.64634 14.9138 2.38684 14.9713H11.5488C13.652 14.8079 12.6526 11.8801 12.8886 10.5337C13.0523 9.99611 13.7703 9.99839 13.9326 10.5337C13.8247 12.6089 14.6599 15.6335 11.7045 16.0003H2.2316C1.06845 15.9165 0.137389 15.0174 0 13.8859L0.00620967 4.36409C0.140494 3.35906 1.00791 2.447 2.04997 2.33194H2.04958Z" fill="#D06706"/></svg>
+                            </a>
+                        </td> -->
+                        <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['title'] ?></td> -->
+                        <td class="px-2 py-1">
+                            <img 
+                                class="h-28 max-w-[100px] w-full mx-auto rounded-md object-cover cursor-pointer" 
+                                src="<?= $order['image'] ?>" 
+                                alt="" 
+                                onclick="openImagePopup('<?= $order['image'] ?>')"
+                            >
+                        </td>
+                        <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal">
+                            <?php 
+                            echo wordwrap($order['marketplace_vendor'], 15, "<br>\n", true);
+                            ?>
+                        </td>
+                        <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <a href="#" class="icon-link">
+                                <span><?= ucfirst($order['status']) ?></span>                  
+                            </a>
+                        </td> -->
+                        <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal ">
+                            <a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link text-blue-600 hover:underline">
+                                <span><?php echo $order['po_number']; ?></span>
+
+                            </a>
+                        </td>
+                        <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?php 
+                        if ($order['delivery_due_date']) {
+                            $days = ceil((strtotime($order['delivery_due_date']) - time()) / (60 * 60 * 24));
+                            echo date('d/m/Y', strtotime($order['delivery_due_date'])) . ' <br>' . $days . ' Days Remaining';
+                        } else {
+                            echo '-';
+                        }
                         ?>
-                    </td>
-                    <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <a href="#" class="icon-link">
-                            <span><?= ucfirst($order['status']) ?></span>                  
-                        </a>
-                    </td> -->
-                     <td class="px-2 py-4 text-sm text-gray-500 whitespace-normal ">
-                        <a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link text-blue-600 hover:underline">
-                            <span><?php echo $order['po_number']; ?></span>
+                        
+                        </td>
+                        <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
+                        <!-- <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <?= isset($order['total_price']) ? '₹' . $order['total_price'] : '-' ?>
+                        </td> -->
 
-                        </a>
-                    </td>
-                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?php 
-                    if ($order['delivery_due_date']) {
-                        $days = ceil((strtotime($order['delivery_due_date']) - time()) / (60 * 60 * 24));
-                        echo date('d/m/Y', strtotime($order['delivery_due_date'])) . ' <br>' . $days . ' Days Remaining';
-                    } else {
-                        echo '-';
-                    }
-                    ?>
+                        <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
+                        <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['shipping_address'] ?></td> -->
+                        <!-- <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium rounded-r-md">
+                            <a href="#" class="text-gray-500 hover:text-gray-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+                            </a>
+                        </td> -->
+                    </tr>
+                    <?php
+                            }
+                        } else {
+                            echo "<tr><td colspan='10' class='text-center'>No orders found.</td></tr>";
+                        }
+                        ?>
+                    </tbody>
+                </table>
+                <?php */?>
+
                     
-                    </td>
-                    <!--<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Mukul</td> -->
-                    <!-- <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <?= isset($order['total_price']) ? '₹' . $order['total_price'] : '-' ?>
-                    </td> -->
+                    <?php 
+                    if (!empty($data['orders'])) {
+                        foreach ($data['orders'] as $order) {
+                    ?>
+                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border border-gray-200" style="margin: 0px 0px 10px 0px">
+                        <div class="flex items-start p-4 gap-4">
+                            <!-- Checkbox -->
+                            <div class="flex-shrink-0 pt-1">
+                                <input type="checkbox" name="poitem[]" value="<?=$order['id']?>" class="custom-checkbox" checked>
+                            </div>
 
-                    <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-500"><?= $order['quantity'] ?? '-' ?></td>
-                    <!-- <td class="px-6 py-4 text-sm text-gray-500 max-w-xs"><?= $order['shipping_address'] ?></td> -->
-                    <!-- <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium rounded-r-md">
-                        <a href="#" class="text-gray-500 hover:text-gray-700">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
-                        </a>
-                    </td> -->
-                </tr>
-                <?php
+                            <!-- Main two-column layout -->
+                            <div class="grid grid-cols-[max-content,1fr] gap-x-4 w-full">
+
+                                <!-- COLUMN 1 -->
+                                <div class="flex flex-col gap-4">
+                                    <!-- Col 1, Row 1: Image and Title -->
+                                    <div class="flex items-start gap-4">
+                                        <img src="<?= $order['image'] ?>" alt="Product Image" class="w-24 h-24 rounded-md object-cover flex-shrink-0">
+                                        <div class="pt-1 w-full max-w-xs">
+                                            <h2 class="product-title mb-1"><?= $order['title'] ?></h2>
+                                            <p class="item-code">Item Code: <?= $order['item_code'] ?></p>
+                                            <p class="quantity">Quantity: <?= $order['quantity'] ?></p>
+                                        </div>
+                                    </div>
+                                    <!-- Col 1, Row 2: Order Details -->
+                                    <div class=""> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
+                                        <div class="grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
+                                            <span class="heading-typography pb-[25px]">Order Date</span>
+                                            <p class="pb-[25px]">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
+
+                                            <span class="heading-typography pb-[25px]">Order ID</span>
+                                            <p class="pb-[25px]">: <span class="data-typography"><?= $order['order_number'] ?></span></p>
+
+                                            <span class="heading-typography">Vendor Name</span>
+                                            <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- COLUMN 2 -->
+                                <div class="flex flex-col gap-4">
+                                    <!-- Col 2, Row 1: Status Grid and Actions -->
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="flex-grow">
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
+                                                <div>
+                                                    <span class="heading-typography block mb-5">Status</span>
+                                                    <span class="pending-text mt-1 block"><?= ucfirst($order['status']) ?></span>
+                                                </div>
+                                                <div>
+                                                    <span class="heading-typography block mb-5">PO Date</span>
+                                                    <span class="data-typography mt-1 block"><?= date("d M Y", strtotime($order['po_date'])) ?></span>
+                                                </div>
+                                                <div>
+                                                    <span class="heading-typography block mb-5">Receipt Due</span>
+                                                    <span class="data-typography mt-1 block"><?= date("d M Y", strtotime($order['expected_delivery_date'])) ?></span>
+                                                </div>
+                                                <div>
+                                                    <span class="heading-typography block mb-5">Staff</span>
+                                                    <span class="data-typography mt-1 block"><?= $order['staff_name'] ?></span>
+                                                </div>
+                                                <div>
+                                                    <span class="heading-typography block mb-5">Amount</span>
+                                                    <span class="data-typography mt-1 block font-semibold">₹<?= $order['total_cost'] ?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="w-auto flex flex-col items-center space-y-2 flex-shrink-0">
+                                            <button class="text-gray-500 hover:text-gray-800">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                            </button>
+                                            <button class="text-gray-500 hover:text-gray-800">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <!-- Col 2, Row 2: Note and Priority -->
+                                    <div class="flex items-start gap-4">
+                                        <div class="flex-grow">
+                                            <h4 class="note-heading mb-2">Note:</h4>
+                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[502px] min-h-[110px]">
+                                                <?= $order['notes'] ?>
+                                            </div>
+                                        </div>
+                                        <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
+                                            <div class="mt-[20px]">
+                                                <h4 class="set-priority-title mb-2">Set Priority</h4>
+                                                <span class="urgent-text">Urgent</span>
+                                            </div>
+                                            <div>
+                                                <?php if (!empty($order['vendor_invoice'])): ?>
+                                                    <a href="<?= base_url($order['vendor_invoice']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
+                                                        <p class="mr-1">Download Invoice</p>
+                                                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span class="text-gray-400">No Invoice</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php
                         }
                     } else {
-                        echo "<tr><td colspan='10' class='text-center'>No orders found.</td></tr>";
+                        echo "No orders found.";
                     }
                     ?>
-                </tbody>
-            </table>
-        </div>
+
+            </div>
         </form>
         <!-- Pagination -->
          <?php
