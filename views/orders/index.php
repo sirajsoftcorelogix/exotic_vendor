@@ -343,7 +343,11 @@
     <div class="mt-5">
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
             <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
-        
+            <!-- button refresh-->
+            <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
+                <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
+            <i class="fas fa-sync-alt p-1 bg-white border border-orange-500"></i>
+            </span>
 
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
@@ -799,6 +803,23 @@
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
+<div id="importPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
+        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="p-6">
+            <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
+            <form id="importForm" style="max-height:200px; overflow-y:auto;" enctype="multipart/form-data" method="post" action="?page=orders&action=import_orders">
+                <div class="mb-4">
+                    <p class="text-gray-700 mb-2">Are you sure you want to import orders from Server?</p>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" onclick="closeImportPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <script>
 function closeImagePopup(e) {
     // If called from button or outside click
@@ -1012,4 +1033,64 @@ function closeImagePopup(e) {
         localStorage.removeItem('selected_po_orders');
     });
     
+    //call import function
+    function callImport(){
+        //open import popup to display import status and call ajax to import
+        document.getElementById('importPopup').classList.remove('hidden');      
+        
+    }
+    function closeImportPopup(e) {
+        // If called from button or outside click
+        document.getElementById('importPopup').classList.add('hidden');
+        location.reload();
+    }
+    //import calling through ajax
+    document.getElementById('importForm').addEventListener('submit', function(e){
+        e.preventDefault(); // Prevent default form submission
+        //loading image and submit button disable
+        const submitButton = document.querySelector('#importForm button[type="submit"]');
+        const loadingImage = document.createElement('img');
+        loadingImage.src = 'images/loading-crop.gif'; // Path to your loading image
+        loadingImage.alt = 'Loading...';
+        loadingImage.style.height = '50px';
+        loadingImage.classList.add('loading-image');
+        submitButton.parentNode.insertBefore(loadingImage, submitButton);
+        submitButton.disabled = true;
+
+        const form = this;
+        const formData = new FormData(form);
+        
+        fetch('index.php?page=orders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801', {
+            method: 'GET',           
+        })
+        .then(response => response.text())
+        .then(text => {
+            // Try to parse JSON; if parsing fails, treat response as HTML/text
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return { message: null, html: text };
+            }
+        })
+        .then(data => {
+            if (data && data.message) {
+                alert(data.message || 'Import completed.');
+            } else if (data && data.html) {
+                // Server returned HTML; log it for debugging and show a generic success message
+                document.getElementById('importForm').innerHTML = data.html;
+                //console.log('Server response (HTML):', data.html);
+                //alert('Import completed. Server returned HTML response.');
+            } else {
+                alert('Import completed.');
+            }
+            //closeImportPopup();
+            // Optionally, refresh the page or update the order list
+            //location.reload();
+        })
+        .catch(error => {
+            console.error('Error during import:', error);
+            alert('An error occurred during import.');
+            closeImportPopup();
+        });
+    });
 </script>
