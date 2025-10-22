@@ -52,6 +52,7 @@ class OrdersController {
 
         // Use pagination in the database query for better performance
         $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
+        //print_array($orders);
         $total_orders = $ordersModel->getOrdersCount($filters);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         // Render the orders view

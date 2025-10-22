@@ -518,7 +518,9 @@
                         <div class="flex items-start p-4 gap-4">
                             <!-- Checkbox -->
                             <div class="flex-shrink-0 pt-1">
-                                <input type="checkbox" name="poitem[]" value="<?=$order['id']?>" class="custom-checkbox" checked>
+                                <?php if($order['status']=='pending'): ?>
+                                <input type="checkbox" name="poitem[]" value="<?=$order['order_id']?>" class="custom-checkbox" >
+                                <?php endif; ?>
                             </div>
 
                             <!-- Main two-column layout -->
@@ -527,10 +529,10 @@
                                 <!-- COLUMN 1 -->
                                 <div class="flex flex-col gap-4">
                                     <!-- Col 1, Row 1: Image and Title -->
-                                    <div class="flex items-start gap-4">
+                                    <div class="flex items-start gap-4 ">
                                         <img src="<?= $order['image'] ?>" alt="Product Image" class="w-24 h-24 rounded-md object-cover flex-shrink-0">
                                         <div class="pt-1 w-full max-w-xs">
-                                            <h2 class="product-title mb-1"><?= $order['title'] ?></h2>
+                                            <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
                                             <p class="item-code">Item Code: <?= $order['item_code'] ?></p>
                                             <p class="quantity">Quantity: <?= $order['quantity'] ?></p>
                                         </div>
@@ -542,7 +544,7 @@
                                             <p class="pb-[25px]">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
                                             <span class="heading-typography pb-[25px]">Order ID</span>
-                                            <p class="pb-[25px]">: <span class="data-typography"><?= $order['order_number'] ?></span></p>
+                                            <p class="pb-[25px]">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
@@ -562,11 +564,11 @@
                                                 </div>
                                                 <div>
                                                     <span class="heading-typography block mb-5">PO Date</span>
-                                                    <span class="data-typography mt-1 block"><?= date("d M Y", strtotime($order['po_date'])) ?></span>
+                                                    <span class="data-typography mt-1 block"><?= $order['po_date'] ? date("d M Y", strtotime($order['po_date'])) : 'N/A' ?></span>
                                                 </div>
                                                 <div>
                                                     <span class="heading-typography block mb-5">Receipt Due</span>
-                                                    <span class="data-typography mt-1 block"><?= date("d M Y", strtotime($order['expected_delivery_date'])) ?></span>
+                                                    <span class="data-typography mt-1 block"><?= $order['expected_delivery_date'] ? date("d M Y", strtotime($order['expected_delivery_date'])) : 'N/A' ?></span>
                                                 </div>
                                                 <div>
                                                     <span class="heading-typography block mb-5">Staff</span>
@@ -728,10 +730,15 @@
                         <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md h-36
                          object-cover">
                         <div class="ml-6 text-sm text-gray-600 space-y-1">
-                            <p><strong>Order Number:</strong> <span id="order_number"></span></p>
+                            <p><strong>Order Number:</strong> <span id="order_number"></span> 
+                            <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
+                            <input type="hidden" name="poitem[]" id="poitem_order_id">
+                            <button type="submit" class="btn btn-success">Create PO</button>
+                            </form>
+                            </p>
                             <p><strong>Order Date:</strong> <span id="order_date"></span></p>
                             <p><strong>HSN Code:</strong> <span id="hsn"></span></p>
-                            <p><strong>Category:</strong> <span id="category"></span></p>
+                            <p><strong>Category:</strong> <span id="groupname"></span></p>
                             <p><strong>Quantity:</strong> <span id="quantity"></span></p>
                             <p><strong>Shipping Country:</strong> <span id="shipping_country"></span></p>  
                         </div>
@@ -787,6 +794,10 @@
                                 <label for="location" class="text-sm font-bold text-gray-700">Location: </label>
                                 <span class="text-gray-600" id="location"></span>
                             </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Order Addons: </label>
+                                <div id="order_addons" class="text-gray-600"></div>
+                            </div>
                         </div>
 
                         
@@ -837,7 +848,54 @@ function closeImagePopup(e) {
         link.addEventListener('click', function (event) {
             event.preventDefault();
             const orderData = JSON.parse(this.getAttribute('data-order'));
-            fetchOrderDetails(orderData.id).then(orderDetails => {
+            console.log(orderData.groupname);
+            // Populate the popup with order details
+            document.getElementById('poitem_order_id').value = orderData.order_id || '';
+            document.getElementById('order_number').textContent = orderData.order_number || 'N/A';
+            document.getElementById('order_date').textContent = orderData.order_date || 'N/A';
+            document.getElementById('hsn').textContent = orderData.hsn || 'N/A';
+            document.getElementById('groupname').textContent = orderData.groupname || 'N/A';
+            document.getElementById('quantity').textContent = orderData.quantity || 'N/A';
+            document.getElementById('item').textContent = orderData.title || 'N/A';
+            document.getElementById('sub_category').textContent = orderData.subcategories || 'N/A';
+            document.getElementById('size').textContent = orderData.size || 'N/A';
+            document.getElementById('color').textContent = orderData.color || 'N/A';
+            document.getElementById('item_price').textContent = orderData.itemprice ? '₹' + orderData.itemprice : 'N/A';
+            document.getElementById('final_price').textContent = orderData.finalprice ? '₹' + orderData.finalprice : 'N/A';
+            document.getElementById('cost_price').textContent = orderData.cost_price ? '₹' + orderData.cost_price : 'N/A';
+            document.getElementById('currency').textContent = orderData.currency || 'N/A';
+            document.getElementById('gst').textContent = orderData.gst || 'N/A';
+            document.getElementById('marketplace').textContent = orderData.marketplace_vendor || 'N/A';
+            document.getElementById('local_stock').textContent = orderData.local_stock || 'N/A';
+            document.getElementById('location').textContent = orderData.location || 'N/A';
+            const imgElem = document.querySelector('#vendor-popup-panel img');
+            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
+            const infoDiv = imgElem.nextElementSibling;     
+            document.getElementById('shipping_country').textContent = orderData.shipping_country || 'N/A';
+            // Order Addons
+            const addonsDiv = document.getElementById('order_addons');
+            addonsDiv.innerHTML = '';
+            let options = orderData.options || [];
+            if (typeof options === 'string') {
+                try {
+                    options = JSON.parse(options);
+                } catch (e) {
+                    options = [options];
+                }
+            }
+
+            if (Array.isArray(options) && options.length > 0) {
+                addonsDiv.innerHTML = ''; // clear
+                options.forEach(opt => {
+                    const chip = document.createElement('span');
+                    chip.className = 'inline-block bg-gray-100 text-sm px-2 py-1 rounded mr-2 mb-2';
+                    chip.textContent = opt;
+                    addonsDiv.appendChild(chip);
+                });
+            } else {
+                addonsDiv.textContent = 'N/A';
+            }
+            /*fetchOrderDetails(orderData.id).then(orderDetails => {
                 //console.log(orderDetails.order);
                 // Populate the popup with order details
                 document.getElementById('gst').textContent = orderDetails.order.gst || 'N/A';                       
@@ -866,7 +924,7 @@ function closeImagePopup(e) {
                     <p><strong>Quantity:</strong> ${orderDetails.order.quantity || 'N/A'}</p>
                     <p><strong>Shipping Country:</strong> ${orderDetails.order.shipping_country || 'N/A'}</p>
                 `;
-            });
+            });*/
             openPopup();
         });
     });
