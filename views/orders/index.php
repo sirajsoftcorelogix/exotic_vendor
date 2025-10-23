@@ -730,10 +730,10 @@
                         <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md h-36
                          object-cover">
                         <div class="ml-6 text-sm text-gray-600 space-y-1">
-                            <p><strong>Order Number:</strong> <span id="order_number"></span> 
+                            <p class="flex w-[400px]"><strong>Order Number:</strong> <span id="order_number"></span> 
                             <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
                             <input type="hidden" name="poitem[]" id="poitem_order_id">
-                            <button type="submit" class="btn btn-success">Create PO</button>
+                            <button type="submit" class="btn btn-success float-right">Create PO</button>
                             </form>
                             </p>
                             <p><strong>Order Date:</strong> <span id="order_date"></span></p>
