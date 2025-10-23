@@ -598,7 +598,7 @@
                                         <div class="flex-grow">
                                             <h4 class="note-heading mb-2">Note:</h4>
                                             <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[502px] min-h-[110px]">
-                                                <?= $order['notes'] ?>
+                                                <?= isset($order['notes']) ? $order['notes'] : '' ?>
                                             </div>
                                         </div>
                                         <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
