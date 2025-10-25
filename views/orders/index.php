@@ -540,18 +540,14 @@
                                     <!-- Col 1, Row 2: Order Details -->
                                     <div class=""> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
                                         <div class="grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
-                                            <span class="heading-typography ">Order Date</span>
-                                            <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
+                                            <span class="heading-typography pb-[25px]">Order Date</span>
+                                            <p class="pb-[25px]">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
-                                            <span class="heading-typography ">Order ID</span>
-                                            <p class="">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                            <span class="heading-typography pb-[25px]">Order ID</span>
+                                            <p class="pb-[25px]">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
-                                            <span class="heading-typography">PO Vendor Name</span>
+                                            <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
-                                            <span class="heading-typography">Marketplace Vendor</span>
-                                            <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
-                                            <span class="heading-typography">Staff</span>
-                                            <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
                                         </div>
                                     </div>
                                 </div>
@@ -562,23 +558,48 @@
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
-                                                <div class="col-span-2">
-                                                    <span class="heading-typography block mb-5">PO Number</span>
-                                                    <span class="pending-text mt-1 block"><a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link text-blue-600 hover:underline">
-                                                        <?= $order['po_number'] ?? '' ?></a></span>
+                                                <div>
+                                                    <span class="heading-typography block mb-5">Addon</span>
+                                                    <?php
+                                                    $options = $order['options'] ?? '';
+                                                    $optionsArr = [];
+
+                                                    if (is_string($options)) {
+                                                        $decoded = json_decode($options, true);
+                                                        if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
+                                                            $optionsArr = $decoded;
+                                                        } else {
+                                                            // fallback: comma separated string
+                                                            $optionsArr = array_filter(array_map('trim', explode(',', $options)));
+                                                        }
+                                                    } elseif (is_array($options)) {
+                                                        $optionsArr = $options;
+                                                    }
+
+                                                    if (!empty($optionsArr)) {
+                                                        foreach ($optionsArr as $opt) {
+                                                            echo '<span class="inline-block bg-gray-100 text-sm px-2 py-1 rounded mr-2 mb-2">' . htmlspecialchars($opt) . '</span>';
+                                                        }
+                                                    } else {
+                                                        echo '<span class="data-typography mt-1 block">N/A</span>';
+                                                    }
+                                                    ?>
                                                 </div>
                                                 <div>
-                                                    <span class="heading-typography block mb-5">PO Date</span>
-                                                    <span class="data-typography mt-1 block"><?= $order['po_date'] ? date("d M Y", strtotime($order['po_date'])) : 'N/A' ?></span>
+                                                    <span class="heading-typography block mb-5">Location</span>
+                                                    <span class="data-typography mt-1 block"><?= $order['location'] ?: 'N/A' ?></span>
                                                 </div>
                                                 <div>
-                                                    <span class="heading-typography block mb-5">Receipt Due</span>
+                                                    <span class="heading-typography block mb-5">ESD</span>
                                                     <span class="data-typography mt-1 block"><?= $order['expected_delivery_date'] ? date("d M Y", strtotime($order['expected_delivery_date'])) : 'N/A' ?></span>
                                                 </div>
-                                                
                                                 <div>
-                                                    <span class="heading-typography block mb-5">Amount</span>
-                                                    <span class="data-typography mt-1 block font-semibold">₹<?= $order['total_cost'] ?? 'N/A' ?></span>
+                                                    <span class="heading-typography block mb-5">Staff</span>
+                                                    <span class="data-typography mt-1 block"><?= $order['staff_name'] ?></span>
+                                                </div>
+                                                <div>
+                                                    <span class="heading-typography block mb-5">Local Stock</span>
+                                                    <span class="data-typography mt-1 block font-semibold">₹<?= $order['local_stock'] ?></span>
                                                 </div>
                                             </div>
                                         </div>
@@ -609,7 +630,7 @@
                                                 <span class="urgent-text">Urgent</span>
                                             </div>
                                             <div>
-                                                <?php if (!empty($order['vendor_invoice'])): ?>
+                                                <?php /*if (!empty($order['vendor_invoice'])): ?>
                                                     <a href="<?= base_url($order['vendor_invoice']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
                                                         <p class="mr-1">Download Invoice</p>
                                                         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -618,7 +639,7 @@
                                                     </a>
                                                 <?php else: ?>
                                                     <span class="text-gray-400">No Invoice</span>
-                                                <?php endif; ?>
+                                                <?php endif; */ ?>
                                             </div>
                                         </div>
                                     </div>
@@ -752,14 +773,13 @@
                                 <label class="text-sm font-bold text-gray-700 ">Title: </label>
                                 <span class="text-gray-600" id="item"></span>
                             </div>                            
-                            
-                            <div>
-                                <label class="text-sm font-bold text-gray-700">Sub Category: </label>
-                                <span class="text-gray-600" id="sub_category"></span>
-                            </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Description: </label>
                                 <span class="text-gray-600" id="description"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Sub Category: </label>
+                                <span class="text-gray-600" id="sub_category"></span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Size: </label>
@@ -837,7 +857,9 @@
                                 <label class="text-sm font-bold text-gray-700">Expected Delivery Date: </label>
                                 <span id="expected_delivery_date" class="text-gray-600"></span>
                             </div>
+                        </div>
 
+                        
                     </form>
                 </div>
             </div>
@@ -856,7 +878,7 @@
         <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6">
             <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
-            <?php //echo date('Y-m-d H:i:s',1761382018);
+            <?php //echo date('Y-m-d H:i:s',1761382018);          
 
             ?>
             <div class="w-full bg-gray-200 rounded-full dark:bg-gray-700 mb-2">
@@ -920,8 +942,7 @@ function closeImagePopup(e) {
             document.getElementById('numsold').textContent = orderData.numsold || 'N/A';
             document.getElementById('po_number').textContent = orderData.po_number || 'N/A';
             document.getElementById('po_date').textContent = orderData.po_date || 'N/A';
-            document.getElementById('expected_delivery_date').textContent = orderData.expected_delivery_date  || 'N/A';
-            
+            document.getElementById('expected_delivery_date').textContent = orderData.expected_delivery_date || 'N/A';
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
