@@ -148,7 +148,7 @@ class PurchaseOrder {
         return $stmt->execute();
     }
     public function updateStatus($id, $status) {
-        $allowedStatuses = ['pending', 'ordered', 'received', 'cancelled', 'draft']; // Define allowed statuses
+        $allowedStatuses = ['pending', 'ordered', 'received', 'cancelled', 'draft', 'completed']; // Define allowed statuses
         if (!in_array($status, $allowedStatuses)) {
             return false; // Invalid status
         }
