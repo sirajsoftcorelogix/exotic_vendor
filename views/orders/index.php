@@ -533,21 +533,25 @@
                                         <img src="<?= $order['image'] ?>" onclick="openImagePopup('<?= $order['image'] ?>')" alt="Product Image" class="w-24 h-24 rounded-md object-cover flex-shrink-0 cursor-pointer">
                                         <div class="pt-1 w-full max-w-xs">
                                             <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
-                                            <p class="item-code">Item Code: <?= $order['item_code'] ?></p>
+                                            <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></p>
                                             <p class="quantity">Quantity: <?= $order['quantity'] ?></p>
                                         </div>
                                     </div>
                                     <!-- Col 1, Row 2: Order Details -->
                                     <div class=""> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
                                         <div class="grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
-                                            <span class="heading-typography pb-[25px]">Order Date</span>
-                                            <p class="pb-[25px]">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
+                                            <span class="heading-typography ">Order Date</span>
+                                            <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
-                                            <span class="heading-typography pb-[25px]">Order ID</span>
-                                            <p class="pb-[25px]">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                            <span class="heading-typography ">Order ID</span>
+                                            <p class="">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
-                                            <span class="heading-typography">Vendor Name</span>
+                                            <span class="heading-typography">PO Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
+                                            <span class="heading-typography">Marketplace Vendor</span>
+                                            <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
+                                            <span class="heading-typography">Staff</span>
+                                            <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
                                         </div>
                                     </div>
                                 </div>
@@ -558,9 +562,10 @@
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
-                                                <div>
-                                                    <span class="heading-typography block mb-5">Status</span>
-                                                    <span class="pending-text mt-1 block"><?= ucfirst($order['status']) ?></span>
+                                                <div class="col-span-2">
+                                                    <span class="heading-typography block mb-5">PO Number</span>
+                                                    <span class="pending-text mt-1 block"><a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $order['po_id']); ?>" class="icon-link text-blue-600 hover:underline">
+                                                        <?= $order['po_number'] ?? '' ?></a></span>
                                                 </div>
                                                 <div>
                                                     <span class="heading-typography block mb-5">PO Date</span>
@@ -570,13 +575,10 @@
                                                     <span class="heading-typography block mb-5">Receipt Due</span>
                                                     <span class="data-typography mt-1 block"><?= $order['expected_delivery_date'] ? date("d M Y", strtotime($order['expected_delivery_date'])) : 'N/A' ?></span>
                                                 </div>
-                                                <div>
-                                                    <span class="heading-typography block mb-5">Staff</span>
-                                                    <span class="data-typography mt-1 block"><?= $order['staff_name'] ?></span>
-                                                </div>
+                                                
                                                 <div>
                                                     <span class="heading-typography block mb-5">Amount</span>
-                                                    <span class="data-typography mt-1 block font-semibold">₹<?= $order['total_cost'] ?></span>
+                                                    <span class="data-typography mt-1 block font-semibold">₹<?= $order['total_cost'] ?? 'N/A' ?></span>
                                                 </div>
                                             </div>
                                         </div>
@@ -750,13 +752,14 @@
                                 <label class="text-sm font-bold text-gray-700 ">Title: </label>
                                 <span class="text-gray-600" id="item"></span>
                             </div>                            
-                            <div>
-                                <label class="text-sm font-bold text-gray-700">Description: </label>
-                                <span class="text-gray-600" id="description"></span>
-                            </div>
+                            
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Sub Category: </label>
                                 <span class="text-gray-600" id="sub_category"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Description: </label>
+                                <span class="text-gray-600" id="description"></span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Size: </label>
@@ -804,27 +807,37 @@
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Order Addons: </label>
-                                <div id="order_addons" class="text-gray-600"></div>
+                                <span id="order_addons" class="text-gray-600"></span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Backorder Status: </label>
-                                <div id="backorder_status" class="text-gray-600"></div>
+                                <span id="backorder_status" class="text-gray-600"></span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Backorder Percentage: </label>
-                                <div id="backorder_percent" class="text-gray-600"></div>
+                                <span id="backorder_percent" class="text-gray-600"></span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Backorder Delay: </label>
-                                <div id="backorder_delay" class="text-gray-600"></div>
+                                <span id="backorder_delay" class="text-gray-600"></span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Sold Quantity: </label>
-                                <div id="numsold" class="text-gray-600"></div>
+                                <span id="numsold" class="text-gray-600"></span>
                             </div>
-                        </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">PO Number: </label>
+                                <span id="po_number" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">PO Date: </label>
+                                <span id="po_date" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Expected Delivery Date: </label>
+                                <span id="expected_delivery_date" class="text-gray-600"></span>
+                            </div>
 
-                        
                     </form>
                 </div>
             </div>
@@ -905,6 +918,10 @@ function closeImagePopup(e) {
             document.getElementById('backorder_percent').textContent = orderData.backorder_percent || 'N/A';
             document.getElementById('backorder_delay').textContent = orderData.backorder_delay || 'N/A';
             document.getElementById('numsold').textContent = orderData.numsold || 'N/A';
+            document.getElementById('po_number').textContent = orderData.po_number || 'N/A';
+            document.getElementById('po_date').textContent = orderData.po_date || 'N/A';
+            document.getElementById('expected_delivery_date').textContent = orderData.expected_delivery_date  || 'N/A';
+            
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
