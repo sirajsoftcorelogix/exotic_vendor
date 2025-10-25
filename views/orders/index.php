@@ -530,7 +530,7 @@
                                 <div class="flex flex-col gap-4">
                                     <!-- Col 1, Row 1: Image and Title -->
                                     <div class="flex items-start gap-4 ">
-                                        <img src="<?= $order['image'] ?>" alt="Product Image" class="w-24 h-24 rounded-md object-cover flex-shrink-0">
+                                        <img src="<?= $order['image'] ?>" onclick="openImagePopup('<?= $order['image'] ?>')" alt="Product Image" class="w-24 h-24 rounded-md object-cover flex-shrink-0 cursor-pointer">
                                         <div class="pt-1 w-full max-w-xs">
                                             <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
                                             <p class="item-code">Item Code: <?= $order['item_code'] ?></p>
@@ -581,16 +581,16 @@
                                             </div>
                                         </div>
                                         <div class="w-auto flex flex-col items-center space-y-2 flex-shrink-0">
-                                            <button class="text-gray-500 hover:text-gray-800">
+                                            <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                                 </svg>
-                                            </button>
-                                            <button class="text-gray-500 hover:text-gray-800">
+                                            </span>
+                                            <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                                 </svg>
-                                            </button>
+                                            </span>
                                         </div>
                                     </div>
                                     <!-- Col 2, Row 2: Note and Priority -->
@@ -750,7 +750,11 @@
                                 <label class="text-sm font-bold text-gray-700 ">Title: </label>
                                 <span class="text-gray-600" id="item"></span>
                             </div>                            
-                             <div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Description: </label>
+                                <span class="text-gray-600" id="description"></span>
+                            </div>
+                            <div>
                                 <label class="text-sm font-bold text-gray-700">Sub Category: </label>
                                 <span class="text-gray-600" id="sub_category"></span>
                             </div>
@@ -761,6 +765,10 @@
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Color: </label>
                                 <span class="text-gray-600" id="color"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Material: </label>
+                                <span class="text-gray-600" id="material"></span>
                             </div>
                             <div>
                                 <label for="item_price" class="text-sm font-bold text-gray-700">Item Price: </label>
@@ -798,6 +806,22 @@
                                 <label class="text-sm font-bold text-gray-700">Order Addons: </label>
                                 <div id="order_addons" class="text-gray-600"></div>
                             </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Backorder Status: </label>
+                                <div id="backorder_status" class="text-gray-600"></div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Backorder Percentage: </label>
+                                <div id="backorder_percent" class="text-gray-600"></div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Backorder Delay: </label>
+                                <div id="backorder_delay" class="text-gray-600"></div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Sold Quantity: </label>
+                                <div id="numsold" class="text-gray-600"></div>
+                            </div>
                         </div>
 
                         
@@ -819,11 +843,18 @@
         <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6">
             <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
-            <form id="importForm" style="max-height:200px; overflow-y:auto;" enctype="multipart/form-data" method="post" action="?page=orders&action=import_orders">
-                <div class="mb-4">
+            <?php //echo date('Y-m-d H:i:s',1761382018);
+
+            ?>
+            <div class="w-full bg-gray-200 rounded-full dark:bg-gray-700 mb-2">
+                <div id="importProgress" class="bg-orange-600 text-xs font-medium text-orange-100 text-center p-0.5 leading-none rounded-full" style="width: 0%"> 0%</div>
+            </div>
+            <form id="importForm" enctype="multipart/form-data" method="post" action="?page=orders&action=import_orders">
+                <div class="mb-4" style="max-height:200px; overflow-y:auto;" id="importStatus">
                     <p class="text-gray-700 mb-2">Are you sure you want to import orders from Server?</p>
                 </div>
                 <div class="flex justify-end space-x-4">
+                    <div id="errorMessage" class=""></div>
                     <button type="button" onclick="closeImportPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Import</button>
                 </div>
@@ -868,6 +899,12 @@ function closeImagePopup(e) {
             document.getElementById('marketplace').textContent = orderData.marketplace_vendor || 'N/A';
             document.getElementById('local_stock').textContent = orderData.local_stock || 'N/A';
             document.getElementById('location').textContent = orderData.location || 'N/A';
+            document.getElementById('description').textContent = orderData.description || 'N/A';
+            document.getElementById('material').textContent = orderData.material || 'N/A';
+            document.getElementById('backorder_status').textContent = orderData.backorder_status || 'N/A';
+            document.getElementById('backorder_percent').textContent = orderData.backorder_percent || 'N/A';
+            document.getElementById('backorder_delay').textContent = orderData.backorder_delay || 'N/A';
+            document.getElementById('numsold').textContent = orderData.numsold || 'N/A';
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
@@ -1114,7 +1151,16 @@ function closeImagePopup(e) {
         loadingImage.classList.add('loading-image');
         submitButton.parentNode.insertBefore(loadingImage, submitButton);
         submitButton.disabled = true;
-
+        document.getElementById('errorMessage').textContent = 'Import in progress...';
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 10;
+            document.getElementById('importProgress').style.width = `${progress}%`;
+            document.getElementById('importProgress').textContent = `${progress}%`;
+            if (progress >= 45) {
+                clearInterval(interval);
+            }
+        }, 100);
         const form = this;
         const formData = new FormData(form);
         
@@ -1131,11 +1177,27 @@ function closeImagePopup(e) {
             }
         })
         .then(data => {
+            // Remove loading image and enable submit button
+            loadingImage.remove();
+            submitButton.disabled = false;
+            //increment gradually to show activity
+            
+            const interval = setInterval(() => {
+                progress += 10;
+                document.getElementById('importProgress').style.width = `${progress}%`;
+                document.getElementById('importProgress').textContent = `${progress}%`;
+                if (progress >= 100) {
+                    clearInterval(interval);
+                }
+            }, 100);
+
+            document.getElementById('errorMessage').classList.add('text-green-500');
+            document.getElementById('errorMessage').textContent = 'Import completed successfully.';
             if (data && data.message) {
                 alert(data.message || 'Import completed.');
             } else if (data && data.html) {
                 // Server returned HTML; log it for debugging and show a generic success message
-                document.getElementById('importForm').innerHTML = data.html;
+                document.getElementById('importStatus').innerHTML = data.html;
                 //console.log('Server response (HTML):', data.html);
                 //alert('Import completed. Server returned HTML response.');
             } else {
