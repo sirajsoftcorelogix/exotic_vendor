@@ -11,7 +11,7 @@ if(isset($data['imported']) && isset($data['total'])) {
         echo flash_message($message, 'success');
     }
     else {
-        $message = 'No orders were imported. Please check the API response or your import criteria.';
+        $message = 'No orders were imported. Please check the errors below.';
         echo flash_message($message, 'error');
     }
     ?>
@@ -19,7 +19,7 @@ if(isset($data['imported']) && isset($data['total'])) {
 <?php
 }?>
 <div class="mrg-3">
-    <h3>Import Result</h3>
+    <h3>Import Result:</h3>
     
 <?php
 if(isset($data['result']) && is_array($data['result'])) {
