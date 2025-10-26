@@ -540,14 +540,18 @@
                                     <!-- Col 1, Row 2: Order Details -->
                                     <div class=""> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
                                         <div class="grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
-                                            <span class="heading-typography pb-[25px]">Order Date</span>
-                                            <p class="pb-[25px]">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
+                                            <span class="heading-typography ">Order Date</span>
+                                            <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
-                                            <span class="heading-typography pb-[25px]">Order ID</span>
-                                            <p class="pb-[25px]">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                            <span class="heading-typography ">Order ID</span>
+                                            <p class="">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
+                                            <span class="heading-typography">Marketplace</span>
+                                            <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
+                                            <span class="heading-typography">Staff Name</span>
+                                            <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
                                         </div>
                                     </div>
                                 </div>
@@ -558,7 +562,7 @@
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
-                                                <div>
+                                                <div class="col-span-2">
                                                     <span class="heading-typography block mb-5">Addon</span>
                                                     <?php
                                                     $options = $order['options'] ?? '';
@@ -592,14 +596,10 @@
                                                 <div>
                                                     <span class="heading-typography block mb-5">ESD</span>
                                                     <span class="data-typography mt-1 block"><?= $order['expected_delivery_date'] ? date("d M Y", strtotime($order['expected_delivery_date'])) : 'N/A' ?></span>
-                                                </div>
-                                                <div>
-                                                    <span class="heading-typography block mb-5">Staff</span>
-                                                    <span class="data-typography mt-1 block"><?= $order['staff_name'] ?></span>
-                                                </div>
+                                                </div>                                                
                                                 <div>
                                                     <span class="heading-typography block mb-5">Local Stock</span>
-                                                    <span class="data-typography mt-1 block font-semibold">₹<?= $order['local_stock'] ?></span>
+                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['local_stock'] ?? 'N/A' ?></span>
                                                 </div>
                                             </div>
                                         </div>
@@ -799,15 +799,15 @@
                             </div>
                             <div>
                                 <label for="final_price" class="text-sm font-bold text-gray-700">Final Price: </label>
-                                <span class="text-gray-600" id="final_price">₹00</span>
+                                <span class="text-gray-600" id="final_price">00</span>
                             </div>
                             <div>
                                 <label for="cost_price" class="text-sm font-bold text-gray-700">Cost Price: </label>
-                                <span class="text-gray-600" id="cost_price">₹00</span>
+                                <span class="text-gray-600" id="cost_price">00</span>
                             </div>
                             <div>
                                 <label for="currency" class="text-sm font-bold text-gray-700">Currency: </label>
-                                <span class="text-gray-600" id="currency">₹00</span>
+                                <span class="text-gray-600" id="currency">00</span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">GST: </label>
@@ -926,9 +926,9 @@ function closeImagePopup(e) {
             document.getElementById('sub_category').textContent = orderData.subcategories || 'N/A';
             document.getElementById('size').textContent = orderData.size || 'N/A';
             document.getElementById('color').textContent = orderData.color || 'N/A';
-            document.getElementById('item_price').textContent = orderData.itemprice ? '₹' + orderData.itemprice : 'N/A';
-            document.getElementById('final_price').textContent = orderData.finalprice ? '₹' + orderData.finalprice : 'N/A';
-            document.getElementById('cost_price').textContent = orderData.cost_price ? '₹' + orderData.cost_price : 'N/A';
+            document.getElementById('item_price').textContent = orderData.itemprice ? '' + orderData.itemprice : 'N/A';
+            document.getElementById('final_price').textContent = orderData.finalprice ? '' + orderData.finalprice : 'N/A';
+            document.getElementById('cost_price').textContent = orderData.cost_price ? '' + orderData.cost_price : 'N/A';
             document.getElementById('currency').textContent = orderData.currency || 'N/A';
             document.getElementById('gst').textContent = orderData.gst || 'N/A';
             document.getElementById('marketplace').textContent = orderData.marketplace_vendor || 'N/A';
@@ -967,6 +967,8 @@ function closeImagePopup(e) {
                     chip.textContent = opt;
                     addonsDiv.appendChild(chip);
                 });
+            } if(options == [] || options == '' || options == null || options.length == 0 || options == 'Array') {
+                addonsDiv.textContent = 'N/A';
             } else {
                 addonsDiv.textContent = 'N/A';
             }
