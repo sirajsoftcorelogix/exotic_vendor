@@ -495,6 +495,22 @@
                             </div>
                         </a>
                     </li>
+                    <li>
+                        <a href="<?=base_url('index.php?page=products&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'products') ? 'active' : '' ?>">
+                            <div class="content-wrapper">
+                              <i class="fa fa-boxes mr-2"></i>
+                              <span>Products</span>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?=base_url('index.php?page=orderstatus&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'orderstatus') ? 'active' : '' ?>">
+                            <div class="content-wrapper">
+                              <i class="fa fa-clipboard-list mr-2"></i>
+                              <span>Order Status</span>
+                            </div>
+                        </a>
+                    </li>
                 </ul>
             </div>
         </nav>
