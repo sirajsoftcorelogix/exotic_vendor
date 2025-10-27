@@ -767,7 +767,7 @@
                         </div>
                     </div>
 
-                    <form id="invoice-form" enctype="multipart/form-data">
+                    <form id="detail-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                             <div>
                                 <label class="text-sm font-bold text-gray-700 ">Title: </label>
@@ -842,7 +842,7 @@
                                 <span id="backorder_delay" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Sold Quantity: </label>
+                                <label class="text-sm font-bold text-gray-700">Sold Quantity (numsold): </label>
                                 <span id="numsold" class="text-gray-600"></span>
                             </div>
                             <div>
@@ -856,6 +856,58 @@
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Expected Delivery Date: </label>
                                 <span id="expected_delivery_date" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Product Weight: </label>
+                                <span id="product_weight" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Product Weight Unit: </label>
+                                <span id="product_weight_unit" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Product Height: </label>
+                                <span id="prod_height" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Product Width: </label>
+                                <span id="prod_width" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Product Length: </label>
+                                <span id="prod_length" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Length Unit: </label>
+                                <span id="length_unit" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Payment Type: </label>
+                                <span id="payment_type" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Coupon: </label>
+                                <span id="coupon" class="text-gray-600"></span>
+                            </div>
+                            <div> 
+                                <label class="text-sm font-bold text-gray-700">Coupon Reduce: </label>
+                                <span id="coupon_reduce" class="text-gray-600"></span>
+                            </div>
+                            <div> 
+                                <label class="text-sm font-bold text-gray-700">Gift Voucher: </label>
+                                <span id="giftvoucher" class="text-gray-600"></span>
+                            </div>
+                            <div> 
+                                <label class="text-sm font-bold text-gray-700">Gift Voucher Reduce: </label>
+                                <span id="giftvoucher_reduce" class="text-gray-600"></span>
+                            </div>
+                            <div> 
+                                <label class="text-sm font-bold text-gray-700">Credit: </label>
+                                <span id="credit" class="text-gray-600"></span>
+                            </div>
+                            <div> 
+                                <label class="text-sm font-bold text-gray-700">Vendor: </label>
+                                <span id="vendor" class="text-gray-600"></span>
                             </div>
                         </div>
 
@@ -943,6 +995,19 @@ function closeImagePopup(e) {
             document.getElementById('po_number').textContent = orderData.po_number || 'N/A';
             document.getElementById('po_date').textContent = orderData.po_date || 'N/A';
             document.getElementById('expected_delivery_date').textContent = orderData.expected_delivery_date || 'N/A';
+            document.getElementById('product_weight').textContent = orderData.product_weight || 'N/A';
+            document.getElementById('product_weight_unit').textContent = orderData.product_weight_unit || 'N/A';
+            document.getElementById('prod_height').textContent = orderData.prod_height || 'N/A';
+            document.getElementById('prod_width').textContent = orderData.prod_width || 'N/A';
+            document.getElementById('prod_length').textContent = orderData.prod_length || 'N/A';
+            document.getElementById('length_unit').textContent = orderData.length_unit || 'N/A';
+            document.getElementById('payment_type').textContent = orderData.payment_type || 'N/A';
+            document.getElementById('coupon').textContent = orderData.coupon || 'N/A';
+            document.getElementById('coupon_reduce').textContent = orderData.coupon_reduce || 'N/A';
+            document.getElementById('giftvoucher').textContent = orderData.giftvoucher ||  'N/A';
+            document.getElementById('giftvoucher_reduce').textContent = orderData.giftvoucher_reduce || 'N/A';
+            document.getElementById('credit').textContent = orderData.credit || 'N/A';
+            document.getElementById('vendor').textContent = orderData.vendor || 'N/A';            
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
