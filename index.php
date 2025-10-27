@@ -243,6 +243,31 @@ switch ($page) {
         $controller = new DashboardController();
         $controller->index();
         break;
+    case 'products':
+        require_once 'controllers/ProductsController.php';
+        $controller = new ProductsController();
+        $action = $_GET['action'] ?? 'list';
+        switch ($action) {
+            case 'list':
+                $controller->product_list();
+                break;
+            case 'view':
+                $controller->product_view();
+                break;
+            case 'create':
+                $controller->product_create();
+                break;
+            case 'edit':
+                $controller->product_edit();
+                break;
+            case 'delete':
+                $controller->product_delete();
+                break;
+            default:
+                $controller->product_list();
+                break;
+        }
+        break;
     default:
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();

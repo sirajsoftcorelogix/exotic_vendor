@@ -106,7 +106,10 @@ class OrdersController {
             $from_date = $lastLog['max_ordered_time'];
         }
         $to_date = time();
-
+        //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
+        //$to_date = strtotime(date('13-08-2025 00:00:00'));
+        //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
+        //$to_date = 1755102092;   // Example fixed date 13-08-2025 23:59:59
         $url = 'https://www.exoticindia.com/action';
        
         $postData = [
@@ -147,7 +150,7 @@ class OrdersController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
             return;
         }
-        //print_r($orders);
+        //print_r($response);
         //exit;
         if (empty($orders['orders'])) {
             //echo "No orders found in the API response.";
@@ -195,31 +198,26 @@ class OrdersController {
                     'length_unit' => $item['length_unit'] ?? '',
                     'backorder_status' => $item['backorder_status'] ?? 0,
                     'backorder_percent' => $item['backorder_percent'] ?? 0,
-                    'backorder_delay' => $item['backorder_delay'] ?? ''
+                    'backorder_delay' => $item['backorder_delay'] ?? '',
+                    'payment_type' => $order['payment_type'] ?? '',
+                    'coupon' => $order['coupon'] ?? '',
+                    'coupon_reduce' => $order['coupon_reduce'] ?? '',
+                    'giftvoucher' => $order['giftvoucher'] ?? '',
+                    'giftvoucher_reduce' => $order['giftvoucher_reduce'] ?? '',
+                    'credit' => $order['credit'] ?? '',
+                    'vendor' => $order['vendor'] ?? ''
 					 ];
-					$totalorder++;
-                }
-                // Add other fields as needed
-           
-            //print_array($rdata);
-           
-            //$totalorder = count($data);
-            $data = $ordersModel->insertOrder($rdata);
-            $result[] = $data;
-            //add products
-            $pdata[] = $ordersModel->addProducts($rdata);
-            
-            //if ($result){
-                if (isset($data['success']) && $data['success'] == 1) {
-                    // Handle error case
-                    //renderTemplateClean('views/errors/error.php', ['message' => $result['message']], 'Import Error');
-                    //return;
-                     $imported++;
-                }
-            //} else {
-            //     renderTemplateClean('views/errors/error.php', ['message' => 'Failed to insert order.'], 'Import Error');                
-            //     return;
-            // }
+					$totalorder++;                
+                    
+                    $data = $ordersModel->insertOrder($rdata);
+                    $result[] = $data;
+                    //add products
+                    $pdata[] = $ordersModel->addProducts($rdata);                   
+                    
+                    if (isset($data['success']) && $data['success'] == 1) {                        
+                        $imported++;
+                    }                    
+            }
            
         }
         //print_array($pdata);
