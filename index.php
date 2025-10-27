@@ -238,6 +238,29 @@ switch ($page) {
                 break;
         }
         break;
+    case 'orders_priority_status':        
+        require_once 'controllers/OrdersPriorityStatusController.php';
+        $controller = new OrdersPriorityStatusController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addOPSRecord();
+                break;
+            case 'updateRecord':
+                $controller->addOPSRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'paymentTermsDetails':
+                $controller->getOPSDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'dashboard':        
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
