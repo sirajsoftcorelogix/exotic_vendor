@@ -204,7 +204,7 @@ class Order{
             'order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
             'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 
             'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 
-            'cost_price', 'location', 'order_date','numsold','product_weight','product_weight_unit',
+            'cost_price', 'location', 'order_date','processed_time','numsold','product_weight','product_weight_unit',
             'prod_height',
             'prod_width',
             'prod_length',
@@ -345,14 +345,110 @@ class Order{
         if(empty($log_id) || empty($data['end_time'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
-        $sql = "UPDATE order_import_log SET end_time = ?, successful_imports = ?, total_orders = ?, error = ? WHERE id = ?";
+        $sql = "UPDATE order_import_log SET end_time = ?, successful_imports = ?, total_orders = ?, error = ?, max_ordered_time = ?, add_product_log = ?, log_details = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssdis', $data['end_time'], $data['successful_imports'], $data['total_orders'], $data['error'], $log_id);
+        $stmt->bind_param('ssdisssd', $data['end_time'], $data['successful_imports'], $data['total_orders'], $data['error'], $data['max_ordered_time'], $data['add_product_log'], $data['log_details'], $log_id);
         if ($stmt->execute()) {
             return ['success' => true];
         } else {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+    public function getLastImportLog() {
+        $sql = "SELECT * FROM order_import_log ORDER BY id DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function addProducts($data) {
+        if(empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        // Check for existing products with the same item_code
+        $existingProducts = [];
+        $sql = "SELECT * FROM vp_products WHERE item_code = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $data['item_code']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $existingProducts[] = $row;
+        }
+        if (!empty($existingProducts)) {
+            return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' already exists.'];
+        }
+        //Prepare insert
+    //     $values = [];
+    //     foreach ($data as $product) {
+    //         $values[] = sprintf("('%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %d)",
+    //             $product['item_code'],
+    //             $product['title'],
+    //             $product['description'],
+    //             $product['size'],
+    //             $product['color'],
+    //             $product['groupname'],
+    //             $product['subcategories'],
+    //             $product['itemprice'],
+    //             $product['finalprice'],
+    //             $product['image'],
+    //             $product['gst'],
+    //             $product['hsn'],
+    //             $product['product_weight'],
+    //             $product['product_weight_unit'],
+    //             $product['prod_height'],
+    //             $product['prod_width'],
+    //             $product['prod_length'],
+    //             $product['length_unit'],
+    //             $product['cost_price']
+    //         );
+    //     }
+    //    echo $sql = "INSERT INTO `vp_products` (`item_code`, `title`, `description`, `size`, `color`, `groupname`, `subcategories`, `itemprice`, `finalprice`, `image`, `gst`, `hsn`, `product_weight`, `product_weight_unit`, `prod_height`, `prod_width`, `prod_length`, `length_unit`, `cost_price`) VALUES " . implode(',', $values);
+    //     $stmt = $this->db->prepare($sql);
+    //     if ($stmt->execute()) {
+    //         return ['success' => true];
+    //     } else {
+    //         return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+    //     }
+
+        
+        if(!empty($data)) {
+        $sql = "INSERT INTO vp_products (item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sssssssiissdisiiisi', 
+            $data['item_code'], 
+            $data['title'],
+            $data['description'],
+            $data['size'],
+            $data['color'],
+            $data['groupname'],
+            $data['subcategories'],
+            $data['itemprice'],
+            $data['finalprice'],
+            $data['image'],
+            $data['gst'],
+            $data['hsn'],
+            $data['product_weight'],
+            $data['product_weight_unit'],
+            $data['prod_height'],
+            $data['prod_width'],
+            $data['prod_length'],
+            $data['length_unit'],   
+            $data['cost_price']
+        );
+        $stmt->execute();
+        if ($stmt->error) {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+        //return $stmt->insert_id;
+        return ['success' => true, 'message' => 'Product added successfully.', 'insert_id' => $stmt->insert_id];
+
+        } else {
+            return false;
+        }
+    }
 }
-?> 
+?>

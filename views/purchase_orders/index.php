@@ -452,7 +452,7 @@
         <option value="pending">Pending</option>
         <option value="ordered">Ordered</option>
         <option value="received">Received</option>
-        <!-- <option value="delivered">Delivered</option> -->
+        <option value="completed">Completed</option>
         <option value="cancelled">Cancelled</option>
       </select>
       <textarea name="cancelation_reason" id="cancelation_reason" class="w-full border rounded-md p-2 mb-4 hidden" rows="3" placeholder="Enter cancellation reason..."></textarea>

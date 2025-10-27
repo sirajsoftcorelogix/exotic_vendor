@@ -88,7 +88,10 @@ class OrdersController {
             http_response_code(403); // Forbidden
             die('Unauthorized access.');
         }
-         
+
+        //last order log fetch
+        $lastLog = $ordersModel->getLastImportLog();
+        
         //log create
         $log_data = ['start_time' => date('Y-m-d H:i:s')];
         $log_id = 0;
@@ -99,9 +102,13 @@ class OrdersController {
 
         $from_date = strtotime('-1 days');
         //echo "<br>";
+        if ($lastLog && !empty($lastLog['max_ordered_time'])) {         
+            $from_date = $lastLog['max_ordered_time'];
+        }
         $to_date = time();
 
         $url = 'https://www.exoticindia.com/action';
+       
         $postData = [
             'makeRequestOf' => 'vendors-orderjson',
             'from_date' => $from_date,
@@ -177,10 +184,11 @@ class OrdersController {
 					'local_stock' => $item['local_stock'] ?? '',
 					'cost_price' => $item['cp'] ?? '',
 					'location' => $item['location'] ?? '',
-					'order_date' => date('Y-m-d H:i:s', strtotime($order['orderdate'] ?? 'now')),
+					'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
+                    'processed_time' => $order['processed_time'] ?? 0,
                     'numsold' => $item['numsold'] ?? 0,
                     'product_weight' => $item['product_weight'] ?? 0.0,
-                    'product_weight_unit' => $item['product_weight_unit'] ?? 'kg',
+                    'product_weight_unit' => $item['product_weight_unit'] ?? '',
                     'prod_height' => $item['prod_height'] ?? 0.0,
                     'prod_width' => $item['prod_width'] ?? 0.0,
                     'prod_length' => $item['prod_length'] ?? 0.0,
@@ -198,7 +206,9 @@ class OrdersController {
             //$totalorder = count($data);
             $data = $ordersModel->insertOrder($rdata);
             $result[] = $data;
-            //print_array($rdata);
+            //add products
+            $pdata[] = $ordersModel->addProducts($rdata);
+            
             //if ($result){
                 if (isset($data['success']) && $data['success'] == 1) {
                     // Handle error case
@@ -212,6 +222,7 @@ class OrdersController {
             // }
            
         }
+        //print_array($pdata);
         //print_r($result);
         //update log end time and imported count
         if($log_id > 0){
@@ -220,14 +231,20 @@ class OrdersController {
                 'successful_imports' => $imported,
                 'total_orders' => $totalorder,
                 'error' => isset($error) ? $error : '',
-                'log_details' => json_encode($result)
+                'log_details' => json_encode($result),
+                'max_ordered_time' => $order['processed_time'] ?? '',
+                'from_date' => $from_date,
+                'to_date' => $to_date,
+                'add_product_log' => json_encode($pdata)
             ];
+            //print_array($log_update_data);
             $ordersModel->updateOrderImportLog($log_id, $log_update_data);
         }
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
             'result' => $result,
-            'total' => $totalorder
+            'total' => $totalorder,
+            'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
 	

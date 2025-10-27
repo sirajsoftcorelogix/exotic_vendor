@@ -530,24 +530,28 @@
                                 <div class="flex flex-col gap-4">
                                     <!-- Col 1, Row 1: Image and Title -->
                                     <div class="flex items-start gap-4 ">
-                                        <img src="<?= $order['image'] ?>" alt="Product Image" class="w-24 h-24 rounded-md object-cover flex-shrink-0">
+                                        <img src="<?= $order['image'] ?>" onclick="openImagePopup('<?= $order['image'] ?>')" alt="Product Image" class="h-24 rounded-md object-cover flex-shrink-0 cursor-pointer">
                                         <div class="pt-1 w-full max-w-xs">
                                             <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
-                                            <p class="item-code">Item Code: <?= $order['item_code'] ?></p>
+                                            <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></p>
                                             <p class="quantity">Quantity: <?= $order['quantity'] ?></p>
                                         </div>
                                     </div>
                                     <!-- Col 1, Row 2: Order Details -->
                                     <div class=""> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
                                         <div class="grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
-                                            <span class="heading-typography pb-[25px]">Order Date</span>
-                                            <p class="pb-[25px]">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
+                                            <span class="heading-typography ">Order Date</span>
+                                            <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
-                                            <span class="heading-typography pb-[25px]">Order ID</span>
-                                            <p class="pb-[25px]">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                            <span class="heading-typography ">Order ID</span>
+                                            <p class="">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
+                                            <span class="heading-typography">Marketplace</span>
+                                            <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
+                                            <span class="heading-typography">Staff Name</span>
+                                            <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
                                         </div>
                                     </div>
                                 </div>
@@ -558,39 +562,58 @@
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
-                                                <div>
-                                                    <span class="heading-typography block mb-5">Status</span>
-                                                    <span class="pending-text mt-1 block"><?= ucfirst($order['status']) ?></span>
+                                                <div class="col-span-2">
+                                                    <span class="heading-typography block mb-5">Addon</span>
+                                                    <?php
+                                                    $options = $order['options'] ?? '';
+                                                    $optionsArr = [];
+
+                                                    if (is_string($options)) {
+                                                        $decoded = json_decode($options, true);
+                                                        if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
+                                                            $optionsArr = $decoded;
+                                                        } else {
+                                                            // fallback: comma separated string
+                                                            $optionsArr = array_filter(array_map('trim', explode(',', $options)));
+                                                        }
+                                                    } elseif (is_array($options)) {
+                                                        $optionsArr = $options;
+                                                    }
+
+                                                    if (!empty($optionsArr)) {
+                                                        foreach ($optionsArr as $opt) {
+                                                            echo '<span class="inline-block bg-gray-100 text-sm px-2 py-1 rounded mr-2 mb-2">' . htmlspecialchars($opt) . '</span>';
+                                                        }
+                                                    } else {
+                                                        echo '<span class="data-typography mt-1 block">N/A</span>';
+                                                    }
+                                                    ?>
                                                 </div>
                                                 <div>
-                                                    <span class="heading-typography block mb-5">PO Date</span>
-                                                    <span class="data-typography mt-1 block"><?= $order['po_date'] ? date("d M Y", strtotime($order['po_date'])) : 'N/A' ?></span>
+                                                    <span class="heading-typography block mb-5">Location</span>
+                                                    <span class="data-typography mt-1 block"><?= $order['location'] ?: 'N/A' ?></span>
                                                 </div>
                                                 <div>
-                                                    <span class="heading-typography block mb-5">Receipt Due</span>
+                                                    <span class="heading-typography block mb-5">ESD</span>
                                                     <span class="data-typography mt-1 block"><?= $order['expected_delivery_date'] ? date("d M Y", strtotime($order['expected_delivery_date'])) : 'N/A' ?></span>
-                                                </div>
+                                                </div>                                                
                                                 <div>
-                                                    <span class="heading-typography block mb-5">Staff</span>
-                                                    <span class="data-typography mt-1 block"><?= $order['staff_name'] ?></span>
-                                                </div>
-                                                <div>
-                                                    <span class="heading-typography block mb-5">Amount</span>
-                                                    <span class="data-typography mt-1 block font-semibold">₹<?= $order['total_cost'] ?></span>
+                                                    <span class="heading-typography block mb-5">Local Stock</span>
+                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['local_stock'] ?? 'N/A' ?></span>
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="w-auto flex flex-col items-center space-y-2 flex-shrink-0">
-                                            <button class="text-gray-500 hover:text-gray-800">
+                                            <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                                 </svg>
-                                            </button>
-                                            <button class="text-gray-500 hover:text-gray-800">
+                                            </span>
+                                            <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                                 </svg>
-                                            </button>
+                                            </span>
                                         </div>
                                     </div>
                                     <!-- Col 2, Row 2: Note and Priority -->
@@ -607,7 +630,7 @@
                                                 <span class="urgent-text">Urgent</span>
                                             </div>
                                             <div>
-                                                <?php if (!empty($order['vendor_invoice'])): ?>
+                                                <?php /*if (!empty($order['vendor_invoice'])): ?>
                                                     <a href="<?= base_url($order['vendor_invoice']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
                                                         <p class="mr-1">Download Invoice</p>
                                                         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -616,7 +639,7 @@
                                                     </a>
                                                 <?php else: ?>
                                                     <span class="text-gray-400">No Invoice</span>
-                                                <?php endif; ?>
+                                                <?php endif; */ ?>
                                             </div>
                                         </div>
                                     </div>
@@ -750,7 +773,11 @@
                                 <label class="text-sm font-bold text-gray-700 ">Title: </label>
                                 <span class="text-gray-600" id="item"></span>
                             </div>                            
-                             <div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Description: </label>
+                                <span class="text-gray-600" id="description"></span>
+                            </div>
+                            <div>
                                 <label class="text-sm font-bold text-gray-700">Sub Category: </label>
                                 <span class="text-gray-600" id="sub_category"></span>
                             </div>
@@ -763,20 +790,24 @@
                                 <span class="text-gray-600" id="color"></span>
                             </div>
                             <div>
+                                <label class="text-sm font-bold text-gray-700">Material: </label>
+                                <span class="text-gray-600" id="material"></span>
+                            </div>
+                            <div>
                                 <label for="item_price" class="text-sm font-bold text-gray-700">Item Price: </label>
                                 <span class="text-gray-600" id="item_price">₹00</span>
                             </div>
                             <div>
                                 <label for="final_price" class="text-sm font-bold text-gray-700">Final Price: </label>
-                                <span class="text-gray-600" id="final_price">₹00</span>
+                                <span class="text-gray-600" id="final_price">00</span>
                             </div>
                             <div>
                                 <label for="cost_price" class="text-sm font-bold text-gray-700">Cost Price: </label>
-                                <span class="text-gray-600" id="cost_price">₹00</span>
+                                <span class="text-gray-600" id="cost_price">00</span>
                             </div>
                             <div>
                                 <label for="currency" class="text-sm font-bold text-gray-700">Currency: </label>
-                                <span class="text-gray-600" id="currency">₹00</span>
+                                <span class="text-gray-600" id="currency">00</span>
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">GST: </label>
@@ -796,7 +827,35 @@
                             </div>
                             <div>
                                 <label class="text-sm font-bold text-gray-700">Order Addons: </label>
-                                <div id="order_addons" class="text-gray-600"></div>
+                                <span id="order_addons" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Backorder Status: </label>
+                                <span id="backorder_status" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Backorder Percentage: </label>
+                                <span id="backorder_percent" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Backorder Delay: </label>
+                                <span id="backorder_delay" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Sold Quantity: </label>
+                                <span id="numsold" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">PO Number: </label>
+                                <span id="po_number" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">PO Date: </label>
+                                <span id="po_date" class="text-gray-600"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-bold text-gray-700">Expected Delivery Date: </label>
+                                <span id="expected_delivery_date" class="text-gray-600"></span>
                             </div>
                         </div>
 
@@ -819,11 +878,18 @@
         <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6">
             <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
-            <form id="importForm" style="max-height:200px; overflow-y:auto;" enctype="multipart/form-data" method="post" action="?page=orders&action=import_orders">
-                <div class="mb-4">
+            <?php //echo date('Y-m-d H:i:s',1761382018);          
+
+            ?>
+            <div class="w-full bg-gray-200 rounded-full dark:bg-gray-700 mb-2">
+                <div id="importProgress" class="bg-orange-600 text-xs font-medium text-orange-100 text-center p-0.5 leading-none rounded-full" style="width: 0%"> 0%</div>
+            </div>
+            <form id="importForm" enctype="multipart/form-data" method="post" action="?page=orders&action=import_orders">
+                <div class="mb-4" style="max-height:200px; overflow-y:auto;" id="importStatus">
                     <p class="text-gray-700 mb-2">Are you sure you want to import orders from Server?</p>
                 </div>
                 <div class="flex justify-end space-x-4">
+                    <div id="errorMessage" class=""></div>
                     <button type="button" onclick="closeImportPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Import</button>
                 </div>
@@ -860,14 +926,23 @@ function closeImagePopup(e) {
             document.getElementById('sub_category').textContent = orderData.subcategories || 'N/A';
             document.getElementById('size').textContent = orderData.size || 'N/A';
             document.getElementById('color').textContent = orderData.color || 'N/A';
-            document.getElementById('item_price').textContent = orderData.itemprice ? '₹' + orderData.itemprice : 'N/A';
-            document.getElementById('final_price').textContent = orderData.finalprice ? '₹' + orderData.finalprice : 'N/A';
-            document.getElementById('cost_price').textContent = orderData.cost_price ? '₹' + orderData.cost_price : 'N/A';
+            document.getElementById('item_price').textContent = orderData.itemprice ? '' + orderData.itemprice : 'N/A';
+            document.getElementById('final_price').textContent = orderData.finalprice ? '' + orderData.finalprice : 'N/A';
+            document.getElementById('cost_price').textContent = orderData.cost_price ? '' + orderData.cost_price : 'N/A';
             document.getElementById('currency').textContent = orderData.currency || 'N/A';
             document.getElementById('gst').textContent = orderData.gst || 'N/A';
             document.getElementById('marketplace').textContent = orderData.marketplace_vendor || 'N/A';
             document.getElementById('local_stock').textContent = orderData.local_stock || 'N/A';
             document.getElementById('location').textContent = orderData.location || 'N/A';
+            document.getElementById('description').textContent = orderData.description || 'N/A';
+            document.getElementById('material').textContent = orderData.material || 'N/A';
+            document.getElementById('backorder_status').textContent = orderData.backorder_status || 'N/A';
+            document.getElementById('backorder_percent').textContent = orderData.backorder_percent || 'N/A';
+            document.getElementById('backorder_delay').textContent = orderData.backorder_delay || 'N/A';
+            document.getElementById('numsold').textContent = orderData.numsold || 'N/A';
+            document.getElementById('po_number').textContent = orderData.po_number || 'N/A';
+            document.getElementById('po_date').textContent = orderData.po_date || 'N/A';
+            document.getElementById('expected_delivery_date').textContent = orderData.expected_delivery_date || 'N/A';
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
@@ -892,6 +967,8 @@ function closeImagePopup(e) {
                     chip.textContent = opt;
                     addonsDiv.appendChild(chip);
                 });
+            } if(options == [] || options == '' || options == null || options.length == 0 || options == 'Array') {
+                addonsDiv.textContent = 'N/A';
             } else {
                 addonsDiv.textContent = 'N/A';
             }
@@ -1114,7 +1191,16 @@ function closeImagePopup(e) {
         loadingImage.classList.add('loading-image');
         submitButton.parentNode.insertBefore(loadingImage, submitButton);
         submitButton.disabled = true;
-
+        document.getElementById('errorMessage').textContent = 'Import in progress...';
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 10;
+            document.getElementById('importProgress').style.width = `${progress}%`;
+            document.getElementById('importProgress').textContent = `${progress}%`;
+            if (progress >= 45) {
+                clearInterval(interval);
+            }
+        }, 100);
         const form = this;
         const formData = new FormData(form);
         
@@ -1131,11 +1217,27 @@ function closeImagePopup(e) {
             }
         })
         .then(data => {
+            // Remove loading image and enable submit button
+            loadingImage.remove();
+            submitButton.disabled = false;
+            //increment gradually to show activity
+            
+            const interval = setInterval(() => {
+                progress += 10;
+                document.getElementById('importProgress').style.width = `${progress}%`;
+                document.getElementById('importProgress').textContent = `${progress}%`;
+                if (progress >= 100) {
+                    clearInterval(interval);
+                }
+            }, 100);
+
+            document.getElementById('errorMessage').classList.add('text-green-500');
+            document.getElementById('errorMessage').textContent = 'Import completed successfully.';
             if (data && data.message) {
                 alert(data.message || 'Import completed.');
             } else if (data && data.html) {
                 // Server returned HTML; log it for debugging and show a generic success message
-                document.getElementById('importForm').innerHTML = data.html;
+                document.getElementById('importStatus').innerHTML = data.html;
                 //console.log('Server response (HTML):', data.html);
                 //alert('Import completed. Server returned HTML response.');
             } else {
