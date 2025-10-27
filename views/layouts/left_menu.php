@@ -504,10 +504,10 @@
                         </a>
                     </li>
                     <li>
-                        <a href="<?=base_url('index.php?page=orderstatus&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'orderstatus') ? 'active' : '' ?>">
+                        <a href="<?=base_url('index.php?page=orders_priority_status&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'orderstatus') ? 'active' : '' ?>">
                             <div class="content-wrapper">
                               <i class="fa fa-clipboard-list mr-2"></i>
-                              <span>Order Status</span>
+                              <span>Order Priority Status</span>
                             </div>
                         </a>
                     </li>
