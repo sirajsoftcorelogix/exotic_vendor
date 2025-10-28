@@ -937,6 +937,17 @@
                 <div id="importProgress" class="bg-orange-600 text-xs font-medium text-orange-100 text-center p-0.5 leading-none rounded-full" style="width: 0%"> 0%</div>
             </div>
             <form id="importForm" enctype="multipart/form-data" method="post" action="?page=orders&action=import_orders">
+                <div class="mb-4 flex">
+                    <label for="importType" class="block text-gray-700 font-bold mb-2 ">Import Type:</label>
+                    <select id="importType" name="importType" class="border border-gray-300 rounded px-3 py-2 ml-12" onchange="toggleOrderNumberInput()">
+                        <option value="all">Import All Orders</option>
+                        <option value="specific">Import Specific Order</option>
+                    </select>
+                </div>
+                <div class="mb-4 flex hidden" id="orderNumberDiv">
+                    <label for="importOrderId" class="block text-gray-700 font-bold mb-2">Order Number:</label>
+                    <input type="text" id="importOrderId" name="importOrderId" class="border border-gray-300 rounded px-3 py-2 ml-8" >
+                </div>
                 <div class="mb-4" style="max-height:200px; overflow-y:auto;" id="importStatus">
                     <p class="text-gray-700 mb-2">Are you sure you want to import orders from Server?</p>
                 </div>
@@ -1248,6 +1259,7 @@ function closeImagePopup(e) {
     document.getElementById('importForm').addEventListener('submit', function(e){
         e.preventDefault(); // Prevent default form submission
         //loading image and submit button disable
+        const orderId = document.getElementById('importOrderId').value;
         const submitButton = document.querySelector('#importForm button[type="submit"]');
         const loadingImage = document.createElement('img');
         loadingImage.src = 'images/loading-crop.gif'; // Path to your loading image
@@ -1268,9 +1280,9 @@ function closeImagePopup(e) {
         }, 100);
         const form = this;
         const formData = new FormData(form);
-        
-        fetch('index.php?page=orders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801', {
-            method: 'GET',           
+
+        fetch('index.php?page=orders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801&orderid=' + orderId, {
+            method: 'GET',
         })
         .then(response => response.text())
         .then(text => {
@@ -1318,4 +1330,15 @@ function closeImagePopup(e) {
             closeImportPopup();
         });
     });
+    //toggle order number input
+    function toggleOrderNumberInput(){      
+        const importType = document.getElementById('importType').value;
+        const orderNumberDiv = document.getElementById('orderNumberDiv');
+        if(importType === 'specific'){
+            orderNumberDiv.classList.remove('hidden');
+        } else {
+            orderNumberDiv.classList.add('hidden');
+            document.getElementById('importOrderId').value = '';
+        }
+    }
 </script>
