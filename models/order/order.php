@@ -217,7 +217,7 @@ class Order{
         // Build SQL query
         $columns = implode(', ', $InsertFields);
         $placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
-        $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
+        echo $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
