@@ -117,6 +117,12 @@ class OrdersController {
             'from_date' => $from_date,
             'to_date' => $to_date
         ];
+        if (!empty($_GET['orderid'])) {
+            $postData = [
+                'makeRequestOf' => 'vendors-orderjson',
+                'orderid' => $_GET['orderid']
+            ];
+        }
 
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
@@ -150,8 +156,8 @@ class OrdersController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
             return;
         }
-        //print_r($response);
-        //exit;
+        // print_array($orders);
+        // exit;
         if (empty($orders['orders'])) {
             //echo "No orders found in the API response.";
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
@@ -185,7 +191,7 @@ class OrdersController {
 					'gst' => $item['gst'] ?? '',
 					'hsn' => $item['hscode'] ?? '',
 					'local_stock' => $item['local_stock'] ?? '',
-					'cost_price' => $item['cp'] ?? '',
+					'cost_price' => $item['cp'] ?? 0.0,
 					'location' => $item['location'] ?? '',
 					'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
                     'processed_time' => $order['processed_time'] ?? 0,
