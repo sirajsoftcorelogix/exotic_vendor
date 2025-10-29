@@ -511,6 +511,14 @@
                             </div>
                         </a>
                     </li>
+                    <li>
+                        <a href="<?=base_url('index.php?page=roles&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'roles') ? 'active' : '' ?>">
+                            <div class="content-wrapper">
+                              <i class="fa fa-clipboard-list mr-2"></i>
+                              <span>Roles</span>
+                            </div>
+                        </a>
+                    </li>
                 </ul>
             </div>
         </nav>

@@ -254,7 +254,7 @@ switch ($page) {
             case 'deleteRecord':
                 $controller->delete();
                 break;
-            case 'paymentTermsDetails':
+            case 'getDetails':
                 $controller->getOPSDetails();
             default:
                 $controller->index();
@@ -288,6 +288,29 @@ switch ($page) {
                 break;
             default:
                 $controller->product_list();
+                break;
+        }
+        break;
+    case 'roles':        
+        require_once 'controllers/RolesController.php';
+        $controller = new RolesController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'updateRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'roleDetails':
+                $controller->getDetails();
+            default:
+                $controller->index();
                 break;
         }
         break;

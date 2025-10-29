@@ -322,4 +322,39 @@
 			'Bidriware' => 'Bidriware'
 		];
 	}
+	function updateRoles() { // Run this function once to populate permissions table
+		global $conn;
+
+		$actions = ['add', 'edit', 'view', 'delete', 'list']; // Standard permissions
+		$roles = [2, 3]; // Role IDs to assign permissions to (e.g., Editor and Viewer)
+
+        $sql = "SELECT id, module_name, slug FROM modules where module_name != 'Administrator' ORDER BY module_name";
+        $modules = $conn->query($sql);
+        while($m = mysqli_fetch_assoc($modules)) {
+            
+            $stmt = $conn->prepare("INSERT INTO vp_permissions (module_id, module_name, action_name) VALUES (?, ?, ?)");
+            foreach ($modules as $module) {
+                foreach ($actions as $action) {
+                    $stmt->bind_param("iss", $module["id"], $module["module_name"], $action);
+                    if ($stmt->execute()) {
+						$last_insert_id = $conn->insert_id;
+						$stmt_p = $conn->prepare("INSERT INTO vp_role_permissions (role_id, permission_id) VALUES (?, ?)");
+						foreach ($roles as $role) {
+							$stmt_p->bind_param("ii", $role, $last_insert_id);
+							if ($stmt_p->execute()) {
+								echo "<br>Inserted Linking permission: " . $module['module_name'] . " - $action\n\n\n";
+							} else {
+								echo "<br>Error Linking inserting " . $module['module_name'] . " - $action: " . $stmt_p->error . "\n\n\n";
+							}
+						}
+                        echo "<br><br><br>Inserted permission: " . $module['module_name'] . " - $action\n";
+                    } else {
+                        echo "<br>Error inserting " . $module['module_name'] . " - $action: " . $stmt->error . "\n";
+                    }
+                }
+            }
+            $stmt->close();
+        }
+		$conn->close();
+	}
 ?>
