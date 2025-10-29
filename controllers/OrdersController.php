@@ -191,7 +191,7 @@ class OrdersController {
 					'gst' => $item['gst'] ?? '',
 					'hsn' => $item['hscode'] ?? '',
 					'local_stock' => $item['local_stock'] ?? '',
-					'cost_price' => $item['cp'] ?? '',
+					'cost_price' => $item['cp'] ?? 0.0,
 					'location' => $item['location'] ?? '',
 					'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
                     'processed_time' => $order['processed_time'] ?? 0,
