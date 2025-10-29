@@ -217,7 +217,7 @@ class Order{
         // Build SQL query
         $columns = implode(', ', $InsertFields);
         $placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
-        $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
+        echo $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
@@ -243,7 +243,8 @@ class Order{
                 $types .= 's';
             }
         }
-
+        print_r($types);
+        print_r($values);
         // Bind dynamically
         $stmt->bind_param($types, ...$values);
 
