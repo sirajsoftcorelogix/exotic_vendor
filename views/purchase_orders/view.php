@@ -63,18 +63,18 @@
       foreach ($items as $index => $item): ?>
         <div class="bg-white rounded-lg p-4 grid grid-cols-12 gap-4 items-center table-row-text">
           <div class="col-span-1"><?= $index + 1 ?></div>
-          <div class="col-span-3"><?= htmlspecialchars($item['title']) ?></div>
-          <div class="col-span-1"><?= htmlspecialchars($item['hsn']) ?></div>
+          <div class="col-span-3"><?= htmlspecialchars($item['title'] ?? '') ?> - <?= htmlspecialchars($item['order_number'] ?? '') ?></div>
+          <div class="col-span-1"><?= htmlspecialchars($item['hsn'] ?? '') ?></div>
           <div class="col-span-1"><img src="<?= isset($item['image']) ? $item['image'] : '' ?>" class="rounded-lg" onerror="this.onerror=null;this.src='https://placehold.co/56x88/cccccc/ffffff?text=Image';"></div>
-          <div class="col-span-1"><?= htmlspecialchars($item['gst']) ?>%</div>
+          <div class="col-span-1"><?= htmlspecialchars($item['gst'] ?? '') ?>%</div>
           <div class="col-span-1">
-            <input type="text" value="<?= htmlspecialchars($item['quantity']) ?>" class="w-[50px] h-[25px] text-center border rounded-md focus:ring-0 form-input" readonly>
+            <input type="text" value="<?= htmlspecialchars($item['quantity'] ?? '') ?>" class="w-[50px] h-[25px] text-center border rounded-md focus:ring-0 form-input" readonly>
           </div>
           <div class="col-span-1">Nos</div>
           <div class="col-span-2">
-            <input type="text" value="<?= htmlspecialchars($item['price']) ?>" class="w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input" readonly>
+            <input type="text" value="<?= htmlspecialchars($item['price'] ?? '') ?>" class="w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input" readonly>
           </div>
-          <div class="col-span-1">₹<?= htmlspecialchars($item['amount']) ?></div>
+          <div class="col-span-1">₹<?= htmlspecialchars($item['amount'] ?? '') ?></div>
         </div>
       <?php endforeach; ?>
     </div>
