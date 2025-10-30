@@ -287,6 +287,7 @@
                 <h4 class="payment-details-header">Shipping</h4>
                 <p class="payment-details-text mt-2"><?php echo $invoice['shipping']; ?></p>
               </div>
+              
               <div class="col-span-2">
                 <h4 class="payment-details-header">Grand Total</h4>
                 <p class="payment-details-text mt-2"><?php echo $invoice['grand_total']; ?></p>
@@ -309,7 +310,7 @@
       <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-10 gap-x-8 gap-y-2 flex-grow">
         <div class="col-span-2">
           <h4 class="payment-details-header">Payment Date</h4>
-          <p class="payment-details-text mt-2"><?php echo $paymentDetails['payment_date']; ?></p>
+          <p class="payment-details-text mt-2"><?php echo date('d M Y', strtotime($paymentDetails['payment_date'])); ?></p>
         </div>
         <div class="col-span-2">
           <h4 class="payment-details-header">Payment Type</h4>
@@ -327,7 +328,11 @@
           <h4 class="payment-details-header">Account Number</h4>
           <p class="payment-details-text mt-2"><?php echo $paymentDetails['vendor_bank_account_number']; ?></p>
         </div>
-        <div class="col-span-full">
+        <div class="col-span-2">
+            <h4 class="payment-details-header">Payment Mode </h4>
+            <p class="payment-details-text mt-2"><?php echo $paymentDetails['payment_mode']; ?></p>
+        </div>
+        <div class="col-span-4">
           <h4 class="payment-details-header">Payment Note:</h4>
           <p class="payment-details-text mt-2"><?php echo $paymentDetails['payment_note']; ?></p>
         </div>

@@ -100,6 +100,8 @@
         letter-spacing: 0.2px;
         color: rgba(7, 7, 7, 1);
     }
+    
+   
 </style>
 <div class="container mx-auto p-4">
     <!-- Header Section -->
@@ -544,7 +546,7 @@
                                             <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
                                             <span class="heading-typography ">Order ID</span>
-                                            <p class="">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                            <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
@@ -609,11 +611,19 @@
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                                 </svg>
                                             </span>
-                                            <span class="text-gray-500 hover:text-gray-800">
+                                            <!-- <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                                 </svg>
+                                            </span> -->
+                                            <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold" style="position: relative; display: inline-block;" onclick="toggleMenu(<?= $order['order_id'] ?>)">
+                                                <i class="fas fa-ellipsis-v"></i> <!-- &#x22EE;  Vertical ellipsis -->
                                             </span>
+                                            <div id="menu-<?= $order['order_id'] ?>" class="menu-dropdown menu-popup-order">
+                                                <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
+                                                <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Delete Order</a>
+                                            </div>
                                         </div>
                                     </div>
                                     <!-- Col 2, Row 2: Note and Priority -->
@@ -955,6 +965,41 @@
                     <div id="errorMessage" class=""></div>
                     <button type="button" onclick="closeImportPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!--Status Popup -->
+<div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeStatusPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
+        <button onclick="closeStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="p-6">
+            <h2 class="text-3xl font-bold mb-4">Update Order Status</h2>
+            <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
+                <input type="hidden" name="status_order_id" id="status_order_id">
+                <div class="mb-4">
+                    <div class="mb-4">
+                    <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Select New Status:</label>
+                    <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
+                        <?php     
+                            echo "<option value=\"\">-- Select Status --</option>";                   
+                        foreach ($order_status_list as $status) {
+                            echo "<option value=\"{$status['slug']}\">{$status['title']}</option>";
+                        }
+                        ?>
+                    </select>
+                    </div>
+                    <!-- Remarks field -->
+                    <div class="mb-4">
+                        <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Remarks:</label>
+                        <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="3"></textarea>
+                    </div>  
+                    <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update Status</button>
                 </div>
             </form>
         </div>
@@ -1341,4 +1386,85 @@ function closeImagePopup(e) {
             document.getElementById('importOrderId').value = '';
         }
     }
+    // Toggle menu visibility
+    function toggleMenu(orderId) { 
+        const menu = document.getElementById('menu-' + orderId);
+        if (menu.style.display === 'block') {
+            menu.style.display = 'none';
+        } else {
+            // Close other menus
+            document.querySelectorAll('.menu-dropdown').forEach(m => m.style.display = 'none');
+            menu.style.display = 'block';
+        }
+    }
+    // Close menus when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!event.target.matches('.menu-dropdown, .menu-dropdown *') && !event.target.matches('.menu-button')) {
+            document.querySelectorAll('.menu-dropdown').forEach(m => m.style.display = 'none');
+        }
+    });
+    function openStatusPopup(orderId) {
+        document.getElementById('status_order_id').value = orderId;
+        document.getElementById('statusPopup').classList.remove('hidden');
+        document.getElementById('orderStatusError').textContent = '';
+        document.getElementById('orderStatusError').classList.add('hidden');
+        document.getElementById('orderRemarks').value = '';
+        
+        // Close the menu
+        const menu = document.getElementById('menu-' + orderId);
+        if (menu) {
+            menu.style.display = 'none';
+        }
+        // update fields with order data
+        const orderData = JSON.parse(document.querySelector('#order-id-' + orderId).getAttribute('data-order'));
+        document.getElementById('orderRemarks').value = orderData.remarks || '';
+        document.getElementById('orderStatus').value = orderData.status || '';
+    }
+    
+    function closeStatusPopup() {
+        document.getElementById('statusPopup').classList.add('hidden');
+    }
+    // submit status form with validation
+    document.getElementById('statusForm').addEventListener('submit', function(e){
+        const statusSelect = document.getElementById('orderStatus');
+        const errorDiv = document.getElementById('orderStatusError');
+        if(statusSelect.value === '') {
+            e.preventDefault();
+            errorDiv.classList.remove('hidden');
+        } else {
+            errorDiv.classList.add('hidden');
+        }
+        // Ajax submit the form if validation passes       
+        if (statusSelect.value !== '') {
+            e.preventDefault();
+            const formData = new FormData(document.getElementById('statusForm'));
+            fetch('?page=orders&action=update_status', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    errorDiv.classList.remove('text-red-500');
+                    errorDiv.classList.add('text-green-500');
+                    errorDiv.textContent = 'Order status updated successfully.';
+                    errorDiv.classList.remove('hidden');
+                    //closeStatusPopup();
+                    setTimeout(() => {
+                        closeStatusPopup();
+                        location.reload();
+                    }, 2000);
+                } else {
+                    errorDiv.textContent = 'Error updating order status.';
+                    errorDiv.classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating order status.');
+            });
+        }
+
+    });
+
 </script>
