@@ -314,6 +314,29 @@ switch ($page) {
                 break;
         }
         break;
+    case 'teams':        
+        require_once 'controllers/TeamsController.php';
+        $controller = new TeamsController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'updateRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     default:
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
