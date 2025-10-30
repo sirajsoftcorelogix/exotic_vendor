@@ -224,6 +224,15 @@
                                     <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" />
                                 </div>
                                 <div>
+                                    <label class="text-sm font-medium text-gray-700">Team</label>
+                                    <select class="form-input w-full mt-1" name="addTeam" id="addTeam">
+                                        <option value="" disabled selected>Select Team</option>
+                                        <?php foreach($teamList as $team): ?>
+                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
                                     <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
                                         <option value="active">Active</option>
@@ -231,31 +240,9 @@
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
-                                
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Category</label>
-                               <?php /*?>
-                                <select class="form-input w-full mt-1 h-32 select-checkbox" multiple name="addVendorCategory[]" id="addVendorCategory">
-                                    <option value="" disabled>Select Categories</option>
-                                    
-                                    <?php foreach($category[0] as $key => $value): ?>
-                                        <?php if ($value['parent_id'] == 0): // Only show parent categories ?>
-                                            <optgroup label="<?php echo $value['display_name']; ?>" style="font-weight: bold;">
-                                                <?php 
-                                                // Show subcategories if exist
-                                                foreach($category[$value['id']] as $subKey => $subValue): 
-                                                    if ($subValue['parent_id'] == $value['id']): ?>
-                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['display_name']; ?></option>
-                                                <?php 
-                                                    endif; 
-                                                endforeach; ?>
-                                                </optgroup>                                            
-                                        <?php endif; 
-                                        endforeach;
-                                        ?>
-                                </select>
-                                <?php */?>
                                 <br/>
                                 <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="addVendorCategory">
                                     <option value="" disabled>Select Categories</option>
@@ -272,7 +259,6 @@
                                 </select>
                             </div>
                         </div>
-                        
 
                         <!-- Address -->
                         <div class="pt-4">
@@ -408,6 +394,15 @@
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
                                     <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" />
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Team</label>
+                                    <select class="form-input w-full mt-1" name="editTeam" id="editTeam">
+                                        <option value="" disabled selected>Select Team</option>
+                                        <?php foreach($teamList as $team): ?>
+                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
@@ -950,6 +945,7 @@
 
             document.getElementById("editPostalCode").value = vendor.postal_code;
             document.getElementById("editRating").value = vendor.rating;
+            document.getElementById("editTeam").value = vendor.team_id;
             document.getElementById("editNotes").value = vendor.notes;
             document.getElementById("editStatus").value = vendor.is_active;
             //vendor category

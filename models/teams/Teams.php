@@ -58,11 +58,12 @@ class Teams {
         ];
 	}
 	public function addRecord($data) {
-        $sql = "INSERT INTO vp_teams (team_name, team_description, is_active) VALUES (?, ?, ?)";
+        $sql = "INSERT INTO vp_teams (team_name, team_description, user_id, is_active) VALUES (?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssi',
+        $stmt->bind_param('ssii',
             $data['addTeamName'],
             $data['addTeamDescription'],
+            $_SESSION["user"]["id"],
             $data['addStatus']
         );
         if ($stmt->execute()) {
@@ -74,11 +75,12 @@ class Teams {
         ];
     }
     public function updateRecord($id, $data) {
-        $sql = "UPDATE vp_teams SET team_name = ?, team_description = ?, is_active = ? WHERE id = ?";
+        $sql = "UPDATE vp_teams SET team_name = ?, team_description = ?, user_id = ?, is_active = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssii',
+        $stmt->bind_param('ssiii',
             $data['editTeamName'],
             $data['editTeamDescription'],
+            $_SESSION["user"]["id"],
             $data['editStatus'],
             $id
         );
@@ -102,7 +104,6 @@ class Teams {
             'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
         ];
     }
-	
 	public function getRecord($id) {
         $result = $this->conn->query("SELECT id, team_name, team_description, is_active 
                       FROM vp_teams 
@@ -111,5 +112,13 @@ class Teams {
 
         return json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 	}
+    public function getAllTeams() {
+        $result = $this->conn->query("SELECT id, team_name FROM vp_teams WHERE is_active = '1' ORDER BY team_name ASC");
+        $teams = [];
+        while ($row = $result->fetch_assoc()) {
+            $teams[] = $row;
+        }
+        return $teams;
+    }
 }
 ?>

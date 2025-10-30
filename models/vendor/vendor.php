@@ -129,9 +129,9 @@ class vendor {
             $checkPanStmt->close();
         }
 
-        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('sssssssssssssss',
+        $stmt->bind_param('ssssssssssssssiis',
             $data['addVendorName'],
             $data['addContactPerson'],
             $data['addEmail'],
@@ -146,6 +146,7 @@ class vendor {
             $data['addPostalCode'],
             $data['addRating'],
             $data['addNotes'],
+            $_SESSION["user"]["id"],
             $data['addStatus']
         );
         if ($stmt->execute()) {
@@ -166,9 +167,9 @@ class vendor {
         ];
     }
     public function updateVendor($id, $data) {
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, is_active = ? WHERE id = ?";
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, is_active = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('sssssssssssssssi', 
+        $stmt->bind_param('ssssssssssssssiisi', 
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
@@ -183,6 +184,8 @@ class vendor {
             $data['editPostalCode'],
             $data['editRating'],
             $data['editNotes'],
+            $_SESSION["user"]["id"],
+            $data['editTeam'],
             $data['editStatus'],
             $id
         );
