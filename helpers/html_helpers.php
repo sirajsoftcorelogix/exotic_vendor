@@ -357,4 +357,27 @@
         }
 		$conn->close();
 	}
+	function hasPermission($user_id, $module, $action) {
+		
+		if($_SESSION["user"]["role_id"] == 1 || $_SESSION["user"]["role"] == "admin"){ // Admin has all permissions
+			return true;
+		}
+		global $conn;
+		$sql = "SELECT COUNT(*) AS total
+				FROM vp_role_permissions rp
+				JOIN vp_permissions p ON rp.permission_id = p.id
+				JOIN vp_users u ON u.role_id = rp.role_id
+				WHERE u.id='$user_id' AND p.module_name='$module' AND p.action_name='$action'";
+		$res = $conn->query($sql);
+		$row = mysqli_fetch_assoc($res);
+		return $row['total'] > 0;
+	}
+	function checkPermission($module, $action) {
+		session_start();
+		$user_id = $_SESSION["user"]["id"] ?? 0;
+		if (!$user_id || !hasPermission($user_id, $module, $action)) {
+			header("Location: index.php?page=dashboard");
+			exit;
+		}
+	}
 ?>

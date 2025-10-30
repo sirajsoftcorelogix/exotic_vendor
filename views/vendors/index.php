@@ -38,10 +38,14 @@
             </form>
         </div>
         <!-- Add User Button -->
+        <?php
+        if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'add')) {
+        ?>
         <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" id="open-vendor-popup-btn">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>Add Vendor</button>
+        <?php } ?>
     </div>
 
     <!-- Vendor Listing -->
@@ -97,9 +101,13 @@
                                             &#x22EE; <!-- Vertical ellipsis -->
                                         </button> 
                                         <ul class="menu-popup">
-                                            <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'edit')) { ?>
+                                                <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <?php } ?>
                                             <li onclick="openBankDtlsModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
-                                            <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'delete')) { ?>
+                                                <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php } ?>
                                             <li style="color: lightgray;"><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
