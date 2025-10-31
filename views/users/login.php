@@ -15,7 +15,7 @@ global $domain, $root_path;
             </div>
 
             <!-- Main Content -->
-            <h2 class="portal-title mb-1">Vendor Onboarding Portal</h2>
+            <h2 class="portal-title mb-1">Vendor Onboarding Portal </h2>
             <p class="portal-subtitle text-orange-100 mb-3">Flurish Together. Grow Stronger.</p>
             <button class="bg-white text-black w-[110px] h-[40px] rounded-[5px] shadow-md hover:bg-gray-100 transition duration-300 flex items-center justify-center read-more-btn">
                 Read More
