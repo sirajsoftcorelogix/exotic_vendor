@@ -605,25 +605,36 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="w-auto flex flex-col items-center space-y-2 flex-shrink-0">
+                                        <!-- <div class="w-auto flex flex-col items-center space-y-2">
                                             <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                                 </svg>
                                             </span>
-                                            <!-- <span class="text-gray-500 hover:text-gray-800">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                                </svg>
-                                            </span> -->
+                                            
                                             <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold" style="position: relative; display: inline-block;" onclick="toggleMenu(<?= $order['order_id'] ?>)">
-                                                <i class="fas fa-ellipsis-v"></i> <!-- &#x22EE;  Vertical ellipsis -->
+                                                <i class="fas fa-ellipsis-v"></i> 
                                             </span>
-                                            <div id="menu-<?= $order['order_id'] ?>" class="menu-dropdown menu-popup-order">
+                                            <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order">
                                                 <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
                                                 <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
-                                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Delete Order</a>
+                                               
                                             </div>
+                                        </div> -->
+                                        <div class="w-auto flex flex-col items-center space-y-2">
+                                            <span class="text-gray-500 hover:text-gray-800">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                            </span>
+                                            <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold relative inline-block" onclick="toggleMenu(<?= $order['order_id'] ?>)">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                                <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
+                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
+                                                    <hr class="my-1 mx-2"></hr>
+                                                    <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                </div>
+                                            </span>
                                         </div>
                                     </div>
                                     <!-- Col 2, Row 2: Note and Priority -->
@@ -919,6 +930,10 @@
                                 <label class="text-sm font-bold text-gray-700">Vendor: </label>
                                 <span id="vendor" class="text-gray-600"></span>
                             </div>
+                            <div> 
+                                <label class="text-sm font-bold text-gray-700">Payment Type: </label>
+                                <span id="payment_type" class="text-gray-600"></span>
+                            </div>
                         </div>
 
                         
@@ -972,36 +987,97 @@
 </div>
 <!--Status Popup -->
 <div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeStatusPopup(event)">
-    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
+    <div class="bg-white p-4 rounded-md max-w-4xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
         <button onclick="closeStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <div class="p-6">
-            <h2 class="text-3xl font-bold mb-4">Update Order Status</h2>
-            <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
-                <input type="hidden" name="status_order_id" id="status_order_id">
-                <div class="mb-4">
+        <div class="w-full flex">
+            <div class="items-start mb-6 w-[40%]">
+                <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md border-2 m-6 h-36
+                    object-cover">
+                <p class="ml-6 text-sm text-gray-600 space-y-1">
+                    <strong>Order Number:</strong> <span id="status_order_number"></span><br>
+                    <strong>Item Code:</strong> <span id="status_item_code"></span><br>
+                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br><br>
+                    <span id="status_category"></span> / 
+                    <span id="status_sub_category"></span><br>
+                    <span id="status_item" class="font-bold"></span><br>
+                </p>
+            </div>
+            <div class="border-l pl-4 ml-4"></div>
+            <div class="p-4 w-[59%]">
+                <h2 class="text-2xl font-bold mb-4">Order Update</h2>
+                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
+                    <input type="hidden" name="status_order_id" id="status_order_id">
                     <div class="mb-4">
-                    <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Select New Status:</label>
-                    <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
-                        <?php     
-                            echo "<option value=\"\">-- Select Status --</option>";                   
-                        foreach ($order_status_list as $status) {
-                            echo "<option value=\"{$status['slug']}\">{$status['title']}</option>";
-                        }
-                        ?>
-                    </select>
+                        <div class="mb-4 flex space-x-4">
+                        <div>
+                        <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Select Order Status:</label>
+                        <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
+                            <?php
+                            echo '<option value="">-- Select Status --</option>';
+
+                            // Find the "Procurement" parent id (by slug or title, case-insensitive)
+                            $procurement_id = null;
+                            foreach ($order_status_list as $s) {
+                                if ((isset($s['slug']) && strtolower($s['slug']) === 'procurement') ||
+                                    (isset($s['title']) && strtolower($s['title']) === 'procurement')) {
+                                    $procurement_id = $s['id'] ?? null;
+                                    break;
+                                }
+                            }
+
+                            // Partition statuses into procurement children and others
+                            $procurement_children = [];
+                            $other_statuses = [];
+                            foreach ($order_status_list as $status) {
+                                // skip the procurement parent itself from listing
+                                if ($procurement_id !== null && isset($status['id']) && $status['id'] == $procurement_id) {
+                                    continue;
+                                }
+
+                                if ($procurement_id !== null && isset($status['parent_id']) && $status['parent_id'] == $procurement_id) {
+                                    $procurement_children[] = $status;
+                                } else {
+                                    $other_statuses[] = $status;
+                                }
+                            }
+                            // Output remaining statuses
+                            foreach ($other_statuses as $st) {
+                                $value = htmlspecialchars($st['slug'] ?? '');
+                                $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
+                                echo "<option value=\"{$value}\">{$label}</option>";
+                            }
+                            // Output optgroup for Procurement (if any)
+                            if (!empty($procurement_children)) {
+                                echo '<optgroup label="Procurement">';
+                                foreach ($procurement_children as $st) {
+                                    $value = htmlspecialchars($st['slug'] ?? '');
+                                    $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
+                                    echo "<option value=\"{$value}\">{$label}</option>";
+                                }
+                                echo '</optgroup>';
+                            }                           
+                            ?>
+                            
+                        </select>
+                        </div>
+                        <div>
+                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">ESD:</label>
+                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-3 py-2 w-full">
+                        </div>
+                        </div>
+                        <!-- Remarks field -->
+                        <div class="mb-4">
+                            <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes:</label>
+                            <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
+                        </div>  
+                        <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
                     </div>
-                    <!-- Remarks field -->
-                    <div class="mb-4">
-                        <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Remarks:</label>
-                        <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="3"></textarea>
-                    </div>  
-                    <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
-                </div>
-                <div class="flex justify-end space-x-4">
-                    <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update Status</button>
-                </div>
-            </form>
+                    <div class="flex justify-end space-x-4">
+                        <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-600">Cancel</button>
+                        <button type="submit" class="px-4 py-2 btn-success text-white rounded hover:bg-blue-700">Save</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -1063,7 +1139,8 @@ function closeImagePopup(e) {
             document.getElementById('giftvoucher').textContent = orderData.giftvoucher ||  'N/A';
             document.getElementById('giftvoucher_reduce').textContent = orderData.giftvoucher_reduce || 'N/A';
             document.getElementById('credit').textContent = orderData.credit || 'N/A';
-            document.getElementById('vendor').textContent = orderData.vendor || 'N/A';            
+            document.getElementById('vendor').textContent = orderData.vendor || 'N/A';
+            document.getElementById('payment_type').textContent = orderData.payment_type || 'N/A';            
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
@@ -1387,21 +1464,19 @@ function closeImagePopup(e) {
         }
     }
     // Toggle menu visibility
-    function toggleMenu(orderId) { 
-        const menu = document.getElementById('menu-' + orderId);
-        if (menu.style.display === 'block') {
-            menu.style.display = 'none';
-        } else {
-            // Close other menus
-            document.querySelectorAll('.menu-dropdown').forEach(m => m.style.display = 'none');
-            menu.style.display = 'block';
-        }
+    function toggleMenu(orderId) {
+        const menu = document.getElementById('menu-' + orderId);        
+        menu.style.display = 'block';       
     }
     // Close menus when clicking outside
     document.addEventListener('click', function(event) {
-        if (!event.target.matches('.menu-dropdown, .menu-dropdown *') && !event.target.matches('.menu-button')) {
-            document.querySelectorAll('.menu-dropdown').forEach(m => m.style.display = 'none');
+        // don't close if click is inside a menu or on the menu button (handles inner elements like <i>)
+        if (event.target.closest('.menu-popup-order') || event.target.closest('.menu-button')) {
+            return;
         }
+        document.querySelectorAll('.menu-popup-order').forEach(function(menu) {
+            menu.style.display = 'none';
+        });
     });
     function openStatusPopup(orderId) {
         document.getElementById('status_order_id').value = orderId;
@@ -1419,6 +1494,40 @@ function closeImagePopup(e) {
         const orderData = JSON.parse(document.querySelector('#order-id-' + orderId).getAttribute('data-order'));
         document.getElementById('orderRemarks').value = orderData.remarks || '';
         document.getElementById('orderStatus').value = orderData.status || '';
+        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
+        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
+        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || 'N/A';
+        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
+        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
+        document.getElementById('status_item').textContent = orderData.title || 'N/A';
+        // display ESD in dd-mm-yyyy format while keeping the date input usable
+        (function(){
+            const statusESD = document.getElementById('statusESD');
+            const raw = orderData.esd || '';
+
+            if (!statusESD) return;
+
+            // expect raw in yyyy-mm-dd
+            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (m) {
+                const formatted = `${m[3]}-${m[2]}-${m[1]}`; // dd-mm-yyyy
+
+                if (statusESD.type === 'date') {
+                    // keep the actual input value in yyyy-mm-dd so the native picker works
+                    statusESD.value = raw;
+                } else {
+                    // if it's a text field, set the formatted value directly
+                    statusESD.value = formatted;
+                }
+            } else {
+                // fallback: if format unknown, set raw value
+                statusESD.value = raw || '';
+            }
+        })();
+        //console.log(orderData.esd);
+        //image
+        const imgElem = document.querySelector('#statusPopup img');
+        imgElem.src = orderData.image || 'default-image.png';
     }
     
     function closeStatusPopup() {

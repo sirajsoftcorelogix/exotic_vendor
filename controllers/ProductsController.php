@@ -3,6 +3,7 @@ require_once 'models/product/product.php';
 $productModel = new product($conn);
 class ProductsController {
     public function product_list() {
+        is_login();
         global $productModel;
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -26,6 +27,7 @@ class ProductsController {
     }
 
     public function viewProduct() {
+        is_login();
         global $productModel;
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         $data = [];

@@ -421,9 +421,9 @@ class Order{
         if(empty($order_id) || empty($data['status'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
-        $sql = "UPDATE vp_orders SET status = ?, remarks = ? WHERE id = ?";
+        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssi', $data['status'], $data['remarks'], $order_id);
+        $stmt->bind_param('sssi', $data['status'], $data['remarks'], $data['esd'], $order_id);
         if ($stmt->execute()) {
             return ['success' => true];
         } else {

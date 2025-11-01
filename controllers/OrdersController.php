@@ -217,7 +217,7 @@ class OrdersController {
                     'giftvoucher' => $order['giftvoucher'] ?? '',
                     'giftvoucher_reduce' => $order['giftvoucher_reduce'] ?? '',
                     'credit' => $order['credit'] ?? '',
-                    'vendor' => $order['vendor'] ?? ''
+                    'vendor' => $item['vendor'] ?? ''
 					 ];
 					$totalorder++;                
                     
@@ -298,11 +298,13 @@ class OrdersController {
             $order_id = isset($_POST['status_order_id']) ? (int)$_POST['status_order_id'] : 0;
             $new_status = isset($_POST['orderStatus']) ? $_POST['orderStatus'] : '';
             $remarks = isset($_POST['orderRemarks']) ? trim($_POST['orderRemarks']) : '';
+            $esd = isset($_POST['esd']) ? trim($_POST['esd']) : '';
 
             if ($order_id > 0 && !empty($new_status)) {
                 $update_data = [
                     'status' => $new_status,
-                    'remarks' => $remarks
+                    'remarks' => $remarks,
+                    'esd' => $esd
                 ];
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
                 if ($updated) {

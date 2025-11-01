@@ -675,13 +675,13 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
     right: 0;
     background: #fff;
     border: 1px solid #ccc;
-    list-style: none;
+    /* list-style: none; */
     padding: 5px 0;
     margin: 0;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     display: none;
     z-index: 1000;
-    min-width: 120px;
+    min-width: 140px;
     max-height: 265px;
     overflow-y: auto;
     border-radius: 4px;
