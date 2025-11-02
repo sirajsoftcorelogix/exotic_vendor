@@ -312,9 +312,12 @@ class OrdersController {
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
-                    'esd' => $esd,
                     'priority' => $priority
                 ];
+                // only include ESD if a non-empty value was provided to avoid inserting an empty string into a DATE/DATETIME column
+                if ($esd !== NULL && $esd !== '') {
+                    $update_data['esd'] = $esd;
+                }
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
                 if ($updated) {
                     echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);

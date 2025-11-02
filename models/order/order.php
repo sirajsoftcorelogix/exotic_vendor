@@ -41,7 +41,8 @@ class Order{
         }
         if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
             if ($filters['status_filter'] === 'pending') {
-                $sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                $sql .= " AND vp_orders.status = 'pending'";
             } elseif ($filters['status_filter'] === 'processed') {
                 //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
                 $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
