@@ -667,3 +667,32 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
     font-size: 12px;
 }
 
+   
+ /* Use absolute positioning so the menu doesn't affect layout / stretch other elements */
+.menu-popup-order {
+    position: relative;
+    top: 0px;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    /* list-style: none; */
+    padding: 5px 0;
+    margin: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    display: none;
+    z-index: 1000;
+    min-width: 140px;
+    max-height: 265px;
+    overflow-y: auto;
+    border-radius: 4px;
+}
+
+.menu-popup-order li {
+padding: 8px 12px;
+cursor: pointer;
+transition: background 0.2s;
+}
+
+.menu-popup-order li:hover {
+background-color: #f0f0f0;
+}

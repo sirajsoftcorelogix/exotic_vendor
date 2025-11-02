@@ -75,9 +75,9 @@ global $domain, $root_path;
     })
     .then(response => response.json())
     .then(data => {
-      if (data.success) {
-        //alert('Login successful!');
-        window.location.href = "?page=orders&action=list";
+    if (data.success) {
+      var redirect = <?php echo json_encode(isset($_SESSION['redirect_after_login']) && $_SESSION['redirect_after_login'] ? $_SESSION['redirect_after_login'] : '?page=orders&action=list'); ?>;
+      window.location.href = redirect;
       } else {
         //alert('Login failed: ' + data.message);
         errorDiv.textContent = data.message;

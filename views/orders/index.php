@@ -100,6 +100,8 @@
         letter-spacing: 0.2px;
         color: rgba(7, 7, 7, 1);
     }
+    
+   
 </style>
 <div class="container mx-auto p-4">
     <!-- Header Section -->
@@ -544,10 +546,10 @@
                                             <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
                                             <span class="heading-typography ">Order ID</span>
-                                            <p class="">: <span class="data-typography"><a href="#" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                            <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
                                             <span class="heading-typography">Vendor Name</span>
-                                            <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
+                                            <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
                                             <span class="heading-typography">Marketplace</span>
                                             <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
                                             <span class="heading-typography">Staff Name</span>
@@ -562,7 +564,7 @@
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
-                                                <div class="col-span-2">
+                                                <div class="">
                                                     <span class="heading-typography block mb-5">Addon</span>
                                                     <?php
                                                     $options = $order['options'] ?? '';
@@ -590,29 +592,53 @@
                                                     ?>
                                                 </div>
                                                 <div>
+                                                    <span class="heading-typography block mb-5">Local Stock</span>
+                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['local_stock'] ?? 'N/A' ?></span>
+                                                </div>
+                                                <div>
                                                     <span class="heading-typography block mb-5">Location</span>
                                                     <span class="data-typography mt-1 block"><?= $order['location'] ?: 'N/A' ?></span>
                                                 </div>
                                                 <div>
                                                     <span class="heading-typography block mb-5">ESD</span>
-                                                    <span class="data-typography mt-1 block"><?= $order['expected_delivery_date'] ? date("d M Y", strtotime($order['expected_delivery_date'])) : 'N/A' ?></span>
+                                                    <span class="data-typography mt-1 block"><?= $order['esd'] ? date("d M Y", strtotime($order['esd'])) : 'N/A' ?></span>
                                                 </div>                                                
+                                                
                                                 <div>
-                                                    <span class="heading-typography block mb-5">Local Stock</span>
-                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['local_stock'] ?? 'N/A' ?></span>
+                                                    <span class="heading-typography block mb-5">Status</span>
+                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['status'] ? $status_list[$order['status']] : 'N/A' ?></span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="w-auto flex flex-col items-center space-y-2 flex-shrink-0">
+                                        <!-- <div class="w-auto flex flex-col items-center space-y-2">
                                             <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                                 </svg>
                                             </span>
+                                            
+                                            <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold" style="position: relative; display: inline-block;" onclick="toggleMenu(<?= $order['order_id'] ?>)">
+                                                <i class="fas fa-ellipsis-v"></i> 
+                                            </span>
+                                            <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order">
+                                                <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
+                                                <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                               
+                                            </div>
+                                        </div> -->
+                                        <div class="w-auto flex flex-col items-center space-y-2">
                                             <span class="text-gray-500 hover:text-gray-800">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                                 </svg>
+                                            </span>
+                                            <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold relative inline-block" onclick="toggleMenu(<?= $order['order_id'] ?>)">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                                <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
+                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
+                                                    <hr class="my-1 mx-2"></hr>
+                                                    <!-- <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
+                                                </div>
                                             </span>
                                         </div>
                                     </div>
@@ -620,14 +646,14 @@
                                     <div class="flex items-start gap-4">
                                         <div class="flex-grow">
                                             <h4 class="note-heading mb-2">Note:</h4>
-                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[502px] min-h-[110px]">
-                                                <?= isset($order['notes']) ? $order['notes'] : '' ?>
+                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[452px] min-h-[110px]">
+                                                <?= isset($order['remarks']) ? $order['remarks'] : '' ?>
                                             </div>
                                         </div>
                                         <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
                                             <div class="mt-[20px]">
                                                 <h4 class="set-priority-title mb-2">Set Priority</h4>
-                                                <span class="urgent-text">Urgent</span>
+                                                <span class="urgent-text"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
                                             </div>
                                             <div>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
@@ -909,6 +935,7 @@
                                 <label class="text-sm font-bold text-gray-700">Vendor: </label>
                                 <span id="vendor" class="text-gray-600"></span>
                             </div>
+                            
                         </div>
 
                         
@@ -957,6 +984,124 @@
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Import</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+<!--Status Popup -->
+<div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeStatusPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-4xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
+        <button onclick="closeStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="w-full flex">
+            <div class="items-start mb-6 w-[40%]">
+                <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md border-2 m-6 h-36
+                    object-cover">
+                <p class="ml-6 text-sm text-gray-600 space-y-1">
+                    <strong>Order Number:</strong> <span id="status_order_number"></span><br>
+                    <strong>Item Code:</strong> <span id="status_item_code"></span><br>
+                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br><br>
+                    <span id="status_category"></span> / 
+                    <span id="status_sub_category"></span><br>
+                    <span id="status_item" class="font-bold"></span><br>
+                </p>
+            </div>
+            <div class="border-l pl-4 ml-4"></div>
+            <div class="p-4 w-[59%]">
+                <h2 class="text-2xl font-bold mb-4">Order Update</h2>
+                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
+                    <input type="hidden" name="status_order_id" id="status_order_id">
+                    <div class="mb-4">
+                        <div class="mb-4 flex space-x-4">
+                        <div>
+                        <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Select Order Status:</label>
+                        <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
+                            <?php
+                            echo '<option value="">-- Order Status --</option>';
+
+                            // Find the "Procurement" parent id (by slug or title, case-insensitive)
+                            $procurement_id = null;
+                            $sorder_id = null;
+                            $parent = [];
+                            foreach ($order_status_list as $s) {
+                                if ((isset($s['slug']) && strtolower($s['slug']) === 'procurement') ||
+                                    (isset($s['title']) && strtolower($s['title']) === 'procurement')) {
+                                    $procurement_id = $s['id'] ?? null;
+                                    //break;
+                                }
+                                if($s['parent_id'] === 0 && strtolower($s['slug']) === 'order'){
+                                    //$parent[$s['id']] = $s['title'];
+                                    $sorder_id = $s['id'] ?? null;
+                                }
+                            }
+
+                            // Partition statuses into procurement children and others
+                            $procurement_children = [];
+                            $other_statuses = [];
+                            foreach ($order_status_list as $status) {
+                                // skip the procurement parent itself from listing
+                                if ($procurement_id !== null && isset($status['id']) && $status['id'] == $procurement_id) {
+                                    continue;
+                                }
+                                if($sorder_id !== null &&  $status['id'] == $sorder_id){
+                                    continue;
+                                }
+                                if ($procurement_id !== null && isset($status['parent_id']) && $status['parent_id'] == $procurement_id) {
+                                    $procurement_children[] = $status;
+                                } else {
+                                    $other_statuses[] = $status;
+                                }
+                            }
+                            // Output remaining statuses
+                            if (!empty($other_statuses)) {
+                                echo '<optgroup label="Order">';
+                                foreach ($other_statuses as $st) {
+                                    $value = htmlspecialchars($st['slug'] ?? '');
+                                    $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
+                                    echo "<option value=\"{$value}\">{$label}</option>";
+                                }
+                            }
+                            // Output optgroup for Procurement (if any)
+                            if (!empty($procurement_children)) {
+                                echo '<optgroup label="Procurement">';
+                                foreach ($procurement_children as $st) {
+                                    $value = htmlspecialchars($st['slug'] ?? '');
+                                    $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
+                                    echo "<option value=\"{$value}\">{$label}</option>";
+                                }
+                                echo '</optgroup>';
+                            }                           
+                            ?>
+                            
+                        </select>
+                        </div>
+                        <div>
+                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">ESD:</label>
+                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
+                        </div>
+                        <div style="min-width: 100px;">
+                        <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Set Priority:</label>
+                        <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
+                            <option value="" >-Select-</option>
+                            <option value="critical" >Critical</option>
+                            <option value="urgent" >Urgent</option>
+                            <option value="high" >High</option>
+                            <option value="medium" >Medium</option>
+                            <option value="low" >Low</option>
+                        </select>
+                        </div>
+                        </div>
+                        <!-- Remarks field -->
+                        <div class="mb-4">
+                            <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes:</label>
+                            <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
+                        </div>  
+                        <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
+                    </div>
+                    <div class="flex justify-end space-x-4">
+                        <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-600">Cancel</button>
+                        <button type="submit" class="px-4 py-2 btn-success text-white rounded hover:bg-blue-700">Save</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -1018,7 +1163,8 @@ function closeImagePopup(e) {
             document.getElementById('giftvoucher').textContent = orderData.giftvoucher ||  'N/A';
             document.getElementById('giftvoucher_reduce').textContent = orderData.giftvoucher_reduce || 'N/A';
             document.getElementById('credit').textContent = orderData.credit || 'N/A';
-            document.getElementById('vendor').textContent = orderData.vendor || 'N/A';            
+            document.getElementById('vendor').textContent = orderData.vendor || 'N/A';
+                    
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
@@ -1341,4 +1487,120 @@ function closeImagePopup(e) {
             document.getElementById('importOrderId').value = '';
         }
     }
+    // Toggle menu visibility
+    function toggleMenu(orderId) {
+        const menu = document.getElementById('menu-' + orderId);        
+        menu.style.display = 'block';       
+    }
+    // Close menus when clicking outside
+    document.addEventListener('click', function(event) {
+        // don't close if click is inside a menu or on the menu button (handles inner elements like <i>)
+        if (event.target.closest('.menu-popup-order') || event.target.closest('.menu-button')) {
+            return;
+        }
+        document.querySelectorAll('.menu-popup-order').forEach(function(menu) {
+            menu.style.display = 'none';
+        });
+    });
+    function openStatusPopup(orderId) {
+        document.getElementById('status_order_id').value = orderId;
+        document.getElementById('statusPopup').classList.remove('hidden');
+        document.getElementById('orderStatusError').textContent = '';
+        document.getElementById('orderStatusError').classList.add('hidden');
+        document.getElementById('orderRemarks').value = '';
+        document.getElementById('orderPriority').value = '';
+        
+        
+        // Close the menu
+        const menu = document.getElementById('menu-' + orderId);
+        if (menu) {
+            menu.style.display = 'none';
+        }
+        // update fields with order data
+        const orderData = JSON.parse(document.querySelector('#order-id-' + orderId).getAttribute('data-order'));
+        document.getElementById('orderRemarks').value = orderData.remarks || '';
+        document.getElementById('orderStatus').value = orderData.status || '';
+        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
+        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
+        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || 'N/A';
+        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
+        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
+        document.getElementById('status_item').textContent = orderData.title || 'N/A';
+        document.getElementById('orderPriority').value = orderData.priority || 'N/A';
+        // display ESD in dd-mm-yyyy format while keeping the date input usable
+        (function(){
+            const statusESD = document.getElementById('statusESD');
+            const raw = orderData.esd || '';
+
+            if (!statusESD) return;
+
+            // expect raw in yyyy-mm-dd
+            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (m) {
+                const formatted = `${m[3]}-${m[2]}-${m[1]}`; // dd-mm-yyyy
+
+                if (statusESD.type === 'date') {
+                    // keep the actual input value in yyyy-mm-dd so the native picker works
+                    statusESD.value = raw;
+                } else {
+                    // if it's a text field, set the formatted value directly
+                    statusESD.value = formatted;
+                }
+            } else {
+                // fallback: if format unknown, set raw value
+                statusESD.value = raw || '';
+            }
+        })();
+        //console.log(orderData.esd);
+        //image
+        const imgElem = document.querySelector('#statusPopup img');
+        imgElem.src = orderData.image || 'default-image.png';
+    }
+    
+    function closeStatusPopup() {
+        document.getElementById('statusPopup').classList.add('hidden');
+    }
+    // submit status form with validation
+    document.getElementById('statusForm').addEventListener('submit', function(e){
+        const statusSelect = document.getElementById('orderStatus');
+        const errorDiv = document.getElementById('orderStatusError');
+        if(statusSelect.value === '') {
+            e.preventDefault();
+            errorDiv.classList.remove('hidden');
+        } else {
+            errorDiv.classList.add('hidden');
+        }
+        // Ajax submit the form if validation passes       
+        if (statusSelect.value !== '') {
+            e.preventDefault();
+            const formData = new FormData(document.getElementById('statusForm'));
+            fetch('?page=orders&action=update_status', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    errorDiv.classList.remove('text-red-500');
+                    errorDiv.classList.add('text-green-500');
+                    errorDiv.textContent = 'Order status updated successfully.';
+                    errorDiv.classList.remove('hidden');
+                    //closeStatusPopup();
+                    setTimeout(() => {
+                        closeStatusPopup();
+                        location.reload();
+                    }, 2000);
+                } else {
+                    errorDiv.textContent = 'Error updating order status.';
+                    errorDiv.classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating order status.');
+            });
+        }
+
+    });
+
 </script>

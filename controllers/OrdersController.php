@@ -1,6 +1,8 @@
 <?php 
 require_once 'models/order/order.php';
+require_once 'models/comman/tables.php';
 $ordersModel = new Order($conn);
+$commanModel = new Tables($conn);
 global $root_path;
 global $domain;
 class OrdersController { 
@@ -8,6 +10,7 @@ class OrdersController {
     public function index() {
         is_login();
         global $ordersModel;
+        global $commanModel;
         // Fetch all orders
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
@@ -49,7 +52,10 @@ class OrdersController {
             $filters['category'] = 'all';
         }
        
-
+        //order status list
+        $statusList = $commanModel->get_order_status_list();
+        $order_status_row = $commanModel->get_order_status();
+        //print_array($order_status_list);
         // Use pagination in the database query for better performance
         $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
         //print_array($orders);
@@ -60,7 +66,9 @@ class OrdersController {
             'orders' => $orders,
             'total_orders' => $total_orders,
             'total_pages' => $total_pages,
-            'current_page' => $page
+            'current_page' => $page,
+            'order_status_list' => $order_status_row,
+            'status_list' => $statusList,
         ], 'Manage Orders');
     }
         
@@ -211,7 +219,7 @@ class OrdersController {
                     'giftvoucher' => $order['giftvoucher'] ?? '',
                     'giftvoucher_reduce' => $order['giftvoucher_reduce'] ?? '',
                     'credit' => $order['credit'] ?? '',
-                    'vendor' => $order['vendor'] ?? ''
+                    'vendor' => $item['vendor'] ?? ''
 					 ];
 					$totalorder++;                
                     
@@ -222,7 +230,8 @@ class OrdersController {
                     
                     if (isset($data['success']) && $data['success'] == 1) {                        
                         $imported++;
-                    }                    
+                    } 
+                    //print_array($rdata);                   
             }
            
         }
@@ -282,6 +291,37 @@ class OrdersController {
         } else {
             echo json_encode(['success' => false, 'message' => 'Invalid Order ID.']);
         }
+        exit;
+    }
+    public function updateStatus() {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $order_id = isset($_POST['status_order_id']) ? (int)$_POST['status_order_id'] : 0;
+            $new_status = isset($_POST['orderStatus']) ? $_POST['orderStatus'] : '';
+            $remarks = isset($_POST['orderRemarks']) ? trim($_POST['orderRemarks']) : '';
+            $esd = isset($_POST['esd']) ? trim($_POST['esd']) : '';
+            $priority = isset($_POST['orderPriority']) ? trim($_POST['orderPriority']) : '';
+
+            if ($order_id > 0 && !empty($new_status)) {
+                $update_data = [
+                    'status' => $new_status,
+                    'remarks' => $remarks,
+                    'esd' => $esd,
+                    'priority' => $priority
+                ];
+                $updated = $ordersModel->updateStatus($order_id, $update_data);
+                if ($updated) {
+                    echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update order status.']);
+                }
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid order ID or status.']);
+            }
+        }
+
         exit;
     }
 }

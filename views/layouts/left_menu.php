@@ -504,7 +504,7 @@
                         </a>
                     </li>
                     <li>
-                        <a href="<?=base_url('index.php?page=orderstatus&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'orderstatus') ? 'active' : '' ?>">
+                        <a href="#<?php //echo base_url('index.php?page=orderstatus&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'orderstatus') ? 'active' : '' ?>">
                             <div class="content-wrapper">
                               <i class="fa fa-clipboard-list mr-2"></i>
                               <span>Order Status</span>
