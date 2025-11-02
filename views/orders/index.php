@@ -1064,9 +1064,9 @@
                         </div>
                         <div>
                             <label for="statusESD" class="block text-gray-700 font-bold mb-2">ESD:</label>
-                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-1 py-1 w-full">
+                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
                         </div>
-                        <div class="min-width: 161px;">
+                        <div style="min-width: 100px;">
                         <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Set Priority:</label>
                         <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
                             <option value="" >-Select-</option>
