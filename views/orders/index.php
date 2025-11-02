@@ -318,7 +318,26 @@
                     <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
-
+                
+                <div class="">
+                    <select id="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                        onchange="location.href='?page=orders&action=list&country=' + this.value;">                        
+                        <option value="" selected >All Country</option>
+                        <?php foreach ($country_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
+                <div class="">
+                    <select id="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                        onchange="location.href='?page=orders&action=list&category=' + this.value;">
+                        
+                        <option value="all" selected >All Categories</option>
+                        <?php foreach (getCategories() as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
@@ -366,15 +385,15 @@
                         <span class="px-1 text-sm">Processed</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    <!--<a href="<?php //echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Cancelled</span>
+                    <a href="<?php echo base_url('?page=orders&action=list&status=dispatch'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Dispatch</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">In Progress</span>
+                        <span class="px-1 text-sm">Shipped</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    
+                    <!--
                     <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Received</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
@@ -388,16 +407,16 @@
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a> -->
                 </div>
-                <div class="right-0 top-0 absolute p-4 size">
+                <!-- <div class="right-0 top-0 absolute p-4 size">
                     <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                         onchange="location.href='?page=orders&action=list&category=' + this.value;">
                         
                         <option value="all" selected >All Categories</option>
-                        <?php foreach (getCategories() as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>                    
+                        <?php // (getCategories() as $key => $value): ?>
+                            <option value="<?php //echo $key; ?>" <?php //echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php //echo $value; ?></option>
+                        <?php //endforeach; ?>                    
                     </select>
-                </div>
+                </div> -->
             </div>
 
             <!-- Table h-96 overflow-y-scroll-->
@@ -606,7 +625,7 @@
                                                 
                                                 <div>
                                                     <span class="heading-typography block mb-5">Status</span>
-                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['status'] ? $status_list[$order['status']] : 'N/A' ?></span>
+                                                    <span class="data-typography mt-1 block font-semibold"><?= isset($status_list[$order['status']]) ? $status_list[$order['status']] : $order['status'] ?></span>
                                                 </div>
                                             </div>
                                         </div>
@@ -635,7 +654,7 @@
                                             <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold relative inline-block" onclick="toggleMenu(<?= $order['order_id'] ?>)">
                                                 <i class="fas fa-ellipsis-v"></i>
                                                 <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
-                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
+                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Order Update</a>
                                                     <hr class="my-1 mx-2"></hr>
                                                     <!-- <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
                                                 </div>
@@ -652,7 +671,7 @@
                                         </div>
                                         <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
                                             <div class="mt-[20px]">
-                                                <h4 class="set-priority-title mb-2">Set Priority</h4>
+                                                <h4 class="set-priority-title mb-2">Priority</h4>
                                                 <span class="urgent-text"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
                                             </div>
                                             <div>
@@ -1012,7 +1031,7 @@
                     <div class="mb-4">
                         <div class="mb-4 flex space-x-4">
                         <div>
-                        <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Select Order Status:</label>
+                        <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Order Status:</label>
                         <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
                             <?php
                             echo '<option value="">-- Order Status --</option>';
@@ -1078,7 +1097,7 @@
                             <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
                         </div>
                         <div style="min-width: 100px;">
-                        <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Set Priority:</label>
+                        <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Priority:</label>
                         <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
                             <option value="" >-Select-</option>
                             <option value="medium" selected>Medium</option>

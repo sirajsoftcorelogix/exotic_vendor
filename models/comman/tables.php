@@ -95,6 +95,19 @@ class Tables {
         }
         return $data;
     }
+    public function get_counry_list() {
+        $sql = "SELECT * FROM countries WHERE 1=1";
+        $stmt = $this->ci->prepare($sql);        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[$row['country_code']] = $row['NAME'];
+            }
+        }
+        return $data;
+    }
 
 }
 ?>

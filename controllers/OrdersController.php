@@ -41,7 +41,7 @@ class OrdersController {
         if(!empty($_GET['po_no'])){
             $filters['po_no'] = $_GET['po_no'];  
         }
-        if (!empty($_GET['status']) && in_array($_GET['status'], ['all', 'processed', 'pending', 'cancelled'])) {
+        if (!empty($_GET['status']) && in_array($_GET['status'], ['all', 'processed', 'pending', 'dispatch', 'shipped'])) {
             $filters['status_filter'] = $_GET['status'];
         } else {
             $filters['status_filter'] = 'all';
@@ -51,10 +51,13 @@ class OrdersController {
         } else {
             $filters['category'] = 'all';
         }
-       
+        if(!empty($_GET['country'])){
+            $filters['country'] = $_GET['country'];  
+        }
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
+        $countryList= $commanModel->get_counry_list();
         //print_array($order_status_list);
         // Use pagination in the database query for better performance
         $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
@@ -69,6 +72,7 @@ class OrdersController {
             'current_page' => $page,
             'order_status_list' => $order_status_row,
             'status_list' => $statusList,
+            'country_list' => $countryList
         ], 'Manage Orders');
     }
         

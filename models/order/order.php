@@ -43,15 +43,23 @@ class Order{
             if ($filters['status_filter'] === 'pending') {
                 $sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
             } elseif ($filters['status_filter'] === 'processed') {
-                $sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
-            } elseif ($filters['status_filter'] === 'cancelled') {
-                $sql .= " AND (vp_orders.status = 'cancel')";
+                //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
+                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+            } elseif ($filters['status_filter'] === 'dispatch') {
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+            } elseif ($filters['status_filter'] === 'shipped') {
+                $sql .= " AND vp_orders.status = shipped";
             }
         }
+        if (!empty($filters['country'])) {
+            $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
+            //$params[] = '%' . $filters['country'] . '%';
+        } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
-            $sql .= " AND groupname LIKE ?";
+            $sql .= " AND vp_orders.groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
         }
+          
 
         $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
@@ -106,11 +114,18 @@ class Order{
             if ($filters['status_filter'] === 'pending') {
                 $sql .= " AND (po_number IS NULL OR po_number = '')";
             } elseif ($filters['status_filter'] === 'processed') {
-                $sql .= " AND (po_number IS NOT NULL AND po_number != '')";
-            } elseif ($filters['status_filter'] === 'cancelled') {
-                $sql .= " AND ('status' = 'cancel')";
+                //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
+                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+            } elseif ($filters['status_filter'] === 'dispatch') {
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+            } elseif ($filters['status_filter'] === 'shipped') {
+                $sql .= " AND vp_orders.status = shipped";
             }
         }
+        if (!empty($filters['country'])) {
+            $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
+            //$params[] = '%' . $filters['country'] . '%';
+        } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
             $sql .= " AND groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
