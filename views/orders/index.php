@@ -673,11 +673,11 @@
                                             <div class="mt-[20px]">
                                                 <h4 class="set-priority-title mb-2">Priority</h4>
 												<?php
-													$priority_bg_class['critical'] = 'bg-red-950';
-													$priority_bg_class['urgent'] = 'bg-red-700';
+													$priority_bg_class['critical'] = 'bg-red-700';
+													$priority_bg_class['urgent'] = 'bg-red-600';
 													$priority_bg_class['high'] = 'bg-red-500';
-													$priority_bg_class['medium'] = 'bg-orange-700';
-													$priority_bg_class['low'] = 'bg-yellow-500';
+													$priority_bg_class['medium'] = 'bg-orange-500';
+													$priority_bg_class['low'] = 'bg-yellow-400';
 													$priority_span_bg_color = isset($order['priority']) ? $priority_bg_class[$order['priority']] : '';
 												?>
                                                 <span class="capitalize p-2 <?php echo $priority_span_bg_color; ?>"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
@@ -1108,10 +1108,10 @@
                         <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Priority:</label>
                         <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
                             <option value="" >-Select-</option>
-                            <option value="medium" selected>Medium</option>
                             <option value="critical" >Critical</option>
                             <option value="urgent" >Urgent</option>
                             <option value="high" >High</option>                            
+                            <option value="medium" selected>Medium</option>
                             <option value="low" >Low</option>
                         </select>
                         </div>
