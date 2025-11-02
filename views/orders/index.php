@@ -1081,10 +1081,10 @@
                         <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Set Priority:</label>
                         <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
                             <option value="" >-Select-</option>
+                            <option value="medium" selected>Medium</option>
                             <option value="critical" >Critical</option>
                             <option value="urgent" >Urgent</option>
-                            <option value="high" >High</option>
-                            <option value="medium" >Medium</option>
+                            <option value="high" >High</option>                            
                             <option value="low" >Low</option>
                         </select>
                         </div>
@@ -1526,7 +1526,7 @@ function closeImagePopup(e) {
         document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
         document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
         document.getElementById('status_item').textContent = orderData.title || 'N/A';
-        document.getElementById('orderPriority').value = orderData.priority || 'N/A';
+        document.getElementById('orderPriority').value = orderData.priority || '';
         // display ESD in dd-mm-yyyy format while keeping the date input usable
         (function(){
             const statusESD = document.getElementById('statusESD');
