@@ -678,9 +678,9 @@
 													$priority_bg_class['high'] = 'bg-red-500';
 													$priority_bg_class['medium'] = 'bg-orange-700';
 													$priority_bg_class['low'] = 'bg-yellow-500';
-													echo $priority_span_bg_color = isset($order['priority']) ? $priority_bg_class[$order['priority']] : '';
+													$priority_span_bg_color = isset($order['priority']) ? $priority_bg_class[$order['priority']] : '';
 												?>
-                                                <span class="capitalize p-2 <? echo $priority_span_bg_color; ?>"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
+                                                <span class="capitalize p-2 <?php echo $priority_span_bg_color; ?>"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
                                             </div>
                                             <div>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
