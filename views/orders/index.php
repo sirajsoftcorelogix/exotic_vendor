@@ -1019,11 +1019,17 @@
 
                             // Find the "Procurement" parent id (by slug or title, case-insensitive)
                             $procurement_id = null;
+                            $sorder_id = null;
+                            $parent = [];
                             foreach ($order_status_list as $s) {
                                 if ((isset($s['slug']) && strtolower($s['slug']) === 'procurement') ||
                                     (isset($s['title']) && strtolower($s['title']) === 'procurement')) {
                                     $procurement_id = $s['id'] ?? null;
-                                    break;
+                                    //break;
+                                }
+                                if($s['parent_id'] === 0 && strtolower($s['slug']) === 'order'){
+                                    //$parent[$s['id']] = $s['title'];
+                                    $sorder_id = $s['id'] ?? null;
                                 }
                             }
 
@@ -1035,7 +1041,9 @@
                                 if ($procurement_id !== null && isset($status['id']) && $status['id'] == $procurement_id) {
                                     continue;
                                 }
-
+                                if($sorder_id !== null &&  $status['id'] == $sorder_id){
+                                    continue;
+                                }
                                 if ($procurement_id !== null && isset($status['parent_id']) && $status['parent_id'] == $procurement_id) {
                                     $procurement_children[] = $status;
                                 } else {
@@ -1043,10 +1051,13 @@
                                 }
                             }
                             // Output remaining statuses
-                            foreach ($other_statuses as $st) {
-                                $value = htmlspecialchars($st['slug'] ?? '');
-                                $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
-                                echo "<option value=\"{$value}\">{$label}</option>";
+                            if (!empty($other_statuses)) {
+                                echo '<optgroup label="Order">';
+                                foreach ($other_statuses as $st) {
+                                    $value = htmlspecialchars($st['slug'] ?? '');
+                                    $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
+                                    echo "<option value=\"{$value}\">{$label}</option>";
+                                }
                             }
                             // Output optgroup for Procurement (if any)
                             if (!empty($procurement_children)) {
