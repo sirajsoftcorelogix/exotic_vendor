@@ -82,5 +82,19 @@ class Tables {
         return $data;
     }
 
+    public function get_order_status_list() {
+        $sql = "SELECT * FROM vp_order_status WHERE is_active = 1";
+        $stmt = $this->ci->prepare($sql);        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[$row['slug']] = $row['title'];
+            }
+        }
+        return $data;
+    }
+
 }
 ?>

@@ -549,7 +549,7 @@
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
 
                                             <span class="heading-typography">Vendor Name</span>
-                                            <p>: <span class="data-typography"><?= $order['vendor_name'] ?></span></p>
+                                            <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
                                             <span class="heading-typography">Marketplace</span>
                                             <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
                                             <span class="heading-typography">Staff Name</span>
@@ -564,7 +564,7 @@
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
-                                                <div class="col-span-2">
+                                                <div class="">
                                                     <span class="heading-typography block mb-5">Addon</span>
                                                     <?php
                                                     $options = $order['options'] ?? '';
@@ -592,16 +592,21 @@
                                                     ?>
                                                 </div>
                                                 <div>
+                                                    <span class="heading-typography block mb-5">Local Stock</span>
+                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['local_stock'] ?? 'N/A' ?></span>
+                                                </div>
+                                                <div>
                                                     <span class="heading-typography block mb-5">Location</span>
                                                     <span class="data-typography mt-1 block"><?= $order['location'] ?: 'N/A' ?></span>
                                                 </div>
                                                 <div>
                                                     <span class="heading-typography block mb-5">ESD</span>
-                                                    <span class="data-typography mt-1 block"><?= $order['expected_delivery_date'] ? date("d M Y", strtotime($order['expected_delivery_date'])) : 'N/A' ?></span>
+                                                    <span class="data-typography mt-1 block"><?= $order['esd'] ? date("d M Y", strtotime($order['esd'])) : 'N/A' ?></span>
                                                 </div>                                                
+                                                
                                                 <div>
-                                                    <span class="heading-typography block mb-5">Local Stock</span>
-                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['local_stock'] ?? 'N/A' ?></span>
+                                                    <span class="heading-typography block mb-5">Status</span>
+                                                    <span class="data-typography mt-1 block font-semibold"><?= $order['status'] ? $status_list[$order['status']] : 'N/A' ?></span>
                                                 </div>
                                             </div>
                                         </div>
@@ -632,7 +637,7 @@
                                                 <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
                                                     <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
                                                     <hr class="my-1 mx-2"></hr>
-                                                    <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                    <!-- <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
                                                 </div>
                                             </span>
                                         </div>
@@ -641,14 +646,14 @@
                                     <div class="flex items-start gap-4">
                                         <div class="flex-grow">
                                             <h4 class="note-heading mb-2">Note:</h4>
-                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[502px] min-h-[110px]">
-                                                <?= isset($order['notes']) ? $order['notes'] : '' ?>
+                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[452px] min-h-[110px]">
+                                                <?= isset($order['remarks']) ? $order['remarks'] : '' ?>
                                             </div>
                                         </div>
                                         <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
                                             <div class="mt-[20px]">
                                                 <h4 class="set-priority-title mb-2">Set Priority</h4>
-                                                <span class="urgent-text">Urgent</span>
+                                                <span class="urgent-text"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
                                             </div>
                                             <div>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
@@ -930,10 +935,7 @@
                                 <label class="text-sm font-bold text-gray-700">Vendor: </label>
                                 <span id="vendor" class="text-gray-600"></span>
                             </div>
-                            <div> 
-                                <label class="text-sm font-bold text-gray-700">Payment Type: </label>
-                                <span id="payment_type" class="text-gray-600"></span>
-                            </div>
+                            
                         </div>
 
                         
@@ -1013,7 +1015,7 @@
                         <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Select Order Status:</label>
                         <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
                             <?php
-                            echo '<option value="">-- Select Status --</option>';
+                            echo '<option value="">-- Order Status --</option>';
 
                             // Find the "Procurement" parent id (by slug or title, case-insensitive)
                             $procurement_id = null;
@@ -1062,7 +1064,18 @@
                         </div>
                         <div>
                             <label for="statusESD" class="block text-gray-700 font-bold mb-2">ESD:</label>
-                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-3 py-2 w-full">
+                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-1 py-1 w-full">
+                        </div>
+                        <div>
+                        <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Set Priority:</label>
+                        <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
+                            <option value="" >-Select-</option>
+                            <option value="critical" >Critical</option>
+                            <option value="urgent" >Urgent</option>
+                            <option value="high" >High</option>
+                            <option value="medium" >Medium</option>
+                            <option value="low" >Low</option>
+                        </select>
                         </div>
                         </div>
                         <!-- Remarks field -->
@@ -1140,7 +1153,7 @@ function closeImagePopup(e) {
             document.getElementById('giftvoucher_reduce').textContent = orderData.giftvoucher_reduce || 'N/A';
             document.getElementById('credit').textContent = orderData.credit || 'N/A';
             document.getElementById('vendor').textContent = orderData.vendor || 'N/A';
-            document.getElementById('payment_type').textContent = orderData.payment_type || 'N/A';            
+                    
             const imgElem = document.querySelector('#vendor-popup-panel img');
             imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
             const infoDiv = imgElem.nextElementSibling;     
@@ -1484,6 +1497,8 @@ function closeImagePopup(e) {
         document.getElementById('orderStatusError').textContent = '';
         document.getElementById('orderStatusError').classList.add('hidden');
         document.getElementById('orderRemarks').value = '';
+        document.getElementById('orderPriority').value = '';
+        
         
         // Close the menu
         const menu = document.getElementById('menu-' + orderId);
@@ -1500,6 +1515,7 @@ function closeImagePopup(e) {
         document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
         document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
         document.getElementById('status_item').textContent = orderData.title || 'N/A';
+        document.getElementById('orderPriority').value = orderData.priority || 'N/A';
         // display ESD in dd-mm-yyyy format while keeping the date input usable
         (function(){
             const statusESD = document.getElementById('statusESD');

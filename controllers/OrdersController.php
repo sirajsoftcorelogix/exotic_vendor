@@ -53,7 +53,8 @@ class OrdersController {
         }
        
         //order status list
-        $order_status_list = $commanModel->get_order_status();
+        $statusList = $commanModel->get_order_status_list();
+        $order_status_row = $commanModel->get_order_status();
         //print_array($order_status_list);
         // Use pagination in the database query for better performance
         $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
@@ -66,7 +67,8 @@ class OrdersController {
             'total_orders' => $total_orders,
             'total_pages' => $total_pages,
             'current_page' => $page,
-            'order_status_list' => $order_status_list
+            'order_status_list' => $order_status_row,
+            'status_list' => $statusList,
         ], 'Manage Orders');
     }
         
@@ -300,12 +302,14 @@ class OrdersController {
             $new_status = isset($_POST['orderStatus']) ? $_POST['orderStatus'] : '';
             $remarks = isset($_POST['orderRemarks']) ? trim($_POST['orderRemarks']) : '';
             $esd = isset($_POST['esd']) ? trim($_POST['esd']) : '';
+            $priority = isset($_POST['orderPriority']) ? trim($_POST['orderPriority']) : '';
 
             if ($order_id > 0 && !empty($new_status)) {
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
-                    'esd' => $esd
+                    'esd' => $esd,
+                    'priority' => $priority
                 ];
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
                 if ($updated) {
