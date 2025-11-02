@@ -672,7 +672,7 @@
                                         <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
                                             <div class="mt-[20px]">
                                                 <h4 class="set-priority-title mb-2">Priority</h4>
-                                                <span class="urgent-text"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
+                                                <span class="bg-yellow-500"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
                                             </div>
                                             <div>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
