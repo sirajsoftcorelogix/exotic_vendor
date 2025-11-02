@@ -211,7 +211,14 @@ class Order{
             'length_unit',
             'backorder_status',
             'backorder_percent',
-            'backorder_delay'
+            'backorder_delay',
+            'payment_type',
+            'coupon',
+            'coupon_reduce',
+            'giftvoucher',
+            'giftvoucher_reduce',
+            'credit',
+            'vendor'
         ];
 
         // Build SQL query

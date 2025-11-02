@@ -228,7 +228,8 @@ class OrdersController {
                     
                     if (isset($data['success']) && $data['success'] == 1) {                        
                         $imported++;
-                    }                    
+                    } 
+                    //print_array($rdata);                   
             }
            
         }
