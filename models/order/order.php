@@ -48,7 +48,7 @@ class Order{
             } elseif ($filters['status_filter'] === 'dispatch') {
                 $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = shipped";
+                $sql .= " AND vp_orders.status = 'shipped'";
             }
         }
         if (!empty($filters['country'])) {
@@ -119,7 +119,7 @@ class Order{
             } elseif ($filters['status_filter'] === 'dispatch') {
                 $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = shipped";
+                $sql .= " AND vp_orders.status = 'shipped'";
             }
         }
         if (!empty($filters['country'])) {

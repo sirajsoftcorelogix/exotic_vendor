@@ -389,7 +389,7 @@
                         <span class="px-1 text-sm">Dispatch</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                    <a href="<?php echo base_url('?page=orders&action=list&status=shipped'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Shipped</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
