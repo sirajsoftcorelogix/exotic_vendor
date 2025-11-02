@@ -305,7 +305,7 @@ class OrdersController {
             $order_id = isset($_POST['status_order_id']) ? (int)$_POST['status_order_id'] : 0;
             $new_status = isset($_POST['orderStatus']) ? $_POST['orderStatus'] : '';
             $remarks = isset($_POST['orderRemarks']) ? trim($_POST['orderRemarks']) : NULL;
-            $esd = isset($_POST['esd']) ? trim($_POST['esd']) : NULL;
+            $esd = isset($_POST['esd']) ? trim($_POST['esd']) : '';
             $priority = isset($_POST['orderPriority']) ? trim($_POST['orderPriority']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
