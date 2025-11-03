@@ -68,7 +68,7 @@
                                     </defs>
                                 </svg>
 
-                                <span> Sales Orders</span>
+                                <span> Order Management</span>
                             </div>
                         </a>
                     </li>

@@ -50,6 +50,8 @@ class Order{
                 $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
             }
         }
         if (!empty($filters['country'])) {
@@ -59,6 +61,9 @@ class Order{
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
             $sql .= " AND vp_orders.groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
+        }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND vp_orders.options LIKE '%express%'";
         }
           
 
