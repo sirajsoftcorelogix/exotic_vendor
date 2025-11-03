@@ -678,7 +678,12 @@
 													$priority_bg_class['high'] = 'bg-red-500';
 													$priority_bg_class['medium'] = 'bg-orange-500';
 													$priority_bg_class['low'] = 'bg-yellow-400';
-													$priority_span_bg_color = isset($order['priority']) ? $priority_bg_class[$order['priority']] : '';
+													//$priority_span_bg_color = isset($order['priority']) ? $priority_bg_class[$order['priority']] : '';
+													if(isset($order['priority'])){
+														$priority_span_bg_color = $priority_bg_class[$order['priority']];
+													}else{
+														$priority_span_bg_color = '';
+													}
 													if($priority_span_bg_color != 'bg-yellow-400'){
 														$priority_span_text_color = 'text-white';
 													}
