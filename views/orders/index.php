@@ -393,11 +393,15 @@
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=dispatch'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'dispatch') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Dispatch</span>
+                        <span class="px-1 text-sm">Preparing for Dispatch</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=shipped'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'shipped') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Shipped</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="<?php echo base_url('?page=orders&action=list&options=express'); ?>" class="tab <?php echo (isset($_GET['options']) && $_GET['options'] === 'express') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Express Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <!--
@@ -593,32 +597,26 @@
                                         <div class="flex-grow">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 items-start text-center md:text-left">
                                                 <div class="">
-                                                    <span class="heading-typography block mb-5">Addon</span>
+                                                    <h4 class="set-priority-title mb-2">Priority</h4>
                                                     <?php
-                                                    $options = $order['options'] ?? '';
-                                                    $optionsArr = [];
-
-                                                    if (is_string($options)) {
-                                                        $decoded = json_decode($options, true);
-                                                        if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
-                                                            $optionsArr = $decoded;
-                                                        } else {
-                                                            // fallback: comma separated string
-                                                            $optionsArr = array_filter(array_map('trim', explode(',', $options)));
+                                                        $priority_bg_class['critical'] = 'bg-red-700';
+                                                        $priority_bg_class['urgent'] = 'bg-red-600';
+                                                        $priority_bg_class['high'] = 'bg-red-500';
+                                                        $priority_bg_class['medium'] = 'bg-orange-500';
+                                                        $priority_bg_class['low'] = 'bg-yellow-400';
+                                                        //$priority_span_bg_color = isset($order['priority']) ? $priority_bg_class[$order['priority']] : '';
+                                                        if(isset($order['priority']) && $order['priority']!=''){
+                                                            $priority_span_bg_color = $priority_bg_class[$order['priority']];
+                                                        }else{
+                                                            $priority_span_bg_color = '';
                                                         }
-                                                    } elseif (is_array($options)) {
-                                                        $optionsArr = $options;
-                                                    }
-
-                                                    if (!empty($optionsArr)) {
-                                                        foreach ($optionsArr as $opt) {
-                                                            echo '<span class="inline-block bg-gray-100 text-sm px-2 py-1 rounded mr-2 mb-2">' . htmlspecialchars($opt) . '</span>';
+                                                        if($priority_span_bg_color != 'bg-yellow-400'){
+                                                            $priority_span_text_color = 'text-white';
                                                         }
-                                                    } else {
-                                                        echo '<span class="data-typography mt-1 block">N/A</span>';
-                                                    }
                                                     ?>
+                                                    <span class="capitalize p-2 <?php echo $priority_span_bg_color.' '.$priority_span_text_color; ?>"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
                                                 </div>
+                                                
                                                 <div>
                                                     <span class="heading-typography block mb-5">Local Stock</span>
                                                     <span class="data-typography mt-1 block font-semibold"><?= $order['local_stock'] ?? 'N/A' ?></span>
@@ -679,25 +677,51 @@
                                             </div>
                                         </div>
                                         <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
-                                            <div class="mt-[20px]">
-                                                <h4 class="set-priority-title mb-2">Priority</h4>
-												<?php
-													$priority_bg_class['critical'] = 'bg-red-700';
-													$priority_bg_class['urgent'] = 'bg-red-600';
-													$priority_bg_class['high'] = 'bg-red-500';
-													$priority_bg_class['medium'] = 'bg-orange-500';
-													$priority_bg_class['low'] = 'bg-yellow-400';
-													//$priority_span_bg_color = isset($order['priority']) ? $priority_bg_class[$order['priority']] : '';
-													if(isset($order['priority']) && $order['priority']!=''){
-														$priority_span_bg_color = $priority_bg_class[$order['priority']];
-													}else{
-														$priority_span_bg_color = '';
-													}
-													if($priority_span_bg_color != 'bg-yellow-400'){
-														$priority_span_text_color = 'text-white';
-													}
-												?>
-                                                <span class="capitalize p-2 <?php echo $priority_span_bg_color.' '.$priority_span_text_color; ?>"><?= isset($order['priority']) ? $order['priority'] : '' ?></span>
+                                            <div class="mt-[20px] max-w-32">
+                                                <span class="heading-typography block mb-5">Addon</span>
+                                                <?php
+                                                $options = $order['options'] ?? '';
+                                                $optionsArr = [];
+
+                                                if (is_string($options)) {
+                                                    $decoded = json_decode($options, true);
+                                                    if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
+                                                        $optionsArr = $decoded;
+                                                    } else {
+                                                        // fallback: comma separated string
+                                                        $optionsArr = array_filter(array_map('trim', explode(',', $options)));
+                                                    }
+                                                } elseif (is_array($options)) {
+                                                    $optionsArr = $options;
+                                                }
+
+                                                if (!empty($optionsArr)) {
+                                                    foreach ($optionsArr as $opt) {
+                                                        $addon_css = '';
+                                                        // normalize option value to a string to avoid warnings with strpos()
+                                                        if (is_array($opt)) {
+                                                            $opt_text = implode(', ', $opt);
+                                                        } else {
+                                                            $opt_text = (string)$opt;
+                                                        }
+                                                        $opt_text = trim($opt_text);
+                                                        if ($opt_text === '') {
+                                                            continue;
+                                                        }
+                                                        // Highlight Express Shipping specially, otherwise show default style
+                                                        if (strpos($opt_text, 'Express') !== false) {
+                                                            $display = 'Express Shipping';
+                                                            $addon_css = 'bg-red-100 text-red-800';
+                                                        } else {
+                                                            $display = $opt_text;
+                                                            $addon_css = 'bg-gray-100 text-gray-800';
+                                                        }
+                                                        echo '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
+                                                    }
+                                                } else {
+                                                    echo '<span class="data-typography mt-1 block">N/A</span>';
+                                                }
+                                                ?>
                                             </div>
                                             <div>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>

@@ -44,7 +44,7 @@ class OrdersController {
         if (!empty($_GET['status'])) {
             $filters['status_filter'] = $_GET['status'];
         } 
-        
+
         if (!empty($_GET['category']) && in_array($_GET['category'], array_keys(getCategories()))) {
             $filters['category'] = $_GET['category'];
         } else {
@@ -52,6 +52,9 @@ class OrdersController {
         }
         if(!empty($_GET['country'])){
             $filters['country'] = $_GET['country'];  
+        }
+        if(!empty($_GET['options']) && $_GET['options'] == 'express'){
+            $filters['options'] = 'express';  
         }
         //order status list
         $statusList = $commanModel->get_order_status_list();

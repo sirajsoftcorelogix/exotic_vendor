@@ -62,6 +62,9 @@ class Order{
             $sql .= " AND vp_orders.groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
         }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND vp_orders.options LIKE '%express%'";
+        }
           
 
         $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
