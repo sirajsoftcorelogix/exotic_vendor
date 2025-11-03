@@ -83,7 +83,7 @@ class Tables {
     }
 
     public function get_order_status_list() {
-        $sql = "SELECT * FROM vp_order_status WHERE is_active = 1";
+        $sql = "SELECT * FROM vp_order_status WHERE is_active = 1 and parent_id != 0";
         $stmt = $this->ci->prepare($sql);        
         $stmt->execute();
         $result = $stmt->get_result();

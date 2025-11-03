@@ -41,11 +41,10 @@ class OrdersController {
         if(!empty($_GET['po_no'])){
             $filters['po_no'] = $_GET['po_no'];  
         }
-        if (!empty($_GET['status']) && in_array($_GET['status'], ['all', 'processed', 'pending', 'dispatch', 'shipped'])) {
+        if (!empty($_GET['status'])) {
             $filters['status_filter'] = $_GET['status'];
-        } else {
-            $filters['status_filter'] = 'all';
-        }
+        } 
+        
         if (!empty($_GET['category']) && in_array($_GET['category'], array_keys(getCategories()))) {
             $filters['category'] = $_GET['category'];
         } else {
