@@ -2,10 +2,12 @@
 require_once 'models/vendor/vendor.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
+require_once 'models/teams/Teams.php';
 
 $vendorsModel = new Vendor($conn);
 $countryModel = new Country($conn);
 $stateModel = new State($conn);
+$teamModel = new Teams($conn);
 
 global $root_path;
 global $domain;
@@ -15,6 +17,7 @@ class VendorsController {
         global $vendorsModel;
         global $countryModel;
         global $stateModel;
+        global $teamModel;
 
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
@@ -27,7 +30,8 @@ class VendorsController {
 
         $countryList = $countryModel->getAllCountries();
         $stateList = $stateModel->getAllStates(105); // India ID = 105
-        //print_array($vendorsModel->listCategory());
+        $teamList = $teamModel->getAllTeams();
+
         $data = [
             'vendors' => $vendors_data["vendors"],
             'page_no' => $page_no,
@@ -40,7 +44,8 @@ class VendorsController {
             'status_filter'=> $status_filter,
             'countryList' => $countryList["countries"],
             'stateList' => $stateList["states"],
-            'category' => $vendorsModel->listCategory()
+            'category' => $vendorsModel->listCategory(),
+            'teamList' => $teamList
         ];
         
         renderTemplate('views/vendors/index.php', $data, 'Manage Vendors');
