@@ -322,6 +322,10 @@
                 <div class="">
                     <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected >All Country</option>
+						<optgroup label="Easy">
+							<option value="overseas">Overseas</option>
+							<option value="IN">India</option>
+						</optgroup>
                         <?php foreach ($country_list as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
@@ -380,8 +384,12 @@
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
                 <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
-                    <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status'])) ? 'tab-active' : ''; ?> text-center relative py-4">
+                    <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status']) && !isset($_GET['options'])) ? 'tab-active' : ''; ?> text-center relative py-4">
                         <span class="px-1 text-sm">All Orders</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="<?php echo base_url('?page=orders&action=list&options=express'); ?>" class="tab <?php echo (isset($_GET['options']) && $_GET['options'] === 'express') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Express Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=pending'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
@@ -400,10 +408,7 @@
                         <span class="px-1 text-sm">Shipped</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    <a href="<?php echo base_url('?page=orders&action=list&options=express'); ?>" class="tab <?php echo (isset($_GET['options']) && $_GET['options'] === 'express') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Express Orders</span>
-                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                    </a>
+                    
                     <!--
                     <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Received</span>
@@ -586,6 +591,9 @@
                                             <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
                                             <span class="heading-typography">Staff Name</span>
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
+											<span class="heading-typography">Payment Type</span>
+                                            <p>: <span class="data-typography"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
+											
                                         </div>
                                     </div>
                                 </div>
