@@ -322,6 +322,10 @@
                 <div class="">
                     <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected >All Country</option>
+						<optgroup label="Easy">
+							<option value="overseas">Overseas</option>
+							<option value="IN">India</option>
+						</optgroup>
                         <?php foreach ($country_list as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
