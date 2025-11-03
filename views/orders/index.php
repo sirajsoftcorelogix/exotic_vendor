@@ -592,7 +592,7 @@
                                             <span class="heading-typography">Staff Name</span>
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
 											<span class="heading-typography">Payment Type</span>
-                                            <p>: <span class="data-typography"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
+                                            <p>: <span class="data-typography capitalize"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
 											
                                         </div>
                                     </div>
