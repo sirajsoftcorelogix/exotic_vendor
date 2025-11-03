@@ -161,7 +161,7 @@
         <button type="submit" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Create</button>
         <!-- <button type="button" id="draftButton" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md action-button">Draft</button> -->
         <button type="button" id="previewButton" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Preview</button>
-        <button type="button" class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button>
+        <button type="button" onclick="window.location.href='?page=orders&action=list'" class="bg-black text-white font-semibold py-2 px-4 rounded-md action-button">Cancel</button>
     </div>
     </form>
 </div>
