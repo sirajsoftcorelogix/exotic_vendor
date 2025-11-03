@@ -241,6 +241,29 @@ switch ($page) {
                 break;
         }
         break;
+    case 'orders_priority_status':        
+        require_once 'controllers/OrdersPriorityStatusController.php';
+        $controller = new OrdersPriorityStatusController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addOPSRecord();
+                break;
+            case 'updateRecord':
+                $controller->addOPSRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->getOPSDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'dashboard':        
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
@@ -268,6 +291,52 @@ switch ($page) {
                 break;
             default:
                 $controller->product_list();
+                break;
+        }
+        break;
+    case 'roles':        
+        require_once 'controllers/RolesController.php';
+        $controller = new RolesController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'updateRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'roleDetails':
+                $controller->getDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+    case 'teams':        
+        require_once 'controllers/TeamsController.php';
+        $controller = new TeamsController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'updateRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+            default:
+                $controller->index();
                 break;
         }
         break;
