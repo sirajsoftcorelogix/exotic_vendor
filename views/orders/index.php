@@ -319,25 +319,25 @@
                     <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 
-                <!-- <div class="">
-                    <select id="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
-                        onchange="location.href='?page=orders&action=list&country=' + this.value;">                        
+                <div class="">
+                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                        >                        
                         <option value="" selected >All Country</option>
-                        <?php //foreach ($country_list as $key => $value): ?>
-                            <option value="<?php //echo $key; ?>" <?php //echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php //echo $value; ?></option>
-                        <?php //endforeach; ?>                    
+                        <?php foreach ($country_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
                     </select>
                 </div>
                 <div class="">
-                    <select id="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
-                        onchange="location.href='?page=orders&action=list&category=' + this.value;">
+                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                        >
                         
                         <option value="all" selected >All Categories</option>
-                        <?php //foreach (getCategories() as $key => $value): ?>
-                            <option value="<?php //echo $key; ?>" <?php //echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php //echo $value; ?></option>
-                        <?php //endforeach; ?>                    
+                        <?php foreach (getCategories() as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
                     </select>
-                </div> -->
+                </div>
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
