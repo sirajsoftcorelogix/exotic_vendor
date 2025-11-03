@@ -336,6 +336,15 @@
                         <?php endforeach; ?>                    
                     </select>
                 </div>
+                <div >
+                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+
+                        <option value="all" selected >All Status</option>
+                        <?php foreach ($status_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>

@@ -50,6 +50,8 @@ class Order{
                 $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
             }
         }
         if (!empty($filters['country'])) {
