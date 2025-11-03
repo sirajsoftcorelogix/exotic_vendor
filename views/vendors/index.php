@@ -38,10 +38,14 @@
             </form>
         </div>
         <!-- Add User Button -->
+        <?php
+        if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'add')) {
+        ?>
         <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" id="open-vendor-popup-btn">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>Add Vendor</button>
+        <?php } ?>
     </div>
 
     <!-- Vendor Listing -->
@@ -97,9 +101,13 @@
                                             &#x22EE; <!-- Vertical ellipsis -->
                                         </button> 
                                         <ul class="menu-popup">
-                                            <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'edit')) { ?>
+                                                <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <?php } ?>
                                             <li onclick="openBankDtlsModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
-                                            <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'delete')) { ?>
+                                                <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php } ?>
                                             <li style="color: lightgray;"><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
@@ -224,6 +232,15 @@
                                     <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" />
                                 </div>
                                 <div>
+                                    <label class="text-sm font-medium text-gray-700">Team</label>
+                                    <select class="form-input w-full mt-1" name="addTeam" id="addTeam">
+                                        <option value="" disabled selected>Select Team</option>
+                                        <?php foreach($teamList as $team): ?>
+                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
                                     <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
                                         <option value="active">Active</option>
@@ -231,31 +248,9 @@
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
-                                
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Category</label>
-                               <?php /*?>
-                                <select class="form-input w-full mt-1 h-32 select-checkbox" multiple name="addVendorCategory[]" id="addVendorCategory">
-                                    <option value="" disabled>Select Categories</option>
-                                    
-                                    <?php foreach($category[0] as $key => $value): ?>
-                                        <?php if ($value['parent_id'] == 0): // Only show parent categories ?>
-                                            <optgroup label="<?php echo $value['display_name']; ?>" style="font-weight: bold;">
-                                                <?php 
-                                                // Show subcategories if exist
-                                                foreach($category[$value['id']] as $subKey => $subValue): 
-                                                    if ($subValue['parent_id'] == $value['id']): ?>
-                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['display_name']; ?></option>
-                                                <?php 
-                                                    endif; 
-                                                endforeach; ?>
-                                                </optgroup>                                            
-                                        <?php endif; 
-                                        endforeach;
-                                        ?>
-                                </select>
-                                <?php */?>
                                 <br/>
                                 <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="addVendorCategory">
                                     <option value="" disabled>Select Categories</option>
@@ -272,7 +267,6 @@
                                 </select>
                             </div>
                         </div>
-                        
 
                         <!-- Address -->
                         <div class="pt-4">
@@ -408,6 +402,15 @@
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
                                     <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" />
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Team</label>
+                                    <select class="form-input w-full mt-1" name="editTeam" id="editTeam">
+                                        <option value="" disabled selected>Select Team</option>
+                                        <?php foreach($teamList as $team): ?>
+                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
@@ -950,6 +953,7 @@
 
             document.getElementById("editPostalCode").value = vendor.postal_code;
             document.getElementById("editRating").value = vendor.rating;
+            document.getElementById("editTeam").value = vendor.team_id;
             document.getElementById("editNotes").value = vendor.notes;
             document.getElementById("editStatus").value = vendor.is_active;
             //vendor category
