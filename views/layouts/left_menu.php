@@ -507,7 +507,23 @@
                         <a href="#<?php //echo base_url('index.php?page=orderstatus&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'orderstatus') ? 'active' : '' ?>">
                             <div class="content-wrapper">
                               <i class="fa fa-clipboard-list mr-2"></i>
-                              <span>Order Status</span>
+                              <span>Order Priority Status</span>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?=base_url('index.php?page=roles&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'roles') ? 'active' : '' ?>">
+                            <div class="content-wrapper">
+                              <i class="fa fa-clipboard-list mr-2"></i>
+                              <span>Roles</span>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="<?=base_url('index.php?page=teams&action=list');?>" class="nav-link text-gray-800 <?= ($page == 'teams') ? 'active' : '' ?>">
+                            <div class="content-wrapper">
+                              <i class="fa fa-clipboard-list mr-2"></i>
+                              <span>Teams</span>
                             </div>
                         </a>
                     </li>
