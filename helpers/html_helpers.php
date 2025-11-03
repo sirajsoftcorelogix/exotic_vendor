@@ -1,10 +1,22 @@
 <?php
 	function is_login(){
 		global $domain;
-        if (!isset($_SESSION) || !isset($_SESSION['user'])) {
-            header('Location: ' . $domain . '?page=users&action=login');
-            exit;
-        }
+		if (session_status() === PHP_SESSION_NONE) session_start();
+
+		if (!isset($_SESSION) || !isset($_SESSION['user'])) {
+			// store current URL to redirect back after successful login
+			$currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
+				. '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+
+			if (empty($_SESSION['redirect_after_login'])) {
+				$_SESSION['redirect_after_login'] = $currentUrl;
+			}
+
+			header('Location: ' . $domain . '?page=users&action=login');
+			exit;
+		}
+
+		return true;
 	}
 	function base_url($path = '') {
 		global $domain;

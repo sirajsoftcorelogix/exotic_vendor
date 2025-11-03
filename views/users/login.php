@@ -15,7 +15,7 @@ global $domain, $root_path;
             </div>
 
             <!-- Main Content -->
-            <h2 class="portal-title mb-1">Vendor Onboarding Portal</h2>
+            <h2 class="portal-title mb-1">Exotic India Central</h2>
             <p class="portal-subtitle text-orange-100 mb-3">Flurish Together. Grow Stronger.</p>
             <button class="bg-white text-black w-[110px] h-[40px] rounded-[5px] shadow-md hover:bg-gray-100 transition duration-300 flex items-center justify-center read-more-btn">
                 Read More
@@ -75,9 +75,9 @@ global $domain, $root_path;
     })
     .then(response => response.json())
     .then(data => {
-      if (data.success) {
-        //alert('Login successful!');
-        window.location.href = "?page=orders&action=list";
+    if (data.success) {
+      var redirect = <?php echo json_encode(isset($_SESSION['redirect_after_login']) && $_SESSION['redirect_after_login'] ? $_SESSION['redirect_after_login'] : '?page=orders&action=list'); ?>;
+      window.location.href = redirect;
       } else {
         //alert('Login failed: ' + data.message);
         errorDiv.textContent = data.message;

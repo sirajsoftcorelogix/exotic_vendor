@@ -287,6 +287,7 @@
                 <h4 class="payment-details-header">Shipping</h4>
                 <p class="payment-details-text mt-2"><?php echo $invoice['shipping']; ?></p>
               </div>
+              
               <div class="col-span-2">
                 <h4 class="payment-details-header">Grand Total</h4>
                 <p class="payment-details-text mt-2"><?php echo $invoice['grand_total']; ?></p>
@@ -303,13 +304,16 @@
 
   <!-- Payment Details -->
   <div class="space-y-1.5">    
-    <h3 class="payment-details-title mb-4">Payment Details:</h3>    
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="payment-details-title m-0">Payment Details:</h3>
+      <button id="add-payment-btn" class="btn btn-success">Add Payment</button>
+    </div>
     <?php foreach($payment as $paymentDetails) { ?>     
     <div class="flex items-stretch mb-4">
       <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-10 gap-x-8 gap-y-2 flex-grow">
         <div class="col-span-2">
           <h4 class="payment-details-header">Payment Date</h4>
-          <p class="payment-details-text mt-2"><?php echo $paymentDetails['payment_date']; ?></p>
+          <p class="payment-details-text mt-2"><?php echo date('d M Y', strtotime($paymentDetails['payment_date'])); ?></p>
         </div>
         <div class="col-span-2">
           <h4 class="payment-details-header">Payment Type</h4>
@@ -327,7 +331,11 @@
           <h4 class="payment-details-header">Account Number</h4>
           <p class="payment-details-text mt-2"><?php echo $paymentDetails['vendor_bank_account_number']; ?></p>
         </div>
-        <div class="col-span-full">
+        <div class="col-span-2">
+            <h4 class="payment-details-header">Payment Mode </h4>
+            <p class="payment-details-text mt-2"><?php echo $paymentDetails['payment_mode']; ?></p>
+        </div>
+        <div class="col-span-4">
           <h4 class="payment-details-header">Payment Note:</h4>
           <p class="payment-details-text mt-2"><?php echo $paymentDetails['payment_note']; ?></p>
         </div>
@@ -430,13 +438,13 @@
                       
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">                          
                             <div>
-                                <label for="invoice_id" class="text-sm font-medium text-gray-700">Invoice:<i class="text-red-500">*</i></label>
+                                <label for="invoice_id" class="text-sm font-medium text-gray-700">Invoice:</label>
                                 <select id="invoice_id" name="invoice_id" class="form-input w-full bg-white mt-1">
-                                    <!-- <option value="" disabled selected>Select Invoice</option> -->
+                                    <!-- <option value="">Select Invoice</option> -->
                                     <?php
                                     //print_r($invoice);
                                     //foreach ($invoice as $inv): ?>
-                                        <option value="<?= htmlspecialchars($invoice['id'] ?? '') ?>"><?= htmlspecialchars($invoice['invoice_no'] ?? '') ?></option>
+                                        <option value="<?= htmlspecialchars($invoice['id'] ?? '') ?>" selected><?= htmlspecialchars($invoice['invoice_no'] ?? '') ?></option>
                                     <?php //endforeach; ?>
                                 </select>
                             </div>
@@ -826,11 +834,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const paymentErrorMsg = paymentError.querySelector('p');
     const editPaymentBtns = document.querySelectorAll('.edit-payment');
     const removePaymentBtns = document.querySelectorAll('.remove-payment');
+    const addPaymentBtn = document.getElementById('add-payment-btn');
 
     // Function to open the popup
     function openPaymentPopup() {
         paymentPopup.classList.remove('hidden');
         toggleMenu(document.querySelector('.menu-button')); // Close the menu if open
+        setTimeout(() => {
+            paymentModalSlider.classList.remove('translate-x-full');
+        }, 10); // Slight delay to allow transition
+    }
+    // Function to open the payment popup
+    function openAddPaymentPopup() {
+        paymentPopup.classList.remove('hidden');        
         setTimeout(() => {
             paymentModalSlider.classList.remove('translate-x-full');
         }, 10); // Slight delay to allow transition
@@ -857,6 +873,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Event listeners for opening and closing the popup
     if (openPaymentPopupBtn) {
         openPaymentPopupBtn.addEventListener('click', openPaymentPopup);
+    }
+    if(addPaymentBtn){
+        addPaymentBtn.addEventListener('click', openAddPaymentPopup);
     }
     // Event listeners for edit buttons
     editPaymentBtns.forEach(button => {
@@ -888,7 +907,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.getElementById('payment-vendor-id').value = payment.vendor_id;
 
                         // Open the popup
-                        openPaymentPopup();
+                        openAddPaymentPopup();
                     } else {
                         alert(data.message || 'Failed to fetch payment details.');
                     }

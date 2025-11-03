@@ -41,17 +41,31 @@ class Order{
         }
         if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
             if ($filters['status_filter'] === 'pending') {
-                $sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                $sql .= " AND vp_orders.status = 'pending'";
             } elseif ($filters['status_filter'] === 'processed') {
-                $sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
-            } elseif ($filters['status_filter'] === 'cancelled') {
-                $sql .= " AND (vp_orders.status = 'cancel')";
+                //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
+                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+            } elseif ($filters['status_filter'] === 'dispatch') {
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+            } elseif ($filters['status_filter'] === 'shipped') {
+                $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
             }
         }
+        if (!empty($filters['country'])) {
+            $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
+            //$params[] = '%' . $filters['country'] . '%';
+        } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
-            $sql .= " AND groupname LIKE ?";
+            $sql .= " AND vp_orders.groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
         }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND vp_orders.options LIKE '%express%'";
+        }
+          
 
         $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
@@ -106,11 +120,18 @@ class Order{
             if ($filters['status_filter'] === 'pending') {
                 $sql .= " AND (po_number IS NULL OR po_number = '')";
             } elseif ($filters['status_filter'] === 'processed') {
-                $sql .= " AND (po_number IS NOT NULL AND po_number != '')";
-            } elseif ($filters['status_filter'] === 'cancelled') {
-                $sql .= " AND ('status' = 'cancel')";
+                //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
+                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+            } elseif ($filters['status_filter'] === 'dispatch') {
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+            } elseif ($filters['status_filter'] === 'shipped') {
+                $sql .= " AND vp_orders.status = 'shipped'";
             }
         }
+        if (!empty($filters['country'])) {
+            $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
+            //$params[] = '%' . $filters['country'] . '%';
+        } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
             $sql .= " AND groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
@@ -211,7 +232,14 @@ class Order{
             'length_unit',
             'backorder_status',
             'backorder_percent',
-            'backorder_delay'
+            'backorder_delay',
+            'payment_type',
+            'coupon',
+            'coupon_reduce',
+            'giftvoucher',
+            'giftvoucher_reduce',
+            'credit',
+            'vendor'
         ];
 
         // Build SQL query
@@ -381,40 +409,7 @@ class Order{
         if (!empty($existingProducts)) {
             return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' already exists.'];
         }
-        //Prepare insert
-    //     $values = [];
-    //     foreach ($data as $product) {
-    //         $values[] = sprintf("('%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %d)",
-    //             $product['item_code'],
-    //             $product['title'],
-    //             $product['description'],
-    //             $product['size'],
-    //             $product['color'],
-    //             $product['groupname'],
-    //             $product['subcategories'],
-    //             $product['itemprice'],
-    //             $product['finalprice'],
-    //             $product['image'],
-    //             $product['gst'],
-    //             $product['hsn'],
-    //             $product['product_weight'],
-    //             $product['product_weight_unit'],
-    //             $product['prod_height'],
-    //             $product['prod_width'],
-    //             $product['prod_length'],
-    //             $product['length_unit'],
-    //             $product['cost_price']
-    //         );
-    //     }
-    //    echo $sql = "INSERT INTO `vp_products` (`item_code`, `title`, `description`, `size`, `color`, `groupname`, `subcategories`, `itemprice`, `finalprice`, `image`, `gst`, `hsn`, `product_weight`, `product_weight_unit`, `prod_height`, `prod_width`, `prod_length`, `length_unit`, `cost_price`) VALUES " . implode(',', $values);
-    //     $stmt = $this->db->prepare($sql);
-    //     if ($stmt->execute()) {
-    //         return ['success' => true];
-    //     } else {
-    //         return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-    //     }
-
-        
+               
         if(!empty($data)) {
         $sql = "INSERT INTO vp_products (item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
@@ -448,6 +443,19 @@ class Order{
 
         } else {
             return false;
+        }
+    }
+    function updateStatus($order_id, $data) {
+        if(empty($order_id) || empty($data['status'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssssi', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $order_id);
+        if ($stmt->execute()) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
 }
