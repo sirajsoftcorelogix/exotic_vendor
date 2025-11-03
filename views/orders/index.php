@@ -549,7 +549,9 @@
                                 <div class="flex flex-col gap-4">
                                     <!-- Col 1, Row 1: Image and Title -->
                                     <div class="flex items-start gap-4 ">
-                                        <img src="<?= $order['image'] ?>" onclick="openImagePopup('<?= $order['image'] ?>')" alt="Product Image" class="h-24 rounded-md object-cover flex-shrink-0 cursor-pointer">
+										<div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
+											<img src="<?= $order['image'] ?>" onclick="openImagePopup('<?= $order['image'] ?>')" alt="<?= $order['item_code'].' - '.$order['title'] ?>" class="max-w-full max-h-full object-contain cursor-pointer">
+										</div>
                                         <div class="pt-1 w-full max-w-xs">
                                             <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
                                             <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></p>
