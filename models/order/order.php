@@ -243,7 +243,9 @@ class Order{
             'giftvoucher',
             'giftvoucher_reduce',
             'credit',
-            'vendor'
+            'vendor',
+            'country',
+            'material'
         ];
 
         // Build SQL query
