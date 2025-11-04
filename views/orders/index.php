@@ -322,6 +322,10 @@
                 <div class="">
                     <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected >All Country</option>
+						<optgroup label="Easy">
+							<option value="overseas">Overseas</option>
+							<option value="IN">India</option>
+						</optgroup>
                         <?php foreach ($country_list as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
@@ -580,13 +584,14 @@
 
                                             <span class="heading-typography ">Order ID</span>
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
-
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
                                             <span class="heading-typography">Marketplace</span>
                                             <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
                                             <span class="heading-typography">Staff Name</span>
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
+											<span class="heading-typography">Payment Type</span>
+                                            <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
                                         </div>
                                     </div>
                                 </div>

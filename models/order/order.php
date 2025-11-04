@@ -55,7 +55,11 @@ class Order{
             }
         }
         if (!empty($filters['country'])) {
-            $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
+			if($filters['country']=='overseas'){
+				$sql .= " AND (vp_orders.shipping_country != 'IN' OR vp_orders.country != 'IN')";
+			}else{
+				$sql .= " AND (vp_orders.shipping_country = '" . $filters['country'] . "' OR vp_orders.country = '" . $filters['country'] . "' )";
+			}
             //$params[] = '%' . $filters['country'] . '%';
         } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
