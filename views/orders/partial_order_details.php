@@ -31,7 +31,7 @@
                                 <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
                                 <div class="flex justify-between items-center mt-3">
                                     <div class="status-box flex items-center justify-center">
-                                        <span class="status-text">Ready for Dispatch</span>
+                                        <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
                                     </div>
                                 </div>
                                 <p class="vendor-text mt-2"><strong class="vendor-title">Vendor :</strong> <span
@@ -48,7 +48,7 @@
                                     <p><span class="item-detail-title">Item Code : </span><span
                                             class="item-detail-value"><?php echo $item['item_code']; ?></span></p>
                                     <p><span class="item-detail-title">Material : </span><span
-                                            class="item-detail-value"><?php //echo $item['material']; ?></span></p>
+                                            class="item-detail-value"><?php echo $item['material']; ?></span></p>
                                     <p><span class="item-detail-title">Color : </span><span class="item-detail-value"><?php echo $item['color']; ?></span>
                                     </p>
                                     <p><span class="item-detail-title">Size : </span><span
