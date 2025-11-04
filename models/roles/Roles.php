@@ -38,11 +38,11 @@ class Roles {
 
         $totalPages = ceil($totalRecords / $limit);
 
-        // fetch data
-        //$sql = "SELECT vr.id, vr.role_name, vr.is_active, GROUP_CONCAT(CONCAT(vp.module_name, ':', vp.action_name) ORDER BY vp.module_name, vp.action_name SEPARATOR ', ') AS permissions FROM vp_roles AS vr INNER JOIN vp_role_permissions AS vrp ON vr.id = vrp.role_id INNER JOIN vp_permissions AS vp ON vrp.permission_id = vp.id INNER JOIN modules AS m ON vp.module_id = m.id $where GROUP BY vrp.role_id ORDER BY vr.role_name LIMIT $limit OFFSET $offset";
         $modules_str = "";
+        $roles = array();
 
-        $sql = "SELECT vr.id, vr.role_name, vr.is_active, vp.module_name, vp.action_name FROM vp_roles AS vr INNER JOIN vp_role_permissions AS vrp ON vr.id = vrp.role_id INNER JOIN vp_permissions AS vp ON vrp.permission_id = vp.id INNER JOIN modules AS m ON vp.module_id = m.id $where ORDER BY vr.role_name LIMIT $limit OFFSET $offset";
+        //$sql = "SELECT vr.id, vr.role_name, vr.is_active, vp.module_name, vp.action_name FROM vp_roles AS vr INNER JOIN vp_role_permissions AS vrp ON vr.id = vrp.role_id INNER JOIN vp_permissions AS vp ON vrp.permission_id = vp.id INNER JOIN modules AS m ON vp.module_id = m.id $where ORDER BY vr.role_name LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vr.id, vr.role_name, vr.is_active, vp.module_name, vp.action_name FROM vp_roles AS vr INNER JOIN vp_role_permissions AS vrp ON vr.id = vrp.role_id INNER JOIN vp_permissions AS vp ON vrp.permission_id = vp.id INNER JOIN modules AS m ON vp.module_id = m.id $where ORDER BY vr.role_name";
         $result = $this->conn->query($sql);
         if ($result) {
             while ($row = $result->fetch_assoc()) {
@@ -74,8 +74,6 @@ class Roles {
                 }
                 $modules_str .= "</div>";
             }
-        } else {
-            $roles = array();
         }
 
         // return structured data
