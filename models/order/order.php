@@ -462,5 +462,21 @@ class Order{
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+    function getOrderByOrderNumber($order_number) {
+        $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            // If only one row is found, return an associative array for backward compatibility,
+            // otherwise return all matching rows as an array of associative arrays.
+            /*if ($result->num_rows === 1) {
+                return $result->fetch_assoc();
+            }*/
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return null;
+    }
 }
 ?>
