@@ -132,6 +132,9 @@ switch ($page) {
             case 'update_status':
                 $controller->updateStatus();
                 break;
+            case 'get_order_details_html':
+                $controller->getOrderDetailsHTML();
+                break;
             default:
                 $controller->index();
                 break;

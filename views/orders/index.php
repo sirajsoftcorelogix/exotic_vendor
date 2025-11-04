@@ -235,14 +235,14 @@
     </div>
     <!-- Advance Search Accordion -->
     <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
-        <button id="accordion-button" class="w-full flex justify-between items-center mb-2">
+        <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
             <h2 class="text-xl font-bold text-gray-900">Advance Search</h2>
-            <svg id="accordion-icon" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg id="accordion-icon-search" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
         </button>
 
-        <div id="accordion-content" class="accordion-content hidden">
+        <div id="accordion-content-search" class="accordion-content hidden">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
@@ -812,6 +812,14 @@
 
     </div>
 </div>
+
+<div class="container mx-auto p-8">
+    <!-- Button to open the details modal -->
+    <button id="open-details-modal"
+            class="bg-blue-600 text-white rounded-md font-medium text-sm flex items-center justify-center transition hover:bg-blue-700 px-6 py-3">
+        Open New Modal
+    </button>
+</div>
 <!-- Order Details Popup Modal -->
 <!-- <div class="fixed inset-y-0 right-0 w-[400px] bg-white shadow-lg p-4" id="orderDetailOffcanvas" style="display: none; z-index: 1000;">
   Popup content goes here
@@ -1174,6 +1182,31 @@
         </div>
     </div>
 </div>
+<!-- Details Modal -->
+<div id="details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden">
+    <div id="details-modal-slider" class="fixed top-0 right-0 h-full w-full max-w-3xl flex transform translate-x-full">
+
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-details-modal"
+                    class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center -ml-[61px]"
+                    style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
+            <!-- Modal Content -->
+            <div class="flex-grow space-y-4" id="details-modal-content">
+                <!-- Dynamic content will be loaded here -->
+                
+            </div>
+        </div>
+    </div>
+</div>
 <script>
 function closeImagePopup(e) {
     // If called from button or outside click
@@ -1182,143 +1215,7 @@ function closeImagePopup(e) {
 </script>
 <script>
     // Popup functionality
-    const popupWrapper = document.getElementById('popup-wrapper');
-    const modalSlider = document.getElementById('modal-slider');
-    const closePopupBtn = document.getElementById('close-vendor-popup-btn');
-    const popupImage = document.getElementById('popupImage');
-    const orderDetailLinks = document.querySelectorAll('.order-detail-link');
-    orderDetailLinks.forEach(link => {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            const orderData = JSON.parse(this.getAttribute('data-order'));
-            console.log(orderData.groupname);
-            // Populate the popup with order details
-            document.getElementById('poitem_order_id').value = orderData.order_id || '';
-            document.getElementById('order_number').textContent = orderData.order_number || 'N/A';
-            document.getElementById('order_date').textContent = orderData.order_date || 'N/A';
-            document.getElementById('hsn').textContent = orderData.hsn || 'N/A';
-            document.getElementById('groupname').textContent = orderData.groupname || 'N/A';
-            document.getElementById('quantity').textContent = orderData.quantity || 'N/A';
-            document.getElementById('item').textContent = orderData.title || 'N/A';
-            document.getElementById('sub_category').textContent = orderData.subcategories || 'N/A';
-            document.getElementById('size').textContent = orderData.size || 'N/A';
-            document.getElementById('color').textContent = orderData.color || 'N/A';
-            document.getElementById('item_price').textContent = orderData.itemprice ? '' + orderData.itemprice : 'N/A';
-            document.getElementById('final_price').textContent = orderData.finalprice ? '' + orderData.finalprice : 'N/A';
-            document.getElementById('cost_price').textContent = orderData.cost_price ? '' + orderData.cost_price : 'N/A';
-            document.getElementById('currency').textContent = orderData.currency || 'N/A';
-            document.getElementById('gst').textContent = orderData.gst || 'N/A';
-            document.getElementById('marketplace').textContent = orderData.marketplace_vendor || 'N/A';
-            document.getElementById('local_stock').textContent = orderData.local_stock || 'N/A';
-            document.getElementById('location').textContent = orderData.location || 'N/A';
-            document.getElementById('description').textContent = orderData.description || 'N/A';
-            document.getElementById('material').textContent = orderData.material || 'N/A';
-            document.getElementById('backorder_status').textContent = orderData.backorder_status || 'N/A';
-            document.getElementById('backorder_percent').textContent = orderData.backorder_percent || 'N/A';
-            document.getElementById('backorder_delay').textContent = orderData.backorder_delay || 'N/A';
-            document.getElementById('numsold').textContent = orderData.numsold || 'N/A';
-            document.getElementById('po_number').textContent = orderData.po_number || 'N/A';
-            document.getElementById('po_date').textContent = orderData.po_date || 'N/A';
-            document.getElementById('expected_delivery_date').textContent = orderData.expected_delivery_date || 'N/A';
-            document.getElementById('product_weight').textContent = orderData.product_weight || 'N/A';
-            document.getElementById('product_weight_unit').textContent = orderData.product_weight_unit || 'N/A';
-            document.getElementById('prod_height').textContent = orderData.prod_height || 'N/A';
-            document.getElementById('prod_width').textContent = orderData.prod_width || 'N/A';
-            document.getElementById('prod_length').textContent = orderData.prod_length || 'N/A';
-            document.getElementById('length_unit').textContent = orderData.length_unit || 'N/A';
-            document.getElementById('payment_type').textContent = orderData.payment_type || 'N/A';
-            document.getElementById('coupon').textContent = orderData.coupon || 'N/A';
-            document.getElementById('coupon_reduce').textContent = orderData.coupon_reduce || 'N/A';
-            document.getElementById('giftvoucher').textContent = orderData.giftvoucher ||  'N/A';
-            document.getElementById('giftvoucher_reduce').textContent = orderData.giftvoucher_reduce || 'N/A';
-            document.getElementById('credit').textContent = orderData.credit || 'N/A';
-            document.getElementById('vendor').textContent = orderData.vendor || 'N/A';
-                    
-            const imgElem = document.querySelector('#vendor-popup-panel img');
-            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
-            const infoDiv = imgElem.nextElementSibling;     
-            document.getElementById('shipping_country').textContent = orderData.shipping_country || 'N/A';
-            // Order Addons
-            const addonsDiv = document.getElementById('order_addons');
-            addonsDiv.innerHTML = '';
-            let options = orderData.options || [];
-            if (typeof options === 'string') {
-                try {
-                    options = JSON.parse(options);
-                } catch (e) {
-                    options = [options];
-                }
-            }
-
-            if (Array.isArray(options) && options.length > 0) {
-                addonsDiv.innerHTML = ''; // clear
-                options.forEach(opt => {
-                    const chip = document.createElement('span');
-                    chip.className = 'inline-block bg-gray-100 text-sm px-2 py-1 rounded mr-2 mb-2';
-                    chip.textContent = opt;
-                    addonsDiv.appendChild(chip);
-                });
-            } if(options == [] || options == '' || options == null || options.length == 0 || options == 'Array') {
-                addonsDiv.textContent = 'N/A';
-            } else {
-                addonsDiv.textContent = 'N/A';
-            }
-            /*fetchOrderDetails(orderData.id).then(orderDetails => {
-                //console.log(orderDetails.order);
-                // Populate the popup with order details
-                document.getElementById('gst').textContent = orderDetails.order.gst || 'N/A';                       
-                
-                document.getElementById('final_price').textContent = orderDetails.order.finalprice ? '₹' + orderDetails.order.finalprice : 'N/A';
-                document.getElementById('item_price').textContent = orderDetails.order.itemprice ? '₹' + orderDetails.order.itemprice : 'N/A';
-                document.getElementById('cost_price').textContent = orderDetails.order.cost_price ? '₹' + orderDetails.order.cost_price : 'N/A';
-                document.getElementById('currency').textContent = orderDetails.order.currency || 'N/A';
-                document.getElementById('item').textContent = orderDetails.order.title || 'N/A';
-                document.getElementById('sub_category').textContent = orderDetails.order.subcategories || 'N/A';
-                document.getElementById('size').textContent = orderDetails.order.size || 'N/A';
-                document.getElementById('color').textContent = orderDetails.order.color || 'N/A';
-                document.getElementById('marketplace').textContent = orderDetails.order.marketplace_vendor || 'N/A';
-                document.getElementById('local_stock').textContent = orderDetails.order.local_stock || 'N/A';
-                document.getElementById('location').textContent = orderDetails.order.location || 'N/A';
-                
-                // Other details
-                const imgElem = document.querySelector('#vendor-popup-panel img');
-                imgElem.src = orderDetails.order.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
-                const infoDiv = imgElem.nextElementSibling;
-                infoDiv.innerHTML = `
-                    <p><strong>Order Number:</strong> ${orderDetails.order.order_number || 'N/A'}</p>
-                    <p><strong>Order Date:</strong> ${orderDetails.order.order_date || 'N/A'}</p>
-                    <p><strong>HSN Code:</strong> ${orderDetails.order.hsn || 'N/A'}</p>
-                    <p><strong>Category:</strong> ${orderDetails.order.groupname || 'N/A'}</p>
-                    <p><strong>Quantity:</strong> ${orderDetails.order.quantity || 'N/A'}</p>
-                    <p><strong>Shipping Country:</strong> ${orderDetails.order.shipping_country || 'N/A'}</p>
-                `;
-            });*/
-            openPopup();
-        });
-    });
-    function openPopup() {
-        popupWrapper.classList.remove('hidden');
-        setTimeout(() => {
-            modalSlider.classList.remove('translate-x-full');
-        }, 10); // Slight delay to allow transition
-    }
-    closePopupBtn.addEventListener('click', () => {
-        modalSlider.classList.add('translate-x-full');
-        setTimeout(() => {
-            popupWrapper.classList.add('hidden');
-        }, 300); // Match the duration of the CSS transition
-    });
-    // function populateOrderDetails(order) {
-    //     document.getElementById('description').textContent = order.title || 'N/A';
-    //     document.getElementById('gst').textContent = order.gst || 'N/A';
-    //     document.getElementById('hsn').textContent = order.hsn || 'N/A';
-    //     document.getElementById('po_number').textContent = order.po_number || 'N/A';
-    //     document.getElementById('quantity').textContent = order.quantity || 'N/A';
-    // }
-    function fetchOrderDetails(id) {
-        return fetch('?page=orders&action=get_order_details&id=' + encodeURIComponent(id))
-            .then(r => r.json());
-    }
+   
     function checkPoItmes() {
         
         const checkedRows = document.querySelectorAll('input[name="poitem[]"]:checked');
@@ -1332,16 +1229,16 @@ function closeImagePopup(e) {
     
     document.addEventListener('DOMContentLoaded', function () {
         // Accordion functionality
-        const accordionButton = document.getElementById('accordion-button');
-        const accordionContent = document.getElementById('accordion-content');
-        const accordionIcon = document.getElementById('accordion-icon');
+        const accordionButton = document.getElementById('accordion-button-search');
+        const accordionContent = document.getElementById('accordion-content-search');
+        const accordionIcon = document.getElementById('accordion-icon-search');
 
-        accordionButton.addEventListener('click', () => {
+        accordionButton.addEventListener('click', () => { 
             const isExpanded = accordionButton.getAttribute('aria-expanded') === 'true';
             accordionButton.setAttribute('aria-expanded', !isExpanded);
-            if (accordionContent.classList.contains('hidden')) {
+            if (accordionContent.classList.contains('hidden')) { 
                 accordionContent.classList.remove('hidden');
-                accordionIcon.classList.add('rotate-180');
+                accordionIcon.classList.add('rotate-180');                
             } else {
                 accordionContent.classList.add('hidden');
                 accordionIcon.classList.remove('rotate-180');
@@ -1672,4 +1569,105 @@ function closeImagePopup(e) {
 
     });
 
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Modal functionality
+        const openModalBtn = document.getElementById('open-details-modal');
+        const closeModalBtn = document.getElementById('close-details-modal');
+        const modal = document.getElementById('details-modal');
+        const modalSlider = document.getElementById('details-modal-slider');
+
+        const openModal = () => {
+            if (!modal || !modalSlider) return;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalSlider.classList.remove('translate-x-full');
+            }, 10);
+        };
+
+        const closeModal = () => {
+            if (!modal || !modalSlider) return;
+            modalSlider.classList.add('translate-x-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        };
+
+        if (openModalBtn) openModalBtn.addEventListener('click', openModal);
+        if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+
+        if (modal) {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+
+        // Accordion functionality
+        // Initialize accordion triggers inside a given root (document or a container element).
+        // Call initAccordionTriggers() on load and after injecting dynamic HTML.
+        function initAccordionTriggers(root = document) {
+            const accordionTriggers = root.querySelectorAll('.accordion-trigger');
+            accordionTriggers.forEach(trigger => {
+                // Remove previous handler if stored to avoid duplicate handlers
+                if (trigger.__accordionClick__) {
+                    trigger.removeEventListener('click', trigger.__accordionClick__);
+                }
+
+                const handler = function () {
+                    const content = this.nextElementSibling;
+                    const isOpening = !content.classList.contains('open');
+
+                    // Open or close the clicked one
+                    if (isOpening) {
+                        content.classList.add('open');
+                        this.classList.add('active');
+                    } else {
+                        content.classList.remove('open');
+                        this.classList.remove('active');
+                    }
+                };
+
+                // store the handler reference so it can be removed later
+                trigger.__accordionClick__ = handler;
+                trigger.addEventListener('click', handler);
+            });
+        }
+
+        // initialize for existing DOM
+        //initAccordionTriggers();
+
+        // Load dynamic content into the modal when an order detail link is clicked
+        const orderDetailLinks = document.querySelectorAll('.order-detail-link');
+        orderDetailLinks.forEach(link => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                openModal(); // Open the modal first
+            const modalContentDiv = document.getElementById('details-modal-content');
+            const orderData  = JSON.parse(link.getAttribute('data-order'));
+            //console.log('Fetching details for order:', orderData.order_number);
+            //loadingImage.classList.remove('hidden');
+            modalContentDiv.innerHTML = '<p>Loading...</p>'; // Show loading indicator
+
+            fetch(`?page=orders&action=get_order_details_html&order_number=${encodeURIComponent(orderData.order_number)}`)
+                .then(response => response.text())
+                .then(html => {
+                    modalContentDiv.innerHTML = html; // Insert the fetched HTML
+
+                    // Initialize accordion triggers inside the newly injected content so they work.
+                    if (typeof initAccordionTriggers === 'function') {
+                        initAccordionTriggers(modalContentDiv);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading order details:', error);
+                    modalContentDiv.innerHTML = '<p>Error loading order details.</p>';
+                });
+            });
+        });
+
+    });
 </script>

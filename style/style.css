@@ -696,3 +696,158 @@ transition: background 0.2s;
 .menu-popup-order li:hover {
 background-color: #f0f0f0;
 }
+
+/* Custom styles for accordion content */
+/* Modal styles */
+        #details-modal-slider {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* Custom class for modal title */
+        .modal-title {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 700;
+            font-size: 24px;
+            line-height: 1.2;
+            color: rgba(5, 19, 33, 1);
+        }
+
+        /* Accordion content transition */
+        .accordion-content-details {
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            background-color: rgba(245, 245, 245, 1); /* #f5f5f5 or neutral-100 */
+        }
+
+        .accordion-content-details.open {
+            max-height: 1500px; /* Set a large enough max-height */
+            opacity: 1;
+        }
+
+        /* Typography Styles */
+        .item-title {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            color: rgba(0, 0, 0, 1);
+        }
+
+        .item-meta {
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            font-size: 13px;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .status-box {
+            width: 172px;
+            height: 29px;
+            border-radius: 19px;
+            background-color: rgba(0, 172, 79, 1);
+        }
+
+        .status-text {
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 1);
+        }
+
+        .vendor-text {
+            font-size: 13px;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .vendor-title {
+            font-weight: 700; /* Bold */
+        }
+
+        .vendor-name {
+            font-weight: 400; /* Regular */
+        }
+
+        /* Accordion Detail Typography */
+        .item-detail-title {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            line-height: 174%;
+            letter-spacing: 0%;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .item-detail-value {
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            font-size: 13px;
+            line-height: 174%;
+            letter-spacing: 0%;
+            color: rgba(58, 58, 73, 1); /* Added color from title */
+        }
+
+        .section-title {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .section-value {
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            font-size: 13px;
+            color: rgba(58, 58, 73, 1); /* Added color */
+        }
+
+        .notes-title {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .notes-text {
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            font-size: 13px;
+            color: rgba(58, 58, 73, 1); /* Added color */
+        }
+
+        /* Custom styles for the PO/Shipping buttons */
+        .po-button {
+            width: 172px;
+            height: 29px;
+            border-radius: 33px;
+            background-color: rgba(208, 103, 6, 1);
+            font-size: 14px;
+            color: rgba(255, 255, 255, 1);
+            font-weight: 500; /* Added for visibility */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+        }
+
+        .po-button:hover {
+            opacity: 0.9;
+        }
+
+        .shipping-button {
+            width: 172px;
+            height: 29px;
+            border-radius: 33px;
+            background-color: rgba(185, 227, 191, 1);
+            font-size: 14px;
+            color: black;
+            font-weight: 500; /* Added for visibility */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+        }
+
+        .shipping-button:hover {
+            opacity: 0.9;
+        }
