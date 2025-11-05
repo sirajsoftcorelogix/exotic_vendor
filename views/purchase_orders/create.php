@@ -81,7 +81,7 @@
                 <!-- <td class="p-4">Nos</td> -->
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
-                        <input type="number" min="0" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         <!-- <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
                         <label for="gst_inclusive">GST inclusive</label> -->
                         
@@ -485,7 +485,7 @@ function addSelectOrderListeners() {
                 
                 <td class="p-4">
                     <div class="flex items-center space-x-2">
-                        <input type="number" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         
                     </div>
                 </td>

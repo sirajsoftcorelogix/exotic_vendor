@@ -245,7 +245,8 @@ class Order{
             'credit',
             'vendor',
             'country',
-            'material'
+            'material',
+            'status'
         ];
 
         // Build SQL query
