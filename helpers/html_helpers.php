@@ -337,8 +337,20 @@
 	function updateRoles() { // Run this function once to populate permissions table
 		global $conn;
 
-		$actions = ['add', 'edit', 'view', 'delete', 'list']; // Standard permissions
-		$roles = [2, 3]; // Role IDs to assign permissions to (e.g., Editor and Viewer)
+		$sql = "SELECT id, access_name FROM vp_role_access where is_active = '1' ORDER BY id ASC";
+        $modules = $conn->query($sql);
+        while($m = mysqli_fetch_assoc($modules)) {
+			$actions[] = $m['access_name'];
+		}
+
+		$sql = "SELECT id, role_name FROM vp_roles where is_active = '1' ORDER BY id ASC";
+        $modules = $conn->query($sql);
+        while($m = mysqli_fetch_assoc($modules)) {
+			$roles[] = $m['id'];
+		}
+
+		//$actions = ['add', 'edit', 'view', 'delete', 'list','level 1 info','Level 2 Info']; // Standard permissions role_access
+		//$roles = [1, 2]; // Role IDs to assign permissions to (e.g., Editor and Viewer) // Role table
 
         $sql = "SELECT id, module_name, slug FROM modules where module_name != 'Administrator' ORDER BY module_name";
         $modules = $conn->query($sql);
@@ -370,7 +382,6 @@
 		$conn->close();
 	}
 	function hasPermission($user_id, $module, $action) {
-		
 		if($_SESSION["user"]["role_id"] == 1 || $_SESSION["user"]["role"] == "admin"){ // Admin has all permissions
 			return true;
 		}
@@ -379,7 +390,8 @@
 				FROM vp_role_permissions rp
 				JOIN vp_permissions p ON rp.permission_id = p.id
 				JOIN vp_users u ON u.role_id = rp.role_id
-				WHERE u.id='$user_id' AND p.module_name='$module' AND p.action_name='$action'";
+				JOIN vp_roles r ON r.id = u.role_id
+				WHERE u.id='$user_id' AND p.module_name='$module' AND p.action_name='$action' AND r.is_active=1";
 		$res = $conn->query($sql);
 		$row = mysqli_fetch_assoc($res);
 		return $row['total'] > 0;
