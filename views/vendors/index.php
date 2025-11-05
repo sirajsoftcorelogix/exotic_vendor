@@ -233,12 +233,19 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <select class="form-input w-full mt-1" name="addTeam" id="addTeam">
+                                    <select class="form-input w-full mt-1" name="addTeam" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
                                         <option value="" disabled selected>Select Team</option>
                                         <?php foreach($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Agent</label>
+                                    <span id="addTeamMemberBlock">
+                                        <select class="form-input w-full mt-1" name="addTeamMember" id="addTeamMember">
+                                            <option value="" disabled selected>Select Team Member</option>
+                                        </select>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
@@ -405,12 +412,20 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <select class="form-input w-full mt-1" name="editTeam" id="editTeam">
+                                    <select class="form-input w-full mt-1" name="editTeam" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
                                         <option value="" disabled selected>Select Team</option>
                                         <?php foreach($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Agent</label>
+                                    <span id="editTeamMemberBlock">
+                                        <select class="form-input w-full mt-1" name="editTeamMember" id="editTeamMember">
+                                            <option value="" disabled selected>Select Team Member</option>
+                                        </select>
+                                    </span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
@@ -621,6 +636,76 @@
 
 <!-- JavaScript to handle popup and form submission -->
 <script>
+
+    function fillTeamAgent(teamId, formType) {
+        if(teamId === "") return;
+        if(formType === 'AddForm') {
+            document.getElementById('addTeamMemberBlock').innerHTML = 'Loading...';
+        } else {
+            document.getElementById('editTeamMemberBlock').innerHTML = 'Loading...';
+        }
+        if(formType === 'AddForm') {
+            // Fetch team members from the server
+            fetch('?page=vendors&action=getTeamMembers&teamId=' + teamId)
+            .then(response => response.json())
+            .then(data => {
+                // Create a new select element
+                let memberSelect = document.createElement('select');
+
+                // add attributes
+                memberSelect.id = "addTeamMember";
+                memberSelect.name = "addTeamMember";
+                memberSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
+
+                // Populate the select element with options
+                const defaultOption = document.createElement('option');
+                defaultOption.value = "";
+                defaultOption.textContent = "Select Team Member";
+                defaultOption.disabled = true;
+                defaultOption.selected = true;
+                memberSelect.appendChild(defaultOption);
+
+                let members = Array.isArray(data) ? data : [data]; 
+                members.forEach(member => {
+                    const option = document.createElement('option');
+                    option.value = member.id;
+                    option.textContent = member.name;
+                    memberSelect.appendChild(option);
+                });
+                document.getElementById('addTeamMemberBlock').innerHTML = memberSelect.outerHTML;
+            });
+        } else {
+            // Fetch team members from the server
+            fetch('?page=vendors&action=getTeamMembers&teamId=' + teamId)
+            .then(response => response.json())
+            .then(data => {
+                // Create a new select element
+                let memberSelect = document.createElement('select');
+
+                // add attributes
+                memberSelect.id = "editTeamMember";
+                memberSelect.name = "editTeamMember";
+                memberSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
+
+                // Populate the select element with options
+                const defaultOption = document.createElement('option');
+                defaultOption.value = "";
+                defaultOption.textContent = "Select Team Member";
+                defaultOption.disabled = true;
+                defaultOption.selected = true;
+                memberSelect.appendChild(defaultOption);
+
+                let members = Array.isArray(data) ? data : [data]; 
+                members.forEach(member => {
+                    const option = document.createElement('option');
+                    option.value = member.id;
+                    option.textContent = member.name;
+                    memberSelect.appendChild(option);
+                });
+                document.getElementById('editTeamMemberBlock').innerHTML = memberSelect.outerHTML;
+            });
+        }
+    }
     
     // Toggle menu visibility
     function toggleMenu(button) {
@@ -917,6 +1002,9 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
+            document.getElementById("editTeam").value = vendor.team_id;
+            
+            fillTeamAgent(vendor.team_id, "editForm");
 
             if(vendor.country !== "India") {
                 document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" required name="editState" id="editState" value="' + vendor.state + '" />';

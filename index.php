@@ -98,10 +98,9 @@ switch ($page) {
                 break;
             case 'bankDetails':
                 $controller->addBankDetails();
-            /*case 'add':
-                $controller->addEditVendor();
-                break;*/
-            
+            case 'getTeamMembers':
+                $controller->getTeamMembers();
+                break;
             /*case 'update':
                 $controller->addEditVendor();
                 break;*/
@@ -304,12 +303,24 @@ switch ($page) {
             case 'list':
                 $controller->index();   
                 break;
-            case 'addRecord':
+            /*case 'addRecord':
+                $controller->addRecord();
+                break;*/
+            case 'add':
+                $controller->addRRecord();
+                break;
+            case 'add_role':
                 $controller->addRecord();
                 break;
-            case 'updateRecord':
-                $controller->addRecord();
+            case 'edit':
+                $controller->editRecord();
                 break;
+            case 'edit_role':
+                $controller->updateRecord();
+                break;
+            /*case 'updateRecord':
+                $controller->addRecord();
+                break;*/
             case 'deleteRecord':
                 $controller->delete();
                 break;
