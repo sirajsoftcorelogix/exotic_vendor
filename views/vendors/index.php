@@ -231,6 +231,8 @@
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
                                     <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" />
                                 </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Team</label>
                                     <select class="form-input w-full mt-1" name="addTeam" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
@@ -246,14 +248,6 @@
                                         <select class="form-input w-full mt-1" name="addTeamMember" id="addTeamMember">
                                             <option value="" disabled selected>Select Team Member</option>
                                         </select>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
-                                    </select>
                                 </div>
                             </div>
                             <div>
@@ -330,7 +324,7 @@
                         <!-- Ratings & Notes -->
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">
                                         Rating <span class="text-red-500">*</span>
@@ -341,6 +335,14 @@
                                         <option>3 Star</option>
                                         <option>2 Star</option>
                                         <option>1 Star</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
+                                    <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive </option>
+                                        <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
                             </div>
@@ -410,6 +412,9 @@
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
                                     <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" />
                                 </div>
+                                
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Team</label>
                                     <select class="form-input w-full mt-1" name="editTeam" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
@@ -427,17 +432,6 @@
                                         </select>
                                     </span>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
-                                    </select>
-                                </div>
-                                
-								<div>
-								</div>
                             </div>
                             <div>
                                 <?php //print_array($category); ?>
@@ -459,7 +453,6 @@
                                                     echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['display_name']) . '</option>';
                                                 }
                                             }
-
                                             echo '</optgroup>';
                                         }
                                     }
@@ -524,7 +517,7 @@
                         <!-- Ratings & Notes -->
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">
                                         Rating <span class="text-red-500">*</span>
@@ -535,6 +528,14 @@
                                         <option>3 Star</option>
                                         <option>2 Star</option>
                                         <option>1 Star</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
+                                    <select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive </option>
+                                        <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
                             </div>
