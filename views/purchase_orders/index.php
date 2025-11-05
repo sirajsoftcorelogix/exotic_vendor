@@ -180,7 +180,7 @@
                             ?>
                         </td>
 
-                        <td class="px-6 py-4 whitespace-nowrap"><a onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><?= htmlspecialchars($order['po_number'] ?? 'N/A') ?></a></td>
+                        <td class="px-6 py-4 whitespace-nowrap"><a href="#" onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><?= htmlspecialchars($order['po_number'] ?? 'N/A') ?></a></td>
 						
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['po_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'] ?? '')) ?></td>
