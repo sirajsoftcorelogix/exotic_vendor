@@ -9,7 +9,10 @@
 				. '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
 
 			if (empty($_SESSION['redirect_after_login'])) {
-				$_SESSION['redirect_after_login'] = $currentUrl;
+				if(strpos($currentUrl, 'get_order_details_html') !== false)
+					$_SESSION['redirect_after_login'] = $domain . '?page=orders&action=list';
+				else
+					$_SESSION['redirect_after_login'] = $currentUrl;
 			}
 
 			header('Location: ' . $domain . '?page=users&action=login');
