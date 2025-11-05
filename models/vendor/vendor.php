@@ -92,17 +92,6 @@ class vendor {
         }
     }
     public function addVendor($data) {
-        // Check if vendor_email already exists
-        /*$checkEmailSql = "SELECT id FROM vp_vendors WHERE vendor_email = ?";
-        $checkEmailStmt = $this->conn->prepare($checkEmailSql);
-        $checkEmailStmt->bind_param('s', $data['vendor_email']);
-        $checkEmailStmt->execute();
-        $checkEmailStmt->store_result();
-        if ($checkEmailStmt->num_rows > 0) {
-            return ['success' => false, 'message' => 'Vendor email already exists. Please use a different email.'];
-        }
-        $checkEmailStmt->close();*/
-
         // Check if gst_number already exists (if provided)
         if (!empty($data['addGstNumber'])) {
             $checkGstSql = "SELECT id FROM vp_vendors WHERE gst_number = ?";
@@ -159,8 +148,6 @@ class vendor {
             }
             return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status];
         }
-
-           
         return [
             'success' => false,
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
@@ -197,7 +184,6 @@ class vendor {
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
-            
             return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status];
         }
         return [
@@ -278,7 +264,6 @@ class vendor {
         while ($row = $result->fetch_assoc()) {
             $vendors[] = $row;
         }
-
         // return structured data
         return [
             'vendors'        => $vendors,
@@ -342,6 +327,17 @@ class vendor {
             $categories[] = $row['category_id'];
         }
         return $categories;
+    }
+    public function getTeamMembers($team_id) {
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND team_id = '$team_id' ORDER BY name ASC";
+        $result = $this->conn->query($sql);
+        $teamMembers = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $teamMembers[] = $row;
+            }
+        }
+        return $teamMembers;
     }
 }
 ?>

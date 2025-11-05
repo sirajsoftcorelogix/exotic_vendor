@@ -98,10 +98,9 @@ switch ($page) {
                 break;
             case 'bankDetails':
                 $controller->addBankDetails();
-            /*case 'add':
-                $controller->addEditVendor();
-                break;*/
-            
+            case 'getTeamMembers':
+                $controller->getTeamMembers();
+                break;
             /*case 'update':
                 $controller->addEditVendor();
                 break;*/

@@ -58,7 +58,7 @@ class Teams {
         ];
 	}
 	public function addRecord($data) {
-        $sql = "INSERT INTO vp_teams (team_name, team_description, user_id, is_active) VALUES (?, ?, ?)";
+        $sql = "INSERT INTO vp_teams (team_name, team_description, user_id, is_active) VALUES (?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('ssii',
             $data['addTeamName'],

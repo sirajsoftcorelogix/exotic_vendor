@@ -138,6 +138,16 @@ class VendorsController {
         }
         exit;
     }
-
+    public function getTeamMembers() {
+        global $vendorsModel;
+        $team_id = isset($_GET['teamId']) ? (int)$_GET['teamId'] : 0;
+        if ($team_id > 0) {
+            $members = $vendorsModel->getTeamMembers($team_id);
+            echo json_encode($members);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid team ID.']);
+        }
+        exit;
+    } 
 }
 ?>
