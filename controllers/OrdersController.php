@@ -225,7 +225,9 @@ class OrdersController {
                     'giftvoucher' => $order['giftvoucher'] ?? '',
                     'giftvoucher_reduce' => $order['giftvoucher_reduce'] ?? '',
                     'credit' => $order['credit'] ?? '',
-                    'vendor' => $item['vendor'] ?? ''
+                    'vendor' => $item['vendor'] ?? '',
+                    'country' => $order['country'] ?? '',
+                    'material' => $item['material'] ?? ''
 					 ];
 					$totalorder++;                
                     
@@ -331,6 +333,23 @@ class OrdersController {
             }
         }
 
+        exit;
+    }
+    public function getOrderDetailsHTML() {
+        is_login();
+        global $ordersModel, $commanModel;
+        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        if ($order_number > 0) {
+            $order = $ordersModel->getOrderByOrderNumber($order_number);
+            $statusList = $commanModel->get_order_status_list();
+            if ($order) {
+                renderTemplateClean('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList], 'Order Details');
+            } else {
+                echo '<p>Order not found.</p>';
+            }
+        } else {
+            echo '<p>Invalid Order Number.</p>';
+        }
         exit;
     }
 }
