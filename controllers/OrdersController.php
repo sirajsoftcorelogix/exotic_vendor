@@ -227,7 +227,8 @@ class OrdersController {
                     'credit' => $order['credit'] ?? '',
                     'vendor' => $item['vendor'] ?? '',
                     'country' => $order['country'] ?? '',
-                    'material' => $item['material'] ?? ''
+                    'material' => $item['material'] ?? '',
+                    'status'   => strtoupper($order['payment_type']) === 'AMAZONFBA' ? 'shipped' : 'pending'
 					 ];
 					$totalorder++;                
                     
