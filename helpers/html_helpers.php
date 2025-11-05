@@ -7,10 +7,25 @@
 			// store current URL to redirect back after successful login
 			$currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
 				. '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+			
+			// identify AJAX requests and handle differently
+			$headers = getallheaders();
+			$isAjax = isset($headers['X-Requested-With']) && strtolower($headers['X-Requested-With']) === 'xmlhttprequest';	
+			if ($isAjax) {
+				echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
+				//echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => $domain . '?page=users&action=login']);
+				exit;
+			}
 
 			if (empty($_SESSION['redirect_after_login'])) {
-				if(strpos($currentUrl, 'get_order_details_html') !== false)
+				if(strpos($currentUrl, 'get_order_details_html') !== false){
 					$_SESSION['redirect_after_login'] = $domain . '?page=orders&action=list';
+					echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
+					//On AJAX call login page link
+					//$_SESSION['ajax_redirect_after_login'] = $domain . '?page=orders&action=list';
+					//echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => $domain . '?page=users&action=login']);
+					exit;
+				}
 				else
 					$_SESSION['redirect_after_login'] = $currentUrl;
 			}
