@@ -632,7 +632,7 @@
                                                     <span class="data-typography mt-1 block"><?= $order['location'] ?: 'N/A' ?></span>
                                                 </div>
                                                 <div>
-                                                    <span class="heading-typography block mb-5">ESD</span>
+                                                    <span class="heading-typography block mb-5">Ship By Date</span>
                                                     <span class="data-typography mt-1 block"><?= $order['esd'] ? date("d M Y", strtotime($order['esd'])) : 'N/A' ?></span>
                                                 </div>                                                
                                                 
@@ -1149,7 +1149,7 @@
                         </select>
                         </div>
                         <div>
-                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">ESD:</label>
+                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date:</label>
                             <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
                         </div>
                         <div style="min-width: 100px;">
