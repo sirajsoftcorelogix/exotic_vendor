@@ -173,14 +173,15 @@
                      <?php if (!empty($purchaseOrders)): ?>
                         <?php foreach ($purchaseOrders as $order): ?>
                     <tr class="table-content-text">
-                        <td class=" whitespace-nowrap cursor-pointer text-lg text-yellow-400" title="<?= $order['flag_star'] ? 'Unmark as Important' : 'Mark as Important' ?>">
+                        <td class="whitespace-nowrap cursor-pointer text-lg text-yellow-400" title="<?= $order['flag_star'] ? 'Unmark as Important' : 'Mark as Important' ?>">
                             <?= $order['flag_star'] 
                                 ? '<i class="fa fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Unmark as Important\'></i>' 
                                 : '<i class="far fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Mark as Important\'></i>' 
                             ?>
                         </td>
 
-                        <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($order['po_number'] ?? 'N/A') ?></td>
+                        <td class="px-6 py-4 whitespace-nowrap"><a href="#" class="text-blue-600" onclick="handleAction('View', <?= htmlspecialchars($order['id']) ?>, this)"><?= htmlspecialchars($order['po_number'] ?? 'N/A') ?></a></td>
+						
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['po_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap">

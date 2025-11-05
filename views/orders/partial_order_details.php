@@ -63,7 +63,7 @@
                                     <input type="hidden" name="poitem[]" id="poitem_order_id" value="<?php echo $item['id']?>">                                    
                                     <button type="submit" class="po-button">Create PO</button>
                                     </form>
-                                    <span class="shipping-button">Express Shipping</span>
+                                    <!-- <span class="shipping-button">Express Shipping</span> -->
                                     
                                 </div>
                             </div>
