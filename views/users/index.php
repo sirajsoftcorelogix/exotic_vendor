@@ -78,7 +78,11 @@
                                     <td class="px-6 py-4 whitespace-nowrap"><?= $item['email']; ?></td>
                                     <td class="px-6 py-4 whitespace-nowrap"><?= $item['phone']; ?></td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span style="width: 145px; height: 25px; padding:15px 0px 15px 0px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white"><?= ($item['role'] != "") ? ucwords(str_replace("_", " ", $item['role'])) : '' ?></span>
+                                        <span style="width: 145px; height: 25px; padding:15px 0px 15px 0px;" class="px-3 py-1 inline-flex items-center justify-center text-xs leading-5 font-semibold rounded-md bg-black text-white">
+                                        <?php foreach($roles_list as $role):
+                                            if($item['role_id']==$role['id']) { echo $role['role_name']; }
+                                         endforeach; ?>
+                                        </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
@@ -210,10 +214,20 @@
                             </div>
 
                             <div>
+                                <label for="team" class="text-sm font-medium text-gray-700">Team:</label>
+                                <select id="team" name="team" class="form-input w-full bg-white mt-1" required>
+                                    <?php foreach($teams_list as $team): ?>
+                                        <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div>
                                 <label for="role" class="text-sm font-medium text-gray-700">Role:</label>
                                 <select id="role" name="role" class="form-input w-full bg-white mt-1" required>
-                                    <option value="admin">Admin</option>
-                                    <option value="onboarding_executive">Onboarding Executive</option>
+                                    <?php foreach($roles_list as $role): ?>
+                                        <option value="<?php echo $role['id']; ?>"><?php echo $role['role_name']; ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
 
@@ -283,10 +297,20 @@
                             </div>
 
                             <div>
+                                <label for="team" class="text-sm font-medium text-gray-700">Team:</label>
+                                <select id="editTeam" name="team" class="form-input w-full bg-white mt-1" required>
+                                    <?php foreach($teams_list as $team): ?>
+                                        <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div>
                                 <label for="role" class="text-sm font-medium text-gray-700">Role:</label>
-                                <select id="editRole" name="role" class="form-input w-full bg-white mt-1">
-                                    <option value="admin">Admin</option>
-                                    <option value="onboarding_executive">Onboarding Executive</option>
+                                <select id="editRole" name="role" class="form-input w-full bg-white mt-1" required>
+                                    <?php foreach($roles_list as $role): ?>
+                                        <option value="<?php echo $role['id']; ?>"><?php echo $role['role_name']; ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
 
@@ -312,7 +336,6 @@
   </div>
 </div>
 <!-- End Model Popup -->
-
 
 <!-- JavaScript to handle popup and form submission -->
 <script>
@@ -432,15 +455,14 @@
             document.getElementById("editEmail").value= user.email;
             document.getElementById("EditPhone").value= user.phone;
 
-            document.getElementById("editRole").value= user.role;
+            document.getElementById("editRole").value= user.role_id;
+            document.getElementById("editTeam").value= user.team_id;
             document.getElementById("editIs_active").value= user.is_active;
 
-            
             popupWrapperEdit.classList.remove('hidden');
             setTimeout(() => {
                 modalSliderEdit.classList.remove('translate-x-full');
             }, 10);
-            //document.getElementById('editUserModal').show();
         });
     }
 

@@ -92,17 +92,6 @@ class vendor {
         }
     }
     public function addVendor($data) {
-        // Check if vendor_email already exists
-        /*$checkEmailSql = "SELECT id FROM vp_vendors WHERE vendor_email = ?";
-        $checkEmailStmt = $this->conn->prepare($checkEmailSql);
-        $checkEmailStmt->bind_param('s', $data['vendor_email']);
-        $checkEmailStmt->execute();
-        $checkEmailStmt->store_result();
-        if ($checkEmailStmt->num_rows > 0) {
-            return ['success' => false, 'message' => 'Vendor email already exists. Please use a different email.'];
-        }
-        $checkEmailStmt->close();*/
-
         // Check if gst_number already exists (if provided)
         if (!empty($data['addGstNumber'])) {
             $checkGstSql = "SELECT id FROM vp_vendors WHERE gst_number = ?";
@@ -129,9 +118,9 @@ class vendor {
             $checkPanStmt->close();
         }
 
-        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssiis',
+        $stmt->bind_param('ssssssssssssssiiis',
             $data['addVendorName'],
             $data['addContactPerson'],
             $data['addEmail'],
@@ -147,6 +136,8 @@ class vendor {
             $data['addRating'],
             $data['addNotes'],
             $_SESSION["user"]["id"],
+            $data['addTeam'],
+            $data['addAgent'],
             $data['addStatus']
         );
         if ($stmt->execute()) {
@@ -159,17 +150,15 @@ class vendor {
             }
             return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status];
         }
-
-           
         return [
             'success' => false,
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
     public function updateVendor($id, $data) {
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, is_active = ? WHERE id = ?";
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssiisi', 
+        $stmt->bind_param('ssssssssssssssiiisi', 
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
@@ -186,6 +175,7 @@ class vendor {
             $data['editNotes'],
             $_SESSION["user"]["id"],
             $data['editTeam'],
+            $data['editAgent'],
             $data['editStatus'],
             $id
         );
@@ -197,7 +187,6 @@ class vendor {
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
-            
             return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status];
         }
         return [
@@ -278,7 +267,6 @@ class vendor {
         while ($row = $result->fetch_assoc()) {
             $vendors[] = $row;
         }
-
         // return structured data
         return [
             'vendors'        => $vendors,
@@ -342,6 +330,17 @@ class vendor {
             $categories[] = $row['category_id'];
         }
         return $categories;
+    }
+    public function getTeamMembers($team_id) {
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND team_id = '$team_id' ORDER BY name ASC";
+        $result = $this->conn->query($sql);
+        $teamMembers = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $teamMembers[] = $row;
+            }
+        }
+        return $teamMembers;
     }
 }
 ?>

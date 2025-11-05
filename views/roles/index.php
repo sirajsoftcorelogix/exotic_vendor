@@ -50,7 +50,7 @@
             </form>
         </div>
         <!-- Add User Button -->
-        <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" id="open-vendor-popup-btn">
+        <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" onclick="openEditModal(0);">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>Add</button>
@@ -74,6 +74,7 @@
                     </div>
                 </div>
             </div>
+            <div class="text-sm font-bold text-green-600 mb-4" id="messageDiv"><?php echo $_SESSION["role_message"] ?? ""; unset($_SESSION["role_message"]); ?></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
@@ -103,10 +104,12 @@
                                         <button class="menu-button" onclick="toggleMenu(this)">
                                             &#x22EE; <!-- Vertical ellipsis -->
                                         </button>
-                                        <ul class="menu-popup">
-                                            <li onclick="openEditModal(<?= htmlspecialchars($row['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
-                                            <li class="delete-btn" data-id="<?php echo $row['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
-                                        </ul>
+                                        <?php if($row['id'] != 1) { ?>
+                                            <ul class="menu-popup">    
+                                                <li onclick="openEditModal(<?= htmlspecialchars($row['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                                <li class="delete-btn" data-id="<?php echo $row['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            </ul>
+                                        <?php } ?>
                                     </div>
 
                                 </td>
@@ -282,6 +285,14 @@
 
 <!-- JavaScript to handle popup and form submission -->
 <script>
+    const myDiv = document.getElementById('messageDiv');
+    // Clear the div after 5000 milliseconds (5 seconds)
+    setTimeout(() => {
+        if (myDiv.innerHTML.trim() !== '') {
+            myDiv.innerHTML = '';
+        }
+    }, 3000);
+
     // Toggle menu visibility
     function toggleMenu(button) {
         const popup = button.nextElementSibling;
@@ -380,7 +391,7 @@
         });
     });
 
-    const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
+    /*const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
     const popupWrapper = document.getElementById('popup-wrapper');
     const modalSlider = document.getElementById('modal-slider');
     const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
@@ -401,9 +412,9 @@
         if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
             popupWrapper.classList.add('hidden');
         }
-    });
+    });*/
 
-    openVendorPopupBtn.addEventListener('click', openVendorPopup);
+    /*openVendorPopupBtn.addEventListener('click', openVendorPopup);
     cancelVendorBtn.addEventListener('click', closeVendorPopup);
     closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
 
@@ -442,7 +453,7 @@
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
             }
         });
-    };
+    };*/
 
     let successModalTimer;
     // Delete
@@ -497,13 +508,21 @@
     }
 
     // Edit User Modal Logic    
-    const popupWrapperEdit = document.getElementById('editVendorModal');
+    /*const popupWrapperEdit = document.getElementById('editVendorModal');
     const modalSliderEdit = document.getElementById('modal-slider-edit');
     const cancelVendorBtnEdit = document.getElementById('cancel-vendor-btn-edit');
-    const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
+    const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');*/
 
     function openEditModal(id) {
-        closeAllMenus();
+        if(id == 0) {
+            window.location.href = '?page=roles&action=add';
+            return;
+        } else {
+            window.location.href = '?page=roles&action=edit&role_id='+ id;
+            return;
+        }
+
+        /*closeAllMenus();
         fetch("?page=roles&action=roleDetails&id=" + id)
         .then(res => res.json())
         .then(data => {
@@ -523,17 +542,17 @@
             setTimeout(() => {
                 modalSliderEdit.classList.remove('translate-x-full');
             }, 10);
-        });
+        });*/
     }
 
     function closeVendorPopupEdit() {
         modalSliderEdit.classList.add('translate-x-full');
     }
 
-    closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
-    cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    //closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    //cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
 
-    document.getElementById('editUserForm').onsubmit = function(e) {
+    /*document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
         // Ensure CKEditor updates <textarea>
         for (var instance in CKEDITOR.instances) {
@@ -567,5 +586,5 @@
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
             }
         });
-    };
+    };*/
 </script>

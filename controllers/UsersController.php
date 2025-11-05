@@ -227,8 +227,12 @@ class UsersController {
         $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
         
         $users_data = $usersModel->getAllUsersListing($page_no, $limit, $search, $role_filter, $status_filter);
+        $roles = $usersModel->getAllRoles();
+        $teams = $usersModel->getAllTeams();
         $data = [
             'users' => $users_data["users"],
+            'roles_list' => $roles,
+            'teams_list' => $teams,
             'page_no' => $page_no,
             'total_pages' => $users_data["totalPages"],
             'sort_by' => $sort_by,
