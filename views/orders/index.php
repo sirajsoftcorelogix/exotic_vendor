@@ -818,13 +818,6 @@
     </div>
 </div>
 
-<div class="container mx-auto p-8">
-    <!-- Button to open the details modal -->
-    <button id="open-details-modal"
-            class="bg-blue-600 text-white rounded-md font-medium text-sm flex items-center justify-center transition hover:bg-blue-700 px-6 py-3">
-        Open New Modal
-    </button>
-</div>
 <!-- Order Details Popup Modal -->
 <!-- <div class="fixed inset-y-0 right-0 w-[400px] bg-white shadow-lg p-4" id="orderDetailOffcanvas" style="display: none; z-index: 1000;">
   Popup content goes here

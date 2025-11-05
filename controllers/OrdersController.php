@@ -343,9 +343,10 @@ class OrdersController {
             $order = $ordersModel->getOrderByOrderNumber($order_number);
             $statusList = $commanModel->get_order_status_list();
             if ($order) {
-                renderTemplateClean('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList], 'Order Details');
+                renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
+                //renderTemplateClean('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList], 'Order Details');
             } else {
-                echo '<p>Order not found.</p>';
+                echo '<p>Order details not found.</p>';
             }
         } else {
             echo '<p>Invalid Order Number.</p>';
