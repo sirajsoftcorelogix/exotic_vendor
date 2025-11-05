@@ -6,9 +6,11 @@ $rolesModel = new Roles($conn);
 global $root_path;
 global $domain;
 class RolesController {
+    public function __construct() {
+        is_login();
+    }
 
     public function index() {
-        is_login();
         global $rolesModel;
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
@@ -31,22 +33,50 @@ class RolesController {
             'totalRecords' => $pt_data["totalRecords"],
             'status_filter'=> $status_filter,
         ];
-        
         renderTemplate('views/roles/index.php', $data, 'Manage Roles');
     }
     public function addRecord() {
-        is_login();
         global $rolesModel;
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $data = $_POST;
-            $id = isset($data['id']) ? (int)$data['id'] : 0;
-            if ($id > 0) {
-                $result = $rolesModel->updateRecord($id, $data);
-            } else {
-                $result = $rolesModel->addRecord($data);            
-            }
-            echo json_encode($result);
+        $data = $_POST;
+        $result = $rolesModel->addRecord($data);      
+        $_SESSION["role_message"] = $result['message'];
+        header("location: " . base_url('?page=roles&action=list'));
+        exit;
+    }
+    public function addRRecord() {
+        global $rolesModel;
+        $result = $rolesModel->getRecord(0);
+        $data = [
+            'roles' => $result["roles"],
+            'modules_str' => $result["modules_str"],
+        ];
+        renderTemplate('views/roles/add.php', $data, 'Add Role');
+    }
+    public function editRecord() {
+        global $rolesModel;
+        $roleId = isset($_GET['role_id']) ? $_GET['role_id'] : 0;
+        if (!$roleId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Request.']);
+            exit;
         }
+        $data = $rolesModel->getRecord($roleId);
+        $data = [
+            'roles' => $data["roles"],
+            'modules_str' => $data["modules_str"],
+        ];
+        renderTemplate('views/roles/edit.php', $data, 'Edit Role');
+    }
+    public function updateRecord() {
+        global $rolesModel;
+        $roleId = isset($_POST['role_id']) ? $_POST['role_id'] : 0;
+        if (!$roleId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+            exit;
+        }
+        $data = $_POST;
+        $result = $rolesModel->updateRecord($roleId, $data);
+        $_SESSION["role_message"] = $result['message'];
+        header("location: " . base_url('?page=roles&action=list'));
         exit;
     }
     public function delete() {

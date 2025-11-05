@@ -91,10 +91,10 @@ class User {
         }
         $checkStmt->close();
 
-        $sql = "INSERT INTO vp_users (name, email, phone, password, role, is_active) VALUES (?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_users (name, email, phone, password, team_id, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-        $stmt->bind_param('sssssi', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active']);
+        $stmt->bind_param('ssssiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['team'], $data['role'], $data['is_active']);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'User added successfully.'];
         }
@@ -116,14 +116,14 @@ class User {
         $checkStmt->close();
 
         if (!empty($data['password'])) {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role = ?, is_active = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, team_id = ?, role_id = ?, is_active = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            $stmt->bind_param('sssssii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('ssssiiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['team'], $data['role'], $data['is_active'], $id);
         } else {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role = ?, is_active = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, team_id = ?, role_id = ?, is_active = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('ssssii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('sssiiii', $data['name'], $data['email'], $data['phone'], $data['team'], $data['role'], $data['is_active'], $id);
         }
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'User updated successfully.'];
@@ -179,15 +179,6 @@ class User {
         $stmt->execute();
         $result = $stmt->get_result();
         return $result->fetch_row()[0];
-    }   
-    public function getRoles() {
-        $sql = "SELECT id, role_name FROM roles WHERE active = 1 ORDER BY role_name ASC";
-        $result = $this->db->query($sql);
-        $roles = [];        
-        while ($row = $result->fetch_assoc()) {
-            $roles[$row['id']] = $row['role_name'];
-        }
-        return $roles;
     }
     public function getAllUsers() {
         $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
@@ -278,6 +269,24 @@ class User {
             'totalRecords' => $totalRecords,
             'search'       => $search
         ];
+    }
+    public function getAllRoles() {
+        $sql = "SELECT id, role_name FROM vp_roles WHERE is_active = 1 ORDER BY role_name ASC";
+        $result = $this->db->query($sql);
+        $roles = [];        
+        while ($row = $result->fetch_assoc()) {
+            $roles[] = $row;
+        }
+        return $roles;
+    }
+    public function getAllTeams() {
+        $sql = "SELECT id, team_name FROM vp_teams WHERE is_active = 1 ORDER BY team_name ASC";
+        $result = $this->db->query($sql);
+        $teams = [];        
+        while ($row = $result->fetch_assoc()) {
+            $teams[] = $row;
+        }
+        return $teams;
     }
 }
 
