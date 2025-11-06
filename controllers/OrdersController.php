@@ -189,8 +189,10 @@ class OrdersController {
                 foreach ($order['cart'] as $item) {  
                     $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
                     $esd = '0000-00-00';
+                    $local_stock_int = (int) floatval($item['local_stock']);
+                    $lead_time_int = (int) floatval($item['leadtime']);
                     if($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])){
-                        if(!empty($item['local_stock']) && $item['local_stock'] > 0){
+                        if(!empty($local_stock_int) && $local_stock_int > 0){
                             $esd = date('Y-m-d', strtotime($orderdate. ' + 3 days'));
                         } else {
                             // Normalize options to array and check for 'express'
@@ -212,14 +214,14 @@ class OrdersController {
                             if ($hasExpress) {
                                 $esd = date('Y-m-d', strtotime($orderdate. ' + 0 days'));
                             } else {
-                                $esd = date('Y-m-d', strtotime($orderdate. ' + ' .$item['leadtime'].' days'));
+                                $esd = date('Y-m-d', strtotime($orderdate. ' + ' . $lead_time_int . ' days'));
                             }
                         }
                     }else{
-                        if(!empty($item['local_stock']) && $item['local_stock'] > 0){
-                            $esd = date('Y-m-d', strtotime($orderdate. ' + '.($item['local_stock']).' days'));
+                        if(!empty($local_stock_int) && $local_stock_int > 0){
+                            $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));                           
                         } else {
-                            $esd = date('Y-m-d', strtotime($orderdate. ' + '.($item['leadtime']).' days'));
+                            $esd = date('Y-m-d', strtotime($orderdate. ' + '.($lead_time_int).' days'));                            
                         }
                     }
 					$rdata = [
@@ -281,7 +283,7 @@ class OrdersController {
                     if (isset($data['success']) && $data['success'] == 1) {                        
                         $imported++;
                     } 
-                    //print_array($rdata);                   
+                   // print_array($rdata);                   
             }
            
         }
