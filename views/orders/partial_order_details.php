@@ -5,8 +5,10 @@
                 <div>
                     <div class="accordion-trigger cursor-pointer border-b pb-4">
                         <div class="flex items-start space-x-4">
-                            <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image"
-                                 class="h-36 rounded-lg object-cover flex-shrink-0">
+                            <div class="flex-shrink-0 w-36 h-36">
+                                <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image"
+                                     class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0">
+                            </div>
                             <div class="flex-grow">
                                 <div>
                                     <p> <span class="section-value"><?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?></span></p>
@@ -40,7 +42,7 @@
                                         <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
                                     </div>
                                     <div class="status-box flex items-center justify-center">
-                                        <span class="status-text">Shipped on : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
+                                        <span class="status-text">Shipped by : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
                                     </div>
                                     <div class="flex space-x-3 justify-end">  
                                         <?php if($item['po_number']): ?>
