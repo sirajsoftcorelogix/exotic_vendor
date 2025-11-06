@@ -102,7 +102,8 @@ class OrdersController {
             http_response_code(403); // Forbidden
             die('Unauthorized access.');
         }
-
+        //order status list
+        $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
         $lastLog = $ordersModel->getLastImportLog();
         
@@ -124,7 +125,8 @@ class OrdersController {
         //$to_date = strtotime(date('13-08-2025 00:00:00'));
         //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
         //$to_date = 1755102092;   // Example fixed date 13-08-2025 23:59:59
-        $url = 'https://www.exoticindia.com/action';
+        //$url = 'https://www.exoticindia.com/action';
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
        
         $postData = [
             'makeRequestOf' => 'vendors-orderjson',
@@ -228,7 +230,9 @@ class OrdersController {
                     'vendor' => $item['vendor'] ?? '',
                     'country' => $order['country'] ?? '',
                     'material' => $item['material'] ?? '',
-                    'status'   => strtoupper($order['payment_type']) === 'AMAZONFBA' ? 'shipped' : 'pending'
+                    //$orderStatus = productionOrderStatusList()[$item['status']] ?? 'pending',
+                    $orderStatus = !empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending',
+                    'status'   => strtoupper($order['payment_type']) === 'AMAZONFBA' ? 'shipped' : $orderStatus,
 					 ];
 					$totalorder++;                
                     
