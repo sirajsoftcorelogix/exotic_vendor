@@ -45,9 +45,9 @@ class Order{
                 $sql .= " AND vp_orders.status = 'pending'";
             } elseif ($filters['status_filter'] === 'processed') {
                 //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
-                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
             } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
@@ -125,9 +125,9 @@ class Order{
                 $sql .= " AND (po_number IS NULL OR po_number = '')";
             } elseif ($filters['status_filter'] === 'processed') {
                 //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
-                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
             } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
             }
@@ -245,7 +245,9 @@ class Order{
             'credit',
             'vendor',
             'country',
-            'material'
+            'material',
+            'status',
+            'esd'
         ];
 
         // Build SQL query
@@ -479,6 +481,21 @@ class Order{
             return $result->fetch_all(MYSQLI_ASSOC);
         }
         return null;
+    }
+    function adminOrderStatusList($admin = true) {
+        $sql = "SELECT * FROM vp_order_status WHERE admin_id != 0 ORDER BY id ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $result->fetch_all(MYSQLI_ASSOC);
+        }
+        //array list with slug as key
+        $statusList = [];
+        foreach ($result as $row) {
+            $statusList[$row['admin_id']] = $row['slug'];
+        }
+        return $statusList;
     }
 }
 ?>
