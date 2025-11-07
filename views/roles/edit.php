@@ -7,7 +7,7 @@
                 <div class="pt-4">
                     <div>
                         <label class="text-sm font-medium text-gray-700">Role Name <span class="text-red-500">*</span></label>
-                        <input type="text" class="form-input w-full mt-1" required name="editRName" id="editRName" value="<?php echo $roles["role_name"];?>" />
+                        <input type="text" class="form-input w-full mt-1 required" required name="editRName" id="editRName" value="<?php echo $roles["role_name"];?>" />
                     </div>
                     <div>
                         <label class="text-sm font-medium text-gray-700">Description</label>
@@ -33,3 +33,14 @@
         </div>
     </form>
 </div>
+<script>
+    const requiredFields = document.querySelectorAll('.required');
+    // Optional: Auto-trim leading spaces on input
+    requiredFields.forEach(field => {
+        field.addEventListener('input', function() {
+            if (this.value.charAt(0) === ' ') {
+                this.value = this.value.trimStart(); // Remove leading spaces
+            }
+        });
+    });
+</script>
