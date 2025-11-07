@@ -5,10 +5,16 @@
                 <div>
                     <div class="accordion-trigger cursor-pointer border-b pb-4">
                         <div class="flex items-start space-x-4">
-                            <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image"
-                                 class="h-36 rounded-lg object-cover flex-shrink-0">
+                            <div class="flex-shrink-0 w-36 h-36">
+                                <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image"
+                                     class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0">
+                            </div>
                             <div class="flex-grow">
+                                <div>
+                                    <p> <span class="section-value"><?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?></span></p>
+                                </div>
                                 <div class="flex justify-between items-start">
+                                    
                                     <h3 class="item-title pr-4"><?php echo $item['title']; ?></h3>
                                     <div class="flex flex-col items-center space-y-2 flex-shrink-0 ml-4">
                                         <!-- <button class="text-gray-500 hover:text-gray-800">
@@ -29,13 +35,29 @@
                                 </div>
                                 <p class="item-meta mt-0">Item Code: <?php echo $item['item_code']; ?></p>
                                 <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
+                                <p class="vendor-text mt-2"><strong class="vendor-title">Vendor :</strong> <span
+                                        class="vendor-name"><?php echo $item['vendor']; ?></span></p>
                                 <div class="flex justify-between items-center mt-3">
                                     <div class="status-box flex items-center justify-center">
                                         <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
                                     </div>
+                                    <div class="status-box flex items-center justify-center">
+                                        <span class="status-text">Shipped by : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
+                                    </div>
+                                    <div class="flex space-x-3 justify-end">  
+                                        <?php if($item['po_number']): ?>
+                                        <span class="po-button"><?php echo $item['po_number']; ?></span>
+                                        <?php else: ?>
+                                        <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
+                                        <input type="hidden" name="poitem[]" id="poitem_order_id" value="<?php echo $item['id']?>">                                    
+                                        <button type="submit" class="po-button">Create PO</button>
+                                        </form>
+                                        <?php endif; ?>
+                                        <!-- <span class="shipping-button">Express Shipping</span> -->                                    
+                                    </div>
                                 </div>
-                                <p class="vendor-text mt-2"><strong class="vendor-title">Vendor :</strong> <span
-                                        class="vendor-name"><?php echo $item['vendor']; ?></span></p>
+                                
+                                
                             </div>
                         </div>
                     </div>
@@ -44,35 +66,60 @@
                         <!-- Item Details -->
                         <div class="p-1 rounded-lg" style="background-color: rgba(245, 245, 245, 1);">
                             <div class="grid grid-cols-2 gap-x-1 items-end">
-                                <div class="space-y-1">
+                                <!-- <div class="space-y-1">
                                     <p><span class="item-detail-title">Item Code : </span><span
-                                            class="item-detail-value"><?php echo $item['item_code']; ?></span></p>
+                                            class="item-detail-value"><?php //echo $item['item_code']; ?></span></p>
                                     <p><span class="item-detail-title">Material : </span><span
-                                            class="item-detail-value"><?php echo $item['material']; ?></span></p>
+                                            class="item-detail-value"><?php //echo $item['material']; ?></span></p>
                                     <p><span class="item-detail-title">Color : </span><span class="item-detail-value"><?php echo $item['color']; ?></span>
                                     </p>
                                     <p><span class="item-detail-title">Size : </span><span
-                                            class="item-detail-value"><?php echo $item['size']; ?></span></p>
+                                            class="item-detail-value"><?php //echo $item['size']; ?></span></p>
                                     <p><span class="item-detail-title">Shipping Country : </span><span
-                                            class="item-detail-value"><?php echo $item['shipping_country']; ?></span></p>
+                                            class="item-detail-value"><?php //echo $item['shipping_country']; ?></span></p>
                                     <p><span class="item-detail-title">EST : </span><span class="item-detail-value"><?php echo $item['esd']; ?></span>
                                     </p>
-                                </div>
-                                <div class="flex space-x-3 justify-end">                                    
-                                    <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
-                                    <input type="hidden" name="poitem[]" id="poitem_order_id" value="<?php echo $item['id']?>">                                    
-                                    <button type="submit" class="po-button">Create PO</button>
-                                    </form>
-                                    <!-- <span class="shipping-button">Express Shipping</span> -->
-                                    
-                                </div>
+                                </div> -->
+                                
                             </div>
                         </div>
+                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
+                            <div>
+                                <p><strong class="section-title">Shipping Country : </strong><span class="section-value"><?php echo $item['shipping_country']; ?></span>
+                                </p>                                
+                            </div>
+                            <div>
+                                <p><strong class="section-title">Billing Country : </strong><span class="section-value"><?php echo $item['country']; ?></span>
+                                </p>
+                            </div>
+                        </div>
+                        
                         <!-- Marketplace -->
                         <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <p><span class="section-title">Marketplace : </span><span
+                            <div><p><span class="section-title">Marketplace : </span><span
                                     class="section-value"><?php echo $item['marketplace_vendor']; ?></span></p>
-                            <p><span class="section-title">Vendor : </span><span class="section-value"><?php echo $item['vendor']; ?></span></p>
+                            </div>
+                            <div>
+                                    <p><span class="section-title">Vendor : </span><span class="section-value"><?php echo $item['vendor']; ?></span></p>
+                            </div>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
+                            <div>
+                                <p><strong class="section-title">Color : </strong><span class="section-value"><?php echo $item['color']; ?></span>
+                                </p>
+                                <p><strong class="section-title">Size : </strong><span class="section-value"><?php echo $item['size']; ?></span>
+                                </p>
+                            </div>
+                            <div>
+                                <p><strong class="section-title">Material : </strong><span class="section-value"><?php echo $item['material']; ?></span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="bg-green-200 p-4 rounded-lg grid grid-cols-2 gap-x-8">
+                            <div>
+                                <p><span class="section-title">Addons : </span><span class="section-value"><?php $options = json_decode($item['options'], true); echo implode(', ', $options); ?></span>
+                                </p>
+                            </div>
                         </div>
                         <!-- Stock -->
                         <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
@@ -92,20 +139,27 @@
                         <!-- Pricing -->
                         <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
                             <div>
+                                
                                 <p><span class="section-title">Item Price : </span><span
                                         class="section-value"><?php echo $item['itemprice']; ?></span></p>
                                 <p><span class="section-title">Final Price : </span><span
                                         class="section-value"><?php echo $item['finalprice']; ?></span></p>
                                 <p><span class="section-title">Cost Price : </span><span
                                         class="section-value"><?php echo $item['cost_price']; ?></span></p>
-                                <p><span class="section-title">Currency : </span><span class="section-value"><?php echo $item['currency']; ?></span>
-                                </p>
+                                <p><span class="section-title">Currency : </span><span 
+                                        class="section-value"><?php echo $item['currency']; ?></span></p>
+                                <p><span class="section-title">Cost price : </span><span 
+                                        class="section-value"><?php echo $item['cost_price']; ?></span></p>
                             </div>
                             <div>
                                 <p><span class="section-title">HSN Code : </span><span
                                         class="section-value"><?php echo $item['hsn']; ?></span></p>
                                 <p><span class="section-title">GST : </span><span class="section-value"><?php echo $item['gst']; ?></span></p>
                                 <p><span class="section-title">Credit : </span><span class="section-value"><?php echo $item['credit']; ?></span></p>
+                                <p><span class="section-title">Payment Type : </span><span 
+                                        class="section-value"><?php echo $item['payment_type']; ?></span></p>
+                                <p><span class="section-title">Credit : </span><span 
+                                        class="section-value"><?php echo $item['credit']; ?></span></p>
                             </div>
                         </div>
                         <!-- Coupon -->
@@ -150,7 +204,8 @@
                                 <p><span class="section-title">Product Length : </span><span class="section-value"><?php echo $item['prod_length'] . $item['length_unit']; ?></span>
                                 </p>
                             </div>
-                        </div>
+                        </div>                       
+                        
                         <!-- Notes -->
                         <div class="bg-white p-4 rounded-lg">
                             <p class="notes-title">Notes :</p>

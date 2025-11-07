@@ -102,7 +102,8 @@ class OrdersController {
             http_response_code(403); // Forbidden
             die('Unauthorized access.');
         }
-
+        //order status list
+        $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
         $lastLog = $ordersModel->getLastImportLog();
         
@@ -124,7 +125,8 @@ class OrdersController {
         //$to_date = strtotime(date('13-08-2025 00:00:00'));
         //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
         //$to_date = 1755102092;   // Example fixed date 13-08-2025 23:59:59
-        $url = 'https://www.exoticindia.com/action';
+        //$url = 'https://www.exoticindia.com/action';
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
        
         $postData = [
             'makeRequestOf' => 'vendors-orderjson',
@@ -184,7 +186,44 @@ class OrdersController {
             // Check if the order has the required fields
             // Map API fields to your table columns
                 
-                foreach ($order['cart'] as $item) {                
+                foreach ($order['cart'] as $item) {  
+                    $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
+                    $esd = '0000-00-00';
+                    $local_stock_int = (int) floatval($item['local_stock']);
+                    $lead_time_int = (int) floatval($item['leadtime']);
+                    if($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])){
+                        if(!empty($local_stock_int) && $local_stock_int > 0){
+                            $esd = date('Y-m-d', strtotime($orderdate. ' + 3 days'));
+                        } else {
+                            // Normalize options to array and check for 'express'
+                            $hasExpress = false;
+                            $options = $item['options'] ?? null;
+                            if (!empty($options)) {
+                                if (is_string($options)) {
+                                    $decoded = json_decode($options, true);
+                                    if (is_array($decoded)) {
+                                        $hasExpress = in_array('express', $decoded, true);
+                                    } else {
+                                        // fallback: check substring (case-insensitive) for non-JSON values
+                                        $hasExpress = stripos($options, 'express') !== false;
+                                    }
+                                } elseif (is_array($options)) {
+                                    $hasExpress = in_array('express', $options, true);
+                                }
+                            }
+                            if ($hasExpress) {
+                                $esd = date('Y-m-d', strtotime($orderdate. ' + 0 days'));
+                            } else {
+                                $esd = date('Y-m-d', strtotime($orderdate. ' + ' . $lead_time_int . ' days'));
+                            }
+                        }
+                    }else{
+                        if(!empty($local_stock_int) && $local_stock_int > 0){
+                            $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));                           
+                        } else {
+                            $esd = date('Y-m-d', strtotime($orderdate. ' + '.($lead_time_int).' days'));                            
+                        }
+                    }
 					$rdata = [
 					'order_number' => $order['orderid'] ?? '',
 					'shipping_country' => $order['shipping_country'] ?? '',
@@ -227,8 +266,13 @@ class OrdersController {
                     'credit' => $order['credit'] ?? '',
                     'vendor' => $item['vendor'] ?? '',
                     'country' => $order['country'] ?? '',
-                    'material' => $item['material'] ?? ''
-					 ];
+                    'material' => $item['material'] ?? '',
+                    //$orderStatus = productionOrderStatusList()[$item['status']] ?? 'pending',
+                    'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
+                        ? 'shipped'
+                        : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
+                    'esd' => $esd
+                    ];
 					$totalorder++;                
                     
                     $data = $ordersModel->insertOrder($rdata);
@@ -239,7 +283,7 @@ class OrdersController {
                     if (isset($data['success']) && $data['success'] == 1) {                        
                         $imported++;
                     } 
-                    //print_array($rdata);                   
+                   // print_array($rdata);                   
             }
            
         }

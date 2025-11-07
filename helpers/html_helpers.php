@@ -422,4 +422,21 @@
 			exit;
 		}
 	}
+	function productionOrderStatusList() {
+		/*  1: Confirmed
+			2: Cancellation request being processed
+			3: Return request being processed
+			4: Cancelled/Returned
+			5: Shipped
+			6: Returned */
+		return [
+			'1' => 'pending',
+			'2' => 'cancellation_request_processed',
+			'3' => 'return_request_processed',
+			'4' => 'cancelled_returned',
+			'5' => 'shipped',
+			'6' => 'returned'
+		];
+	}
+	
 ?>
