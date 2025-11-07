@@ -347,7 +347,8 @@ class OrdersController {
     }
     public function updateStatus() {
         is_login();
-        global $ordersModel;
+        global $ordersModel; 
+        global $commanModel;
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $order_id = isset($_POST['status_order_id']) ? (int)$_POST['status_order_id'] : 0;
@@ -367,6 +368,30 @@ class OrdersController {
                     $update_data['esd'] = $esd;
                 }
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
+               
+                // call exotic india API to update order status
+                $orderval = $ordersModel->getOrderById($order_id);
+                $apidata = [
+                    'orderid' => $orderval['order_number'],
+                    'level' => 'item',
+                    'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
+                    'size' => trim($orderval['size']),
+                    'color' => trim($orderval['color']),
+                    'itemcode' => trim($orderval['item_code'])
+                ];
+                $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
+                //log status change
+                $logData = [
+                    'order_id' => $order_id,
+                    'status' => $new_status,
+                    'changed_by' => $_SESSION['user']['id'],
+                    'api_response' => json_encode($resp),
+                    'change_date' => date('Y-m-d H:i:s')
+                ];
+                //print_array($apidata);
+                //print_array($logData);
+                $commanModel->add_order_status_log($logData);
+
                 if ($updated) {
                     echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);
                 } else {

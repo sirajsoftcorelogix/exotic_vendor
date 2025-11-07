@@ -124,13 +124,14 @@ class Roles {
         $permissions = $data['permissions'] ?? [];
         $query = "SELECT COUNT(*) AS total FROM vp_roles WHERE role_name = '".$data['addRName']."'";
         $result = $this->conn->query($query);
-        $data = mysqli_fetch_assoc($result);
-        if ($data['total'] > 0) {
+        $exist = mysqli_fetch_assoc($result);
+        if ($exist['total'] > 0) {
             return [
                 'success' => false,
                 'message' => "Role name already exists."
             ];
         } else {
+			//print_array($data);
             $sql = "INSERT INTO vp_roles (role_name, role_description, user_id, is_active) VALUES (?, ?, ?, ?)";
             $stmt = $this->conn->prepare($sql);
             $stmt->bind_param('ssii',
