@@ -1,5 +1,5 @@
 <div class="bg-white p-4 md:p-8">
-    <h1>Edit Role</h1>
+    <h1>Add Role</h1>
     <form action="<?php echo base_url('?page=roles&action=add_role'); ?>" id="add_role" method="POST">
         <div class="flex flex-col md:flex-row justify-between mb-8">
             <div class="h-full w-full overflow-y-auto">
