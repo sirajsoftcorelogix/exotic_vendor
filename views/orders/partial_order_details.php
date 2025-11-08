@@ -41,7 +41,7 @@
                                     <div class="status-box flex items-center justify-center">
                                         <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
                                     </div>
-                                    <div class="status-box flex items-center justify-center">
+                                    <div class="status-box w-48 flex items-center justify-center">
                                         <span class="status-text">Shipped by : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
                                     </div>
                                     <div class="flex space-x-3 justify-end">  
