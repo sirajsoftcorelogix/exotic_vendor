@@ -391,19 +391,19 @@
                             </div>
                             <div>
                                 <label for="sub_total" class="text-sm font-medium text-gray-700">Sub Total ₹: <span class="text-red-500">*</span></label>
-                                <input type="number" id="sub_total" name="sub_total" value="" class="form-input w-full mt-1">
+                                <input type="number" step="0.01" inputmode="decimal" id="sub_total" name="sub_total" value="" class="form-input w-full mt-1">
                             </div>
                             <div>
                                 <label for="gst_total" class="text-sm font-medium text-gray-700">GST Total ₹: </label>
-                                <input type="number" id="gst_total" name="gst_total" class="form-input w-full mt-1">
+                                <input type="number" step="0.01" inputmode="decimal" id="gst_total" name="gst_total" class="form-input w-full mt-1">
                             </div>
                             <div>
                                 <label for="shipping" class="text-sm font-medium text-gray-700">Shipping ₹: </label>
-                                <input type="number" id="shipping" name="shipping" value="" class="form-input w-full mt-1">
+                                <input type="number" step="0.01" inputmode="decimal" id="shipping" name="shipping" value="" class="form-input w-full mt-1">
                             </div>
                             <div>
                                 <label for="grand_total" class="text-sm font-medium text-gray-700">Grand Total ₹: <span class="text-red-500">*</span></label>
-                                <input type="number" id="grand_total" name="grand_total" value="" class="form-input w-full mt-1 bg-gray-100" readonly>
+                                <input type="number" step="0.01" inputmode="decimal" id="grand_total" name="grand_total" value="" class="form-input w-full mt-1 bg-gray-100" readonly>
                             </div>
                         </div>
 
