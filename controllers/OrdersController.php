@@ -381,7 +381,7 @@ class OrdersController {
                 //     'itemcode' => trim($orderval['item_code'])
                 // ];
                 // //run update if admin id not 0
-                // if ($apidata['order_status'] != 0) {
+                // if ($apidata['order_status'] > 0) {
                 //     $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
                 // }
                 //log status change
