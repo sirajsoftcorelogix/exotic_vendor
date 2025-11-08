@@ -497,5 +497,48 @@ class Order{
         }
         return $statusList;
     }
+    function updateImportedOrder($data) {
+        // Validate inputs
+        if (empty($data['order_number']) || empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Order number or item code is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET 
+                shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
+                groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, gst = ?, hsn = ?, 
+                local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
+                numsold = ?, product_weight = ?, product_weight_unit = ?,
+                prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
+                backorder_status = ?, backorder_percent = ?, backorder_delay = ?,
+                payment_type = ?, coupon = ?, coupon_reduce = ?, giftvoucher = ?, giftvoucher_reduce = ?,
+                credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?
+                WHERE order_number = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $stmt->bind_param('ssssssssddssssisssssssssssssssssssssssssss', 
+            $data['shipping_country'], $data['title'], $data['description'], $data['size'], $data['color'],
+            $data['groupname'], $data['subcategories'], $data['currency'], $data['itemprice'], $data['finalprice'],
+            $data['image'], $data['marketplace_vendor'], $data['quantity'], $data['options'], $data['gst'], $data['hsn'],
+            $data['local_stock'], $data['cost_price'], $data['location'], $data['order_date'], $data['processed_time'],
+            $data['numsold'], $data['product_weight'], $data['product_weight_unit'],
+            $data['prod_height'], $data['prod_width'], $data['prod_length'], $data['length_unit'],
+            $data['backorder_status'], $data['backorder_percent'], $data['backorder_delay'],
+            $data['payment_type'], $data['coupon'], $data['coupon_reduce'], $data['giftvoucher'], $data['giftvoucher_reduce'],
+            $data['credit'], $data['vendor'], $data['country'], $data['material'], $data['status'], $data['esd'],
+            $data['order_number'], $data['item_code']
+        );
+        if ($stmt->execute()) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
 ?>
