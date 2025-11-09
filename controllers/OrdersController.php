@@ -271,7 +271,8 @@ class OrdersController {
                     'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
                         ? 'shipped'
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
-                    'esd' => $esd
+                    'esd' => $esd,
+                    'updated_at' => date('Y-m-d H:i:s')
                     ];
 					$totalorder++;                
                     
