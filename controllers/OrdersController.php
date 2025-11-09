@@ -491,8 +491,8 @@ class OrdersController {
             return;
         }
         // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
-        print_array($orders);
-        exit;
+        // print_array($orders);
+        // exit;
         if (empty($orders['orders'])) {
             //echo "No orders found in the API response.";
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
