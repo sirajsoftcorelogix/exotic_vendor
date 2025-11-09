@@ -1,4 +1,17 @@
 <?php
+//count
+$imported = isset($data['imported']) ? $data['imported'] : 0;
+$total = isset($data['total']) ? $data['total'] : 0;
+echo "<div class='mrg-3'>";
+if ($imported > 0) {
+    $message = sprintf('%d orders updated successfully out of %d total orders.', $imported, $total);
+    echo flash_message($message, 'success');
+} else {
+    $message = 'No orders were updated. Please check the errors below.';
+    echo flash_message($message, 'error');
+}
+echo "<h1>Import Update Summary</h1>";
+//total affected rows, order number, item code
 foreach ($data['result'] as $result) {
 
     if (isset($result['success']) && $result['success']) {
