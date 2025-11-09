@@ -436,22 +436,14 @@ class OrdersController {
         //order status list
         $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
-        $lastLog = $ordersModel->getLastImportLog();
-        
-        //log create
-        $log_data = ['start_time' => date('Y-m-d H:i:s')];
-        $log_id = 0;
-		
-        if($logs = $ordersModel->orderImportLog($log_data)){
-            $log_id = $logs['insert_id'];
-        }        // Set your date range (example: last 7 days)
-
-        $from_date = strtotime('-1 days');
+        // Set your date range (example: last 7 days)
+        //print_array($_GET);
+        $from_date = !empty($_GET['from_date']) ? strtotime($_GET['from_date'] . ' 00:00:00') : strtotime('-1 days');
         //echo "<br>";
-        if ($lastLog && !empty($lastLog['max_ordered_time'])) {         
-            $from_date = $lastLog['max_ordered_time'];
-        }
-        $to_date = time();
+        // if ($lastLog && !empty($lastLog['max_ordered_time'])) {         
+        //     $from_date = $lastLog['max_ordered_time'];
+        // }
+        $to_date = !empty($_GET['to_date']) ? strtotime($_GET['to_date'] . ' 23:59:59') : time();
         //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
         //$to_date = strtotime(date('13-08-2025 00:00:00'));
         //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
@@ -503,6 +495,7 @@ class OrdersController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
             return;
         }
+        // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
         // print_array($orders);
         // exit;
         if (empty($orders['orders'])) {
@@ -611,7 +604,7 @@ class OrdersController {
                     //add products
                     //$pdata[] = $ordersModel->addProducts($rdata);                   
                     
-                    if (isset($data['success']) && $data['success'] == 1) {                        
+                    if (isset($data['success']) && $data['success'] == true) {                        
                         $imported++;
                     } 
                    // print_array($rdata);                   
@@ -621,21 +614,7 @@ class OrdersController {
         //print_array($pdata);
         //print_r($result);
         //update log end time and imported count
-        if($log_id > 0){
-            $log_update_data = [
-                'end_time' => date('Y-m-d H:i:s'),
-                'successful_imports' => $imported,
-                'total_orders' => $totalorder,
-                'error' => isset($error) ? $error : '',
-                'log_details' => json_encode($result),
-                'max_ordered_time' => $order['processed_time'] ?? '',
-                'from_date' => $from_date,
-                'to_date' => $to_date,
-                'add_product_log' => ''//json_encode($pdata)
-            ];
-            //print_array($log_update_data);
-            $ordersModel->updateOrderImportLog($log_id, $log_update_data);
-        }
+        
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
             'result' => $result,
