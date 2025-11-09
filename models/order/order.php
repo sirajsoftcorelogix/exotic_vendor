@@ -557,14 +557,15 @@ class Order{
         array_unshift($refs, $types);
         call_user_func_array([$stmt, 'bind_param'], $refs);
         // print binded parameters for debugging
-        //print_array($refs);
-        // foreach ($refs as $ref) {
-        //     if ($ref === $types) continue; // Skip types string
-        //     echo $ref . "\n";
-        // }
-        print_r($stmt);
+        //print_array($refs);        
+
+        //foreach ($refs as $ref) {
+            //if ($ref === $types) continue; // Skip types string
+            //echo $ref . "\n";
+        //}
+        //print_r($stmt);
         if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Order updated successfully.'];
+            return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
         } else {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }

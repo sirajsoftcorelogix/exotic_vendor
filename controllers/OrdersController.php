@@ -611,7 +611,7 @@ class OrdersController {
         //print_r($result);
         //update log end time and imported count
         
-        renderTemplateClean('views/orders/import_result.php', [
+        renderTemplateClean('views/orders/import_update_result.php', [
             'imported' => $imported,
             'result' => $result,
             'total' => $totalorder,
