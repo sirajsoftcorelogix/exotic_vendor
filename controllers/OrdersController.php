@@ -271,8 +271,7 @@ class OrdersController {
                     'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
                         ? 'shipped'
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
-                    'esd' => $esd,
-                    'updated_at' => date('Y-m-d H:i:s')
+                    'esd' => $esd
                     ];
 					$totalorder++;                
                     
@@ -427,8 +426,7 @@ class OrdersController {
         }
         exit;
     }
-    public function updateImportedOrders() {
-        //is_login();
+    public function updateImportedOrders() {        
         global $ordersModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
@@ -445,11 +443,7 @@ class OrdersController {
         //     $from_date = $lastLog['max_ordered_time'];
         // }
         $to_date = !empty($_GET['to_date']) ? strtotime($_GET['to_date'] . ' 23:59:59') : time();
-        //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
-        //$to_date = strtotime(date('13-08-2025 00:00:00'));
-        //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
-        //$to_date = 1755102092;   // Example fixed date 13-08-2025 23:59:59
-        //$url = 'https://www.exoticindia.com/action';
+      
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
        
         $postData = [
@@ -596,7 +590,8 @@ class OrdersController {
                     'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
                         ? 'shipped'
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
-                    'esd' => $esd
+                    'esd' => $esd,
+                    'updated_at' => date('Y-m-d H:i:s')
                     ];
 					$totalorder++;                
                     
