@@ -564,11 +564,12 @@ class Order{
             //echo $ref . "\n";
         //}
         //print_r($stmt);
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
-        } else {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-        }
+        //comment the below line after execution on 09-06-2024
+        // if ($stmt->execute()) {
+        //     return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        // } else {
+        //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        // }
     }
 }
 ?>
