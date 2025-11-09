@@ -126,7 +126,7 @@ class PurchaseOrdersController {
         global $purchaseOrdersModel;
         global $ordersModel;
         // Validate and process the form submission
-        $vendor = isset($_POST['vendor']) ? $_POST['vendor'] : '';
+        $vendor = isset($_POST['vendor_id']) ? $_POST['vendor_id'] : '';
         $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : '';
         $deliveryDueDate = isset($_POST['delivery_due_date']) ? $_POST['delivery_due_date'] : '';
         $deliveryAddress = isset($_POST['delivery_address']) ? $_POST['delivery_address'] : '';
@@ -1406,5 +1406,12 @@ class PurchaseOrdersController {
         }
 
         echo json_encode(['success' => true, 'message' => 'Challan deleted successfully.']);
+    }
+    public function vendorSearch(){
+        global $vendorsModel;
+        $term = isset($_GET['query']) ? $_GET['query'] : '';
+        $vendors = $vendorsModel->searchVendors($term);
+        echo json_encode(['success' => true, 'data' => $vendors]);
+        exit;
     }
 }
