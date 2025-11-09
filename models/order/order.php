@@ -513,7 +513,7 @@ class Order{
                 prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
                 backorder_status = ?, backorder_percent = ?, backorder_delay = ?,
                 payment_type = ?, coupon = ?, coupon_reduce = ?, giftvoucher = ?, giftvoucher_reduce = ?,
-                credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?, updated_at = NOW()
+                credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?, updated_at = ?
                 WHERE order_number = ? AND item_code = ?";
         $stmt = $this->db->prepare($sql);
 
@@ -532,7 +532,7 @@ class Order{
             $data['prod_height'], $data['prod_width'], $data['prod_length'], $data['length_unit'],
             $data['backorder_status'], $data['backorder_percent'], $data['backorder_delay'],
             $data['payment_type'], $data['coupon'], $data['coupon_reduce'], $data['giftvoucher'], $data['giftvoucher_reduce'],
-            $data['credit'], $data['vendor'], $data['country'], $data['material'], $data['status'], $data['esd'],
+            $data['credit'], $data['vendor'], $data['country'], $data['material'], $data['status'], $data['esd'], $data['updated_at'],
             $data['order_number'], $data['item_code']
         ];
 
@@ -562,6 +562,7 @@ class Order{
         //     if ($ref === $types) continue; // Skip types string
         //     echo $ref . "\n";
         // }
+        print_r($stmt);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Order updated successfully.'];
         } else {
