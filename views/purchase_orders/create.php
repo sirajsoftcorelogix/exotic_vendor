@@ -28,14 +28,29 @@
         <div class="space-y-2 w-full md:w-auto">
             <div class="flex items-center">
                 <label for="vendor" class="block text-gray-700 form-label">Vendor : <span class="text-red-500"> *</span></label>
-                <select id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-full md:w-[300px]">
+                <!-- <select id="vendor" name="vendor" class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-full md:w-[300px]">
                     <option value="">Select Vendor</option>
-                    <?php foreach ($vendors as $vendor): ?>
+                    <?php /*foreach ($vendors as $vendor): ?>
                         <option value="<?= $vendor['id'] ?>"><?= htmlspecialchars($vendor['vendor_name']) ?></option>
-                    <?php endforeach; ?>  
-                </select>
+                    <?php endforeach;*/ ?>
+
+                </select> -->
+                <!-- replaced select with autocomplete input -->
+                <div style="position:relative; width:100%; max-width:600px;">
+                    <input
+                        type="text"
+                        id="vendor_autocomplete"
+                        class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-full md:w-[300px]"
+                        placeholder="Search vendor by name..."
+                        autocomplete="off"
+                        value=""
+                    >
+                    <input type="hidden" name="vendor_id" id="vendor_id" value="">
+                    <div id="vendor_suggestions" class="bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; left:0; right:0; z-index:50; max-height:240px; overflow:auto;"></div>
+                </div>
                 
             </div>
+
             <div class="flex items-center">
                 <label for="delivery-address" class="block text-gray-700 form-label">Delivery Address : <span class="text-red-500"> *</span></label>
                 <select id="delivery_address" name="delivery_address" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[300px]">
@@ -535,4 +550,38 @@ function addSelectOrderListeners() {
         alert("An error occurred while saving the Purchase Order.");
     });
 });*/
+// Vendor Autocomplete
+document.getElementById('vendor_autocomplete').addEventListener('input', function() {
+    const query = this.value;
+    const suggestionsBox = document.getElementById('vendor_suggestions');
+    const vendorIdInput = document.getElementById('vendor_id');
+
+    if (query.length < 2) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {            
+            suggestionsBox.innerHTML = '';
+            if (Array.isArray(data.data) && data.data.length > 0) {
+                data.data.forEach(vendor => {
+                    const div = document.createElement('div');
+                    div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+                    div.textContent = vendor.vendor_name;
+                    div.addEventListener('click', function() {
+                        document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
+                        vendorIdInput.value = vendor.id;
+                        suggestionsBox.style.display = 'none';
+                    });
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        });
+});
+
 </script>
