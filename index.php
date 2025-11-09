@@ -134,6 +134,9 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'update_import':
+                $controller->updateImportedOrders();
+                break;
             default:
                 $controller->index();
                 break;

@@ -347,7 +347,8 @@ class OrdersController {
     }
     public function updateStatus() {
         is_login();
-        global $ordersModel;
+        global $ordersModel; 
+        global $commanModel;
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $order_id = isset($_POST['status_order_id']) ? (int)$_POST['status_order_id'] : 0;
@@ -367,6 +368,34 @@ class OrdersController {
                     $update_data['esd'] = $esd;
                 }
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
+               
+                // commented out on 09-11-2025 as per request
+                // // call exotic india API to update order status
+                // $orderval = $ordersModel->getOrderById($order_id);
+                // $apidata = [
+                //     'orderid' => $orderval['order_number'],
+                //     'level' => 'item',
+                //     'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
+                //     'size' => trim($orderval['size']),
+                //     'color' => trim($orderval['color']),
+                //     'itemcode' => trim($orderval['item_code'])
+                // ];
+                // //run update if admin id not 0
+                // if ($apidata['order_status'] > 0) {
+                //     $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
+                // }
+                //log status change
+                $logData = [
+                    'order_id' => $order_id,
+                    'status' => $new_status,
+                    'changed_by' => $_SESSION['user']['id'],
+                    'api_response' => json_encode($resp),
+                    'change_date' => date('Y-m-d H:i:s')
+                ];
+                //print_array($apidata);
+                //print_array($logData);
+                $commanModel->add_order_status_log($logData);
+
                 if ($updated) {
                     echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);
                 } else {
@@ -396,6 +425,198 @@ class OrdersController {
             echo '<p>Invalid Order Number.</p>';
         }
         exit;
+    }
+    public function updateImportedOrders() {        
+        global $ordersModel;
+        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+            http_response_code(403); // Forbidden
+            die('Unauthorized access.');
+        }
+        //order status list
+        $statusList = $ordersModel->adminOrderStatusList('true');
+        //last order log fetch
+        // Set your date range (example: last 7 days)
+        //print_array($_GET);
+        $from_date = !empty($_GET['from_date']) ? strtotime($_GET['from_date'] . ' 00:00:00') : strtotime('-1 days');
+        //echo "<br>";
+        // if ($lastLog && !empty($lastLog['max_ordered_time'])) {         
+        //     $from_date = $lastLog['max_ordered_time'];
+        // }
+        $to_date = !empty($_GET['to_date']) ? strtotime($_GET['to_date'] . ' 23:59:59') : time();
+      
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
+       
+        $postData = [
+            'makeRequestOf' => 'vendors-orderjson',
+            'from_date' => $from_date,
+            'to_date' => $to_date
+        ];
+        if (!empty($_GET['orderid'])) {
+            $postData = [
+                'makeRequestOf' => 'vendors-orderjson',
+                'orderid' => $_GET['orderid']
+            ];
+        }
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+
+        // Initialize cURL
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $response = curl_exec($ch);
+        
+        $error = curl_error($ch);
+        curl_close($ch);
+        // print_r($error);
+        // print_r($headers);
+        // print_r($response);
+        if ($response === false) {
+            renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
+            return;
+        }
+
+        $orders = json_decode($response, true);
+        if (!is_array($orders)) {
+            //echo "Invalid API response format.";
+            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+            return;
+        }
+        // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
+        // print_array($orders);
+        // exit;
+        if (empty($orders['orders'])) {
+            //echo "No orders found in the API response.";
+            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+            return;
+        }
+        $imported = 0; $totalorder = 0;
+        foreach ($orders['orders'] as $order) { 
+            
+            //print_r($order['cart']);
+            // Check if the order has the required fields
+            // Map API fields to your table columns
+                
+                foreach ($order['cart'] as $item) {  
+                    $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
+                    $esd = '0000-00-00';
+                    $local_stock_int = (int) floatval($item['local_stock']);
+                    $lead_time_int = (int) floatval($item['leadtime']);
+                    if($item['marketplace_vendor'] == 'exoticindia' || empty($item['marketplace_vendor'])){
+                        if(!empty($local_stock_int) && $local_stock_int > 0){
+                            $esd = date('Y-m-d', strtotime($orderdate. ' + 3 days'));
+                        } else {
+                            // Normalize options to array and check for 'express'
+                            $hasExpress = false;
+                            $options = $item['options'] ?? null;
+                            if (!empty($options)) {
+                                if (is_string($options)) {
+                                    $decoded = json_decode($options, true);
+                                    if (is_array($decoded)) {
+                                        $hasExpress = in_array('express', $decoded, true);
+                                    } else {
+                                        // fallback: check substring (case-insensitive) for non-JSON values
+                                        $hasExpress = stripos($options, 'express') !== false;
+                                    }
+                                } elseif (is_array($options)) {
+                                    $hasExpress = in_array('express', $options, true);
+                                }
+                            }
+                            if ($hasExpress) {
+                                $esd = date('Y-m-d', strtotime($orderdate. ' + 0 days'));
+                            } else {
+                                $esd = date('Y-m-d', strtotime($orderdate. ' + ' . $lead_time_int . ' days'));
+                            }
+                        }
+                    }else{
+                        if(!empty($local_stock_int) && $local_stock_int > 0){
+                            $esd = date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));                           
+                        } else {
+                            $esd = date('Y-m-d', strtotime($orderdate. ' + '.($lead_time_int).' days'));                            
+                        }
+                    }
+					$rdata = [
+					'order_number' => $order['orderid'] ?? '',
+					'shipping_country' => $order['shipping_country'] ?? '',
+					'title' => $item['title'] ?? '',
+					'description' => $item['description'] ?? '',
+					'item_code' => $item['itemcode'] ?? '',
+					'size' => $item['size'] ?? '',
+					'color' => $item['color'] ?? '',
+					'groupname' => $item['groupname'] ?? '',
+					'subcategories' => $item['subcategories'] ?? '',
+					'currency' => $item['currency'] ?? '',
+					'itemprice' => $item['itemprice'] ?? '',
+					'finalprice' => $item['finalprice'] ?? '',
+					'image' => $item['image'] ?? '',
+					'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
+					'quantity' => $item['qty'] ?? '',
+					'options' => $item['options'] ?? 0,
+					'gst' => $item['gst'] ?? '',
+					'hsn' => $item['hscode'] ?? '',
+					'local_stock' => $item['local_stock'] ?? '',
+					'cost_price' => $item['cp'] ?? 0.0,
+					'location' => $item['location'] ?? '',
+					'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? ''),
+                    'processed_time' => $order['processed_time'] ?? 0,
+                    'numsold' => $item['numsold'] ?? 0,
+                    'product_weight' => $item['product_weight'] ?? 0.0,
+                    'product_weight_unit' => $item['product_weight_unit'] ?? '',
+                    'prod_height' => $item['prod_height'] ?? 0.0,
+                    'prod_width' => $item['prod_width'] ?? 0.0,
+                    'prod_length' => $item['prod_length'] ?? 0.0,
+                    'length_unit' => $item['length_unit'] ?? '',
+                    'backorder_status' => $item['backorder_status'] ?? 0,
+                    'backorder_percent' => $item['backorder_percent'] ?? 0,
+                    'backorder_delay' => $item['backorder_delay'] ?? '',
+                    'payment_type' => $order['payment_type'] ?? '',
+                    'coupon' => $order['coupon'] ?? '',
+                    'coupon_reduce' => $order['coupon_reduce'] ?? '',
+                    'giftvoucher' => $order['giftvoucher'] ?? '',
+                    'giftvoucher_reduce' => $order['giftvoucher_reduce'] ?? '',
+                    'credit' => $order['credit'] ?? '',
+                    'vendor' => $item['vendor'] ?? '',
+                    'country' => $order['country'] ?? '',
+                    'material' => $item['material'] ?? '',
+                    //$orderStatus = productionOrderStatusList()[$item['status']] ?? 'pending',
+                    'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
+                        ? 'shipped'
+                        : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
+                    'esd' => $esd,
+                    'updated_at' => date('Y-m-d H:i:s')
+                    ];
+					$totalorder++;                
+                    
+                    $data = $ordersModel->updateImportedOrder($rdata);
+                    $result[] = $data;
+                    //add products
+                    //$pdata[] = $ordersModel->addProducts($rdata);                   
+                    
+                    if (isset($data['success']) && $data['success'] == true) {                        
+                        $imported++;
+                    } 
+                   // print_array($rdata);                   
+            }
+           
+        }
+        //print_array($pdata);
+        //print_r($result);
+        //update log end time and imported count
+        
+        renderTemplateClean('views/orders/import_update_result.php', [
+            'imported' => $imported,
+            'result' => $result,
+            'total' => $totalorder,
+            //'products' => json_encode($pdata)
+        ], 'Import Orders Result');
     }
 }
 ?>

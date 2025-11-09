@@ -497,5 +497,78 @@ class Order{
         }
         return $statusList;
     }
+    function updateImportedOrder($data) {
+        // Validate inputs
+        if (empty($data['order_number']) || empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Order number or item code is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET 
+                shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
+                groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, gst = ?, hsn = ?, 
+                local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
+                numsold = ?, product_weight = ?, product_weight_unit = ?,
+                prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
+                backorder_status = ?, backorder_percent = ?, backorder_delay = ?,
+                payment_type = ?, coupon = ?, coupon_reduce = ?, giftvoucher = ?, giftvoucher_reduce = ?,
+                credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?, updated_at = ?
+                WHERE order_number = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        // Prepare values in the same order as the SQL placeholders
+        $values = [
+            $data['shipping_country'], $data['title'], $data['description'], $data['size'], $data['color'],
+            $data['groupname'], $data['subcategories'], $data['currency'], $data['itemprice'], $data['finalprice'],
+            $data['image'], $data['marketplace_vendor'], $data['quantity'], json_encode($data['options']), $data['gst'], $data['hsn'],
+            $data['local_stock'], $data['cost_price'], $data['location'], $data['order_date'], $data['processed_time'],
+            $data['numsold'], $data['product_weight'], $data['product_weight_unit'],
+            $data['prod_height'], $data['prod_width'], $data['prod_length'], $data['length_unit'],
+            $data['backorder_status'], $data['backorder_percent'], $data['backorder_delay'],
+            $data['payment_type'], $data['coupon'], $data['coupon_reduce'], $data['giftvoucher'], $data['giftvoucher_reduce'],
+            $data['credit'], $data['vendor'], $data['country'], $data['material'], $data['status'], $data['esd'], $data['updated_at'],
+            $data['order_number'], $data['item_code']
+        ];
+
+        // Build types string dynamically based on actual PHP types
+        $types = '';
+        foreach ($values as $val) {
+            if (is_int($val)) {
+                $types .= 'i';
+            } elseif (is_float($val) || is_double($val)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        // mysqli_stmt::bind_param requires arguments passed by reference when using call_user_func_array
+        $refs = [];
+        foreach ($values as $key => $value) {
+            $refs[$key] = &$values[$key];
+        }
+        array_unshift($refs, $types);
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        // print binded parameters for debugging
+        //print_array($refs);        
+
+        //foreach ($refs as $ref) {
+            //if ($ref === $types) continue; // Skip types string
+            //echo $ref . "\n";
+        //}
+        //print_r($stmt);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
 ?>

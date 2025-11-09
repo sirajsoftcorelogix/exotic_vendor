@@ -380,6 +380,10 @@
                 <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
             <i class="fas fa-sync-alt p-1 bg-white border border-orange-500"></i>
             </span>
+            <!-- update imported orders -->
+            <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
+                <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
+            </span> -->
 
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
@@ -845,7 +849,7 @@
         </div>
 
         <!-- Popup Panel -->
-        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
+        <!-- <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Order Details</h2>
@@ -1017,7 +1021,7 @@
                     </form>
                 </div>
             </div>
-        </div>
+        </div> -->
     </div>
 </div>
 <!-- Image Popup -->
@@ -1205,10 +1209,25 @@
         </div>
     </div>
 </div>
+<!-- Image Popup Script -->
+<div id="importedPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportedPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
+        <button onclick="closeImportedPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="p-6">
+            <h2 class="text-2xl font-bold mb-4">Import Summary</h2>
+            <div id="importedStatus" class="w-full" style="max-height:400px; overflow-y:auto;">
+                <!-- Import summary will be populated here -->
+            </div>
+            <div class="flex justify-end space-x-4 mt-4">
+                <button type="button" onclick="closeImportedPopup()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
-function closeImagePopup(e) {
+function closeImportedPopup(e) {
     // If called from button or outside click
-    document.getElementById('imagePopup').classList.add('hidden');
+    document.getElementById('importedPopup').classList.add('hidden');
 }
 </script>
 <script>
@@ -1668,4 +1687,11 @@ function closeImagePopup(e) {
         });
 
     });
+</script>
+<script>
+    //call Imported Update Popup
+    function callImportedUpdate() {
+        //open import popup to display import status and call ajax to import
+        document.getElementById('importedPopup').classList.remove('hidden');       
+    }
 </script>
