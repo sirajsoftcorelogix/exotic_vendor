@@ -1,5 +1,7 @@
 <?php 
     //print_array($order);
+	$countries = country_array();
+	//print_array($countries);
     foreach ($order as $items => $item):?>
             <!-- Accordion Item 1 -->
                 <div>
@@ -85,11 +87,11 @@
                         </div>
                         <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
                             <div>
-                                <p><strong class="section-title">Shipping Country : </strong><span class="section-value"><?php echo $item['shipping_country']; ?></span>
+                                <p><strong class="section-title">Shipping Country : </strong><span class="section-value"><?php echo $countries[$item['shipping_country']]; ?></span>
                                 </p>                                
                             </div>
                             <div>
-                                <p><strong class="section-title">Billing Country : </strong><span class="section-value"><?php echo $item['country']; ?></span>
+                                <p><strong class="section-title">Billing Country : </strong><span class="section-value"><?php echo $countries[$item['country']]; ?></span>
                                 </p>
                             </div>
                         </div>
