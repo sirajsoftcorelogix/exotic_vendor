@@ -402,8 +402,9 @@
             </div>
             <div class="ml-auto flex items-center space-x-4">
             <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
-                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
+                    
                     <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
+                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
             </select>
             <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                 onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
