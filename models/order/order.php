@@ -56,7 +56,7 @@ class Order{
         }
         if (!empty($filters['country'])) {
 			if($filters['country']=='overseas'){
-				$sql .= " AND (vp_orders.shipping_country != 'IN' OR vp_orders.country != 'IN')";
+				$sql .= " AND (vp_orders.shipping_country != 'IN' AND vp_orders.country != 'IN')";
 			}else{
 				$sql .= " AND (vp_orders.shipping_country = '" . $filters['country'] . "' OR vp_orders.country = '" . $filters['country'] . "' )";
 			}
