@@ -457,11 +457,11 @@
                         <span class="px-1 text-sm">Received</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>-->
-                    <a href="<?php echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                    <a href="<?php echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'cancelled') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Cancelled</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    <a href="<?php echo base_url('?page=orders&action=list&status=returned'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                    <a href="<?php echo base_url('?page=orders&action=list&status=returned'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'returned') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Returned</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a> 
