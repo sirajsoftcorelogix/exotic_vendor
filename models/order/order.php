@@ -52,7 +52,7 @@ class Order{
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
                 $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-            }
+            } 
         }
         if (!empty($filters['country'])) {
 			if($filters['country']=='overseas'){
@@ -69,9 +69,14 @@ class Order{
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND vp_orders.options LIKE '%express%'";
         }
-          
+        // Add sorting based on filter
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+        } else {
+            $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+        }
 
-        $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
+        $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         // Add limit and offset to params and types
         $params[] = $limit;
@@ -130,6 +135,8 @@ class Order{
                 $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
             }
         }
         if (!empty($filters['country'])) {
@@ -139,6 +146,14 @@ class Order{
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
             $sql .= " AND groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
+        }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND options LIKE '%express%'";
+        }
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
+        } else {
+            $sql .= " ORDER BY order_date DESC"; // Default sort order
         }
 
         $stmt = $this->db->prepare($sql);
