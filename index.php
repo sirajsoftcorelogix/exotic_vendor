@@ -218,6 +218,9 @@ switch ($page) {
             case 'remove_challan':
                 $controller->deleteChallan();
                 break;
+            case 'vendor_search':
+                $controller->vendorSearch();
+                break;
             default:
                 $controller->index();
                 break;
