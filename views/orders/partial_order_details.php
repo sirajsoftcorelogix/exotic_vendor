@@ -1,5 +1,7 @@
 <?php 
     //print_array($order);
+	$countries = country_array();
+	print_array($countries);
     foreach ($order as $items => $item):?>
             <!-- Accordion Item 1 -->
                 <div>

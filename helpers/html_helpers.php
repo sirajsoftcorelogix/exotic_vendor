@@ -186,6 +186,19 @@
 			['id' => 10, 'iso_code' => 'MY', 'timezone' => 'Asia/Kuala_Lumpur',    'name' => 'Malaysia'],
 		];
 	}
+	
+	function country_array(){
+		// Fetch active roles
+		global $conn;
+		$sql = "SELECT * FROM countries";
+		$result = $conn->query($sql);
+		$countries = array();
+		while ($row = $result->fetch_assoc()) {
+			$countries[$row['country_code ']] = $row['NAME'];
+		}
+		return $countries;
+	}
+		
 
 	function getWeekDays() {
 		return [
