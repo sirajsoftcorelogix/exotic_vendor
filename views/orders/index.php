@@ -104,6 +104,28 @@
    
 </style>
 <div class="container mx-auto p-4">
+    <?php
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
+        $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
+        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+
+        // Prepare query string for pagination links
+        $search_params = $_GET;
+        unset($search_params['page_no'], $search_params['limit']);
+        $query_string = http_build_query($search_params);
+        $query_string = $query_string ? '&' . $query_string : '';
+
+        // Calculate start/end slot for 10 pages
+        $slot_size = 10;
+        $start = max(1, $page - floor($slot_size / 2));
+        $end = min($total_pages, $start + $slot_size - 1);
+        if ($end - $start < $slot_size - 1) {
+            $start = max(1, $end - $slot_size + 1);
+        }
+    ?>
     <!-- Header Section -->
     <!-- Stats Section -->
     <div class="mt-6 sm:mt-8">
@@ -374,7 +396,23 @@
     <!-- Orders Table Section -->
     <div class="mt-5">
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
+            <div class="flex  ">
+            <div class="w-1/2">
             <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
+            </div>
+            <div class="ml-auto flex items-center space-x-4">
+            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value ;">
+                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By Old to New</option>
+                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By New to Old</option>
+            </select>
+            <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
+                <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                    <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
+                        <?= $opt ?> Orders per page
+                    </option>
+                <?php endforeach; ?>
+            </select>
             <!-- button refresh-->
             <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
                 <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
@@ -384,7 +422,8 @@
             <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
                 <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
             </span> -->
-
+            </div>
+            </div>
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
                 <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
@@ -417,26 +456,26 @@
                     <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Received</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                    </a>
-                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Disputed</span>
+                    </a>-->
+                    <a href="<?php echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-sm">Cancelled</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
+                    <a href="<?php echo base_url('?page=orders&action=list&status=returned'); ?>" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Returned</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                    </a> -->
+                    </a> 
                 </div>
-                <!-- <div class="right-0 top-0 absolute p-4 size">
-                    <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                <div class="right-0 top-0 absolute p-4 size">
+                    <!--<select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                         onchange="location.href='?page=orders&action=list&category=' + this.value;">
                         
                         <option value="all" selected >All Categories</option>
                         <?php // (getCategories() as $key => $value): ?>
                             <option value="<?php //echo $key; ?>" <?php //echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php //echo $value; ?></option>
                         <?php //endforeach; ?>                    
-                    </select>
-                </div> -->
+                    </select>-->                    
+                </div> 
             </div>
 
             <!-- Table h-96 overflow-y-scroll-->
@@ -761,28 +800,7 @@
             </div>
         </form>
         <!-- Pagination -->
-         <?php
-            $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-            $page = $page < 1 ? 1 : $page;
-            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
-            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
-            $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
-            $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
-
-            // Prepare query string for pagination links
-            $search_params = $_GET;
-            unset($search_params['page_no'], $search_params['limit']);
-            $query_string = http_build_query($search_params);
-            $query_string = $query_string ? '&' . $query_string : '';
-
-            // Calculate start/end slot for 10 pages
-            $slot_size = 10;
-            $start = max(1, $page - floor($slot_size / 2));
-            $end = min($total_pages, $start + $slot_size - 1);
-            if ($end - $start < $slot_size - 1) {
-                $start = max(1, $end - $slot_size + 1);
-            }
-            ?>
+         
         <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 bottom-0 border border-[rgba(226,228,230,1)] py-4">
             <div>
                 <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($orders) ?></span> of <span class="font-medium"><?= $total_orders ?></span> orders</p>
@@ -1209,26 +1227,12 @@
         </div>
     </div>
 </div>
-<!-- Image Popup Script -->
-<div id="importedPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportedPopup(event)">
-    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
-        <button onclick="closeImportedPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <div class="p-6">
-            <h2 class="text-2xl font-bold mb-4">Import Summary</h2>
-            <div id="importedStatus" class="w-full" style="max-height:400px; overflow-y:auto;">
-                <!-- Import summary will be populated here -->
-            </div>
-            <div class="flex justify-end space-x-4 mt-4">
-                <button type="button" onclick="closeImportedPopup()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-<script>
-function closeImportedPopup(e) {
-    // If called from button or outside click
-    document.getElementById('importedPopup').classList.add('hidden');
-}
+<!-- image popup close -->
+ <script>
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    }    
 </script>
 <script>
     // Popup functionality
