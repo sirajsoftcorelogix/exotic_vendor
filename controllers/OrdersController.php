@@ -67,8 +67,11 @@ class OrdersController {
         $countryList= $commanModel->get_counry_list();
         //print_array($order_status_list);
         // Use pagination in the database query for better performance
-        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);
-        //print_array($orders);
+        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);             
+        foreach ($orders as $key => $order) {
+            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);            
+        }
+        //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         // Render the orders view
