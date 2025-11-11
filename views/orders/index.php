@@ -598,7 +598,7 @@
 
                             $options = $order['options'] ?? '';
                             $optionsArr = [];
-                            $bordercolor = 'border-gray-300';
+                            $bordercolor = 'border border-gray-300';
                             $addontxt = '';
                             if (is_string($options)) {
                                 $decoded = json_decode($options, true);
@@ -629,7 +629,7 @@
                                     if (strpos($opt_text, 'Express') !== false) {
                                         $display = 'Express Shipping';
                                         $addon_css = 'bg-green-200 text-green-900';
-                                        $bordercolor = 'border-green-300';
+                                        $bordercolor = 'border-4 border-green-300';
                                     } else {
                                         $display = $opt_text;
                                         $addon_css = 'bg-gray-100 text-gray-800';
@@ -641,7 +641,7 @@
                             }                                                
                             
                     ?>
-                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
+                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md  <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
                         <div class="flex items-start p-4 gap-4">
                             <!-- Checkbox -->
                             <div class="flex-shrink-0 pt-1">
