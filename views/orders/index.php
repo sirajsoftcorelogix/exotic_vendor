@@ -814,7 +814,7 @@
                                 <!-- status log -->
                                 <?php if (!empty($order['status_log'])) {
                                     foreach ($order['status_log'] as $log) { ?>
-                                    <div class="timeline-step completed">
+                                    <div class="timeline-step completed min-w-[120px]">
                                         <div class="flex flex-col items-center text-center">
                                         <div class="relative w-full h-5 flex justify-center items-center">
                                             <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
