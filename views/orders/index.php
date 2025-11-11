@@ -428,7 +428,7 @@
             </div>
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
-                <div id="tabsContainer" class="flex space-x-12" aria-label="Tabs">
+                <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
                     <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status']) && !isset($_GET['options'])) ? 'tab-active' : ''; ?> text-center relative py-4">
                         <span class="px-1 text-md">All Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
@@ -595,8 +595,53 @@
                     <?php 
                     if (!empty($data['orders'])) {
                         foreach ($data['orders'] as $order) {
+
+                            $options = $order['options'] ?? '';
+                            $optionsArr = [];
+                            $bordercolor = 'border-gray-300';
+                            $addontxt = '';
+                            if (is_string($options)) {
+                                $decoded = json_decode($options, true);
+                                if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
+                                    $optionsArr = $decoded;
+                                } else {
+                                    // fallback: comma separated string
+                                    $optionsArr = array_filter(array_map('trim', explode(',', $options)));
+                                }
+                            } elseif (is_array($options)) {
+                                $optionsArr = $options;
+                            }
+
+                            if (!empty($optionsArr)) {
+                                foreach ($optionsArr as $opt) {
+                                    $addon_css = '';
+                                    // normalize option value to a string to avoid warnings with strpos()
+                                    if (is_array($opt)) {
+                                        $opt_text = implode(', ', $opt);
+                                    } else {
+                                        $opt_text = (string)$opt;
+                                    }
+                                    $opt_text = trim($opt_text);
+                                    if ($opt_text === '') {
+                                        continue;
+                                    }
+                                    // Highlight Express Shipping specially, otherwise show default style
+                                    if (strpos($opt_text, 'Express') !== false) {
+                                        $display = 'Express Shipping';
+                                        $addon_css = 'bg-green-200 text-green-900';
+                                        $bordercolor = 'border-green-300';
+                                    } else {
+                                        $display = $opt_text;
+                                        $addon_css = 'bg-gray-100 text-gray-800';
+                                    }
+                                    $addontxt =  '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
+                                }
+                            } else {
+                                $addontxt =  '<span class="data-typography mt-1 block">N/A</span>';
+                            }                                                
+                            
                     ?>
-                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border border-gray-200" style="margin: 0px 0px 10px 0px">
+                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
                         <div class="flex items-start p-4 gap-4">
                             <!-- Checkbox -->
                             <div class="flex-shrink-0 pt-1">
@@ -622,8 +667,8 @@
                                         </div>
                                     </div>
                                     <!-- Col 1, Row 2: Order Details -->
-                                    <div class=""> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
-                                        <div class="grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
+                                    <div class="flex w-full"> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
+                                        <div class="w-1/2 pr-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
                                             <span class="heading-typography ">Order Date</span>
                                             <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
@@ -631,6 +676,9 @@
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
+                                            
+                                        </div>
+                                        <div class="w-1/2 pl-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
                                             <span class="heading-typography">Marketplace</span>
                                             <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
                                             <span class="heading-typography">Staff Name</span>
@@ -723,56 +771,14 @@
                                     <div class="flex items-start gap-4">
                                         <div class="flex-grow">
                                             <h4 class="note-heading mb-2">Note:</h4>
-                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[452px] min-h-[110px]">
+                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[452px] min-h-[100px]">
                                                 <?= isset($order['remarks']) ? $order['remarks'] : '' ?>
                                             </div>
                                         </div>
-                                        <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
-                                            <div class="mt-[20px] max-w-32">
+                                        <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem );">
+                                            <div class="mt-[20px] max-w-48">
                                                 <span class="heading-typography block mb-5">Addon</span>
-                                                <?php
-                                                $options = $order['options'] ?? '';
-                                                $optionsArr = [];
-
-                                                if (is_string($options)) {
-                                                    $decoded = json_decode($options, true);
-                                                    if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
-                                                        $optionsArr = $decoded;
-                                                    } else {
-                                                        // fallback: comma separated string
-                                                        $optionsArr = array_filter(array_map('trim', explode(',', $options)));
-                                                    }
-                                                } elseif (is_array($options)) {
-                                                    $optionsArr = $options;
-                                                }
-
-                                                if (!empty($optionsArr)) {
-                                                    foreach ($optionsArr as $opt) {
-                                                        $addon_css = '';
-                                                        // normalize option value to a string to avoid warnings with strpos()
-                                                        if (is_array($opt)) {
-                                                            $opt_text = implode(', ', $opt);
-                                                        } else {
-                                                            $opt_text = (string)$opt;
-                                                        }
-                                                        $opt_text = trim($opt_text);
-                                                        if ($opt_text === '') {
-                                                            continue;
-                                                        }
-                                                        // Highlight Express Shipping specially, otherwise show default style
-                                                        if (strpos($opt_text, 'Express') !== false) {
-                                                            $display = 'Express Shipping';
-                                                            $addon_css = 'bg-red-100 text-red-800';
-                                                        } else {
-                                                            $display = $opt_text;
-                                                            $addon_css = 'bg-gray-100 text-gray-800';
-                                                        }
-                                                        echo '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
-                                                    }
-                                                } else {
-                                                    echo '<span class="data-typography mt-1 block">N/A</span>';
-                                                }
-                                                ?>
+                                                <?= $addontxt ?>
                                             </div>
                                             <div>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
@@ -791,8 +797,37 @@
                                 </div>
                             </div>
                         </div>
-                        <hr class="border-t mx-4  border-gray-200">
-                        <div class="p-4 flex justify-end space-x-4">
+                        <hr class="border-t mx-3  border-gray-200">
+                        <!-- <h3 class="text-sm font-semibold ml-10 mt-4">Order Journey:</h3> -->
+                        <div class="p-1 flex w-full">                            
+                            <div class="grid p-4 rounded-lg grid grid-cols-8 gap-y-2">
+                                <!-- Step 1: Approved -->
+                                <div class="timeline-step completed">
+                                    <div class="flex flex-col items-center text-center">
+                                    <div class="relative w-full h-5 flex justify-center items-center">
+                                        <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+                                    </div>
+                                    <p class="timeline-text mt-2">Created</p>
+                                    <p class="timeline-date"><?php echo date('d M, Y', strtotime($order['created_at'])); ?></p>
+                                    </div>
+                                </div>
+                                <!-- status log -->
+                                <?php if (!empty($order['status_log'])) {
+                                    foreach ($order['status_log'] as $log) { ?>
+                                    <div class="timeline-step completed">
+                                        <div class="flex flex-col items-center text-center">
+                                        <div class="relative w-full h-5 flex justify-center items-center">
+                                            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+                                        </div>
+                                        <p class="timeline-text mt-2"><?php echo ucfirst(str_replace('_', ' ', $log['status'])); ?></p>
+                                        <p class="timeline-date"><?php echo date('d M, Y', strtotime($log['change_date'])); ?></p>
+                                        <p ><?php echo $log['changed_by_username']; ?></p>
+                                        </div>
+                                    </div>
+                                    <?php }
+                                } ?>  
+                                
+                                </div>
                         </div>
                     </div>
                     <?php
