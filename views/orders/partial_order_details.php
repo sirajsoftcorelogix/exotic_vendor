@@ -1,5 +1,7 @@
 <?php 
     //print_array($order);
+	$countries = country_array();
+	//print_array($countries);
     foreach ($order as $items => $item):?>
             <!-- Accordion Item 1 -->
                 <div>
@@ -42,7 +44,7 @@
                                         <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
                                     </div>
                                     <div class="status-box w-48 flex items-center justify-center">
-                                        <span class="status-text">Shipped by : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
+                                        <span class="status-text">Shipped <?php echo $item['status'] == 'shipped' ? 'on' : ' by'; ?> : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
                                     </div>
                                     <div class="flex space-x-3 justify-end">  
                                         <?php if($item['po_number']): ?>
@@ -85,11 +87,11 @@
                         </div>
                         <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
                             <div>
-                                <p><strong class="section-title">Shipping Country : </strong><span class="section-value"><?php echo $item['shipping_country']; ?></span>
+                                <p><strong class="section-title">Shipping Country : </strong><span class="section-value"><?php echo $countries[$item['shipping_country']]; ?></span>
                                 </p>                                
                             </div>
                             <div>
-                                <p><strong class="section-title">Billing Country : </strong><span class="section-value"><?php echo $item['country']; ?></span>
+                                <p><strong class="section-title">Billing Country : </strong><span class="section-value"><?php echo $countries[$item['country']]; ?></span>
                                 </p>
                             </div>
                         </div>
@@ -133,7 +135,7 @@
                                 <p><span class="section-title">Sold Quantity : </span><span
                                         class="section-value"><?php echo $item['numsold']; ?></span></p>
                                 <p><span class="section-title">Order Quantity : </span><span
-                                        class="section-value"><?php //echo $item->numordered; ?></span></p>
+                                        class="section-value"><?php echo $item['quantity']; ?></span></p>
                             </div>
                         </div>
                         <!-- Pricing -->
@@ -148,8 +150,7 @@
                                         class="section-value"><?php echo $item['cost_price']; ?></span></p>
                                 <p><span class="section-title">Currency : </span><span 
                                         class="section-value"><?php echo $item['currency']; ?></span></p>
-                                <p><span class="section-title">Cost price : </span><span 
-                                        class="section-value"><?php echo $item['cost_price']; ?></span></p>
+                                
                             </div>
                             <div>
                                 <p><span class="section-title">HSN Code : </span><span

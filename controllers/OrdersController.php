@@ -56,6 +56,11 @@ class OrdersController {
         if(!empty($_GET['options']) && $_GET['options'] == 'express'){
             $filters['options'] = 'express';  
         }
+        if (!empty($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc'])) {
+            $filters['sort'] = strtolower($_GET['sort']);
+        } else {
+            $filters['sort'] = 'desc'; // Default sort order
+        }
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
@@ -300,7 +305,7 @@ class OrdersController {
                 'max_ordered_time' => $order['processed_time'] ?? '',
                 'from_date' => $from_date,
                 'to_date' => $to_date,
-                'add_product_log' => json_encode($pdata)
+                'add_product_log' => NULL,//json_encode($pdata)
             ];
             //print_array($log_update_data);
             $ordersModel->updateOrderImportLog($log_id, $log_update_data);
@@ -389,7 +394,7 @@ class OrdersController {
                     'order_id' => $order_id,
                     'status' => $new_status,
                     'changed_by' => $_SESSION['user']['id'],
-                    'api_response' => json_encode($resp),
+                    'api_response' => NULL, //json_encode($resp),
                     'change_date' => date('Y-m-d H:i:s')
                 ];
                 //print_array($apidata);

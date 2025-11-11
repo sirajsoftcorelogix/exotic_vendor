@@ -8,7 +8,13 @@ class Order{
     public function getAllOrders($filters = [], $limit = 50, $offset = 0) {
 
         //$sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
-        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  WHERE 1=1";
+        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name 
+		FROM vp_orders 
+		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
+		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		WHERE 1=1";
+		
         $params = [];
         if (!empty($filters['order_number'])) {
             $sql .= " AND vp_orders.order_number LIKE ?";
@@ -52,11 +58,11 @@ class Order{
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
                 $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-            }
+            } 
         }
         if (!empty($filters['country'])) {
 			if($filters['country']=='overseas'){
-				$sql .= " AND (vp_orders.shipping_country != 'IN' OR vp_orders.country != 'IN')";
+				$sql .= " AND (vp_orders.shipping_country != 'IN' AND vp_orders.country != 'IN')";
 			}else{
 				$sql .= " AND (vp_orders.shipping_country = '" . $filters['country'] . "' OR vp_orders.country = '" . $filters['country'] . "' )";
 			}
@@ -69,9 +75,14 @@ class Order{
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND vp_orders.options LIKE '%express%'";
         }
-          
+        // Add sorting based on filter
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+        } else {
+            $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+        }
 
-        $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
+        $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         // Add limit and offset to params and types
         $params[] = $limit;
@@ -130,6 +141,8 @@ class Order{
                 $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
             }
         }
         if (!empty($filters['country'])) {
@@ -139,6 +152,14 @@ class Order{
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
             $sql .= " AND groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
+        }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND options LIKE '%express%'";
+        }
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
+        } else {
+            $sql .= " ORDER BY order_date DESC"; // Default sort order
         }
 
         $stmt = $this->db->prepare($sql);
@@ -564,11 +585,12 @@ class Order{
             //echo $ref . "\n";
         //}
         //print_r($stmt);
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
-        } else {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-        }
+        //comment the below line after execution on 09-06-2024
+        // if ($stmt->execute()) {
+        //     return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        // } else {
+        //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        // }
     }
 }
 ?>

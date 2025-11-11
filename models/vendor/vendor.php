@@ -389,5 +389,17 @@ class vendor {
         }
         return $teamMembers;
     }
+    public function searchVendors($term) {
+        $term = $this->conn->real_escape_string($term);
+        $sql = "SELECT id, vendor_name FROM vp_vendors WHERE vendor_name LIKE '%$term%' LIMIT 10";
+        $result = $this->conn->query($sql);
+        $vendors = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $vendors[] = $row;
+            }
+        }
+        return $vendors;
+    }
 }
 ?>
