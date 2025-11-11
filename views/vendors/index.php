@@ -243,6 +243,7 @@
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
+                                <br />
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Agent</label>
                                     <br/>
@@ -250,6 +251,7 @@
                                         <select class="form-input w-full mt-1" name="addTeamMember" id="addTeamMember">
                                             <option value="" disabled selected>Select Team Member</option>
                                         </select>
+                                    </span>
                                 </div>
                             </div>
                             <div>
@@ -416,17 +418,20 @@
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Team</label><br />
-                                    <select class="form-input w-full mt-1 h-32 edit-multiselect" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
+                                <div style="width: 400px;">
+                                    <label class="text-sm font-medium text-gray-700">Team</label>
+                                    <br />
+                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
                                         <option value="" disabled>Select Team</option>
                                         <?php foreach($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
+                                <br />
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Agent</label><br />
+                                    <label class="text-sm font-medium text-gray-700">Agent</label>
+                                    <br />
                                     <span id="editTeamMemberBlock">
                                         <select class="form-input w-full mt-1" name="editTeamMember" id="editTeamMember">
                                             <option value="" disabled selected>Select Team Member</option>
@@ -436,7 +441,7 @@
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Category</label>
-                                <select class="form-input w-full mt-1 h-32 edit-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
                                     <option value="" disabled>Select Categories</option>
                                     <?php                                     
                                     if (isset($category[0]) && is_array($category[0])) {
@@ -1279,7 +1284,15 @@
         $('#addTeam').select2({
             placeholder: "Select Teams",
             allowClear: true,
-            width: '200',
+            width: '400',
+            closeOnSelect: false
+        });
+    });
+    $(document).ready(function() {
+        $('#editTeam').select2({
+            placeholder: "Select Teams",
+            allowClear: true,
+            width: '400',
             closeOnSelect: false
         });
     });
