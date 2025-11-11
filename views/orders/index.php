@@ -115,7 +115,7 @@
 
         // Prepare query string for pagination links
         $search_params = $_GET;
-        unset($search_params['page_no'], $search_params['limit']);
+        unset($search_params['page_no'], $search_params['limit'], $search_params['sort']);
         $query_string = http_build_query($search_params);
         $query_string = $query_string ? '&' . $query_string : '';
 
@@ -402,9 +402,10 @@
             <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
             </div>
             <div class="ml-auto flex items-center space-x-4">
-            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value ;">
-                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By Old to New</option>
-                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By New to Old</option>
+            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
+                    
+                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
+                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
             </select>
             <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                 onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">

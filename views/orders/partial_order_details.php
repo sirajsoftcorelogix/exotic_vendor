@@ -135,7 +135,7 @@
                                 <p><span class="section-title">Sold Quantity : </span><span
                                         class="section-value"><?php echo $item['numsold']; ?></span></p>
                                 <p><span class="section-title">Order Quantity : </span><span
-                                        class="section-value"><?php echo $item->quantity; ?></span></p>
+                                        class="section-value"><?php echo $item['quantity']; ?></span></p>
                             </div>
                         </div>
                         <!-- Pricing -->

@@ -17,8 +17,26 @@ class User {
         if ($result->num_rows > 0) {
             $user = $result->fetch_assoc();
             if (password_verify($password, $user['password'])) {
-                @session_start();
+                $lifetime = 4 * 3600; // 4 hours in seconds
+
+                if (session_status() !== PHP_SESSION_ACTIVE) {
+                    // set cookie params before starting the session
+                    session_set_cookie_params([
+                        'lifetime' => $lifetime,
+                        'path' => '/',
+                        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+                        'httponly' => true,
+                        'samesite' => 'Lax'
+                    ]);
+                    ini_set('session.gc_maxlifetime', $lifetime);
+                    @session_start();
+                } else {
+                    // extend current session cookie
+                    setcookie(session_name(), session_id(), time() + $lifetime, "/");
+                }
+
                 $_SESSION['user'] = $user;
+                $_SESSION['expires_at'] = time() + $lifetime;
                 return true;
             }
         }   

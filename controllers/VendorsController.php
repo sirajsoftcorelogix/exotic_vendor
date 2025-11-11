@@ -84,7 +84,7 @@ class VendorsController {
         if ($id > 0) {
             $vendor = $vendorsModel->getVendorById($id);
             $vendor['categories'] = $vendorsModel->getVendorCategories($id);
-            //print_array($vendor['categories']);
+            $vendor['teamIds'] = $vendorsModel->getVendorTeams($id);
             if ($vendor) {
                 echo json_encode($vendor);
             } else {
@@ -140,7 +140,7 @@ class VendorsController {
     }
     public function getTeamMembers() {
         global $vendorsModel;
-        $team_id = isset($_GET['teamId']) ? (int)$_GET['teamId'] : 0;
+        $team_id = isset($_GET['teamId']) ? $_GET['teamId'] : 0;
         if ($team_id > 0) {
             $members = $vendorsModel->getTeamMembers($team_id);
             echo json_encode($members);
