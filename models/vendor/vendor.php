@@ -137,18 +137,23 @@ class vendor {
             $data['addNotes'],
             $_SESSION["user"]["id"],
             $data['addTeam'],
-            $data['addAgent'],
+            $data['addTeamMember'],
             $data['addStatus']
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
             $vendor_id = $this->conn->insert_id;
-            $cat_status = '';
+            $cat_status = $tm_status = '';
             // Add vendor categories if provided
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
-            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status];
+            // Add vendor teams
+            if (!empty($data['addTeam']) && is_array($data['addTeam'])) {
+               $tm_status = $this->addVendorTeams($vendor_id, $data['addTeam']);
+            }
+
+            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status];
         }
         return [
             'success' => false,
@@ -175,19 +180,23 @@ class vendor {
             $data['editNotes'],
             $_SESSION["user"]["id"],
             $data['editTeam'],
-            $data['editAgent'],
+            $data['editTeamMember'],
             $data['editStatus'],
             $id
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
             $vendor_id = $id;
-            $cat_status = '';
+            $cat_status = $tm_status = '';
             // Add vendor categories if provided
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
-            return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status];
+            // Add vendor teams
+            if (!empty($data['editTeam']) && is_array($data['editTeam'])) {
+               $tm_status = $this->addVendorTeams($vendor_id, $data['editTeam']);
+            }
+            return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status, 'team_status' => $tm_status];
         }
         return [
             'success' => false,
@@ -319,6 +328,33 @@ class vendor {
 
         return ['success' => true, 'message' => 'Categories updated successfully.'];
     }
+    public function addVendorTeams($vendor_id,$category){       
+        if (empty($vendor_id)) {
+            return ['success' => false, 'message' => 'Vendor ID is required.'];
+        }
+
+        if (empty($category) || !is_array($category)) {
+            return ['success' => false, 'message' => 'Teams is required and must be an array.'];
+        }
+
+        // Delete previous categories for this vendor
+        $deleteSql = "DELETE FROM vp_vendor_team_mapping WHERE vendor_id = ?";
+        $deleteStmt = $this->conn->prepare($deleteSql);
+        $deleteStmt->bind_param('i', $vendor_id);
+        $deleteStmt->execute();
+        $deleteStmt->close();
+
+        // Insert new categories
+        $sql = "INSERT INTO vp_vendor_team_mapping (vendor_id, team_id) VALUES (?, ?)";
+        $stmt = $this->conn->prepare($sql);
+        foreach ($category as $tm_id) {
+            $stmt->bind_param('ii', $vendor_id, $tm_id);
+            $stmt->execute();
+        }
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Categories updated successfully.'];
+    }
     public function getVendorCategories($vendor_id) {
         $sql = "SELECT category_id FROM vendors_category WHERE vendor_id = ?";
         $stmt = $this->conn->prepare($sql);
@@ -331,8 +367,19 @@ class vendor {
         }
         return $categories;
     }
+    public function getVendorTeams($v_id) {
+        $sql = "SELECT team_id FROM vp_vendor_team_mapping WHERE vendor_id = ".$v_id;
+        $result = $this->conn->query($sql);
+        $vTeamMembers = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $vTeamMembers[] = $row["team_id"];
+            }
+        }
+        return $vTeamMembers;
+    }
     public function getTeamMembers($team_id) {
-        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND team_id = '$team_id' ORDER BY name ASC";
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND team_id IN (".$team_id.") ORDER BY team_id, id ASC";
         $result = $this->conn->query($sql);
         $teamMembers = [];
         if ($result && $result->num_rows > 0) {

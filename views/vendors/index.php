@@ -201,7 +201,7 @@
         <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add / Edit Vendor</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add Vendor</h2>
                     <div id="addVendorMsg" style="margin-top:10px;" class="text-sm font-bold"></div>
                     <form id="addVendorForm">
                         <input type="hidden" name="page" value="vendors">
@@ -235,8 +235,9 @@
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <select class="form-input w-full mt-1" name="addTeam" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
-                                        <option value="" disabled selected>Select Team</option>
+                                    <br/>
+                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
+                                        <option value="" disabled>Select Team</option>
                                         <?php foreach($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
@@ -244,6 +245,7 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Agent</label>
+                                    <br/>
                                     <span id="addTeamMemberBlock">
                                         <select class="form-input w-full mt-1" name="addTeamMember" id="addTeamMember">
                                             <option value="" disabled selected>Select Team Member</option>
@@ -383,7 +385,7 @@
         <div class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add / Edit Vendor</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Vendor</h2>
                     <div id="editVendorMsg" style="margin-top:10px;"></div>
                     <form id="editUserForm">
                         <input type="hidden" id="editVendorId" name="id" value="">
@@ -412,20 +414,19 @@
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
                                     <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" />
                                 </div>
-                                
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <select class="form-input w-full mt-1" name="editTeam" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
-                                        <option value="" disabled selected>Select Team</option>
+                                    <label class="text-sm font-medium text-gray-700">Team</label><br />
+                                    <select class="form-input w-full mt-1 h-32 edit-multiselect" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
+                                        <option value="" disabled>Select Team</option>
                                         <?php foreach($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Agent</label>
+                                    <label class="text-sm font-medium text-gray-700">Agent</label><br />
                                     <span id="editTeamMemberBlock">
                                         <select class="form-input w-full mt-1" name="editTeamMember" id="editTeamMember">
                                             <option value="" disabled selected>Select Team Member</option>
@@ -434,7 +435,6 @@
                                 </div>
                             </div>
                             <div>
-                                <?php //print_array($category); ?>
                                 <label class="text-sm font-medium text-gray-700">Category</label>
                                 <select class="form-input w-full mt-1 h-32 edit-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
                                     <option value="" disabled>Select Categories</option>
@@ -640,14 +640,22 @@
 
     function fillTeamAgent(teamId, formType) {
         if(teamId === "") return;
+        
         if(formType === 'AddForm') {
             document.getElementById('addTeamMemberBlock').innerHTML = 'Loading...';
+            // Get the select element
+            var selectElement = document.getElementById('addTeam');
+            // Get all selected options
+            var selectedOptions = selectElement.selectedOptions;
+            // Extract values into an array
+            var selectedValues = Array.from(selectedOptions).map(option => option.value);
+
         } else {
             document.getElementById('editTeamMemberBlock').innerHTML = 'Loading...';
         }
         if(formType === 'AddForm') {
             // Fetch team members from the server
-            fetch('?page=vendors&action=getTeamMembers&teamId=' + teamId)
+            fetch('?page=vendors&action=getTeamMembers&teamId=' + selectedValues.join(','))
             .then(response => response.json())
             .then(data => {
                 // Create a new select element
@@ -675,7 +683,45 @@
                 });
                 document.getElementById('addTeamMemberBlock').innerHTML = memberSelect.outerHTML;
             });
-        } else {
+        } else if(formType === 'EditForm') {
+
+                        // Get the select element
+            var selectElement = document.getElementById('editTeam');
+            // Get all selected options
+            var selectedOptions = selectElement.selectedOptions;
+            // Extract values into an array
+            var selectedValues = Array.from(selectedOptions).map(option => option.value);
+
+            // Fetch team members from the server
+            fetch('?page=vendors&action=getTeamMembers&teamId=' + selectedValues.join(','))
+            .then(response => response.json())
+            .then(data => {
+                // Create a new select element
+                let memberSelect = document.createElement('select');
+
+                // add attributes
+                memberSelect.id = "editTeamMember";
+                memberSelect.name = "editTeamMember";
+                memberSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
+
+                // Populate the select element with options
+                const defaultOption = document.createElement('option');
+                defaultOption.value = "";
+                defaultOption.textContent = "Select Team Member";
+                defaultOption.disabled = true;
+                defaultOption.selected = true;
+                memberSelect.appendChild(defaultOption);
+
+                let members = Array.isArray(data) ? data : [data]; 
+                members.forEach(member => {
+                    const option = document.createElement('option');
+                    option.value = member.id;
+                    option.textContent = member.name;
+                    memberSelect.appendChild(option);
+                });
+                document.getElementById('editTeamMemberBlock').innerHTML = memberSelect.outerHTML;
+            });
+        }  else {
             // Fetch team members from the server
             fetch('?page=vendors&action=getTeamMembers&teamId=' + teamId)
             .then(response => response.json())
@@ -704,6 +750,7 @@
                     memberSelect.appendChild(option);
                 });
                 document.getElementById('editTeamMemberBlock').innerHTML = memberSelect.outerHTML;
+                document.getElementById("editTeamMember").value = formType;
             });
         }
     }
@@ -1003,9 +1050,10 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
-            document.getElementById("editTeam").value = vendor.team_id;
             
-            fillTeamAgent(vendor.team_id, "editForm");
+            fillTeamAgent(vendor.teamIds, vendor.agent_id);
+
+            //document.getElementById("editTeamMember").value = vendor.agent_id;
 
             if(vendor.country !== "India") {
                 document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" required name="editState" id="editState" value="' + vendor.state + '" />';
@@ -1061,10 +1109,29 @@
                 option.selected = categoriesArr.map(String).includes(String(option.value));
             });
 
+            const teamSelect = document.getElementById("editTeam");
+            // Ensure vendor.categories is always an array
+            let teamArr = Array.isArray(vendor.teamIds)
+                ? vendor.teamIds
+                : (typeof vendor.teamIds === "string" && vendor.teamIds.length > 0
+                    ? vendor.teamIds.split(",")
+                    : []);
+
+            // Pre-select options
+            Array.from(teamSelect.options).forEach(option => {
+                option.selected = teamArr.map(String).includes(String(option.value));
+            });
+
             
             // Initialize Select2
             $(document).ready(function() {
                 $('#editVendorCategory').select2({
+                    placeholder: "Select Categories",
+                    allowClear: true,
+                    width: '100%',
+                    closeOnSelect: false
+                });
+                $('#editTeam').select2({
                     placeholder: "Select Categories",
                     allowClear: true,
                     width: '100%',
@@ -1199,13 +1266,20 @@
             }
         });
     };
-</script>
-<script>
+
     $(document).ready(function() {
         $('#addVendorCategory').select2({
             placeholder: "Select Categories",
             allowClear: true,
             width: '400',
+            closeOnSelect: false
+        });
+    });
+    $(document).ready(function() {
+        $('#addTeam').select2({
+            placeholder: "Select Teams",
+            allowClear: true,
+            width: '200',
             closeOnSelect: false
         });
     });
