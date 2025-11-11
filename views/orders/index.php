@@ -760,7 +760,7 @@
                                             <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold relative inline-block" onclick="toggleMenu(<?= $order['order_id'] ?>)">
                                                 <i class="fas fa-ellipsis-v"></i>
                                                 <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
-                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Order Update</a>
+                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Order</a>
                                                     <hr class="my-1 mx-2"></hr>
                                                     <!-- <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
                                                 </div>
