@@ -119,6 +119,21 @@ class Tables {
         }
         return false;
     }
+    //get order status log
+    public function get_order_status_log($order_id) {
+        $sql = "SELECT osl.*, u.name AS changed_by_username FROM vp_order_status_log osl JOIN vp_users u ON osl.changed_by = u.id WHERE osl.order_id = ? ORDER BY osl.id ASC";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[] = $row;
+            }
+        }
+        return $data;
+    }
     public function getExoticIndiaOrderStatusCode($slug) {
         $sql = "SELECT * FROM vp_order_status WHERE slug = ? LIMIT 1";
         $stmt = $this->ci->prepare($sql);
