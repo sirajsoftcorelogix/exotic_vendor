@@ -92,6 +92,42 @@ class vendor {
         }
     }
     public function addVendor($data) {
+        // Vendor Name
+        if (!empty($data['addVendorName'])) {
+            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
+            $checkGstStmt = $this->conn->prepare($checkGstSql);
+            $checkGstStmt->bind_param('s', $data['addVendorName']);
+            $checkGstStmt->execute();
+            $checkGstStmt->store_result();
+            if ($checkGstStmt->num_rows > 0) {
+                return ['success' => false, 'message' => 'Vendor name already exists. Please use a differentVendor name.'];
+            }
+            $checkGstStmt->close();
+        }
+        // Phone Number
+        if (!empty($data['addPhone'])) {
+            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_phone = ?";
+            $checkGstStmt = $this->conn->prepare($checkGstSql);
+            $checkGstStmt->bind_param('s', $data['addPhone']);
+            $checkGstStmt->execute();
+            $checkGstStmt->store_result();
+            if ($checkGstStmt->num_rows > 0) {
+                return ['success' => false, 'message' => 'Phone number already exists. Please use a different Phone number.'];
+            }
+            $checkGstStmt->close();
+        }
+        //Email
+        if (!empty($data['addEmail'])) {
+            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_email = ?";
+            $checkGstStmt = $this->conn->prepare($checkGstSql);
+            $checkGstStmt->bind_param('s', $data['addEmail']);
+            $checkGstStmt->execute();
+            $checkGstStmt->store_result();
+            if ($checkGstStmt->num_rows > 0) {
+                return ['success' => false, 'message' => 'Email already exists. Please use a different Email.'];
+            }
+            $checkGstStmt->close();
+        }
         // Check if gst_number already exists (if provided)
         if (!empty($data['addGstNumber'])) {
             $checkGstSql = "SELECT id FROM vp_vendors WHERE gst_number = ?";
@@ -118,12 +154,13 @@ class vendor {
             $checkPanStmt->close();
         }
 
-        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssiiis',
+        $stmt->bind_param('sssssssssssssssiiis',
             $data['addVendorName'],
             $data['addContactPerson'],
             $data['addEmail'],
+            $data['addCountryCode'],
             $data['addPhone'],
             $data['addAltPhone'],
             $data['addGstNumber'],
@@ -161,12 +198,13 @@ class vendor {
         ];
     }
     public function updateVendor($id, $data) {
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ? WHERE id = ?";
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssiiisi', 
+        $stmt->bind_param('sssssssssssssssiiisi', 
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
+            $data['editCountryCode'],
             $data['editPhone'],
             $data['editAltPhone'],
             $data['editGstNumber'],
@@ -269,7 +307,7 @@ class vendor {
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT * FROM vp_vendors $where LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vp.*, vu.name AS agent_name FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp. agent_id = vu.id $where LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $vendors = [];
@@ -379,15 +417,27 @@ class vendor {
         return $vTeamMembers;
     }
     public function getTeamMembers($team_id) {
-        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND team_id IN (".$team_id.") ORDER BY team_id, id ASC";
+        $sql = "SELECT vu.id as user_id, vu.name, vt.id as team_id, vt.team_name FROM vp_users AS vu INNER JOIN vp_teams AS vt ON vt.id = vu.team_id WHERE vu.is_active = 1 AND vu.team_id IN (".$team_id.") ORDER BY vt.team_name, vu.id ASC";
         $result = $this->conn->query($sql);
         $teamMembers = [];
         if ($result && $result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
-                $teamMembers[] = $row;
+            while($row = mysqli_fetch_assoc($result)) {
+                $teamId = $row['team_id'];
+                if (!isset($teamMembers[$teamId])) {
+                    $teamMembers[$teamId] = [
+                        'team_name' => $row['team_name'],
+                        'agents' => []
+                    ];
+                }
+                $teamMembers[$teamId]['agents'][] = [
+                    'id' => $row['user_id'],
+                    'name' => $row['name']
+                ];
             }
         }
-        return $teamMembers;
+        header('Content-Type: application/json');
+        echo json_encode(array_values($teamMembers));
+        exit;
     }
     public function searchVendors($term) {
         $term = $this->conn->real_escape_string($term);
@@ -400,6 +450,30 @@ class vendor {
             }
         }
         return $vendors;
+    }
+    public function checkVendorName($val) {
+        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_name = ?");
+        $stmt->bind_param("s", $val);
+        $stmt->execute();
+        $stmt->store_result();
+        $response = ['exists' => $stmt->num_rows > 0];
+        return $response;
+    }
+    public function checkEmail($email) {
+        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $stmt->store_result();
+        $response = ['exists' => $stmt->num_rows > 0];
+        return $response;
+    }
+    public function checkPhoneNumber($val) {
+        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_phone = ?");
+        $stmt->bind_param("s", $val);
+        $stmt->execute();
+        $stmt->store_result();
+        $response = ['exists' => $stmt->num_rows > 0];
+        return $response;
     }
 }
 ?>

@@ -101,9 +101,15 @@ switch ($page) {
             case 'getTeamMembers':
                 $controller->getTeamMembers();
                 break;
-            /*case 'update':
-                $controller->addEditVendor();
-                break;*/
+            case 'checkVendorName':
+                $controller->checkVendorName();
+                break;
+            case 'checkEmail':
+                $controller->checkEmail();
+                break;
+            case 'checkPhoneNumber':
+                $controller->checkPhoneNumber();
+                break;                
             default:
                 $controller->index();
                 break;

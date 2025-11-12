@@ -8,7 +8,7 @@ class Country {
 
     public function getAllCountries() {
 		
-		$sql = "SELECT id, name FROM countries";
+		$sql = "SELECT * FROM countries";
 		$sql .= " ORDER BY name ASC";
 
 		$stmt = $this->conn->prepare($sql);
@@ -25,7 +25,7 @@ class Country {
 	}
 	
 	public function getCountry($id) {
-		$sql = "SELECT id, name FROM countries WHERE id = ?";
+		$sql = "SELECT * FROM countries WHERE id = ?";
 
 		$stmt = $this->conn->prepare($sql);
 		$stmt->bind_param("i", $id);
