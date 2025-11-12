@@ -808,7 +808,7 @@
                                         <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
                                     </div>
                                     <p class="timeline-text mt-2">Created</p>
-                                    <p class="timeline-date"><?php echo date('d M, Y', strtotime($order['created_at'])); ?></p>
+                                    <p class="timeline-date"><?php echo date('d M, Y', strtotime($order['order_date'])); ?></p>
                                     </div>
                                 </div>
                                 <!-- status log -->
