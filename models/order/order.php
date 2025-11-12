@@ -592,5 +592,20 @@ class Order{
         //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         // }
     }
+    public function getPaymentTypes(){
+        $sql = "SELECT DISTINCT payment_type FROM `vp_orders` WHERE 1;";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $paymentTypes = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                if(!empty($row['payment_type'])){
+                    $paymentTypes[$row['payment_type']] = str_replace('_', ' ', $row['payment_type']);
+                }
+            }
+        }
+        return $paymentTypes;
+    }
 }
 ?>

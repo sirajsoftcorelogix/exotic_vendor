@@ -82,7 +82,10 @@ class OrdersController {
             'current_page' => $page,
             'order_status_list' => $order_status_row,
             'status_list' => $statusList,
-            'country_list' => $countryList
+            'country_list' => $countryList,
+            'payment_types'=> $ordersModel->getPaymentTypes(),
+            'staff_list' => $commanModel->get_staff_list(),
+            'filters' => $filters
         ], 'Manage Orders');
     }
         

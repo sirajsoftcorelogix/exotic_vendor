@@ -270,7 +270,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
                 <!-- Orders From/Till -->
-                <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
+                <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-0">
                     <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
@@ -281,7 +281,34 @@
                         <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
+                
+                <div >
+                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
 
+                        <option value="all" selected >All Status</option>
+                        <?php foreach ($status_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div >
+                    <select id="payment_type" name="payment_type" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+
+                        <option value="all" selected >All Payment Types</option>
+                        <?php foreach ($payment_types as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['payment_type']) && $_GET['payment_type'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="">
+                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        
+                        <option value="all" selected >All Categories</option>
+                        <?php foreach (getCategories() as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
                 <!-- PO Date -->
                 <!-- <div>
                     <label for="order-date" class="block text-sm font-medium text-gray-600 mb-1">Order Date</label>
@@ -301,18 +328,49 @@
                 </div>
 
                 <!-- Status -->
-                <!-- <div>
-                    <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                    <select id="status" name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" disabled selected>Status</option>
-                        <option>Pending</option>
-                        <option>In Progress</option>
-                        <option>Completed</option>
-                        <option>Disputed</option>
-                        <option>Returned</option>
+                <div>
+                    <label for="priority" class="block text-sm font-medium text-gray-600 mb-1">Priority</label>
+                    <select id="priority" name="priority" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected>-Select-</option>
+                        <option value="critical" >Critical</option>
+                        <option value="urgent" >Urgent</option>
+                        <option value="high" >High</option>                            
+                        <option value="medium" >Medium</option>
+                        <option value="low" >Low</option>
                     </select>
-                </div> -->
-
+                </div>
+                <div class="">
+                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected >All Country</option>
+						<optgroup label="Easy">
+							<option value="overseas">Overseas</option>
+							<option value="IN">India</option>
+						</optgroup>
+                        <?php foreach ($country_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
+                <div class="">
+                    <select id="staff_name" name="staff_name" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected >All Staff</option>
+						<?php foreach ($staff_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && $_GET['staff_name'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
+                <div class="">
+                    <input
+                        type="text"
+                        id="vendor_autocomplete"
+                        class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="Search vendor by name..."
+                        autocomplete="off"
+                        value=""
+                    >
+                    <input type="hidden" name="vendor_id" id="vendor_id" value="">
+                    <div id="vendor_suggestions" class="bg-white border rounded-md shadow-lg mt-1" style="display:none; left:0; right:0; z-index:50; max-height:240px; overflow:auto;"></div>
+                </div>
                 <!-- Min/Max Amount -->
                 <!-- <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
@@ -327,7 +385,7 @@
 
                 <!-- Item Code -->
                 <div>
-                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item No</label>
+                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 <!-- PO No -->
@@ -342,36 +400,8 @@
                     <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 
-                <div class="">
-                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" selected >All Country</option>
-						<optgroup label="Easy">
-							<option value="overseas">Overseas</option>
-							<option value="IN">India</option>
-						</optgroup>
-                        <?php foreach ($country_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>                    
-                    </select>
-                </div>
-                <div class="">
-                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        
-                        <option value="all" selected >All Categories</option>
-                        <?php foreach (getCategories() as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>                    
-                    </select>
-                </div>
-                <div >
-                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-
-                        <option value="all" selected >All Status</option>
-                        <?php foreach ($status_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                
+                
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
@@ -1143,7 +1173,7 @@
             </div>
             <div class="border-l pl-4 ml-4"></div>
             <div class="p-4 w-[59%]">
-                <h2 class="text-2xl font-bold mb-4">Order Update</h2>
+                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
                 <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
                     <input type="hidden" name="status_order_id" id="status_order_id">
                     <div class="mb-4">
@@ -1738,4 +1768,37 @@
         //open import popup to display import status and call ajax to import
         document.getElementById('importedPopup').classList.remove('hidden');       
     }
+    //vendor auto complete
+    document.getElementById('vendor_autocomplete').addEventListener('input', function() {
+    const query = this.value;
+    const suggestionsBox = document.getElementById('vendor_suggestions');
+    const vendorIdInput = document.getElementById('vendor_id');
+
+    if (query.length < 2) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {            
+            suggestionsBox.innerHTML = '';
+            if (Array.isArray(data.data) && data.data.length > 0) {
+                data.data.forEach(vendor => {
+                    const div = document.createElement('div');
+                    div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+                    div.textContent = vendor.vendor_name;
+                    div.addEventListener('click', function() {
+                        document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
+                        vendorIdInput.value = vendor.id;
+                        suggestionsBox.style.display = 'none';
+                    });
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        });
+    });
 </script>
