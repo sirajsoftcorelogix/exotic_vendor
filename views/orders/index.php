@@ -270,7 +270,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
                 <!-- Orders From/Till -->
-                <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
+                <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-0">
                     <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
@@ -281,7 +281,37 @@
                         <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
+                
+                <div >
+                    <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
+                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
 
+                        <option value="all" selected >All Status</option>
+                        <?php foreach ($status_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div >
+                    <label for="payment_type" class="block text-sm font-medium text-gray-600 mb-1">Payment Type</label>
+                    <select id="payment_type" name="payment_type" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+
+                        <option value="all" selected >All Payment Types</option>
+                        <?php foreach ($payment_types as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['payment_type']) && $_GET['payment_type'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="">
+                    <label for="category" class="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        
+                        <option value="all" selected >All Categories</option>
+                        <?php foreach (getCategories() as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
                 <!-- PO Date -->
                 <!-- <div>
                     <label for="order-date" class="block text-sm font-medium text-gray-600 mb-1">Order Date</label>
@@ -301,18 +331,52 @@
                 </div>
 
                 <!-- Status -->
-                <!-- <div>
-                    <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                    <select id="status" name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" disabled selected>Status</option>
-                        <option>Pending</option>
-                        <option>In Progress</option>
-                        <option>Completed</option>
-                        <option>Disputed</option>
-                        <option>Returned</option>
+                <div>
+                    <label for="priority" class="block text-sm font-medium text-gray-600 mb-1">Priority</label>
+                    <select id="priority" name="priority" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected>-Select-</option>
+                        <option value="critical" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'critical') ? 'selected' : ''; ?>>Critical</option>
+                        <option value="urgent" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'urgent') ? 'selected' : ''; ?>>Urgent</option>
+                        <option value="high" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'high') ? 'selected' : ''; ?>>High</option>
+                        <option value="medium" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'medium') ? 'selected' : ''; ?>>Medium</option>
+                        <option value="low" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'low') ? 'selected' : ''; ?>>Low</option>
                     </select>
-                </div> -->
-
+                </div>
+                <div class="">
+                    <label for="country" class="block text-sm font-medium text-gray-600 mb-1">Country</label>
+                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected >All Country</option>
+						<optgroup label="Easy">
+							<option value="overseas">Overseas</option>
+							<option value="IN">India</option>
+						</optgroup>
+                        <?php foreach ($country_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
+                <div class="">
+                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">Staff Name</label>
+                    <select id="staff_name" name="staff_name" class="w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" >All Staff</option>
+						<?php foreach ($staff_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && $_GET['staff_name'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
+                <div class="relative">
+                    <label for="vendor_autocomplete" class="block text-sm font-medium text-gray-600 mb-1">Vendor</label>
+                    <input
+                        type="text"
+                        id="vendor_autocomplete"
+                        class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="Search vendor by name..."
+                        autocomplete="off"
+                        value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>"
+                    >
+                    <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
+                    <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-60 overflow-auto" style="display:none; top:100%;"></div>
+                </div>
                 <!-- Min/Max Amount -->
                 <!-- <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
@@ -327,7 +391,7 @@
 
                 <!-- Item Code -->
                 <div>
-                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item No</label>
+                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 <!-- PO No -->
@@ -342,47 +406,26 @@
                     <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 
-                <div class="">
-                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" selected >All Country</option>
-						<optgroup label="Easy">
-							<option value="overseas">Overseas</option>
-							<option value="IN">India</option>
-						</optgroup>
-                        <?php foreach ($country_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>                    
-                    </select>
-                </div>
-                <div class="">
-                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        
-                        <option value="all" selected >All Categories</option>
-                        <?php foreach (getCategories() as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>                    
-                    </select>
-                </div>
-                <div >
-                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-
-                        <option value="all" selected >All Status</option>
-                        <?php foreach ($status_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                
+                
                 <!-- Buttons -->
-                <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
+                <div class="col-span-2 sm:col-span-2 md:col-span-2 flex items-center gap-2">
+                    <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Cancel</button>
+                    <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
-                    <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
                 </div>
                 </form>
             <!-- clear filter -->
              <script>
-                function clearFilters() {
+                // function clearFilters() {
+                //     const url = new URL(window.location.href);
+                //     //alert(url.search);
+                //     url.search = ''; // Clear all query parameters
+                //     const page = 'page=orders&action=list';
+                //     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
+                // }
+                function cancelSearch() {
                     const url = new URL(window.location.href);
-                    //alert(url.search);
                     url.search = ''; // Clear all query parameters
                     const page = 'page=orders&action=list';
                     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
@@ -598,7 +641,7 @@
 
                             $options = $order['options'] ?? '';
                             $optionsArr = [];
-                            $bordercolor = 'border-gray-300';
+                            $bordercolor = 'border border-gray-300';
                             $addontxt = '';
                             if (is_string($options)) {
                                 $decoded = json_decode($options, true);
@@ -629,7 +672,7 @@
                                     if (strpos($opt_text, 'Express') !== false) {
                                         $display = 'Express Shipping';
                                         $addon_css = 'bg-green-200 text-green-900';
-                                        $bordercolor = 'border-green-300';
+                                        $bordercolor = 'border-4 border-green-300';
                                     } else {
                                         $display = $opt_text;
                                         $addon_css = 'bg-gray-100 text-gray-800';
@@ -641,7 +684,7 @@
                             }                                                
                             
                     ?>
-                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
+                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md  <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
                         <div class="flex items-start p-4 gap-4">
                             <!-- Checkbox -->
                             <div class="flex-shrink-0 pt-1">
@@ -808,13 +851,13 @@
                                         <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
                                     </div>
                                     <p class="timeline-text mt-2">Created</p>
-                                    <p class="timeline-date"><?php echo date('d M, Y', strtotime($order['created_at'])); ?></p>
+                                    <p class="timeline-date"><?php echo date('d M, Y', strtotime($order['order_date'])); ?></p>
                                     </div>
                                 </div>
                                 <!-- status log -->
                                 <?php if (!empty($order['status_log'])) {
                                     foreach ($order['status_log'] as $log) { ?>
-                                    <div class="timeline-step completed">
+                                    <div class="timeline-step completed min-w-[120px]">
                                         <div class="flex flex-col items-center text-center">
                                         <div class="relative w-full h-5 flex justify-center items-center">
                                             <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
@@ -1143,7 +1186,7 @@
             </div>
             <div class="border-l pl-4 ml-4"></div>
             <div class="p-4 w-[59%]">
-                <h2 class="text-2xl font-bold mb-4">Order Update</h2>
+                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
                 <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
                     <input type="hidden" name="status_order_id" id="status_order_id">
                     <div class="mb-4">
@@ -1209,6 +1252,7 @@
                             ?>
                             
                         </select>
+                        <input type="hidden" id="previousStatus" name="previousStatus" value="">
                         </div>
                         <div>
                             <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date:</label>
@@ -1335,7 +1379,7 @@
             toDateInput.min = null;
         }
 
-        clearButton.addEventListener('click', clearFilters);
+        //clearButton.addEventListener('click', clearFilters);
     });
     // Image popup functionality
     function openImagePopup(imageUrl) {
@@ -1554,6 +1598,7 @@
         document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
         document.getElementById('status_item').textContent = orderData.title || 'N/A';
         document.getElementById('orderPriority').value = orderData.priority || '';
+        document.getElementById('previousStatus').value = orderData.status || '';
         // display ESD in dd-mm-yyyy format while keeping the date input usable
         (function(){
             const statusESD = document.getElementById('statusESD');
@@ -1738,4 +1783,37 @@
         //open import popup to display import status and call ajax to import
         document.getElementById('importedPopup').classList.remove('hidden');       
     }
+    //vendor auto complete
+    document.getElementById('vendor_autocomplete').addEventListener('input', function() {
+    const query = this.value;
+    const suggestionsBox = document.getElementById('vendor_suggestions');
+    const vendorIdInput = document.getElementById('vendor_id');
+
+    if (query.length < 2) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {            
+            suggestionsBox.innerHTML = '';
+            if (Array.isArray(data.data) && data.data.length > 0) {
+                data.data.forEach(vendor => {
+                    const div = document.createElement('div');
+                    div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+                    div.textContent = vendor.vendor_name;
+                    div.addEventListener('click', function() {
+                        document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
+                        vendorIdInput.value = vendor.id;
+                        suggestionsBox.style.display = 'none';
+                    });
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        });
+    });
 </script>
