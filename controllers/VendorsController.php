@@ -148,6 +148,47 @@ class VendorsController {
             echo json_encode(['status' => 'error', 'message' => 'Invalid team ID.']);
         }
         exit;
-    } 
+    }
+    public function checkVendorName() {
+        global $vendorsModel;
+        if (!isset($_GET['vendorName']) || empty($_GET['vendorName'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid Vendor Name.']);
+            exit;
+        }
+
+        $vendorName = trim($_GET['vendorName']);
+        $result = $vendorsModel->checkVendorName($vendorName);
+        header('Content-Type: application/json');
+        echo json_encode($result);
+        exit;
+    }
+    public function checkEmail() {
+        global $vendorsModel;
+        if (!isset($_GET['email']) || empty($_GET['email'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid Email Address.']);
+            exit;
+        }
+
+        $email = trim($_GET['email']);
+        $result = $vendorsModel->checkEmail($email);
+        header('Content-Type: application/json');
+        echo json_encode($result);
+        exit;
+    }
+    public function checkPhoneNumber() {
+        global $vendorsModel;
+
+        if (!isset($_GET['phone']) || empty($_GET['phone'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid Phone Number.']);
+            exit;
+        }
+
+        $phone = trim($_GET['phone']);
+        $result = $vendorsModel->checkPhoneNumber($phone);
+        header('Content-Type: application/json');
+        echo json_encode($result);
+        exit;
+
+    }
 }
 ?>
