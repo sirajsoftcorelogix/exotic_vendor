@@ -151,7 +151,7 @@
 	function user_roles_dropdown(){
 		// Fetch active roles
 		global $conn;
-		$sql = "SELECT id, role_name FROM user_roles WHERE active = 1 ORDER BY role_name ASC";
+		$sql = "SELECT id, role_name FROM vp_roles WHERE is_active = 1 ORDER BY role_name ASC";
 		return $conn->query($sql);
 	}
 	
@@ -198,7 +198,6 @@
 		}
 		return $countries;
 	}
-		
 
 	function getWeekDays() {
 		return [
@@ -254,7 +253,6 @@
 		return $services;
 	}
 
-	
 	function getSubscriptionPlans() {
 		global $conn;
 		$sql = "SELECT * FROM subscription_plans m1 WHERE m1.active = 1 ORDER BY id ASC";
@@ -451,5 +449,27 @@
 			'6' => 'returned'
 		];
 	}
-	
+	function updateCountryPhoneCode() {
+		global $conn;
+
+		$sql = "SELECT id, code, name, phone FROM countries_new ORDER BY code ASC";
+        $result = $conn->query($sql);
+		$cnt = 1;
+        while($row = mysqli_fetch_assoc($result)) {
+			$sql_select = "SELECT id FROM countries WHERE country_code = '" . $row["code"] . "'";
+			$result_sel = $conn->query($sql_select);
+			if ($result_sel) {
+				$sql_update = "UPDATE countries SET phone_code = '".$row["phone"]."' WHERE country_code='".$row["code"]."'";
+				$result_updt = $conn->query($sql_update);
+				if($result_updt) {
+					echo $cnt . "Record with Country Code: " . $row["code"] . " has been updated with Phone Code: ".$row["phone"] ."<br>".$sql_update."<br><br>";
+				} else {
+					echo $cnt . "Record with Country Code: " . $row["code"] . " has been NOT updated with Phone Code: ".$row["phone"] ."<br>".$sql_update."<br><br>";
+				}
+				$cnt++;
+			}
+		}
+		echo "All Records Updated in the Countries Table.";
+		$conn->close();
+	}
 ?>
