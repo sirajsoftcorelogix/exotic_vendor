@@ -73,6 +73,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Contact Person</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Agent Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">City</th>
@@ -88,6 +89,7 @@
                                 <td class="px-6 py-4 whitespace-wrap"><?= $index + 1 ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= ($vendor['agent_name']!="") ? htmlspecialchars($vendor['agent_name']) : "" ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['city']) ?></td>
@@ -214,6 +216,7 @@
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Vendor Name <span class="text-red-500">*</span></label>
                                     <input type="text" class="form-input w-full mt-1" required name="addVendorName" id="addVendorName" />
+                                    <span id="addVendorNameMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Contact Person <span class="text-red-500">*</span></label>
@@ -221,15 +224,28 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <input type="number" class="form-input w-full mt-1" required name="addPhone" id="addPhone" />
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <select class="form-input w-1/4" style="width: 190px;" name="addCountryCode" id="addCountryCode" required>
+                                            <option value="" disabled>Select Code</option>
+                                            <?php foreach($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>" <?php if($cl["name"]=="India") { echo "selected"; }?>>
+                                                    <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="number" class="form-input flex-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" />
+                                    </div>
+                                    <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
+                                <br />
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Email</label>
-                                    <input type="email" class="form-input w-full mt-1" name="addEmail" id="addEmail" />
+                                    <label class="text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
+                                    <input type="email" class="form-input w-full mt-1" required name="addEmail" id="addEmail" />
+                                    <span id="addEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" />
+                                    <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" oninput="limitToTenDigits(this)" />
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -391,7 +407,8 @@
                     <div id="editVendorMsg" style="margin-top:10px;"></div>
                     <form id="editUserForm">
                         <input type="hidden" id="editVendorId" name="id" value="">
-                        <input type="text" id="editPreviousState" name="editPreviousState" value="">
+                        <input type="hidden" id="editAgentIds" value="">
+                        <input type="hidden" id="editPreviousState" name="editPreviousState" value="">
                         <!-- Basic Information -->
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Basic Information</h3>
@@ -406,15 +423,27 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" />
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <select class="form-input w-1/4" style="width: 190px;" name="editCountryCode" id="editCountryCode" required>
+                                            <option value="" disabled>Select Code</option>
+                                            <?php foreach($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>">
+                                                    <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="number" class="form-input w-full mt-1" style="width:200px;" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" />
+                                    </div>
+                                    <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
+                                <br />
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Email</label>
-                                    <input type="email" class="form-input w-full mt-1" name="editEmail" id="editEmail" />
+                                    <label class="text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
+                                    <input type="email" class="form-input w-full mt-1" required name="editEmail" id="editEmail" />
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" />
+                                    <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" oninput="limitToTenDigits(this)" />
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -643,119 +672,207 @@
 <!-- JavaScript to handle popup and form submission -->
 <script>
 
+    // Function to limit input to six digits
+    window.limitToTenDigits = function (input) {
+        // Remove non-digit characters
+        input.value = input.value.replace(/\D/g, '');
+
+        // Allow only 8 digits
+        if (input.value.length > 10) {
+            input.value = input.value.slice(0, 10);
+        }
+
+        // Prevent leading zero
+        if (input.value.startsWith('0')) {
+            input.value = input.value.replace(/^0+/, '');
+        }
+    }
+
+    let vendorNameExists = false;
+    let emailExists = false;
+    let phoneExists = false;
+    //Vendor Name
+    const vendorNameInput = document.getElementById('addVendorName');
+    const vendorNameMsg = document.getElementById('addVendorNameMsg');
+
+    vendorNameInput.addEventListener('keyup', () => {
+        const vendorName = vendorNameInput.value.trim();
+        if (vendorName.length < 10) {
+            vendorNameExists = false;
+            vendorNameMsg.textContent = 'Invalid Vendor Name.';
+            return;
+        }
+
+        fetch('?page=vendors&action=checkVendorName&vendorName=' + encodeURIComponent(vendorName))
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    vendorNameMsg.textContent = 'This vendor name is already registered!';
+                    vendorNameMsg.style.color = 'red';
+                    vendorNameExists = true;
+                } else {
+                    vendorNameExists = false;
+                }
+                setTimeout(() => {
+                    vendorNameMsg.textContent = '';
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('Error:', err);
+            });
+    });
+
+    //Phone Number
+    const phoneInput = document.getElementById('addPhone');
+    const phoneMsg = document.getElementById('addPhoneMsg');
+
+    phoneInput.addEventListener('keyup', () => {
+        const phone = phoneInput.value.trim();
+        if (phone.length < 10) {
+            phoneExists = false;
+            phoneMsg.textContent = 'Invalid Phone number.';
+            return;
+        }
+
+        fetch('?page=vendors&action=checkPhoneNumber&phone=' + encodeURIComponent(phone))
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    phoneMsg.textContent = 'This phone number is already registered!';
+                    phoneMsg.style.color = 'red';
+                    phoneExists = true;
+                } else {
+                    phoneExists = false;
+                }
+                setTimeout(() => {
+                    phoneMsg.textContent = '';
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('Error:', err);
+            });
+    });
+    const emailInput = document.getElementById('addEmail');
+    const emailMsg = document.getElementById('addEmailMsg');
+
+    emailInput.addEventListener('keyup', () => {
+        const email = emailInput.value.trim();
+        if (email.length < 0) {
+            emailExists = false;
+            emailMsg.textContent = 'Invalid Email ID.';
+            return;
+        }
+
+        fetch('?page=vendors&action=checkEmail&email=' + encodeURIComponent(email))
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    emailMsg.textContent = 'This email address is already registered!';
+                    emailMsg.style.color = 'red';
+                    emailExists = true;
+                } else {
+                    emailExists = false;
+                }
+                setTimeout(() => {
+                    emailMsg.textContent = '';
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('Error:', err);
+            });
+    });
+    const addForm = document.getElementById('addVendorForm');
+    addForm.addEventListener('submit', (e) => {
+        if (vendorNameExists || phoneExists || emailExists) {
+            e.preventDefault();
+            alert('This phone number already exists. Please enter a different one.');
+        }
+    });
+
     function fillTeamAgent(teamId, formType) {
         if(teamId === "") return;
         
         if(formType === 'AddForm') {
-            document.getElementById('addTeamMemberBlock').innerHTML = 'Loading...';
             // Get the select element
             var selectElement = document.getElementById('addTeam');
             // Get all selected options
             var selectedOptions = selectElement.selectedOptions;
             // Extract values into an array
             var selectedValues = Array.from(selectedOptions).map(option => option.value);
-
-        } else {
-            document.getElementById('editTeamMemberBlock').innerHTML = 'Loading...';
         }
+
         if(formType === 'AddForm') {
-            // Fetch team members from the server
             fetch('?page=vendors&action=getTeamMembers&teamId=' + selectedValues.join(','))
             .then(response => response.json())
             .then(data => {
-                // Create a new select element
-                let memberSelect = document.createElement('select');
-
-                // add attributes
-                memberSelect.id = "addTeamMember";
-                memberSelect.name = "addTeamMember";
-                memberSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                // Populate the select element with options
-                const defaultOption = document.createElement('option');
-                defaultOption.value = "";
-                defaultOption.textContent = "Select Team Member";
-                defaultOption.disabled = true;
-                defaultOption.selected = true;
-                memberSelect.appendChild(defaultOption);
-
-                let members = Array.isArray(data) ? data : [data]; 
-                members.forEach(member => {
-                    const option = document.createElement('option');
-                    option.value = member.id;
-                    option.textContent = member.name;
-                    memberSelect.appendChild(option);
+                let html = '';
+                let teams = Array.isArray(data) ? data : [data]; // safe guard
+                teams.forEach(team => {
+                    html += `<optgroup label="${team.team_name}">`;
+                    if (team.agents && team.agents.length > 0) {
+                        team.agents.forEach(agent => {
+                            html += `<option value="${agent.id}">${agent.name}</option>`;
+                        });
+                    }
+                    html += `</optgroup>`;
                 });
-                document.getElementById('addTeamMemberBlock').innerHTML = memberSelect.outerHTML;
+
+                $('#addTeamMember').html(html).trigger('change');
+            })
+            .catch(error => {
+                console.error("Error loading team members:", error);
             });
         } else if(formType === 'EditForm') {
-
-                        // Get the select element
+            // Get the select element
             var selectElement = document.getElementById('editTeam');
             // Get all selected options
             var selectedOptions = selectElement.selectedOptions;
             // Extract values into an array
             var selectedValues = Array.from(selectedOptions).map(option => option.value);
 
-            // Fetch team members from the server
             fetch('?page=vendors&action=getTeamMembers&teamId=' + selectedValues.join(','))
             .then(response => response.json())
             .then(data => {
-                // Create a new select element
-                let memberSelect = document.createElement('select');
-
-                // add attributes
-                memberSelect.id = "editTeamMember";
-                memberSelect.name = "editTeamMember";
-                memberSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                // Populate the select element with options
-                const defaultOption = document.createElement('option');
-                defaultOption.value = "";
-                defaultOption.textContent = "Select Team Member";
-                defaultOption.disabled = true;
-                defaultOption.selected = true;
-                memberSelect.appendChild(defaultOption);
-
-                let members = Array.isArray(data) ? data : [data]; 
-                members.forEach(member => {
-                    const option = document.createElement('option');
-                    option.value = member.id;
-                    option.textContent = member.name;
-                    memberSelect.appendChild(option);
+                let html = '';
+                let teams = Array.isArray(data) ? data : [data]; // safe guard
+                teams.forEach(team => {
+                    html += `<optgroup label="${team.team_name}">`;
+                    if (team.agents && team.agents.length > 0) {
+                        team.agents.forEach(agent => {
+                            html += `<option value="${agent.id}">${agent.name}</option>`;
+                        });
+                    }
+                    html += `</optgroup>`;
                 });
-                document.getElementById('editTeamMemberBlock').innerHTML = memberSelect.outerHTML;
+                $('#editTeamMember').html(html).trigger('change');
+                if(document.getElementById("editAgentIds").value) {
+                    document.getElementById("editTeamMember").value = document.getElementById("editAgentIds").value;
+                }
+            })
+            .catch(error => {
+                console.error("Error loading team members:", error);
             });
         }  else {
-            // Fetch team members from the server
             fetch('?page=vendors&action=getTeamMembers&teamId=' + teamId)
             .then(response => response.json())
             .then(data => {
-                // Create a new select element
-                let memberSelect = document.createElement('select');
-
-                // add attributes
-                memberSelect.id = "editTeamMember";
-                memberSelect.name = "editTeamMember";
-                memberSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                // Populate the select element with options
-                const defaultOption = document.createElement('option');
-                defaultOption.value = "";
-                defaultOption.textContent = "Select Team Member";
-                defaultOption.disabled = true;
-                defaultOption.selected = true;
-                memberSelect.appendChild(defaultOption);
-
-                let members = Array.isArray(data) ? data : [data]; 
-                members.forEach(member => {
-                    const option = document.createElement('option');
-                    option.value = member.id;
-                    option.textContent = member.name;
-                    memberSelect.appendChild(option);
+                let html = '';
+                let teams = Array.isArray(data) ? data : [data]; // safe guard
+                teams.forEach(team => {
+                    html += `<optgroup label="${team.team_name}">`;
+                    if (team.agents && team.agents.length > 0) {
+                        team.agents.forEach(agent => {
+                            html += `<option value="${agent.id}">${agent.name}</option>`;
+                        });
+                    }
+                    html += `</optgroup>`;
                 });
-                document.getElementById('editTeamMemberBlock').innerHTML = memberSelect.outerHTML;
+
+                $('#editTeamMember').html(html).trigger('change');
                 document.getElementById("editTeamMember").value = formType;
+            })
+            .catch(error => {
+                console.error("Error loading team members:", error);
             });
         }
     }
@@ -1048,6 +1165,7 @@
             document.getElementById("editVendorName").value = vendor.vendor_name;
             document.getElementById("editContactPerson").value = vendor.contact_name;
             document.getElementById("editEmail").value = vendor.vendor_email;
+            document.getElementById("editCountryCode").value = vendor.country_code;
             document.getElementById("editPhone").value = vendor.vendor_phone;
             document.getElementById("editAltPhone").value = vendor.alt_phone;
             document.getElementById("editGstNumber").value = vendor.gst_number;
@@ -1055,6 +1173,8 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
+
+            document.getElementById("editAgentIds").value = vendor.agent_id;
             
             fillTeamAgent(vendor.teamIds, vendor.agent_id);
 
@@ -1126,7 +1246,6 @@
             Array.from(teamSelect.options).forEach(option => {
                 option.selected = teamArr.map(String).includes(String(option.value));
             });
-
             
             // Initialize Select2
             $(document).ready(function() {
@@ -1282,14 +1401,6 @@
     });
     $(document).ready(function() {
         $('#addTeam').select2({
-            placeholder: "Select Teams",
-            allowClear: true,
-            width: '400',
-            closeOnSelect: false
-        });
-    });
-    $(document).ready(function() {
-        $('#editTeam').select2({
             placeholder: "Select Teams",
             allowClear: true,
             width: '400',
