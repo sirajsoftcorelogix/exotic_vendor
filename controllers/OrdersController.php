@@ -61,6 +61,21 @@ class OrdersController {
         } else {
             $filters['sort'] = 'desc'; // Default sort order
         }
+        if (!empty($_GET['payment_type']) && in_array($_GET['payment_type'], array_keys($ordersModel->getPaymentTypes()))) {
+            $filters['payment_type'] = $_GET['payment_type'];
+        } else {
+            $filters['payment_type'] = 'all';
+        }
+        if (!empty($_GET['staff_name'])) {
+            $filters['staff_name'] = $_GET['staff_name'];
+        }
+        if (!empty($_GET['priority'])) {
+            $filters['priority'] = $_GET['priority'];
+        }
+        if(!empty($_GET['vendor_id'])){
+            $filters['vendor_id'] = $_GET['vendor_id'];  
+        }
+        
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
@@ -290,7 +305,7 @@ class OrdersController {
                     $result[] = $data;
                     //add products
                     $pdata[] = $ordersModel->addProducts($rdata);                   
-                    
+                    //$vdata = $ordersModel->addVendorIfNotExists($rdata['vendor']);
                     if (isset($data['success']) && $data['success'] == 1) {                        
                         $imported++;
                     } 
@@ -404,8 +419,10 @@ class OrdersController {
                     'change_date' => date('Y-m-d H:i:s')
                 ];
                 //print_array($apidata);
-                //print_array($logData);
-                $commanModel->add_order_status_log($logData);
+                //print_array($_POST);
+                if($new_status != $_POST['previousStatus']){
+                    $commanModel->add_order_status_log($logData);
+                }                
 
                 if ($updated) {
                     echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);

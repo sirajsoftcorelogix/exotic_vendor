@@ -17,7 +17,7 @@ class User {
         if ($result->num_rows > 0) {
             $user = $result->fetch_assoc();
             if (password_verify($password, $user['password'])) {
-                $lifetime = 4 * 3600; // 4 hours in seconds
+                $lifetime = 8 * 3600; // 8 hours in seconds
 
                 if (session_status() !== PHP_SESSION_ACTIVE) {
                     // set cookie params before starting the session

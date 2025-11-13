@@ -75,13 +75,30 @@ class Order{
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND vp_orders.options LIKE '%express%'";
         }
+        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            $sql .= " AND vp_orders.payment_type = ?";
+            $params[] = $filters['payment_type'];
+        }
+        if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
+            $sql .= " AND vp_users.id = ?";
+            $params[] = $filters['staff_name'];
+        }
+        if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
+            $sql .= " AND vp_orders.priority = ?";
+            $params[] = $filters['priority'];
+        }
+        if(!empty($filters['vendor_id'])){
+            $sql .= " AND vp_vendors.id = ?";
+            $params[] = $filters['vendor_id'];            
+        }
+        //echo $sql;
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
         } else {
             $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
         }
-
+       
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         // Add limit and offset to params and types
@@ -100,7 +117,13 @@ class Order{
         return $orders;
     }
     public function getOrdersCount($filters = []) {
-        $sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
+        //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
+        $sql = "SELECT COUNT(*) as count 
+		FROM vp_orders 
+		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
+		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		WHERE 1=1";
         $params = [];
         if (!empty($filters['order_number'])) {
             $sql .= " AND order_number LIKE ?";
@@ -111,7 +134,7 @@ class Order{
             $params[] = '%' . $filters['item_code'] . '%';
         }
         if (!empty($filters['po_no'])) {
-            $sql .= " AND po_number LIKE ?";
+            $sql .= " AND vp_orders.po_number LIKE ?";
             $params[] = '%' . $filters['po_no'] . '%';
         }
         if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
@@ -133,7 +156,8 @@ class Order{
         }
         if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
             if ($filters['status_filter'] === 'pending') {
-                $sql .= " AND (po_number IS NULL OR po_number = '')";
+                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                $sql .= " AND vp_orders.status = 'pending'";
             } elseif ($filters['status_filter'] === 'processed') {
                 //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
                 $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
@@ -156,6 +180,23 @@ class Order{
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND options LIKE '%express%'";
         }
+        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            $sql .= " AND payment_type = ?";
+            $params[] = $filters['payment_type'];
+        }
+        if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
+            $sql .= " AND vp_users.id = ?";
+            $params[] = $filters['staff_name'];
+        }
+        if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
+            $sql .= " AND priority = ?";
+            $params[] = $filters['priority'];
+        }
+        if(!empty($filters['vendor_id'])){
+            $sql .= " AND vendor_id = ?";
+            $params[] = $filters['vendor_id'];            
+        }
+        // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
         } else {
@@ -606,6 +647,28 @@ class Order{
             }
         }
         return $paymentTypes;
+    }
+    public function addVendorIfNotExists($vendor_name) {
+        // Check if vendor already exists
+        $sql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $vendor_name);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return ['success' => true, 'vendor_id' => $row['id'], 'message' => 'Vendor already exists.'];
+        }
+
+        // Insert new vendor
+        $sql = "INSERT INTO vp_vendors (vendor_name) VALUES (?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $vendor_name);
+        if ($stmt->execute()) {
+            return ['success' => true, 'vendor_id' => $stmt->insert_id, 'message' => 'Vendor added successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
     }
 }
 ?>
