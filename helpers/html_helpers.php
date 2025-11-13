@@ -194,7 +194,7 @@
 		$result = $conn->query($sql);
 		$countries = array();
 		while ($row = $result->fetch_assoc()) {
-			$countries[$row['country_code']] = $row['NAME'];
+			$countries[$row['country_code']] = $row['name'];
 		}
 		return $countries;
 	}
