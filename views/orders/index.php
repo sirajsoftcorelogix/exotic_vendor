@@ -697,7 +697,7 @@
                             <div class="grid grid-cols-[max-content,1fr] gap-x-4 w-full">
 
                                 <!-- COLUMN 1 -->
-                                <div class="flex flex-col gap-4">
+                                <div class="flex flex-col gap-4 w-[500px]">
                                     <!-- Col 1, Row 1: Image and Title -->
                                     <div class="flex items-start gap-4 ">
 										<div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
@@ -733,7 +733,7 @@
                                 </div>
 
                                 <!-- COLUMN 2 -->
-                                <div class="flex flex-col gap-4">
+                                <div class="flex flex-col gap-4 ">
                                     <!-- Col 2, Row 1: Status Grid and Actions -->
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
