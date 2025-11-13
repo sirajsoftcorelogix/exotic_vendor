@@ -187,6 +187,19 @@ class Tables {
         }
         return $response;
     }
+    public function get_staff_list() {
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1";
+        $stmt = $this->ci->prepare($sql);        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[$row['id']] = $row['name'];
+            }
+        }
+        return $data;
+    }
 
 }
 ?>
