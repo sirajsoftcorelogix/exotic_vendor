@@ -6,6 +6,7 @@ require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/order/po_invoice.php';
+require_once 'models/product/product.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -18,6 +19,7 @@ $vendorsModel = new Vendor($conn);
 $usersModel = new User($conn);
 $commanModel = new Tables($conn);
 $poInvoiceModel = new POInvoice($conn);
+$productModel = new Product($conn);
 global $root_path;
  
 class PurchaseOrdersController {
@@ -1412,6 +1414,113 @@ class PurchaseOrdersController {
         $term = isset($_GET['query']) ? $_GET['query'] : '';
         $vendors = $vendorsModel->searchVendors($term);
         echo json_encode(['success' => true, 'data' => $vendors]);
+        exit;
+    }
+    public function customPO(){
+        global $vendorsModel;
+        global $usersModel;
+        global $commanModel;
+        global $domain;
+
+        $data = [];
+        $vendors = $vendorsModel->getAllVendors();
+        $data['vendors'] = $vendorsModel->getAllVendors();
+        //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
+        $data['domain'] = $domain;
+        //print_array($data);
+        $data['users'] = $usersModel->getAllUsers();
+        $data['exotic_address'] = $commanModel->get_exotic_address();
+        $data['templates'] = $commanModel->get_payment_terms_and_conditions();
+        renderTemplate('views/purchase_orders/custom_po.php', $data, 'Create Custom Purchase Order');
+    }
+    function productItems() {
+        global $productModel;
+
+        $search = isset($_GET['search']) ? $_GET['search'] : 0;
+
+        if (!$search) {
+            $orderItems = $productModel->getProductItems('');
+        }else{
+            $orderItems = $productModel->getProductItems($search);
+        }
+        if ($orderItems === false) {
+            echo json_encode(['success' => false, 'message' => 'Failed to fetch order items.']);
+            exit;
+        }
+
+        //echo json_encode(['success' => true, 'data' => $orderItems]);
+        echo json_encode($orderItems);
+        exit;
+    }
+    function customPOSave() {
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+
+        $data = $_POST;
+
+        // Validate required fields
+        if (empty($data['vendor_id']) || empty($data['delivery_due_date'])) {
+            echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
+            exit;
+        }
+        
+        // Prepare purchase order data
+        $purchaseOrderData = [
+            'po_number' => '',
+            'po_type' => 'custom',
+            'vendor_id' => $data['vendor_id'],
+            'expected_delivery_date' => $data['delivery_due_date'],
+            'user_id' => $data['user_id'] ?? '',
+            'created_email' => $data['created_email'] ?? '',
+            'delivery_address' => $data['delivery_address'] ?? '',
+            'subtotal' => $data['subtotal'] ?? 0,
+            'shipping_cost' => $data['shipping_cost'] ?? 0,
+            'total_gst' => $data['total_gst'] ?? 0,
+            'total_cost' => $data['grand_total'] ?? 0,
+            'terms_and_conditions' => $data['terms_and_conditions'] ?? '',
+            'status' => 'pending',
+            'flag_star' => 0
+        ];
+        //print_array($purchaseOrderData);
+        // Save purchase order
+        $poId = $purchaseOrdersModel->addPurchaseOrder($purchaseOrderData);
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Failed to save purchase order.']);
+            exit;
+        }
+        // Generate and update PO number
+        $poNumber = 'CPO-' . date('Y') . '-' . str_pad($poId, 6, '0', STR_PAD_LEFT);
+        $isUpdated = $purchaseOrdersModel->updatePurchaseOrderNumber($poId, ['po_number' => $poNumber]);
+        if (!$isUpdated) {
+            echo json_encode(['success' => false, 'message' => 'Failed to update PO number.']);
+            exit;
+        }
+
+        // Save purchase order items
+         // Create purchase order items
+        $itemsCreated = true;
+        foreach ($data['gst'] as $index => $gstValue) {
+            $items = [
+                'purchase_orders_id' => $poId,
+                'item_code' => isset($data['itemcode'][$index]) ? $data['itemcode'][$index] : '',
+                'order_number' => isset($data['ordernumber'][$index]) ? $data['ordernumber'][$index] : '',
+                'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',
+                'image' => isset($data['img'][$index]) ? $data['img'][$index] : '',
+                'hsn' => isset($data['hsn'][$index]) ? $data['hsn'][$index] : '',
+                'gst' => $gstValue,
+                'quantity' => isset($data['quantity'][$index]) ? $data['quantity'][$index] : 0,
+                'price' => isset($data['rate'][$index]) ? $data['rate'][$index] : 0,
+                'amount' => isset($data['rate'][$index]) ? $data['rate'][$index] * (1 + ($gstValue / 100)) : 0
+            ];
+            //Print_array($items);
+            $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);
+            if (!$itemId) {
+                $itemsCreated = false;
+                break; // Stop processing if any item creation fails
+            }
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Custom Purchase Order created successfully.', 'po_id' => $poId, 'item_ids' => $itemsCreated]);
         exit;
     }
 }

@@ -149,6 +149,13 @@
     </div>
     <!-- End of Advance Search Accordion -->
     <!-- </div> -->
+    <!-- custom po button -->
+    <div class="flex justify-end">
+        <a href="<?php echo base_url('?page=purchase_orders&action=custom_po'); ?>" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm flex items-center gap-2">
+            <i class="fa fa-plus"></i>
+            <span>Create Custom PO</span>
+        </a>
+    </div>
     <!-- PO Table Container -->
     <div class="bg-white rounded-xl shadow-md ">
         <div class="p-6 ">
