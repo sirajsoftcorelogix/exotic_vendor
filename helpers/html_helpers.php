@@ -56,14 +56,7 @@
 	function getloginUser(){
 		//tenant details
 		$user['tenant_id'] 			= $_SESSION['tenant_id'];
-		$user['currency_symbol'] 	= $_SESSION['currency_symbol'];
 		$user['tenant_Name'] 		= $_SESSION['tenant_Name'];
-		//store details
-		$user['store_id'] 			= $_SESSION['store_id'];
-		$user['store_code'] 		= $_SESSION['store_code'];
-		//user details
-		$user['user_id'] 			= $_SESSION['user_id'];
-		$user['user_full_name'] 	= $_SESSION['user_full_name'];
 		return $user;
 	}
 	
