@@ -81,16 +81,25 @@
                 <th class="p-2 text-right w-1/12"></th>
             </tr>
             </thead>
-            <tbody class="table-row-text">
-                <?php //foreach ($data as $index => $item): ?>
-            <tr class="bg-white ">
+            <tbody class="table-row-text " id="poTableBody">
+                
+            <tr class="bg-white position-relative">
                 <td class="p-2">
                     <input type="text" name="item_code[]" class="item_code w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code" onblur="fetchProductDetails(this)">
+                    <!--suggestion box-->
+                    <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto;"></div>
                 </td>
                 
                 <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
                 <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
-                <td class="p-1"><input type="hidden" name="img[]" value=""><img onclick="openImagePopup('')" src="" class="rounded-lg cursor-pointer"></td>
+                <td class="p-1">
+                    <input type="hidden" name="img[]" value="">
+                    <div class="flex items-center space-x-2">
+                        <img onclick="openImagePopup(this.src)" src="" class="rounded-lg cursor-pointer w-10 h-10">
+                        <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">
+                        <button type="button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs" onclick="this.parentElement.querySelector('.img-upload').click()">Upload</button>
+                    </div>
+                </td>
                 <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
@@ -113,7 +122,7 @@
                
                 
             </tr>
-            <?php //endforeach; ?>
+            
             </tbody>
         </table>
     </div>
@@ -122,6 +131,8 @@
     <div class="mt-4 flex justify-between items-start">
         <!-- Add Item Button -->
         <div>
+            <!-- + button to add blank row for item -->
+            <button type="button" id="addRowBtn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button"><i class="fa fa-plus"></i> Add Row</button>
             <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
         </div>
         <!-- Totals Section -->
@@ -186,14 +197,15 @@
 </div>
 <!-- Order Item Modal -->
 <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
-    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-4xl p-6 relative">
         <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
-        <h2 class="text-xl font-bold mb-4">Select Order Item</h2>
+        <h2 class="text-xl font-bold mb-4">Select Product Item</h2>
         <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with order id, item code, or title...">
         <div class="max-h-72 overflow-y-auto">
             <table class="w-full border">
                 <thead>
                     <tr>
+                        <th class="p-2 text-left">Item code</th>
                         <th class="p-2 text-left">Title</th>
                         <th class="p-2 text-left">Order ID</th>
                         <th class="p-2 text-left">Order Date</th>
@@ -442,7 +454,8 @@ function fetchOrderItems(query) {
                 data.forEach(item => {
                     //console.log(item);
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `                        
+                    tr.innerHTML = `     
+                        <td class="p-2">${item.item_code}</td>                   
                         <td class="p-2">${item.title} ${item.item_code}</td>
                         <td class="p-2">${item.order_number}</td>
                         <td class="p-2">${item.order_date}</td>
@@ -596,54 +609,351 @@ document.getElementById('vendor_autocomplete').addEventListener('input', functio
 
 </script>
 <script>
+// Reusable: fill row fields from item data
+function fillRowFromProduct(tr, item) {
+    // Title
+    const titleEl = tr.querySelector('textarea[name="title[]"]');
+    if (titleEl) titleEl.value = item.title || '';
+
+    // HSN
+    const hsnEl = tr.querySelector('input[name="hsn[]"]');
+    if (hsnEl) hsnEl.value = item.hsn || '';
+
+    // Image hidden and preview
+    const imgHidden = tr.querySelector('input[name="img[]"]');
+    if (imgHidden) imgHidden.value = item.image || '';
+    const imgTag = tr.querySelector('img');
+    if (imgTag) {
+        imgTag.src = item.image || '';
+        imgTag.onclick = function() { openImagePopup(item.image || '') };
+    }
+
+    // GST
+    const gstEl = tr.querySelector('input[name="gst[]"]');
+    if (gstEl) gstEl.value = (item.gst !== undefined) ? item.gst : gstEl.value || 0;
+
+    // Rate
+    const rateEl = tr.querySelector('input[name="rate[]"]');
+    if (rateEl && item.rate !== undefined) rateEl.value = parseFloat(item.rate).toFixed(2);
+
+    // Order id / product id
+    const orderIdHidden = tr.querySelector('input[name="orderid[]"]');
+    if (orderIdHidden) orderIdHidden.value = item.id;
+
+    // item_code field value
+    const codeEl = tr.querySelector('input.item_code');
+    if (codeEl) codeEl.value = item.item_code || '';
+
+    // Recalculate totals
+    if (typeof calculateTotals === 'function') calculateTotals();
+}
+
+// Suggestion/autocomplete for a given item_code input
+function initItemCodeInput(input) {
+    const tr = input.closest('tr');
+    const suggBox = tr.querySelector('.suggestion-box');
+    let debounceTimer = null;
+    let activeIndex = -1;
+
+    function clearSuggestions() {
+        if (suggBox) {
+            suggBox.innerHTML = '';
+            suggBox.style.display = 'none';
+        }
+        activeIndex = -1;
+    }
+
+    function renderSuggestions(list) {
+        if (!suggBox) return;
+        if (!Array.isArray(list) || list.length === 0) {
+            clearSuggestions();
+            return;
+        }
+        suggBox.innerHTML = list.map((v, i) => {
+            return `<div class="sugg-item position-relative z-10 w-64 p-2 cursor-pointer hover:bg-gray-300" data-index="${i}" data-id="${escapeHtml(v.id)}" data-json='${escapeHtml(JSON.stringify(v))}' style="padding:8px 10px;">
+                        <div style="font-weight:600;">${escapeHtml(v.item_code || '')} — ${escapeHtml(v.title || '')}</div>
+                        <div style="font-size:11px;color:#6b7280;">HSN: ${escapeHtml(v.hsn || '')} • GST: ${escapeHtml(String(v.gst || ''))}%</div>
+                    </div>`;
+        }).join('');
+        suggBox.style.display = 'block';
+        activeIndex = -1;
+    }
+
+    function escapeHtml(str) {
+        return String(str || '').replace(/[&<>"']/g, function (s) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[s];
+        });
+    }
+
+    function fetchSuggestions(q) {
+        if (!q || q.length < 2) { clearSuggestions(); return; }
+        fetch('<?php echo base_url("?page=purchase_orders&action=product_items&search="); ?>' + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(data => {
+                renderSuggestions(data || []);
+            })
+            .catch(err => {
+                console.error('Suggestion fetch error', err);
+                clearSuggestions();
+            });
+    }
+
+    // input event: fetch suggestions
+    input.addEventListener('input', function() {
+        clearSuggestions();
+        const q = this.value.trim();
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchSuggestions(q), 180);
+    });
+
+    // keyboard navigation & selection
+    input.addEventListener('keydown', function(e) {
+        const items = suggBox ? suggBox.querySelectorAll('.sugg-item') : [];
+        if (!items || items.length === 0) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, items.length - 1);
+            updateActive(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            updateActive(items);
+        } else if (e.key === 'Enter') {
+            if (activeIndex >= 0 && items[activeIndex]) {
+                e.preventDefault();
+                selectSuggestion(items[activeIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            clearSuggestions();
+        }
+    });
+
+    function updateActive(items) {
+        items.forEach(i => i.style.background = '');
+        if (activeIndex >= 0 && items[activeIndex]) {
+            items[activeIndex].style.background = '#d2d5dbff';
+            items[activeIndex].scrollIntoView({block:'nearest'});
+        }
+    }
+
+    // click selection
+    if (suggBox) {
+        suggBox.addEventListener('click', function(e) {
+            const itemEl = e.target.closest('.sugg-item');
+            if (itemEl) selectSuggestion(itemEl);
+        });
+    }
+
+    function selectSuggestion(itemEl) {
+        try {
+            const json = itemEl.getAttribute('data-json') || '{}';
+            const item = JSON.parse(json);
+            // fill row
+            fillRowFromProduct(tr, item);
+        } catch (ex) {
+            console.error('Invalid item JSON', ex);
+        } finally {
+            clearSuggestions();
+        }
+    }
+
+    // hide suggestions when input loses focus (allow click to register)
+    input.addEventListener('blur', function() {
+        setTimeout(clearSuggestions, 180);
+    });
+}
+
+// Attach suggestion behavior to all existing item_code inputs
+document.querySelectorAll('.item_code').forEach(input => {
+    initItemCodeInput(input);
+});
+
+// Keep previous fetchProductDetails for cases where code is typed fully and blurred
 function fetchProductDetails(el) {
     const code = el.value.trim();
     if (!code) return;
     fetch('<?php echo base_url("?page=purchase_orders&action=product_items&search="); ?>' + encodeURIComponent(code))
         .then(r => r.json())
         .then(data => {
-            console.log(data[0]);
             if (!data[0] || !data[0].id) {
-                alert('Product not found');
+                // no exact match
                 return;
             }
             const tr = el.closest('tr');
             if (!tr) return;
-
-            // Title
-            const titleEl = tr.querySelector('textarea[name="title[]"]');
-            if (titleEl) titleEl.value = data[0].title || '';
-
-            // HSN
-            const hsnEl = tr.querySelector('input[name="hsn[]"]');
-            if (hsnEl) hsnEl.value = data[0].hsn || '';
-
-            // Image hidden and preview
-            const imgHidden = tr.querySelector('input[name="img[]"]');
-            if (imgHidden) imgHidden.value = data[0].image || '';
-            const imgTag = tr.querySelector('img');
-            if (imgTag) {
-                imgTag.src = data[0].image || '';
-                imgTag.onclick = function() { openImagePopup(data[0].image || '') };
-            }
-
-            // GST
-            const gstEl = tr.querySelector('input[name="gst[]"]');
-            if (gstEl) gstEl.value = (data[0].gst !== undefined) ? data[0].gst : gstEl.value || 0;
-
-            // Rate
-            const rateEl = tr.querySelector('input[name="rate[]"]');
-            if (rateEl && data[0].rate !== undefined) rateEl.value = parseFloat(data[0].rate).toFixed(2);
-
-            // Optionally set orderid hidden if present
-            const orderIdHidden = tr.querySelector('input[name="orderid[]"]');
-            if (orderIdHidden) orderIdHidden.value = data[0].id;
-
-            // Recalculate totals
-            if (typeof calculateTotals === 'function') calculateTotals();
+            fillRowFromProduct(tr, data[0]);
         })
         .catch(err => {
             console.error('Error fetching product by code', err);
         });
 }
+
+// When adding new row, initialize suggestion on its item_code
+document.getElementById('addRowBtn').addEventListener('click', function() {
+    const poTableBody = document.getElementById('poTableBody');
+    const newRow = document.createElement('tr');
+    newRow.className = 'bg-white ';
+    newRow.innerHTML = `
+        <td class="p-2" style="position:relative;">
+            <input type="text" name="item_code[]" class="item_code w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code">
+            <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto; left:0; right:0;"></div>
+        </td>
+        <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
+        <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
+        <td class="p-1"><input type="hidden" name="img[]" value=""><img onclick="openImagePopup('')" src="" class="rounded-lg cursor-pointer"></td>
+        <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
+        <td class="p-1">
+            <div class="flex items-center space-x-2">
+                <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required>  
+            </div>
+        </td>
+        <td class="p-1">
+            <div class="flex items-center space-x-2">
+                <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+            </div>
+        </td>
+        <td class="p-1 rowTotal"></td>
+        <td class="p-4 text-right rounded-r-lg">
+                <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"> <span class="text-lg"><i class="fa fa-trash-alt"></i></span> </button>
+        </td>
+    `;
+    poTableBody.appendChild(newRow);
+    // Attach suggestion init for the new item_code input
+    const newInput = newRow.querySelector('.item_code');
+    if (newInput) initItemCodeInput(newInput);
+
+    // attach remove-row handler
+    newRow.querySelector('.remove-row').addEventListener('click', function() {
+        newRow.remove();
+        calculateTotals();
+    });
+});
+// image handling
+function handleImageUpload(input) {
+    const tr = input.closest('tr');
+    const imgHidden = tr.querySelector('input[name="img[]"]');
+    const imgTag = tr.querySelector('img');
+    const file = input.files[0];
+    
+    if (file) {
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            alert('Please select a valid image file');
+            return;
+        }
+        
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Image size should not exceed 5MB');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const imgData = e.target.result;
+            if (imgHidden) imgHidden.value = imgData;
+            if (imgTag) {
+                imgTag.src = imgData;
+                imgTag.style.display = 'block';
+                imgTag.onclick = function() { openImagePopup(imgData); };
+            }
+        };
+        reader.onerror = function() {
+            alert('Error reading file');
+        };
+        reader.readAsDataURL(file);
+    }
+}
+// function fetchProductDetails(el) {
+//     const code = el.value.trim();
+//     if (!code) return;
+//     fetch('<?php //echo base_url("?page=purchase_orders&action=product_items&search="); ?>' + encodeURIComponent(code))
+//         .then(r => r.json())
+//         .then(data => {
+//             console.log(data[0]);
+//             if (!data[0] || !data[0].id) {
+//                 alert('Product not found');
+//                 return;
+//             }
+//             const tr = el.closest('tr');
+//             if (!tr) return;
+
+//             // Title
+//             const titleEl = tr.querySelector('textarea[name="title[]"]');
+//             if (titleEl) titleEl.value = data[0].title || '';
+
+//             // HSN
+//             const hsnEl = tr.querySelector('input[name="hsn[]"]');
+//             if (hsnEl) hsnEl.value = data[0].hsn || '';
+
+//             // Image hidden and preview
+//             const imgHidden = tr.querySelector('input[name="img[]"]');
+//             if (imgHidden) imgHidden.value = data[0].image || '';
+//             const imgTag = tr.querySelector('img');
+//             if (imgTag) {
+//                 imgTag.src = data[0].image || '';
+//                 imgTag.onclick = function() { openImagePopup(data[0].image || '') };
+//             }
+
+//             // GST
+//             const gstEl = tr.querySelector('input[name="gst[]"]');
+//             if (gstEl) gstEl.value = (data[0].gst !== undefined) ? data[0].gst : gstEl.value || 0;
+
+//             // Rate
+//             const rateEl = tr.querySelector('input[name="rate[]"]');
+//             if (rateEl && data[0].rate !== undefined) rateEl.value = parseFloat(data[0].rate).toFixed(2);
+
+//             // Optionally set orderid hidden if present
+//             const orderIdHidden = tr.querySelector('input[name="orderid[]"]');
+//             if (orderIdHidden) orderIdHidden.value = data[0].id;
+
+//             // Recalculate totals
+//             if (typeof calculateTotals === 'function') calculateTotals();
+//         })
+//         .catch(err => {
+//             console.error('Error fetching product by code', err);
+//         });
+// }
+// // Attach event listener to existing item_code inputs
+// document.querySelectorAll('.item_code').forEach(input => {
+//     input.addEventListener('blur', function() {
+//         fetchProductDetails(this);
+//     });
+// });
+// // Add Row button functionality
+// document.getElementById('addRowBtn').addEventListener('click', function() {
+//     const poTableBody = document.getElementById('poTableBody');
+//     const newRow = document.createElement('tr');
+//     newRow.className = 'bg-white ';
+//     newRow.innerHTML = `
+//         <td class="p-2">
+//             <input type="text" name="item_code[]" class="item_code w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code" onblur="fetchProductDetails(this)">
+//         </td>
+        
+//         <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
+//         <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
+//         <td class="p-1"><input type="hidden" name="img[]" value=""><img onclick="openImagePopup('')" src="" class="rounded-lg cursor-pointer"></td>
+//         <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
+//         <td class="p-1">
+//             <div class="flex items-center space-x-2">
+//                 <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required>  
+//             </div>
+//         </td>
+//         <td class="p-1">
+//             <div class="flex items-center space-x-2">
+//                 <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+//             </div>
+//         </td>
+//         <td class="p-1 rowTotal"></td>
+//         <td class="p-4 text-right rounded-r-lg">
+//                 <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"> <span class="text-lg"><i class="fa fa-trash-alt"></i></span> </button>
+//         </td>
+//     `;
+//     poTableBody.appendChild(newRow);
+//     // Attach event listener to the new item_code input
+//     newRow.querySelector('.item_code').addEventListener('blur', function() {
+//         fetchProductDetails(this);
+//     });
+// });
+
 </script>

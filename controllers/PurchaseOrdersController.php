@@ -65,6 +65,9 @@ class PurchaseOrdersController {
         if (!empty($_GET['due_date'])) {
             $filters['due_date'] = $_GET['due_date'];
         }
+        if (!empty($_GET['po_type'])) {
+            $filters['po_type'] = $_GET['po_type'];
+        }
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
         // Calculate total pages
@@ -1499,7 +1502,69 @@ class PurchaseOrdersController {
         // Save purchase order items
          // Create purchase order items
         $itemsCreated = true;
-        foreach ($data['gst'] as $index => $gstValue) {
+        foreach ($data['gst'] as $index => $gstValue) {            
+            // image upload and save logic
+            $filesArray = null;
+            if (isset($_FILES['image'])) {
+                $filesArray = $_FILES['image'];
+            } elseif (isset($_FILES['img_files'])) {
+                $filesArray = $_FILES['img_files'];
+            } elseif (isset($_FILES['img'])) {
+                $filesArray = $_FILES['img'];
+            }
+
+            // Ensure upload directory exists
+            $uploadDir = __DIR__ . '/../uploads/po_items/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $imgPath = ''; // default if no upload and no existing value
+
+            // Handle uploaded file for this item index if present
+            if ($filesArray) {
+                // support both multiple and single file input structures
+                $fileName = is_array($filesArray['name']) ? ($filesArray['name'][$index] ?? '') : ($filesArray['name'] ?? '');
+                $fileTmp  = is_array($filesArray['tmp_name']) ? ($filesArray['tmp_name'][$index] ?? '') : ($filesArray['tmp_name'] ?? '');
+                $fileErr  = is_array($filesArray['error']) ? ($filesArray['error'][$index] ?? 4) : ($filesArray['error'] ?? 4);
+                $fileSize = is_array($filesArray['size']) ? ($filesArray['size'][$index] ?? 0) : ($filesArray['size'] ?? 0);
+
+                if (!empty($fileName) && $fileErr === UPLOAD_ERR_OK && is_uploaded_file($fileTmp)) {
+                    $fileNameCmps = explode('.', $fileName);
+                    $fileExtension = strtolower(end($fileNameCmps));
+                    $allowedfileExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+                    if (in_array($fileExtension, $allowedfileExtensions)) {
+                        $newFileName = 'POITEM_' . $poId . '_' . $index . '_' . time() . '.' . $fileExtension;
+                        $dest_path = $uploadDir . $newFileName;
+                        $imgPath = 'uploads/po_items/' . $newFileName;
+                        //create folder and set permissions
+                        if (!is_dir(dirname($dest_path))){
+                            mkdir(dirname($dest_path), 0755, true);
+                        } 
+                        if (move_uploaded_file($fileTmp, $dest_path)) {
+                            // store relative web path                                                       
+                            @chmod($dest_path, 0644);
+
+                        } else {
+                            // failed to move, keep existing POST image if provided
+                            $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+                        }
+                    } else {
+                        // invalid extension, keep existing POST image if provided
+                        $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+                    }
+                } else {
+                    // no upload for this index, use provided img value (could be URL or previously uploaded path)
+                    $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+                }
+            } else {
+                // no file input at all, use provided img value
+                $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+            }
+
+            // Ensure items image points to the resolved path
+            $data['img'][$index] = $imgPath;
             $items = [
                 'purchase_orders_id' => $poId,
                 'item_code' => isset($data['itemcode'][$index]) ? $data['itemcode'][$index] : '',

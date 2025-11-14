@@ -65,6 +65,14 @@ class PurchaseOrder {
             $sql .= " AND EXISTS (SELECT 1 FROM vp_orders vo WHERE vo.po_id = purchase_orders.id AND " . implode(' AND ', $conditions) . ")";
             }
         }
+        // po_type filter
+        if (!empty($filters['po_type'])) {
+            $poType = $this->db->real_escape_string($filters['po_type']);
+            $sql .= " AND purchase_orders.po_type = '$poType'";
+        }else {
+            // Default to normal PO if no filter is set
+            $sql .= " AND purchase_orders.po_type = 'normal'";
+        }   
 
         $sql .= " ORDER BY purchase_orders.id DESC";
         $result = $this->db->query($sql);
