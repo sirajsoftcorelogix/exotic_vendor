@@ -193,7 +193,7 @@ class Order{
             $params[] = $filters['priority'];
         }
         if(!empty($filters['vendor_id'])){
-            $sql .= " AND vendor_id = ?";
+            $sql .= " AND vp_vendors.id = ?";
             $params[] = $filters['vendor_id'];            
         }
         // Add sorting based on filter
