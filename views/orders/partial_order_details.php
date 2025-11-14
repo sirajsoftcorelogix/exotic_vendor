@@ -44,7 +44,7 @@
                                         <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
                                     </div>
                                     <div class="status-box w-48 flex items-center justify-center">
-                                        <span class="status-text">Shipped <?php echo $item['status'] == 'shipped' ? 'on' : ' by'; ?> : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
+                                        <span class="status-text">Ship <?php echo $item['status'] == 'shipped' ? 'on' : ' by'; ?> : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
                                     </div>
                                     <div class="flex space-x-3 justify-end">  
                                         <?php if($item['po_number']): ?>
