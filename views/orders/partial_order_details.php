@@ -44,7 +44,7 @@
                                         <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
                                     </div>
                                     <div class="status-box w-48 flex items-center justify-center">
-                                        <span class="status-text">Shipped <?php echo $item['status'] == 'shipped' ? 'on' : ' by'; ?> : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
+                                        <span class="status-text">Ship <?php echo $item['status'] == 'shipped' ? 'on' : ' by'; ?> : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
                                     </div>
                                     <div class="flex space-x-3 justify-end">  
                                         <?php if($item['po_number']): ?>
@@ -203,6 +203,8 @@
                             </div>
                             <div>
                                 <p><span class="section-title">Product Length : </span><span class="section-value"><?php echo $item['prod_length'] . $item['length_unit']; ?></span>
+                                </p>
+								<p><span class="section-title">Product Width : </span><span class="section-value"><?php echo $item['prod_width'] . $item['length_unit']; ?></span>
                                 </p>
                             </div>
                         </div>                       

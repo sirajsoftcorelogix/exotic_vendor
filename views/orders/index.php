@@ -265,7 +265,7 @@
             </svg>
         </button>
 
-        <div id="accordion-content-search" class="accordion-content hidden">
+        <div id="accordion-content-search" class="accordion-content hidden overflow-visible">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
@@ -375,7 +375,7 @@
                         value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>"
                     >
                     <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
-                    <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-60 overflow-auto" style="display:none; top:100%;"></div>
+                    <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-48 overflow-auto " style="display:none; top:100%;"></div>
                 </div>
                 <!-- Min/Max Amount -->
                 <!-- <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
@@ -697,7 +697,7 @@
                             <div class="grid grid-cols-[max-content,1fr] gap-x-4 w-full">
 
                                 <!-- COLUMN 1 -->
-                                <div class="flex flex-col gap-4">
+                                <div class="flex flex-col gap-4 w-[500px]">
                                     <!-- Col 1, Row 1: Image and Title -->
                                     <div class="flex items-start gap-4 ">
 										<div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
@@ -733,7 +733,7 @@
                                 </div>
 
                                 <!-- COLUMN 2 -->
-                                <div class="flex flex-col gap-4">
+                                <div class="flex flex-col gap-4 ">
                                     <!-- Col 2, Row 1: Status Grid and Actions -->
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
@@ -1788,6 +1788,17 @@
     const query = this.value;
     const suggestionsBox = document.getElementById('vendor_suggestions');
     const vendorIdInput = document.getElementById('vendor_id');
+    // close suggestions if clicked outside
+    document.addEventListener('click', function(event) {
+        if (!suggestionsBox.contains(event.target) && event.target !== document.getElementById('vendor_autocomplete')) {
+            suggestionsBox.style.display = 'none';
+        }
+        if (event.target === document.getElementById('vendor_autocomplete')) {
+            if (suggestionsBox.children.length > 0) {
+                suggestionsBox.style.display = 'block';
+            }
+        }
+    });
 
     if (query.length < 2) {
         suggestionsBox.style.display = 'none';
