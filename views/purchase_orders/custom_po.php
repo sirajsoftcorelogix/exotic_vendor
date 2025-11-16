@@ -263,7 +263,7 @@
 <div id="previewPdfModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display:none;">
     <div class="bg-white rounded-lg shadow-lg w-full max-w-4xl p-6 relative">
         <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closePreviewPdf">&times;</button>
-        <h2 class="text-xl font-bold mb-4">Purchase Order Preview</h2>
+        <h2 class="text-xl font-bold mb-4">Custom PO Preview</h2>
         <iframe id="previewPdfFrame" src="" style="width:100%;height:70vh;border:none;"></iframe>
     </div>
 </div>
@@ -396,10 +396,10 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     .then(response => response.json())  
     .then(data => {
         if (data.success) {
-            alert("Purchase Order created successfully!");
+            alert("Custom PO created successfully!");
             submitBtn.disabled = false;
         submitBtn.textContent = originalText;
-            //window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&viewpo=true'); ?>"; // Redirect to the list page
+            window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&po_type=custom'); ?>"; // Redirect to the list page
         } else {
             alert("Error: " + data.message);
             // Re-enable the button and restore text
@@ -409,7 +409,7 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     })
     .catch(error => {
         console.error("Error:", error);
-        alert("An error occurred while creating the Purchase Order.");
+        alert("An error occurred while creating the Custom PO.");
         submitBtn.disabled = false;
         submitBtn.textContent = originalText;
     });
@@ -800,7 +800,11 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
         </td>
         <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
         <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
-        <td class="p-1"><input type="hidden" name="img[]" value=""><img onclick="openImagePopup('')" src="" class="rounded-lg cursor-pointer"></td>
+        <td class="p-1">
+        <input type="hidden" name="img[]" value=""><img onclick="openImagePopup('')" src="" class="rounded-lg cursor-pointer">
+        <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">
+        <button type="button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs" onclick="this.parentElement.querySelector('.img-upload').click()">Upload</button>
+        </td>
         <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
         <td class="p-1">
             <div class="flex items-center space-x-2">

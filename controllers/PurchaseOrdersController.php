@@ -1458,6 +1458,7 @@ class PurchaseOrdersController {
     function customPOSave() {
         global $purchaseOrdersModel;
         global $purchaseOrderItemsModel;
+        global $domain;
 
         $data = $_POST;
 
@@ -1498,7 +1499,7 @@ class PurchaseOrdersController {
             echo json_encode(['success' => false, 'message' => 'Failed to update PO number.']);
             exit;
         }
-
+        //print_array($_FILES);
         // Save purchase order items
          // Create purchase order items
         $itemsCreated = true;
@@ -1509,6 +1510,8 @@ class PurchaseOrdersController {
                 $filesArray = $_FILES['image'];
             } elseif (isset($_FILES['img_files'])) {
                 $filesArray = $_FILES['img_files'];
+            } elseif (isset($_FILES['img_upload'])) {
+                $filesArray = $_FILES['img_upload'];
             } elseif (isset($_FILES['img'])) {
                 $filesArray = $_FILES['img'];
             }
@@ -1520,9 +1523,10 @@ class PurchaseOrdersController {
             }
 
             $imgPath = ''; // default if no upload and no existing value
-
+            //echo "Processing item index $index\n";
             // Handle uploaded file for this item index if present
             if ($filesArray) {
+                //echo "updoading file for index $index: $fileName\n";
                 // support both multiple and single file input structures
                 $fileName = is_array($filesArray['name']) ? ($filesArray['name'][$index] ?? '') : ($filesArray['name'] ?? '');
                 $fileTmp  = is_array($filesArray['tmp_name']) ? ($filesArray['tmp_name'][$index] ?? '') : ($filesArray['tmp_name'] ?? '');
@@ -1533,15 +1537,12 @@ class PurchaseOrdersController {
                     $fileNameCmps = explode('.', $fileName);
                     $fileExtension = strtolower(end($fileNameCmps));
                     $allowedfileExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
+                    
                     if (in_array($fileExtension, $allowedfileExtensions)) {
                         $newFileName = 'POITEM_' . $poId . '_' . $index . '_' . time() . '.' . $fileExtension;
                         $dest_path = $uploadDir . $newFileName;
-                        $imgPath = 'uploads/po_items/' . $newFileName;
-                        //create folder and set permissions
-                        if (!is_dir(dirname($dest_path))){
-                            mkdir(dirname($dest_path), 0755, true);
-                        } 
+                        $imgPath = $domain.'/uploads/po_items/' . $newFileName;
+                        //set permissions                        
                         if (move_uploaded_file($fileTmp, $dest_path)) {
                             // store relative web path                                                       
                             @chmod($dest_path, 0644);
