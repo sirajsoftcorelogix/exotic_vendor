@@ -154,11 +154,12 @@
         <div class=" justify-left">
             <a href="<?php echo base_url('?page=purchase_orders&action=custom_po'); ?>" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm flex items-center gap-2">
                 <i class="fa fa-plus"></i>
-                <span>Create Custom PO</span>
+                <span> Custom PO</span>
             </a>
         </div>
         <div class="justify-end">
             <select id="po_type" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=purchase_orders&action=list&po_type=' + this.value ;">                    
+                <option value="" <?= !isset($_GET['po_type']) || $_GET['po_type'] === '' ? 'selected' : '' ?>>All PO Types</option>
                 <option value="normal" <?= (isset($_GET['po_type']) && $_GET['po_type'] === 'normal') ? 'selected' : '' ?>>Normal PO</option>
                 <option value="custom" <?= (isset($_GET['po_type']) && $_GET['po_type'] === 'custom') ? 'selected' : '' ?>>Custom PO</option>
         </select>

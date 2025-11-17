@@ -1440,8 +1440,11 @@ class PurchaseOrdersController {
         global $productModel;
 
         $search = isset($_GET['search']) ? $_GET['search'] : 0;
+        $type = isset($_GET['type']) ? $_GET['type'] : '';
+        if($type == 'item_code'){
+            $orderItems = $productModel->getProductItemsByCode($search);
 
-        if (!$search) {
+        }elseif (!$search) {
             $orderItems = $productModel->getProductItems('');
         }else{
             $orderItems = $productModel->getProductItems($search);

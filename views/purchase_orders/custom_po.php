@@ -85,7 +85,7 @@
                 
             <tr class="bg-white position-relative">
                 <td class="p-2">
-                    <input type="text" name="item_code[]" class="item_code w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code" onblur="fetchProductDetails(this)">
+                    <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code" onblur="fetchProductDetails(this)">
                     <!--suggestion box-->
                     <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto;"></div>
                 </td>
@@ -95,9 +95,9 @@
                 <td class="p-1">
                     <input type="hidden" name="img[]" value="">
                     <div class="flex items-center space-x-2">
-                        <img onclick="openImagePopup(this.src)" src="" class="rounded-lg cursor-pointer w-10 h-10">
+                        <img onclick="this.parentElement.querySelector('.img-upload').click();" src="https://placehold.co/100x100/e2e8f0/4a5568?text=Upload" class="rounded-lg cursor-pointer">
                         <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">
-                        <button type="button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs" onclick="this.parentElement.querySelector('.img-upload').click()">Upload</button>
+                        <!-- <button type="button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs" onclick="">Upload</button> -->
                     </div>
                 </td>
                 <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
@@ -132,8 +132,8 @@
         <!-- Add Item Button -->
         <div>
             <!-- + button to add blank row for item -->
-            <button type="button" id="addRowBtn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button"><i class="fa fa-plus"></i> Add Row</button>
-            <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
+            <button type="button" id="addRowBtn" class="bg-[rgba(208,103,6,1)] text-white font-sm py-1.5 px-8 rounded-md"><i class="fa fa-plus"></i> Row</button>
+            <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button"><i class="fa fa-plus"></i> Item</button>
         </div>
         <!-- Totals Section -->
         <div class="w-1/3">
@@ -612,8 +612,10 @@ document.getElementById('vendor_autocomplete').addEventListener('input', functio
 // Reusable: fill row fields from item data
 function fillRowFromProduct(tr, item) {
     // Title
+    //console.log(item);
     const titleEl = tr.querySelector('textarea[name="title[]"]');
-    if (titleEl) titleEl.value = item.title || '';
+    const itmSummary = item.title + (item.color ? ' - color: ' + item.color : '') + (item.size ? ' - size: ' + item.size : '');
+    if (titleEl) titleEl.value = itmSummary || '';
 
     // HSN
     const hsnEl = tr.querySelector('input[name="hsn[]"]');
@@ -634,7 +636,7 @@ function fillRowFromProduct(tr, item) {
 
     // Rate
     const rateEl = tr.querySelector('input[name="rate[]"]');
-    if (rateEl && item.rate !== undefined) rateEl.value = parseFloat(item.rate).toFixed(2);
+    if (rateEl && item.cost_price !== undefined) rateEl.value = parseFloat(item.cost_price).toFixed(2);
 
     // Order id / product id
     const orderIdHidden = tr.querySelector('input[name="orderid[]"]');
@@ -687,7 +689,7 @@ function initItemCodeInput(input) {
 
     function fetchSuggestions(q) {
         if (!q || q.length < 2) { clearSuggestions(); return; }
-        fetch('<?php echo base_url("?page=purchase_orders&action=product_items&search="); ?>' + encodeURIComponent(q))
+        fetch('<?php echo base_url("?page=purchase_orders&action=product_items&type=item_code&search="); ?>' + encodeURIComponent(q))
             .then(r => r.json())
             .then(data => {
                 renderSuggestions(data || []);
@@ -795,15 +797,14 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
     newRow.className = 'bg-white ';
     newRow.innerHTML = `
         <td class="p-2" style="position:relative;">
-            <input type="text" name="item_code[]" class="item_code w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code">
+            <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code">
             <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto; left:0; right:0;"></div>
         </td>
         <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
         <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
         <td class="p-1">
-        <input type="hidden" name="img[]" value=""><img onclick="openImagePopup('')" src="" class="rounded-lg cursor-pointer">
-        <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">
-        <button type="button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs" onclick="this.parentElement.querySelector('.img-upload').click()">Upload</button>
+        <input type="hidden" name="img[]" value=""><img onclick="this.parentElement.querySelector('.img-upload').click()" src="https://placehold.co/100x100/e2e8f0/4a5568?text=Image" class="rounded-lg cursor-pointer">
+        <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">        
         </td>
         <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
         <td class="p-1">
@@ -861,6 +862,24 @@ function handleImageUpload(input) {
                 imgTag.style.display = 'block';
                 imgTag.onclick = function() { openImagePopup(imgData); };
             }
+            // Add remove icon to the image
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold hover:bg-red-700';
+            removeBtn.innerHTML = '✕';
+            removeBtn.onclick = function(e) {
+                e.preventDefault();
+                imgTag.src = 'https://placehold.co/100x100/e2e8f0/4a5568?text=Upload';
+                imgHidden.value = '';
+                input.value = '';
+                imgTag.parentElement.removeChild(removeBtn);
+                //upload on click again
+                imgTag.onclick = function() {
+                    input.click();
+                };
+            };
+            imgTag.parentElement.style.position = 'relative';
+            imgTag.parentElement.appendChild(removeBtn);
         };
         reader.onerror = function() {
             alert('Error reading file');

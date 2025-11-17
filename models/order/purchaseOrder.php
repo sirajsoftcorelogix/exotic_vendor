@@ -69,10 +69,7 @@ class PurchaseOrder {
         if (!empty($filters['po_type'])) {
             $poType = $this->db->real_escape_string($filters['po_type']);
             $sql .= " AND purchase_orders.po_type = '$poType'";
-        }else {
-            // Default to normal PO if no filter is set
-            $sql .= " AND purchase_orders.po_type = 'normal'";
-        }   
+        }  
 
         $sql .= " ORDER BY purchase_orders.id DESC";
         $result = $this->db->query($sql);

@@ -45,30 +45,53 @@ class product{
     }
     public function getProductItems($search = '') {
         $searchTerm = "%$search%";
-        $sql = "SELECT * FROM vp_orders WHERE status = 'pending' AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
+        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ?)";
         $stmt = $this->db->prepare($sql);
         $searchTerm = "%{$searchTerm}%";
-        $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);
+        $stmt->bind_param('ss', $searchTerm, $searchTerm);
         $stmt->execute();
         $result = $stmt->get_result();
         $orderItems = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
                 $orderItems[] = [
-                    'id' => $row['id'],
-                    'order_number' => $row['order_number'],
-                    'order_date' => $row['order_date'],
+                    'id' => $row['id'],                                     
                     'item_code' => $row['item_code'],
                     'title' => $row['title'],
-                    //'price' => $row['unit_price'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'cost_price' => $row['cost_price'],
                     'gst' => $row['gst'],
                     'hsn' => $row['hsn'],
                     'description' => $row['description'],
-                    'image' => $row['image'],
-                    // 'marketplace_vendor' => $row['marketplace_vendor'],
-                    'quantity' => $row['quantity'],
-                    'options' => $row['options'],
-                    'order_date' => $row['order_date'],
+                    'image' => $row['image']
+                ];
+            }
+        }
+        return $orderItems;
+    }
+    public function getProductItemsByCode($item_code = '') {
+        $searchTerm = "%$item_code%";
+        $sql = "SELECT * FROM vp_products WHERE item_code LIKE ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $searchTerm);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],                    
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'cost_price' => $row['cost_price'],
+                    'gst' => $row['gst'],
+                    'hsn' => $row['hsn'],
+                    'description' => $row['description'],
+                    'image' => $row['image']
+                    
                 ];
             }
         }
