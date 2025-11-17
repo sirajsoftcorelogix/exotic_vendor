@@ -103,6 +103,7 @@ class Tables {
         $data = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
+
                 if (!empty($row['name']) && !empty($row['country_code'])) {
                     $data[$row['country_code']] = $row['name'];
                 }

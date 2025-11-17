@@ -16,18 +16,41 @@
                     </div>
                     <div class="flex flex-wrap items-left gap-4">
                         <div class="relative flex items-left gap-2">
-                            <input type="text" name="search_text" placeholder="Search by name, email or phone" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
+                            <input type="text" name="search_text" placeholder="Search by name, email or phone" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 250px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
                         </div>
                     </div>
                     <div class="relative">
-                        <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
+                        <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="category_filter" id="category_filter">
+                            <option value="" selected>All Categories</option>
+                            <?php foreach($category[0] as $key => $value): ?>
+                                <?php if ($value['parent_id'] == 0): ?>
+                                    <optgroup label="<?php echo $value['category_name']; ?>">
+                                        <?php foreach($category[$value['id']] as $subKey => $subValue): 
+                                            if ($subValue['parent_id'] == $value['id']): ?>
+                                                <option value="<?php echo $subValue['id']; ?>" title="<?php echo $subValue['category_name']; ?>" <?php echo ($data['category_filter'] == $subValue['id']) ? "selected" : ""?>><?php echo $subValue['category_name']; ?></option>
+                                        <?php endif; endforeach; ?>
+                                    </optgroup>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="relative">
+                        <select style="width: 132px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="team_filter" id="team_filter">
+                            <option value="" selected>All Teams</option>
+                            <?php foreach($teamList as $team): ?>
+                                <option value="<?php echo $team['id']; ?>" <?php echo ($data['team_filter'] == $team['id']) ? "selected" : ""?>><?php echo $team['team_name']; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="relative">
+                        <select style="width: 120px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
                             <option value="" selected>All Status</option>
                             <option value="active" <?php echo ($data['status_filter'] == "active") ? "selected" : ""?>>Active</option>
                             <option value="inactive" <?php echo ($data['status_filter'] == "inactive") ? "selected" : ""?>>Inactive</option>
                             <option value="blacklisted" <?php echo ($data['status_filter'] == "blacklisted") ? "selected" : ""?>>Blacklisted</option>
                         </select>
                     </div>
-                    
                     <div class="relative">
                         <input type="submit" value="Search" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2">
                     </div>
@@ -73,9 +96,9 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Contact Person</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Agent Name</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text" nowrap>Agent Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th>
+                        <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th> -->
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">City</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">State</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
@@ -90,11 +113,11 @@
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= ($vendor['agent_name']!="") ? htmlspecialchars($vendor['agent_name']) : "" ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['city']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['state']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'])) ?>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
+                                <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td> -->
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['city']) ?></td>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['state']) ?></td>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'])) ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
@@ -119,6 +142,7 @@
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        
                     <?php else: ?>
                         <tr>
                             <td colspan="12" class="px-6 py-4 text-center text-gray-500">No vendors found.</td>
@@ -131,22 +155,23 @@
     </div>
 
     <!-- Pagination Logic -->
-	<?php
-        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
-        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
-        $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
-        $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
+    <?php if (!empty($vendors)): ?>
+        <?php
+            $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+            $page = $page < 1 ? 1 : $page;
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
+            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+            $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
+            $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
 
-        // Calculate start/end slot for 10 pages
-        $slot_size = 10;
-        $start = max(1, $page - floor($slot_size / 2));
-        $end = min($total_pages, $start + $slot_size - 1);
-        if ($end - $start < $slot_size - 1) {
-            $start = max(1, $end - $slot_size + 1);
-        }
-	?>
+            // Calculate start/end slot for 10 pages
+            $slot_size = 10;
+            $start = max(1, $page - floor($slot_size / 2));
+            $end = min($total_pages, $start + $slot_size - 1);
+            if ($end - $start < $slot_size - 1) {
+                $start = max(1, $end - $slot_size + 1);
+            }
+        ?>
         <div class="bg-white rounded-xl shadow-md p-4">
             <div class="flex items-center justify-center">
                 <div class="flex items-center gap-4 text-sm text-gray-600">
@@ -181,6 +206,7 @@
                 </div>
             </div>
         </div>
+    <?php endif; ?>
 </div>
 
 <!-- Add Vendor Modal -->
@@ -239,8 +265,8 @@
                                 </div>
                                 <br />
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
-                                    <input type="email" class="form-input w-full mt-1" required name="addEmail" id="addEmail" />
+                                    <label class="text-sm font-medium text-gray-700">Email</label>
+                                    <input type="email" class="form-input w-full mt-1" name="addEmail" id="addEmail" />
                                     <span id="addEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
@@ -277,10 +303,10 @@
                                     <option value="" disabled>Select Categories</option>
                                     <?php foreach($category[0] as $key => $value): ?>
                                         <?php if ($value['parent_id'] == 0): ?>
-                                            <optgroup label="<?php echo $value['display_name']; ?>">
+                                            <optgroup label="<?php echo $value['category_name']; ?>">
                                                 <?php foreach($category[$value['id']] as $subKey => $subValue): 
                                                     if ($subValue['parent_id'] == $value['id']): ?>
-                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['display_name']; ?></option>
+                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['category_name']; ?></option>
                                                 <?php endif; endforeach; ?>
                                             </optgroup>
                                         <?php endif; ?>
@@ -438,8 +464,8 @@
                                 </div>
                                 <br />
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
-                                    <input type="email" class="form-input w-full mt-1" required name="editEmail" id="editEmail" />
+                                    <label class="text-sm font-medium text-gray-700">Email</label>
+                                    <input type="email" class="form-input w-full mt-1" name="editEmail" id="editEmail" />
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
@@ -463,7 +489,7 @@
                                     <br />
                                     <span id="editTeamMemberBlock">
                                         <select class="form-input w-full mt-1" name="editTeamMember" id="editTeamMember">
-                                            <option value="" disabled selected>Select Team Member</option>
+                                            <option value="" disabled selected>Select Agent</option>
                                         </select>
                                     </span>
                                 </div>
@@ -476,7 +502,7 @@
                                     if (isset($category[0]) && is_array($category[0])) {
                                         foreach ($category[0] as $parent) {
                                             $parentId = $parent['id'];
-                                            $parentName = $parent['display_name'];
+                                            $parentName = $parent['category_name'];
 
                                             // Only show parent as optgroup label, not as selectable option
                                             echo '<optgroup label="' . htmlspecialchars($parentName) . '" style="font-weight: bold;">';
@@ -484,7 +510,7 @@
                                             // Show subcategories if exist
                                             if (isset($category[$parentId]) && is_array($category[$parentId])) {
                                                 foreach ($category[$parentId] as $child) {
-                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['display_name']) . '</option>';
+                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
                                                 }
                                             }
                                             echo '</optgroup>';
@@ -1256,7 +1282,7 @@
                     closeOnSelect: false
                 });
                 $('#editTeam').select2({
-                    placeholder: "Select Categories",
+                    placeholder: "Select Teams",
                     allowClear: true,
                     width: '100%',
                     closeOnSelect: false
