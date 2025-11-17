@@ -270,7 +270,7 @@ class vendor {
             'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
         ];
     }
-    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '') {
+    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '') {
         // sanitize
         $page = (int)$page;
         if ($page < 1) $page = 1;
@@ -290,24 +290,32 @@ class vendor {
         } else {
             if (!empty($search)) {
                 $search = $this->conn->real_escape_string($search);
-                $where = "WHERE vendor_name LIKE '%$search%' OR contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%' OR city LIKE '%$search%' OR state LIKE '%$search%'";
+                $where = "WHERE vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%'";
             }
 
             if (!empty($status_filter)) {
                 $search = $this->conn->real_escape_string($status_filter);   
-                $where = "WHERE is_active = '$status_filter'";
+                $where = "WHERE vp.is_active = '$status_filter'";
+            }
+            if (!empty($category_filter)) {
+                $search = $this->conn->real_escape_string($category_filter);   
+                $where = "WHERE vc.category_id = '$category_filter'";
+            }
+            if (!empty($team_filter)) {
+                $search = $this->conn->real_escape_string($team_filter);   
+                $where = "WHERE vvtm.team_id = '$team_filter'";
             }
         }
 
         // total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_vendors $where");
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_vendors AS vp LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
 
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT vp.*, vu.name AS agent_name FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp. agent_id = vu.id $where LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vp.*, vu.name AS agent_name FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp. agent_id = vu.id LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $vendors = [];
@@ -325,7 +333,7 @@ class vendor {
         ];
     }
     public function listCategory(){
-        $sql = "SELECT * FROM category WHERE is_active=1 ORDER BY parent_id ASC, display_name ASC";
+        $sql = "SELECT * FROM vp_vendor_category WHERE is_active=1 ORDER BY parent_id ASC, category_name ASC";
         $result = $this->conn->query($sql);
         $category = [];
         if ($result && $result->num_rows > 0) {
