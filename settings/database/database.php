@@ -5,7 +5,7 @@
 		public static function getConnection() {
 			if (self::$conn === null) {
 				$host = 'localhost';
-				$dbname = 'exotic_vendor_portal';
+				$dbname = 'vendor_portal_test';
 				$username = 'root';
 				$password = '';
 
