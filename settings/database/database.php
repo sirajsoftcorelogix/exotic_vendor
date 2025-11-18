@@ -5,9 +5,10 @@
 		public static function getConnection() {
 			if (self::$conn === null) {
 				$host = 'localhost';
+
 				$dbname = 'vendor_portal_test';
-				$username = 'root';
-				$password = '';
+                                $username = 'vendor_user';
+                                $password = 'eXotic@123';
 
 				self::$conn = mysqli_connect($host, $username, $password, $dbname);
 
