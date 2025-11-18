@@ -57,7 +57,7 @@
                 <select id="delivery_address" name="delivery_address" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[300px]">
                     <option value="">Select Delivery Address</option>
                     <?php foreach ($exotic_address as $address): ?>
-                        <option value="<?= $address['id'] ?>"><?= htmlspecialchars($address['address']) ?></option>
+                        <option value="<?= $address['id'] ?>" <?= $address['is_default'] ? 'selected' : '' ?>><?= htmlspecialchars($address['address_title']) ?></option>
                     <?php endforeach; ?>
                 </select>   
             </div>
@@ -510,7 +510,7 @@ function addSelectOrderListeners() {
             const tr = document.createElement('tr');
             tr.className = 'bg-white';
             tr.innerHTML = `
-                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${id}"><input name="item_code[]" value="${itemCode}"></td>
+                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input name="item_code[]" value="${itemCode}"></td>
                 <td class="p-1"><textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea></td>
                 <td class="p-1"><input name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${hsn}"></td>
                 <td class="p-1"><input type="hidden" name="img[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" ></td>

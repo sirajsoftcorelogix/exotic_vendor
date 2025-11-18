@@ -274,11 +274,15 @@ class PurchaseOrdersController {
         $data['proforma'] = $poInvoiceModel->getInvoiceByPOId($poId,'performa');
         $data['status_log'] = $purchaseOrdersModel->get_po_status_log($poId);
         $data['poId'] = $poId;
-        $data['payment'] = $poInvoiceModel->getPaymentsByPoId($poId);
-        $data['vendor_bank'] = $vendorsModel->getBankDetailsById($purchaseOrder['vendor_id']);
+        $pmt = $poInvoiceModel->getPaymentsByPoId($poId);
+        $data['payment'] = $pmt ?? [];
+        //$data['vendor_bank'] = $vendorsModel->getBankDetailsById($purchaseOrder['vendor_id']);        
+        $data['vendor_bank'] = $poInvoiceModel->getBankDetailsById($purchaseOrder['vendor_id']);
         $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
         $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
-        //print_array($data['proforma']);
+        //print_array($data['payment']);
+       
+        
         $address = $commanModel->get_exotic_address();
         foreach($address as $addr){
             if($addr['id'] == $purchaseOrder['delivery_address']){
@@ -1572,7 +1576,7 @@ class PurchaseOrdersController {
             $items = [
                 'purchase_orders_id' => $poId,
                 'item_code' => isset($data['itemcode'][$index]) ? $data['itemcode'][$index] : '',
-                'order_number' => isset($data['ordernumber'][$index]) ? $data['ordernumber'][$index] : '',
+                'product_id' => isset($data['ordernumber'][$index]) ? $data['ordernumber'][$index] : '',
                 'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',
                 'image' => isset($data['img'][$index]) ? $data['img'][$index] : '',
                 'hsn' => isset($data['hsn'][$index]) ? $data['hsn'][$index] : '',
@@ -1582,7 +1586,7 @@ class PurchaseOrdersController {
                 'amount' => isset($data['rate'][$index]) ? $data['rate'][$index] * (1 + ($gstValue / 100)) : 0
             ];
             //Print_array($items);
-            $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);
+            $itemId = $purchaseOrderItemsModel->createCustomPoItem($items);
             if (!$itemId) {
                 $itemsCreated = false;
                 break; // Stop processing if any item creation fails
