@@ -49,7 +49,7 @@
                   <?php foreach($moduleRows[$value['id']] as $subKey => $subValue): 
                         if ($subValue['parent_id'] == $value['id']): ?>
                               <li>
-                                    <a href="<?=base_url('index.php?page='.$subValue["slug"].'&action='.$subValue["slug"]);?>" class="nav-link text-gray-800 <?= ($page == $subValue["slug"]) ? 'active' : '' ?>">
+                                    <a href="<?=base_url('index.php?page='.$subValue["slug"].'&action='.$subValue["action"]);?>" class="nav-link text-gray-800 <?= ($page == $subValue["slug"]) ? 'active' : '' ?>">
                                     <div class="content-wrapper">
                                           <i class="fa fa-clipboard-list mr-2"></i>
                                           <span><?php echo($subValue["module_name"]);?></span>
