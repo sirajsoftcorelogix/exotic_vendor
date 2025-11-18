@@ -227,6 +227,15 @@ switch ($page) {
             case 'vendor_search':
                 $controller->vendorSearch();
                 break;
+            case 'custom_po':
+                $controller->customPO();
+                break;
+            case 'custompo_post':
+                $controller->customPOSave();
+                break;
+            case 'product_items':
+                $controller->productItems();
+                break;
             default:
                 $controller->index();
                 break;
