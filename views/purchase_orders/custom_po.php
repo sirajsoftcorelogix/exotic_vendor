@@ -203,7 +203,7 @@
         <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
         <h2 class="text-xl font-bold mb-4">Select Product Item</h2>
         <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with item code, or title...">
-        <div class="max-h-72 overflow-y-auto">
+        <div class="max-h-80 overflow-y-auto">
             <table class="w-full border">
                 <thead>
                     <tr class="sticky top-0 bg-white">
