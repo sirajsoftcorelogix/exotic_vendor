@@ -182,7 +182,7 @@ function renderMenu($menu, $currentPage = '')
                         echo '<a href="index.php?page=' . $child['slug'] . '&action=' . $child['slug'] . '" 
                                     class="nav-link text-gray-800 ' . $active . '">';
                         // icon
-                        echo '<div class="content-wrapper">' . trim($child['icon']) . '</i>&nbsp;';
+                        echo '<div class="content-wrapper">' . trim($child['icon']) . '</i>&nbsp;&nbsp;';
                         // name
                         echo '<span>' . htmlspecialchars($child['name']) . '</span></div>';
                         echo '</a>';
