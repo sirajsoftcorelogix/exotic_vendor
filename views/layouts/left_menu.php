@@ -51,25 +51,40 @@
                   } else {
                         $idsList = implode(',', $allowedModuleIds);
                         if($userRoleId == 1) {
-                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon FROM modules m WHERE m.active = 1 ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
+                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon, m.sort_order FROM modules m WHERE m.active = 1 ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
                         } else {
-                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon FROM modules m WHERE m.active = 1 AND ( m.id IN ($idsList) OR m.id IN (SELECT DISTINCT parent_id FROM modules WHERE id IN ($idsList) AND parent_id IS NOT NULL)) ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
+                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon, m.sort_order FROM modules m WHERE m.active = 1 AND ( m.id IN ($idsList) OR m.id IN (SELECT DISTINCT parent_id FROM modules WHERE id IN ($idsList) AND parent_id IS NOT NULL)) ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
                         }
                         $result = $conn->query($sql);
 
                         // collect modules by id
-                        $modules = [];
+                        $modules = []; // final tree
+                        $items = [];   // flat list
+
                         while ($row = $result->fetch_assoc()) {
                               $id = (int)$row['id'];
-                              $modules[$id] = [
+                              $items[$id] = [
                                     'id' => $id,
                                     'parent_id' => isset($row['parent_id']) ? (int)$row['parent_id'] : 0,
                                     'name' => $row['module_name'],
                                     'slug' => $row['slug'],
                                     'icon' => $row['font_awesome_icon'],
+                                    'sort_order'=> $row['sort_order'],
                                     'children' => []
                               ];
                         }
+
+                        // Build tree using parent_id
+                        foreach ($items as $id => &$item) {
+                        if ($item['parent_id'] == 0) {
+                              $modules[$id] = &$item;
+                        } else {
+                              $items[$item['parent_id']]['children'][$id] = &$item;
+                        }
+                        }
+                        unset($item); // break reference
+                        
+                        sortMenu($modules); //sorting order implementation
 
                         $menu = [];
                         foreach ($modules as $id => $m) {
@@ -135,6 +150,18 @@
       </nav>
 </aside>
 <?php
+// Sort children based on sort_order
+function sortMenu(&$menu) {
+    uasort($menu, function($a, $b) {
+        return $a['sort_order'] <=> $b['sort_order'];
+    });
+
+    foreach ($menu as &$item) {
+        if (!empty($item['children'])) {
+            sortMenu($item['children']);
+        }
+    }
+}
 function renderMenu($menu, $currentPage = '')
 {
       foreach ($menu as $item) {
