@@ -1575,8 +1575,8 @@ class PurchaseOrdersController {
             $data['img'][$index] = $imgPath;
             $items = [
                 'purchase_orders_id' => $poId,
-                'item_code' => isset($data['itemcode'][$index]) ? $data['itemcode'][$index] : '',
-                'product_id' => isset($data['ordernumber'][$index]) ? $data['ordernumber'][$index] : '',
+                'item_code' => isset($data['item_code'][$index]) ? $data['item_code'][$index] : '',
+                'product_id' => isset($data['product_id'][$index]) ? $data['product_id'][$index] : '',
                 'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',
                 'image' => isset($data['img'][$index]) ? $data['img'][$index] : '',
                 'hsn' => isset($data['hsn'][$index]) ? $data['hsn'][$index] : '',
@@ -1585,7 +1585,7 @@ class PurchaseOrdersController {
                 'price' => isset($data['rate'][$index]) ? $data['rate'][$index] : 0,
                 'amount' => isset($data['rate'][$index]) ? $data['rate'][$index] * (1 + ($gstValue / 100)) : 0
             ];
-            //Print_array($items);
+            //print_array($items);
             $itemId = $purchaseOrderItemsModel->createCustomPoItem($items);
             if (!$itemId) {
                 $itemsCreated = false;

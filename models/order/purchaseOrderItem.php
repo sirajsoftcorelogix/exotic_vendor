@@ -47,7 +47,7 @@ class PurchaseOrderItem {
     public function createCustomPoItem($data) {
         $query = "INSERT INTO vp_po_items (purchase_orders_id, item_code, product_id, title, image, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ? )";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("iisssidddd", 
+        $stmt->bind_param("isissidddd", 
             $data['purchase_orders_id'],
             $data['item_code'],
             $data['product_id'], 
