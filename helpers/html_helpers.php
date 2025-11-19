@@ -410,7 +410,7 @@
 		$conn->close();
 	}
 	function hasPermission($user_id, $module, $action) {
-		if($_SESSION["user"]["role_id"] == 1 || $_SESSION["user"]["role"] == "admin"){ // Admin has all permissions
+		if($_SESSION["user"]["role_id"] == 1){ // Admin has all permissions
 			return true;
 		}
 		global $conn;
