@@ -851,3 +851,9 @@ background-color: #f0f0f0;
         .shipping-button:hover {
             opacity: 0.9;
         }
+        .action-button-row {
+            width: 185px;
+            height: 37px;
+            font-size: 14px;
+            font-weight: 500;
+        }
