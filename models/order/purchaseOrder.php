@@ -65,6 +65,11 @@ class PurchaseOrder {
             $sql .= " AND EXISTS (SELECT 1 FROM vp_orders vo WHERE vo.po_id = purchase_orders.id AND " . implode(' AND ', $conditions) . ")";
             }
         }
+        // po_type filter
+        if (!empty($filters['po_type'])) {
+            $poType = $this->db->real_escape_string($filters['po_type']);
+            $sql .= " AND purchase_orders.po_type = '$poType'";
+        }  
 
         $sql .= " ORDER BY purchase_orders.id DESC";
         $result = $this->db->query($sql);
@@ -206,5 +211,28 @@ class PurchaseOrder {
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param("si", $reason, $id);
         return $stmt->execute();
+    }
+    public function addPurchaseOrder($data) {
+        $sql = "INSERT INTO purchase_orders (po_number, po_type, vendor_id, user_id, expected_delivery_date, delivery_address, notes, terms_and_conditions, total_gst, total_cost, subtotal, shipping_cost, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";    
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param("ssiissssdddds",
+            $data['po_number'],  
+            $data['po_type'],
+            $data['vendor_id'],
+            $data['user_id'],
+            $data['expected_delivery_date'], 
+            $data['delivery_address'], 
+            $data['notes'],
+            $data['terms_and_conditions'],
+            $data['total_gst'],            
+            $data['total_cost'],
+            $data['subtotal'],
+            $data['shipping_cost'],
+            $data['status']
+        );
+        if ($stmt->execute()) {
+            return $this->db->insert_id; // Return the ID of the newly created purchase order
+        }
+        return false;
     }
 }

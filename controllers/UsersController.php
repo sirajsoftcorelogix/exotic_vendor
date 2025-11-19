@@ -264,6 +264,7 @@ class UsersController {
             }
             if ($id > 0) {
                 $data['user'] = $usersModel->getUserById($id);
+                $data['teamIds'] = $usersModel->getUserTeams($id);
             }
         } catch (Exception $e) {
             $data['message'] = ['success' => false, 'error' => $e->getMessage()];
@@ -343,6 +344,7 @@ class UsersController {
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
             $user = $usersModel->getUserById($id);
+            $user['teamIds'] = $usersModel->getUserTeams($id);
             if ($user) {
                 echo json_encode($user);
             } else {
