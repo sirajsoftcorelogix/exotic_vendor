@@ -368,7 +368,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     color: rgba(208, 103, 6, 1);
 }
 .action-button {
-    width: 185px;
+    width: 100px;
     height: 37px;
     font-size: 14px;
     font-weight: 500;
@@ -852,7 +852,7 @@ background-color: #f0f0f0;
             opacity: 0.9;
         }
         .action-button-row {
-            width: 185px;
+            width: 100px;
             height: 37px;
             font-size: 14px;
             font-weight: 500;

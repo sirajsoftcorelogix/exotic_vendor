@@ -134,7 +134,7 @@
         <!-- Add Item Button -->
         <div>
             <!-- + button to add blank row for item -->
-            <button type="button" id="addRowBtn" class="bg-[rgba(208,103,6,1)] text-white font-sm py-1.5 px-8 rounded-md action-button-row"><i class="fa fa-plus"></i> Row</button>
+            <button type="button" id="addRowBtn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button-row"><i class="fa fa-plus"></i> Row</button>
             <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
         </div>
         <!-- Totals Section -->
