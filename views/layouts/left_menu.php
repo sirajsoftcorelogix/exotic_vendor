@@ -68,7 +68,7 @@
                                     'parent_id' => isset($row['parent_id']) ? (int)$row['parent_id'] : 0,
                                     'name' => $row['module_name'],
                                     'slug' => $row['slug'],
-                                    'icon' => $row['font_awesome_icon'],
+                                    'icon' => ($row['font_awesome_icon']),
                                     'sort_order'=> $row['sort_order'],
                                     'children' => []
                               ];
@@ -83,7 +83,6 @@
                         }
                         }
                         unset($item); // break reference
-                        
                         sortMenu($modules); //sorting order implementation
 
                         $menu = [];
@@ -183,7 +182,7 @@ function renderMenu($menu, $currentPage = '')
                         echo '<a href="index.php?page=' . $child['slug'] . '&action=' . $child['slug'] . '" 
                                     class="nav-link text-gray-800 ' . $active . '">';
                         // icon
-                        echo '<div class="content-wrapper"><i class="fa fa-clipboard-list mr-2"></i>';
+                        echo '<div class="content-wrapper">' . $child['icon'] . '</i>';
                         // name
                         echo '<span>' . htmlspecialchars($child['name']) . '</span></div>';
                         echo '</a>';
