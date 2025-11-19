@@ -134,8 +134,8 @@
         <!-- Add Item Button -->
         <div>
             <!-- + button to add blank row for item -->
-            <button type="button" id="addRowBtn" class="bg-[rgba(208,103,6,1)] text-white font-sm py-1.5 px-8 rounded-md"><i class="fa fa-plus"></i> Row</button>
-            <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button"><i class="fa fa-plus"></i> Item</button>
+            <button type="button" id="addRowBtn" class="bg-[rgba(208,103,6,1)] text-white font-sm py-1.5 px-8 rounded-md action-button-row"><i class="fa fa-plus"></i> Row</button>
+            <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
         </div>
         <!-- Totals Section -->
         <div class="w-1/3">
@@ -202,15 +202,15 @@
     <div class="bg-white rounded-lg shadow-lg w-full max-w-4xl p-6 relative">
         <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
         <h2 class="text-xl font-bold mb-4">Select Product Item</h2>
-        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with order id, item code, or title...">
+        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with item code, or title...">
         <div class="max-h-72 overflow-y-auto">
             <table class="w-full border">
                 <thead>
-                    <tr>
+                    <tr class="sticky top-0 bg-white">
                         <th class="p-2 text-left">Item code</th>
                         <th class="p-2 text-left">Title</th>
-                        <th class="p-2 text-left">Order ID</th>
-                        <th class="p-2 text-left">Order Date</th>
+                       
+                        <th class="p-2 text-left">Size & Color</th>
                         <th class="p-2 text-left">Image</th>
                         <th class="p-2 text-left">Action</th>
                     </tr>
@@ -450,7 +450,7 @@ function fetchOrderItems(query) {
         .then(r => r.json())
         .then(data => {
             //console.log(data);
-            const tbody = document.getElementById('orderList');
+            //const tbody = document.getElementById('orderList');
             tbody.innerHTML = '';
             if (Array.isArray(data) && data.length > 0) {
                 data.forEach(item => {
@@ -458,15 +458,15 @@ function fetchOrderItems(query) {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `     
                         <td class="p-2">${item.item_code}</td>                   
-                        <td class="p-2">${item.title} ${item.item_code}</td>
-                        <td class="p-2">${item.order_number}</td>
-                        <td class="p-2">${item.order_date}</td>
+                        <td class="p-2">${item.title} ${item.item_code}</td>                        
+                        <td class="p-2">${item.size ? item.size : ''} ${item.color ? '- ' + item.color : ''}</td>
                         <td class="p-2"><img src="${item.image}" alt="" class="w-10 h-10 rounded"></td>
                         <td class="p-2">
                             <button type="button" title="Select" class="select-order bg-blue-500 text-white px-3 py-1 rounded"
                                 data-id="${item.id}"
                                 data-item-code="${(item.item_code ? item.item_code : '').replace(/"/g, '&quot;')}"
-                                data-order-number="${item.order_number.replace(/"/g, '&quot;')}"
+                                data-size="${(item.size ? item.size : '').replace(/"/g, '&quot;')}"
+                                data-color="${(item.color ? item.color : '').replace(/"/g, '&quot;')}"
                                 data-title="${item.title.replace(/"/g, '&quot;')}"
                                 data-hsn="${(item.hsn ? item.hsn : '').replace(/"/g, '&quot;')}"
                                 data-image="${item.image.replace(/"/g, '&quot;')}"
@@ -806,7 +806,7 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
         <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
         <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
         <td class="p-1">
-        <input type="hidden" name="img[]" value=""><img onclick="this.parentElement.querySelector('.img-upload').click()" src="https://placehold.co/100x100/e2e8f0/4a5568?text=Image" class="rounded-lg cursor-pointer">
+        <input type="hidden" name="img[]" value=""><img onclick="this.parentElement.querySelector('.img-upload').click()" src="https://placehold.co/100x100/e2e8f0/4a5568?text=Upload" class="rounded-lg cursor-pointer">
         <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">        
         </td>
         <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
