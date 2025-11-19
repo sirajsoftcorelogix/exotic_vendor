@@ -61,6 +61,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email Address</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone Number</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Role</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Teams</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
                         <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Last Login</th> -->
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
@@ -84,6 +85,7 @@
                                          endforeach; ?>
                                         </span>
                                     </td>
+                                    <td class="px-6 py-4 whitespace-nowrap"><?php if($item["team_names"]!="") { echo str_replace(", ", "<br>", $item["team_names"]); }?></td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
                                             <?php if ($item['is_active'] == 1): ?>
@@ -187,7 +189,7 @@
         <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add / Edit User</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add User</h2>
                     <div id="addUserMsg" style="margin-top:10px;"></div>
                     <form id="addUserForm">
                         <input type="hidden" name="page" value="users">
@@ -215,13 +217,19 @@
 
                             <div>
                                 <label for="team" class="text-sm font-medium text-gray-700">Team:</label>
-                                <select id="team" name="team" class="form-input w-full bg-white mt-1" required>
+                                <!-- <select id="team" name="team" class="form-input w-full bg-white mt-1" required>
+                                    <?php foreach($teams_list as $team): ?>
+                                        <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                    <?php endforeach; ?>
+                                </select> -->
+                                <select class="form-input w-full bg-white mt-1 advanced-multiselect" multiple name="team[]" id="team">
+                                    <option value="" disabled>Select Team</option>
                                     <?php foreach($teams_list as $team): ?>
                                         <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-
+                            <br />
                             <div>
                                 <label for="role" class="text-sm font-medium text-gray-700">Role:</label>
                                 <select id="role" name="role" class="form-input w-full bg-white mt-1" required>
@@ -298,13 +306,19 @@
 
                             <div>
                                 <label for="team" class="text-sm font-medium text-gray-700">Team:</label>
-                                <select id="editTeam" name="team" class="form-input w-full bg-white mt-1" required>
+                                <!-- <select id="editTeam" name="team" class="form-input w-full bg-white mt-1" required>
+                                    <?php foreach($teams_list as $team): ?>
+                                        <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
+                                    <?php endforeach; ?>
+                                </select> -->
+                                <select class="form-input w-full bg-white mt-1 advanced-multiselect" multiple name="team[]" id="editTeam">
+                                    <option value="" disabled>Select Team</option>
                                     <?php foreach($teams_list as $team): ?>
                                         <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-
+                            <br />
                             <div>
                                 <label for="role" class="text-sm font-medium text-gray-700">Role:</label>
                                 <select id="editRole" name="role" class="form-input w-full bg-white mt-1" required>
@@ -459,6 +473,29 @@
             document.getElementById("editTeam").value= user.team_id;
             document.getElementById("editIs_active").value= user.is_active;
 
+            const teamSelect = document.getElementById("editTeam");
+            // Ensure user.categories is always an array
+            let teamArr = Array.isArray(user.teamIds)
+                ? user.teamIds
+                : (typeof user.teamIds === "string" && user.teamIds.length > 0
+                    ? user.teamIds.split(",")
+                    : []);
+
+            // Pre-select options
+            Array.from(teamSelect.options).forEach(option => {
+                option.selected = teamArr.map(String).includes(String(option.value));
+            });
+            
+            // Initialize Select2
+            $(document).ready(function() {
+                $('#editTeam').select2({
+                    placeholder: "Select Teams",
+                    allowClear: true,
+                    width: '400',
+                    closeOnSelect: false
+                });
+            });
+
             popupWrapperEdit.classList.remove('hidden');
             setTimeout(() => {
                 modalSliderEdit.classList.remove('translate-x-full');
@@ -500,4 +537,12 @@
             }, 1000); // redirect after 1 sec
         });
     };
+    $(document).ready(function() {
+        $('#team').select2({
+            placeholder: "Select Teams",
+            allowClear: true,
+            width: '400',
+            closeOnSelect: false
+        });
+    });
 </script>

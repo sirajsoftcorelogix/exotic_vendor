@@ -204,6 +204,8 @@
                             <div>
                                 <p><span class="section-title">Product Length : </span><span class="section-value"><?php echo $item['prod_length'] . $item['length_unit']; ?></span>
                                 </p>
+								<p><span class="section-title">Product Width : </span><span class="section-value"><?php echo $item['prod_width'] . $item['length_unit']; ?></span>
+                                </p>
                             </div>
                         </div>                       
                         

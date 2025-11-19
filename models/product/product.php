@@ -43,4 +43,58 @@ class product{
         $row = $result->fetch_assoc();
         return isset($row['cnt']) ? (int)$row['cnt'] : 0;
     }
+    public function getProductItems($search = '') {
+        $searchTerm = "%$search%";
+        $sql = "SELECT * FROM vp_products WHERE (item_code LIKE ? OR title LIKE ?)";
+        $stmt = $this->db->prepare($sql);
+        $searchTerm = "%{$searchTerm}%";
+        $stmt->bind_param('ss', $searchTerm, $searchTerm);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],                                     
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'cost_price' => $row['cost_price'],
+                    'gst' => $row['gst'],
+                    'hsn' => $row['hsn'],
+                    'description' => $row['description'],
+                    'image' => $row['image']
+                ];
+            }
+        }
+        return $orderItems;
+    }
+    public function getProductItemsByCode($item_code = '') {
+        $searchTerm = "%$item_code%";
+        $sql = "SELECT * FROM vp_products WHERE item_code LIKE ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $searchTerm);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],                    
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'cost_price' => $row['cost_price'],
+                    'gst' => $row['gst'],
+                    'hsn' => $row['hsn'],
+                    'description' => $row['description'],
+                    'image' => $row['image']
+                    
+                ];
+            }
+        }
+        return $orderItems;
+    }
 }
