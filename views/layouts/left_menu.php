@@ -27,45 +27,147 @@
       <nav id="main-nav" class="flex-1 overflow-y-auto p-4">
             <!-- Navigation Links -->
             <?php
-            global $conn;
-            $sql = "SELECT id, parent_id, module_name, slug, `action` FROM modules WHERE active=1 ORDER BY parent_id ASC";
-            $result = $conn->query($sql);
-            $moduleRows = [];
-            if ($result && $result->num_rows > 0) {
-                  while ($row = $result->fetch_assoc()) {
-                        $parent_id = $row['parent_id'];
-                        if (!isset($moduleRows[$parent_id])) {
-                              $moduleRows[$parent_id] = [];
-                        }
-                        $moduleRows[$parent_id][] = $row;
+                  $userRoleId = (int)$_SESSION["user"]["role_id"];
+                  global $conn;
+                  if($userRoleId == 1) {
+                        $sql = "SELECT DISTINCT p.module_id FROM vp_role_permissions rp JOIN vp_permissions p ON rp.permission_id = p.id";
+                        $stmt = $conn->prepare($sql);
+                  }else{
+                        $sql = "SELECT DISTINCT p.module_id FROM vp_role_permissions rp JOIN vp_permissions p ON rp.permission_id = p.id WHERE rp.role_id = ?";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param('i', $userRoleId);
                   }
-            }
+                  $stmt->execute();
+                  $res = $stmt->get_result();
 
-            foreach($moduleRows[0] as $key => $value): ?>
-            <?php if ($value['parent_id'] == 0): ?>
-                  <div><h3 class="px-3 py-2 text-gray-700"><?php echo $value['module_name']; ?></h3>
-                  <ul class="mt-1">
-                  <?php if(isset($moduleRows[$value['id']])) { ?>
-                  <?php foreach($moduleRows[$value['id']] as $subKey => $subValue): 
-                        if ($subValue['parent_id'] == $value['id']): ?>
-                              <li>
-                                    <a href="<?=base_url('index.php?page='.$subValue["slug"].'&action='.$subValue["slug"]);?>" class="nav-link text-gray-800 <?= ($page == $subValue["slug"]) ? 'active' : '' ?>">
-                                    <div class="content-wrapper">
-                                          <i class="fa fa-clipboard-list mr-2"></i>
-                                          <span><?php echo($subValue["module_name"]);?></span>
-                                    </div>
-                                    </a>
-                              </li>
-                        <!-- <option value="<?php echo $subValue['id']; ?>" title="<?php echo $subValue['module_name']; ?>" <?php echo ($data['category_filter'] == $subValue['id']) ? "selected" : ""?>><?php echo $subValue['module_name']; ?></option> -->
-                  <?php endif; endforeach; ?>
-                  <?php } ?>
-                  </ul>
-                  </div>
-            <?php endif; ?>
-      <?php endforeach; ?>
+                  $allowedModuleIds = [];
+                  while ($r = $res->fetch_assoc()) {
+                        $allowedModuleIds[] = (int)$r['module_id'];
+                  }
+                  $stmt->close();
+
+                  if (empty($allowedModuleIds)) {
+                        $menu = [];
+                  } else {
+                        $idsList = implode(',', $allowedModuleIds);
+                        if($userRoleId == 1) {
+                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon FROM modules m WHERE m.active = 1 ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
+                        } else {
+                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon FROM modules m WHERE m.active = 1 AND ( m.id IN ($idsList) OR m.id IN (SELECT DISTINCT parent_id FROM modules WHERE id IN ($idsList) AND parent_id IS NOT NULL)) ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
+                        }
+                        $result = $conn->query($sql);
+
+                        // collect modules by id
+                        $modules = [];
+                        while ($row = $result->fetch_assoc()) {
+                              $id = (int)$row['id'];
+                              $modules[$id] = [
+                                    'id' => $id,
+                                    'parent_id' => isset($row['parent_id']) ? (int)$row['parent_id'] : 0,
+                                    'name' => $row['module_name'],
+                                    'slug' => $row['slug'],
+                                    'icon' => $row['font_awesome_icon'],
+                                    'children' => []
+                              ];
+                        }
+
+                        $menu = [];
+                        foreach ($modules as $id => $m) {
+                              $parentId = (int)$m['parent_id'];
+
+                              if ($parentId === 0 || $parentId === null) {
+                                    // top-level
+                                    $menu[$id] = $m;
+                              } else {
+                                    // child: but parent may or may not exist in $modules (we included parents above)
+                                    if (!isset($modules[$parentId])) {
+                                          // parent not present (rare because we selected parents), fetch parent quickly
+                                          $pstmt = $conn->prepare("SELECT id, parent_id, module_name, slug, font_awesome_icon FROM modules WHERE id = ? AND active = 1");
+                                          $pstmt->bind_param('i', $parentId);
+                                          $pstmt->execute();
+                                          $pres = $pstmt->get_result()->fetch_assoc();
+                                          $pstmt->close();
+                                          if ($pres) {
+                                                $modules[$parentId] = [
+                                                      'id' => (int)$pres['id'],
+                                                      'parent_id' => isset($pres['parent_id']) ? (int)$pres['parent_id'] : 0,
+                                                      'name' => $pres['module_name'],
+                                                      'slug' => $pres['slug'],
+                                                      'icon' => $pres['font_awesome_icon'],
+                                                      'children' => []
+                                                ];
+                                          }
+                                    }
+                                    // attach to parent in modules array
+                                    if (isset($modules[$parentId])) {
+                                          // ensure children array uses child id as key to prevent duplicates
+                                          $modules[$parentId]['children'][$id] = [
+                                                'id' => $m['id'],
+                                                'parent_id' => $parentId,
+                                                'name' => $m['name'],
+                                                'slug' => $m['slug'],
+                                                'icon' => $m['icon']
+                                          ];
+                                    } else {
+                                          // fallback: put child as top-level if parent missing
+                                          $menu[$id] = $m;
+                                    }
+                              }
+                        }
+
+                        foreach ($modules as $id => $m) {
+                              if ((int)$m['parent_id'] === 0 || $m['parent_id'] === null) {
+                                    // convert children associative array to numeric indexed array (optional)
+                                    $children = array_values($m['children']);
+                                    $menu[$id] = [
+                                          'id' => $m['id'],
+                                          'parent_id' => $m['parent_id'],
+                                          'name' => $m['name'],
+                                          'slug' => $m['slug'],
+                                          'icon' => $m['icon'],
+                                          'children' => $children
+                                    ];
+                              }
+                        }
+                  }
+                  renderMenu($menu, $page); //generate HTML menu
+            ?>
       </nav>
 </aside>
+<?php
+function renderMenu($menu, $currentPage = '')
+{
+      foreach ($menu as $item) {
 
+            // Parent category title
+            echo '<div>';
+            echo '<h3 class="px-3 py-2 text-gray-700">'
+                        . htmlspecialchars($item['name'])
+                  . '</h3>';
+            echo '<ul class="mt-1">';
+            // If parent has children
+            if (!empty($item['children'])) {
+                  foreach ($item['children'] as $child) {
+
+                        $active = ($currentPage == $child['slug']) 
+                                          ? 'active' 
+                                          : '';
+                        echo '<li>';
+                        echo '<a href="index.php?page=' . $child['slug'] . '&action=' . $child['slug'] . '" 
+                                    class="nav-link text-gray-800 ' . $active . '">';
+                        // icon
+                        echo '<div class="content-wrapper"><i class="fa fa-clipboard-list mr-2"></i>';
+                        // name
+                        echo '<span>' . htmlspecialchars($child['name']) . '</span></div>';
+                        echo '</a>';
+                        echo '</li>';
+                  }
+            }
+            echo '</ul>';
+            echo '</div>';
+      }
+}
+?>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const menuToggle = document.getElementById('menu-toggle');
@@ -85,24 +187,5 @@
                 openMenuButton.classList.add('hidden');
             });
         }
-
-      //   const nav = document.getElementById('main-nav');
-      //   if (nav) {
-      //       const navLinks = nav.querySelectorAll('.nav-link');
-
-      //       nav.addEventListener('click', function(e) {
-      //           const clickedLink = e.target.closest('.nav-link');
-      //           if (!clickedLink) return;
-
-      //           // This line was preventing navigation. It has been removed.
-      //           // e.preventDefault();
-
-      //           navLinks.forEach(link => {
-      //               link.classList.remove('active');
-      //           });
-
-      //           clickedLink.classList.add('active');
-      //       });
-      //   }
     });
 </script>
