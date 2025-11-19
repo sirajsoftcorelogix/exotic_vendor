@@ -83,11 +83,13 @@
             </thead>
             <tbody class="table-row-text " id="poTableBody">
                 
-            <tr class="bg-white position-relative">
-                <td class="p-2">
+            <tr class="bg-white">
+                <td class="p-2 position-relative">
+                    <input type="hidden" name="product_id[]" value="">
                     <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code" onblur="fetchProductDetails(this)">
                     <!--suggestion box-->
-                    <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto;"></div>
+                    <div class="suggestion-box position-absolute z-50 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; max-height:240px; overflow:auto;"></div>
+                    
                 </td>
                 
                 <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
@@ -510,7 +512,7 @@ function addSelectOrderListeners() {
             const tr = document.createElement('tr');
             tr.className = 'bg-white';
             tr.innerHTML = `
-                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input name="item_code[]" value="${itemCode}"></td>
+                <td class="p-2 rounded-l-lg"><input type="hidden" name="product_id[]" value="${id}"><input name="item_code[]" value="${itemCode}"></td>
                 <td class="p-1"><textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea></td>
                 <td class="p-1"><input name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${hsn}"></td>
                 <td class="p-1"><input type="hidden" name="img[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" ></td>
@@ -639,7 +641,7 @@ function fillRowFromProduct(tr, item) {
     if (rateEl && item.cost_price !== undefined) rateEl.value = parseFloat(item.cost_price).toFixed(2);
 
     // Order id / product id
-    const orderIdHidden = tr.querySelector('input[name="orderid[]"]');
+    const orderIdHidden = tr.querySelector('input[name="product_id[]"]');
     if (orderIdHidden) orderIdHidden.value = item.id;
 
     // item_code field value
@@ -797,6 +799,7 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
     newRow.className = 'bg-white ';
     newRow.innerHTML = `
         <td class="p-2" style="position:relative;">
+            <input type="hidden" name="product_id[]" value="">
             <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code">
             <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto; left:0; right:0;"></div>
         </td>
