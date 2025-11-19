@@ -1470,7 +1470,7 @@ class PurchaseOrdersController {
         $data = $_POST;
 
         // Validate required fields
-        if (empty($data['vendor_id']) || empty($data['delivery_due_date'])) {
+        if (empty($data['vendor']) || empty($data['delivery_due_date']) || empty($data['title']) || empty($data['quantity']) || empty($data['rate']) || empty($data['delivery_address'])) {
             echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
             exit;
         }
@@ -1479,7 +1479,7 @@ class PurchaseOrdersController {
         $purchaseOrderData = [
             'po_number' => '',
             'po_type' => 'custom',
-            'vendor_id' => $data['vendor_id'],
+            'vendor_id' => $data['vendor'],
             'expected_delivery_date' => $data['delivery_due_date'],
             'user_id' => $data['user_id'] ?? '',
             'created_email' => $data['created_email'] ?? '',

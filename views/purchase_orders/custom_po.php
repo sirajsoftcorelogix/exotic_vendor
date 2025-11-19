@@ -46,7 +46,7 @@
                         autocomplete="off"
                         value=""
                     >
-                    <input type="hidden" name="vendor_id" id="vendor_id" value="">
+                    <input type="hidden" name="vendor" id="vendor" value="">
                     <div id="vendor_suggestions" class="bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; left:0; right:0; z-index:50; max-height:240px; overflow:auto;"></div>
                 </div>
                 
@@ -187,6 +187,7 @@
     </div>
 
     <!-- Action Buttons -->
+    <div id="addPoMsg" style="margin-bottom:10px;"></div>
     <div class="mt-8 flex justify-end space-x-4">
         <input type=checkbox id="isDraft" name="status" value="draft" style="transform: scale(1.5); margin-right: 4px;">
         <label for="isDraft" class="block text-gray-700 form-label" style="margin-top: 4px;">Save as Draft</label>
@@ -389,6 +390,8 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     submitBtn.disabled = true;
     const originalText = submitBtn.textContent;
     submitBtn.textContent = 'Processing...';
+    const addPoMsg = document.getElementById("addPoMsg");
+    addPoMsg.innerText = "Processing...";
     const formData = new FormData(this);
 
     fetch(<?php echo "'".base_url('?page=purchase_orders&action=custompo_post')."'"; ?>, {
@@ -398,10 +401,16 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     .then(response => response.json())  
     .then(data => {
         if (data.success) {
-            alert("Custom PO created successfully!");
+            //alert("Custom PO created successfully!");
+            addPoMsg.style = "color: green; font-weight: bold; background-color: #e0ffe0; padding: 10px; border-radius: 5px; margin-top: 10px; text-align: center; border: 1px solid green;";
+            addPoMsg.innerText = "Custom PO created successfully!";
             submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
-            window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&po_type=custom'); ?>"; // Redirect to the list page
+            submitBtn.textContent = originalText;
+            setTimeout(() => {
+                addPoMsg.innerText = "";
+                window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&po_type=custom'); ?>"; // Redirect to the list page
+            }, 3000);
+            
         } else {
             alert("Error: " + data.message);
             // Re-enable the button and restore text
@@ -579,7 +588,7 @@ function addSelectOrderListeners() {
 document.getElementById('vendor_autocomplete').addEventListener('input', function() {
     const query = this.value;
     const suggestionsBox = document.getElementById('vendor_suggestions');
-    const vendorIdInput = document.getElementById('vendor_id');
+    const vendorIdInput = document.getElementById('vendor');
 
     if (query.length < 2) {
         suggestionsBox.style.display = 'none';

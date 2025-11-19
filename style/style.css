@@ -857,3 +857,6 @@ background-color: #f0f0f0;
             font-size: 14px;
             font-weight: 500;
         }
+        .blinking-text {
+            animation: blink-animation 1s infinite;
+        }
