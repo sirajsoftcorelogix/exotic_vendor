@@ -408,7 +408,7 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
             submitBtn.textContent = originalText;
             setTimeout(() => {
                 addPoMsg.innerText = "";
-                window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&po_type=custom'); ?>"; // Redirect to the list page
+                window.location.href = "<?php echo base_url('?page=purchase_orders&action=stock_purchase'); ?>"; // Redirect to the list page
             }, 3000);
             
         } else {

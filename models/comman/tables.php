@@ -107,6 +107,7 @@ class Tables {
                 if (!empty($row['name']) && !empty($row['country_code'])) {
                     $data[$row['country_code']] = $row['name'];
                 }
+
             }
         }
         return $data;
