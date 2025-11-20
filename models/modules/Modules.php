@@ -58,17 +58,16 @@ class Modules {
         ];
 	}
 	public function addRecord($data) {
-        $sql = "INSERT INTO modules (parent_id, module_name, slug, action, font_awesome_icon, active, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $icon = (trim($data['addFontAwesomeIcon']) != "") ? $this->conn->real_escape_string($data['addFontAwesomeIcon']) : $this->conn->real_escape_string('<i class="fa fa-clipboard-list mr-2">');
+        $addParentMenu = $this->conn->real_escape_string($data['addParentMenu']);
+        $addModuleName = $this->conn->real_escape_string($data['addModuleName']);
+        $addSlug = $this->conn->real_escape_string($data['addSlug']);
+        $addAction = $this->conn->real_escape_string($data['addAction']);
+        
+        $sql = "INSERT INTO modules (parent_id, module_name, slug, `action`, font_awesome_icon, active, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('issssii',
-            $data['addParentMenu'],
-            $data['addModuleName'],
-            $data['addSlug'],
-            $data['addAction'],
-            $data['addFontAwesomeIcon'],
-            $data['addStatus'],
-            $_SESSION["user"]["id"]
-        );
+        $stmt->bind_param('issssii', $addParentMenu, $addModuleName, $addSlug, $addAction, $icon, $data['addStatus'], $_SESSION["user"]["id"]);
+
         if ($stmt->execute()) {
             $module_id = $this->conn->insert_id;
 
@@ -127,14 +126,20 @@ class Modules {
         ];
     }
     public function updateRecord($id, $data) {
+        $icon = (trim($data['editFontAwesomeIcon']) != "") ? $this->conn->real_escape_string($data['editFontAwesomeIcon']) : $this->conn->real_escape_string('<i class="fa fa-clipboard-list mr-2">');
+        $editParentMenu = $this->conn->real_escape_string($data['editParentMenu']);
+        $editModuleName = $this->conn->real_escape_string($data['editModuleName']);
+        $editSlug = $this->conn->real_escape_string($data['editSlug']);
+        $editAction = $this->conn->real_escape_string($data['editAction']);
+
         $sql = "UPDATE modules SET parent_id = ?, module_name = ?, slug = ?, action = ?, font_awesome_icon = ?, active = ?, user_id = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('issssiii',
-            $data['editParentMenu'],
-            $data['editModuleName'],
-            $data['editSlug'],
-            $data['editAction'],
-            $data['editFontAwesomeIcon'],
+            $editParentMenu,
+            $editModuleName,
+            $editSlug,
+            $editAction,
+            $icon,
             $data['editStatus'],
             $_SESSION["user"]["id"],
             $id

@@ -109,7 +109,10 @@ switch ($page) {
                 break;
             case 'checkPhoneNumber':
                 $controller->checkPhoneNumber();
-                break;                
+                break;
+            case 'sales_analytics':
+                $controller->importSalesAnalyticsData();
+                break;
             default:
                 $controller->index();
                 break;
