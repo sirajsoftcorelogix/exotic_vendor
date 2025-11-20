@@ -20,24 +20,25 @@ class User {
             if (password_verify($password, $user['password'])) {
                 $lifetime = 8 * 3600; // 8 hours in seconds
 
-                // Set session parameters
-                ini_set('session.gc_maxlifetime', $lifetime);
-                ini_set('session.cookie_lifetime', $lifetime);
-                ini_set('session.gc_probability', 1);
-                ini_set('session.gc_divisor', 100);
-
-                session_set_cookie_params([
-                    'lifetime' => $lifetime,
-                    'path' => '/',
-                    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
-                    'httponly' => true,
-                    'samesite' => 'Lax'
-                ]);
-
                 if (session_status() !== PHP_SESSION_ACTIVE) {
-                    // Safe to configure session settings
-                    // ... ini_set and session_set_cookie_params here ...
+                    // Set session parameters BEFORE session_start
+                    ini_set('session.gc_maxlifetime', $lifetime);
+                    ini_set('session.cookie_lifetime', $lifetime);
+                    ini_set('session.gc_probability', 1);
+                    ini_set('session.gc_divisor', 100);
+
+                    session_set_cookie_params([
+                        'lifetime' => $lifetime,
+                        'path' => '/',
+                        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+                        'httponly' => true,
+                        'samesite' => 'Lax'
+                    ]);
+
                     session_start();
+                } else {
+                    // Session already active — just refresh cookie
+                    setcookie(session_name(), session_id(), time() + $lifetime, "/");
                 }
 
 
