@@ -25,7 +25,7 @@ class Tables {
     
 
     public function get_exotic_address() {
-        $sql = "SELECT * FROM exotic_address WHERE is_active = 1";
+        $sql = "SELECT * FROM exotic_address WHERE is_active = 1 order by `order_no` ASC";
         $result = $this->ci->query($sql);
         $data = [];
         if ($result && $result->num_rows > 0) {
@@ -103,9 +103,7 @@ class Tables {
         $data = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                if (!empty($row['name']) && !empty($row['country_code'])) {
-                    $data[$row['country_code']] = $row['name'];
-                }
+                $data[$row['country_code']] = $row['name'];
             }
         }
         return $data;
@@ -186,6 +184,19 @@ class Tables {
             return  "cURL Error: " . $error;
         }
         return $response;
+    }
+    public function get_staff_list() {
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1";
+        $stmt = $this->ci->prepare($sql);        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[$row['id']] = $row['name'];
+            }
+        }
+        return $data;
     }
 
 }

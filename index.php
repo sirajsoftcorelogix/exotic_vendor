@@ -101,9 +101,15 @@ switch ($page) {
             case 'getTeamMembers':
                 $controller->getTeamMembers();
                 break;
-            /*case 'update':
-                $controller->addEditVendor();
-                break;*/
+            case 'checkVendorName':
+                $controller->checkVendorName();
+                break;
+            case 'checkEmail':
+                $controller->checkEmail();
+                break;
+            case 'checkPhoneNumber':
+                $controller->checkPhoneNumber();
+                break;                
             default:
                 $controller->index();
                 break;
@@ -220,6 +226,15 @@ switch ($page) {
                 break;
             case 'vendor_search':
                 $controller->vendorSearch();
+                break;
+            case 'custom_po':
+                $controller->customPO();
+                break;
+            case 'custompo_post':
+                $controller->customPOSave();
+                break;
+            case 'product_items':
+                $controller->productItems();
                 break;
             default:
                 $controller->index();

@@ -44,6 +44,27 @@ class PurchaseOrderItem {
             return false; // Return false on failure
         }
     }
+    public function createCustomPoItem($data) {
+        $query = "INSERT INTO vp_po_items (purchase_orders_id, item_code, product_id, title, image, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ? )";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("isissidddd", 
+            $data['purchase_orders_id'],
+            $data['item_code'],
+            $data['product_id'], 
+            $data['title'],
+            $data['image'],
+            $data['hsn'],
+            $data['gst'],
+            $data['quantity'],
+            $data['price'],
+            $data['amount']
+        );
+        if ($stmt->execute()) {
+            return $this->conn->insert_id; // Return the ID of the newly created item
+        } else {
+            return false; // Return false on failure
+        }
+    }
     public function deletePurchaseOrderItem($id) {
         $query = "DELETE FROM vp_po_items WHERE id = ?";
         $stmt = $this->conn->prepare($query);
