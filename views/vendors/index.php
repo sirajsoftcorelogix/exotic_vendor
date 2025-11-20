@@ -107,9 +107,26 @@
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                     <?php if (!empty($vendors)): ?>
+                        <?php
+                            $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+                            $page = $page < 1 ? 1 : $page;
+                            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
+                            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+                            $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
+                            $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
+
+                            // Calculate start/end slot for 10 pages
+                            $slot_size = 10;
+                            $start = max(1, $page - floor($slot_size / 2));
+                            $end = min($total_pages, $start + $slot_size - 1);
+                            if ($end - $start < $slot_size - 1) {
+                                $start = max(1, $end - $slot_size + 1);
+                            }
+                            $counter = ($page - 1) * $limit;
+                        ?>
                         <?php foreach ($vendors as $index => $vendor): ?>
                             <tr class="table-content-text">
-                                <td class="px-6 py-4 whitespace-wrap"><?= $index + 1 ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= ++$counter ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= ($vendor['agent_name']!="") ? htmlspecialchars($vendor['agent_name']) : "" ?></td>
@@ -156,22 +173,6 @@
 
     <!-- Pagination Logic -->
     <?php if (!empty($vendors)): ?>
-        <?php
-            $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-            $page = $page < 1 ? 1 : $page;
-            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
-            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
-            $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
-            $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
-
-            // Calculate start/end slot for 10 pages
-            $slot_size = 10;
-            $start = max(1, $page - floor($slot_size / 2));
-            $end = min($total_pages, $start + $slot_size - 1);
-            if ($end - $start < $slot_size - 1) {
-                $start = max(1, $end - $slot_size + 1);
-            }
-        ?>
         <div class="bg-white rounded-xl shadow-md p-4">
             <div class="flex items-center justify-center">
                 <div class="flex items-center gap-4 text-sm text-gray-600">
