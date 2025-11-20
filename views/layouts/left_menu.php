@@ -148,7 +148,7 @@
                               }
                         }
                   }
-                  renderMenu($menu, $page); //generate HTML menu
+                  renderMenu($menu, $page, $action); //generate HTML menu
             ?>
       </nav>
 </aside>
@@ -165,8 +165,8 @@ function sortMenu(&$menu) {
         }
     }
 }
-function renderMenu($menu, $currentPage = '')
-{
+function renderMenu($menu, $currentPage = '', $currentAction = '')
+{ 
       foreach ($menu as $item) {
 
             // Parent category title
@@ -179,7 +179,7 @@ function renderMenu($menu, $currentPage = '')
             if (!empty($item['children'])) {
                   foreach ($item['children'] as $child) {
 
-                        $active = ($currentPage == $child['slug']) 
+                        $active = ($currentPage == $child['slug'] && $currentAction == $child['action']) 
                                           ? 'active' 
                                           : '';
                         echo '<li>';
