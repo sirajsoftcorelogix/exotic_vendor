@@ -430,9 +430,7 @@
                 <div class="p-8">
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add / Edit Payment Details</h2>
 
-                    <div id="payment-error" class="hidden mb-4">
-                        <p class="text-red-600 text-sm"></p>
-                    </div>
+                    
                     <form id="payment-form" >
                       <h5 class="font-bold text-gray-800 mb-4 pb-4 border-b">Basic payment details</h5>
                       
@@ -457,8 +455,8 @@
                                 <select id="payment_mode" name="payment_mode" class="form-input w-full bg-white mt-1">
                                     <option value="" disabled selected>Select mode</option>
                                     <option value="bank_transfer">Bank Transfer</option>
-                                    <option value="credit_card">Credit Card</option>
-                                    <option value="debit_card">Debit Card</option>
+                                    <!-- <option value="credit_card">Credit Card</option>
+                                    <option value="debit_card">Debit Card</option> -->
                                     <option value="cash">Cash</option>
                                     <option value="cheque">Cheque</option>
                                 </select>
@@ -516,7 +514,9 @@
                             <label for="payment_note" class="text-sm font-medium text-gray-700">Payment Note:</label>
                             <textarea id="payment_note" name="payment_note" class="form-input w-full h-24 mt-1 p-2" rows="4" maxlength="500" placeholder="Add any additional notes regarding the payment"></textarea>
                         </div>                      
-
+                        <div id="payment-error" class="hidden mb-4">
+                            <p class="text-red-600 text-sm"></p>
+                        </div>
                         <div class="flex justify-end items-center gap-4 pt-6 border-t">
                             <input type="hidden" id="payment-po-id" name="po_id" value="<?= $purchaseOrder['id'] ?? '' ?>">
                             <input type="hidden" id="payment-vendor-id" name="vendor_id" value="<?= $purchaseOrder['vendor_id'] ?? '' ?>">
@@ -526,6 +526,7 @@
                             <button type="submit" id="submit-payment-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-btn">Submit</button>
                         </div>
                     </form>
+                    
                 </div>
             </div>
         </div>
