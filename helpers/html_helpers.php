@@ -366,49 +366,98 @@
 	function updateRoles() { // Run this function once to populate permissions table
 		global $conn;
 
-		$sql = "SELECT id, access_name FROM vp_role_access where is_active = '1' ORDER BY id ASC";
-        $modules = $conn->query($sql);
-        while($m = mysqli_fetch_assoc($modules)) {
-			$actions[] = $m['access_name'];
+		// Delete existing records
+		try {
+			// Turn off autocommit
+			$conn->begin_transaction();
+
+			// Disable foreign key checks
+			$conn->query("SET FOREIGN_KEY_CHECKS = 0");
+
+			// Delete records
+			$conn->query("DELETE FROM vp_role_permissions");
+			$conn->query("ALTER TABLE vp_role_permissions AUTO_INCREMENT = 1");
+
+			$conn->query("DELETE FROM vp_permissions");
+			$conn->query("ALTER TABLE vp_permissions AUTO_INCREMENT = 1");
+
+			// Re-enable foreign key checks
+			$conn->query("SET FOREIGN_KEY_CHECKS = 1");
+
+			// Commit
+			$conn->commit();
+
+			echo "Tables cleared successfully";
+
+		} catch (Exception $e) {
+
+			// Rollback if something goes wrong
+			$conn->rollback();
+
+			echo "Error: " . $e->getMessage();
+			exit;
 		}
+		
+		/*********************************************** */
+		/*********************************************** */
+		try {
+			$sql = "SELECT id, access_name FROM vp_role_access where is_active = '1' ORDER BY id ASC";
+			$modules = $conn->query($sql);
+			while($m = mysqli_fetch_assoc($modules)) {
+				$actions[] = $m['access_name'];
+			}
 
-		$sql = "SELECT id, role_name FROM vp_roles where is_active = '1' ORDER BY id ASC";
-        $modules = $conn->query($sql);
-        while($m = mysqli_fetch_assoc($modules)) {
-			$roles[] = $m['id'];
-		}
+			$sql = "SELECT id, role_name FROM vp_roles where is_active = '1' ORDER BY id ASC";
+			$modules = $conn->query($sql);
+			while($m = mysqli_fetch_assoc($modules)) {
+				$roles[] = $m['id'];
+			}
 
-		//$actions = ['add', 'edit', 'view', 'delete', 'list','level 1 info','Level 2 Info']; // Standard permissions role_access
-		//$roles = [1, 2]; // Role IDs to assign permissions to (e.g., Editor and Viewer) // Role table
+			//$actions = ['add', 'edit', 'view', 'delete', 'list','level 1 info','Level 2 Info']; // Standard permissions role_access
+			//$roles = [1, 2]; // Role IDs to assign permissions to (e.g., Editor and Viewer) // Role table
 
-        $sql = "SELECT id, module_name, slug FROM modules where module_name != 'Administrator' ORDER BY module_name";
-        $modules = $conn->query($sql);
-        while($m = mysqli_fetch_assoc($modules)) {
-            
-            $stmt = $conn->prepare("INSERT INTO vp_permissions (module_id, module_name, action_name) VALUES (?, ?, ?)");
-            foreach ($modules as $module) {
-                foreach ($actions as $action) {
-                    $stmt->bind_param("iss", $module["id"], $module["module_name"], $action);
-                    if ($stmt->execute()) {
-						$last_insert_id = $conn->insert_id;
-						$stmt_p = $conn->prepare("INSERT INTO vp_role_permissions (role_id, permission_id) VALUES (?, ?)");
-						foreach ($roles as $role) {
-							$stmt_p->bind_param("ii", $role, $last_insert_id);
-							if ($stmt_p->execute()) {
-								echo "<br>Inserted Linking permission: " . $module['module_name'] . " - $action\n\n\n";
+			$sql = "SELECT id, module_name, slug FROM modules where parent_id != 0 ORDER BY module_name";
+			$modules = $conn->query($sql);
+			while($m = mysqli_fetch_assoc($modules)) {
+				$stmt = $conn->prepare("INSERT INTO vp_permissions (module_id, module_name, action_name) VALUES (?, ?, ?)");
+				foreach ($modules as $module) {
+					foreach ($actions as $action) {
+						$chkSql = "SELECT id FROM vp_permissions WHERE module_id = ? AND module_name = ? AND action_name = ?";
+						$chkStmt = $conn->prepare($chkSql);
+						$chkStmt->bind_param('iss', $module["id"], $module["module_name"], $action);
+						$chkStmt->execute();
+						$chkStmt->store_result();
+						if ($chkStmt->num_rows == 0) {
+							$stmt->bind_param("iss", $module["id"], $module["module_name"], $action);
+							if ($stmt->execute()) {
+								$last_insert_id = $conn->insert_id;
+								$stmt_p = $conn->prepare("INSERT INTO vp_role_permissions (role_id, permission_id) VALUES (?, ?)");
+								foreach ($roles as $role) {
+									$stmt_p->bind_param("ii", $role, $last_insert_id);
+									if ($stmt_p->execute()) {
+										echo "<br>Inserted Linking permission: " . $module['module_name'] . " - $action\n\n\n";
+									} else {
+										echo "<br>Error Linking inserting " . $module['module_name'] . " - $action: " . $stmt_p->error . "\n\n\n";
+									}
+								}
+								echo "<br><br><br>Inserted permission: " . $module['module_name'] . " - $action\n";
 							} else {
-								echo "<br>Error Linking inserting " . $module['module_name'] . " - $action: " . $stmt_p->error . "\n\n\n";
+								echo "<br>Error inserting " . $module['module_name'] . " - $action: " . $stmt->error . "\n";
 							}
+						}else{
+							echo "<br><br>Record already exists " . $module["id"] . " ---- " . $module['module_name'] . " - ". $action . "\n";
 						}
-                        echo "<br><br><br>Inserted permission: " . $module['module_name'] . " - $action\n";
-                    } else {
-                        echo "<br>Error inserting " . $module['module_name'] . " - $action: " . $stmt->error . "\n";
-                    }
-                }
-            }
-            $stmt->close();
-        }
-		$conn->close();
+					}
+				}
+				$stmt->close();
+			}
+			$conn->close();
+		} catch (Exception $e) {
+			// Rollback if something goes wrong
+			$conn->rollback();
+			echo "Error: " . $e->getMessage();
+			exit;
+		}
 	}
 	function hasPermission($user_id, $module, $action) {
 		if($_SESSION["user"]["role_id"] == 1 || $_SESSION["user"]["role"] == "admin"){ // Admin has all permissions
