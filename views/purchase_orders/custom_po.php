@@ -322,7 +322,7 @@ document.getElementById('applyTemplate').addEventListener('click', function() {
     const checkboxes = document.querySelectorAll('.select-template-checkbox:checked');
     let combinedContent = '';
     checkboxes.forEach((checkbox, idx) => {
-        combinedContent += (idx + 1) + '. ' + checkbox.getAttribute('data-content') + '\n\n';    
+        combinedContent += (idx + 1) + '. ' + checkbox.getAttribute('data-content') + '\n';    
     });
     if (combinedContent) {
         document.getElementById('terms').value = combinedContent.trim();
