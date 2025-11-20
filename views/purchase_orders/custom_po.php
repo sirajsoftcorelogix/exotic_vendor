@@ -270,6 +270,15 @@
         <iframe id="previewPdfFrame" src="" style="width:100%;height:70vh;border:none;"></iframe>
     </div>
 </div>
+<!-- success popup -->
+<div id="successPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md h-56 relative flex flex-col items-center">
+        <button onclick="closeSuccessPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <h2 class="text-xl font-bold mb-6 text-green-600" id="successTitle">Success!</h2>
+        <p class="py-8 font-semibold" id="successMessage">Custom PO created successfully. </p>
+        <button onclick="closeSuccessPopup()" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">OK</button>
+    </div>
+</div>
 <script>
 // Preview button handler
 document.querySelector('#previewButton').addEventListener('click', function() {
@@ -390,8 +399,8 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     submitBtn.disabled = true;
     const originalText = submitBtn.textContent;
     submitBtn.textContent = 'Processing...';
-    const addPoMsg = document.getElementById("addPoMsg");
-    addPoMsg.innerText = "Processing...";
+    successPopupTitle = document.getElementById("successTitle");
+    successPopupMessage = document.getElementById("successMessage");
     const formData = new FormData(this);
 
     fetch(<?php echo "'".base_url('?page=purchase_orders&action=custompo_post')."'"; ?>, {
@@ -402,12 +411,13 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     .then(data => {
         if (data.success) {
             //alert("Custom PO created successfully!");
-            addPoMsg.style = "color: green; font-weight: bold; background-color: #e0ffe0; padding: 10px; border-radius: 5px; margin-top: 10px; text-align: center; border: 1px solid green;";
-            addPoMsg.innerText = "Custom PO created successfully!";
+            successPopupTitle.innerHTML = "Success <i class=\"fas fa-check-circle\"></i>";
+            successPopupMessage.innerHTML = 'Custom PO created successfully 🎉';
+            document.getElementById("successPopup").classList.remove("hidden");
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;
             setTimeout(() => {
-                addPoMsg.innerText = "";
+                document.getElementById("successPopup").classList.add("hidden");
                 window.location.href = "<?php echo base_url('?page=purchase_orders&action=stock_purchase'); ?>"; // Redirect to the list page
             }, 3000);
             
@@ -898,6 +908,9 @@ function handleImageUpload(input) {
         };
         reader.readAsDataURL(file);
     }
+}
+function closeSuccessPopup() {
+    document.getElementById("successPopup").classList.add("hidden");
 }
 // function fetchProductDetails(el) {
 //     const code = el.value.trim();

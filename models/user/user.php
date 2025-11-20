@@ -16,30 +16,34 @@ class User {
         $result = $stmt->get_result();  
         if ($result->num_rows > 0) {
             $user = $result->fetch_assoc();
+
             if (password_verify($password, $user['password'])) {
                 $lifetime = 8 * 3600; // 8 hours in seconds
 
-                if (session_status() !== PHP_SESSION_ACTIVE) {
-                    // set cookie params before starting the session
-                    session_set_cookie_params([
-                        'lifetime' => $lifetime,
-                        'path' => '/',
-                        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
-                        'httponly' => true,
-                        'samesite' => 'Lax'
-                    ]);
-                    ini_set('session.gc_maxlifetime', $lifetime);
-                    @session_start();
-                } else {
-                    // extend current session cookie
-                    setcookie(session_name(), session_id(), time() + $lifetime, "/");
-                }
+                // Set session parameters
+                ini_set('session.gc_maxlifetime', $lifetime);
+                ini_set('session.cookie_lifetime', $lifetime);
+                ini_set('session.gc_probability', 1);
+                ini_set('session.gc_divisor', 100);
 
+                session_set_cookie_params([
+                    'lifetime' => $lifetime,
+                    'path' => '/',
+                    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+                    'httponly' => true,
+                    'samesite' => 'Lax'
+                ]);
+
+                session_start();
+
+                // Store user and activity timestamp
                 $_SESSION['user'] = $user;
-                $_SESSION['expires_at'] = time() + $lifetime;
+                $_SESSION['last_activity'] = time();
+
                 return true;
             }
-        }   
+        }
+  
         return false;
     }
     public function logout() {
