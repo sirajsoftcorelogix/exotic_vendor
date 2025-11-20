@@ -531,7 +531,7 @@
             document.getElementById("editModuleName").value   = datas.module_name;
             document.getElementById("editSlug").value   = datas.slug;
             document.getElementById("editAction").value   = datas.action;
-            document.getElementById("editFontAwesomeIcon").value = (datas.font_awesome_icon !== null) ? datas.font_awesome_icon : '';
+            document.getElementById("editFontAwesomeIcon").value = (datas.font_awesome_icon !== null) ? unescapeString(datas.font_awesome_icon) : '';
             document.getElementById("editStatus").value = datas.active;
 
             popupWrapperEdit.classList.remove('hidden');
@@ -540,7 +540,19 @@
             }, 10);
         });
     }
-
+    function unescapeString(str) {
+        if (typeof str !== 'string') {
+            return str; // Return as-is if not a string
+        }
+        return str
+            .replace(/\\'/g, "'")       // Unescape single quote
+            .replace(/\\"/g, '"')       // Unescape double quote
+            .replace(/\\\\/g, '\\')     // Unescape backslash (must be done last to avoid double-unescaping)
+            .replace(/\\n/g, '\n')      // Unescape newline
+            .replace(/\\r/g, '\r')      // Unescape carriage return
+            .replace(/\\x00/g, '\x00')  // Unescape null byte
+            .replace(/\\x1a/g, '\x1a'); // Unescape control-Z
+    }
     function closeVendorPopupEdit() {
         modalSliderEdit.classList.add('translate-x-full');
     }
