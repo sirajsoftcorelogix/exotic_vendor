@@ -34,7 +34,12 @@ class User {
                     'samesite' => 'Lax'
                 ]);
 
-                session_start();
+                if (session_status() !== PHP_SESSION_ACTIVE) {
+                    // Safe to configure session settings
+                    // ... ini_set and session_set_cookie_params here ...
+                    session_start();
+                }
+
 
                 // Store user and activity timestamp
                 $_SESSION['user'] = $user;
