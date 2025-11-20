@@ -51,9 +51,9 @@
                   } else {
                         $idsList = implode(',', $allowedModuleIds);
                         if($userRoleId == 1) {
-                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon, m.sort_order FROM modules m WHERE m.active = 1 ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
+                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.action, m.font_awesome_icon, m.sort_order FROM modules m WHERE m.active = 1 ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
                         } else {
-                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.font_awesome_icon, m.sort_order FROM modules m WHERE m.active = 1 AND ( m.id IN ($idsList) OR m.id IN (SELECT DISTINCT parent_id FROM modules WHERE id IN ($idsList) AND parent_id IS NOT NULL)) ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
+                              $sql = "SELECT DISTINCT m.id, m.parent_id, m.module_name, m.slug, m.action, m.font_awesome_icon, m.sort_order FROM modules m WHERE m.active = 1 AND ( m.id IN ($idsList) OR m.id IN (SELECT DISTINCT parent_id FROM modules WHERE id IN ($idsList) AND parent_id IS NOT NULL)) ORDER BY COALESCE(m.parent_id, 0), m.id, m.module_name";
                         }
                         $result = $conn->query($sql);
 
@@ -68,6 +68,7 @@
                                     'parent_id' => isset($row['parent_id']) ? (int)$row['parent_id'] : 0,
                                     'name' => $row['module_name'],
                                     'slug' => $row['slug'],
+                                    'action' => $row['action'],
                                     'icon' => ($row['font_awesome_icon']),
                                     'sort_order'=> $row['sort_order'],
                                     'children' => []
@@ -107,6 +108,7 @@
                                                       'parent_id' => isset($pres['parent_id']) ? (int)$pres['parent_id'] : 0,
                                                       'name' => $pres['module_name'],
                                                       'slug' => $pres['slug'],
+                                                      'action' => $pres['action'],
                                                       'icon' => $pres['font_awesome_icon'],
                                                       'children' => []
                                                 ];
@@ -120,6 +122,7 @@
                                                 'parent_id' => $parentId,
                                                 'name' => $m['name'],
                                                 'slug' => $m['slug'],
+                                                'action' => $m['action'],
                                                 'icon' => $m['icon']
                                           ];
                                     } else {
@@ -138,6 +141,7 @@
                                           'parent_id' => $m['parent_id'],
                                           'name' => $m['name'],
                                           'slug' => $m['slug'],
+                                          'action' => $m['action'],
                                           'icon' => $m['icon'],
                                           'children' => $children
                                     ];
@@ -179,7 +183,7 @@ function renderMenu($menu, $currentPage = '')
                                           ? 'active' 
                                           : '';
                         echo '<li>';
-                        echo '<a href="index.php?page=' . $child['slug'] . '&action=' . $child['slug'] . '" 
+                        echo '<a href="index.php?page=' . $child['slug'] . '&action=' . $child['action'] . '" 
                                     class="nav-link text-gray-800 ' . $active . '">';
                         // icon
                         echo '<div class="content-wrapper">' . trim($child['icon']) . '</i>&nbsp;&nbsp;';
