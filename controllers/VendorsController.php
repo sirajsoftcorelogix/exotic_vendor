@@ -195,41 +195,18 @@ class VendorsController {
 
     }
     public function importSalesAnalyticsData($from_date = "", $to_date = "") {
-        $groupname = ["one among book", "sculptures", "paintings", "jewelry", "textiles", "homelandliving"];
-        print_array($groupname); exit;
-        echo "1"; exit;
-        
-        global $vendorsModel;
-        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+        ini_set('max_execution_time', 0);
+        /*if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
             die('Unauthorized access.');
-        }
+        }*/
+        $groupname = ["book", "sculptures", "paintings", "jewelry", "textiles", "homelandliving"];
         if($from_date == "" && $to_date == "") {
-            $from_date = date('Y-m-d H:i:s');
-            $to_date = strtotime('-1 days');
+            $from_date = "2025-10-27";//date('Y-m-d');
+            $to_date = "2025-10-31";//date('Y-m-d', strtotime('-1 days'));
         }
-        echo $from_date . " -- ". $to_date; exit;
-
-        $from_date = strtotime('-1 days');
-        $to_date = time();
-        //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
-        //$to_date = strtotime(date('13-08-2025 00:00:00'));
-        //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
-        //$to_date = 1755102092;   // Example fixed date 13-08-2025 23:59:59
-        //$url = 'https://www.exoticindia.com/action';
+        //echo $from_date . " -- ". $to_date; exit;
         $url = 'https://www.exoticindia.com/vendor-api/data/sale_data'; // Production API new endpoint
-       
-        $postData = [
-            'makeRequestOf' => 'vendors-orderjson',
-            'from_date' => $from_date,
-            'to_date' => $to_date
-        ];
-        if (!empty($_GET['orderid'])) {
-            $postData = [
-                'makeRequestOf' => 'vendors-orderjson',
-                'orderid' => $_GET['orderid']
-            ];
-        }
 
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
@@ -237,27 +214,41 @@ class VendorsController {
             'Content-Type: application/x-www-form-urlencoded'
         ];
 
-        // Initialize cURL
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
+        $dataResult = array();
+        for($i = 0; $i < count($groupname)-1; $i++) {
+            $gpName = $groupname[$i];
+            $postData = [
+                'groupname' => $gpName,
+                'from_date' => $from_date,
+                'to_date' => $to_date
+            ];
 
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $response = curl_exec($ch);
-        
-        $error = curl_error($ch);
-        curl_close($ch);
-        // print_r($error);
-        // print_r($headers);
-        // print_r($response);
-        if ($response === false) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
-            return;
-        }
+            // Initialize cURL
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
 
-        $orders = json_decode($response, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+            //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            $response = curl_exec($ch);
+            
+            $error = curl_error($ch);
+            curl_close($ch);
+           
+            if ($response === false) {
+                renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
+                return;
+            }
+
+            $result = json_decode($response, true);
+            $dataResult[$gpName] = $result;
+            ignore_user_abort(true);
+            usleep (500000);
+        } //end for loop
+
+        print_array($dataResult);
+        exit;
         if (!is_array($orders)) {
             //echo "Invalid API response format.";
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
@@ -270,6 +261,7 @@ class VendorsController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
             return;
         }
+        print_array($orders); exit;
         /*$imported = 0; $totalorder = 0;
         foreach ($orders['orders'] as $order) { 
             
