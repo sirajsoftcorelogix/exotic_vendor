@@ -67,6 +67,8 @@ class PurchaseOrdersController {
         }
         if (!empty($_GET['po_type'])) {
             $filters['po_type'] = $_GET['po_type'];
+        }else{
+            $filters['po_type'] = 'normal';
         }
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
@@ -77,6 +79,70 @@ class PurchaseOrdersController {
         $orders = array_slice($purchaseOrders, $offset, $limit);
 
         renderTemplate('views/purchase_orders/index.php', [
+            'purchaseOrders' => $orders,
+            'total_orders' => $total_orders,
+            'total_pages' => $total_pages,
+            'current_page' => $page,
+            'search' => $_GET['search_text'] ?? '',
+            'status_filter' => $_GET['status_filter'] ?? '',
+        ], 'Manage Purchase Orders');
+    }
+    public function stockPurchase() {
+        is_login();
+        global $purchaseOrdersModel;
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
+        $offset = ($page - 1) * $limit;
+
+        // Apply filters
+        $filters = [];
+        // if (!empty($_GET['search_text'])) {
+        //     $filters['search_text'] = $_GET['search_text'];
+        // }
+        if (!empty($_GET['status'])) {
+            $filters['status_filter'] = $_GET['status'];
+        }
+        if(!empty($_GET['po_from']) && !empty($_GET['po_to'])){
+            $filters['po_from'] = $_GET['po_from'];
+            $filters['po_to'] = $_GET['po_to'];
+        }
+        if (!empty($_GET['item_code'])) {
+            $filters['item_code'] = $_GET['item_code'];
+        }
+        if (!empty($_GET['item_category'])) {
+            $filters['item_category'] = $_GET['item_category'];
+        }
+        if (!empty($_GET['item_sub_category'])) {
+            $filters['item_sub_category'] = $_GET['item_sub_category'];
+        }
+        if (!empty($_GET['po_amount_from']) && !empty($_GET['po_amount_to'])) {
+            $filters['po_amount_from'] = $_GET['po_amount_from'];
+            $filters['po_amount_to'] = $_GET['po_amount_to'];
+        }
+        if (!empty($_GET['po_number'])) {
+            $filters['po_number'] = $_GET['po_number'];
+        }
+        if (!empty($_GET['vendor_name'])) {
+            $filters['vendor_name'] = $_GET['vendor_name'];
+        }
+        if (!empty($_GET['due_date'])) {
+            $filters['due_date'] = $_GET['due_date'];
+        }
+        if (!empty($_GET['po_type'])) {
+            $filters['po_type'] = $_GET['po_type'];
+        }else{
+            $filters['po_type'] = 'custom';
+        }
+        // Fetch all purchase orders
+        $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
+        // Calculate total pages
+        $total_orders = count($purchaseOrders);
+        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+        // Paginate orders
+        $orders = array_slice($purchaseOrders, $offset, $limit);
+
+        renderTemplate('views/stock_purchase/index.php', [
             'purchaseOrders' => $orders,
             'total_orders' => $total_orders,
             'total_pages' => $total_pages,
