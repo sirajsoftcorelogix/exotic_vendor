@@ -91,6 +91,10 @@ class Order{
             $sql .= " AND vp_vendors.id = ?";
             $params[] = $filters['vendor_id'];            
         }
+        if(!empty($filters['agent'])){
+            $sql .= " AND vp_orders.agent_id = ?";
+            $params[] = $filters['agent'];            
+        }
         //echo $sql;
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
@@ -519,9 +523,9 @@ class Order{
         if(empty($order_id) || empty($data['status'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
-        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ? WHERE id = ?";
+        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ?, agent_id = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssi', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $order_id);
+        $stmt->bind_param('ssssii', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $data['agent_id'], $order_id);
         if ($stmt->execute()) {
             return ['success' => true];
         } else {
