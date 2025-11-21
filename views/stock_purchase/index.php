@@ -1,4 +1,4 @@
-<div class="max-w-7xl mx-auto space-y-6 mr-4">
+<div class="mx-auto space-y-6 mr-4">
     <!-- <div class="p-8">
         
     </div> -->
