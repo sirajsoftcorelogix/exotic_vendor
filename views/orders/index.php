@@ -519,7 +519,7 @@
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a> 
                     <a href="<?php echo base_url('?page=orders&action=list&agent=').$_SESSION['user']['id']; ?>" class="tab <?php echo (isset($_GET['agent']) && $_GET['agent'] == $_SESSION['user']['id']) ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-md">My List</span>
+                        <span class="px-1 text-md">My Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a> 
                 </div>
