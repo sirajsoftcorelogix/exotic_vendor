@@ -1,4 +1,4 @@
-<div class="mx-auto space-y-6 mr-4">
+<div class="max-w-7xl mx-auto space-y-6 mr-4">
     <!-- <div class="p-8">
         
     </div> -->
@@ -140,7 +140,7 @@
                     const url = new URL(window.location.href);
                     //alert(url.search);
                     url.search = ''; // Clear all query parameters
-                    const page = 'page=purchase_orders&action=list';
+                    const page = 'page=purchase_orders&action=stock_purchase';
                     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
                 }
             </script>
@@ -322,24 +322,24 @@
             if ($total_pages > 1): ?>          
              <!-- Prev Button -->
                 <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
-                href="?page=purchase_orders&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                href="?page=purchase_orders&action=stock_purchase&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                     &laquo; Prev
                 </a>
                 <!-- Page Slots -->
                 <?php for ($i = $start; $i <= $end; $i++): ?>
                     <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
-                    href="?page=purchase_orders&action=list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
+                    href="?page=purchase_orders&action=stock_purchase&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
                         <?= $i ?>
                     </a>
                 <?php endfor; ?>
                 <!-- Next Button -->
                 <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
-                href="?page=purchase_orders&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                href="?page=purchase_orders&action=stock_purchase&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                     Next &raquo;
                 </a>
             <?php endif; ?>
             <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
-                    onchange="location.href='?page=purchase_orders&acton=list&page_no=1&limit=' + this.value;">
+                    onchange="location.href='?page=purchase_orders&acton=stock_purchase&page_no=1&limit=' + this.value;">
                 <?php foreach ([10, 20, 50, 100] as $opt): ?>
                     <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                         <?= $opt ?>
@@ -1103,7 +1103,7 @@ function submitSearchForm() {
 
     // ensure page and action are present in submitted query
     setHidden('page', 'purchase_orders');
-    setHidden('action', 'list');
+    setHidden('action', 'stock_purchase');
 
     form.submit();
     return false;

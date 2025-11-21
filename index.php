@@ -239,6 +239,9 @@ switch ($page) {
             case 'product_items':
                 $controller->productItems();
                 break;
+            case 'stock_purchase':
+                $controller->stockPurchase();
+                break;
             default:
                 $controller->index();
                 break;
