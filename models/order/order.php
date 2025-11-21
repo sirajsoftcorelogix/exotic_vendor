@@ -472,16 +472,16 @@ class Order{
         }
         // Check for existing products with the same item_code
         $existingProducts = [];
-        $sql = "SELECT * FROM vp_products WHERE item_code = ?";
+        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND color = ? AND size = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('s', $data['item_code']);
+        $stmt->bind_param('sss', $data['item_code'], $data['color'], $data['size']);
         $stmt->execute();
         $result = $stmt->get_result();
         while ($row = $result->fetch_assoc()) {
             $existingProducts[] = $row;
         }
         if (!empty($existingProducts)) {
-            return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' already exists.'];
+            return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' and color '.$data['color'].' and size '.$data['size'].' already exists.'];
         }
                
         if(!empty($data)) {
