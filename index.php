@@ -340,6 +340,53 @@ switch ($page) {
                 break;
         }
         break;
+     case 'inbounding':        
+        require_once 'controllers/InboundingController.php';
+        $controller = new InboundingController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'form1':
+                $controller->getform1();
+                break;
+            case 'saveform1':
+                $controller->saveform1();
+                break;
+            case 'updateform1':
+                $controller->updateform1();
+                break;
+            case 'form2':
+                $controller->getform2();
+                break;
+            case 'saveform2':
+                $controller->saveform2();
+                break;
+            case 'updateform2':
+                $controller->updateform2();
+                break;
+            case 'form3':
+                $controller->getform3();
+                break;
+            case 'saveform3':
+                $controller->saveform3();
+                break;
+            case 'updateform3':
+                $controller->updateform3();
+                break;
+            case 'label':
+                $controller->label();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     default:
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
