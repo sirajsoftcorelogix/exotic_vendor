@@ -75,6 +75,9 @@ class OrdersController {
         if(!empty($_GET['vendor_id'])){
             $filters['vendor_id'] = $_GET['vendor_id'];  
         }
+        if(!empty($_GET['agent'])){
+            $filters['agent'] = $_GET['agent'];  
+        }
         
         //order status list
         $statusList = $commanModel->get_order_status_list();
@@ -382,12 +385,20 @@ class OrdersController {
             $remarks = isset($_POST['orderRemarks']) ? trim($_POST['orderRemarks']) : NULL;
             $esd = isset($_POST['esd']) ? trim($_POST['esd']) : NULL;
             $priority = isset($_POST['orderPriority']) ? trim($_POST['orderPriority']) : NULL;
+            $agent_id = isset($_POST['agent_id']) ? (int)$_POST['agent_id'] : NULL;
+            $previous_agent = isset($_POST['previous_agent']) ? (int)$_POST['previous_agent'] : NULL;
+            $agent_name = isset($_POST['agent_name']) ? trim($_POST['agent_name']) : NULL;
+            $previous_status = isset($_POST['previousStatus']) ? trim($_POST['previousStatus']) : NULL;
+            $previous_esd = isset($_POST['previous_esd']) ? trim($_POST['previous_esd']) : NULL;
+            $previous_priority = isset($_POST['previous_priority']) ? trim($_POST['previous_priority']) : NULL;
+            $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
-                    'priority' => $priority
+                    'priority' => $priority,
+                    'agent_id' => $agent_id
                 ];
                 // only include ESD if a non-empty value was provided to avoid inserting an empty string into a DATE/DATETIME column
                 if ($esd !== NULL && $esd !== '') {
@@ -413,7 +424,7 @@ class OrdersController {
                 //log status change
                 $logData = [
                     'order_id' => $order_id,
-                    'status' => $new_status,
+                    'status' => 'Status: '.$new_status,
                     'changed_by' => $_SESSION['user']['id'],
                     'api_response' => NULL, //json_encode($resp),
                     'change_date' => date('Y-m-d H:i:s')
@@ -422,7 +433,51 @@ class OrdersController {
                 //print_array($_POST);
                 if($new_status != $_POST['previousStatus']){
                     $commanModel->add_order_status_log($logData);
-                }                
+                }
+                if($agent_id != $previous_agent){
+                    //log agent change
+                    $agentLogData = [
+                        'order_id' => $order_id,                        
+                        'status' => 'Agent: '.$agent_name,
+                        'changed_by' => $_SESSION['user']['id'],
+                        'api_response' => NULL,
+                        'change_date' => date('Y-m-d H:i:s')
+                    ];
+                    $commanModel->add_order_status_log($agentLogData);
+                }
+                if($esd != $previous_esd){
+                    //log esd change
+                    $esdLogData = [
+                        'order_id' => $order_id,                        
+                        'status' => 'ESD : '.$esd,
+                        'changed_by' => $_SESSION['user']['id'],
+                        'api_response' => NULL,
+                        'change_date' => date('Y-m-d H:i:s')
+                    ];
+                    $commanModel->add_order_status_log($esdLogData);
+                }
+                if($priority != $previous_priority){
+                    //log priority change
+                    $priorityLogData = [
+                        'order_id' => $order_id,                        
+                        'status' => 'Priority : '.$priority,
+                        'changed_by' => $_SESSION['user']['id'],
+                        'api_response' => NULL,
+                        'change_date' => date('Y-m-d H:i:s')
+                    ];
+                    $commanModel->add_order_status_log($priorityLogData);
+                }
+                if($remarks != $previous_remarks){
+                    //log remarks change
+                    $remarksLogData = [
+                        'order_id' => $order_id,                        
+                        'status' => 'Notes updated.',
+                        'changed_by' => $_SESSION['user']['id'],
+                        'api_response' => NULL,
+                        'change_date' => date('Y-m-d H:i:s')
+                    ];
+                    $commanModel->add_order_status_log($remarksLogData);
+                }   
 
                 if ($updated) {
                     echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);
