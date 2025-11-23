@@ -1,3 +1,22 @@
+<?php
+
+require_once 'settings/database/database.php';
+require_once 'models/vendor/vendor.php';
+require_once 'models/user/user.php';
+$conn = Database::getConnection();
+$vendorsModel = new Vendor($conn);
+$usersModel = new User($conn);
+
+foreach ($inbounding_data as $key => $value) {
+    $vendor = $vendorsModel->getVendorById($value['vendor_code']);
+    $inbounding_data[$key]['vendor_name'] = $vendor ? $vendor['vendor_name'] : '';
+    $userDetails = $usersModel->getUserById($value['received_by_user_id']);
+    $inbounding_data[$key]['received_name'] = $userDetails ? $userDetails['name'] : '';
+}
+
+unset($usersModel);
+unset($vendorsModel);
+?>
 <div class="max-w-7xl mx-auto space-y-6">
     <!-- Page Header -->
     <div class="flex flex-wrap items-center justify-between gap-4">
@@ -42,63 +61,76 @@
     </div>
 
     <!-- Listing -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <div class="p-6">
-            <!-- <div id="deleteMsgBox" style="margin-top: 10px; margin: botton 10px;" class="text-sm font-bold"></div> -->
-            <!-- Success Modal -->
-            <div id="deleteMsgBox" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50">
-                <div class="bg-white rounded-lg shadow-lg w-[400px] p-8 text-center">
-                    <h2 id="modalTitle" class="text-xl font-bold text-green-600 mb-4">Alert Box</h2>
-                    <p id="showMessage" class="text-gray-700"></p>
-
-                    <div class="mt-6">
-                    <button onclick="closeDeleteModal()" 
-                            class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                        OK
-                    </button>
-                    </div>
-                </div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead>
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Name</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Action</th>
-                    </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+    <!-- <div class="bg-white rounded-xl shadow-md overflow-hidden"> -->
+        <!-- <div class="p-6"> -->
+            
+            <div class="overflow-x-auto mt-4 ">
                     <?php if (!empty($inbounding_data)): ?>
                         <?php foreach ($inbounding_data as $index => $tc): ?>
-                            <tr class="table-content-text">
-                                <td class="px-6 py-4 whitespace-nowrap"><?= $index + 1 ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($tc['name']) ?? '' ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <!-- Three-dot menu container -->
-                                    <div class="menu-wrapper">
-                                        <button class="menu-button" onclick="toggleMenu(this)">
-                                            &#x22EE; <!-- Vertical ellipsis -->
-                                        </button>
-                                        <ul class="menu-popup">
-                                            <li onclick="openEditModal(<?= htmlspecialchars($tc['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
-                                                <li class="delete-btn" data-id="<?php echo $tc['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
-                                        </ul>
-                                    </div>
+                            <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border border-gray-200" style="margin: 0px 0px 10px 0px">
+                                <div class="flex items-start p-4 gap-4">
+                                    <!-- Main two-column layout -->
+                                    <div class="grid grid-cols-[max-content,1fr] gap-x-4 w-full">
+                                        <!-- COLUMN 1 -->
+                                        <div class="flex flex-col gap-4">
+                                            <!-- Col 1, Row 1: Image and Title -->
+                                            <div class="flex items-start gap-4 ">
+                                                <div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
+                                                    <img src="<?php echo base_url($tc['product_photo']); ?>" alt="" class="max-w-full max-h-full object-contain cursor-pointer">
+                                                </div>
+                                                <div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
+                                                    <img src="<?php echo base_url($tc['invoice_image']); ?>" alt="" class="max-w-full max-h-full object-contain cursor-pointer">
+                                                </div>
+                                                <div class="pt-1 w-full max-w-xs">
+                                                    <p class="item-code">Temp Code: <?php echo ($tc['temp_code']); ?></p> 
+                                                    <p class="quantity">Category : <?php echo ($tc['category_code']); ?></p>
+                                                    <p class="quantity">Received_by : <?php print_r($tc['received_name']); ?></p>
+                                                    <p class="quantity">Gate Entry DateTime : <?php print_r($tc['gate_entry_date_time']); ?></p>
+                                                </div>
+                                                <div class="pt-1 w-full max-w-xs">
+                                                    <p class="item-code">Height: <?php echo ($tc['height']); ?></p>
+                                                    <p class="quantity">Width : <?php echo ($tc['width']); ?></p>
+                                                    <p class="quantity">Depth : <?php print_r($tc['depth']); ?></p>
+                                                    <?php
+                                                    $filled = 0;
+                                                    $total = count($tc);
+                                                    foreach ($tc as $key => $t) {
+                                                        if (isset($tc[$key]) && isFilled($tc[$key])) {
+                                                            $filled++;
+                                                        }
+                                                    }
 
-                                </td>
-                            </tr>
+                                                    $percentage = ($filled / $total) * 100;
+                                                    $meterValue = $percentage / 100;
+                                                    echo '<meter id="disk_d" min="0" max="1" value="'.$meterValue.'">'.$percentage.'%</meter>';
+                                                    ?>
+                                                    <?php echo round($percentage, 2) . "%"; ?>
+                                                </div>
+                                                <div class="pt-1 w-full max-w-xs">
+                                                    <p class="item-code">Weight: <?php echo ($tc['weight']); ?></p>
+                                                    <p class="quantity">Quantity : <?php echo ($tc['quantity_received']); ?></p>
+                                                    <p class="quantity">Vendor : <?php print_r($tc['vendor_name']); ?></p>
+                                                    <button style="background:#d9822b;color:#fff;border:none;padding:8px 14px;font-size:14px;font-weight:600;border-radius:6px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">Photos</button>
+                                                    <button 
+                                                        onclick="window.location.href='http://exotic.local/index.php?page=inbounding&action=form1&id=<?php echo $tc['id']; ?>'"
+                                                        style="background:#d9822b;color:#fff;border:none;padding:8px 14px;font-size:14px;font-weight:600;border-radius:6px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                                                        Update
+                                                    </button>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr>
-                            <td colspan="12" class="px-6 py-4 text-center text-gray-500">No record found.</td>
-                        </tr>
+                        <div>No record found.</div>
                     <?php endif; ?>
-                    </tbody>
-                </table>
+                    
             </div>
-        </div>
-    </div>
+        <!-- </div> -->
+    <!-- </div> -->
 
     <!-- Pagination -->
 	<?php         
@@ -251,273 +283,13 @@
 <!-- End Edit Model Popup -->
 
 <!-- JavaScript to handle popup and form submission -->
-<script>
-    // Toggle menu visibility
-    function toggleMenu(button) {
-        const popup = button.nextElementSibling;
-        popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+<?php
+ function isFilled($value) {
+    if ($value === null) return false;
+    if ($value === "") return false;
+    if ($value === 0 || $value === "0") return false;
+    if ($value === "0000-00-00" || $value === "0000-00-00 00:00:00") return false;
 
-        // Close other open menus
-        document.querySelectorAll('.menu-popup').forEach(menu => {
-            if (menu !== popup) menu.style.display = 'none';
-        });
-    }
-
-    // Three dot menu functionality
-    document.addEventListener('DOMContentLoaded', () => {
-        const menuButtons = document.querySelectorAll('.menu-button');
-        const body = document.body;
-        window.currentOpenMenu = null;
-        const menuMargin = 8; // Margin from button in pixels
-
-        // Function to close all menus
-        window.closeAllMenus = function () {
-            if (window.currentOpenMenu) {
-                window.currentOpenMenu.classList.add('hidden');
-                window.currentOpenMenu.classList.remove('active');
-                window.currentOpenMenu.removeAttribute('style');
-                window.currentOpenMenu = null;
-            }
-        };
-
-        // Event listener to close menus when clicking anywhere else on the document
-        document.addEventListener('click', function(e) {
-            if (currentOpenMenu && !currentOpenMenu.contains(e.target)) {
-                closeAllMenus();
-            }
-        });
-
-        // Event listeners for each menu button
-        menuButtons.forEach(button => {
-            button.addEventListener('click', (event) => {
-                event.stopPropagation();
-
-                const dropdown = button.nextElementSibling;
-                if (!dropdown) {
-                    return; // Prevents the TypeError if dropdown is not found
-                }
-
-                const isActive = dropdown.classList.contains('active');
-
-                if (currentOpenMenu && currentOpenMenu !== dropdown) {
-                    closeAllMenus();
-                }
-
-                if (!isActive) {
-                    // Temporarily show the dropdown to get its dimensions
-                    dropdown.classList.remove('hidden');
-
-                    const buttonRect = button.getBoundingClientRect();
-                    const dropdownWidth = dropdown.offsetWidth;
-                    const dropdownHeight = dropdown.offsetHeight;
-                    const viewportHeight = window.innerHeight;
-                    const viewportWidth = window.innerWidth;
-
-                    // Reset position styles
-                    dropdown.style.position = 'fixed';
-                    dropdown.style.top = '';
-                    dropdown.style.left = '';
-                    dropdown.style.bottom = '';
-                    dropdown.style.right = '';
-
-                    // Vertical positioning logic
-                    // If there is enough space to open downwards
-                    if (buttonRect.bottom + dropdownHeight + menuMargin < viewportHeight) {
-                        dropdown.style.top = `${buttonRect.bottom + menuMargin}px`;
-                    } else {
-                        // Not enough space, open upwards
-                        dropdown.style.top = `${buttonRect.top - dropdownHeight - menuMargin}px`;
-                    }
-
-                    // Horizontal positioning logic
-                    // If there is enough space to open on the right
-                    if (buttonRect.left + dropdownWidth < viewportWidth) {
-                        dropdown.style.left = `${buttonRect.left}px`;
-                    } else {
-                        // Not enough space, open leftwards
-                        dropdown.style.left = `${buttonRect.left - dropdownWidth + buttonRect.width}px`;
-                    }
-
-                    // Show the menu and set it as the current active one
-                    dropdown.classList.add('active');
-                    currentOpenMenu = dropdown;
-
-                } else {
-                    // Close the menu if it's already active
-                    closeAllMenus();
-                }
-            });
-        });
-    });
-
-    const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
-    const popupWrapper = document.getElementById('popup-wrapper');
-    const modalSlider = document.getElementById('modal-slider');
-    const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
-    const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
-
-    function openVendorPopup() {
-        popupWrapper.classList.remove('hidden');
-        setTimeout(() => {
-            modalSlider.classList.remove('translate-x-full');
-        }, 10);
-    }
-	
-    function closeVendorPopup() {
-        modalSlider.classList.add('translate-x-full');
-    }
-	
-	modalSlider.addEventListener('transitionend', (event) => {
-        if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
-            popupWrapper.classList.add('hidden');
-        }
-    });
-
-    openVendorPopupBtn.addEventListener('click', openVendorPopup);
-    cancelVendorBtn.addEventListener('click', closeVendorPopup);
-    closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
-
-    document.getElementById('addVendorForm').onsubmit = function(e) {
-        e.preventDefault();
-
-        var form = new FormData(this);
-        var params = new URLSearchParams(form).toString();
-        fetch('?page=inbounding&action=addRecord', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: params
-        })
-        .then(r => r.json())
-        .then(data => {
-            const msgBox = document.getElementById("addVendorMsg");
-            msgBox.innerHTML = '';
-            if (data.success) {
-                msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
-                    ✅ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                setTimeout(() => {
-                    location.reload();
-                }, 1500); // refresh after 1 sec
-            } else {
-                msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-        });
-    };
-
-    let successModalTimer;
-    // Delete
-    document.addEventListener("DOMContentLoaded", () => {
-        const deleteButtons = document.querySelectorAll(".delete-btn");
-        
-        deleteButtons.forEach(btn => {
-            btn.addEventListener("click", (e) => {
-                e.preventDefault();
-                const id = btn.getAttribute("data-id");
-                window.closeAllMenus();
-                if (!confirm("Are you sure you want to delete this record?")) return;
-
-                fetch("?page=inbounding&action=deleteRecord", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: "id=" + id
-                })
-                .then(res => res.json())
-                .then(data => {
-                    const title = document.getElementById("modalTitle");
-                    var type = "error";
-                    title.innerText = "Error ⚠️";
-                    title.className = "text-2xl font-bold text-red-600 mb-4";
-                    if(data.success) {
-                        title.innerText = "Success 🎉";
-                        title.className = "text-2xl font-bold text-green-600 mb-4";
-                    }
-
-                    document.getElementById("showMessage").innerText = data.message;
-                    const modal = document.getElementById("deleteMsgBox");
-                    modal.classList.remove("hidden");
-
-                    // Auto-close after 3 seconds
-                    clearTimeout(successModalTimer);
-                    successModalTimer = setTimeout(() => {
-                        closeDeleteModal();
-                    }, 1500);
-                    
-                })
-                .catch(err => {
-                    console.error("AJAX Error:", err);
-                });
-            });
-        });
-    });
-
-    function closeDeleteModal() {
-        document.getElementById("deleteMsgBox").classList.add("hidden");
-        clearTimeout(successModalTimer);
-        window.location.reload();
-    }
-
-    // Edit User Modal Logic    
-    const popupWrapperEdit = document.getElementById('editVendorModal');
-    const modalSliderEdit = document.getElementById('modal-slider-edit');
-    const cancelVendorBtnEdit = document.getElementById('cancel-vendor-btn-edit');
-    const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
-
-    function openEditModal(id) {
-        if(id == 0) {
-            window.location.href = '?page=inbounding&action=add';
-            return;
-        } else {
-            window.location.href = '?page=inbounding&action=edit&id='+ id;
-            return;
-        }
-    }
-
-    function closeVendorPopupEdit() {
-        modalSliderEdit.classList.add('translate-x-full');
-    }
-
-    closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
-    cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
-
-    document.getElementById('editUserForm').onsubmit = function(e) {
-        e.preventDefault();
-        // Ensure CKEditor updates <textarea>
-        for (var instance in CKEDITOR.instances) {
-            CKEDITOR.instances[instance].updateElement();
-        }
-        var form = new FormData(this);
-        var params = new URLSearchParams(form).toString();
-        fetch('?page=inbounding&action=addRecord', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: params
-        })
-        .then(r => r.json())
-        .then(data => {
-            var msgBox = document.getElementById('editVendorMsg');
-            msgBox.innerHTML = '';
-            if (data.success) {
-                msgBox.innerHTML = `<div style="color: green; padding: 10px; background: #e0ffe0; border: 1px solid #0a0;">
-                                    ✅ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-                setTimeout(() => {
-                    window.location.href = '?page=inbounding&action=list';
-                }, 1000); // redirect after 1 sec
-            } else {
-                msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
-                    ❌ ${data.message}
-                </div>`;
-                msgBox.focus();
-                msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-        });
-    };
-</script>
+    return true;
+}
+?>

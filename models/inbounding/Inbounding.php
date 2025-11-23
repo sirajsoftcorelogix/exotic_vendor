@@ -32,14 +32,14 @@ class Inbounding {
         }
 
 		// total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbounding $where");
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
 
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT * FROM vp_inbounding $where LIMIT $limit OFFSET $offset";
+        $sql = "SELECT * FROM vp_inbound $where LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $data = [];
@@ -92,7 +92,7 @@ class Inbounding {
     ];
 }
     public function getform2($id) {
-        $result = $this->conn->query("SELECT * FROM `vp_inbounding` where id=$id");
+        $result = $this->conn->query("SELECT * FROM `vp_inbound` where id=$id");
         if ($result) {
             $inbounding = $result->fetch_assoc();
             $result->free();
@@ -102,7 +102,7 @@ class Inbounding {
         ];
     }
     public function getAllInbounding() {
-        $result = $this->conn->query("SELECT * FROM `vp_inbounding` ORDER BY id ASC");
+        $result = $this->conn->query("SELECT * FROM `vp_inbound` ORDER BY id ASC");
         $inbounding = [];
         while ($row = $result->fetch_assoc()) {
             $inbounding[] = $row;
@@ -275,7 +275,7 @@ class Inbounding {
 
 
     public function updateRecord($id, $data) {
-        $sql = "UPDATE vp_inbounding SET name = ? WHERE id = ?";
+        $sql = "UPDATE vp_inbound SET name = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('si',
             $data['name'],

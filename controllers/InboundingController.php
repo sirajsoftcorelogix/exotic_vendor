@@ -31,33 +31,41 @@ class InboundingController {
             'status_filter'=> $status_filter,
         ];
         
-        renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');
+        renderTemplateClean('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
     public function label($value=''){
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        renderTemplate('views/inbounding/label.php', $data, 'label');
+        renderTemplateClean('views/inbounding/label.php', $data, 'label');
     }
     public function getform1() {
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform1data($id);
-        renderTemplate('views/inbounding/form1.php', $data, 'form1 inbounding');
+        renderTemplateClean('views/inbounding/form1.php', $data, 'form1 inbounding');
     }
     public function getform2() {
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
-        $data = $inboundingModel->getform1data($id);
-        renderTemplate('views/inbounding/form2.php', $data, 'form2 inbounding');
+        if (isset($id) && $id != 0) {
+            $data = $inboundingModel->getform1data($id);
+            renderTemplateClean('views/inbounding/form2.php', $data, 'form2 inbounding');
+        }else{
+            header("location: " . base_url('?page=inbounding&action=list'));
+        }
     }
     public function getform3() {
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
-        $data = $inboundingModel->getform2data($id);
-        renderTemplate('views/inbounding/form3.php', $data, 'form3 inbounding');
+        if (isset($id) && $id != 0) {
+            $data = $inboundingModel->getform2data($id);
+            renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
+        }else{
+            header("location: " . base_url('?page=inbounding&action=list'));
+        }
     }
     public function saveform1() {
          global $inboundingModel;
@@ -344,7 +352,7 @@ class InboundingController {
         $data = [
             'inbounding' => $data["inbounding"],
         ];
-        renderTemplate('views/inbounding/edit.php', $data, 'Edit inbounding');
+        renderTemplateClean('views/inbounding/edit.php', $data, 'Edit inbounding');
     }
     public function updateRecord() {
         global $inboundingModel;
