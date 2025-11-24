@@ -72,8 +72,8 @@ class Order{
             $sql .= " AND vp_orders.groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
         }
-        if (!empty($filters['options']) && $filters['options'] === 'express') {
-            $sql .= " AND vp_orders.options LIKE '%express%'";
+        if (!empty($filters['options']) && $filters['options'] === 'express' ) {
+            $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
             $sql .= " AND vp_orders.payment_type = ?";
@@ -182,7 +182,7 @@ class Order{
             $params[] = '%' . $filters['category'] . '%';
         }
         if (!empty($filters['options']) && $filters['options'] === 'express') {
-            $sql .= " AND options LIKE '%express%'";
+            $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
             $sql .= " AND payment_type = ?";
