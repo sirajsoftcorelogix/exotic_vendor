@@ -167,7 +167,9 @@ function sortMenu(&$menu) {
 }
 function renderMenu($menu, $currentPage = '', $currentAction = '')
 { 
+      $active = '';
       foreach ($menu as $item) {
+                  
 			echo '<ul class="mt-1">';
 			echo '<li>';
 			echo '<a href="index.php?page=dashboard&action=dashboard" 
