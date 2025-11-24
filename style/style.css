@@ -860,3 +860,84 @@ background-color: #f0f0f0;
         .blinking-text {
             animation: blink-animation 1s infinite;
         }
+        /* SKU / ASIN / Location Label */
+        .typo-sku-label {
+            font-family: 'Inter', sans-serif;
+            font-weight: 500; /* Medium */
+            font-size: 13px;
+            line-height: 200%;
+            letter-spacing: 0%;
+            color: rgba(221, 154, 25, 1);
+        }
+
+        /* Details Typography (Values next to SKU labels) */
+        .typo-sku-value {
+            font-family: 'Inter', sans-serif;
+            font-weight: 500; /* Medium */
+            font-size: 13px;
+            line-height: 200%;
+            letter-spacing: 0%;
+            color: rgba(0, 0, 0, 1);
+        }
+
+        /* Product Title Typography */
+        .typo-product-title {
+            font-family: 'Inter', sans-serif;
+            font-weight: 400; /* Regular */
+            font-size: 13px;
+            line-height: 142%;
+            letter-spacing: -0.02em; /* -2% */
+            color: rgba(58, 58, 73, 1);
+        }
+
+        /* Vendor Part Typography */
+        .typo-vendor {
+            font-family: 'Inter', sans-serif;
+            font-weight: 400; /* Regular */
+            font-size: 13px;
+            line-height: 100%;
+            letter-spacing: -0.02em; /* -2% */
+            color: rgba(58, 58, 73, 1);
+        }
+
+        /* S&F Column & Inventory Overview Typography */
+        .typo-sf-column {
+            font-family: 'Inter', sans-serif;
+            font-weight: 400; /* Regular */
+            font-size: 13px;
+            line-height: 160%;
+            letter-spacing: -0.02em; /* -2% */
+            color: rgba(58, 58, 73, 1);
+        }
+
+        /* Details Link Color */
+        .text-details-link {
+            color: rgba(208, 103, 6, 1);
+            text-decoration: none;
+        }
+        .text-details-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Healthy Text Color */
+        .text-healthy {
+            color: rgba(110, 135, 52, 1);
+        }
+
+        /* Create PO Button Typography */
+        .typo-create-po {
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            font-size: 14px;
+            line-height: 100%;
+            letter-spacing: 0%;
+            color: rgba(255, 255, 255, 1);
+        }
+
+        /* Button Background Color (using the Amber/Orange from context) */
+        .bg-create-po {
+            background-color: rgba(208, 103, 6, 1);
+        }
+        .bg-create-po:hover {
+            background-color: rgba(180, 90, 5, 1); /* Slightly darker for hover */
+        }

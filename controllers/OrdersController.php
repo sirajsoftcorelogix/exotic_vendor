@@ -302,6 +302,9 @@ class OrdersController {
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
                     'esd' => $esd
                     ];
+                    if($order['payment_type'] == 'COD' &&  $item['itemprice'] >= 5000){
+                        $rdata['status'] = 'cod_confirmation_required';
+                    }
 					$totalorder++;                
                     
                     $data = $ordersModel->insertOrder($rdata);
