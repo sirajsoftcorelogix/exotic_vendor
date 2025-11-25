@@ -261,8 +261,7 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">&nbsp;</label>
-                                    <input type="number" class="form-input w-full mt-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" />
+                                    <input type="number" class="form-input w-full mt-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" style="margin-top: 25px;" />
                                     <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 
@@ -461,8 +460,7 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">&nbsp;</label>
-                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" />
+                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" style="margin-top: 25px;" />
                                     <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
