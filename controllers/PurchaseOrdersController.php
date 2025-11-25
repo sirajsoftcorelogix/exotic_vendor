@@ -1494,9 +1494,15 @@ class PurchaseOrdersController {
         global $usersModel;
         global $commanModel;
         global $domain;
-
+        global $productModel;
+       
+        $itemIds = isset($_POST['cpoitem']) ? $_POST['cpoitem'] : [];            
         $data = [];
-        $vendors = $vendorsModel->getAllVendors();
+        foreach ($itemIds as $id) {
+            $data['data'][] = $productModel->getProduct($id);            
+        }
+        //print_array($data['data']);
+        //$vendors = $vendorsModel->getAllVendors();
         $data['vendors'] = $vendorsModel->getAllVendors();
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
         $data['domain'] = $domain;
