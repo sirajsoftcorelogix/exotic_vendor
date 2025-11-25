@@ -300,7 +300,7 @@ function updateProductsStock(itemCode) {
             }
         })
         .catch(error => {
-            updateButton.disabled = false; // Re-enable button
+            //updateButton.disabled = false; // Re-enable button
             //console.error('Error:', error);
             alert('An error occurred while updating the product stock.');
         });
