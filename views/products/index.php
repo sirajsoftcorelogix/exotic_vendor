@@ -1,7 +1,29 @@
 
 <div class="container mx-auto p-4">
     <!-- Top Bar: Search & Advance Search -->
-   
+   <?php
+		
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
+        $total_orders = isset($data['total_records']) ? (int)$data['total_records'] : 0;
+        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+
+        // Prepare query string for pagination links
+        $search_params = $_GET;
+        unset($search_params['page_no'], $search_params['limit'], $search_params['sort']);
+        $query_string = http_build_query($search_params);
+        $query_string = $query_string ? '&' . $query_string : '';
+
+        // Calculate start/end slot for 10 pages
+        $slot_size = 10;
+        $start = max(1, $page - floor($slot_size / 2));
+        $end = min($total_pages, $start + $slot_size - 1);
+        if ($end - $start < $slot_size - 1) {
+            $start = max(1, $end - $slot_size + 1);
+        }
+    ?>
 
     <!-- Orders Table Section -->
     <div class="mt-4">
@@ -17,6 +39,19 @@
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
             </div>
+            <div class="absolute right-0 top-0 flex items-center space-x-4">            
+            <button id="bulkUpdateBtn" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
+                Bulk Update Stocks
+            </button>
+            <select id="rows-per-page" class="text-sm right-0 pagination-select px-1 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                onchange="location.href='?page=products&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
+                <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                    <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
+                        <?= $opt ?> Products per page
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            </div>
         </div>
 
         <!-- Table -->
@@ -24,7 +59,7 @@
             <table class="min-w-full table-spacing">
                 <thead class="bg-gray-50 rounded-md">
                 <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <th class="p-4 w-12"><input type="checkbox" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"></th>
+                    <th class="p-4 w-12"><input type="checkbox" id="selectAll" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"></th>
                     <th class="px-6 py-3">SKU Details</th>
                     <th class="px-6 py-3">Product Details</th>
                     <th class="px-6 py-3">S & F Sum</th>
@@ -35,28 +70,29 @@
                 </thead>
                 <tbody>
                 <?php if (!empty($data['products'])): ?>
-                    <?php foreach ($data['products'] as $product): ?>
+                <?php foreach ($data['products'] as $product): ?>
                     <!-- Table Row 1 -->
-                <tr class="bg-white rounded-md shadow-sm">
+                <tr class="bg-white rounded-md shadow-sm" data-product='<?=  htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8') ?>'>
                     <!-- Checkbox -->
                     <td class="p-4 whitespace-nowrap rounded-l-md align-top pt-6">
-                        <input type="checkbox" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500" value="<?php echo $product['id']; ?>">
+                        <input type="checkbox" name="product_select[]" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500" value="<?php echo $product['item_code']; ?>">
+                    
                     </td>
 
                     <!-- SKU Details -->
                     <td class="px-6 py-4 whitespace-nowrap rounded-l-md align-top">
                         <div class="flex flex-col">
                             <div class="flex items-center gap-2">
-                                <span class="typo-sku-label w-[70px]">SKU :</span>
-                                <span class="typo-sku-value">STG8721-Beige</span>
+                                <span class="typo-sku-label w-[70px]">Item Code :</span>
+                                <span class="typo-sku-value"><?php echo $product['item_code']; ?></span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="typo-sku-label w-[70px]">ASIN :</span>
-                                <span class="typo-sku-value">B0091YZ55I</span>
+                                <span class="typo-sku-value"><?php echo $product['asin']; ?></span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="typo-sku-label w-[70px]">Location :</span>
-                                <span class="typo-sku-value">First Floor C21</span>
+                                <span class="typo-sku-label w-[70px]">Numsold :</span>
+                                <span class="typo-sku-value"><?php echo $product['numsold']; ?></span>
                             </div>
                         </div>
                     </td>
@@ -64,7 +100,7 @@
                     <!-- Product Details -->
                     <td class="px-6 py-4 align-top">
                         <div class="flex items-start space-x-4">
-                            <img class="h-20 w-16 rounded-md object-cover flex-shrink-0" src="<?php echo $product['image'];?>" alt="Product Image">
+                            <img class="w-16 rounded-md object-cover flex-shrink-0 cursor-pointer" onclick="openImagePopup('<?php echo $product['image']; ?>')" src="<?php echo $product['image'];?>" alt="Product Image">
                             <div class="flex flex-col justify-between h-full">
                                 <p class="typo-product-title mb-2 max-w-xs"><?php echo $product['title']; ?></p>
                                 <div class="flex items-center mt-auto">
@@ -82,40 +118,45 @@
                     <!-- S & F Sum -->
                     <td class="px-6 py-4 whitespace-nowrap align-top">
                         <div class="flex flex-col space-y-1">
-                            <span class="typo-sf-column">₹<?php echo $product['finalprice']; ?></span>
-                            <span class="typo-sf-column">622 units</span>
-                            <a href="#" class="typo-sf-column text-details-link mt-1">details</a>
+                            <span class="typo-sf-column">₹<?php echo $product['itemprice']; ?></span>
+                            <span class="typo-sf-column"><?php echo $product['local_stock']; ?></span>
+                            <a href="javascript:void(0);" class="sfdetails typo-sf-column text-details-link mt-1">details</a>
                         </div>
                     </td>
 
                     <!-- Inventory Overview -->
                     <td class="px-6 py-4 whitespace-nowrap align-top">
                         <div class="flex flex-col space-y-1">
-                            <span class="typo-sf-column">Local Stock : 277</span>
+                            <span class="typo-sf-column">Local Stock : <?php echo $product['local_stock']; ?></span>
                             <div class="typo-sf-column">
-                                FBA (US): <span class="text-healthy">Healthy</span>
+                                FBA (US): <span class="text-healthy"><?php echo $product['fba_us']; ?></span>
                             </div>
-                            <a href="#" class="typo-sf-column text-details-link mt-1">details</a>
+                            <a href="javascript:void(0);" class="invdetails typo-sf-column text-details-link mt-1">details</a>
                         </div>
                     </td>
 
                     <!-- Price -->
                     <td class="px-6 py-4 whitespace-nowrap align-top">
-                        <span class="typo-sf-column">₹23,000</span>
+                        <span class="typo-sf-column"><?php echo $product['finalprice']; ?></span>
                     </td>
 
                     <!-- Recommended Action -->
                     <td class="px-6 py-4 whitespace-nowrap text-right align-top rounded-r-md">
+                        
+                        <form action="<?php echo base_url('?page=purchase_orders&action=custom_po'); ?>" method="post">
+                        <input type="hidden" name="cpoitem[]" value="<?php echo $product['id']?>">                                        
                         <button class="bg-create-po typo-create-po px-4 py-2 rounded-full flex items-center gap-2 ml-auto transition shadow-sm">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M0.145379 9.40113L7.21764 12.2427C7.11773 12.6084 7.20811 13.1939 7.31144 13.5665C7.70191 14.976 9.31564 15.1497 10.2487 14.1642C11.2584 13.0983 12.3715 9.54856 12.9031 8.0457C13.5048 6.34437 14.0607 4.62284 14.6072 2.90284L6.58847 1.32646L3.68208 9.24418C3.27445 9.59503 2.69829 9.37865 2.62012 8.84913L5.66721 0.375224C5.78847 0.0997958 6.0573 -0.0274423 6.3551 0.00493869L15.7034 1.90132C16.2632 2.2057 15.8846 2.96075 15.745 3.43999C15.2249 5.22246 14.5404 7.11084 13.9135 8.86627C13.3576 10.4232 12.7429 12.3627 11.9654 13.7973C9.36406 18.5962 4.8245 14.2286 1.34957 13.0872C0.0736919 12.2743 -0.218777 10.8011 0.145379 9.40113Z" fill="white"/>
-                                <path d="M6.94735 9.09858C7.09759 9.06506 7.20321 9.08677 7.34735 9.1142C7.79577 9.19954 9.73248 9.81477 10.1039 10.0193C10.7056 10.3504 10.4795 11.2593 9.65469 11.1626C9.34544 11.1264 7.14563 10.3904 6.85736 10.2342C6.35593 9.96182 6.43219 9.21363 6.94697 9.09858H6.94735Z" fill="white"/>
-                                <path d="M8.02384 6.57367C8.22479 6.53938 8.40553 6.62357 8.59238 6.67157C9.03508 6.78548 10.8848 7.3569 11.18 7.5569C11.7226 7.92452 11.4454 8.73938 10.6652 8.63843C10.2877 8.58967 8.24996 7.91919 7.90982 7.73252C7.33632 7.41748 7.46559 6.6689 8.02422 6.57367H8.02384Z" fill="white"/>
-                            </svg>
+                            <i class="fa-solid fa-cart-shopping"></i>
                             Create PO
-                        </button>
+                        </button>   
+                        </form>                     
+                        <span onclick="updateProductsStock('<?php echo $product['item_code']; ?>', this)" title="Update single product" class="rowUpdateBtn update-button menu-button float-right text-gray-500 hover:bg-orange-200 font-semibold py-1 px-2 cursor-pointer ">
+                            <i class="fas fa-sync-alt p-1 bg-white "></i>
+                        </span>
+                        <span class="typo-sf-column py-2">Updated at: <br> <?php echo $product['updated_at'] ? date('d M Y H:i:s', strtotime($product['updated_at'])) : ''; ?></span>
                     </td>
                 </tr>
+                
                 <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
@@ -127,21 +168,278 @@
         </div>
 
         <!-- Pagination -->
-        <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 mb-12">
-            <span class="text-gray-600">Page</span>
-            <button class="text-gray-600 hover:text-gray-900">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <span class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg">1</span>
-            <button class="text-gray-600 hover:text-gray-900">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-            </button>
-            <select class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600">
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="30" selected>30</option>
+        <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 bottom-0 border border-[rgba(226,228,230,1)] py-4">
+            <div>
+                <p class="text-sm text-gray-600">Showing <span class="font-medium">
+             <?php            
+            //echo '****************************************  '.$query_string;
+            if ($total_pages > 1): ?>          
+             <!-- Prev Button -->
+                <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
+                href="?page=products&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                    &laquo; Prev
+                </a>
+                <!-- Page Slots -->
+                <?php for ($i = $start; $i <= $end; $i++): ?>
+                    <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
+                    href="?page=products&action=list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
+                        <?= $i ?>
+                    </a>
+                <?php endfor; ?>
+                <!-- Next Button -->
+                <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
+                href="?page=products&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                    Next &raquo;
+                </a>
+            <?php endif; ?>
+            <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
+                onchange="location.href='?page=products&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
+                <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                    <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
+                        <?= $opt ?>
+                    </option>
+                <?php endforeach; ?>
             </select>
+
         </div>
 
     </div>
-</div>  
+</div>
+<!-- Image Popup -->
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
+
+<!-- success popup -->
+<div id="successPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md h-56 relative flex flex-col items-center">
+        <!-- <button onclick="closeSuccessPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button> -->
+        <h2 class="text-xl font-bold mb-6 text-green-600" id="successTitle">Product Update</h2>
+        <p class="py-2 font-semibold min-h-[80px]" id="successMessage">Updated successfully. </p>
+        <button onclick="closeSuccessPopup()" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">OK</button>
+    </div>
+</div>
+
+<!-- Details Modal -->
+<div id="details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden">
+    <div id="details-modal-slider" class="fixed top-0 right-0 h-full w-full max-w-md flex transform translate-x-full">
+
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-details-modal"
+                    class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center -ml-[61px]"
+                    style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
+            <!-- Modal Content -->
+            <div class="flex-grow space-y-4" id="details-modal-content">
+                <!-- Dynamic content will be loaded here -->
+                
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// image popup functions
+function openImagePopup(imageUrl) {
+    const popup = document.getElementById('imagePopup');
+    const popupImage = document.getElementById('popupImage');
+    popupImage.src = imageUrl;
+    popup.classList.remove('hidden');
+}
+function closeSuccessPopup() {
+    const popup = document.getElementById('successPopup');
+    popup.classList.add('hidden');
+}
+function closeImagePopup() {
+    const popup = document.getElementById('imagePopup');
+    popup.classList.add('hidden');
+}
+
+const successPopup = document.getElementById('successPopup');
+const successMessage = document.getElementById('successMessage');
+// helper: show popup with message
+function showPopup(message) {
+    if (!successPopup || !successMessage) return;
+    successMessage.innerHTML = message;
+    successPopup.classList.remove('hidden');
+}
+// helper: hide popup
+function hidePopup() {
+    if (!successPopup) return;
+    successPopup.classList.add('hidden');
+    if (successPopupBody) successPopupBody.innerHTML = '';
+}
+//updateProductsStock function and success popup
+function updateProductsStock(itemCode) {
+    showPopup('Updating product stock. Please wait...');
+    //const updateButton = document.getElementById('updateButton');
+    //updateButton.disabled = true; // Disable button to prevent multiple clicks    
+    fetch(`index.php?page=products&action=update_api_call&itemCode=${itemCode}`)
+        .then(response => response.json())
+        .then(data => {
+            //updateButton.disabled = false; // Re-enable button
+            if (data.success) {
+                showPopup('Success! ' + data.message);
+                setTimeout(() => {                    
+                    window.location.reload(); // Reload the page to reflect updated stocks
+                    hidePopup();
+                }, 2000); // Hide popup after 5 seconds
+                
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            updateButton.disabled = false; // Re-enable button
+            //console.error('Error:', error);
+            alert('An error occurred while updating the product stock.');
+        });
+}
+// Bulk Update Stocks button functionality
+document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
+    const checkboxes = document.querySelectorAll('input[name="product_select[]"]:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one product to update.');
+        return;
+    }
+    showPopup('Updating selected products. Please wait...');    
+    // comma separated item codes
+    const itemCodes = Array.from(checkboxes).map(checkbox => checkbox.value).join(',');
+    //validate max item codes per request 50
+    if (checkboxes.length > 50) {
+        alert('You can update a maximum of 50 products at a time.');
+        hidePopup();
+        return;
+    }
+    updateProductsStock(itemCodes); 
+});
+ document.addEventListener('DOMContentLoaded', function () {
+        // Modal functionality
+        const openModalBtn = document.getElementById('open-details-modal');
+        const closeModalBtn = document.getElementById('close-details-modal');
+        const modal = document.getElementById('details-modal');
+        const modalSlider = document.getElementById('details-modal-slider');
+
+        const openModal = () => {
+            if (!modal || !modalSlider) return;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalSlider.classList.remove('translate-x-full');
+            }, 10);
+        };
+
+        const closeModal = () => {
+            if (!modal || !modalSlider) return;
+            modalSlider.classList.add('translate-x-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        };
+
+        if (openModalBtn) openModalBtn.addEventListener('click', openModal);
+        if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+
+        if (modal) {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+   
+    // invdetails and sfdetails click handlers
+    document.querySelectorAll('.invdetails').forEach(link => {
+        link.addEventListener('click', function() {
+            event.preventDefault();
+            openModal(); // Open the modal first
+            const modalContent = document.getElementById('details-modal-content');
+            const row = this.closest('tr');
+            // Try to find the element with the product JSON attribute inside the row (or fall back to the row itself)
+            const productEl = row.querySelector('[data-product]') || row;
+            const productJson = productEl ? (productEl.getAttribute('data-product') || productEl.dataset.product) : null;
+
+            if (!productJson) {
+                console.error('Product data not found on this row.');
+                return;
+            }
+
+            let data;
+            try {
+                data = JSON.parse(productJson);
+            } catch (e) {
+                console.error('Failed to parse product JSON', e);
+                return;
+            }
+            //console.log(data);
+            let content = `
+                <h2 class="text-2xl font-bold mb-4">Inventory Details for ${data.item_code}</h2>
+                <p><strong>Local Location:</strong> ${data.location}</p>
+                <p><strong>Local Stock:</strong> ${data.local_stock}</p>
+                <p><strong>FBA (US):</strong> ${data.fba_us}</p>            
+                <p><strong>FBA (IN):</strong> ${data.fba_in}</p>
+                <p><strong>Leadtime:</strong> ${data.leadtime}</p>
+                <p><strong>instock_leadtime:</strong> ${data.instock_leadtime}</p>
+                <p><strong>Num Sold:</strong> ${data.numsold}</p>
+                <p><strong>Num Sold (India):</strong> ${data.numsold_india}</p>
+                <p><strong>Num Sold (Global):</strong> ${data.numsold_global}</p>
+                <p><strong>Num Sold (Last):</strong> ${data.lastsold}</p>
+            `;
+            modalContent.innerHTML = content;
+        });
+    });
+    document.querySelectorAll('.sfdetails').forEach(link => {
+        link.addEventListener('click', function() {
+            event.preventDefault();
+            openModal(); // Open the modal first
+            const modalContent = document.getElementById('details-modal-content');
+            const row = this.closest('tr');
+            // Try to find the element with the product JSON attribute inside the row (or fall back to the row itself)
+            const productEl = row.querySelector('[data-product]') || row;
+            const productJson = productEl ? (productEl.getAttribute('data-product') || productEl.dataset.product) : null;
+
+            if (!productJson) {
+                console.error('Product data not found on this row.');
+                return;
+            }
+
+            let data;
+            try {
+                data = JSON.parse(productJson);
+            } catch (e) {
+                console.error('Failed to parse product JSON', e);
+                return;
+            }
+            //console.log(data);
+            let content = `
+                <h2 class="text-2xl font-bold mb-4">S & F Details for ${data.item_code}</h2>
+                <p><strong>Item Price:</strong> ₹${data.itemprice}</p>
+                <p><strong>Final Price:</strong> ₹${data.finalprice}</p>
+                <p><strong>Shipping Fee:</strong> ₹${data.shipping_fee}</p>            
+                <p><strong>Cost price:</strong> ₹${data.cost_price}</p>                
+            `;
+            modalContent.innerHTML = content;
+        });
+    });
+    // Select/Deselect all checkboxes
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            document.querySelectorAll('input[name="product_select[]"]').forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+        });
+    }
+
+});
+</script>
