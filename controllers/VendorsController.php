@@ -202,8 +202,8 @@ class VendorsController {
         }*/
         $groupname = ["book", "sculptures", "paintings", "jewelry", "textiles", "homelandliving"];
         if($from_date == "" && $to_date == "") {
-            $from_date = "2025-10-27";//date('Y-m-d');
-            $to_date = "2025-10-31";//date('Y-m-d', strtotime('-1 days'));
+            $from_date = "2025-11-15";//date('Y-m-d');
+            $to_date = "2025-11-20";//date('Y-m-d', strtotime('-1 days'));
         }
         //echo $from_date . " -- ". $to_date; exit;
         $url = 'https://www.exoticindia.com/vendor-api/data/sale_data'; // Production API new endpoint
@@ -215,6 +215,7 @@ class VendorsController {
         ];
 
         $dataResult = array();
+        $jsonData = '';
         for($i = 0; $i < count($groupname)-1; $i++) {
             $gpName = $groupname[$i];
             $postData = [
@@ -234,19 +235,24 @@ class VendorsController {
             $response = curl_exec($ch);
             
             $error = curl_error($ch);
-            curl_close($ch);
            
             if ($response === false) {
                 renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
                 return;
             }
 
-            $result = json_decode($response, true);
-            $dataResult[$gpName] = $result;
+            //$result = json_encode($response, true);
+            $jsonData = "";
+            $jsonData = json_encode($response, JSON_PRETTY_PRINT);
+
+            $filePath = 'user_profile_'. $gpName . '.json';
+            file_put_contents($filePath, $jsonData);
+            
+            //$dataResult[$gpName] = $result;
             ignore_user_abort(true);
             usleep (500000);
         } //end for loop
-
+echo $jsonData; exit;
         print_array($dataResult);
         exit;
         if (!is_array($orders)) {
