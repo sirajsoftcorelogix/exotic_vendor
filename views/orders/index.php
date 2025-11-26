@@ -405,11 +405,19 @@
                     <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
-                
+                <div>
+                    <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
+                    <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected>-Select-</option>
+                        <?php foreach ($staff_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['agent']) && $_GET['agent'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
                 
                 
                 <!-- Buttons -->
-                <div class="col-span-2 sm:col-span-2 md:col-span-2 flex items-center gap-2">
+                <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
                     <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Cancel</button>
                     <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
@@ -472,7 +480,7 @@
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
                 <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
-                    <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status']) && !isset($_GET['options'])) ? 'tab-active' : ''; ?> text-center relative py-4">
+                    <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status']) && !isset($_GET['options']) && !isset($_GET['agent'])) ? 'tab-active' : ''; ?> text-center relative py-4">
                         <span class="px-1 text-md">All Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
@@ -508,6 +516,10 @@
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=returned'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'returned') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-md">Returned</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a> 
+                    <a href="<?php echo base_url('?page=orders&action=list&agent=').$_SESSION['user']['id']; ?>" class="tab <?php echo (isset($_GET['agent']) && $_GET['agent'] == $_SESSION['user']['id']) ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-md">My Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a> 
                 </div>
@@ -726,6 +738,8 @@
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
 											<span class="heading-typography">Payment Type</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
+                                            <span class="heading-typography">Agent</span>
+                                            <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
                                         </div>
                                     </div>
                                 </div>
@@ -1255,23 +1269,39 @@
                         <div>
                             <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date:</label>
                             <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
+                            <input type="hidden" id="previousESD" name="previous_esd" value="">
+                        </div>                        
                         </div>
-                        <div style="min-width: 100px;">
-                        <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Priority:</label>
-                        <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
-                            <option value="" >-Select-</option>
-                            <option value="critical" >Critical</option>
-                            <option value="urgent" >Urgent</option>
-                            <option value="high" >High</option>                            
-                            <option value="medium" selected>Medium</option>
-                            <option value="low" >Low</option>
-                        </select>
-                        </div>
+                        <div class="mb-4 flex space-x-4">
+                            <div style="min-width: 100px;">
+                                <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Assign agent:</label>
+                                <select name="agent_id" id="agentId" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                    <option value="">Select User</option>
+                                    <?php foreach ($staff_list as $id => $name): ?>
+                                        <option value="<?= $id ?>" ><?= htmlspecialchars($name) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <input type="hidden" id="agentName" name="agent_name" value="">
+                                <input type="hidden" id="previousAgent" name="previous_agent" value="">
+                            </div>
+                            <div style="min-width: 100px;">
+                                <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Priority:</label>
+                                <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                    <option value="" >-Select-</option>
+                                    <option value="critical" >Critical</option>
+                                    <option value="urgent" >Urgent</option>
+                                    <option value="high" >High</option>                            
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="low" >Low</option>
+                                </select>
+                                <input type="hidden" id="previousPriority" name="previous_priority" value="">
+                            </div>
                         </div>
                         <!-- Remarks field -->
                         <div class="mb-4">
                             <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes:</label>
                             <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
+                            <input type="hidden" id="previousRemarks" name="previous_remarks" value="">
                         </div>  
                         <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
                     </div>
@@ -1597,6 +1627,11 @@
         document.getElementById('status_item').textContent = orderData.title || 'N/A';
         document.getElementById('orderPriority').value = orderData.priority || '';
         document.getElementById('previousStatus').value = orderData.status || '';
+        document.getElementById('previousAgent').value = orderData.agent_id || '';
+        document.getElementById('agentId').value = orderData.agent_id || '';
+        document.getElementById('previousPriority').value = orderData.priority || '';
+        document.getElementById('previousRemarks').value = orderData.remarks || '';
+        document.getElementById('previousESD').value = orderData.esd || '';
         // display ESD in dd-mm-yyyy format while keeping the date input usable
         (function(){
             const statusESD = document.getElementById('statusESD');
@@ -1630,6 +1665,11 @@
     function closeStatusPopup() {
         document.getElementById('statusPopup').classList.add('hidden');
     }
+    //agent name set on selection
+    document.getElementById('agentId').addEventListener('change', function(){
+        const selectedOption = this.options[this.selectedIndex];
+        document.getElementById('agentName').value = selectedOption.text;
+    });
     // submit status form with validation
     document.getElementById('statusForm').addEventListener('submit', function(e){
         const statusSelect = document.getElementById('orderStatus');

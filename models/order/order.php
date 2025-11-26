@@ -72,8 +72,8 @@ class Order{
             $sql .= " AND vp_orders.groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
         }
-        if (!empty($filters['options']) && $filters['options'] === 'express') {
-            $sql .= " AND vp_orders.options LIKE '%express%'";
+        if (!empty($filters['options']) && $filters['options'] === 'express' ) {
+            $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
             $sql .= " AND vp_orders.payment_type = ?";
@@ -90,6 +90,10 @@ class Order{
         if(!empty($filters['vendor_id'])){
             $sql .= " AND vp_vendors.id = ?";
             $params[] = $filters['vendor_id'];            
+        }
+        if(!empty($filters['agent'])){
+            $sql .= " AND vp_orders.agent_id = ?";
+            $params[] = $filters['agent'];            
         }
         //echo $sql;
         // Add sorting based on filter
@@ -178,7 +182,7 @@ class Order{
             $params[] = '%' . $filters['category'] . '%';
         }
         if (!empty($filters['options']) && $filters['options'] === 'express') {
-            $sql .= " AND options LIKE '%express%'";
+            $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
             $sql .= " AND payment_type = ?";
@@ -468,16 +472,16 @@ class Order{
         }
         // Check for existing products with the same item_code
         $existingProducts = [];
-        $sql = "SELECT * FROM vp_products WHERE item_code = ?";
+        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND color = ? AND size = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('s', $data['item_code']);
+        $stmt->bind_param('sss', $data['item_code'], $data['color'], $data['size']);
         $stmt->execute();
         $result = $stmt->get_result();
         while ($row = $result->fetch_assoc()) {
             $existingProducts[] = $row;
         }
         if (!empty($existingProducts)) {
-            return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' already exists.'];
+            return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' and color '.$data['color'].' and size '.$data['size'].' already exists.'];
         }
                
         if(!empty($data)) {
@@ -519,9 +523,9 @@ class Order{
         if(empty($order_id) || empty($data['status'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
-        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ? WHERE id = ?";
+        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ?, agent_id = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssi', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $order_id);
+        $stmt->bind_param('ssssii', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $data['agent_id'], $order_id);
         if ($stmt->execute()) {
             return ['success' => true];
         } else {
