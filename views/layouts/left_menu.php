@@ -168,19 +168,26 @@ function sortMenu(&$menu) {
 function renderMenu($menu, $currentPage = '', $currentAction = '')
 { 
       $active = '';
+      $cnt = 1;
       foreach ($menu as $item) {
-                  
-			echo '<ul class="mt-1">';
-			echo '<li>';
-			echo '<a href="index.php?page=dashboard&action=dashboard" 
+		if($cnt == 1){
+                  $active = ($currentPage == 'dashboard' && $currentAction == 'dashboard') 
+                              ? 'active' 
+                              : '';
+                  echo '<ul class="mt-1">';
+                  echo '<li>';
+                  echo '<a href="index.php?page=dashboard&action=dashboard" 
                                     class="nav-link text-gray-800 ' . $active . '">';
                         // icon
-			echo '<div class="content-wrapper"><i class="fas fa-shield-alt mr-2"></i>&nbsp;&nbsp;';
-			// name
-			echo '<span>Dashboard</span></div>';
-			echo '</a>';
-			echo '</li>';
-			echo '</ul>';
+                  echo '<div class="content-wrapper"><i class="fas fa-shield-alt mr-2"></i>&nbsp;&nbsp;';
+                  // name
+                  echo '<span>Dashboard</span></div>';
+                  echo '</a>';
+                  echo '</li>';
+                  echo '</ul>';
+                  $cnt++;
+                  continue; // Skip the first item (Dashboard)
+            }
             // Parent category title
             echo '<div>';
             echo '<h3 class="px-3 py-2 text-gray-700">'
