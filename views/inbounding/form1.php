@@ -8,15 +8,161 @@ $actionUrl = $isEdit
     ? base_url('?page=inbounding&action=updateform1&id=' . $id)
     : base_url('?page=inbounding&action=saveform1');
 ?>
+<style>
+    .upload-box {
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 25px;
+    text-align: center;
+    background: #fff;
+    width: 100%;
+    max-width: 450px;
+}
+
+.upload-icon {
+    font-size: 35px;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.upload-box h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.upload-box p {
+    margin: 6px 0 18px;
+    font-size: 14px;
+    color: #666;
+}
+
+.upload-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+    border: 1px solid #ccc;
+}
+
+.file-btn {
+    background: #eee;
+}
+
+.camera-btn {
+    background: #d97917;
+    color: #fff;
+    border: none;
+}
+
+.btn input {
+    display: none;
+}
+
+.preview-img {
+    width: 100%;
+    max-width: 220px;
+    margin-top: 15px;
+    border-radius: 8px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+    .radio-grid {
+    position: relative;
+    border: 1px solid #000;
+    padding: 24px 16px 16px 16px; /* add top padding for title */
+}
+
+.radio-title {
+    position: absolute;
+    top: -10px;
+    left: 14px;
+    background: #fff;
+    padding: 0 6px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+
+    .radio-box {
+    border: 3px solid #000;      /* thick black border */
+    border-radius: 0;            /* square corners */
+    padding: 20px 8px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #fff;            /* white background */
+    color: #000;                 /* black text */
+}
+
+/* Selected item → same design but highlighted */
+.radio-grid input:checked + .radio-box {
+    border: 3px solid #000;
+    background: #e5e5e5;         /* light grey highlight */
+}
+  .radio-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 400px;
+  }
+
+  .radio-grid input {
+    display: none;
+  }
+
+  .radio-box {
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 20px 8px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #f8f8f8;
+  }
+
+  .radio-grid input:checked + .radio-box {
+    border-color: #007bff;
+    background: #e8f0ff;
+  }
+
+  /* Mobile-friendly text size */
+  @media (max-width: 400px) {
+    .radio-box {
+      padding: 16px 6px;
+      font-size: 14px;
+    }
+  }
+</style>
 <div class="bg-white p-4 md:p-8">
     <h1><?php echo $isEdit ? "Edit Inbounding" : "Add Inbounding"; ?></h1>
     <form action="<?php echo $actionUrl; ?>" 
           id="add_role" 
           method="POST" 
-          enctype="multipart/form-data">
-
-      <label for="Category">Category</label>
-      <p>Select Category:</p>
+          enctype="multipart/form-data" style="
+    margin-top: 20px;
+">
       <?php
       $categories = [
           "technology" => "Jewelry",
@@ -25,25 +171,44 @@ $actionUrl = $isEdit
           "health"     => "Clothing",
           "books"      => "Books",
           "homedecor"  => "Home Decor",
-      ];
+      ]; ?>
+      <div class="radio-grid" style="
+            border: 1px solid;
+            padding: 16px;
+        ">
+        <span class="radio-title">Category</span>
+        <?php
       foreach ($categories as $value => $label) { ?>
-          <label>
-              <input type="radio" name="category" value="<?= $value ?>"
-                  <?php if ($category == $value) echo 'checked'; ?>>
-              <?= $label ?>
-          </label><br>
+            <label>
+                <input type="radio" id="category" name="category" value="<?= $value ?>" <?php if ($category == $value) echo 'checked'; ?>>
+                <div class="radio-box"><?= $label ?></div>
+          </label>
       <?php } ?>
+  </div>
       <div id="category-error" style="color:red; font-size:14px; margin-top:5px;"></div>
       <br><br>
-      <label for="photo">Upload Photo:</label><br>
-      <input type="file" id="photo" name="photo" accept="image/*" capture="camera"><br><br>
-      <div id="photo-error" style="color:red; font-size:14px; margin-top:5px;"></div>
-      <?php if ($isEdit && !empty($photo)) { ?>
-          <img id="preview" src="<?php echo base_url($photo); ?>"
-               style="max-width:200px; margin-top:10px;">
-      <?php } else { ?>
-          <img id="preview" src="" style="display:none; max-width:200px; margin-top:10px;">
-      <?php } ?>
+      <div class="upload-box">
+    
+
+    <h3>Upload Product Photo</h3>
+    <p>Drag or paste a file here, or choose an option below</p>
+
+    <div class="upload-buttons">
+        <label class="btn file-btn">
+            Choose File
+            <input type="file" id="photo" name="photo" accept="image/*" capture="camera">
+        </label>
+    </div>
+
+    <div id="photo-error" style="color:red; font-size:14px; margin-top:10px;"></div>
+
+    <?php if ($isEdit && !empty($photo)) { ?>
+        <img id="preview" src="<?php echo base_url($photo); ?>" class="preview-img">
+    <?php } else { ?>
+        <img id="preview" src="" class="preview-img" style="display:none;">
+    <?php } ?>
+</div>
+
       <br><br>
       <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Back</button>
       <button type="submit" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md">

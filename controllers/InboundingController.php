@@ -47,6 +47,52 @@ class InboundingController {
         $data = $inboundingModel->getform1data($id);
         renderTemplateClean('views/inbounding/form1.php', $data, 'form1 inbounding');
     }
+    public function getdesktopform() {
+        global $inboundingModel;
+        $id = $_GET['id'] ?? 0;
+        $data = array();
+        $category_data = $this->getCategoryList();
+        echo "<pre>test: ";print_r($category_data);exit;
+        $data = $inboundingModel->getform2data($id);
+        renderTemplateClean('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
+    }
+  function getCategoryList() {
+    $url = 'https://www.exoticindia.com/vendor-api/product/categorylist';
+
+    $headers = [
+        'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+        'x-adminapitest: 1',
+        'Accept: application/json'
+    ];
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_HTTPGET => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
+    ]);
+
+    $response = curl_exec($ch);
+
+    if (curl_errno($ch)) {
+        error_log("cURL Error: " . curl_error($ch));
+        curl_close($ch);
+        return false;
+    }
+
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode != 200) {
+        error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
+        return false;
+    }
+    return json_decode($response, true);
+}
     public function getform2() {
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;

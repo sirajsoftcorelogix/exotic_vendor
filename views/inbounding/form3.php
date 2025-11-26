@@ -9,6 +9,7 @@ if ($form2['vendor_code']) {
     unset($usersModel);
 }
 ?>
+<div class="container">
 <div class="bg-white p-4 md:p-8">
     <?php
     $record_id = $_GET['id'] ?? '';
@@ -82,7 +83,8 @@ if ($form2['vendor_code']) {
     </label>
     <div style="display:flex; align-items:center; gap:6px;">
 
-    <?php if (!empty($gate_entry_date_time)): ?>
+    <?php if (!empty($gate_entry_date_time) && $gate_entry_date_time != "0000-00-00 00:00:00"): ?>
+
         <!-- READONLY FIELD — USE DB VALUE -->
         <input type="datetime-local"
                name="gate_entry_date_time"
@@ -129,7 +131,7 @@ if ($form2['vendor_code']) {
   <!-- Material -->
   <div style="margin-bottom:12px;">
       <label><strong>Material</strong></label>
-      <select name="material_code" style="width:100%; padding:8px;">
+      <select name="material_code" style="width:100%; padding:8px; border: 1px solid;">
           <option value="">Select Material</option>
           <?php
           $materials = ["Brass","Copper","Bronze","Marble","Wood","Stone","Other"];
@@ -147,7 +149,7 @@ if ($form2['vendor_code']) {
       <div style="flex:1;">
           <label><strong>Height</strong></label>
           <input type="text" name="height" value="<?php echo $height; ?>"
-              style="width:100%; padding:8px; border:1px solid #ccc;">
+              style="width:100%; padding:8px; border: 1px solid;">
       </div>
       <span>cm</span>
   </div>
@@ -157,7 +159,7 @@ if ($form2['vendor_code']) {
       <div style="flex:1;">
           <label><strong>Width</strong></label>
           <input type="text" name="width" value="<?php echo $width; ?>"
-              style="width:100%; padding:8px; border:1px solid:#ccc;">
+              style="width:100%; padding:8px; border: 1px solid;">
       </div>
       <span>cm</span>
   </div>
@@ -167,7 +169,7 @@ if ($form2['vendor_code']) {
     <div style="flex:1;">
         <label><strong>Depth</strong></label>
         <input type="text" name="depth" value="<?php echo $depth; ?>"
-            style="width:100%; padding:8px; border:1px solid:#ccc;">
+            style="width:100%; padding:8px; border: 1px solid;">
     </div>
     <span>cm</span>
 </div>
@@ -177,7 +179,7 @@ if ($form2['vendor_code']) {
     <div style="flex:1;">
         <label><strong>Weight</strong></label>
         <input type="text" name="weight" value="<?php echo $weight; ?>"
-            style="width:100%; padding:8px; border:1px solid:#ccc;">
+            style="width:100%; padding:8px; border: 1px solid;">
     </div>
     <span>kg</span>
 </div>
@@ -187,7 +189,7 @@ if ($form2['vendor_code']) {
     <div style="flex:1;">
         <label><strong>Color</strong></label>
         <input type="text" name="color" value="<?php echo $color; ?>"
-            style="width:100%; padding:8px; border:1px solid:#ccc;">
+            style="width:100%; padding:8px; border: 1px solid;">
     </div>
 </div>
 
@@ -196,7 +198,7 @@ if ($form2['vendor_code']) {
     <div style="flex:1;">
         <label><strong>Quantity</strong></label>
         <input type="text" name="quantity_received" value="<?php echo $quantity_received; ?>"
-            style="width:100%; padding:8px; border:1px solid:#ccc;">
+            style="width:100%; padding:8px; border: 1px solid;">
     </div>
 </div>
 
@@ -205,7 +207,7 @@ if ($form2['vendor_code']) {
     <div style="flex:1;">
         <label><strong>Item Code</strong></label>
         <input type="text" name="Item_code" value="<?php echo $Item_code; ?>"
-            style="width:100%; padding:8px; border:1px solid:#ccc;">
+            style="width:100%; padding:8px; border: 1px solid;">
     </div>
 </div>
   <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Back</button>
@@ -214,7 +216,7 @@ if ($form2['vendor_code']) {
         </button>
 </form>
 </div>
-
+</div>
 <script>
 var id = <?php echo json_encode($record_id); ?>;
 
