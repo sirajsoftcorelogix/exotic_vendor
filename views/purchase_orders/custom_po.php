@@ -700,7 +700,7 @@ function initItemCodeInput(input) {
         suggBox.innerHTML = list.map((v, i) => {
             return `<div class="sugg-item position-relative z-10 w-64 p-2 cursor-pointer hover:bg-gray-300" data-index="${i}" data-id="${escapeHtml(v.id)}" data-json='${escapeHtml(JSON.stringify(v))}' style="padding:8px 10px;">
                         <div style="font-weight:600;">${escapeHtml(v.item_code || '')} — ${escapeHtml(v.title || '')}</div>
-                        <div style="font-size:11px;color:#6b7280;">HSN: ${escapeHtml(v.hsn || '')} • GST: ${escapeHtml(String(v.gst || ''))}%</div>
+                        <div style="font-size:11px;color:#6b7280;">Color: ${escapeHtml(v.color || '')} • Size: ${escapeHtml(v.size || '-')}</div>
                     </div>`;
         }).join('');
         suggBox.style.display = 'block';
