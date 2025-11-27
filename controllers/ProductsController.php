@@ -177,7 +177,7 @@ class ProductsController {
             $items = [$apiResult];
         }*/
         $items = $apiResult; 
-        print_array($items);
+        //print_array($items);
         if (count($items) === 0) {
             echo json_encode(['success' => false, 'message' => 'No items found in API response.']);
             exit;
