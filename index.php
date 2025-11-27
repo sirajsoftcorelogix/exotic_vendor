@@ -5,7 +5,7 @@ error_reporting(E_ALL);
 date_default_timezone_set('Asia/Kolkata');
 
 require_once 'bootstrap/init/init.php';
-$page = $_GET['page'] ?? 'orders';
+$page = $_GET['page'] ?? 'dashboard';
 $action = $_GET['action'] ?? 'list';
 //$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
 
@@ -384,7 +384,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'modules':        
+    case 'modules':
         require_once 'controllers/ModulesController.php';
         $controller = new ModulesController();
         switch ($action) {
@@ -404,6 +404,21 @@ switch ($page) {
                 $controller->getDetails();
             default:
                 $controller->index();
+                break;
+        }
+        break;
+    case 'notifications':
+        require_once 'controllers/NotificationController.php';
+        $controller = new NotificationController();
+        switch ($action) {
+            case 'fetch_notifications':
+                $controller->fetchNotifications();   
+                break;
+            case 'mark_as_read':
+                $controller->markAsRead();
+                break;
+            default:
+                $controller->fetchNotifications();   
                 break;
         }
         break;
