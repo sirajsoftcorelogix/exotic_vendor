@@ -517,13 +517,13 @@ document.getElementById('importConfirmBtn').addEventListener('click', function()
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            msg.textContent = `Imported: ${data.created}, Updated: ${data.updated}, Failed: ${data.failed.length}`;
+            msg.textContent = `Imported: ${data.created}, Updated: ${data.updated}, Failed: ${data.failed.length} SKUs.`;
             msg.className = 'text-sm text-green-600 mt-3';
             setTimeout(()=> {
                 document.getElementById('importModal').classList.add('hidden');
                 // Optional: reload to show new products
                 window.location.reload();
-            }, 1100);
+            }, 2100);
         } else {
             msg.textContent = data.message || 'Import failed';
             msg.className = 'text-sm text-red-500 mt-3';

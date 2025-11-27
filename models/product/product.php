@@ -259,26 +259,61 @@ class product{
         }
         return ['success' => true, 'updated_count' => $updatedCount, 'message' => 'Products updated successfully.'];       
     }
-     public function findByItemCode($code) {
-        $sql = "SELECT * FROM products WHERE item_code = ? LIMIT 1";
+     public function findByItemCodeSizeColor($code, $size, $color) {
+        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND size = ? AND color = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('s', $code);
+        $stmt->bind_param('sss', $code, $size, $color);
         $stmt->execute();
         $res = $stmt->get_result()->fetch_assoc();
         return $res;
     }
     public function createProduct($data) {
-        $sql = "INSERT INTO products (item_code, title, image, local_stock, itemprice, finalprice, vendor, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssidddsss',
+        $sql = "INSERT INTO vp_products (item_code, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql); 
+        $stmt->bind_param('sssssdddsssisssssssssssssssddddddddddsiiisss',
             $data['item_code'],
+            $data['size'],
+            $data['color'],
             $data['title'],
             $data['image'],
             $data['local_stock'],
             $data['itemprice'],
-            $data['finalprice'],
+            $data['finalprice'],            
+            $data['groupname'],
+            $data['material'],
+            $data['cost_price'],
+            $data['gst'],
+            $data['hsn'],
+            $data['description'],
+            $data['asin'],
+            $data['upc'],
+            $data['location'],
+            $data['fba_in'],
+            $data['fba_us'],
+            $data['leadtime'],
+            $data['instock_leadtime'],
+            $data['permanently_available'],
+            $data['numsold'],
+            $data['numsold_india'],
+            $data['numsold_global'],
+            $data['lastsold'],
             $data['vendor'],
+            $data['shippingfee'],
+            $data['sourcingfee'],
+            $data['price'],
+            $data['price_india'],
+            $data['price_india_suggested'],
+            $data['mrp_india'],
+            $data['permanent_discount'],
+            $data['discount_global'],
+            $data['discount_india'],
+            $data['product_weight'],
+            $data['product_weight_unit'],
+            $data['prod_height'],
+            $data['prod_width'],
+            $data['prod_length'],
+            $data['length_unit'],
             $data['created_at'],
             $data['updated_at']
         );
@@ -286,15 +321,48 @@ class product{
         return false;
     }
     public function updateProduct($id, $data) {
-        $sql = "UPDATE products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?, vendor=?, updated_at=? WHERE id = ?";
+        $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssiddssi',
+        $stmt->bind_param('ssiddssddsssssiissiiiissddddddddddsdddssi',
             $data['title'],
             $data['image'],
             $data['local_stock'],
             $data['itemprice'],
-            $data['finalprice'],
+            $data['finalprice'],            
+            $data['groupname'],
+            $data['material'],
+            $data['cost_price'],
+            $data['gst'],
+            $data['hsn'],
+            $data['description'],
+            $data['asin'],
+            $data['upc'],
+            $data['location'],
+            $data['fba_in'],
+            $data['fba_us'],
+            $data['leadtime'],
+            $data['instock_leadtime'],
+            $data['permanently_available'],
+            $data['numsold'],
+            $data['numsold_india'],
+            $data['numsold_global'],
+            $data['lastsold'],
             $data['vendor'],
+            $data['shippingfee'],
+            $data['sourcingfee'],   
+            $data['price'],
+            $data['price_india'],
+            $data['price_india_suggested'],
+            $data['mrp_india'],
+            $data['permanent_discount'],
+            $data['discount_global'],
+            $data['discount_india'], 
+            $data['product_weight'],
+            $data['product_weight_unit'],              
+            $data['prod_height'],
+            $data['prod_width'],
+            $data['prod_length'],
+            $data['length_unit'],
             $data['updated_at'],
             $id
         );
