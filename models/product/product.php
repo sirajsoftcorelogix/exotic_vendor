@@ -323,7 +323,7 @@ class product{
     public function updateProduct($id, $data) {
         $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssiddssddsssssiissiiiissddddddddddsdddssi',
+        $stmt->bind_param('ssiddssddsssssiissiiiiisddddddddddsdddssi',
             $data['title'],
             $data['image'],
             $data['local_stock'],
