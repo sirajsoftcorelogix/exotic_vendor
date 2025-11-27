@@ -3,6 +3,22 @@
 	$sort_order = $_GET['sort_order'] ?? 'desc';
 	$search = $_GET['search'] ?? '';
 ?>
+<style>
+#notif-box {
+    width: 250px;
+    border: 1px solid #ccc;
+    padding: 10px;
+    display: none;
+    background: white;
+    position: absolute;
+    top: 40px;
+}
+.notif-item {
+    padding: 5px;
+    border-bottom: 1px solid #eee;
+}
+</style>
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <div>
         <nav aria-label="breadcrumb">
@@ -28,6 +44,11 @@
         </a>
     </div> -->
 </div>
+<button id="notif-btn">
+    Notifications <span id="notif-count"></span>
+</button>
+
+<div id="notif-box"></div>
 <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom mb-0 p-0 ">
   <div class="container-fluid">
     <div class="collapse navbar-collapse">
@@ -205,7 +226,7 @@
 	<?php endif; ?>
 </div>
 <script>
-	function deleteData(dataId) {
+  function deleteData(dataId) {
 		if (!confirm("Are you sure you want to delete this addon?")) return;
 		try {
 			fetch('index.php?page=products&action=delete_addons', {
@@ -228,4 +249,95 @@
 			alert('An error occurred while submitting the form. Check console for details.');
 		}
 	}
+  /*setInterval(() => {
+    fetch("index.php?page=notifications&action=fetch_notifications")
+      .then(response => response.json())
+      .then(data => {
+          data.forEach(n => {
+              showNotification(n.message);
+          });
+      });
+  }, 5000);
+
+  function showNotification(message){
+      alert("🔔 " + message);
+  }*/
+  function loadNotifications() {
+    $.ajax({
+        url: "index.php?page=notifications&action=fetch_notifications",
+        method: "GET",
+        success: function(data) {
+            console.log(data);
+            let notifs = JSON.parse(data);
+            let count = notifs.length;
+
+            $("#notif-count").text(count > 0 ? "(" + count + ")" : "");
+
+            let html = "";
+            let ids = [];
+
+            notifs.forEach(n => {
+                html += `<div class='notif-item'>${n.message}</div>`;
+                ids.push(n.id);
+            });
+
+            $("#notif-box").html(html);
+
+            // Auto mark as read when dropdown opens
+            $("#notif-btn").off().on("click", function() {
+                $("#notif-box").toggle();
+
+                if (ids.length > 0) {
+                    $.post("index.php?page=notifications&action=mark_as_read", { ids: ids });
+                }
+            });
+        },
+        error: function() {
+            console.error("Failed to fetch notifications.");
+        }
+    });
+}
+
+// Load notifications every 5 seconds
+/*setInterval(loadNotifications, 5000);
+loadNotifications();*/
+
+document.addEventListener("DOMContentLoaded", () => {
+    if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+});
+
+function checkNewNotification() {
+    $.get("index.php?page=notifications&action=fetch_notifications", function(data) {
+        let notif = JSON.parse(data);
+
+        let html = "";
+        let ids = [];
+
+        notifs.forEach(n => {
+            html += `<div class='notif-item'>${n.message}</div>`;
+            ids.push(n.id);
+        });
+
+        if (notif && notif.message) {
+            showBrowserNotification(notif.message, notif.id);
+        }
+    });
+}
+
+function showBrowserNotification(message, id) {
+    if (Notification.permission === "granted") {
+        let notification = new Notification("New Notification", {
+            body: message,
+            icon: "bell.png" // optional icon
+        });
+
+        // Mark as read after showing
+        $.post("index.php?page=notifications&action=mark_as_read", { ids: [id] });
+    }
+}
+
+// Check every 5 seconds
+//setInterval(checkNewNotification, 5000);
 </script>
