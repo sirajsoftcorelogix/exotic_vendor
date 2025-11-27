@@ -308,7 +308,10 @@ switch ($page) {
                 break;
             case 'update_api_call':
                 $controller->updateApiCall();
-                break;            
+                break;   
+            case 'import_api_call':
+                $controller->importApiCall();         
+                break;
             case 'view':
                 $controller->product_view();
                 break;

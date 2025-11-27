@@ -106,7 +106,7 @@ class product{
         if (isset($productData) && is_array($productData)) {            
             foreach ($productData as $product) {  
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, updated_at = ? WHERE item_code = ? AND color = ? AND size = ?");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
                         $color = isset($product['color']) ? $product['color'] : '';
@@ -130,9 +130,19 @@ class product{
                     $numsold_india = isset($product['numsold_india']) ? (int)$product['numsold_india'] : 0;
                     $numsold_global = isset($product['numsold_global']) ? (int)$product['numsold_global'] : 0;
                     $lastsold = isset($product['lastsold']) ? $product['lastsold'] : '';
+                    $vendor = isset($product['vendor']) ? $product['vendor'] : '';
+                    $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
+                    $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
+                    $price = isset($product['price']) ? (float)$product['price'] : 0.0;
+                    $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
+                    $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
+                    $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
+                    $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
+                    $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
+                    $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                     $updated_at = date('Y-m-d H:i:s');
                     $stmt->bind_param(
-                        'sissiissiiiisssss',                            
+                        'sissiissiiiissdddddddddssss',                            
                         $asin,
                         $localStock,
                         $upc,
@@ -146,6 +156,16 @@ class product{
                         $numsold_india,
                         $numsold_global,
                         $lastsold,
+                        $vendor,
+                        $shippingfee,
+                        $sourcingfee,
+                        $price,
+                        $price_india,
+                        $price_india_suggested,
+                        $mrp_india,
+                        $permanent_discount,
+                        $discount_global,
+                        $discount_india,
                         $updated_at,
                         $product['itemcode'],$color,$size
                     );  
@@ -161,7 +181,7 @@ class product{
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {                            
                             //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
-                            $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, updated_at = ? WHERE item_code = ? AND color = ? AND size = ?");
+                            $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ? WHERE item_code = ? AND color = ? AND size = ?");
                             if ($stmt) {
                                 // $title = isset($product['title']) ? $product['title'] : '';
                                  $color = isset($variation['color']) ? $variation['color'] : '';
@@ -185,9 +205,19 @@ class product{
                                 $numsold_india = isset($variation['numsold_india']) ? (int)$variation['numsold_india'] : 0;
                                 $numsold_global = isset($variation['numsold_global']) ? (int)$variation['numsold_global'] : 0;
                                 $lastsold = isset($variation['lastsold']) ? $variation['lastsold'] : '';
+                                $vendor = isset($product['vendor']) ? $product['vendor'] : '';
+                                $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
+                                $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
+                                $price = isset($product['price']) ? (float)$product['price'] : 0.0;
+                                $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
+                                $price_india_suggested = isset($product['price_india_suggested']) ? (float)$product['price_india_suggested'] : 0.0;
+                                $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
+                                $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
+                                $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
+                                $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                                 $updated_at = date('Y-m-d H:i:s');
                                 $stmt->bind_param(
-                                    'sissiissiiiisssss',                                    
+                                    'sissiissiiiissdddddddddssss',                                    
                                     $asin,
                                     $localStock,
                                     $upc,
@@ -201,6 +231,16 @@ class product{
                                     $numsold_india,
                                     $numsold_global,
                                     $lastsold,
+                                    $vendor,
+                                    $shippingfee,
+                                    $sourcingfee,
+                                    $price,
+                                    $price_india,
+                                    $price_india_suggested,
+                                    $mrp_india,
+                                    $permanent_discount,
+                                    $discount_global,
+                                    $discount_india,
                                     $updated_at,
                                     $product['itemcode'],$color,$size
                                 );                                   
@@ -218,5 +258,114 @@ class product{
             }
         }
         return ['success' => true, 'updated_count' => $updatedCount, 'message' => 'Products updated successfully.'];       
+    }
+     public function findByItemCodeSizeColor($code, $size, $color) {
+        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND size = ? AND color = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $code, $size, $color);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        return $res;
+    }
+    public function createProduct($data) {
+        $sql = "INSERT INTO vp_products (item_code, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql); 
+        $stmt->bind_param('sssssdddsssisssssssssssssssddddddddddsiiisss',
+            $data['item_code'],
+            $data['size'],
+            $data['color'],
+            $data['title'],
+            $data['image'],
+            $data['local_stock'],
+            $data['itemprice'],
+            $data['finalprice'],            
+            $data['groupname'],
+            $data['material'],
+            $data['cost_price'],
+            $data['gst'],
+            $data['hsn'],
+            $data['description'],
+            $data['asin'],
+            $data['upc'],
+            $data['location'],
+            $data['fba_in'],
+            $data['fba_us'],
+            $data['leadtime'],
+            $data['instock_leadtime'],
+            $data['permanently_available'],
+            $data['numsold'],
+            $data['numsold_india'],
+            $data['numsold_global'],
+            $data['lastsold'],
+            $data['vendor'],
+            $data['shippingfee'],
+            $data['sourcingfee'],
+            $data['price'],
+            $data['price_india'],
+            $data['price_india_suggested'],
+            $data['mrp_india'],
+            $data['permanent_discount'],
+            $data['discount_global'],
+            $data['discount_india'],
+            $data['product_weight'],
+            $data['product_weight_unit'],
+            $data['prod_height'],
+            $data['prod_width'],
+            $data['prod_length'],
+            $data['length_unit'],
+            $data['created_at'],
+            $data['updated_at']
+        );
+        if ($stmt->execute()) return $this->db->insert_id;
+        return false;
+    }
+    public function updateProduct($id, $data) {
+        $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssiddssddsssssiissiiiissddddddddddsdddssi',
+            $data['title'],
+            $data['image'],
+            $data['local_stock'],
+            $data['itemprice'],
+            $data['finalprice'],            
+            $data['groupname'],
+            $data['material'],
+            $data['cost_price'],
+            $data['gst'],
+            $data['hsn'],
+            $data['description'],
+            $data['asin'],
+            $data['upc'],
+            $data['location'],
+            $data['fba_in'],
+            $data['fba_us'],
+            $data['leadtime'],
+            $data['instock_leadtime'],
+            $data['permanently_available'],
+            $data['numsold'],
+            $data['numsold_india'],
+            $data['numsold_global'],
+            $data['lastsold'],
+            $data['vendor'],
+            $data['shippingfee'],
+            $data['sourcingfee'],   
+            $data['price'],
+            $data['price_india'],
+            $data['price_india_suggested'],
+            $data['mrp_india'],
+            $data['permanent_discount'],
+            $data['discount_global'],
+            $data['discount_india'], 
+            $data['product_weight'],
+            $data['product_weight_unit'],              
+            $data['prod_height'],
+            $data['prod_width'],
+            $data['prod_length'],
+            $data['length_unit'],
+            $data['updated_at'],
+            $id
+        );
+        return $stmt->execute();
     }
 }
