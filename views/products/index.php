@@ -39,9 +39,12 @@
                     <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                 </a>
             </div>
-            <div class="absolute right-0 top-0 flex items-center space-x-4">            
-            <button id="bulkUpdateBtn" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
-                Bulk Update Stocks
+            <div class="absolute right-0 top-0 flex items-center space-x-4">
+            <button id="importProductsBtn" title="Import products" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
+                Import             
+            </button>
+            <button id="bulkUpdateBtn" title="Update stock" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
+                Update
             </button>
             <select id="rows-per-page" class="text-sm right-0 pagination-select px-1 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                 onchange="location.href='?page=products&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
@@ -104,7 +107,7 @@
                             <div class="flex flex-col justify-between h-full">
                                 <p class="typo-product-title mb-2 max-w-xs"><?php echo $product['title']; ?></p>
                                 <div class="flex items-center mt-auto">
-                                    <span class="typo-vendor">Vendor : Kuber</span>
+                                    <span class="typo-vendor">Vendor : <?php echo $product['vendor']; ?></span>
                                     <a href="#" class="ml-2 text-details-link hover:text-amber-700">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -248,6 +251,20 @@
         </div>
     </div>
 </div>
+<!-- Import Products Modal -->
+<div id="importModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative flex flex-col items-center">
+        <button id="closeImportModal" class="absolute top-3 right-3 text-xl">×</button>
+        <h3 class="text-lg font-bold mb-3">Import Products (Max 50 SKUs, comma separated)</h3>
+        <textarea id="importItemCodes" class="w-full border rounded-md p-2 mb-3" rows="5" placeholder="e.g. ITEMCODE1, ITEMCODE2"></textarea>
+        <div id="importCount" class="text-sm text-gray-600 mb-3">0 SKUs</div>
+        <div class="flex justify-end gap-2">
+            <button id="importCancelBtn" class="bg-gray-200 px-3 py-1 rounded">Cancel</button>
+            <button id="importConfirmBtn" class="bg-amber-600 text-white px-3 py-1 rounded">Import</button>
+        </div>
+        <div id="importMsg" class="text-sm mt-3"></div>
+    </div>
+</div>
 <script>
 // image popup functions
 function openImagePopup(imageUrl) {
@@ -323,6 +340,7 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
     }
     updateProductsStock(itemCodes); 
 });
+
  document.addEventListener('DOMContentLoaded', function () {
         // Modal functionality
         const openModalBtn = document.getElementById('open-details-modal');
@@ -441,5 +459,83 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
         });
     }
 
+});
+
+// Import Products Modal functionality
+document.getElementById('importProductsBtn').addEventListener('click', function() {
+    document.getElementById('importItemCodes').value = '';
+    document.getElementById('importCount').textContent = '0 SKUs';
+    document.getElementById('importMsg').textContent = '';
+    document.getElementById('importModal').classList.remove('hidden');
+});
+
+document.getElementById('closeImportModal').addEventListener('click', function() {
+    document.getElementById('importModal').classList.add('hidden');
+});
+document.getElementById('importCancelBtn').addEventListener('click', function() {
+    document.getElementById('importModal').classList.add('hidden');
+});
+
+const importInput = document.getElementById('importItemCodes');
+importInput.addEventListener('input', function() {
+    const codes = this.value.split(',').map(s => s.trim()).filter(Boolean);
+    document.getElementById('importCount').textContent = `${codes.length} SKUs`;
+    if (codes.length > 50) {
+        document.getElementById('importCount').classList.add('text-red-500');
+    } else {
+        document.getElementById('importCount').classList.remove('text-red-500');
+    }
+});
+
+document.getElementById('importConfirmBtn').addEventListener('click', function() {
+    const btn = this;
+    const raw = importInput.value;
+    const codes = raw.split(',').map(s => s.trim()).filter(Boolean);
+    const msg = document.getElementById('importMsg');
+    msg.textContent = '';
+
+    if (codes.length === 0) {
+        msg.textContent = 'Please add at least one SKU.';
+        msg.className = 'text-sm text-red-500 mt-3';
+        return;
+    }
+    if (codes.length > 50) {
+        msg.textContent = 'Maximum 50 SKUs only.';
+        msg.className = 'text-sm text-red-500 mt-3';
+        return;
+    }
+
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = 'Processing...';
+
+    fetch('?page=products&action=import_api_call', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ itemCodes: codes })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            msg.textContent = `Imported: ${data.created}, Updated: ${data.updated}, Failed: ${data.failed.length} SKUs.`;
+            msg.className = 'text-sm text-green-600 mt-3';
+            setTimeout(()=> {
+                document.getElementById('importModal').classList.add('hidden');
+                // Optional: reload to show new products
+                window.location.reload();
+            }, 2100);
+        } else {
+            msg.textContent = data.message || 'Import failed';
+            msg.className = 'text-sm text-red-500 mt-3';
+        }
+    })
+    .catch(err => {
+        msg.textContent = 'Error: ' + (err.message || 'Request failed');
+        msg.className = 'text-sm text-red-500 mt-3';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    });
 });
 </script>
