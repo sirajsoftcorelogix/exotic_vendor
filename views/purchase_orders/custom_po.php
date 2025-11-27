@@ -85,33 +85,38 @@
                 
             <tr class="bg-white">
                 <td class="p-2 position-relative">
-                    <input type="hidden" name="product_id[]" value="">
-                    <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code" onblur="fetchProductDetails(this)">
+                    <input type="hidden" name="product_id[]" value="<?php echo $data[0]['id'] ?? ''; ?>">
+                    <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['item_code'] ?? ''; ?>" placeholder="Item code" onblur="fetchProductDetails(this)">
                     <!--suggestion box-->
                     <div class="suggestion-box position-absolute z-50 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; max-height:240px; overflow:auto;"></div>
                     
                 </td>
                 
-                <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
-                <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
+                <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?php echo $data[0]['title'] ?? ''; ?></textarea></td>
+                <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['hsn'] ?? ''; ?>"></td>
                 <td class="p-1">
+                    <?php if(isset($data[0]['image']) && !empty($data[0]['image'])){ ?>
+                       <img src="<?php echo $data[0]['image']; ?>" alt="Product Image" class="rounded-lg cursor-pointer" >
+                        <input type="hidden" name="img[]" value="<?php echo $data[0]['image']; ?>">
+                       <?php }else{ ?>
                     <input type="hidden" name="img[]" value="">
                     <div class="flex items-center space-x-2">
                         <img onclick="this.parentElement.querySelector('.img-upload').click();" src="https://placehold.co/100x100/e2e8f0/4a5568?text=Upload" class="rounded-lg cursor-pointer">
                         <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">
                         <!-- <button type="button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs" onclick="">Upload</button> -->
                     </div>
+                    <?php } ?>
                 </td>
-                <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required></td>
+                <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['gst'] ?? ''; ?>" oninput="calculateTotals()" required></td>
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
-                        <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" oninput="calculateTotals()" required>                       
+                        <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['quantity'] ?? ''; ?>" oninput="calculateTotals()" required>                       
                     </div>
                 </td>
                 <!-- <td class="p-4">Nos</td> -->
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
-                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="<?php echo $data[0]['rate'] ?? ''; ?>" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         <!-- <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
                         <label for="gst_inclusive">GST inclusive</label> -->
                         
@@ -695,7 +700,7 @@ function initItemCodeInput(input) {
         suggBox.innerHTML = list.map((v, i) => {
             return `<div class="sugg-item position-relative z-10 w-64 p-2 cursor-pointer hover:bg-gray-300" data-index="${i}" data-id="${escapeHtml(v.id)}" data-json='${escapeHtml(JSON.stringify(v))}' style="padding:8px 10px;">
                         <div style="font-weight:600;">${escapeHtml(v.item_code || '')} — ${escapeHtml(v.title || '')}</div>
-                        <div style="font-size:11px;color:#6b7280;">HSN: ${escapeHtml(v.hsn || '')} • GST: ${escapeHtml(String(v.gst || ''))}%</div>
+                        <div style="font-size:11px;color:#6b7280;">Color: ${escapeHtml(v.color || '')} • Size: ${escapeHtml(v.size || '-')}</div>
                     </div>`;
         }).join('');
         suggBox.style.display = 'block';

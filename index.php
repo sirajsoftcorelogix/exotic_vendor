@@ -306,6 +306,12 @@ switch ($page) {
             case 'list':
                 $controller->product_list();
                 break;
+            case 'update_api_call':
+                $controller->updateApiCall();
+                break;   
+            case 'import_api_call':
+                $controller->importApiCall();         
+                break;
             case 'view':
                 $controller->product_view();
                 break;
@@ -381,7 +387,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'modules':        
+    case 'modules':
         require_once 'controllers/ModulesController.php';
         $controller = new ModulesController();
         switch ($action) {
@@ -401,6 +407,21 @@ switch ($page) {
                 $controller->getDetails();
             default:
                 $controller->index();
+                break;
+        }
+        break;
+    case 'notifications':
+        require_once 'controllers/NotificationController.php';
+        $controller = new NotificationController();
+        switch ($action) {
+            case 'fetch_notifications':
+                $controller->fetchNotifications();   
+                break;
+            case 'mark_as_read':
+                $controller->markAsRead();
+                break;
+            default:
+                $controller->fetchNotifications();   
                 break;
         }
         break;
