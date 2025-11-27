@@ -251,20 +251,20 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <select class="form-input w-1/4" style="width: 190px;" name="addCountryCode" id="addCountryCode" required>
-                                            <option value="" disabled>Select Code</option>
-                                            <?php foreach($countryList as $cl): ?>
-                                                <option value="<?php echo $cl['phone_code']; ?>" <?php if($cl["name"]=="India") { echo "selected"; }?>>
-                                                    <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <input type="number" class="form-input flex-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" />
-                                    </div>
+                                    <select class="form-input w-1/4" style="width: 190px;" name="addCountryCode" id="addCountryCode" required>
+                                        <option value="" disabled>Select Code</option>
+                                        <?php foreach($countryList as $cl): ?>
+                                            <option value="<?php echo $cl['phone_code']; ?>" <?php if($cl["name"]=="India") { echo "selected"; }?>>
+                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div>
+                                    <input type="number" class="form-input w-full mt-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" style="margin-top: 25px;" />
                                     <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
-                                <br />
+                                
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Email</label>
                                     <input type="email" class="form-input w-full mt-1" name="addEmail" id="addEmail" />
@@ -450,20 +450,19 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <select class="form-input w-1/4" style="width: 190px;" name="editCountryCode" id="editCountryCode" required>
-                                            <option value="" disabled>Select Code</option>
-                                            <?php foreach($countryList as $cl): ?>
-                                                <option value="<?php echo $cl['phone_code']; ?>">
-                                                    <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <input type="number" class="form-input w-full mt-1" style="width:200px;" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" />
-                                    </div>
+                                    <select class="form-input w-1/4" style="width: 190px;" name="editCountryCode" id="editCountryCode" required>
+                                        <option value="" disabled>Select Code</option>
+                                        <?php foreach($countryList as $cl): ?>
+                                            <option value="<?php echo $cl['phone_code']; ?>">
+                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div>
+                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" style="margin-top: 25px;" />
                                     <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
-                                <br />
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Email</label>
                                     <input type="email" class="form-input w-full mt-1" name="editEmail" id="editEmail" />
