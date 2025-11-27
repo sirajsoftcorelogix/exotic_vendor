@@ -170,7 +170,7 @@ function renderMenu($menu, $currentPage = '', $currentAction = '')
       $active = '';
       $cnt = 1;
       foreach ($menu as $item) {
-		if($cnt == 1){
+		if($cnt == 1 && $item['slug'] == 'dashboard' && $item['action'] == 'dashboard') {
                   $active = ($currentPage == 'dashboard' && $currentAction == 'dashboard') 
                               ? 'active' 
                               : '';
