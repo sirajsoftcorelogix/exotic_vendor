@@ -6,7 +6,6 @@ $paymentTermsModel = new PaymentTerms($conn);
 global $root_path;
 global $domain;
 class NotificationController {
-
     public function fetchNotifications() {
         is_login();
         global $conn;

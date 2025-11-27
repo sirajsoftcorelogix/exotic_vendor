@@ -249,95 +249,48 @@
 			alert('An error occurred while submitting the form. Check console for details.');
 		}
 	}
-  /*setInterval(() => {
-    fetch("index.php?page=notifications&action=fetch_notifications")
-      .then(response => response.json())
-      .then(data => {
-          data.forEach(n => {
-              showNotification(n.message);
-          });
-      });
-  }, 5000);
 
-  function showNotification(message){
-      alert("🔔 " + message);
-  }*/
-  function loadNotifications() {
-    $.ajax({
-        url: "index.php?page=notifications&action=fetch_notifications",
-        method: "GET",
-        success: function(data) {
-            console.log(data);
-            let notifs = JSON.parse(data);
-            let count = notifs.length;
-
-            $("#notif-count").text(count > 0 ? "(" + count + ")" : "");
-
-            let html = "";
-            let ids = [];
-
-            notifs.forEach(n => {
-                html += `<div class='notif-item'>${n.message}</div>`;
-                ids.push(n.id);
-            });
-
-            $("#notif-box").html(html);
-
-            // Auto mark as read when dropdown opens
-            $("#notif-btn").off().on("click", function() {
-                $("#notif-box").toggle();
-
-                if (ids.length > 0) {
-                    $.post("index.php?page=notifications&action=mark_as_read", { ids: ids });
-                }
-            });
-        },
-        error: function() {
-            console.error("Failed to fetch notifications.");
-        }
-    });
+// Notification Logic
+if (!("Notification" in window)) {
+    alert("This browser does not support desktop notification");
+} else if (Notification.permission !== "granted") {
+    Notification.requestPermission();
 }
 
-// Load notifications every 5 seconds
-/*setInterval(loadNotifications, 5000);
-loadNotifications();*/
-
-document.addEventListener("DOMContentLoaded", () => {
-    if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-    }
-});
+let processing = false;
 
 function checkNewNotification() {
+    if (processing) return;
+
     $.get("index.php?page=notifications&action=fetch_notifications", function(data) {
-        let notif = JSON.parse(data);
+        let notifs = JSON.parse(data);
 
-        let html = "";
-        let ids = [];
-
-        notifs.forEach(n => {
-            html += `<div class='notif-item'>${n.message}</div>`;
-            ids.push(n.id);
-        });
-
-        if (notif && notif.message) {
-            showBrowserNotification(notif.message, notif.id);
+        if (notifs.length > 0) {
+            processing = true;
+            showNotificationsQueue(notifs);
         }
     });
 }
 
-function showBrowserNotification(message, id) {
-    if (Notification.permission === "granted") {
-        let notification = new Notification("New Notification", {
-            body: message,
-            icon: "bell.png" // optional icon
-        });
-
-        // Mark as read after showing
-        $.post("index.php?page=notifications&action=mark_as_read", { ids: [id] });
+function showNotificationsQueue(notifs) {
+    if (notifs.length === 0) {
+        processing = false;
+        return;
     }
+
+    let notif = notifs.shift();
+
+    new Notification("New Notification", {
+        body: notif.message,
+        icon: "bell.png"
+    });
+
+    // Mark as read
+    $.post("index.php?page=notifications&action=mark_as_read", { ids: [notif.id] });
+
+    // Show next after 1 second
+    setTimeout(() => showNotificationsQueue(notifs), 1000);
 }
 
-// Check every 5 seconds
-//setInterval(checkNewNotification, 5000);
+setInterval(checkNewNotification, 5000);
 </script>

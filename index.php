@@ -247,7 +247,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'payement_terms':        
+    case 'payement_terms':
         require_once 'controllers/PaymenetTermsController.php';
         $controller = new PaymenetTermsController();
         switch ($action) {
@@ -270,7 +270,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'orders_priority_status':        
+    case 'orders_priority_status':
         require_once 'controllers/OrdersPriorityStatusController.php';
         $controller = new OrdersPriorityStatusController();
         switch ($action) {
@@ -293,7 +293,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'dashboard':        
+    case 'dashboard':
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
         $controller->index();
@@ -323,7 +323,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'roles':        
+    case 'roles':
         require_once 'controllers/RolesController.php';
         $controller = new RolesController();
         switch ($action) {
@@ -358,7 +358,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'teams':        
+    case 'teams':
         require_once 'controllers/TeamsController.php';
         $controller = new TeamsController();
         switch ($action) {
