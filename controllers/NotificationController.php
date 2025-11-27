@@ -28,7 +28,7 @@ class NotificationController {
         if (!empty($ids)) {
             $ids_str = implode(",", array_map('intval', $ids));
 
-            $sql = "UPDATE vp_notifications SET is_read=1 WHERE id IN ($ids_str)";
+            $sql = "UPDATE vp_notifications SET is_read = 1, read_at=now() WHERE id IN ($ids_str)";
             mysqli_query($conn, $sql);
         }
 

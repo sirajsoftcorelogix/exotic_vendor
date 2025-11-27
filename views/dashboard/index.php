@@ -272,6 +272,13 @@ function checkNewNotification() {
     });
 }
 
+function playNotificationSound() {
+  const audio = new Audio("images/sounds/notify.mp3");
+  audio.play().catch(error => {
+      console.log("Autoplay blocked:", error);
+  });
+}
+
 function showNotificationsQueue(notifs) {
     if (notifs.length === 0) {
         processing = false;
@@ -282,8 +289,23 @@ function showNotificationsQueue(notifs) {
 
     new Notification("New Notification", {
         body: notif.message,
-        icon: "bell.png"
+        icon: "images/bell-icons.ico",
     });
+
+    playNotificationSound();
+
+    /*new Notification("New Notification", {
+        body: notif.message,
+        icon: "bell.png",
+        data: { link: notif.link }
+    }).onclick = function(event) {
+        event.preventDefault();
+        if (event.target.data.link) {
+            window.open(event.target.data.link, '_blank');
+        } else {
+            window.focus();
+        }
+    };*/
 
     // Mark as read
     $.post("index.php?page=notifications&action=mark_as_read", { ids: [notif.id] });

@@ -10,7 +10,6 @@ $action = $_GET['action'] ?? 'list';
 //$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
 
 switch ($page) {
-	
 	case 'users':
         require_once 'controllers/UsersController.php';
 		$controller = new UsersController($conn);
