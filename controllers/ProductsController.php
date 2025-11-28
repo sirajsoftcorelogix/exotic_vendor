@@ -5,16 +5,25 @@ class ProductsController {
     public function product_list() {
         is_login();
         global $productModel;
-        $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+        //$search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Users per page, default 50
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // If user select value from dropdown
         $offset = ($page_no - 1) * $limit;
-
-        $products_data = $productModel->getAllProducts($limit, $offset, $search);
+        //Advanced Search Filters
+        $filters = [];
+        if (!empty($_GET['item_code'])) {
+            $filters['item_code'] = $_GET['item_code'];            
+        }        
+        if (!empty($_GET['item_name'])) {
+            $filters['title'] = $_GET['item_name'];            
+        }
+        if (!empty($_GET['vendor_name']) && !empty($_GET['vendor_id'])) {
+            $filters['vendor_name'] = $_GET['vendor_name'];            
+        }
+        $products_data = $productModel->getAllProducts($limit, $offset, $filters);
         // Assuming a method countAllProducts exists to get total count
-        $total_records = $productModel->countAllProducts($search);
-
+        $total_records = $productModel->countAllProducts($filters);
         $data = [
             'products' => $products_data,
             'page_no' => $page_no,

@@ -24,8 +24,85 @@
             $start = max(1, $end - $slot_size + 1);
         }
     ?>
+    <!-- Advance Search Accordion -->
+    <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
+        <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
+            <h2 class="text-xl font-bold text-gray-900">Advance Search</h2>
+            <svg id="accordion-icon-search" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+        </button>
 
-    <!-- Orders Table Section -->
+        <div id="accordion-content-search" class="accordion-content hidden overflow-visible">
+            <!-- Responsive Grid container -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
+                <form method="GET" id="productsSearchForm" action="<?= base_url('?page=products&action=list') ?>" class="contents">
+                <!-- products From/Till -->
+               
+
+                <!-- Item Code -->
+                <div>
+                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+
+                <!-- Item Name -->
+                <div>
+                    <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <div class="relative">
+                    <label for="vendor_autocomplete" class="block text-sm font-medium text-gray-600 mb-1">Vendor</label>
+                    <input
+                        type="text"
+                        id="vendor_autocomplete"
+                        class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="Search vendor by name..."
+                        autocomplete="off"
+                        name="vendor_name"
+                        value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>"
+                    >
+                    <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
+                    <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-48 overflow-auto " style="display:none; top:100%;"></div>
+                </div>
+                <!-- <div>
+                    <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
+                    <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected>-Select-</option>
+                        <?php //foreach ($staff_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['agent']) && $_GET['agent'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php //endforeach; ?>                    
+                    </select>
+                </div> -->
+                
+                
+                <!-- Buttons -->
+                <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
+                    <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Cancel</button>
+                    <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
+                    <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
+                </div>
+                </form>
+            <!-- clear filter -->
+             <script>
+                // function clearFilters() {
+                //     const url = new URL(window.location.href);
+                //     //alert(url.search);
+                //     url.search = ''; // Clear all query parameters
+                //     const page = 'page=orders&action=list';
+                //     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
+                // }
+                function cancelSearch() {
+                    const url = new URL(window.location.href);
+                    url.search = ''; // Clear all query parameters
+                    const page = 'page=products&action=list';
+                    window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
+                }
+            </script>
+            </div>
+        </div>
+    </div>
+    <!-- products Table Section -->
     <div class="mt-4">
         <!-- Tabs -->
         <div class="relative border-b-[4px] border-white mb-6">
@@ -538,4 +615,102 @@ document.getElementById('importConfirmBtn').addEventListener('click', function()
         btn.textContent = originalText;
     });
 });
+document.addEventListener('DOMContentLoaded', function () {
+    // Accordion functionality
+    const accordionButton = document.getElementById('accordion-button-search');
+    const accordionContent = document.getElementById('accordion-content-search');
+    const accordionIcon = document.getElementById('accordion-icon-search');
+
+    accordionButton.addEventListener('click', () => { 
+        const isExpanded = accordionButton.getAttribute('aria-expanded') === 'true';
+        accordionButton.setAttribute('aria-expanded', !isExpanded);
+        if (accordionContent.classList.contains('hidden')) { 
+            accordionContent.classList.remove('hidden');
+            accordionIcon.classList.add('rotate-180');                
+        } else {
+            accordionContent.classList.add('hidden');
+            accordionIcon.classList.remove('rotate-180');
+        }
+    });
+
+    function clearFilters() {
+        fromDateInput.value = '';
+        toDateInput.value = '';
+        toDateInput.min = null;
+    }
+
+    //clearButton.addEventListener('click', clearFilters);
+
+
+    const productsSearchForm = document.getElementById('productsSearchForm');
+    productsSearchForm.addEventListener('submit', function(event) {
+        // You can add custom validation here if needed
+        // For example, ensure that from_date is not after to_date
+        const form = document.getElementById('search-form') || document.querySelector('#accordion-content form') || document.querySelector('form[method="GET"]');
+        if (!form) return false;
+        
+        function setHidden(name, value){
+            let inp = form.querySelector('input[name="' + name + '"]');
+            if (!inp) {
+                inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = name;
+                form.appendChild(inp);
+            }
+            inp.value = value;
+        }
+
+        // ensure page and action are present in submitted query
+        setHidden('page', 'products');
+        setHidden('action', 'list');
+
+        form.submit();
+        return false;
+    });
+});
+//vendor auto complete
+document.getElementById('vendor_autocomplete').addEventListener('input', function() {
+    const query = this.value;
+    const suggestionsBox = document.getElementById('vendor_suggestions');
+    const vendorIdInput = document.getElementById('vendor_id');
+    // close suggestions if clicked outside
+    document.addEventListener('click', function(event) {
+        if (!suggestionsBox.contains(event.target) && event.target !== document.getElementById('vendor_autocomplete')) {
+            suggestionsBox.style.display = 'none';
+        }
+        if (event.target === document.getElementById('vendor_autocomplete')) {
+            if (suggestionsBox.children.length > 0) {
+                suggestionsBox.style.display = 'block';
+            }
+        }
+    });
+
+    if (query.length < 2) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {            
+            suggestionsBox.innerHTML = '';
+            if (Array.isArray(data.data) && data.data.length > 0) {
+                data.data.forEach(vendor => {
+                    const div = document.createElement('div');
+                    div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+                    div.textContent = vendor.vendor_name;
+                    div.addEventListener('click', function() {
+                        document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
+                        vendorIdInput.value = vendor.id;
+                        suggestionsBox.style.display = 'none';
+                    });
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+    });
+});
+
 </script>
