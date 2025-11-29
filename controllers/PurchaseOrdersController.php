@@ -876,15 +876,15 @@ class PurchaseOrdersController {
                     </tr>
                     <tr>
                         <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">Shipping:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['shipping'].'</td>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['shipping_cost'].'</td>
                     </tr>
                     <tr>
                         <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['gst'].'</td>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['total_gst'].'</td>
                     </tr>
                     <tr>
                         <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
-                        <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$purchaseOrder['grand_total'].'</td>
+                        <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$purchaseOrder['total_cost'].'</td>
                     </tr>
                 </table>
             </td>
