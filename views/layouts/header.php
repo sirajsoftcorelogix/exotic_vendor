@@ -304,4 +304,70 @@ unset($usersModel);
             }, 1500); // redirect after 1 sec
         });
     };
+    
+    // Notification Logic
+    if (!("Notification" in window)) {
+        alert("This browser does not support desktop notification");
+    } else if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+
+    let processing = false;
+
+    function checkNewNotification() {
+        if (processing) return;
+
+        $.get("index.php?page=notifications&action=fetch_notifications", function(data) {
+            let notifs = JSON.parse(data);
+
+            if (notifs.length > 0) {
+                processing = true;
+                showNotificationsQueue(notifs);
+            }
+        });
+    }
+
+    function playNotificationSound() {
+    const audio = new Audio("images/sounds/notify.mp3");
+    audio.play().catch(error => {
+        console.log("Autoplay blocked:", error);
+    });
+    }
+
+    function showNotificationsQueue(notifs) {
+        if (notifs.length === 0) {
+            processing = false;
+            return;
+        }
+
+        let notif = notifs.shift();
+
+        new Notification("New Notification", {
+            body: notif.message,
+            icon: "images/bell-icons.ico",
+        });
+
+        playNotificationSound();
+
+        /*new Notification("New Notification", {
+            body: notif.message,
+            icon: "bell.png",
+            data: { link: notif.link }
+        }).onclick = function(event) {
+            event.preventDefault();
+            if (event.target.data.link) {
+                window.open(event.target.data.link, '_blank');
+            } else {
+                window.focus();
+            }
+        };*/
+
+        // Mark as read
+        $.post("index.php?page=notifications&action=mark_as_read", { ids: [notif.id] });
+
+        // Show next after 1 second
+        setTimeout(() => showNotificationsQueue(notifs), 1000);
+    }
+
+    setInterval(checkNewNotification, 5000);
 </script>
