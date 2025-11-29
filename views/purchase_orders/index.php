@@ -512,6 +512,26 @@
         <div id="emailToPo-msg" class="text-sm mt-2"></div>
     </div>
 </div>
+<!-- -- Download Format Popup -->
+<div id="download-popup-overlay" class="fixed inset-0 bg-black bg-opacity-30 z-50 hidden flex items-center justify-center">
+  <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
+    <h3 class="text-lg font-bold mb-4">Download Purchase Order</h3>
+    <form id="download-form" method="post" action="?page=purchase_orders&action=download" target="_blank">
+      <input type="hidden" id="download-po-id" name="po_id">
+      <label for="design-format-select" class="block mb-2 text-sm font-medium text-gray-700">Select Format:</label>
+      <select id="design-format-select" name="design_format" class="w-full border rounded-md p-2 mb-4">
+        <!-- <option value="largeImageWithPrice">Large Image with Price</option> -->
+        <option value="smallImageWithPrice">Small Image with Price</option>
+        <option value="largeImageWithoutPrice">Large Image without Price</option>
+        <!-- <option value="smallImageWithoutPrice">Small Image without Price</option> -->
+      </select>
+      <div class="flex justify-end gap-2">
+        <button type="button" id="download-cancel-btn" onclick="closeDownloadPopup()" class="bg-gray-200 px-4 py-1 rounded">Cancel</button>
+        <button type="submit" class="bg-green-600 text-white px-4 py-1 rounded">Download</button>
+      </div>
+    </form>
+  </div>
+</div>
 <script>
 //calculate grand total
 document.getElementById('sub_total').addEventListener('input', calculateGrandTotal);    
@@ -584,8 +604,12 @@ function handleAction(action, poId, el) {
             });
       }
   } else if (action === 'Download') {
+    //open popup to ask for download format
+    document.getElementById('download-po-id').value = poId;
+    document.getElementById('download-popup-overlay').classList.remove('hidden');
+
       // Redirect to download action
-      window.open('?page=purchase_orders&action=download&po_id='+ poId, '_blank');
+      //window.open('?page=purchase_orders&action=download&po_id='+ poId, '_blank');
   } else if (action === 'ChangeStatus') {
         document.getElementById('status-po-id').value = poId;
         document.getElementById('status-popup-overlay').classList.remove('hidden');
@@ -1108,4 +1132,8 @@ function submitSearchForm() {
     form.submit();
     return false;
 }
+//downoad popup
+function closeDownloadPopup() {
+    document.getElementById('download-popup-overlay').classList.add('hidden');
+}   
 </script>

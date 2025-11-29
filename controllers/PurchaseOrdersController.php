@@ -766,11 +766,17 @@ class PurchaseOrdersController {
         global $vendorsModel;
         global $usersModel;
 
-        
+        $design_format = 'smallImageWithPrice';
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
         if($generateOnly){
             $poId = $generateOnly;
         }
+        //download as design format required
+        //print_array($_POST);
+        if (isset($_POST['design_format']) && isset($_POST['po_id'])) {
+            $design_format = $_POST['design_format'];
+            $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+        } 
         if (!$poId) {
             echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
             exit;
@@ -839,14 +845,14 @@ class PurchaseOrdersController {
             require_once 'Text/LanguageDetect.php'; 
             $detector = new Text_LanguageDetect();
             
-            $tbody = '';
+            $tbody = ''; $thead= ''; $summary_rows = '';
             foreach ($purchaseOrderItems as $index => $item) {
                 $text = explode(':', $item['title']);
                 $lang1 = $detector->detectSimple($text[0]); // returns 'hi', 'ta', etc.
                 $lang2 = isset($text[1]) ? $detector->detectSimple($text[1]) : 'english';
                 $font = $fontMap[$lang1] ?? 'sans-serif'; // fallback if unknown
                 $font2 = $fontMap[$lang2] ?? 'sans-serif'; // fallback if unknown
-
+                if($design_format == 'smallImageWithPrice'){ 
                 $tbody .= '<tr>';
                 $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
                 $tbody .= '<td style="width:37% !important; border:1px solid #000; padding:6px;">';
@@ -860,10 +866,49 @@ class PurchaseOrdersController {
                 $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
                 //}
                 $tbody .= '</tr>';
+                $summary_rows .= '<tr>
+            <td style="width: 60%;"></td>
+            <td style="width: 40%; vertical-align:top;">
+                <table>
+                    <tr>
+                        <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['subtotal'].'</td>
+                    </tr>
+                    <tr>
+                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">Shipping:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['shipping'].'</td>
+                    </tr>
+                    <tr>
+                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['gst'].'</td>
+                    </tr>
+                    <tr>
+                        <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
+                        <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$purchaseOrder['grand_total'].'</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>';
+                }else if($design_format == 'largeImageWithoutPrice'){
+                    $tbody .= '<tr style="border:1px solid #000;">';
+                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .= '<p> <b>Order details:</b> <br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
+                    $tbody .= '<b>Dimensions:</b> <br> Height:' . htmlspecialchars($item['prod_height'] ?? '') . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
+                    $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight'] ?? '') . '<br>';
+                    $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size'] ?? '') . ' <br>';
+                    $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color'] ?? '') . '<br>';
+                    $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material'] ?? '') . ' <br>';
+                    $tbody .= '</p>';
+                    $tbody .= '</td>';
+                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:350px;">';
+                    $tbody .= '</td>';
+                    $tbody .= '</tr>';
+                }
                 
             }
         }
-        
+       
         require_once('vendor/autoload.php');
         define('_MPDF_TTFONTPATH',  __DIR__ . '/../templates/fonts/');      
 
@@ -891,29 +936,42 @@ class PurchaseOrdersController {
             'R' => 'NotoSansGujarati-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-        //if($item['price'] < 0){            
+        if($design_format == 'smallImageWithPrice'){
+        
+            $thead = '<tr>    
+                <th style="width:5% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">#</th>
+                <th style="width:37% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
+                <th style="width:13% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
+                <th style="width:8% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Qty</th>
+                <th style="width:13% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:right; font-size:11px;">Unit Price</th>
+                <th style="width:8% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">GST</th>
+                <th style="width:16% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:right; font-size:11px;">Amount</th>
+            </tr>';     
+        }else if($design_format == 'largeImageWithoutPrice'){
+            /*$thead = '<tr>    
+                <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
+                <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
+            </tr>';*/
+            $thead = '';
+        }      
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
-        // }else{
-        // $temphtml = file_get_contents('templates/purchaseOrder/po_zero_price.html');
-        // }
-        //Define HTML content
+        
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}','{{thead}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
             [
                 $purchaseOrder['po_number'],
                 date('d M Y', strtotime($purchaseOrder['created_at'])),
                 date('d M Y', strtotime($purchaseOrder['expected_delivery_date'])),
+                $thead,
                 $tbody,
-                $purchaseOrder['subtotal'],
-                $purchaseOrder['shipping_cost'],
-                $purchaseOrder['total_gst'],
-                $purchaseOrder['total_cost'],
+                $summary_rows,
                 nl2br($purchaseOrder['terms_and_conditions']),
                 $vendorInfo,
                 $contactPerson
             ],
             $temphtml
         );
+        //echo $html; exit;
         // $html = '
         //     <h2 style="font-family: sans-serif;">English: Hello World</h2>
         //     <p style="font-family: noto_devanagari;">हिंदी: नमस्ते दुनिया</p>

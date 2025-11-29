@@ -447,6 +447,8 @@ class OrdersController {
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($agentLogData);
+                    //set notification to agent
+                    sendNotification($agent_id, 'You have been assigned a new order. Please check the order details.');
                 }
                 if($esd != $previous_esd){
                     //log esd change
