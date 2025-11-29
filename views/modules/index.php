@@ -1,16 +1,3 @@
-<style>
-  label input[type=checkbox] {
-      transform: scale(1.2);
-      margin-right: 6px;
-  }
-  .permission-box {
-      border: 1px solid #ddd;
-      padding: 10px 15px;
-      margin-bottom: 15px;
-      border-radius: 8px;
-      background: #fff;
-  }
-</style>
 <div class="max-w-7xl mx-auto space-y-6">
     <!-- Page Header -->
     <div class="flex flex-wrap items-center justify-between gap-4">
@@ -18,7 +5,7 @@
         <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap items-center justify-between gap-4 flex-grow mt-[10px]">
             <!-- Filters -->
             <form method="get" id="filterForm">
-                <input type="hidden" name="page" value="roles">
+                <input type="hidden" name="page" value="modules">
                 <input type="hidden" name="action" value="list">
                 <div class="flex flex-wrap items-center gap-4">
                     <div class="flex items-center gap-2">
@@ -29,7 +16,7 @@
                     </div>
                     <div class="flex flex-wrap items-left gap-4">
                         <div class="relative flex items-left gap-2">
-                            <input type="text" name="search_text" placeholder="Search by name, email or phone" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
+                            <input type="text" name="search_text" placeholder="Search by name" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
                         </div>
                     </div>
                     <div class="relative">
@@ -44,13 +31,13 @@
                         <input type="submit" value="Search" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2">
                     </div>
                     <div class="relative">
-                        <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=roles&action=list';">
+                        <input type="button" value="Clear" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 800; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="font-bold rounded-lg flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white" onclick="document.getElementById('filterForm').reset();window.location='?page=modules&action=list';">
                     </div>
                 </div>
             </form>
         </div>
         <!-- Add User Button -->
-        <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" onclick="openEditModal(0);">
+        <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" id="open-vendor-popup-btn">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>Add</button>
@@ -74,42 +61,33 @@
                     </div>
                 </div>
             </div>
-            <div class="text-sm font-bold text-green-600 mb-4" id="messageDiv"><?php echo $_SESSION["role_message"] ?? ""; unset($_SESSION["role_message"]); ?></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                     <tr>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Role</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Action</th>
                     </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                    <?php if (!empty($roles)): ?>
-                        <?php foreach ($roles as $index => $row): 
-                            $perm_display = [];
-                            foreach ($row['permissions'] as $module => $actions) {
-                                $perm_display[] = "<b>".htmlspecialchars($module) . '</b>: ' . implode(', ', array_map('htmlspecialchars', $actions));
-                            }
-                            ?>
+                    <?php if (!empty($modules_data)): ?>
+                        <?php foreach ($modules_data as $index => $tc): ?>
                             <tr class="table-content-text">
                                 <td class="px-6 py-4 whitespace-nowrap"><?= $index + 1 ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($row['role_name']) ?? "" ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= ($row['is_active'] == 1 ? "Active" : "Inactive") ?>
-                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($tc['module_name']) ?? '' ?></td>
+                                <td class="px-6 py-4 whitespace-nowrap"><?= ($tc['active'] == 1 ? "Active" : "Inactive") ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
                                     <div class="menu-wrapper">
                                         <button class="menu-button" onclick="toggleMenu(this)">
                                             &#x22EE; <!-- Vertical ellipsis -->
                                         </button>
-                                        <?php if($row['id'] != 1) { ?>
-                                            <ul class="menu-popup">    
-                                                <li onclick="openEditModal(<?= htmlspecialchars($row['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
-                                                <li class="delete-btn" data-id="<?php echo $row['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
-                                            </ul>
-                                        <?php } ?>
+                                        <ul class="menu-popup">
+                                            <li onclick="openEditModal(<?= htmlspecialchars($tc['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <li class="delete-btn" data-id="<?php echo $tc['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                        </ul>
                                     </div>
 
                                 </td>
@@ -139,17 +117,17 @@
                 <div class="flex items-center gap-4 text-sm text-gray-600">
                     <span>Page</span>
                     <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no <= 1 ? 'disabled' : '' ?>" >
-                        <a class="page-link" <?php if(($page_no-1) >= 1) { ?> href="?page=roles&acton=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?>  tabindex="-1">
+                        <a class="page-link" <?php if(($page_no-1) >= 1) { ?> href="?page=modules&acton=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?>  tabindex="-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                         </a>
                     </button>
                     <span id="page-number" class="bg-black text-white rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold shadow-lg"><?= $page_no ?></span>
                     <button class="p-2 rounded-full hover:bg-gray-100 <?= $page_no >= $total_pages ? 'disabled' : '' ?>">
-                        <a class="page-link" <?php if($page_no < $total_pages) { ?> href="?page=roles&acton=list&page_no=<?= $page_no+1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
+                        <a class="page-link" <?php if($page_no < $total_pages) { ?> href="?page=modules&acton=list&page_no=<?= $page_no+1 ?>&limit=<?= $limit ?>" <?php } else { ?> href="#" <?php } ?> tabindex="-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></a>
                     </button>
                     <div class="relative">
-                        <select id="rows-per-page" class="custom-select bg-transparent border-b border-gray-300 text-gray-900 text-sm focus:ring-0 focus:border-gray-500 block w-full p-1" onchange="location.href='?page=roles&acton=list&page_no=1&limit=' + this.value;">
+                        <select id="rows-per-page" class="custom-select bg-transparent border-b border-gray-300 text-gray-900 text-sm focus:ring-0 focus:border-gray-500 block w-full p-1" onchange="location.href='?page=modules&acton=list&page_no=1&limit=' + this.value;">
                             <?php foreach ([10, 20, 50, 100] as $opt): ?>
                                 <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                                     <?= $opt ?>
@@ -161,7 +139,6 @@
             </div>
         </div>
 	<?php endif; ?>
-
 </div>
 
 <!-- Add Modal -->
@@ -184,23 +161,35 @@
         <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add Role</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add Module</h2>
                     <div id="addVendorMsg" style="margin-top:10px;" class="text-sm font-bold"></div>
                     <form id="addVendorForm">
                         <div class="pt-4">
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Role Name <span class="text-red-500">*</span></label>
-                                <input type="text" class="form-input w-full mt-1" required name="addRName" id="addRName" />
+                                <label class="text-sm font-medium text-gray-700">Parent Menu <span class="text-red-500">*</span></label>
+                                <select style="width: 100%; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="addParentMenu" id="addParentMenu" required>
+                                    <option value="0" selected>-- Select Parent Menu --</option>
+                                    <?php foreach ($parent_menus as $pmenu): ?>
+                                        <option value="<?= htmlspecialchars($pmenu['id']) ?>"><?= htmlspecialchars($pmenu['module_name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Description</label>
-                                <textarea class="w-full min-h-[90px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="addRDescription" id="addRDescription"></textarea>
+                                <label class="text-sm font-medium text-gray-700">Module Name <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1 required" required name="addModuleName" />
                             </div>
-                        </div>
-                        <div class="pt-4"><label class="text-sm font-medium text-gray-700">Permissions</label></div>
-
-                        <div class="pt-4">
-                            <?=$modules_str?>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Slug <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1 required" required name="addSlug" />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Action <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1 required" required name="addAction" value="list" />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Font Awesome Icon</label>
+                                <input type="text" class="form-input w-full mt-1 required" name="addFontAwesomeIcon" placeholder="fa fa-clipboard-list" />
+                            </div>
                         </div>
                         <div class="pt-4 grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
 							<div>
@@ -243,22 +232,36 @@
         <div class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Role</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Module</h2>
                     <div id="editVendorMsg" style="margin-top:10px;"></div>
                     <form id="editUserForm">
                         <input type="hidden" id="editId" name="id" value="">
                         <div class="pt-4">
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Role Name <span class="text-red-500">*</span></label>
-                                <input type="text" class="form-input w-full mt-1" required name="editRName" id="editRName" />
+                                <label class="text-sm font-medium text-gray-700">Parent Menu <span class="text-red-500">*</span></label>
+                                <select style="width: 100%; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="editParentMenu" id="editParentMenu" required>
+                                    <option value="0" selected>-- Select Parent Menu --</option>
+                                    <?php foreach ($parent_menus as $pmenu): ?>
+                                        <option value="<?= htmlspecialchars($pmenu['id']) ?>"><?= htmlspecialchars($pmenu['module_name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Module Name <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1 required" required name="editModuleName" id="editModuleName" />
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Description</label>
-                                <textarea class="w-full min-h-[90px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="editRDescription" id="editRDescription"></textarea>
+                                <label class="text-sm font-medium text-gray-700">Slug <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1 required" required name="editSlug" id="editSlug" />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Action <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1 required" required name="editAction" id="editAction" />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Font Awesome Icon <span class="text-red-500">*</span></label>
+                                <input type="text" class="form-input w-full mt-1 required" name="editFontAwesomeIcon" id="editFontAwesomeIcon" />
                             </div>
                         </div>
-                        <div class="pt-4"><label class="text-sm font-medium text-gray-700">Permissions</label></div>
-                        <div class="pt-4" id="editModuleStr"></div>
                         <div class="pt-4 grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
 							<div>
 								<label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
@@ -285,13 +288,15 @@
 
 <!-- JavaScript to handle popup and form submission -->
 <script>
-    const myDiv = document.getElementById('messageDiv');
-    // Clear the div after 5000 milliseconds (5 seconds)
-    setTimeout(() => {
-        if (myDiv.innerHTML.trim() !== '') {
-            myDiv.innerHTML = '';
-        }
-    }, 3000);
+    const requiredFields = document.querySelectorAll('.required');
+    // Optional: Auto-trim leading spaces on input
+    requiredFields.forEach(field => {
+        field.addEventListener('input', function() {
+            if (this.value.charAt(0) === ' ') {
+                this.value = this.value.trimStart(); // Remove leading spaces
+            }
+        });
+    });
 
     // Toggle menu visibility
     function toggleMenu(button) {
@@ -391,7 +396,7 @@
         });
     });
 
-    /*const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
+    const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
     const popupWrapper = document.getElementById('popup-wrapper');
     const modalSlider = document.getElementById('modal-slider');
     const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
@@ -412,22 +417,18 @@
         if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
             popupWrapper.classList.add('hidden');
         }
-    });*/
+    });
 
-    /*openVendorPopupBtn.addEventListener('click', openVendorPopup);
+    openVendorPopupBtn.addEventListener('click', openVendorPopup);
     cancelVendorBtn.addEventListener('click', closeVendorPopup);
     closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
 
     document.getElementById('addVendorForm').onsubmit = function(e) {
         e.preventDefault();
-        // Ensure CKEditor updates <textarea>
-        for (var instance in CKEDITOR.instances) {
-            CKEDITOR.instances[instance].updateElement();
-        }
 
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
-        fetch('?page=roles&action=addRecord', {
+        fetch('?page=modules&action=addRecord', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: params
@@ -453,7 +454,7 @@
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
             }
         });
-    };*/
+    };
 
     let successModalTimer;
     // Delete
@@ -467,7 +468,7 @@
                 window.closeAllMenus();
                 if (!confirm("Are you sure you want to delete this record?")) return;
 
-                fetch("?page=roles&action=deleteRecord", {
+                fetch("?page=modules&action=deleteRecord", {
                     method: "POST",
                     headers: { "Content-Type": "application/x-www-form-urlencoded" },
                     body: "id=" + id
@@ -508,24 +509,17 @@
     }
 
     // Edit User Modal Logic    
-    /*const popupWrapperEdit = document.getElementById('editVendorModal');
+    const popupWrapperEdit = document.getElementById('editVendorModal');
     const modalSliderEdit = document.getElementById('modal-slider-edit');
     const cancelVendorBtnEdit = document.getElementById('cancel-vendor-btn-edit');
-    const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');*/
+    const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
 
     function openEditModal(id) {
-        if(id == 0) {
-            window.location.href = '?page=roles&action=add';
-            return;
-        } else {
-            window.location.href = '?page=roles&action=edit&role_id='+ id;
-            return;
-        }
-
-        /*closeAllMenus();
-        fetch("?page=roles&action=roleDetails&id=" + id)
+        closeAllMenus();
+        fetch("?page=modules&action=getDetails&id=" + id)
         .then(res => res.json())
         .then(data => {
+            console.log(data);
             let datas = JSON.parse(data);
             if (data.status === "error") {
                 alert(data.message);
@@ -533,26 +527,40 @@
             }
             // Populate form fields data
             document.getElementById("editId").value   = datas.id;
-            document.getElementById("editRName").value   = datas.role_name;
-            document.getElementById("editRDescription").value   = datas.role_description;
-            document.getElementById("editModuleStr").innerHTML   = datas.edit_modules_str;
-            document.getElementById("editStatus").value = datas.is_active;
+            document.getElementById("editParentMenu").value   = datas.parent_id;
+            document.getElementById("editModuleName").value   = datas.module_name;
+            document.getElementById("editSlug").value   = datas.slug;
+            document.getElementById("editAction").value   = datas.action;
+            document.getElementById("editFontAwesomeIcon").value = (datas.font_awesome_icon !== null) ? unescapeString(datas.font_awesome_icon) : '';
+            document.getElementById("editStatus").value = datas.active;
 
             popupWrapperEdit.classList.remove('hidden');
             setTimeout(() => {
                 modalSliderEdit.classList.remove('translate-x-full');
             }, 10);
-        });*/
+        });
     }
-
+    function unescapeString(str) {
+        if (typeof str !== 'string') {
+            return str; // Return as-is if not a string
+        }
+        return str
+            .replace(/\\'/g, "'")       // Unescape single quote
+            .replace(/\\"/g, '"')       // Unescape double quote
+            .replace(/\\\\/g, '\\')     // Unescape backslash (must be done last to avoid double-unescaping)
+            .replace(/\\n/g, '\n')      // Unescape newline
+            .replace(/\\r/g, '\r')      // Unescape carriage return
+            .replace(/\\x00/g, '\x00')  // Unescape null byte
+            .replace(/\\x1a/g, '\x1a'); // Unescape control-Z
+    }
     function closeVendorPopupEdit() {
         modalSliderEdit.classList.add('translate-x-full');
     }
 
-    //closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
-    //cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
+    cancelVendorBtnEdit.addEventListener('click', closeVendorPopupEdit);
 
-    /*document.getElementById('editUserForm').onsubmit = function(e) {
+    document.getElementById('editUserForm').onsubmit = function(e) {
         e.preventDefault();
         // Ensure CKEditor updates <textarea>
         for (var instance in CKEDITOR.instances) {
@@ -560,7 +568,7 @@
         }
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
-        fetch('?page=roles&action=addRecord', {
+        fetch('?page=modules&action=addRecord', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: params
@@ -576,7 +584,7 @@
                 msgBox.focus();
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
                 setTimeout(() => {
-                    window.location.href = '?page=roles&action=list';
+                    window.location.href = '?page=modules&action=list';
                 }, 1000); // redirect after 1 sec
             } else {
                 msgBox.innerHTML = `<div style="color: red; padding: 10px; background: #ffe0e0; border: 1px solid #a00;">
@@ -586,5 +594,5 @@
                 msgBox.scrollIntoView({ behavior: "smooth", block: "center" });
             }
         });
-    };*/
+    };
 </script>

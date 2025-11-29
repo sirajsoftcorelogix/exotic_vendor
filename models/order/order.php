@@ -8,7 +8,13 @@ class Order{
     public function getAllOrders($filters = [], $limit = 50, $offset = 0) {
 
         //$sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
-        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  WHERE 1=1";
+        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name 
+		FROM vp_orders 
+		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
+		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		WHERE 1=1";
+		
         $params = [];
         if (!empty($filters['order_number'])) {
             $sql .= " AND vp_orders.order_number LIKE ?";
@@ -45,18 +51,18 @@ class Order{
                 $sql .= " AND vp_orders.status = 'pending'";
             } elseif ($filters['status_filter'] === 'processed') {
                 //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
-                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
             } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
                 $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-            }
+            } 
         }
         if (!empty($filters['country'])) {
 			if($filters['country']=='overseas'){
-				$sql .= " AND (vp_orders.shipping_country != 'IN' OR vp_orders.country != 'IN')";
+				$sql .= " AND (vp_orders.shipping_country != 'IN' AND vp_orders.country != 'IN')";
 			}else{
 				$sql .= " AND (vp_orders.shipping_country = '" . $filters['country'] . "' OR vp_orders.country = '" . $filters['country'] . "' )";
 			}
@@ -66,12 +72,38 @@ class Order{
             $sql .= " AND vp_orders.groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
         }
-        if (!empty($filters['options']) && $filters['options'] === 'express') {
-            $sql .= " AND vp_orders.options LIKE '%express%'";
+        if (!empty($filters['options']) && $filters['options'] === 'express' ) {
+            $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
-          
-
-        $sql .= " ORDER BY order_date DESC LIMIT ? OFFSET ?";
+        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            $sql .= " AND vp_orders.payment_type = ?";
+            $params[] = $filters['payment_type'];
+        }
+        if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
+            $sql .= " AND vp_users.id = ?";
+            $params[] = $filters['staff_name'];
+        }
+        if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
+            $sql .= " AND vp_orders.priority = ?";
+            $params[] = $filters['priority'];
+        }
+        if(!empty($filters['vendor_id'])){
+            $sql .= " AND vp_vendors.id = ?";
+            $params[] = $filters['vendor_id'];            
+        }
+        if(!empty($filters['agent'])){
+            $sql .= " AND vp_orders.agent_id = ?";
+            $params[] = $filters['agent'];            
+        }
+        //echo $sql;
+        // Add sorting based on filter
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+        } else {
+            $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+        }
+       
+        $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         // Add limit and offset to params and types
         $params[] = $limit;
@@ -89,7 +121,13 @@ class Order{
         return $orders;
     }
     public function getOrdersCount($filters = []) {
-        $sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
+        //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
+        $sql = "SELECT COUNT(*) as count 
+		FROM vp_orders 
+		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
+		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		WHERE 1=1";
         $params = [];
         if (!empty($filters['order_number'])) {
             $sql .= " AND order_number LIKE ?";
@@ -100,7 +138,7 @@ class Order{
             $params[] = '%' . $filters['item_code'] . '%';
         }
         if (!empty($filters['po_no'])) {
-            $sql .= " AND po_number LIKE ?";
+            $sql .= " AND vp_orders.po_number LIKE ?";
             $params[] = '%' . $filters['po_no'] . '%';
         }
         if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
@@ -122,14 +160,17 @@ class Order{
         }
         if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
             if ($filters['status_filter'] === 'pending') {
-                $sql .= " AND (po_number IS NULL OR po_number = '')";
+                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                $sql .= " AND vp_orders.status = 'pending'";
             } elseif ($filters['status_filter'] === 'processed') {
                 //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
-                $sql .= " AND vp_orders.status IN ('po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
             } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','ready_for_dispatch')";
+                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
             }
         }
         if (!empty($filters['country'])) {
@@ -139,6 +180,35 @@ class Order{
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
             $sql .= " AND groupname LIKE ?";
             $params[] = '%' . $filters['category'] . '%';
+        }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
+        }
+        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            $sql .= " AND payment_type = ?";
+            $params[] = $filters['payment_type'];
+        }
+        if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
+            $sql .= " AND vp_users.id = ?";
+            $params[] = $filters['staff_name'];
+        }
+        if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
+            $sql .= " AND priority = ?";
+            $params[] = $filters['priority'];
+        }
+        if(!empty($filters['vendor_id'])){
+            $sql .= " AND vp_vendors.id = ?";
+            $params[] = $filters['vendor_id'];            
+        }
+        if(!empty($filters['agent'])){
+            $sql .= " AND vp_orders.agent_id = ?";
+            $params[] = $filters['agent'];            
+        }
+        // Add sorting based on filter
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
+        } else {
+            $sql .= " ORDER BY order_date DESC"; // Default sort order
         }
 
         $stmt = $this->db->prepare($sql);
@@ -243,7 +313,11 @@ class Order{
             'giftvoucher',
             'giftvoucher_reduce',
             'credit',
-            'vendor'
+            'vendor',
+            'country',
+            'material',
+            'status',
+            'esd'
         ];
 
         // Build SQL query
@@ -402,16 +476,16 @@ class Order{
         }
         // Check for existing products with the same item_code
         $existingProducts = [];
-        $sql = "SELECT * FROM vp_products WHERE item_code = ?";
+        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND color = ? AND size = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('s', $data['item_code']);
+        $stmt->bind_param('sss', $data['item_code'], $data['color'], $data['size']);
         $stmt->execute();
         $result = $stmt->get_result();
         while ($row = $result->fetch_assoc()) {
             $existingProducts[] = $row;
         }
         if (!empty($existingProducts)) {
-            return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' already exists.'];
+            return ['success' => false, 'message' => 'Product with item_code '.$data['item_code'].' and color '.$data['color'].' and size '.$data['size'].' already exists.'];
         }
                
         if(!empty($data)) {
@@ -453,11 +527,153 @@ class Order{
         if(empty($order_id) || empty($data['status'])) {
             return ['success' => false, 'message' => 'Required fields are missing.'];
         }
-        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ? WHERE id = ?";
+        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ?, agent_id = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssi', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $order_id);
+        $stmt->bind_param('ssssii', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $data['agent_id'], $order_id);
         if ($stmt->execute()) {
             return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    function getOrderByOrderNumber($order_number) {
+        $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            // If only one row is found, return an associative array for backward compatibility,
+            // otherwise return all matching rows as an array of associative arrays.
+            /*if ($result->num_rows === 1) {
+                return $result->fetch_assoc();
+            }*/
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return null;
+    }
+    function adminOrderStatusList($admin = true) {
+        $sql = "SELECT * FROM vp_order_status WHERE admin_id != 0 ORDER BY id ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $result->fetch_all(MYSQLI_ASSOC);
+        }
+        //array list with slug as key
+        $statusList = [];
+        foreach ($result as $row) {
+            $statusList[$row['admin_id']] = $row['slug'];
+        }
+        return $statusList;
+    }
+    function updateImportedOrder($data) {
+        // Validate inputs
+        if (empty($data['order_number']) || empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Order number or item code is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET 
+                shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
+                groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, gst = ?, hsn = ?, 
+                local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
+                numsold = ?, product_weight = ?, product_weight_unit = ?,
+                prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
+                backorder_status = ?, backorder_percent = ?, backorder_delay = ?,
+                payment_type = ?, coupon = ?, coupon_reduce = ?, giftvoucher = ?, giftvoucher_reduce = ?,
+                credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?, updated_at = ?
+                WHERE order_number = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        // Prepare values in the same order as the SQL placeholders
+        $values = [
+            $data['shipping_country'], $data['title'], $data['description'], $data['size'], $data['color'],
+            $data['groupname'], $data['subcategories'], $data['currency'], $data['itemprice'], $data['finalprice'],
+            $data['image'], $data['marketplace_vendor'], $data['quantity'], json_encode($data['options']), $data['gst'], $data['hsn'],
+            $data['local_stock'], $data['cost_price'], $data['location'], $data['order_date'], $data['processed_time'],
+            $data['numsold'], $data['product_weight'], $data['product_weight_unit'],
+            $data['prod_height'], $data['prod_width'], $data['prod_length'], $data['length_unit'],
+            $data['backorder_status'], $data['backorder_percent'], $data['backorder_delay'],
+            $data['payment_type'], $data['coupon'], $data['coupon_reduce'], $data['giftvoucher'], $data['giftvoucher_reduce'],
+            $data['credit'], $data['vendor'], $data['country'], $data['material'], $data['status'], $data['esd'], $data['updated_at'],
+            $data['order_number'], $data['item_code']
+        ];
+
+        // Build types string dynamically based on actual PHP types
+        $types = '';
+        foreach ($values as $val) {
+            if (is_int($val)) {
+                $types .= 'i';
+            } elseif (is_float($val) || is_double($val)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        // mysqli_stmt::bind_param requires arguments passed by reference when using call_user_func_array
+        $refs = [];
+        foreach ($values as $key => $value) {
+            $refs[$key] = &$values[$key];
+        }
+        array_unshift($refs, $types);
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        // print binded parameters for debugging
+        //print_array($refs);        
+
+        //foreach ($refs as $ref) {
+            //if ($ref === $types) continue; // Skip types string
+            //echo $ref . "\n";
+        //}
+        //print_r($stmt);
+        //comment the below line after execution on 09-06-2024
+        // if ($stmt->execute()) {
+        //     return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        // } else {
+        //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        // }
+    }
+    public function getPaymentTypes(){
+        $sql = "SELECT DISTINCT payment_type FROM `vp_orders` WHERE 1;";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $paymentTypes = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                if(!empty($row['payment_type'])){
+                    $paymentTypes[$row['payment_type']] = str_replace('_', ' ', $row['payment_type']);
+                }
+            }
+        }
+        return $paymentTypes;
+    }
+    public function addVendorIfNotExists($vendor_name) {
+        // Check if vendor already exists
+        $sql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $vendor_name);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return ['success' => true, 'vendor_id' => $row['id'], 'message' => 'Vendor already exists.'];
+        }
+
+        // Insert new vendor
+        $sql = "INSERT INTO vp_vendors (vendor_name) VALUES (?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $vendor_name);
+        if ($stmt->execute()) {
+            return ['success' => true, 'vendor_id' => $stmt->insert_id, 'message' => 'Vendor added successfully.'];
         } else {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }

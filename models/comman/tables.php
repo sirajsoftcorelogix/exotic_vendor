@@ -25,7 +25,7 @@ class Tables {
     
 
     public function get_exotic_address() {
-        $sql = "SELECT * FROM exotic_address WHERE is_active = 1";
+        $sql = "SELECT * FROM exotic_address WHERE is_active = 1 order by `order_no` ASC";
         $result = $this->ci->query($sql);
         $data = [];
         if ($result && $result->num_rows > 0) {
@@ -103,7 +103,100 @@ class Tables {
         $data = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $data[$row['country_code']] = $row['name'];
+               if (!empty($row['name']) && !empty($row['country_code'])) {
+                    $data[$row['country_code']] = $row['name'];
+                }
+
+            }
+        }
+        return $data;
+    }
+
+    //order status log
+    public function add_order_status_log($data) {
+        $sql = "INSERT INTO vp_order_status_log (order_id, status, changed_by, api_response, change_date) VALUES (?, ?, ?, ?, ?)";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('issss', $data['order_id'], $data['status'], $data['changed_by'], $data['api_response'], $data['change_date']);
+        if ($stmt->execute()) {
+            return true;
+        }
+        return false;
+    }
+    //get order status log
+    public function get_order_status_log($order_id) {
+        $sql = "SELECT osl.*, u.name AS changed_by_username FROM vp_order_status_log osl JOIN vp_users u ON osl.changed_by = u.id WHERE osl.order_id = ? ORDER BY osl.id ASC";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[] = $row;
+            }
+        }
+        return $data;
+    }
+    public function getExoticIndiaOrderStatusCode($slug) {
+        $sql = "SELECT * FROM vp_order_status WHERE slug = ? LIMIT 1";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('s', $slug);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function updateExoticIndiaOrderStatus($apidata) {
+        // This is a placeholder function. Implement the actual API call here.
+        //print_r($new_status);
+        //echo "Updating Exotic India order status for order ID: " . $order_id . "\n";
+        // For example, you might use cURL or any HTTP client to send a request to the Exotic India API.
+        $url = "https://www.exoticindia.com/vendor-api/order/modify";
+        $postData = [
+            'makeRequestOf' => 'vendors-orderjson',
+            'orderid' => $apidata['orderid'],
+            'level' => $apidata['level'],
+            'order_status' => $apidata['order_status'],
+            'itemcode' => $apidata['itemcode'],
+            'size' => $apidata['size'],
+            'color' => $apidata['color']
+        ];
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+
+        // Initialize cURL
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $response = curl_exec($ch);
+        
+        $error = curl_error($ch);
+        curl_close($ch);
+        if ($error) {
+            // Handle cURL error
+            //echo "cURL Error: " . $error;
+            return  "cURL Error: " . $error;
+        }
+        return $response;
+    }
+    public function get_staff_list() {
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1";
+        $stmt = $this->ci->prepare($sql);        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[$row['id']] = $row['name'];
             }
         }
         return $data;

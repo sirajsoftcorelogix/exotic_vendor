@@ -7,9 +7,27 @@
 			// store current URL to redirect back after successful login
 			$currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
 				. '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+			
+			// identify AJAX requests and handle differently
+			$headers = getallheaders();
+			$isAjax = isset($headers['X-Requested-With']) && strtolower($headers['X-Requested-With']) === 'xmlhttprequest';	
+			if ($isAjax) {
+				echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
+				//echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => $domain . '?page=users&action=login']);
+				exit;
+			}
 
 			if (empty($_SESSION['redirect_after_login'])) {
-				$_SESSION['redirect_after_login'] = $currentUrl;
+				if(strpos($currentUrl, 'get_order_details_html') !== false){
+					$_SESSION['redirect_after_login'] = $domain . '?page=orders&action=list';
+					echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
+					//On AJAX call login page link
+					//$_SESSION['ajax_redirect_after_login'] = $domain . '?page=orders&action=list';
+					//echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => $domain . '?page=users&action=login']);
+					exit;
+				}
+				else
+					$_SESSION['redirect_after_login'] = $currentUrl;
 			}
 
 			header('Location: ' . $domain . '?page=users&action=login');
@@ -38,14 +56,13 @@
 	function getloginUser(){
 		//tenant details
 		$user['tenant_id'] 			= $_SESSION['tenant_id'];
-		$user['currency_symbol'] 	= $_SESSION['currency_symbol'];
 		$user['tenant_Name'] 		= $_SESSION['tenant_Name'];
 		//store details
-		$user['store_id'] 			= $_SESSION['store_id'];
-		$user['store_code'] 		= $_SESSION['store_code'];
-		//user details
-		$user['user_id'] 			= $_SESSION['user_id'];
-		$user['user_full_name'] 	= $_SESSION['user_full_name'];
+		// $user['store_id'] 			= $_SESSION['store_id'];
+		// $user['store_code'] 		= $_SESSION['store_code'];
+		// //user details
+		// $user['user_id'] 			= $_SESSION['user_id'];
+		// $user['user_full_name'] 	= $_SESSION['user_full_name'];
 		return $user;
 	}
 	
@@ -133,7 +150,7 @@
 	function user_roles_dropdown(){
 		// Fetch active roles
 		global $conn;
-		$sql = "SELECT id, role_name FROM user_roles WHERE active = 1 ORDER BY role_name ASC";
+		$sql = "SELECT id, role_name FROM vp_roles WHERE is_active = 1 ORDER BY role_name ASC";
 		return $conn->query($sql);
 	}
 	
@@ -167,6 +184,18 @@
 			['id' => 9,  'iso_code' => 'SG', 'timezone' => 'Asia/Singapore',       'name' => 'Singapore'],
 			['id' => 10, 'iso_code' => 'MY', 'timezone' => 'Asia/Kuala_Lumpur',    'name' => 'Malaysia'],
 		];
+	}
+	
+	function country_array(){
+		// Fetch active roles
+		global $conn;
+		$sql = "SELECT * FROM countries";
+		$result = $conn->query($sql);
+		$countries = array();
+		while ($row = $result->fetch_assoc()) {
+			$countries[$row['country_code']] = $row['name'];
+		}
+		return $countries;
 	}
 
 	function getWeekDays() {
@@ -223,7 +252,6 @@
 		return $services;
 	}
 
-	
 	function getSubscriptionPlans() {
 		global $conn;
 		$sql = "SELECT * FROM subscription_plans m1 WHERE m1.active = 1 ORDER BY id ASC";
@@ -337,41 +365,101 @@
 	function updateRoles() { // Run this function once to populate permissions table
 		global $conn;
 
-		$actions = ['add', 'edit', 'view', 'delete', 'list']; // Standard permissions
-		$roles = [2, 3]; // Role IDs to assign permissions to (e.g., Editor and Viewer)
+		// Delete existing records
+		try {
+			// Turn off autocommit
+			$conn->begin_transaction();
 
-        $sql = "SELECT id, module_name, slug FROM modules where module_name != 'Administrator' ORDER BY module_name";
-        $modules = $conn->query($sql);
-        while($m = mysqli_fetch_assoc($modules)) {
-            
-            $stmt = $conn->prepare("INSERT INTO vp_permissions (module_id, module_name, action_name) VALUES (?, ?, ?)");
-            foreach ($modules as $module) {
-                foreach ($actions as $action) {
-                    $stmt->bind_param("iss", $module["id"], $module["module_name"], $action);
-                    if ($stmt->execute()) {
-						$last_insert_id = $conn->insert_id;
-						$stmt_p = $conn->prepare("INSERT INTO vp_role_permissions (role_id, permission_id) VALUES (?, ?)");
-						foreach ($roles as $role) {
-							$stmt_p->bind_param("ii", $role, $last_insert_id);
-							if ($stmt_p->execute()) {
-								echo "<br>Inserted Linking permission: " . $module['module_name'] . " - $action\n\n\n";
+			// Disable foreign key checks
+			$conn->query("SET FOREIGN_KEY_CHECKS = 0");
+
+			// Delete records
+			$conn->query("DELETE FROM vp_role_permissions");
+			$conn->query("ALTER TABLE vp_role_permissions AUTO_INCREMENT = 1");
+
+			$conn->query("DELETE FROM vp_permissions");
+			$conn->query("ALTER TABLE vp_permissions AUTO_INCREMENT = 1");
+
+			// Re-enable foreign key checks
+			$conn->query("SET FOREIGN_KEY_CHECKS = 1");
+
+			// Commit
+			$conn->commit();
+
+			echo "Tables cleared successfully";
+
+		} catch (Exception $e) {
+
+			// Rollback if something goes wrong
+			$conn->rollback();
+
+			echo "Error: " . $e->getMessage();
+			exit;
+		}
+		
+		/*********************************************** */
+		/*********************************************** */
+		try {
+			$sql = "SELECT id, access_name FROM vp_role_access where is_active = '1' ORDER BY id ASC";
+			$modules = $conn->query($sql);
+			while($m = mysqli_fetch_assoc($modules)) {
+				$actions[] = $m['access_name'];
+			}
+
+			$sql = "SELECT id, role_name FROM vp_roles where is_active = '1' ORDER BY id ASC";
+			$modules = $conn->query($sql);
+			while($m = mysqli_fetch_assoc($modules)) {
+				$roles[] = $m['id'];
+			}
+
+			//$actions = ['add', 'edit', 'view', 'delete', 'list','level 1 info','Level 2 Info']; // Standard permissions role_access
+			//$roles = [1, 2]; // Role IDs to assign permissions to (e.g., Editor and Viewer) // Role table
+
+			$sql = "SELECT id, module_name, slug FROM modules where parent_id != 0 ORDER BY module_name";
+			$modules = $conn->query($sql);
+			while($m = mysqli_fetch_assoc($modules)) {
+				$stmt = $conn->prepare("INSERT INTO vp_permissions (module_id, module_name, action_name) VALUES (?, ?, ?)");
+				foreach ($modules as $module) {
+					foreach ($actions as $action) {
+						$chkSql = "SELECT id FROM vp_permissions WHERE module_id = ? AND module_name = ? AND action_name = ?";
+						$chkStmt = $conn->prepare($chkSql);
+						$chkStmt->bind_param('iss', $module["id"], $module["module_name"], $action);
+						$chkStmt->execute();
+						$chkStmt->store_result();
+						if ($chkStmt->num_rows == 0) {
+							$stmt->bind_param("iss", $module["id"], $module["module_name"], $action);
+							if ($stmt->execute()) {
+								$last_insert_id = $conn->insert_id;
+								$stmt_p = $conn->prepare("INSERT INTO vp_role_permissions (role_id, permission_id) VALUES (?, ?)");
+								foreach ($roles as $role) {
+									$stmt_p->bind_param("ii", $role, $last_insert_id);
+									if ($stmt_p->execute()) {
+										echo "<br>Inserted Linking permission: " . $module['module_name'] . " - $action\n\n\n";
+									} else {
+										echo "<br>Error Linking inserting " . $module['module_name'] . " - $action: " . $stmt_p->error . "\n\n\n";
+									}
+								}
+								echo "<br><br><br>Inserted permission: " . $module['module_name'] . " - $action\n";
 							} else {
-								echo "<br>Error Linking inserting " . $module['module_name'] . " - $action: " . $stmt_p->error . "\n\n\n";
+								echo "<br>Error inserting " . $module['module_name'] . " - $action: " . $stmt->error . "\n";
 							}
+						}else{
+							echo "<br><br>Record already exists " . $module["id"] . " ---- " . $module['module_name'] . " - ". $action . "\n";
 						}
-                        echo "<br><br><br>Inserted permission: " . $module['module_name'] . " - $action\n";
-                    } else {
-                        echo "<br>Error inserting " . $module['module_name'] . " - $action: " . $stmt->error . "\n";
-                    }
-                }
-            }
-            $stmt->close();
-        }
-		$conn->close();
+					}
+				}
+				$stmt->close();
+			}
+			$conn->close();
+		} catch (Exception $e) {
+			// Rollback if something goes wrong
+			$conn->rollback();
+			echo "Error: " . $e->getMessage();
+			exit;
+		}
 	}
 	function hasPermission($user_id, $module, $action) {
-		
-		if($_SESSION["user"]["role_id"] == 1 || $_SESSION["user"]["role"] == "admin"){ // Admin has all permissions
+		if($_SESSION["user"]["role_id"] == 1){ // Admin has all permissions
 			return true;
 		}
 		global $conn;
@@ -379,7 +467,8 @@
 				FROM vp_role_permissions rp
 				JOIN vp_permissions p ON rp.permission_id = p.id
 				JOIN vp_users u ON u.role_id = rp.role_id
-				WHERE u.id='$user_id' AND p.module_name='$module' AND p.action_name='$action'";
+				JOIN vp_roles r ON r.id = u.role_id
+				WHERE u.id='$user_id' AND p.module_name='$module' AND p.action_name='$action' AND r.is_active=1";
 		$res = $conn->query($sql);
 		$row = mysqli_fetch_assoc($res);
 		return $row['total'] > 0;
@@ -391,5 +480,51 @@
 			header("Location: index.php?page=dashboard");
 			exit;
 		}
+	}
+	function productionOrderStatusList() {
+		/*  1: Confirmed
+			2: Cancellation request being processed
+			3: Return request being processed
+			4: Cancelled/Returned
+			5: Shipped
+			6: Returned */
+		return [
+			'1' => 'pending',
+			'2' => 'cancellation_request_processed',
+			'3' => 'return_request_processed',
+			'4' => 'cancelled_returned',
+			'5' => 'shipped',
+			'6' => 'returned'
+		];
+	}
+	function updateCountryPhoneCode() {
+		global $conn;
+
+		$sql = "SELECT id, code, name, phone FROM countries_new ORDER BY code ASC";
+        $result = $conn->query($sql);
+		$cnt = 1;
+        while($row = mysqli_fetch_assoc($result)) {
+			$sql_select = "SELECT id FROM countries WHERE country_code = '" . $row["code"] . "'";
+			$result_sel = $conn->query($sql_select);
+			if ($result_sel) {
+				$sql_update = "UPDATE countries SET phone_code = '".$row["phone"]."' WHERE country_code='".$row["code"]."'";
+				$result_updt = $conn->query($sql_update);
+				if($result_updt) {
+					echo $cnt . "Record with Country Code: " . $row["code"] . " has been updated with Phone Code: ".$row["phone"] ."<br>".$sql_update."<br><br>";
+				} else {
+					echo $cnt . "Record with Country Code: " . $row["code"] . " has been NOT updated with Phone Code: ".$row["phone"] ."<br>".$sql_update."<br><br>";
+				}
+				$cnt++;
+			}
+		}
+		echo "All Records Updated in the Countries Table.";
+		$conn->close();
+	}
+	function sendNotification($user_id, $message, $link = '') {
+		global $conn;
+		$sql = "INSERT INTO vp_notifications (user_id, `message`, is_read, link, created_at) VALUES (?, ?, 0, ?, NOW())";
+		$stmt = $conn->prepare($sql);
+		$stmt->bind_param("iss", $user_id, $message, $link);
+		return $stmt->execute();
 	}
 ?>

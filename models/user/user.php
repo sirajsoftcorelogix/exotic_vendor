@@ -22,6 +22,7 @@ class User {
                 return true;
             }
         }   
+  
         return false;
     }
     public function logout() {
@@ -91,11 +92,16 @@ class User {
         }
         $checkStmt->close();
 
-        $sql = "INSERT INTO vp_users (name, email, phone, password, role, is_active) VALUES (?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_users (name, email, phone, password, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-        $stmt->bind_param('sssssi', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active']);
+        $stmt->bind_param('ssssii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active']);
         if ($stmt->execute()) {
+            $user_id = $this->db->insert_id;
+            // Add vendor teams
+            if (!empty($data['team']) && is_array($data['team'])) {
+               $tm_status = $this->addUserTeams($user_id, $data['team']);
+            }
             return ['success' => true, 'message' => 'User added successfully.'];
         }
         return [
@@ -116,22 +122,63 @@ class User {
         $checkStmt->close();
 
         if (!empty($data['password'])) {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role = ?, is_active = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            $stmt->bind_param('sssssii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('ssssiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $id);
         } else {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role = ?, is_active = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role_id = ?, is_active = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('ssssii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('sssiii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $id);
         }
         if ($stmt->execute()) {
+            // Add vendor teams
+            if (!empty($data['team']) && is_array($data['team'])) {
+               $tm_status = $this->addUserTeams($id, $data['team']);
+            }
             return ['success' => true, 'message' => 'User updated successfully.'];
         }
         return [
             'success' => false,
             'message' => 'Update failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
+    }
+    public function addUserTeams($user_id, $teamIds){       
+        if (empty($user_id)) {
+            return ['success' => false, 'message' => 'User ID is required.'];
+        }
+
+        if (empty($teamIds) || !is_array($teamIds)) {
+            return ['success' => false, 'message' => 'Teams is required and must be an array.'];
+        }
+
+        // Delete previous categories for this vendor
+        $deleteSql = "DELETE FROM vp_user_team_mapping WHERE user_id = ?";
+        $deleteStmt = $this->db->prepare($deleteSql);
+        $deleteStmt->bind_param('i', $user_id);
+        $deleteStmt->execute();
+        $deleteStmt->close();
+
+        // Insert new categories
+        $sql = "INSERT INTO vp_user_team_mapping (user_id, team_id) VALUES (?, ?)";
+        $stmt = $this->db->prepare($sql);
+        foreach ($teamIds as $tm_id) {
+            $stmt->bind_param('ii', $user_id, $tm_id);
+            $stmt->execute();
+        }
+        $stmt->close();
+        return ['success' => true, 'message' => 'Teams updated successfully.'];
+    }
+    public function getUserTeams($u_id) {
+        $sql = "SELECT team_id FROM vp_user_team_mapping WHERE user_id = ".$u_id;
+        $result = $this->db->query($sql);
+        $uTeamMembers = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $uTeamMembers[] = $row["team_id"];
+            }
+        }
+        return $uTeamMembers;
     }
     public function updateUserPriofile($id, $data) {
 
@@ -179,15 +226,6 @@ class User {
         $stmt->execute();
         $result = $stmt->get_result();
         return $result->fetch_row()[0];
-    }   
-    public function getRoles() {
-        $sql = "SELECT id, role_name FROM roles WHERE active = 1 ORDER BY role_name ASC";
-        $result = $this->db->query($sql);
-        $roles = [];        
-        while ($row = $result->fetch_assoc()) {
-            $roles[$row['id']] = $row['role_name'];
-        }
-        return $roles;
     }
     public function getAllUsers() {
         $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
@@ -261,7 +299,7 @@ class User {
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT * FROM vp_users $where LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vu.*, GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id LIMIT $limit OFFSET $offset;";
         $result = $this->db->query($sql);
 
         $users = [];
@@ -278,6 +316,24 @@ class User {
             'totalRecords' => $totalRecords,
             'search'       => $search
         ];
+    }
+    public function getAllRoles() {
+        $sql = "SELECT id, role_name FROM vp_roles WHERE is_active = 1 ORDER BY role_name ASC";
+        $result = $this->db->query($sql);
+        $roles = [];        
+        while ($row = $result->fetch_assoc()) {
+            $roles[] = $row;
+        }
+        return $roles;
+    }
+    public function getAllTeams() {
+        $sql = "SELECT id, team_name FROM vp_teams WHERE is_active = 1 ORDER BY team_name ASC";
+        $result = $this->db->query($sql);
+        $teams = [];        
+        while ($row = $result->fetch_assoc()) {
+            $teams[] = $row;
+        }
+        return $teams;
     }
 }
 

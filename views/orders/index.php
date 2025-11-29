@@ -104,6 +104,29 @@
    
 </style>
 <div class="container mx-auto p-4">
+    <?php
+		
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
+        $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
+        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+
+        // Prepare query string for pagination links
+        $search_params = $_GET;
+        unset($search_params['page_no'], $search_params['limit'], $search_params['sort']);
+        $query_string = http_build_query($search_params);
+        $query_string = $query_string ? '&' . $query_string : '';
+
+        // Calculate start/end slot for 10 pages
+        $slot_size = 10;
+        $start = max(1, $page - floor($slot_size / 2));
+        $end = min($total_pages, $start + $slot_size - 1);
+        if ($end - $start < $slot_size - 1) {
+            $start = max(1, $end - $slot_size + 1);
+        }
+    ?>
     <!-- Header Section -->
     <!-- Stats Section -->
     <div class="mt-6 sm:mt-8">
@@ -235,19 +258,19 @@
     </div>
     <!-- Advance Search Accordion -->
     <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
-        <button id="accordion-button" class="w-full flex justify-between items-center mb-2">
+        <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
             <h2 class="text-xl font-bold text-gray-900">Advance Search</h2>
-            <svg id="accordion-icon" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg id="accordion-icon-search" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
         </button>
 
-        <div id="accordion-content" class="accordion-content hidden">
+        <div id="accordion-content-search" class="accordion-content hidden overflow-visible">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
                 <!-- Orders From/Till -->
-                <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
+                <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-0">
                     <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
@@ -258,7 +281,37 @@
                         <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
+                
+                <div >
+                    <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
+                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
 
+                        <option value="all" selected >All Status</option>
+                        <?php foreach ($status_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div >
+                    <label for="payment_type" class="block text-sm font-medium text-gray-600 mb-1">Payment Type</label>
+                    <select id="payment_type" name="payment_type" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+
+                        <option value="all" selected >All Payment Types</option>
+                        <?php foreach ($payment_types as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['payment_type']) && $_GET['payment_type'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="">
+                    <label for="category" class="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        
+                        <option value="all" selected >All Categories</option>
+                        <?php foreach (getCategories() as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
                 <!-- PO Date -->
                 <!-- <div>
                     <label for="order-date" class="block text-sm font-medium text-gray-600 mb-1">Order Date</label>
@@ -278,18 +331,52 @@
                 </div>
 
                 <!-- Status -->
-                <!-- <div>
-                    <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                    <select id="status" name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" disabled selected>Status</option>
-                        <option>Pending</option>
-                        <option>In Progress</option>
-                        <option>Completed</option>
-                        <option>Disputed</option>
-                        <option>Returned</option>
+                <div>
+                    <label for="priority" class="block text-sm font-medium text-gray-600 mb-1">Priority</label>
+                    <select id="priority" name="priority" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected>-Select-</option>
+                        <option value="critical" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'critical') ? 'selected' : ''; ?>>Critical</option>
+                        <option value="urgent" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'urgent') ? 'selected' : ''; ?>>Urgent</option>
+                        <option value="high" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'high') ? 'selected' : ''; ?>>High</option>
+                        <option value="medium" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'medium') ? 'selected' : ''; ?>>Medium</option>
+                        <option value="low" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'low') ? 'selected' : ''; ?>>Low</option>
                     </select>
-                </div> -->
-
+                </div>
+                <div class="">
+                    <label for="country" class="block text-sm font-medium text-gray-600 mb-1">Country</label>
+                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected >All Country</option>
+						<optgroup label="Easy">
+							<option value="overseas">Overseas</option>
+							<option value="IN">India</option>
+						</optgroup>
+                        <?php foreach ($country_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
+                <div class="">
+                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">Staff Name</label>
+                    <select id="staff_name" name="staff_name" class="w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" >All Staff</option>
+						<?php foreach ($staff_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && $_GET['staff_name'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
+                <div class="relative">
+                    <label for="vendor_autocomplete" class="block text-sm font-medium text-gray-600 mb-1">Vendor</label>
+                    <input
+                        type="text"
+                        id="vendor_autocomplete"
+                        class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="Search vendor by name..."
+                        autocomplete="off"
+                        value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>"
+                    >
+                    <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
+                    <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-48 overflow-auto " style="display:none; top:100%;"></div>
+                </div>
                 <!-- Min/Max Amount -->
                 <!-- <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">
@@ -304,7 +391,7 @@
 
                 <!-- Item Code -->
                 <div>
-                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item No</label>
+                    <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 <!-- PO No -->
@@ -318,48 +405,35 @@
                     <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
                     <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
+                <div>
+                    <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
+                    <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="" selected>-Select-</option>
+                        <?php foreach ($staff_list as $key => $value): ?>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['agent']) && $_GET['agent'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                        <?php endforeach; ?>                    
+                    </select>
+                </div>
                 
-                <div class="">
-                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" selected >All Country</option>
-						<optgroup label="Easy">
-							<option value="overseas">Overseas</option>
-							<option value="IN">India</option>
-						</optgroup>
-                        <?php foreach ($country_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>                    
-                    </select>
-                </div>
-                <div class="">
-                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        
-                        <option value="all" selected >All Categories</option>
-                        <?php foreach (getCategories() as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>                    
-                    </select>
-                </div>
-                <div >
-                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-
-                        <option value="all" selected >All Status</option>
-                        <?php foreach ($status_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                
                 <!-- Buttons -->
-                <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
+                <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
+                    <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Cancel</button>
+                    <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
-                    <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
                 </div>
                 </form>
             <!-- clear filter -->
              <script>
-                function clearFilters() {
+                // function clearFilters() {
+                //     const url = new URL(window.location.href);
+                //     //alert(url.search);
+                //     url.search = ''; // Clear all query parameters
+                //     const page = 'page=orders&action=list';
+                //     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
+                // }
+                function cancelSearch() {
                     const url = new URL(window.location.href);
-                    //alert(url.search);
                     url.search = ''; // Clear all query parameters
                     const page = 'page=orders&action=list';
                     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
@@ -374,38 +448,60 @@
     <!-- Orders Table Section -->
     <div class="mt-5">
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
+            <div class="flex  ">
+            <div class="w-1/2">
             <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
+            </div>
+            <div class="ml-auto flex items-center space-x-4">
+            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
+                    
+                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
+                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
+            </select>
+            <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
+                <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                    <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
+                        <?= $opt ?> Orders per page
+                    </option>
+                <?php endforeach; ?>
+            </select>
             <!-- button refresh-->
             <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
                 <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
             <i class="fas fa-sync-alt p-1 bg-white border border-orange-500"></i>
             </span>
-
+            <!-- update imported orders -->
+            <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
+                <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
+            </span> -->
+            </div>
+            </div>
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
                 <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
-                    <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status']) && !isset($_GET['options'])) ? 'tab-active' : ''; ?> text-center relative py-4">
-                        <span class="px-1 text-sm">All Orders</span>
+                    <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : ''; echo (!isset($_GET['status']) && !isset($_GET['options']) && !isset($_GET['agent'])) ? 'tab-active' : ''; ?> text-center relative py-4">
+                        <span class="px-1 text-md">All Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&options=express'); ?>" class="tab <?php echo (isset($_GET['options']) && $_GET['options'] === 'express') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Express Orders</span>
+                        <span class="px-1 text-md">Express Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=pending'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Pending</span>
+                        <span class="px-1 text-md">Pending</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=processed'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'processed') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Processed</span>
+                        <span class="px-1 text-md">Processed</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=dispatch'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'dispatch') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Preparing for Dispatch</span>
+                        <span class="px-1 text-md">Preparing for Dispatch</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=shipped'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'shipped') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Shipped</span>
+                        <span class="px-1 text-md">Shipped</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     
@@ -413,26 +509,30 @@
                     <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
                         <span class="px-1 text-sm">Received</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                    </a>
-                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Disputed</span>
+                    </a>-->
+                    <a href="<?php echo base_url('?page=orders&action=list&status=cancelled'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'cancelled') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-md">Cancelled</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    <a href="#" class="tab text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-sm">Returned</span>
+                    <a href="<?php echo base_url('?page=orders&action=list&status=returned'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'returned') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-md">Returned</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                    </a> -->
+                    </a> 
+                    <a href="<?php echo base_url('?page=orders&action=list&agent=').$_SESSION['user']['id']; ?>" class="tab <?php echo (isset($_GET['agent']) && $_GET['agent'] == $_SESSION['user']['id']) ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-md">My Orders</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a> 
                 </div>
-                <!-- <div class="right-0 top-0 absolute p-4 size">
-                    <select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                <div class="right-0 top-0 absolute p-4 size">
+                    <!--<select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                         onchange="location.href='?page=orders&action=list&category=' + this.value;">
                         
                         <option value="all" selected >All Categories</option>
                         <?php // (getCategories() as $key => $value): ?>
                             <option value="<?php //echo $key; ?>" <?php //echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php //echo $value; ?></option>
                         <?php //endforeach; ?>                    
-                    </select>
-                </div> -->
+                    </select>-->                    
+                </div> 
             </div>
 
             <!-- Table h-96 overflow-y-scroll-->
@@ -550,8 +650,53 @@
                     <?php 
                     if (!empty($data['orders'])) {
                         foreach ($data['orders'] as $order) {
+
+                            $options = $order['options'] ?? '';
+                            $optionsArr = [];
+                            $bordercolor = 'border border-gray-300';
+                            $addontxt = '';
+                            if (is_string($options)) {
+                                $decoded = json_decode($options, true);
+                                if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
+                                    $optionsArr = $decoded;
+                                } else {
+                                    // fallback: comma separated string
+                                    $optionsArr = array_filter(array_map('trim', explode(',', $options)));
+                                }
+                            } elseif (is_array($options)) {
+                                $optionsArr = $options;
+                            }
+
+                            if (!empty($optionsArr)) {
+                                foreach ($optionsArr as $opt) {
+                                    $addon_css = '';
+                                    // normalize option value to a string to avoid warnings with strpos()
+                                    if (is_array($opt)) {
+                                        $opt_text = implode(', ', $opt);
+                                    } else {
+                                        $opt_text = (string)$opt;
+                                    }
+                                    $opt_text = trim($opt_text);
+                                    if ($opt_text === '') {
+                                        continue;
+                                    }
+                                    // Highlight Express Shipping specially, otherwise show default style
+                                    if (strpos($opt_text, 'Express') !== false) {
+                                        $display = 'Express Shipping';
+                                        $addon_css = 'bg-green-200 text-green-900';
+                                        $bordercolor = 'border-4 border-green-300';
+                                    } else {
+                                        $display = $opt_text;
+                                        $addon_css = 'bg-gray-100 text-gray-800';
+                                    }
+                                    $addontxt =  '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
+                                }
+                            } else {
+                                $addontxt =  '<span class="data-typography mt-1 block">N/A</span>';
+                            }                                                
+                            
                     ?>
-                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border border-gray-200" style="margin: 0px 0px 10px 0px">
+                    <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md  <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
                         <div class="flex items-start p-4 gap-4">
                             <!-- Checkbox -->
                             <div class="flex-shrink-0 pt-1">
@@ -564,7 +709,7 @@
                             <div class="grid grid-cols-[max-content,1fr] gap-x-4 w-full">
 
                                 <!-- COLUMN 1 -->
-                                <div class="flex flex-col gap-4">
+                                <div class="flex flex-col gap-4 w-[500px]">
                                     <!-- Col 1, Row 1: Image and Title -->
                                     <div class="flex items-start gap-4 ">
 										<div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
@@ -577,8 +722,8 @@
                                         </div>
                                     </div>
                                     <!-- Col 1, Row 2: Order Details -->
-                                    <div class=""> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
-                                        <div class="grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
+                                    <div class="flex w-full"> <!-- Left padding to align under title (w-24 + gap-4 = 6rem + 1rem) -->
+                                        <div class="w-1/2 pr-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
                                             <span class="heading-typography ">Order Date</span>
                                             <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
@@ -586,18 +731,21 @@
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
-                                            <span class="heading-typography">Marketplace</span>
-                                            <p>: <span class="data-typography"><?= $order['marketplace_vendor'] ?></span></p>
+                                            
+                                        </div>
+                                        <div class="w-1/2 pl-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
                                             <span class="heading-typography">Staff Name</span>
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
 											<span class="heading-typography">Payment Type</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
+                                            <span class="heading-typography">Agent</span>
+                                            <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- COLUMN 2 -->
-                                <div class="flex flex-col gap-4">
+                                <div class="flex flex-col gap-4 ">
                                     <!-- Col 2, Row 1: Status Grid and Actions -->
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="flex-grow">
@@ -632,7 +780,7 @@
                                                     <span class="data-typography mt-1 block"><?= $order['location'] ?: 'N/A' ?></span>
                                                 </div>
                                                 <div>
-                                                    <span class="heading-typography block mb-5">ESD</span>
+                                                    <span class="heading-typography block mb-5">Ship By Date</span>
                                                     <span class="data-typography mt-1 block"><?= $order['esd'] ? date("d M Y", strtotime($order['esd'])) : 'N/A' ?></span>
                                                 </div>                                                
                                                 
@@ -667,7 +815,7 @@
                                             <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold relative inline-block" onclick="toggleMenu(<?= $order['order_id'] ?>)">
                                                 <i class="fas fa-ellipsis-v"></i>
                                                 <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
-                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Order Update</a>
+                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Order</a>
                                                     <hr class="my-1 mx-2"></hr>
                                                     <!-- <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
                                                 </div>
@@ -678,56 +826,14 @@
                                     <div class="flex items-start gap-4">
                                         <div class="flex-grow">
                                             <h4 class="note-heading mb-2">Note:</h4>
-                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[452px] min-h-[110px]">
+                                            <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[452px] min-h-[100px]">
                                                 <?= isset($order['remarks']) ? $order['remarks'] : '' ?>
                                             </div>
                                         </div>
-                                        <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem + 40px);">
-                                            <div class="mt-[20px] max-w-32">
+                                        <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem );">
+                                            <div class="mt-[20px] max-w-48">
                                                 <span class="heading-typography block mb-5">Addon</span>
-                                                <?php
-                                                $options = $order['options'] ?? '';
-                                                $optionsArr = [];
-
-                                                if (is_string($options)) {
-                                                    $decoded = json_decode($options, true);
-                                                    if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
-                                                        $optionsArr = $decoded;
-                                                    } else {
-                                                        // fallback: comma separated string
-                                                        $optionsArr = array_filter(array_map('trim', explode(',', $options)));
-                                                    }
-                                                } elseif (is_array($options)) {
-                                                    $optionsArr = $options;
-                                                }
-
-                                                if (!empty($optionsArr)) {
-                                                    foreach ($optionsArr as $opt) {
-                                                        $addon_css = '';
-                                                        // normalize option value to a string to avoid warnings with strpos()
-                                                        if (is_array($opt)) {
-                                                            $opt_text = implode(', ', $opt);
-                                                        } else {
-                                                            $opt_text = (string)$opt;
-                                                        }
-                                                        $opt_text = trim($opt_text);
-                                                        if ($opt_text === '') {
-                                                            continue;
-                                                        }
-                                                        // Highlight Express Shipping specially, otherwise show default style
-                                                        if (strpos($opt_text, 'Express') !== false) {
-                                                            $display = 'Express Shipping';
-                                                            $addon_css = 'bg-red-100 text-red-800';
-                                                        } else {
-                                                            $display = $opt_text;
-                                                            $addon_css = 'bg-gray-100 text-gray-800';
-                                                        }
-                                                        echo '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
-                                                    }
-                                                } else {
-                                                    echo '<span class="data-typography mt-1 block">N/A</span>';
-                                                }
-                                                ?>
+                                                <?= $addontxt ?>
                                             </div>
                                             <div>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
@@ -746,6 +852,38 @@
                                 </div>
                             </div>
                         </div>
+                        <hr class="border-t mx-3  border-gray-200">
+                        <!-- <h3 class="text-sm font-semibold ml-10 mt-4">Order Journey:</h3> -->
+                        <div class="p-1 flex w-full">                            
+                            <div class="grid p-4 rounded-lg grid grid-cols-8 gap-y-2">
+                                <!-- Step 1: Approved -->
+                                <div class="timeline-step completed">
+                                    <div class="flex flex-col items-center text-center">
+                                    <div class="relative w-full h-5 flex justify-center items-center">
+                                        <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+                                    </div>
+                                    <p class="timeline-text mt-2">Created</p>
+                                    <p class="timeline-date"><?php echo date('d M, Y', strtotime($order['order_date'])); ?></p>
+                                    </div>
+                                </div>
+                                <!-- status log -->
+                                <?php if (!empty($order['status_log'])) {
+                                    foreach ($order['status_log'] as $log) { ?>
+                                    <div class="timeline-step completed min-w-[120px]">
+                                        <div class="flex flex-col items-center text-center">
+                                        <div class="relative w-full h-5 flex justify-center items-center">
+                                            <div class="w-[18px] h-[18px] rounded-full bg-[rgba(39,174,96,1)] z-10"></div>
+                                        </div>
+                                        <p class="timeline-text mt-2"><?php echo ucfirst(str_replace('_', ' ', $log['status'])); ?></p>
+                                        <p class="timeline-date"><?php echo date('d M, Y', strtotime($log['change_date'])); ?></p>
+                                        <p ><?php echo $log['changed_by_username']; ?></p>
+                                        </div>
+                                    </div>
+                                    <?php }
+                                } ?>  
+                                
+                                </div>
+                        </div>
                     </div>
                     <?php
                         }
@@ -757,28 +895,7 @@
             </div>
         </form>
         <!-- Pagination -->
-         <?php
-            $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-            $page = $page < 1 ? 1 : $page;
-            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
-            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
-            $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
-            $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
-
-            // Prepare query string for pagination links
-            $search_params = $_GET;
-            unset($search_params['page_no'], $search_params['limit']);
-            $query_string = http_build_query($search_params);
-            $query_string = $query_string ? '&' . $query_string : '';
-
-            // Calculate start/end slot for 10 pages
-            $slot_size = 10;
-            $start = max(1, $page - floor($slot_size / 2));
-            $end = min($total_pages, $start + $slot_size - 1);
-            if ($end - $start < $slot_size - 1) {
-                $start = max(1, $end - $slot_size + 1);
-            }
-            ?>
+         
         <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 bottom-0 border border-[rgba(226,228,230,1)] py-4">
             <div>
                 <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($orders) ?></span> of <span class="font-medium"><?= $total_orders ?></span> orders</p>
@@ -817,6 +934,7 @@
 
     </div>
 </div>
+
 <!-- Order Details Popup Modal -->
 <!-- <div class="fixed inset-y-0 right-0 w-[400px] bg-white shadow-lg p-4" id="orderDetailOffcanvas" style="display: none; z-index: 1000;">
   Popup content goes here
@@ -844,7 +962,7 @@
         </div>
 
         <!-- Popup Panel -->
-        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
+        <!-- <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Order Details</h2>
@@ -1016,7 +1134,7 @@
                     </form>
                 </div>
             </div>
-        </div>
+        </div> -->
     </div>
 </div>
 <!-- Image Popup -->
@@ -1080,7 +1198,7 @@
             </div>
             <div class="border-l pl-4 ml-4"></div>
             <div class="p-4 w-[59%]">
-                <h2 class="text-2xl font-bold mb-4">Order Update</h2>
+                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
                 <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
                     <input type="hidden" name="status_order_id" id="status_order_id">
                     <div class="mb-4">
@@ -1146,27 +1264,44 @@
                             ?>
                             
                         </select>
+                        <input type="hidden" id="previousStatus" name="previousStatus" value="">
                         </div>
                         <div>
-                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">ESD:</label>
+                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date:</label>
                             <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
+                            <input type="hidden" id="previousESD" name="previous_esd" value="">
+                        </div>                        
                         </div>
-                        <div style="min-width: 100px;">
-                        <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Priority:</label>
-                        <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
-                            <option value="" >-Select-</option>
-                            <option value="critical" >Critical</option>
-                            <option value="urgent" >Urgent</option>
-                            <option value="high" >High</option>                            
-                            <option value="medium" selected>Medium</option>
-                            <option value="low" >Low</option>
-                        </select>
-                        </div>
+                        <div class="mb-4 flex space-x-4">
+                            <div style="min-width: 100px;">
+                                <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Assign agent:</label>
+                                <select name="agent_id" id="agentId" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                    <option value="">Select User</option>
+                                    <?php foreach ($staff_list as $id => $name): ?>
+                                        <option value="<?= $id ?>" ><?= htmlspecialchars($name) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <input type="hidden" id="agentName" name="agent_name" value="">
+                                <input type="hidden" id="previousAgent" name="previous_agent" value="">
+                            </div>
+                            <div style="min-width: 100px;">
+                                <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Priority:</label>
+                                <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                    <option value="" >-Select-</option>
+                                    <option value="critical" >Critical</option>
+                                    <option value="urgent" >Urgent</option>
+                                    <option value="high" >High</option>                            
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="low" >Low</option>
+                                </select>
+                                <input type="hidden" id="previousPriority" name="previous_priority" value="">
+                            </div>
                         </div>
                         <!-- Remarks field -->
                         <div class="mb-4">
                             <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes:</label>
                             <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
+                            <input type="hidden" id="previousRemarks" name="previous_remarks" value="">
                         </div>  
                         <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
                     </div>
@@ -1179,151 +1314,41 @@
         </div>
     </div>
 </div>
-<script>
-function closeImagePopup(e) {
-    // If called from button or outside click
-    document.getElementById('imagePopup').classList.add('hidden');
-}
+<!-- Details Modal -->
+<div id="details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden">
+    <div id="details-modal-slider" class="fixed top-0 right-0 h-full w-full max-w-3xl flex transform translate-x-full">
+
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-details-modal"
+                    class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center -ml-[61px]"
+                    style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
+            <!-- Modal Content -->
+            <div class="flex-grow space-y-4" id="details-modal-content">
+                <!-- Dynamic content will be loaded here -->
+                
+            </div>
+        </div>
+    </div>
+</div>
+<!-- image popup close -->
+ <script>
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    }    
 </script>
 <script>
     // Popup functionality
-    const popupWrapper = document.getElementById('popup-wrapper');
-    const modalSlider = document.getElementById('modal-slider');
-    const closePopupBtn = document.getElementById('close-vendor-popup-btn');
-    const popupImage = document.getElementById('popupImage');
-    const orderDetailLinks = document.querySelectorAll('.order-detail-link');
-    orderDetailLinks.forEach(link => {
-        link.addEventListener('click', function (event) {
-            event.preventDefault();
-            const orderData = JSON.parse(this.getAttribute('data-order'));
-            console.log(orderData.groupname);
-            // Populate the popup with order details
-            document.getElementById('poitem_order_id').value = orderData.order_id || '';
-            document.getElementById('order_number').textContent = orderData.order_number || 'N/A';
-            document.getElementById('order_date').textContent = orderData.order_date || 'N/A';
-            document.getElementById('hsn').textContent = orderData.hsn || 'N/A';
-            document.getElementById('groupname').textContent = orderData.groupname || 'N/A';
-            document.getElementById('quantity').textContent = orderData.quantity || 'N/A';
-            document.getElementById('item').textContent = orderData.title || 'N/A';
-            document.getElementById('sub_category').textContent = orderData.subcategories || 'N/A';
-            document.getElementById('size').textContent = orderData.size || 'N/A';
-            document.getElementById('color').textContent = orderData.color || 'N/A';
-            document.getElementById('item_price').textContent = orderData.itemprice ? '' + orderData.itemprice : 'N/A';
-            document.getElementById('final_price').textContent = orderData.finalprice ? '' + orderData.finalprice : 'N/A';
-            document.getElementById('cost_price').textContent = orderData.cost_price ? '' + orderData.cost_price : 'N/A';
-            document.getElementById('currency').textContent = orderData.currency || 'N/A';
-            document.getElementById('gst').textContent = orderData.gst || 'N/A';
-            document.getElementById('marketplace').textContent = orderData.marketplace_vendor || 'N/A';
-            document.getElementById('local_stock').textContent = orderData.local_stock || 'N/A';
-            document.getElementById('location').textContent = orderData.location || 'N/A';
-            document.getElementById('description').textContent = orderData.description || 'N/A';
-            document.getElementById('material').textContent = orderData.material || 'N/A';
-            document.getElementById('backorder_status').textContent = orderData.backorder_status || 'N/A';
-            document.getElementById('backorder_percent').textContent = orderData.backorder_percent || 'N/A';
-            document.getElementById('backorder_delay').textContent = orderData.backorder_delay || 'N/A';
-            document.getElementById('numsold').textContent = orderData.numsold || 'N/A';
-            document.getElementById('po_number').textContent = orderData.po_number || 'N/A';
-            document.getElementById('po_date').textContent = orderData.po_date || 'N/A';
-            document.getElementById('expected_delivery_date').textContent = orderData.expected_delivery_date || 'N/A';
-            document.getElementById('product_weight').textContent = orderData.product_weight || 'N/A';
-            document.getElementById('product_weight_unit').textContent = orderData.product_weight_unit || 'N/A';
-            document.getElementById('prod_height').textContent = orderData.prod_height || 'N/A';
-            document.getElementById('prod_width').textContent = orderData.prod_width || 'N/A';
-            document.getElementById('prod_length').textContent = orderData.prod_length || 'N/A';
-            document.getElementById('length_unit').textContent = orderData.length_unit || 'N/A';
-            document.getElementById('payment_type').textContent = orderData.payment_type || 'N/A';
-            document.getElementById('coupon').textContent = orderData.coupon || 'N/A';
-            document.getElementById('coupon_reduce').textContent = orderData.coupon_reduce || 'N/A';
-            document.getElementById('giftvoucher').textContent = orderData.giftvoucher ||  'N/A';
-            document.getElementById('giftvoucher_reduce').textContent = orderData.giftvoucher_reduce || 'N/A';
-            document.getElementById('credit').textContent = orderData.credit || 'N/A';
-            document.getElementById('vendor').textContent = orderData.vendor || 'N/A';
-                    
-            const imgElem = document.querySelector('#vendor-popup-panel img');
-            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
-            const infoDiv = imgElem.nextElementSibling;     
-            document.getElementById('shipping_country').textContent = orderData.shipping_country || 'N/A';
-            // Order Addons
-            const addonsDiv = document.getElementById('order_addons');
-            addonsDiv.innerHTML = '';
-            let options = orderData.options || [];
-            if (typeof options === 'string') {
-                try {
-                    options = JSON.parse(options);
-                } catch (e) {
-                    options = [options];
-                }
-            }
-
-            if (Array.isArray(options) && options.length > 0) {
-                addonsDiv.innerHTML = ''; // clear
-                options.forEach(opt => {
-                    const chip = document.createElement('span');
-                    chip.className = 'inline-block bg-gray-100 text-sm px-2 py-1 rounded mr-2 mb-2';
-                    chip.textContent = opt;
-                    addonsDiv.appendChild(chip);
-                });
-            } if(options == [] || options == '' || options == null || options.length == 0 || options == 'Array') {
-                addonsDiv.textContent = 'N/A';
-            } else {
-                addonsDiv.textContent = 'N/A';
-            }
-            /*fetchOrderDetails(orderData.id).then(orderDetails => {
-                //console.log(orderDetails.order);
-                // Populate the popup with order details
-                document.getElementById('gst').textContent = orderDetails.order.gst || 'N/A';                       
-                
-                document.getElementById('final_price').textContent = orderDetails.order.finalprice ? '₹' + orderDetails.order.finalprice : 'N/A';
-                document.getElementById('item_price').textContent = orderDetails.order.itemprice ? '₹' + orderDetails.order.itemprice : 'N/A';
-                document.getElementById('cost_price').textContent = orderDetails.order.cost_price ? '₹' + orderDetails.order.cost_price : 'N/A';
-                document.getElementById('currency').textContent = orderDetails.order.currency || 'N/A';
-                document.getElementById('item').textContent = orderDetails.order.title || 'N/A';
-                document.getElementById('sub_category').textContent = orderDetails.order.subcategories || 'N/A';
-                document.getElementById('size').textContent = orderDetails.order.size || 'N/A';
-                document.getElementById('color').textContent = orderDetails.order.color || 'N/A';
-                document.getElementById('marketplace').textContent = orderDetails.order.marketplace_vendor || 'N/A';
-                document.getElementById('local_stock').textContent = orderDetails.order.local_stock || 'N/A';
-                document.getElementById('location').textContent = orderDetails.order.location || 'N/A';
-                
-                // Other details
-                const imgElem = document.querySelector('#vendor-popup-panel img');
-                imgElem.src = orderDetails.order.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=No+Image';
-                const infoDiv = imgElem.nextElementSibling;
-                infoDiv.innerHTML = `
-                    <p><strong>Order Number:</strong> ${orderDetails.order.order_number || 'N/A'}</p>
-                    <p><strong>Order Date:</strong> ${orderDetails.order.order_date || 'N/A'}</p>
-                    <p><strong>HSN Code:</strong> ${orderDetails.order.hsn || 'N/A'}</p>
-                    <p><strong>Category:</strong> ${orderDetails.order.groupname || 'N/A'}</p>
-                    <p><strong>Quantity:</strong> ${orderDetails.order.quantity || 'N/A'}</p>
-                    <p><strong>Shipping Country:</strong> ${orderDetails.order.shipping_country || 'N/A'}</p>
-                `;
-            });*/
-            openPopup();
-        });
-    });
-    function openPopup() {
-        popupWrapper.classList.remove('hidden');
-        setTimeout(() => {
-            modalSlider.classList.remove('translate-x-full');
-        }, 10); // Slight delay to allow transition
-    }
-    closePopupBtn.addEventListener('click', () => {
-        modalSlider.classList.add('translate-x-full');
-        setTimeout(() => {
-            popupWrapper.classList.add('hidden');
-        }, 300); // Match the duration of the CSS transition
-    });
-    // function populateOrderDetails(order) {
-    //     document.getElementById('description').textContent = order.title || 'N/A';
-    //     document.getElementById('gst').textContent = order.gst || 'N/A';
-    //     document.getElementById('hsn').textContent = order.hsn || 'N/A';
-    //     document.getElementById('po_number').textContent = order.po_number || 'N/A';
-    //     document.getElementById('quantity').textContent = order.quantity || 'N/A';
-    // }
-    function fetchOrderDetails(id) {
-        return fetch('?page=orders&action=get_order_details&id=' + encodeURIComponent(id))
-            .then(r => r.json());
-    }
+   
     function checkPoItmes() {
         
         const checkedRows = document.querySelectorAll('input[name="poitem[]"]:checked');
@@ -1337,16 +1362,16 @@ function closeImagePopup(e) {
     
     document.addEventListener('DOMContentLoaded', function () {
         // Accordion functionality
-        const accordionButton = document.getElementById('accordion-button');
-        const accordionContent = document.getElementById('accordion-content');
-        const accordionIcon = document.getElementById('accordion-icon');
+        const accordionButton = document.getElementById('accordion-button-search');
+        const accordionContent = document.getElementById('accordion-content-search');
+        const accordionIcon = document.getElementById('accordion-icon-search');
 
-        accordionButton.addEventListener('click', () => {
+        accordionButton.addEventListener('click', () => { 
             const isExpanded = accordionButton.getAttribute('aria-expanded') === 'true';
             accordionButton.setAttribute('aria-expanded', !isExpanded);
-            if (accordionContent.classList.contains('hidden')) {
+            if (accordionContent.classList.contains('hidden')) { 
                 accordionContent.classList.remove('hidden');
-                accordionIcon.classList.add('rotate-180');
+                accordionIcon.classList.add('rotate-180');                
             } else {
                 accordionContent.classList.add('hidden');
                 accordionIcon.classList.remove('rotate-180');
@@ -1382,7 +1407,7 @@ function closeImagePopup(e) {
             toDateInput.min = null;
         }
 
-        clearButton.addEventListener('click', clearFilters);
+        //clearButton.addEventListener('click', clearFilters);
     });
     // Image popup functionality
     function openImagePopup(imageUrl) {
@@ -1601,6 +1626,12 @@ function closeImagePopup(e) {
         document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
         document.getElementById('status_item').textContent = orderData.title || 'N/A';
         document.getElementById('orderPriority').value = orderData.priority || '';
+        document.getElementById('previousStatus').value = orderData.status || '';
+        document.getElementById('previousAgent').value = orderData.agent_id || '';
+        document.getElementById('agentId').value = orderData.agent_id || '';
+        document.getElementById('previousPriority').value = orderData.priority || '';
+        document.getElementById('previousRemarks').value = orderData.remarks || '';
+        document.getElementById('previousESD').value = orderData.esd || '';
         // display ESD in dd-mm-yyyy format while keeping the date input usable
         (function(){
             const statusESD = document.getElementById('statusESD');
@@ -1634,6 +1665,11 @@ function closeImagePopup(e) {
     function closeStatusPopup() {
         document.getElementById('statusPopup').classList.add('hidden');
     }
+    //agent name set on selection
+    document.getElementById('agentId').addEventListener('change', function(){
+        const selectedOption = this.options[this.selectedIndex];
+        document.getElementById('agentName').value = selectedOption.text;
+    });
     // submit status form with validation
     document.getElementById('statusForm').addEventListener('submit', function(e){
         const statusSelect = document.getElementById('orderStatus');
@@ -1677,4 +1713,156 @@ function closeImagePopup(e) {
 
     });
 
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Modal functionality
+        const openModalBtn = document.getElementById('open-details-modal');
+        const closeModalBtn = document.getElementById('close-details-modal');
+        const modal = document.getElementById('details-modal');
+        const modalSlider = document.getElementById('details-modal-slider');
+
+        const openModal = () => {
+            if (!modal || !modalSlider) return;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalSlider.classList.remove('translate-x-full');
+            }, 10);
+        };
+
+        const closeModal = () => {
+            if (!modal || !modalSlider) return;
+            modalSlider.classList.add('translate-x-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        };
+
+        if (openModalBtn) openModalBtn.addEventListener('click', openModal);
+        if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+
+        if (modal) {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+
+        // Accordion functionality
+        // Initialize accordion triggers inside a given root (document or a container element).
+        // Call initAccordionTriggers() on load and after injecting dynamic HTML.
+        function initAccordionTriggers(root = document) {
+            const accordionTriggers = root.querySelectorAll('.accordion-trigger');
+            accordionTriggers.forEach(trigger => {
+                // Remove previous handler if stored to avoid duplicate handlers
+                if (trigger.__accordionClick__) {
+                    trigger.removeEventListener('click', trigger.__accordionClick__);
+                }
+
+                const handler = function () {
+                    const content = this.nextElementSibling;
+                    const isOpening = !content.classList.contains('open');
+
+                    // Open or close the clicked one
+                    if (isOpening) {
+                        content.classList.add('open');
+                        this.classList.add('active');
+                    } else {
+                        content.classList.remove('open');
+                        this.classList.remove('active');
+                    }
+                };
+
+                // store the handler reference so it can be removed later
+                trigger.__accordionClick__ = handler;
+                trigger.addEventListener('click', handler);
+            });
+        }
+
+        // initialize for existing DOM
+        //initAccordionTriggers();
+
+        // Load dynamic content into the modal when an order detail link is clicked
+        const orderDetailLinks = document.querySelectorAll('.order-detail-link');
+        orderDetailLinks.forEach(link => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                openModal(); // Open the modal first
+            const modalContentDiv = document.getElementById('details-modal-content');
+            const orderData  = JSON.parse(link.getAttribute('data-order'));
+            //console.log('Fetching details for order:', orderData.order_number);
+            //loadingImage.classList.remove('hidden');
+            modalContentDiv.innerHTML = '<p>Loading...</p>'; // Show loading indicator
+
+            fetch(`?page=orders&action=get_order_details_html&order_number=${encodeURIComponent(orderData.order_number)}`)
+                .then(response => response.text())
+                .then(html => {
+                    modalContentDiv.innerHTML = html; // Insert the fetched HTML
+
+                    // Initialize accordion triggers inside the newly injected content so they work.
+                    if (typeof initAccordionTriggers === 'function') {
+                        initAccordionTriggers(modalContentDiv);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading order details:', error);
+                    modalContentDiv.innerHTML = '<p>Error loading order details.</p>';
+                });
+            });
+        });
+
+    });
+</script>
+<script>
+    //call Imported Update Popup
+    function callImportedUpdate() {
+        //open import popup to display import status and call ajax to import
+        document.getElementById('importedPopup').classList.remove('hidden');       
+    }
+    //vendor auto complete
+    document.getElementById('vendor_autocomplete').addEventListener('input', function() {
+    const query = this.value;
+    const suggestionsBox = document.getElementById('vendor_suggestions');
+    const vendorIdInput = document.getElementById('vendor_id');
+    // close suggestions if clicked outside
+    document.addEventListener('click', function(event) {
+        if (!suggestionsBox.contains(event.target) && event.target !== document.getElementById('vendor_autocomplete')) {
+            suggestionsBox.style.display = 'none';
+        }
+        if (event.target === document.getElementById('vendor_autocomplete')) {
+            if (suggestionsBox.children.length > 0) {
+                suggestionsBox.style.display = 'block';
+            }
+        }
+    });
+
+    if (query.length < 2) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {            
+            suggestionsBox.innerHTML = '';
+            if (Array.isArray(data.data) && data.data.length > 0) {
+                data.data.forEach(vendor => {
+                    const div = document.createElement('div');
+                    div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+                    div.textContent = vendor.vendor_name;
+                    div.addEventListener('click', function() {
+                        document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
+                        vendorIdInput.value = vendor.id;
+                        suggestionsBox.style.display = 'none';
+                    });
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        });
+    });
 </script>

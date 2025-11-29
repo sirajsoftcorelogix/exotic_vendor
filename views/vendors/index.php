@@ -16,18 +16,41 @@
                     </div>
                     <div class="flex flex-wrap items-left gap-4">
                         <div class="relative flex items-left gap-2">
-                            <input type="text" name="search_text" placeholder="Search by name, email or phone" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
+                            <input type="text" name="search_text" placeholder="Search by name, email or phone" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 250px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
                         </div>
                     </div>
                     <div class="relative">
-                        <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
+                        <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="category_filter" id="category_filter">
+                            <option value="" selected>All Categories</option>
+                            <?php foreach($category[0] as $key => $value): ?>
+                                <?php if ($value['parent_id'] == 0): ?>
+                                    <optgroup label="<?php echo $value['category_name']; ?>">
+                                        <?php foreach($category[$value['id']] as $subKey => $subValue): 
+                                            if ($subValue['parent_id'] == $value['id']): ?>
+                                                <option value="<?php echo $subValue['id']; ?>" title="<?php echo $subValue['category_name']; ?>" <?php echo ($data['category_filter'] == $subValue['id']) ? "selected" : ""?>><?php echo $subValue['category_name']; ?></option>
+                                        <?php endif; endforeach; ?>
+                                    </optgroup>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="relative">
+                        <select style="width: 132px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="team_filter" id="team_filter">
+                            <option value="" selected>All Teams</option>
+                            <?php foreach($teamList as $team): ?>
+                                <option value="<?php echo $team['id']; ?>" <?php echo ($data['team_filter'] == $team['id']) ? "selected" : ""?>><?php echo $team['team_name']; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="relative">
+                        <select style="width: 120px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
                             <option value="" selected>All Status</option>
                             <option value="active" <?php echo ($data['status_filter'] == "active") ? "selected" : ""?>>Active</option>
                             <option value="inactive" <?php echo ($data['status_filter'] == "inactive") ? "selected" : ""?>>Inactive</option>
                             <option value="blacklisted" <?php echo ($data['status_filter'] == "blacklisted") ? "selected" : ""?>>Blacklisted</option>
                         </select>
                     </div>
-                    
                     <div class="relative">
                         <input type="submit" value="Search" style="width: 100px; height: 37px; border-radius: 5px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2">
                     </div>
@@ -39,7 +62,7 @@
         </div>
         <!-- Add User Button -->
         <?php
-        if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'add')) {
+        if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'add')) {
         ?>
         <button style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; line-height: 100%; letter-spacing: 0%; margin-right:10px;" class="bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg flex items-center justify-center gap-2 mt-[10px]" id="open-vendor-popup-btn">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -73,8 +96,9 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Contact Person</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text" nowrap>Agent Name</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Phone</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th>
+                        <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th> -->
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">City</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">State</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Status</th>
@@ -83,16 +107,34 @@
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                     <?php if (!empty($vendors)): ?>
+                        <?php
+                            $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+                            $page = $page < 1 ? 1 : $page;
+                            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
+                            $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+                            $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
+                            $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
+
+                            // Calculate start/end slot for 10 pages
+                            $slot_size = 10;
+                            $start = max(1, $page - floor($slot_size / 2));
+                            $end = min($total_pages, $start + $slot_size - 1);
+                            if ($end - $start < $slot_size - 1) {
+                                $start = max(1, $end - $slot_size + 1);
+                            }
+                            $counter = ($page - 1) * $limit;
+                        ?>
                         <?php foreach ($vendors as $index => $vendor): ?>
                             <tr class="table-content-text">
-                                <td class="px-6 py-4 whitespace-wrap"><?= $index + 1 ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= ++$counter ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name']) ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['city']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['state']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'])) ?>
+                                <td class="px-6 py-4 whitespace-wrap"><?= ($vendor['agent_name']!="") ? htmlspecialchars($vendor['agent_name']) : "" ?></td>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
+                                <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td> -->
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['city']) ?></td>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['state']) ?></td>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'])) ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
@@ -101,11 +143,11 @@
                                             &#x22EE; <!-- Vertical ellipsis -->
                                         </button> 
                                         <ul class="menu-popup">
-                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'edit')) { ?>
+                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'edit')) { ?>
                                                 <li onclick="openEditModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <?php } ?>
                                             <li onclick="openBankDtlsModal(<?= htmlspecialchars($vendor['id']) ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
-                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Manage Vendor', 'delete')) { ?>
+                                            <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'delete')) { ?>
                                                 <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
                                             <?php } ?>
                                             <li style="color: lightgray;"><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
@@ -117,6 +159,7 @@
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                        
                     <?php else: ?>
                         <tr>
                             <td colspan="12" class="px-6 py-4 text-center text-gray-500">No vendors found.</td>
@@ -129,22 +172,7 @@
     </div>
 
     <!-- Pagination Logic -->
-	<?php
-        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // records per page, default 20
-        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
-        $total_records = isset($data['totalRecords']) ? (int)$data['totalRecords'] : 0;
-        $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
-
-        // Calculate start/end slot for 10 pages
-        $slot_size = 10;
-        $start = max(1, $page - floor($slot_size / 2));
-        $end = min($total_pages, $start + $slot_size - 1);
-        if ($end - $start < $slot_size - 1) {
-            $start = max(1, $end - $slot_size + 1);
-        }
-	?>
+    <?php if (!empty($vendors)): ?>
         <div class="bg-white rounded-xl shadow-md p-4">
             <div class="flex items-center justify-center">
                 <div class="flex items-center gap-4 text-sm text-gray-600">
@@ -179,6 +207,7 @@
                 </div>
             </div>
         </div>
+    <?php endif; ?>
 </div>
 
 <!-- Add Vendor Modal -->
@@ -201,7 +230,7 @@
         <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add / Edit Vendor</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add Vendor</h2>
                     <div id="addVendorMsg" style="margin-top:10px;" class="text-sm font-bold"></div>
                     <form id="addVendorForm">
                         <input type="hidden" name="page" value="vendors">
@@ -214,6 +243,7 @@
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Vendor Name <span class="text-red-500">*</span></label>
                                     <input type="text" class="form-input w-full mt-1" required name="addVendorName" id="addVendorName" />
+                                    <span id="addVendorNameMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Contact Person <span class="text-red-500">*</span></label>
@@ -221,32 +251,50 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <input type="number" class="form-input w-full mt-1" required name="addPhone" id="addPhone" />
+                                    <select class="form-input w-1/4" style="width: 190px;" name="addCountryCode" id="addCountryCode" required>
+                                        <option value="" disabled>Select Code</option>
+                                        <?php foreach($countryList as $cl): ?>
+                                            <option value="<?php echo $cl['phone_code']; ?>" <?php if($cl["name"]=="India") { echo "selected"; }?>>
+                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
+                                <div>
+                                    <input type="number" class="form-input w-full mt-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" style="margin-top: 25px;" />
+                                    <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
+                                </div>
+                                
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Email</label>
                                     <input type="email" class="form-input w-full mt-1" name="addEmail" id="addEmail" />
+                                    <span id="addEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" />
+                                    <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" oninput="limitToTenDigits(this)" />
                                 </div>
-                                <div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div style="width: 400px;">
                                     <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <select class="form-input w-full mt-1" name="addTeam" id="addTeam">
-                                        <option value="" disabled selected>Select Team</option>
+                                    <br/>
+                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
+                                        <option value="" disabled>Select Team</option>
                                         <?php foreach($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
-                                    </select>
+                                <br />
+                                <div style="width: 400px;">
+                                    <label class="text-sm font-medium text-gray-700">Agent</label>
+                                    <br/>
+                                    <span id="addTeamMemberBlock">
+                                        <select class="form-input w-full mt-1" name="addTeamMember" id="addTeamMember">
+                                            <option value="" disabled selected>Select Team Member</option>
+                                        </select>
+                                    </span>
                                 </div>
                             </div>
                             <div>
@@ -256,10 +304,10 @@
                                     <option value="" disabled>Select Categories</option>
                                     <?php foreach($category[0] as $key => $value): ?>
                                         <?php if ($value['parent_id'] == 0): ?>
-                                            <optgroup label="<?php echo $value['display_name']; ?>">
+                                            <optgroup label="<?php echo $value['category_name']; ?>">
                                                 <?php foreach($category[$value['id']] as $subKey => $subValue): 
                                                     if ($subValue['parent_id'] == $value['id']): ?>
-                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['display_name']; ?></option>
+                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['category_name']; ?></option>
                                                 <?php endif; endforeach; ?>
                                             </optgroup>
                                         <?php endif; ?>
@@ -323,7 +371,7 @@
                         <!-- Ratings & Notes -->
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">
                                         Rating <span class="text-red-500">*</span>
@@ -334,6 +382,14 @@
                                         <option>3 Star</option>
                                         <option>2 Star</option>
                                         <option>1 Star</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
+                                    <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive </option>
+                                        <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
                             </div>
@@ -374,11 +430,12 @@
         <div class="h-full bg-white shadow-2xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add / Edit Vendor</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Vendor</h2>
                     <div id="editVendorMsg" style="margin-top:10px;"></div>
                     <form id="editUserForm">
                         <input type="hidden" id="editVendorId" name="id" value="">
-                        <input type="text" id="editPreviousState" name="editPreviousState" value="">
+                        <input type="hidden" id="editAgentIds" value="">
+                        <input type="hidden" id="editPreviousState" name="editPreviousState" value="">
                         <!-- Basic Information -->
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Basic Information</h3>
@@ -393,7 +450,18 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" />
+                                    <select class="form-input w-1/4" style="width: 190px;" name="editCountryCode" id="editCountryCode" required>
+                                        <option value="" disabled>Select Code</option>
+                                        <?php foreach($countryList as $cl): ?>
+                                            <option value="<?php echo $cl['phone_code']; ?>">
+                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div>
+                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" style="margin-top: 25px;" />
+                                    <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Email</label>
@@ -401,39 +469,40 @@
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" />
+                                    <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" oninput="limitToTenDigits(this)" />
                                 </div>
-                                <div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div style="width: 400px;">
                                     <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <select class="form-input w-full mt-1" name="editTeam" id="editTeam">
-                                        <option value="" disabled selected>Select Team</option>
+                                    <br />
+                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
+                                        <option value="" disabled>Select Team</option>
                                         <?php foreach($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
-                                    </select>
+                                <br />
+                                <div style="width: 400px;">
+                                    <label class="text-sm font-medium text-gray-700">Agent</label>
+                                    <br />
+                                    <span id="editTeamMemberBlock">
+                                        <select class="form-input w-full mt-1" name="editTeamMember" id="editTeamMember">
+                                            <option value="" disabled selected>Select Agent</option>
+                                        </select>
+                                    </span>
                                 </div>
-                                
-								<div>
-								</div>
                             </div>
                             <div>
-                                <?php //print_array($category); ?>
                                 <label class="text-sm font-medium text-gray-700">Category</label>
-                                <select class="form-input w-full mt-1 h-32 edit-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
                                     <option value="" disabled>Select Categories</option>
                                     <?php                                     
                                     if (isset($category[0]) && is_array($category[0])) {
                                         foreach ($category[0] as $parent) {
                                             $parentId = $parent['id'];
-                                            $parentName = $parent['display_name'];
+                                            $parentName = $parent['category_name'];
 
                                             // Only show parent as optgroup label, not as selectable option
                                             echo '<optgroup label="' . htmlspecialchars($parentName) . '" style="font-weight: bold;">';
@@ -441,10 +510,9 @@
                                             // Show subcategories if exist
                                             if (isset($category[$parentId]) && is_array($category[$parentId])) {
                                                 foreach ($category[$parentId] as $child) {
-                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['display_name']) . '</option>';
+                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
                                                 }
                                             }
-
                                             echo '</optgroup>';
                                         }
                                     }
@@ -509,7 +577,7 @@
                         <!-- Ratings & Notes -->
                         <div class="pt-4">
                             <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">
                                         Rating <span class="text-red-500">*</span>
@@ -520,6 +588,14 @@
                                         <option>3 Star</option>
                                         <option>2 Star</option>
                                         <option>1 Star</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
+                                    <select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive </option>
+                                        <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
                             </div>
@@ -621,6 +697,211 @@
 
 <!-- JavaScript to handle popup and form submission -->
 <script>
+
+    // Function to limit input to six digits
+    window.limitToTenDigits = function (input) {
+        // Remove non-digit characters
+        input.value = input.value.replace(/\D/g, '');
+
+        // Allow only 8 digits
+        if (input.value.length > 10) {
+            input.value = input.value.slice(0, 10);
+        }
+
+        // Prevent leading zero
+        if (input.value.startsWith('0')) {
+            input.value = input.value.replace(/^0+/, '');
+        }
+    }
+
+    let vendorNameExists = false;
+    let emailExists = false;
+    let phoneExists = false;
+    //Vendor Name
+    const vendorNameInput = document.getElementById('addVendorName');
+    const vendorNameMsg = document.getElementById('addVendorNameMsg');
+
+    vendorNameInput.addEventListener('keyup', () => {
+        const vendorName = vendorNameInput.value.trim();
+        if (vendorName.length < 10) {
+            vendorNameExists = false;
+            vendorNameMsg.textContent = 'Invalid Vendor Name.';
+            return;
+        }
+
+        fetch('?page=vendors&action=checkVendorName&vendorName=' + encodeURIComponent(vendorName))
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    vendorNameMsg.textContent = 'This vendor name is already registered!';
+                    vendorNameMsg.style.color = 'red';
+                    vendorNameExists = true;
+                } else {
+                    vendorNameExists = false;
+                }
+                setTimeout(() => {
+                    vendorNameMsg.textContent = '';
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('Error:', err);
+            });
+    });
+
+    //Phone Number
+    const phoneInput = document.getElementById('addPhone');
+    const phoneMsg = document.getElementById('addPhoneMsg');
+
+    phoneInput.addEventListener('keyup', () => {
+        const phone = phoneInput.value.trim();
+        if (phone.length < 10) {
+            phoneExists = false;
+            phoneMsg.textContent = 'Invalid Phone number.';
+            return;
+        }
+
+        fetch('?page=vendors&action=checkPhoneNumber&phone=' + encodeURIComponent(phone))
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    phoneMsg.textContent = 'This phone number is already registered!';
+                    phoneMsg.style.color = 'red';
+                    phoneExists = true;
+                } else {
+                    phoneExists = false;
+                }
+                setTimeout(() => {
+                    phoneMsg.textContent = '';
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('Error:', err);
+            });
+    });
+    const emailInput = document.getElementById('addEmail');
+    const emailMsg = document.getElementById('addEmailMsg');
+
+    emailInput.addEventListener('keyup', () => {
+        const email = emailInput.value.trim();
+        if (email.length < 0) {
+            emailExists = false;
+            emailMsg.textContent = 'Invalid Email ID.';
+            return;
+        }
+
+        fetch('?page=vendors&action=checkEmail&email=' + encodeURIComponent(email))
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    emailMsg.textContent = 'This email address is already registered!';
+                    emailMsg.style.color = 'red';
+                    emailExists = true;
+                } else {
+                    emailExists = false;
+                }
+                setTimeout(() => {
+                    emailMsg.textContent = '';
+                }, 3000);
+            })
+            .catch(err => {
+                console.error('Error:', err);
+            });
+    });
+    const addForm = document.getElementById('addVendorForm');
+    addForm.addEventListener('submit', (e) => {
+        if (vendorNameExists || phoneExists || emailExists) {
+            e.preventDefault();
+            alert('This phone number already exists. Please enter a different one.');
+        }
+    });
+
+    function fillTeamAgent(teamId, formType) {
+        if(teamId === "") return;
+        
+        if(formType === 'AddForm') {
+            // Get the select element
+            var selectElement = document.getElementById('addTeam');
+            // Get all selected options
+            var selectedOptions = selectElement.selectedOptions;
+            // Extract values into an array
+            var selectedValues = Array.from(selectedOptions).map(option => option.value);
+        }
+
+        if(formType === 'AddForm') {
+            fetch('?page=vendors&action=getTeamMembers&teamId=' + selectedValues.join(','))
+            .then(response => response.json())
+            .then(data => {
+                let html = '';
+                let teams = Array.isArray(data) ? data : [data]; // safe guard
+                teams.forEach(team => {
+                    html += `<optgroup label="${team.team_name}">`;
+                    if (team.agents && team.agents.length > 0) {
+                        team.agents.forEach(agent => {
+                            html += `<option value="${agent.id}">${agent.name}</option>`;
+                        });
+                    }
+                    html += `</optgroup>`;
+                });
+
+                $('#addTeamMember').html(html).trigger('change');
+            })
+            .catch(error => {
+                console.error("Error loading team members:", error);
+            });
+        } else if(formType === 'EditForm') {
+            // Get the select element
+            var selectElement = document.getElementById('editTeam');
+            // Get all selected options
+            var selectedOptions = selectElement.selectedOptions;
+            // Extract values into an array
+            var selectedValues = Array.from(selectedOptions).map(option => option.value);
+
+            fetch('?page=vendors&action=getTeamMembers&teamId=' + selectedValues.join(','))
+            .then(response => response.json())
+            .then(data => {
+                let html = '';
+                let teams = Array.isArray(data) ? data : [data]; // safe guard
+                teams.forEach(team => {
+                    html += `<optgroup label="${team.team_name}">`;
+                    if (team.agents && team.agents.length > 0) {
+                        team.agents.forEach(agent => {
+                            html += `<option value="${agent.id}">${agent.name}</option>`;
+                        });
+                    }
+                    html += `</optgroup>`;
+                });
+                $('#editTeamMember').html(html).trigger('change');
+                if(document.getElementById("editAgentIds").value) {
+                    document.getElementById("editTeamMember").value = document.getElementById("editAgentIds").value;
+                }
+            })
+            .catch(error => {
+                console.error("Error loading team members:", error);
+            });
+        }  else {
+            fetch('?page=vendors&action=getTeamMembers&teamId=' + teamId)
+            .then(response => response.json())
+            .then(data => {
+                let html = '';
+                let teams = Array.isArray(data) ? data : [data]; // safe guard
+                teams.forEach(team => {
+                    html += `<optgroup label="${team.team_name}">`;
+                    if (team.agents && team.agents.length > 0) {
+                        team.agents.forEach(agent => {
+                            html += `<option value="${agent.id}">${agent.name}</option>`;
+                        });
+                    }
+                    html += `</optgroup>`;
+                });
+
+                $('#editTeamMember').html(html).trigger('change');
+                document.getElementById("editTeamMember").value = formType;
+            })
+            .catch(error => {
+                console.error("Error loading team members:", error);
+            });
+        }
+    }
     
     // Toggle menu visibility
     function toggleMenu(button) {
@@ -910,6 +1191,7 @@
             document.getElementById("editVendorName").value = vendor.vendor_name;
             document.getElementById("editContactPerson").value = vendor.contact_name;
             document.getElementById("editEmail").value = vendor.vendor_email;
+            document.getElementById("editCountryCode").value = vendor.country_code;
             document.getElementById("editPhone").value = vendor.vendor_phone;
             document.getElementById("editAltPhone").value = vendor.alt_phone;
             document.getElementById("editGstNumber").value = vendor.gst_number;
@@ -917,6 +1199,12 @@
             document.getElementById("editAddress").value = vendor.address;
             document.getElementById("editCity").value = vendor.city;
             document.getElementById("editCountry").value = vendor.country;
+
+            document.getElementById("editAgentIds").value = vendor.agent_id;
+            
+            fillTeamAgent(vendor.teamIds, vendor.agent_id);
+
+            //document.getElementById("editTeamMember").value = vendor.agent_id;
 
             if(vendor.country !== "India") {
                 document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" required name="editState" id="editState" value="' + vendor.state + '" />';
@@ -972,11 +1260,29 @@
                 option.selected = categoriesArr.map(String).includes(String(option.value));
             });
 
+            const teamSelect = document.getElementById("editTeam");
+            // Ensure vendor.categories is always an array
+            let teamArr = Array.isArray(vendor.teamIds)
+                ? vendor.teamIds
+                : (typeof vendor.teamIds === "string" && vendor.teamIds.length > 0
+                    ? vendor.teamIds.split(",")
+                    : []);
+
+            // Pre-select options
+            Array.from(teamSelect.options).forEach(option => {
+                option.selected = teamArr.map(String).includes(String(option.value));
+            });
             
             // Initialize Select2
             $(document).ready(function() {
                 $('#editVendorCategory').select2({
                     placeholder: "Select Categories",
+                    allowClear: true,
+                    width: '100%',
+                    closeOnSelect: false
+                });
+                $('#editTeam').select2({
+                    placeholder: "Select Teams",
                     allowClear: true,
                     width: '100%',
                     closeOnSelect: false
@@ -1110,11 +1416,18 @@
             }
         });
     };
-</script>
-<script>
+
     $(document).ready(function() {
         $('#addVendorCategory').select2({
             placeholder: "Select Categories",
+            allowClear: true,
+            width: '400',
+            closeOnSelect: false
+        });
+    });
+    $(document).ready(function() {
+        $('#addTeam').select2({
+            placeholder: "Select Teams",
             allowClear: true,
             width: '400',
             closeOnSelect: false

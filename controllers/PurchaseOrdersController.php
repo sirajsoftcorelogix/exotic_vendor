@@ -6,6 +6,7 @@ require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/order/po_invoice.php';
+require_once 'models/product/product.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -18,6 +19,7 @@ $vendorsModel = new Vendor($conn);
 $usersModel = new User($conn);
 $commanModel = new Tables($conn);
 $poInvoiceModel = new POInvoice($conn);
+$productModel = new Product($conn);
 global $root_path;
  
 class PurchaseOrdersController {
@@ -63,6 +65,11 @@ class PurchaseOrdersController {
         if (!empty($_GET['due_date'])) {
             $filters['due_date'] = $_GET['due_date'];
         }
+        if (!empty($_GET['po_type'])) {
+            $filters['po_type'] = $_GET['po_type'];
+        }else{
+            $filters['po_type'] = 'normal';
+        }
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
         // Calculate total pages
@@ -72,6 +79,70 @@ class PurchaseOrdersController {
         $orders = array_slice($purchaseOrders, $offset, $limit);
 
         renderTemplate('views/purchase_orders/index.php', [
+            'purchaseOrders' => $orders,
+            'total_orders' => $total_orders,
+            'total_pages' => $total_pages,
+            'current_page' => $page,
+            'search' => $_GET['search_text'] ?? '',
+            'status_filter' => $_GET['status_filter'] ?? '',
+        ], 'Manage Purchase Orders');
+    }
+    public function stockPurchase() {
+        is_login();
+        global $purchaseOrdersModel;
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
+        $offset = ($page - 1) * $limit;
+
+        // Apply filters
+        $filters = [];
+        // if (!empty($_GET['search_text'])) {
+        //     $filters['search_text'] = $_GET['search_text'];
+        // }
+        if (!empty($_GET['status'])) {
+            $filters['status_filter'] = $_GET['status'];
+        }
+        if(!empty($_GET['po_from']) && !empty($_GET['po_to'])){
+            $filters['po_from'] = $_GET['po_from'];
+            $filters['po_to'] = $_GET['po_to'];
+        }
+        if (!empty($_GET['item_code'])) {
+            $filters['item_code'] = $_GET['item_code'];
+        }
+        if (!empty($_GET['item_category'])) {
+            $filters['item_category'] = $_GET['item_category'];
+        }
+        if (!empty($_GET['item_sub_category'])) {
+            $filters['item_sub_category'] = $_GET['item_sub_category'];
+        }
+        if (!empty($_GET['po_amount_from']) && !empty($_GET['po_amount_to'])) {
+            $filters['po_amount_from'] = $_GET['po_amount_from'];
+            $filters['po_amount_to'] = $_GET['po_amount_to'];
+        }
+        if (!empty($_GET['po_number'])) {
+            $filters['po_number'] = $_GET['po_number'];
+        }
+        if (!empty($_GET['vendor_name'])) {
+            $filters['vendor_name'] = $_GET['vendor_name'];
+        }
+        if (!empty($_GET['due_date'])) {
+            $filters['due_date'] = $_GET['due_date'];
+        }
+        if (!empty($_GET['po_type'])) {
+            $filters['po_type'] = $_GET['po_type'];
+        }else{
+            $filters['po_type'] = 'custom';
+        }
+        // Fetch all purchase orders
+        $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
+        // Calculate total pages
+        $total_orders = count($purchaseOrders);
+        $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+        // Paginate orders
+        $orders = array_slice($purchaseOrders, $offset, $limit);
+
+        renderTemplate('views/stock_purchase/index.php', [
             'purchaseOrders' => $orders,
             'total_orders' => $total_orders,
             'total_pages' => $total_pages,
@@ -126,7 +197,7 @@ class PurchaseOrdersController {
         global $purchaseOrdersModel;
         global $ordersModel;
         // Validate and process the form submission
-        $vendor = isset($_POST['vendor']) ? $_POST['vendor'] : '';
+        $vendor = isset($_POST['vendor_id']) ? $_POST['vendor_id'] : '';
         $user_id = isset($_POST['user_id']) ? $_POST['user_id'] : '';
         $deliveryDueDate = isset($_POST['delivery_due_date']) ? $_POST['delivery_due_date'] : '';
         $deliveryAddress = isset($_POST['delivery_address']) ? $_POST['delivery_address'] : '';
@@ -269,11 +340,15 @@ class PurchaseOrdersController {
         $data['proforma'] = $poInvoiceModel->getInvoiceByPOId($poId,'performa');
         $data['status_log'] = $purchaseOrdersModel->get_po_status_log($poId);
         $data['poId'] = $poId;
-        $data['payment'] = $poInvoiceModel->getPaymentsByPoId($poId);
-        $data['vendor_bank'] = $vendorsModel->getBankDetailsById($purchaseOrder['vendor_id']);
+        $pmt = $poInvoiceModel->getPaymentsByPoId($poId);
+        $data['payment'] = $pmt ?? [];
+        //$data['vendor_bank'] = $vendorsModel->getBankDetailsById($purchaseOrder['vendor_id']);        
+        $data['vendor_bank'] = $poInvoiceModel->getBankDetailsById($purchaseOrder['vendor_id']);
         $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
         $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
-        //print_array($data['proforma']);
+        //print_array($data['payment']);
+       
+        
         $address = $commanModel->get_exotic_address();
         foreach($address as $addr){
             if($addr['id'] == $purchaseOrder['delivery_address']){
@@ -779,9 +854,11 @@ class PurchaseOrdersController {
                 $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '') . '</p>';
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
                 $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+                //if($item['price'] < 0){                
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['price'], 2) . '</td>';
                 $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['gst']) . '%</td>';
                 $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
+                //}
                 $tbody .= '</tr>';
                 
             }
@@ -814,8 +891,11 @@ class PurchaseOrdersController {
             'R' => 'NotoSansGujarati-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-
+        //if($item['price'] < 0){            
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
+        // }else{
+        // $temphtml = file_get_contents('templates/purchaseOrder/po_zero_price.html');
+        // }
         //Define HTML content
         $html = str_replace(
             ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
@@ -1406,5 +1486,191 @@ class PurchaseOrdersController {
         }
 
         echo json_encode(['success' => true, 'message' => 'Challan deleted successfully.']);
+    }
+    public function vendorSearch(){
+        global $vendorsModel;
+        $term = isset($_GET['query']) ? $_GET['query'] : '';
+        $vendors = $vendorsModel->searchVendors($term);
+        echo json_encode(['success' => true, 'data' => $vendors]);
+        exit;
+    }
+    public function customPO(){
+        global $vendorsModel;
+        global $usersModel;
+        global $commanModel;
+        global $domain;
+        global $productModel;
+       
+        $itemIds = isset($_POST['cpoitem']) ? $_POST['cpoitem'] : [];            
+        $data = [];
+        foreach ($itemIds as $id) {
+            $data['data'][] = $productModel->getProduct($id);            
+        }
+        //print_array($data['data']);
+        //$vendors = $vendorsModel->getAllVendors();
+        $data['vendors'] = $vendorsModel->getAllVendors();
+        //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
+        $data['domain'] = $domain;
+        //print_array($data);
+        $data['users'] = $usersModel->getAllUsers();
+        $data['exotic_address'] = $commanModel->get_exotic_address();
+        $data['templates'] = $commanModel->get_payment_terms_and_conditions();
+        renderTemplate('views/purchase_orders/custom_po.php', $data, 'Create Custom Purchase Order');
+    }
+    function productItems() {
+        global $productModel;
+
+        $search = isset($_GET['search']) ? $_GET['search'] : 0;
+        $type = isset($_GET['type']) ? $_GET['type'] : '';
+        if($type == 'item_code'){
+            $orderItems = $productModel->getProductItemsByCode($search);
+
+        }elseif (!$search) {
+            $orderItems = $productModel->getProductItems('');
+        }else{
+            $orderItems = $productModel->getProductItems($search);
+        }
+        if ($orderItems === false) {
+            echo json_encode(['success' => false, 'message' => 'Failed to fetch order items.']);
+            exit;
+        }
+
+        //echo json_encode(['success' => true, 'data' => $orderItems]);
+        echo json_encode($orderItems);
+        exit;
+    }
+    function customPOSave() {
+        global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
+        global $domain;
+
+        $data = $_POST;
+
+        // Validate required fields
+        if (empty($data['vendor']) || empty($data['delivery_due_date']) || empty($data['title']) || empty($data['quantity']) || empty($data['rate']) || empty($data['delivery_address'])) {
+            echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
+            exit;
+        }
+        
+        // Prepare purchase order data
+        $purchaseOrderData = [
+            'po_number' => '',
+            'po_type' => 'custom',
+            'vendor_id' => $data['vendor'],
+            'expected_delivery_date' => $data['delivery_due_date'],
+            'user_id' => $data['user_id'] ?? '',
+            'created_email' => $data['created_email'] ?? '',
+            'delivery_address' => $data['delivery_address'] ?? '',
+            'subtotal' => $data['subtotal'] ?? 0,
+            'shipping_cost' => $data['shipping_cost'] ?? 0,
+            'total_gst' => $data['total_gst'] ?? 0,
+            'total_cost' => $data['grand_total'] ?? 0,
+            'terms_and_conditions' => $data['terms_and_conditions'] ?? '',
+            'status' => 'pending',
+            'flag_star' => 0
+        ];
+        //print_array($purchaseOrderData);
+        // Save purchase order
+        $poId = $purchaseOrdersModel->addPurchaseOrder($purchaseOrderData);
+        if (!$poId) {
+            echo json_encode(['success' => false, 'message' => 'Failed to save purchase order.']);
+            exit;
+        }
+        // Generate and update PO number
+        $poNumber = 'CPO-' . date('Y') . '-' . str_pad($poId, 6, '0', STR_PAD_LEFT);
+        $isUpdated = $purchaseOrdersModel->updatePurchaseOrderNumber($poId, ['po_number' => $poNumber]);
+        if (!$isUpdated) {
+            echo json_encode(['success' => false, 'message' => 'Failed to update PO number.']);
+            exit;
+        }
+        //print_array($_FILES);
+        // Save purchase order items
+         // Create purchase order items
+        $itemsCreated = true;
+        foreach ($data['gst'] as $index => $gstValue) {            
+            // image upload and save logic
+            $filesArray = null;
+            if (isset($_FILES['image'])) {
+                $filesArray = $_FILES['image'];
+            } elseif (isset($_FILES['img_files'])) {
+                $filesArray = $_FILES['img_files'];
+            } elseif (isset($_FILES['img_upload'])) {
+                $filesArray = $_FILES['img_upload'];
+            } elseif (isset($_FILES['img'])) {
+                $filesArray = $_FILES['img'];
+            }
+
+            // Ensure upload directory exists
+            $uploadDir = __DIR__ . '/../uploads/po_items/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $imgPath = ''; // default if no upload and no existing value
+            //echo "Processing item index $index\n";
+            // Handle uploaded file for this item index if present
+            if ($filesArray) {
+                //echo "updoading file for index $index: $fileName\n";
+                // support both multiple and single file input structures
+                $fileName = is_array($filesArray['name']) ? ($filesArray['name'][$index] ?? '') : ($filesArray['name'] ?? '');
+                $fileTmp  = is_array($filesArray['tmp_name']) ? ($filesArray['tmp_name'][$index] ?? '') : ($filesArray['tmp_name'] ?? '');
+                $fileErr  = is_array($filesArray['error']) ? ($filesArray['error'][$index] ?? 4) : ($filesArray['error'] ?? 4);
+                $fileSize = is_array($filesArray['size']) ? ($filesArray['size'][$index] ?? 0) : ($filesArray['size'] ?? 0);
+
+                if (!empty($fileName) && $fileErr === UPLOAD_ERR_OK && is_uploaded_file($fileTmp)) {
+                    $fileNameCmps = explode('.', $fileName);
+                    $fileExtension = strtolower(end($fileNameCmps));
+                    $allowedfileExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+                    
+                    if (in_array($fileExtension, $allowedfileExtensions)) {
+                        $newFileName = 'POITEM_' . $poId . '_' . $index . '_' . time() . '.' . $fileExtension;
+                        $dest_path = $uploadDir . $newFileName;
+                        $imgPath = $domain.'/uploads/po_items/' . $newFileName;
+                        //set permissions                        
+                        if (move_uploaded_file($fileTmp, $dest_path)) {
+                            // store relative web path                                                       
+                            @chmod($dest_path, 0644);
+
+                        } else {
+                            // failed to move, keep existing POST image if provided
+                            $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+                        }
+                    } else {
+                        // invalid extension, keep existing POST image if provided
+                        $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+                    }
+                } else {
+                    // no upload for this index, use provided img value (could be URL or previously uploaded path)
+                    $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+                }
+            } else {
+                // no file input at all, use provided img value
+                $imgPath = isset($data['img'][$index]) ? $data['img'][$index] : '';
+            }
+
+            // Ensure items image points to the resolved path
+            $data['img'][$index] = $imgPath;
+            $items = [
+                'purchase_orders_id' => $poId,
+                'item_code' => isset($data['item_code'][$index]) ? $data['item_code'][$index] : '',
+                'product_id' => isset($data['product_id'][$index]) ? $data['product_id'][$index] : '',
+                'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',
+                'image' => isset($data['img'][$index]) ? $data['img'][$index] : '',
+                'hsn' => isset($data['hsn'][$index]) ? $data['hsn'][$index] : '',
+                'gst' => $gstValue,
+                'quantity' => isset($data['quantity'][$index]) ? $data['quantity'][$index] : 0,
+                'price' => isset($data['rate'][$index]) ? $data['rate'][$index] : 0,
+                'amount' => isset($data['rate'][$index]) ? $data['rate'][$index] * (1 + ($gstValue / 100)) : 0
+            ];
+            //print_array($items);
+            $itemId = $purchaseOrderItemsModel->createCustomPoItem($items);
+            if (!$itemId) {
+                $itemsCreated = false;
+                break; // Stop processing if any item creation fails
+            }
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Custom Purchase Order created successfully.', 'po_id' => $poId, 'item_ids' => $itemsCreated]);
+        exit;
     }
 }

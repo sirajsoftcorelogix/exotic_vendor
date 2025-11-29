@@ -227,8 +227,12 @@ class UsersController {
         $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
         
         $users_data = $usersModel->getAllUsersListing($page_no, $limit, $search, $role_filter, $status_filter);
+        $roles = $usersModel->getAllRoles();
+        $teams = $usersModel->getAllTeams();
         $data = [
             'users' => $users_data["users"],
+            'roles_list' => $roles,
+            'teams_list' => $teams,
             'page_no' => $page_no,
             'total_pages' => $users_data["totalPages"],
             'sort_by' => $sort_by,
@@ -260,6 +264,7 @@ class UsersController {
             }
             if ($id > 0) {
                 $data['user'] = $usersModel->getUserById($id);
+                $data['teamIds'] = $usersModel->getUserTeams($id);
             }
         } catch (Exception $e) {
             $data['message'] = ['success' => false, 'error' => $e->getMessage()];
@@ -339,6 +344,7 @@ class UsersController {
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
             $user = $usersModel->getUserById($id);
+            $user['teamIds'] = $usersModel->getUserTeams($id);
             if ($user) {
                 echo json_encode($user);
             } else {

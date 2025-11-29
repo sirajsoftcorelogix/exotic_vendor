@@ -92,17 +92,42 @@ class vendor {
         }
     }
     public function addVendor($data) {
-        // Check if vendor_email already exists
-        /*$checkEmailSql = "SELECT id FROM vp_vendors WHERE vendor_email = ?";
-        $checkEmailStmt = $this->conn->prepare($checkEmailSql);
-        $checkEmailStmt->bind_param('s', $data['vendor_email']);
-        $checkEmailStmt->execute();
-        $checkEmailStmt->store_result();
-        if ($checkEmailStmt->num_rows > 0) {
-            return ['success' => false, 'message' => 'Vendor email already exists. Please use a different email.'];
+        // Vendor Name
+        if (!empty($data['addVendorName'])) {
+            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
+            $checkGstStmt = $this->conn->prepare($checkGstSql);
+            $checkGstStmt->bind_param('s', $data['addVendorName']);
+            $checkGstStmt->execute();
+            $checkGstStmt->store_result();
+            if ($checkGstStmt->num_rows > 0) {
+                return ['success' => false, 'message' => 'Vendor name already exists. Please use a differentVendor name.'];
+            }
+            $checkGstStmt->close();
         }
-        $checkEmailStmt->close();*/
-
+        // Phone Number
+        if (!empty($data['addPhone'])) {
+            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_phone = ?";
+            $checkGstStmt = $this->conn->prepare($checkGstSql);
+            $checkGstStmt->bind_param('s', $data['addPhone']);
+            $checkGstStmt->execute();
+            $checkGstStmt->store_result();
+            if ($checkGstStmt->num_rows > 0) {
+                return ['success' => false, 'message' => 'Phone number already exists. Please use a different Phone number.'];
+            }
+            $checkGstStmt->close();
+        }
+        //Email
+        if (!empty($data['addEmail'])) {
+            $checkGstSql = "SELECT id FROM vp_vendors WHERE vendor_email = ?";
+            $checkGstStmt = $this->conn->prepare($checkGstSql);
+            $checkGstStmt->bind_param('s', $data['addEmail']);
+            $checkGstStmt->execute();
+            $checkGstStmt->store_result();
+            if ($checkGstStmt->num_rows > 0) {
+                return ['success' => false, 'message' => 'Email already exists. Please use a different Email.'];
+            }
+            $checkGstStmt->close();
+        }
         // Check if gst_number already exists (if provided)
         if (!empty($data['addGstNumber'])) {
             $checkGstSql = "SELECT id FROM vp_vendors WHERE gst_number = ?";
@@ -129,12 +154,13 @@ class vendor {
             $checkPanStmt->close();
         }
 
-        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssiis',
+        $stmt->bind_param('sssssssssssssssiiis',
             $data['addVendorName'],
             $data['addContactPerson'],
             $data['addEmail'],
+            $data['addCountryCode'],
             $data['addPhone'],
             $data['addAltPhone'],
             $data['addGstNumber'],
@@ -147,32 +173,38 @@ class vendor {
             $data['addRating'],
             $data['addNotes'],
             $_SESSION["user"]["id"],
+            $data['addTeam'],
+            $data['addTeamMember'],
             $data['addStatus']
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
             $vendor_id = $this->conn->insert_id;
-            $cat_status = '';
+            $cat_status = $tm_status = '';
             // Add vendor categories if provided
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
-            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status];
-        }
+            // Add vendor teams
+            if (!empty($data['addTeam']) && is_array($data['addTeam'])) {
+               $tm_status = $this->addVendorTeams($vendor_id, $data['addTeam']);
+            }
 
-           
+            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status];
+        }
         return [
             'success' => false,
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
     public function updateVendor($id, $data) {
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, is_active = ? WHERE id = ?";
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('ssssssssssssssiisi', 
+        $stmt->bind_param('sssssssssssssssiiisi', 
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
+            $data['editCountryCode'],
             $data['editPhone'],
             $data['editAltPhone'],
             $data['editGstNumber'],
@@ -186,19 +218,23 @@ class vendor {
             $data['editNotes'],
             $_SESSION["user"]["id"],
             $data['editTeam'],
+            $data['editTeamMember'],
             $data['editStatus'],
             $id
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
             $vendor_id = $id;
-            $cat_status = '';
+            $cat_status = $tm_status = '';
             // Add vendor categories if provided
             if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
             }
-            
-            return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status];
+            // Add vendor teams
+            if (!empty($data['editTeam']) && is_array($data['editTeam'])) {
+               $tm_status = $this->addVendorTeams($vendor_id, $data['editTeam']);
+            }
+            return ['success' => true, 'message' => 'Vendor updated successfully.','cat_status'=>$cat_status, 'team_status' => $tm_status];
         }
         return [
             'success' => false,
@@ -234,7 +270,7 @@ class vendor {
             'message' => 'Delete failed: ' . $stmt->error . '. Please try again later.'
         ];
     }
-    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '') {
+    public function getAllVendorsListing($page = 1, $limit = 10, $search = '', $status_filter = '', $category_filter = '', $team_filter = '') {
         // sanitize
         $page = (int)$page;
         if ($page < 1) $page = 1;
@@ -254,31 +290,38 @@ class vendor {
         } else {
             if (!empty($search)) {
                 $search = $this->conn->real_escape_string($search);
-                $where = "WHERE vendor_name LIKE '%$search%' OR contact_name LIKE '%$search%' OR vendor_email LIKE '%$search%' OR vendor_phone LIKE '%$search%' OR city LIKE '%$search%' OR state LIKE '%$search%'";
+                $where = "WHERE vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%'";
             }
 
             if (!empty($status_filter)) {
                 $search = $this->conn->real_escape_string($status_filter);   
-                $where = "WHERE is_active = '$status_filter'";
+                $where = "WHERE vp.is_active = '$status_filter'";
+            }
+            if (!empty($category_filter)) {
+                $search = $this->conn->real_escape_string($category_filter);   
+                $where = "WHERE vc.category_id = '$category_filter'";
+            }
+            if (!empty($team_filter)) {
+                $search = $this->conn->real_escape_string($team_filter);   
+                $where = "WHERE vvtm.team_id = '$team_filter'";
             }
         }
 
         // total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_vendors $where");
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
-
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT * FROM vp_vendors $where LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vp.*, vu.name AS agent_name, GROUP_CONCAT(DISTINCT vc.category_id) AS categories, GROUP_CONCAT(DISTINCT vvtm.team_id) AS teams FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where GROUP BY vp.id LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
+
 
         $vendors = [];
         while ($row = $result->fetch_assoc()) {
             $vendors[] = $row;
         }
-
         // return structured data
         return [
             'vendors'        => $vendors,
@@ -290,7 +333,7 @@ class vendor {
         ];
     }
     public function listCategory(){
-        $sql = "SELECT * FROM category WHERE is_active=1 ORDER BY parent_id ASC, display_name ASC";
+        $sql = "SELECT * FROM vp_vendor_category WHERE is_active=1 ORDER BY parent_id ASC, category_name ASC";
         $result = $this->conn->query($sql);
         $category = [];
         if ($result && $result->num_rows > 0) {
@@ -331,6 +374,33 @@ class vendor {
 
         return ['success' => true, 'message' => 'Categories updated successfully.'];
     }
+    public function addVendorTeams($vendor_id,$category){       
+        if (empty($vendor_id)) {
+            return ['success' => false, 'message' => 'Vendor ID is required.'];
+        }
+
+        if (empty($category) || !is_array($category)) {
+            return ['success' => false, 'message' => 'Teams is required and must be an array.'];
+        }
+
+        // Delete previous categories for this vendor
+        $deleteSql = "DELETE FROM vp_vendor_team_mapping WHERE vendor_id = ?";
+        $deleteStmt = $this->conn->prepare($deleteSql);
+        $deleteStmt->bind_param('i', $vendor_id);
+        $deleteStmt->execute();
+        $deleteStmt->close();
+
+        // Insert new categories
+        $sql = "INSERT INTO vp_vendor_team_mapping (vendor_id, team_id) VALUES (?, ?)";
+        $stmt = $this->conn->prepare($sql);
+        foreach ($category as $tm_id) {
+            $stmt->bind_param('ii', $vendor_id, $tm_id);
+            $stmt->execute();
+        }
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Categories updated successfully.'];
+    }
     public function getVendorCategories($vendor_id) {
         $sql = "SELECT category_id FROM vendors_category WHERE vendor_id = ?";
         $stmt = $this->conn->prepare($sql);
@@ -342,6 +412,76 @@ class vendor {
             $categories[] = $row['category_id'];
         }
         return $categories;
+    }
+    public function getVendorTeams($v_id) {
+        $sql = "SELECT team_id FROM vp_vendor_team_mapping WHERE vendor_id = ".$v_id;
+        $result = $this->conn->query($sql);
+        $vTeamMembers = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $vTeamMembers[] = $row["team_id"];
+            }
+        }
+        return $vTeamMembers;
+    }
+    public function getTeamMembers($team_id) {
+        $sql = "SELECT vu.id as user_id, vu.name, vt.id as team_id, vt.team_name FROM vp_users AS vu INNER JOIN vp_teams AS vt ON vt.id = vu.team_id WHERE vu.is_active = 1 AND vu.team_id IN (".$team_id.") ORDER BY vt.team_name, vu.id ASC";
+        $result = $this->conn->query($sql);
+        $teamMembers = [];
+        if ($result && $result->num_rows > 0) {
+            while($row = mysqli_fetch_assoc($result)) {
+                $teamId = $row['team_id'];
+                if (!isset($teamMembers[$teamId])) {
+                    $teamMembers[$teamId] = [
+                        'team_name' => $row['team_name'],
+                        'agents' => []
+                    ];
+                }
+                $teamMembers[$teamId]['agents'][] = [
+                    'id' => $row['user_id'],
+                    'name' => $row['name']
+                ];
+            }
+        }
+        header('Content-Type: application/json');
+        echo json_encode(array_values($teamMembers));
+        exit;
+    }
+    public function searchVendors($term) {
+        $term = $this->conn->real_escape_string($term);
+        $sql = "SELECT id, vendor_name FROM vp_vendors WHERE vendor_name LIKE '%$term%' LIMIT 10";
+        $result = $this->conn->query($sql);
+        $vendors = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $vendors[] = $row;
+            }
+        }
+        return $vendors;
+    }
+    public function checkVendorName($val) {
+        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_name = ?");
+        $stmt->bind_param("s", $val);
+        $stmt->execute();
+        $stmt->store_result();
+        $response = ['exists' => $stmt->num_rows > 0];
+        return $response;
+    }
+    public function checkEmail($email) {
+        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $stmt->store_result();
+        $response = ['exists' => $stmt->num_rows > 0];
+        return $response;
+    }
+    public function checkPhoneNumber($val) {
+        $stmt = $this->conn->prepare("SELECT id FROM vp_vendors WHERE vendor_phone = ?");
+        $stmt->bind_param("s", $val);
+        $stmt->execute();
+        $stmt->store_result();
+        $response = ['exists' => $stmt->num_rows > 0];
+        return $response;
     }
 }
 ?>

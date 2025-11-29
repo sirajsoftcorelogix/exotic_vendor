@@ -1,7 +1,7 @@
 bootstrap/init/init.php
-settings/database/database.php
 vendor/*
 uploads/*
 images/policy-term-and-condition-term-svgrepo-com.svg
 generated_pdfs/*
 tmp/*
+settings/database/database.php

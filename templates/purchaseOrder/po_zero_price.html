@@ -1,0 +1,113 @@
+<div style="width:100%; font-family:helvetica,arial,sans-serif; color:#333; font-size:11px;">
+    <!-- Header -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+        <tr>
+            <td style="width:50%; vertical-align:top;">
+                <img src="images/po_logo.png" style="width:150px; height:auto; margin-bottom:5px;">
+                <!-- <div style="font-size:12px; color:#666; text-decoration:underline;">www.exoticindiaart.com</div> -->
+            </td>
+            <td style="width:50%; text-align:right; vertical-align:top;">
+                <span style="font-size:26px; font-weight:bold;">Purchase Order</span>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Address Section -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;" cellpadding="8">
+        <tr>
+            <td style="width:48%; vertical-align:top;">
+                <span style="font-size:12px; font-weight:bold; text-transform:uppercase;">Buyer</span><br>
+                <span style="font-size:14px; font-weight:bold;">Exotic India Art Pvt. Ltd.</span><br>
+                A16/1 WAZIRPUR INDUSTRIAL AREA<br>
+                Delhi - 110052 India<br>
+                <span style="font-size:12px;">                    
+                    Email: onboarding@exoticindia.com<br>
+                    <!-- Website: www.exoticindiaart.com<br> -->
+                    {{contact_person}}<br>
+                    <!-- Designation: Sales Manager<br> -->
+                    GST No. 07AAACE1234F1Z5
+                </span>
+            </td>
+            <td style="width:4%;"></td>
+            <td style="width:48%; vertical-align:top;">
+                <span style="font-size:12px; font-weight:bold; text-transform:uppercase;">Vendor</span><br>
+                
+               {{vendor_info}}
+            </td>
+        </tr>
+    </table>
+
+    <!-- Divider -->
+    <div style="border-top:2px dotted #000; margin-top:20px;"></div>
+
+    <!-- Order Info & Delivery Address -->
+    <table style="width:100%; border-collapse:collapse; margin-top:10px; margin-bottom:10px;">
+        <tr>
+            <td style="width:60%; vertical-align:top;">
+                <span style="font-size:11px;">Purchase Order No.: <b>{{po_number}}</b></span><br>
+                <span style="font-size:11px;">Date: <b>{{date}}</b></span><br>
+                <span style="font-size:11px;">Delivery Due: <b>{{delivery_due}}</b></span>
+            </td>
+            <td style="width:40%; vertical-align:top; text-align:right;">
+                <span style="font-size:11px; font-weight:bold;">Delivery Address:</span><br>
+                <span style="font-size:11px;">A16/1 WAZIRPUR INDUSTRIAL AREA</span><br>
+                <span style="font-size:11px;">Delhi - 110052 India</span>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Divider -->
+    <div style="border-top:2px dotted #000; padding: 20px;"></div>
+
+    <!-- Order Details Table -->
+    <div style="font-size:12px; font-weight:bold; margin-bottom:10px;">Order Details:</div>
+    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+        <thead>
+            <tr>    
+                <th style="width:10% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">#</th>
+                <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
+                <th style="width:30% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
+                <th style="width:10% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Qty</th>
+                
+            </tr>
+        </thead>
+        <tbody>
+            {{tbody}}
+            <!-- Repeat <tr> for each item -->
+        </tbody>
+    </table>
+
+    <!-- Summary Table -->
+    <table style="width:100%; border-collapse:collapse; margin-left:auto; margin-right:0; margin-bottom:20px; text-align:right;">
+        <tr>
+            <td style="width: 60%;"></td>
+            <td style="width: 40%; vertical-align:top;">
+                <table>
+                    <tr>
+                        <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">{{subtotal}}</td>
+                    </tr>
+                    <tr>
+                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">Shipping:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">{{shipping}}</td>
+                    </tr>
+                    <tr>
+                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
+                        <td style="padding:5px 10px; text-align:right; font-size:17px;">{{gst}}</td>
+                    </tr>
+                    <tr>
+                        <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
+                        <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">{{grand_total}}</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        
+    </table>
+
+    <!-- Terms & Conditions -->
+    <div style="margin-top:40px;">
+        <div style="font-size:10px; font-weight:bold; margin-bottom:10px;">Terms & Conditions</div>
+        {{terms}}
+    </div>
+</div>
