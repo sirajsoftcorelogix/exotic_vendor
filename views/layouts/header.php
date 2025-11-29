@@ -342,7 +342,7 @@ unset($usersModel);
 
         let notif = notifs.shift();
 
-        new Notification("New Notification", {
+        new Notification(notif.title, {
             body: notif.message,
             icon: "images/bell-icons.ico",
         });
