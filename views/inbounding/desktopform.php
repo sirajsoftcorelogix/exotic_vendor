@@ -1,469 +1,403 @@
+<style>
+    .container,.img-box,.item-linking-wrapper{box-sizing:border-box}.btn-action,.form-control{height:36px;font-size:13px}.img-box,.thumb-preview,.upload-box{position:relative}.container{width:100%;max-width:1200px;margin:0 auto;padding:20px;background-color:transparent}.item-linking-wrapper{display:flex;flex-direction:row;align-items:stretch;width:100%}.img-box{flex-shrink:0;width:150px;background-color:#f4f4f4;border:1px solid #777;border-radius:6px;padding:4px;margin-left:20px}.img-box img{width:100%;height:100%;object-fit:cover;border-radius:3px;display:block;background-color:#ddd}.styled-fieldset{flex-grow:1;border:1px solid #ccc;border-radius:5px;padding:15px 20px 20px;background-color:#fff;margin-left:10px;margin-right:20px}.form-control,.receipt-fieldset{border:1px solid #ccc;width:100%;box-sizing:border-box}.styled-fieldset legend{font-size:14px;font-weight:700;color:#333;padding:0 5px}.form-row{display:flex;gap:30px;margin-bottom:15px;align-items:flex-end}.form-col{flex:1;display:flex;flex-direction:column}.input-label{font-size:12px;font-weight:700;color:#333;margin-bottom:6px}.warning-text{color:#d32f2f;font-weight:400;font-size:11px}.form-control{border-radius:4px;padding:0 10px;color:#333}.form-control:focus,.full-width-input:focus,.std-input:focus,.std-select:focus,.vendor-input:focus{outline:0;border-color:#999}.input-group{display:flex;gap:8px;width:100%}.input-group .form-control{flex-grow:1}.btn-action{background-color:#d97824;color:#fff;border:none;border-radius:4px;padding:0 20px;font-weight:600;cursor:pointer;white-space:nowrap}.ident-fieldset,.receipt-fieldset,.related-fieldset,.scroll-box,.title-fieldset{background-color:#fff}.btn-action:hover,.btn-load-related:hover,.btn-save-final:hover{background-color:#c0651a}.ident-wrapper,.receipt-wrapper,.section-wrapper,.title-key-wrapper{margin-top:15px;margin-left:20px;margin-right:20px;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}.receipt-fieldset{border-radius:5px;padding:8px 15px 12px}.ident-fieldset legend,.receipt-fieldset legend,.related-fieldset legend,.std-fieldset legend,.title-fieldset legend,.vendor-fieldset legend{font-size:13px;font-weight:700;color:#333;padding:0 5px}.receipt-info-row{display:flex;flex-direction:row;gap:50px}.receipt-col{display:flex;flex-direction:column}.receipt-label{font-size:11px;font-weight:700;color:#222;margin-bottom:3px}.receipt-value{font-size:12px;color:#444}.ident-fieldset{border:1px solid #ccc;border-radius:5px;padding:10px 15px 15px}.ident-grid{display:flex;flex-direction:row;gap:20px}.ident-col{flex:1;display:flex;flex-direction:column;gap:10px}.ident-label{font-size:12px;font-weight:700;color:#222;margin-bottom:4px;display:block}.ident-red-note{color:#d32f2f;font-weight:400;font-size:11px;margin-left:5px}.checklist-item span,.ident-select{color:#333;font-size:12px}.invoice-wrapper,.related-wrapper{margin-left:20px;margin-right:20px;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}.ident-select{width:100%;height:30px;border:1px solid #ccc;border-radius:3px;padding-left:5px}.scroll-box{border:1px solid #ccc;height:140px;overflow-y:scroll;padding:5px}.checklist-item{display:flex;align-items:center;padding:5px 2px;border-bottom:1px solid #f0f0f0}.checklist-item:last-child{border-bottom:none}.checklist-item input[type=checkbox]{margin-right:8px}.title-fieldset{border:1px solid #ccc;border-radius:5px;padding:15px 20px 20px}.title-row{margin-bottom:15px}.grid-row:last-child,.title-row:last-child{margin-bottom:0}.title-label{font-size:12px;font-weight:700;color:#222;display:block;margin-bottom:5px}.full-width-input{width:100%;height:34px;border:1px solid #ccc;border-radius:4px;padding:0 10px;font-size:13px;color:#333;box-sizing:border-box}.related-wrapper{margin-top:15px;width:auto;max-width:100%;box-sizing:border-box}.related-fieldset{border:1px solid #ccc;border-radius:5px;padding:10px 15px;width:100%;min-width:0;box-sizing:border-box}.btn-load-related{background-color:#d97824;color:#fff;border:none;border-radius:3px;padding:6px 15px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:10px}.related-scroll-container{display:flex;flex-direction:row;gap:15px;overflow-x:auto;width:100%;padding-bottom:5px}.related-scroll-container::-webkit-scrollbar{height:14px}.related-scroll-container::-webkit-scrollbar-track{background:#e0e0e0;border:1px solid #ccc;border-radius:2px}.related-scroll-container::-webkit-scrollbar-thumb{background:#666;border:2px solid #e0e0e0;border-radius:4px}.related-scroll-container::-webkit-scrollbar-thumb:hover{background:#555}.related-item{display:flex;flex-direction:column;align-items:center;width:110px;flex-shrink:0}.related-img-frame{width:100%;height:110px;border:1px solid #555;border-radius:5px;padding:3px;background-color:#fff;box-sizing:border-box}.related-img-frame img{width:100%;height:100%;object-fit:cover;border-radius:3px;display:block;background-color:#eee}.upload-box,.vendor-fieldset{border:1px solid #ccc;display:flex}.related-caption{font-size:12px;font-weight:700;color:#000;margin-top:5px;text-align:center}.invoice-wrapper{margin-top:15px;display:flex;flex-direction:row;gap:20px;align-items:stretch}.upload-box{flex:1;border-radius:5px;background-color:#fff;padding:10px;align-items:center;gap:15px}.thumb-preview{width:65px;height:75px;background-color:#cc99b5;border:1px solid #444;border-radius:4px;flex-shrink:0;box-shadow:0 2px 5px rgba(0,0,0,.1);cursor:pointer}.btn-delete-thumb,.btn-delete-thumb:hover{background-color:#d32f2f}.btn-delete-thumb{display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.3);z-index:10;position:absolute;top:-6px;right:-6px;width:16px;height:16px;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.2)}.upload-text-area{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-grow:1;text-align:center}.upload-icon{font-size:24px;color:#555;margin-bottom:2px}.upload-title{font-size:13px;font-weight:700;color:#000;margin:0}.upload-subtitle{font-size:10px;color:#666;margin:0}.vendor-fieldset{flex:1;border-radius:5px;padding:10px 15px;background-color:#fff;flex-direction:column;justify-content:center}.input-wrapper-relative{position:relative;width:100%}.vendor-input{width:100%;height:34px;border:1px solid #ccc;border-radius:4px;padding:0 100px 0 10px;font-size:13px;color:#333;box-sizing:border-box}.auto-search-label,.legend-note,.vendor-helper-text{font-size:11px;color:#d32f2f}.auto-search-label{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none}.vendor-helper-text{margin-top:4px}.std-fieldset{border:1px solid #ccc;border-radius:5px;padding:15px 20px;background-color:#fff}.legend-note{font-weight:400;margin-left:10px}.input-note-below{color:#d32f2f;font-size:10px;margin-top:2px}.grid-row{display:flex;gap:20px;margin-bottom:15px;align-items:flex-start}.col-1-4,.col-1-5{flex:1}.std-label{font-size:12px;font-weight:700;color:#222;margin-bottom:5px;display:block}.std-input,.std-select{width:100%;height:32px;border:1px solid #ccc;border-radius:3px;padding:0 10px;font-size:13px;color:#333;box-sizing:border-box}.input-suffix-group{position:relative;display:flex;align-items:center;width:100%}.input-suffix-group input{padding-right:40px}.suffix-text{position:absolute;right:10px;font-size:12px;color:#777;pointer-events:none}.save-btn-wrapper{margin:25px 20px 40px;display:flex;justify-content:flex-end}.btn-save-final{background-color:#d97824;color:#fff;border:none;border-radius:4px;padding:10px 30px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+</style>
+<?php
 
-    <style>
-        /* --- Global Reset and Container --- */
-        body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f4f4; padding: 20px; font-size: 13px; }
-        .container { background-color: #fff; padding: 20px; border-radius: 4px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
-        h2 { font-size: 18px; margin-top: 0; margin-bottom: 20px; font-weight: 500; color: #333; }
-        h3 { font-size: 15px; margin-top: 20px; margin-bottom: 10px; font-weight: bold; color: #333; }
-        hr { border: none; border-top: 1px solid #eee; margin: 20px 0; }
-        
-        /* --- Form Elements and Utility --- */
-        .form-group { position: relative; margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; font-size: 12px; }
-        .form-group input[type="text"], 
-        .form-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc; /* Standard light border */
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-size: 13px;
-        }
-        .prefilled-text { color: red; font-size: 11px; margin-top: 2px; }
-        
-        /* --- 1. Header/Linking Section --- */
-        .item-header {
-            display: flex;
-            align-items: flex-start;
-            gap: 40px;
-            margin-bottom: 25px;
-            border: 1px solid #ccc; /* Visible light border around the whole header block */
-            padding: 15px;
-            border-radius: 4px;
-        }
-        .item-image-box img { width: 80px; height: 80px; border: 1px solid #eee; padding: 5px; }
-        .item-linking-details { flex-grow: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 30px; }
-        
-        .header-field-pair { display: flex; align-items: center; gap: 10px; }
-        .header-field-pair label { font-weight: normal; margin: 0; }
-        .header-field-pair input[type="text"] { width: 150px; }
-        .header-field-pair button { 
-            padding: 6px 15px; 
-            background-color: #f0ad4e; 
-            color: white; 
-            border: none; 
-            border-radius: 4px;
-            font-size: 13px;
-            cursor: pointer;
-        }
-        
-        /* Receipt Info */
-        .receipt-info {
-            display: flex;
-            gap: 30px;
-            margin: 15px 0 25px 0;
-            font-size: 12px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee; /* Bottom border to separate from Identification */
-        }
-        .receipt-info-item p { margin: 0; padding-top: 5px; }
-        .receipt-info-item span { font-weight: bold; color: #333; }
-
-        /* --- 2. Item Identification --- */
-        .identification-grid-rows { display: flex; gap: 20px; }
-        .id-column { flex: 1; min-width: 0; }
-        .id-column-narrow { flex: 0 0 30%; } 
-        
-        /* Checkbox Groups - Border and scroll */
-        .checkbox-container {
-            border: 1px solid #ccc; /* Border around the checkbox group */
-            padding: 5px 10px;
-            height: 100px;
-            overflow-y: auto;
-            border-radius: 4px;
-            background-color: #fff;
-        }
-        .checkbox-container label {
-            display: flex;
-            align-items: center;
-            font-weight: normal;
-            margin-bottom: 5px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        /* --- 4. Related Items --- */
-        .related-items-section { 
-            text-align: center; 
-            border: 1px solid #ccc; /* Border around related items section */
-            padding: 15px;
-            border-radius: 4px;
-        }
-        .related-items-section button { padding: 8px 15px; background-color: #f0ad4e; color: white; border: none; border-radius: 4px; margin-bottom: 15px; cursor: pointer; font-size: 13px; }
-        .related-items-list { display: flex; justify-content: space-around; gap: 10px; }
-        .related-item-box { border: 1px solid #eee; padding: 10px; text-align: center; width: 18%; border-radius: 4px; font-size: 12px; }
-        .related-item-box img { max-width: 100%; height: auto; border-radius: 4px; }
-        
-        /* --- 5. Upload & Vendor --- */
-        .upload-vendor-row { display: flex; gap: 20px; margin-top: 20px; align-items: flex-start; }
-        .upload-box {
-            border: 1px solid #ccc; /* Subtle border around the upload wrapper */
-            padding: 10px;
-            text-align: center;
-            width: 30%;
-            border-radius: 4px;
-            font-size: 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            height: 100px;
-        }
-        .upload-content { 
-            border: 2px dashed #ccc; /* Dashed border inside the upload box */
-            padding: 15px; 
-            width: 80%; 
-            margin-top: 5px;
-            border-radius: 4px;
-        }
-        .vendor-group { flex: 1; position: relative; }
-        .vendor-group button { position: absolute; right: 0; top: 35px; background: #fff; border: 1px solid #ccc; color: #333; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
-
-        /* --- 6. Pricing & Dimensions --- */
-        .price-dimension-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 10px; }
-        .price-dimension-group { padding: 5px 0; }
-        .price-label { font-weight: bold; margin-bottom: 5px; text-align: center; }
-        
-        /* Pricing Input style - Combined input/unit border */
-        .price-input-group { 
-            display: flex; 
-            align-items: center; 
-            border: 1px solid #ccc; 
-            border-radius: 4px; 
-            background-color: #fff;
-        }
-        .price-input-group input { 
-            flex: 1; 
-            min-width: 30px; 
-            padding: 7px; 
-            border: none; 
-            background: none; 
-            text-align: left; 
-        }
-        .price-input-group .unit { 
-            margin-left: auto; 
-            padding-right: 5px;
-            font-weight: normal; 
-            color: #555; 
-            font-size: 12px; 
-        }
-
-        /* Dimension Input style */
-        .dimension-input-group { display: flex; align-items: center; }
-        .dimension-input-group input { flex: 1; padding: 7px; border: 1px solid #ccc; border-radius: 4px; text-align: left; }
-        .dimension-input-group span { margin-left: 5px; color: #555; font-size: 12px; }
-
-        /* --- 7. Stock --- */
-        .stock-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 15px; }
-
-        /* --- 8. Save Button --- */
-        .save-button-container { text-align: right; margin-top: 30px; }
-        .save-button-container button {
-            padding: 10px 25px;
-            background-color: #f0ad4e;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-    </style>
-
-
+?>
 <div class="container">
-    <h2>Inbound - Product details update</h2>
-
-    <div class="item-header">
-        <div class="item-image-box">
-            <img src="placeholder-goddess-idol.jpg" alt="Goddess Idol Image">
+    <div class="item-linking-wrapper">
+        <div class="img-box">
+            <img src="<?php echo base_url($data['form2']['product_photo']); ?>">
         </div>
-        
-        <div class="item-linking-details">
-            <div class="form-group">
-                <label>Item Linking</label>
-                <div class="header-field-pair">
-                    <label>Variant:</label>
-                    <label><input type="radio" name="variant" value="Yes" checked> Yes</label>
+        <fieldset class="styled-fieldset">
+            <legend>Item Linking</legend>
+            <div class="form-row">
+                <div class="form-col">
+                    <label class="input-label">Variant:</label>
+                    <select class="form-control">
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div class="form-col">
+                    <label class="input-label">Date Added</label>
+                    <!-- <input type="text" class="form-control" value="1 Nov 2025"> -->
+                    <?php if (!empty($data['form2']['gate_entry_date_time']) && $data['form2']['gate_entry_date_time'] != "0000-00-00 00:00:00"): ?>
+                        <input type="datetime-local" class="form-control" value="<?php echo date('Y-m-d\TH:i', strtotime($data['form2']['gate_entry_date_time'])); ?>">
+                    <?php else: ?>
+                        <input type="datetime-local" class="form-control" value="<?php echo date('Y-m-d\TH:i'); ?>">
+                    <?php endif; ?>
                 </div>
             </div>
-            <div class="form-group">
-                <label for="dateAdded">Date Added</label>
-                <input type="text" id="dateAdded" value="1 Nov 2025" disabled>
-            </div>
-            
-            <div class="form-group">
-                <label for="parentItemCode">Parent Item Code: (Show only others Variant to Yes)</label>
-                <div class="header-field-pair" style="gap: 5px;">
-                    <input type="text" id="parentItemCode" value="" style="flex: 1;">
-                    <button>Explore</button>
+            <div class="form-row">
+                <div class="form-col">
+                    <label class="input-label">
+                        Parent Item Code: <span class="warning-text">(Show only when Variant is Yes)</span>
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control">
+                        <button class="btn-action">Explore</button>
+                    </div>
+                </div>
+                <div class="form-col">
+                    <label class="input-label">Stock Added On:</label>
+                    <input type="text" class="form-control" value="1 Nov 2025">
                 </div>
             </div>
-            <div class="form-group">
-                <label for="stockUpdatedOn">Stock Updated On</label>
-                <input type="text" id="stockUpdatedOn" value="1 Nov 2025" disabled>
-            </div>
-        </div>
+        </fieldset>
     </div>
-    
-    <div class="receipt-info">
-        <div class="receipt-info-item">
-            <label>Receipt</label>
-            <p>Gate Entry Date & Time: <span>01 Nov 2025 11:15 AM</span></p>
-        </div>
-        <div class="receipt-info-item">
-            <label>Received by</label>
-            <p>Uttam Kumar</p>
-        </div>
-        <div class="receipt-info-item">
-            <label>Updated by</label>
-            <p>Shivam Kumar</p>
-        </div>
-    </div>
-
-    <h3>Item Identification</h3>
-    <div class="identification-grid-rows">
-        <div class="id-column">
-            <div class="form-group">
-                <label for="material">Material</label>
-                <select id="material">
-                    <option selected>change prefilled value if item exists</option>
-                </select>
-                <p class="prefilled-text">Prefilled</p>
-            </div>
-
-            <div class="form-group">
-                <label for="group">Group</label>
-                <select id="group">
-                    <option selected>change prefilled value if item exists</option>
-                </select>
-                <p class="prefilled-text">Prefilled</p>
-            </div>
-            
-             <div class="form-group">
-                <label for="status">Status</label>
-                <select id="status">
-                    <option selected>change prefilled value if item exists</option>
-                </select>
-                <p class="prefilled-text">Prefilled</p>
-            </div>
-
-            <div class="form-group">
-                <label for="category">Category</label>
-                <select id="category">
-                    <option selected>Hindu god and goddesses</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="id-column-narrow">
-            <div class="form-group">
-                <label>Sub Category</label>
-                <div class="checkbox-container">
-                    <label><input type="checkbox"> change prefilled value if item exists</label>
-                    <label><input type="checkbox"> Mordem Art</label>
-                    <label><input type="checkbox"> Ganesha</label>
-                    <label><input type="checkbox"> Wooden Carving</label>
-                    <label><input type="checkbox" checked> Goddess</label>
+    <div class="receipt-wrapper">
+        <fieldset class="receipt-fieldset">
+            <legend>Receipt:</legend>
+            <div class="receipt-info-row">
+                <div class="receipt-col">
+                    <span class="receipt-label">Gate Entry Date & Time:</span>
+                    <span class="receipt-value"><?php echo date('d M Y h:i A', strtotime($data['form2']['gate_entry_date_time'])); ?></span>
+                </div>
+                <div class="receipt-col">
+                    <span class="receipt-label">Received by:</span>
+                    <span class="receipt-value">Uttam Kumar</span>
+                </div>
+                <div class="receipt-col">
+                    <span class="receipt-label">Updated by:</span>
+                    <span class="receipt-value">Shivam Kumar</span>
                 </div>
             </div>
-        </div>
-        
-        <div class="id-column-narrow">
-            <div class="form-group">
-                <label>SubSubCategory</label>
-                <div class="checkbox-container">
-                    <label><input type="checkbox"> Mordem Art</label>
-                    <label><input type="checkbox"> Ganesha</label>
-                    <label><input type="checkbox"> Wooden Carving</label>
-                    <label><input type="checkbox" checked> Goddess</label>
+        </fieldset>
+    </div>
+    <div class="ident-wrapper">
+        <fieldset class="ident-fieldset">
+            <legend>Item Identification</legend>
+            <div class="ident-grid">
+                <div class="ident-col">
+                    <div>
+                        <label class="ident-label">
+                            Material: <span class="ident-red-note">change prefilled value if item exists</span>
+                        </label>
+                        <select class="ident-select">
+                            <option>Brass</option>
+                            <option>Copper</option>
+                            <option>Iron</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ident-label">
+                            Group: <span class="ident-red-note">change prefilled value if item exists</span>
+                        </label>
+                        <select class="ident-select">
+                            <option>Statue</option>
+                            <option>Artifact</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ident-label">
+                            Category: <span class="ident-red-note">change prefilled value if item exists</span>
+                        </label>
+                        <select class="ident-select">
+                            <option>Hindu god and goddesses</option>
+                            <option>Decor</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ident-col">
+                    <label class="ident-label">
+                        Sub Category: <span class="ident-red-note">change prefilled value if item exists</span>
+                    </label>
+                    <div class="scroll-box">
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Modern Art</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Ganesha</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Wooden Carving</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Goddess</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Abstract</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Vintage</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="ident-col">
+                    <label class="ident-label">SubSubCategory:</label>
+                    <div class="scroll-box">
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Modern Art</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Ganesha</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Wooden Carving</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Goddess</span>
+                        </div>
+                        <div class="checklist-item">
+                            <input type="checkbox"> <span>Abstract</span>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </fieldset>
     </div>
-    
-    <hr>
-    
-    <h3>Item Identification</h3>
-    <div style="display: flex; gap: 20px;">
-        <div class="form-group" style="flex: 1;">
-            <label for="title">Title</label>
-            <input type="text" id="title">
-        </div>
+    <div class="title-key-wrapper">
+        <fieldset class="title-fieldset">
+            <legend>Item Identification</legend>
+            <div class="title-row">
+                <label class="title-label">Title:</label>
+                <input type="text" class="full-width-input">
+            </div>
+            <div class="title-row">
+                <label class="title-label">Keywords:</label>
+                <input type="text" class="full-width-input">
+            </div>
+        </fieldset>
     </div>
-    <div style="display: flex; gap: 20px;">
-        <div class="form-group" style="flex: 1;">
-            <label for="keywords">Keywords</label>
-            <input type="text" id="keywords">
-        </div>
+    <div class="related-wrapper">
+        <fieldset class="related-fieldset">
+            <legend>Related Items:</legend>
+            <button class="btn-load-related">Load Related Items</button>
+            <div class="related-scroll-container">
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=PHC439" alt="Item">
+                    </div>
+                    <span class="related-caption">PHC439</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=PHC229" alt="Item">
+                    </div>
+                    <span class="related-caption">PHC229</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=DON839" alt="Item">
+                    </div>
+                    <span class="related-caption">DON839</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=DON836" alt="Item">
+                    </div>
+                    <span class="related-caption">DON836</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=DDP774" alt="Item">
+                    </div>
+                    <span class="related-caption">DDP774</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=EXT123" alt="Item">
+                    </div>
+                    <span class="related-caption">EXT123</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=PHC439" alt="Item">
+                    </div>
+                    <span class="related-caption">PHC439</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=PHC229" alt="Item">
+                    </div>
+                    <span class="related-caption">PHC229</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=DON839" alt="Item">
+                    </div>
+                    <span class="related-caption">DON839</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=DON836" alt="Item">
+                    </div>
+                    <span class="related-caption">DON836</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=DDP774" alt="Item">
+                    </div>
+                    <span class="related-caption">DDP774</span>
+                </div>
+                <div class="related-item">
+                    <div class="related-img-frame">
+                        <img src="https://via.placeholder.com/110x110?text=EXT123" alt="Item">
+                    </div>
+                    <span class="related-caption">EXT123</span>
+                </div>
+            </div>
+        </fieldset>
     </div>
-
-    <hr>
-
-    <h3>Related items</h3>
-    <div class="related-items-section">
-        <button>Load Realted Items</button>
-        <div class="related-items-list">
-            <div class="related-item-box">
-                <img src="placeholder-item1.jpg" alt="Related Item PHC439">
-                <p>PHC439</p>
-            </div>
-            <div class="related-item-box">
-                <img src="placeholder-item2.jpg" alt="Related Item PHC229">
-                <p>PHC229</p>
-            </div>
-            <div class="related-item-box">
-                <img src="placeholder-item3.jpg" alt="Related Item DDN829">
-                <p>DDN829</p>
-            </div>
-            <div class="related-item-box">
-                <img src="placeholder-item4.jpg" alt="Related Item DDN836">
-                <p>DDN836</p>
-            </div>
-            <div class="related-item-box">
-                <img src="placeholder-item5.jpg" alt="Related Item DDP774">
-                <p>DDP774</p>
-            </div>
-        </div>
-    </div>
-
-    <hr>
-
-    <div class="upload-vendor-row">
+    <div class="invoice-wrapper">
         <div class="upload-box">
-            <div style="position: absolute; top: 10px; left: 10px; color: red;">&#x2716;</div>
-            <img src="placeholder-file-icon.png" alt="File Icon" style="width: 30px; height: 30px; margin: 0 auto 5px auto;">
-            <p style="font-weight: bold; margin-bottom: 2px;">Upload Invoice Image</p>
-            <p>Drag or paste a file here or choose an option below</p>
+            <div class="thumb-preview">
+                <img src="<?php echo base_url($data['form2']['invoice_image']); ?>">
+                <div class="btn-delete-thumb">✕</div>
+            </div>
+            <div class="upload-text-area">
+                <div class="upload-icon">☁️</div> 
+                <h4 class="upload-title">Upload Invoice Image</h4>
+                <p class="upload-subtitle">Drag or paste a file here, or choose an option below</p>
+            </div>
         </div>
-        <div class="vendor-group">
-            <label for="vendor">Vendor:</label>
-            <input type="text" id="vendor" value="Swethamber Arts & Crafts">
-            <p class="prefilled-text">Prefilled if item exists</p>
-            <button>(Auto Search)</button>
-        </div>
+        <fieldset class="vendor-fieldset">
+            <legend>Vendor:</legend>
+            <div class="input-wrapper-relative">
+                <input type="text" class="vendor-input" value="Swethamber Arts & Crafts">
+                <span class="auto-search-label">(Auto Search)</span>
+            </div>
+            <div class="vendor-helper-text">Prefilled if item exists</div>
+        </fieldset>
     </div>
-
-    <hr>
-    
-    <h3>Pricing</h3>
-    <div class="price-dimension-row">
-        <div class="price-dimension-group">
-            <div class="price-label">INR Price</div>
-            <div class="price-input-group">
-                <input type="text" value="110"><span class="unit">INR</span>
+    <div class="section-wrapper">
+        <fieldset class="std-fieldset">
+            <legend>Pricing:</legend>
+            <div class="grid-row">
+                <div class="col-1-4">
+                    <label class="std-label">INR Price:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">INR</span>
+                    </div>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">Amazon Price:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">INR</span>
+                    </div>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">USD Price:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">USD</span>
+                    </div>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">GST:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">INR</span>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="price-dimension-group">
-            <div class="price-label">Amazon Price</div>
-            <div class="price-input-group">
-                <input type="text" value="110"><span class="unit">INR</span>
-            </div>
-        </div>
-        <div class="price-dimension-group">
-            <div class="price-label">USD Price</div>
-            <div class="price-input-group">
-                <input type="text" value="110"><span class="unit">USD</span>
-            </div>
-        </div>
-        <div class="price-dimension-group">
-            <div class="price-label">GST</div>
-            <div class="price-input-group">
-                <input type="text" value="110"><span class="unit">INR</span>
-            </div>
-        </div>
-        <div></div>
+        </fieldset>
     </div>
-
-    <hr>
-
-    <h3>Dimensions: <span class="prefilled-text">Prefilled if item exists</span></h3>
-    <div class="price-dimension-row">
-        <div class="price-dimension-group">
-            <div class="price-label">Height</div>
-            <div class="dimension-input-group">
-                <input type="text" value="110"><span>inc</span>
+    <div class="section-wrapper">
+        <fieldset class="std-fieldset">
+            <legend>Dimensions:</legend>
+            <div class="grid-row">
+                <div class="col-1-5">
+                    <label class="std-label">Height:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">cm</span> 
+                    </div>
+                </div>
+                <div class="col-1-5">
+                    <label class="std-label">Width:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">cm</span>
+                    </div>
+                </div>
+                <div class="col-1-5">
+                    <label class="std-label">Depth:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">cm</span>
+                    </div>
+                </div>
+                <div class="col-1-5">
+                    <label class="std-label">Weight:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="110">
+                        <span class="suffix-text">kg</span>
+                    </div>
+                </div>
+                <div class="col-1-5">
+                    <label class="std-label">Size:</label>
+                    <input type="text" class="std-input" value="XL">
+                </div>
             </div>
-        </div>
-        <div class="price-dimension-group">
-            <div class="price-label">Width</div>
-            <div class="dimension-input-group">
-                <input type="text" value="110"><span>inc</span>
-            </div>
-        </div>
-        <div class="price-dimension-group">
-            <div class="price-label">Depth</div>
-            <div class="dimension-input-group">
-                <input type="text" value="110"><span>inc</span>
-            </div>
-        </div>
-        <div class="price-dimension-group">
-            <div class="price-label">Weight</div>
-            <div class="dimension-input-group">
-                <input type="text" value="110"><span>inc</span>
-            </div>
-        </div>
-        <div class="price-dimension-group">
-            <div class="price-label">Size</div>
-            <div class="dimension-input-group">
-                <input type="text" value="XL">
-            </div>
-        </div>
+        </fieldset>
     </div>
-
-    <hr>
-
-    <h3>Stock</h3>
-    <div class="stock-grid">
-        <div class="form-group">
-            <label for="quantity">Quantity</label>
-            <div class="dimension-input-group">
-                <input type="text" id="quantity" value="10"><span>NOS</span>
+    <div class="section-wrapper">
+        <fieldset class="std-fieldset">
+            <legend>Stock:</legend>
+            <div class="grid-row">
+                <div class="col-1-4">
+                    <label class="std-label">Quantity:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="10">
+                        <span class="suffix-text">NOS</span>
+                    </div>
+                    <div class="input-note-below">Prefilled</div>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">Permanently Available:</label>
+                    <select class="std-select">
+                        <option>No</option>
+                        <option>Yes</option>
+                    </select>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">Warehouse:</label>
+                    <select class="std-select">
+                        <option>Wazirpur</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">Store Location:</label>
+                    <input type="text" class="std-input" value="HP134">
+                </div>
             </div>
-            <p class="prefilled-text">Prefilled</p>
-        </div>
-        <div class="form-group">
-            <label for="permanentlyAvailable">Permanently Available</label>
-            <select id="permanentlyAvailable">
-                <option selected>No</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="warehouse">Warehouse</label>
-            <select id="warehouse">
-                <option selected>Wasimpur</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="storeLocation">Store Location</label>
-            <input type="text" id="storeLocation" value="HP134">
-        </div>
-
-        <div class="form-group">
-            <label for="localStock">Local Stock</label>
-            <div class="dimension-input-group">
-                <input type="text" id="localStock" value="10"><span>NOS</span>
+            <div class="grid-row" style="margin-top: 10px;">
+                <div class="col-1-4">
+                    <label class="std-label">Local Stock:</label>
+                    <div class="input-suffix-group">
+                        <input type="text" class="std-input" value="10">
+                        <span class="suffix-text">NOS</span>
+                    </div>
+                    <div class="input-note-below">Prefilled</div>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">In Stock Lead Time:</label>
+                    <select class="std-select">
+                        <option>No</option>
+                        <option>Yes</option>
+                    </select>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">US Stock:</label>
+                    <select class="std-select">
+                        <option>No</option>
+                        <option>Yes</option>
+                    </select>
+                </div>
+                <div class="col-1-4">
+                    <label class="std-label">Local Stock:</label>
+                    <input type="text" class="std-input" value="HP134">
+                </div>
             </div>
-            <p class="prefilled-text">Prefilled</p>
-        </div>
-        <div class="form-group">
-            <label for="inStockLeadTime">In Stock Lead Time</label>
-            <select id="inStockLeadTime">
-                <option selected>--</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="usStock">US Stock</label>
-            <select id="usStock">
-                <option selected>No</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="localStock2">Local Stock</label>
-            <input type="text" id="localStock2" value="HP134">
-        </div>
-    </div>
 
-    <div class="save-button-container">
-        <button>Save and Generate Item Code</button>
+        </fieldset>
     </div>
-
+    <div class="save-btn-wrapper">
+        <button class="btn-save-final">Save and Generate Item Code</button>
+    </div>
 </div>
