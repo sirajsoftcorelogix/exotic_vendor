@@ -183,7 +183,12 @@
                             <img class="w-16 rounded-md object-cover flex-shrink-0 cursor-pointer" onclick="openImagePopup('<?php echo $product['image']; ?>')" src="<?php echo $product['image'];?>" alt="Product Image">
                             <div class="flex flex-col justify-between h-full">
                                 <p class="typo-product-title mb-2 max-w-xs"><?php echo $product['title']; ?></p>
+                                <p class="typo-product-title mb-2 max-w-xs">
+                                     <?php echo $product['size'] ? '<strong>Size :</strong>'.$product['size'] : ''; ?> 
+                                     <?php echo $product['color'] ? ' <strong>Color :</strong>'.$product['color'] .'' : ''; ?>
+                                </p>
                                 <div class="flex items-center mt-auto">
+                                    
                                     <span class="typo-vendor">Vendor : <?php echo $product['vendor']; ?></span>
                                     <a href="#" class="ml-2 text-details-link hover:text-amber-700">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -217,7 +222,7 @@
 
                     <!-- Price -->
                     <td class="px-6 py-4 whitespace-nowrap align-top">
-                        <span class="typo-sf-column"><?php echo $product['finalprice']; ?></span>
+                        <span class="typo-sf-column"><?php echo $product['price'] ? '$'. $product['price'] : ''; ?> <br><?php echo $product['price_india'] ? '₹'. $product['price_india'] : ''; ?></span>
                     </td>
 
                     <!-- Recommended Action -->

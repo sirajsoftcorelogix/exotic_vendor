@@ -96,7 +96,7 @@
                 <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['hsn'] ?? ''; ?>"></td>
                 <td class="p-1">
                     <?php if(isset($data[0]['image']) && !empty($data[0]['image'])){ ?>
-                       <img src="<?php echo $data[0]['image']; ?>" alt="Product Image" class="rounded-lg cursor-pointer" >
+                       <img src="<?php echo $data[0]['image']; ?>" alt="Product Image" class="rounded-lg cursor-pointer" onclick="openImagePopup('<?php echo $data[0]['image']; ?>')" >
                         <input type="hidden" name="img[]" value="<?php echo $data[0]['image']; ?>">
                        <?php }else{ ?>
                     <input type="hidden" name="img[]" value="">

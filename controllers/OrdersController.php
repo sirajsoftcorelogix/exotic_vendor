@@ -410,20 +410,20 @@ class OrdersController {
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
                
                 // commented out on 09-11-2025 as per request
-                // // call exotic india API to update order status
-                // $orderval = $ordersModel->getOrderById($order_id);
-                // $apidata = [
-                //     'orderid' => $orderval['order_number'],
-                //     'level' => 'item',
-                //     'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                //     'size' => trim($orderval['size']),
-                //     'color' => trim($orderval['color']),
-                //     'itemcode' => trim($orderval['item_code'])
-                // ];
-                // //run update if admin id not 0
-                // if ($apidata['order_status'] > 0) {
-                //     $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
-                // }
+                // call exotic india API to update order status
+                $orderval = $ordersModel->getOrderById($order_id);
+                $apidata = [
+                    'orderid' => $orderval['order_number'],
+                    'level' => 'item',
+                    'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
+                    'size' => trim($orderval['size']),
+                    'color' => trim($orderval['color']),
+                    'itemcode' => trim($orderval['item_code'])
+                ];
+                //run update if admin id not 0
+                if ($apidata['order_status'] > 0) {
+                    $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
+                }
                 //log status change
                 $logData = [
                     'order_id' => $order_id,
@@ -447,6 +447,8 @@ class OrdersController {
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($agentLogData);
+                    //set notification to agent
+                    sendNotification($agent_id, 'You have been assigned a new order. Please check the order details.');
                 }
                 if($esd != $previous_esd){
                     //log esd change
