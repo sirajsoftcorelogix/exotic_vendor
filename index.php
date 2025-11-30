@@ -277,6 +277,12 @@ switch ($page) {
             case 'list':
                 $controller->product_list();
                 break;
+            case 'update_api_call':
+                $controller->updateApiCall();
+                break;   
+            case 'import_api_call':
+                $controller->importApiCall();         
+                break;
             case 'view':
                 $controller->product_view();
                 break;
