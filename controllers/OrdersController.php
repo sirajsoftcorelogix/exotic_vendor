@@ -410,20 +410,20 @@ class OrdersController {
                 $updated = $ordersModel->updateStatus($order_id, $update_data);
                
                 // commented out on 09-11-2025 as per request
-                // // call exotic india API to update order status
-                // $orderval = $ordersModel->getOrderById($order_id);
-                // $apidata = [
-                //     'orderid' => $orderval['order_number'],
-                //     'level' => 'item',
-                //     'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                //     'size' => trim($orderval['size']),
-                //     'color' => trim($orderval['color']),
-                //     'itemcode' => trim($orderval['item_code'])
-                // ];
-                // //run update if admin id not 0
-                // if ($apidata['order_status'] > 0) {
-                //     $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
-                // }
+                // call exotic india API to update order status
+                $orderval = $ordersModel->getOrderById($order_id);
+                $apidata = [
+                    'orderid' => $orderval['order_number'],
+                    'level' => 'item',
+                    'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
+                    'size' => trim($orderval['size']),
+                    'color' => trim($orderval['color']),
+                    'itemcode' => trim($orderval['item_code'])
+                ];
+                //run update if admin id not 0
+                if ($apidata['order_status'] > 0) {
+                    $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
+                }
                 //log status change
                 $logData = [
                     'order_id' => $order_id,

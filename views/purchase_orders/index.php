@@ -520,13 +520,14 @@
       <input type="hidden" id="download-po-id" name="po_id">
       <label for="design-format-select" class="block mb-2 text-sm font-medium text-gray-700">Select Format:</label>
       <select id="design-format-select" name="design_format" class="w-full border rounded-md p-2 mb-4">
-        <!-- <option value="largeImageWithPrice">Large Image with Price</option> -->
-        <option value="smallImageWithPrice">Small Image with Price</option>
+        
+        <option value="smallImageWithPrice">Small Image with Price</option>        
+        <option value="smallImageWithoutPrice">Small Image without Price</option>        
+        <option value="largeImageWithPrice">Large Image with Price</option>
         <option value="largeImageWithoutPrice">Large Image without Price</option>
-        <!-- <option value="smallImageWithoutPrice">Small Image without Price</option> -->
       </select>
       <div class="flex justify-end gap-2">
-        <button type="button" id="download-cancel-btn" onclick="closeDownloadPopup()" class="bg-gray-200 px-4 py-1 rounded">Cancel</button>
+        <button type="button" id="download-cancel-btn" onclick="closeDownloadPopup()" class="bg-gray-200 px-4 py-1 rounded">Close</button>
         <button type="submit" class="bg-green-600 text-white px-4 py-1 rounded">Download</button>
       </div>
     </form>

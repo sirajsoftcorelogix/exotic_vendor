@@ -892,7 +892,7 @@ class PurchaseOrdersController {
                 }else if($design_format == 'largeImageWithoutPrice'){
                     $tbody .= '<tr style="border:1px solid #000;">';
                     $tbody .= '<td style="width:50%; padding:20px;">';
-                    $tbody .= '<p> <b>Order details:</b> <br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
+                    $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
                     $tbody .= '<b>Dimensions:</b> <br> Height:' . htmlspecialchars($item['prod_height'] ?? '') . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
                     $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight'] ?? '') . '<br>';
                     $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size'] ?? '') . ' <br>';
@@ -901,9 +901,42 @@ class PurchaseOrdersController {
                     $tbody .= '</p>';
                     $tbody .= '</td>';
                     $tbody .= '<td style="width:50%; padding:20px;">';
-                    $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:350px;">';
+                    $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:400px;">';
                     $tbody .= '</td>';
                     $tbody .= '</tr>';
+                }else if($design_format == 'largeImageWithPrice'){
+                    $tbody .= '<tr style="border:1px solid #000;">';
+                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
+                    $tbody .= '<b>Dimensions:</b> <br> Height:' . htmlspecialchars($item['prod_height'] ?? '') . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
+                    $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight'] ?? '') . '<br>';
+                    $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size'] ?? '') . ' <br>';
+                    $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color'] ?? '') . '<br>';
+                    $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material'] ?? '') . ' <br>';
+                    $tbody .= '</p>';
+                    $tbody .= '<hr class="border-t mx-5  border-gray-400">';
+                    $tbody .= '<p><b>Price Details:</b><br><br>';
+                    $tbody .= '<b>Quantity:</b> ' . htmlspecialchars($item['quantity'] ?? '') . '<br>';
+                    $tbody .= '<b>Unit Price:</b> ₹' . number_format($item['price'] ?? 0, 2) . '<br>';
+                    $tbody .= '<b>GST:</b> ' . htmlspecialchars($item['gst'] ?? '') . '%<br>';
+                    $tbody .= '<b>Amount:</b> ₹' . number_format($item['amount'] ?? 0, 2) . '<br>';
+                    $tbody .= '</p>';
+                    $tbody .= '</td>';
+                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:400px;">';
+                    $tbody .= '</td>';
+                    $tbody .= '</tr>';
+                } else if($design_format == 'smallImageWithoutPrice'){ 
+                $tbody .= '<tr>';
+                $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
+                $tbody .= '<td style="width:50% !important; border:1px solid #000; padding:6px;">';
+                //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
+                $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '') . '</p>';
+                $tbody .= '<td style="width:20% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
+                $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
+                
+                $tbody .= '</tr>';
+                
                 }
                 
             }
@@ -936,7 +969,7 @@ class PurchaseOrdersController {
             'R' => 'NotoSansGujarati-Regular.ttf',
             'useOTL' => 0xFF,
         ];
-        if($design_format == 'smallImageWithPrice'){
+        if($design_format == 'smallImageWithPrice' ){
         
             $thead = '<tr>    
                 <th style="width:5% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">#</th>
@@ -947,12 +980,24 @@ class PurchaseOrdersController {
                 <th style="width:8% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">GST</th>
                 <th style="width:16% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:right; font-size:11px;">Amount</th>
             </tr>';     
-        }else if($design_format == 'largeImageWithoutPrice'){
+        }else if($design_format == 'largeImageWithoutPrice' || $design_format == 'largeImageWithPrice'){
             /*$thead = '<tr>    
                 <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
                 <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
             </tr>';*/
             $thead = '';
+        } else if($design_format == 'smallImageWithoutPrice' ){
+        
+            $thead = '<tr>    
+                <th style="width:10% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">#</th>
+                <th style="width:50% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:left; font-size:11px;">Description</th>
+                <th style="width:20% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Image</th>
+                <th style="width:10% !important; border:1px solid #000; background-color:#000000 !important; color:#fff; padding:6px; text-align:center; font-size:11px;">Qty</th>                
+            </tr>';     
+        }
+        $term = '<div style="font-size:10px; font-weight:bold; margin-bottom:10px;">Terms & Conditions</div>' . nl2br($purchaseOrder['terms_and_conditions']);
+        if(empty($purchaseOrder['terms_and_conditions'])){
+            $term = '';
         }      
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         
@@ -965,7 +1010,7 @@ class PurchaseOrdersController {
                 $thead,
                 $tbody,
                 $summary_rows,
-                nl2br($purchaseOrder['terms_and_conditions']),
+                $term,
                 $vendorInfo,
                 $contactPerson
             ],
