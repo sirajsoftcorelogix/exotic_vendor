@@ -305,7 +305,6 @@ unset($usersModel);
             }, 1500); // redirect after 1 sec
         });
     };
-
     // Notification Logic
     if (!("Notification" in window)) {
         alert("This browser does not support desktop notification");

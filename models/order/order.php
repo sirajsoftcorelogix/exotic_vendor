@@ -200,6 +200,10 @@ class Order{
             $sql .= " AND vp_vendors.id = ?";
             $params[] = $filters['vendor_id'];            
         }
+        if(!empty($filters['agent'])){
+            $sql .= " AND vp_orders.agent_id = ?";
+            $params[] = $filters['agent'];            
+        }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
