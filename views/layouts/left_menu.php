@@ -69,7 +69,7 @@
                                     'name' => $row['module_name'],
                                     'slug' => $row['slug'],
                                     'action' => $row['action'],
-                                    'icon' => ($row['font_awesome_icon']),
+                                    'icon' => stripslashes($row['font_awesome_icon']),
                                     'sort_order'=> $row['sort_order'],
                                     'children' => []
                               ];
@@ -109,7 +109,7 @@
                                                       'name' => $pres['module_name'],
                                                       'slug' => $pres['slug'],
                                                       'action' => $pres['action'],
-                                                      'icon' => $pres['font_awesome_icon'],
+                                                      'icon' => stripslashes($pres['font_awesome_icon']),
                                                       'children' => []
                                                 ];
                                           }

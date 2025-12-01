@@ -520,11 +520,11 @@
 		echo "All Records Updated in the Countries Table.";
 		$conn->close();
 	}
-	function insertNotification($user_id, $message, $link = '') {
+	function insertNotification($user_id, $title, $message, $link = '') {
 		global $conn;
-		$sql = "INSERT INTO vp_notifications (user_id, `message`, is_read, link, created_at) VALUES (?, ?, 0, ?, NOW())";
+		$sql = "INSERT INTO vp_notifications (user_id, title, `message`, is_read, link, created_at) VALUES (?, ?, ?, 0, ?, NOW())";
 		$stmt = $conn->prepare($sql);
-		$stmt->bind_param("iss", $user_id, $message, $link);
+		$stmt->bind_param("isss", $user_id, $title, $message, $link);
 		return $stmt->execute();
 	}
 ?>

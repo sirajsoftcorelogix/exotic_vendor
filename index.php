@@ -407,11 +407,22 @@ switch ($page) {
         require_once 'controllers/NotificationController.php';
         $controller = new NotificationController();
         switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
             case 'fetch_notifications':
                 $controller->fetchNotifications();   
                 break;
             case 'mark_as_read':
                 $controller->markAsRead();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->deleteAllNotifications();
+            case 'delete_all_notifications':
+                $controller->deleteAllNotifications();
                 break;
             default:
                 $controller->fetchNotifications();   
