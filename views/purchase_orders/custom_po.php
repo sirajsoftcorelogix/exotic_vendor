@@ -92,7 +92,7 @@
                     
                 </td>
                 
-                <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?php echo $data[0]['title'] ?? ''; ?></textarea></td>
+                <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?php echo $data[0]['title'] ?? ''; ?> <?= $data[0]['size'] ? ' size:'.$data[0]['size'] : '' ?> <?= $data[0]['color'] ? ' color:'.$data[0]['color'] : '' ?> <?= $data[0]['material'] ? ' material:'.$data[0]['material'] : '' ?></textarea></td>
                 <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['hsn'] ?? ''; ?>"></td>
                 <td class="p-1">
                     <?php if(isset($data[0]['image']) && !empty($data[0]['image'])){ ?>
