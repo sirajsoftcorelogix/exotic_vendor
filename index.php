@@ -98,13 +98,21 @@ switch ($page) {
                 break;
             case 'bankDetails':
                 $controller->addBankDetails();
-            /*case 'add':
-                $controller->addEditVendor();
-                break;*/
-            
-            /*case 'update':
-                $controller->addEditVendor();
-                break;*/
+            case 'getTeamMembers':
+                $controller->getTeamMembers();
+                break;
+            case 'checkVendorName':
+                $controller->checkVendorName();
+                break;
+            case 'checkEmail':
+                $controller->checkEmail();
+                break;
+            case 'checkPhoneNumber':
+                $controller->checkPhoneNumber();
+                break;
+            case 'sales_analytics':
+                $controller->importSalesAnalyticsData();
+                break;
             default:
                 $controller->index();
                 break;
@@ -131,6 +139,12 @@ switch ($page) {
                 break;
             case 'update_status':
                 $controller->updateStatus();
+                break;
+            case 'get_order_details_html':
+                $controller->getOrderDetailsHTML();
+                break;
+            case 'update_import':
+                $controller->updateImportedOrders();
                 break;
             default:
                 $controller->index();
@@ -213,6 +227,21 @@ switch ($page) {
             case 'remove_challan':
                 $controller->deleteChallan();
                 break;
+            case 'vendor_search':
+                $controller->vendorSearch();
+                break;
+            case 'custom_po':
+                $controller->customPO();
+                break;
+            case 'custompo_post':
+                $controller->customPOSave();
+                break;
+            case 'product_items':
+                $controller->productItems();
+                break;
+            case 'stock_purchase':
+                $controller->stockPurchase();
+                break;
             default:
                 $controller->index();
                 break;
@@ -283,7 +312,7 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();         
                 break;
-            case 'view':
+            /*case 'view':
                 $controller->product_view();
                 break;
             case 'create':
@@ -294,7 +323,7 @@ switch ($page) {
                 break;
             case 'delete':
                 $controller->product_delete();
-                break;
+                break;*/
             default:
                 $controller->product_list();
                 break;
@@ -307,12 +336,24 @@ switch ($page) {
             case 'list':
                 $controller->index();   
                 break;
-            case 'addRecord':
+            /*case 'addRecord':
+                $controller->addRecord();
+                break;*/
+            case 'add':
+                $controller->addRRecord();
+                break;
+            case 'add_role':
                 $controller->addRecord();
                 break;
-            case 'updateRecord':
-                $controller->addRecord();
+            case 'edit':
+                $controller->editRecord();
                 break;
+            case 'edit_role':
+                $controller->updateRecord();
+                break;
+            /*case 'updateRecord':
+                $controller->addRecord();
+                break;*/
             case 'deleteRecord':
                 $controller->delete();
                 break;
@@ -326,6 +367,29 @@ switch ($page) {
     case 'teams':        
         require_once 'controllers/TeamsController.php';
         $controller = new TeamsController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'updateRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+	case 'modules':        
+        require_once 'controllers/ModulesController.php';
+        $controller = new ModulesController();
         switch ($action) {
             case 'list':
                 $controller->index();   
