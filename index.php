@@ -312,7 +312,7 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();         
                 break;
-            case 'view':
+            /*case 'view':
                 $controller->product_view();
                 break;
             case 'create':
@@ -323,7 +323,7 @@ switch ($page) {
                 break;
             case 'delete':
                 $controller->product_delete();
-                break;
+                break;/
             default:
                 $controller->product_list();
                 break;
