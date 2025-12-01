@@ -6,3 +6,4 @@ generated_pdfs/*
 tmp/*
 settings/database/database.php
 bootstrap/*
+.vscode/*

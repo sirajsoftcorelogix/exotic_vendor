@@ -857,7 +857,29 @@ class PurchaseOrdersController {
                 $tbody .= '<td style="width:5% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
                 $tbody .= '<td style="width:37% !important; border:1px solid #000; padding:6px;">';
                 //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
-                $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '') . '</p>';
+                $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '');
+                    if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
+                        $tbody .= ' <br> Dimensions: ';
+                        if (!empty($item['prod_height'])) {
+                            $tbody .= ' Height: ' . htmlspecialchars($item['prod_height']);
+                        }
+                        if (!empty($item['prod_width'])) {
+                            $tbody .= ' Width: ' . htmlspecialchars($item['prod_width']);
+                        }
+                        if (!empty($item['prod_length'])) {
+                            $tbody .= ' Depth: ' . htmlspecialchars($item['prod_length']);
+                        }
+                    }
+                    if (!empty($item['size'])) {
+                        $tbody .= ' Size: ' . htmlspecialchars($item['size']);
+                    }
+                    if (!empty($item['color'])) {
+                        $tbody .= ' Color: ' . htmlspecialchars($item['color']);
+                    }
+                    if (!empty($item['material'])) {
+                        $tbody .= ' Material: ' . htmlspecialchars($item['material']);
+                    }
+                $tbody .= '</p>';
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
                 $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
                 //if($item['price'] < 0){                
@@ -891,38 +913,55 @@ class PurchaseOrdersController {
         </tr>';
                 }else if($design_format == 'largeImageWithoutPrice'){
                     $tbody .= '<tr style="border:1px solid #000;">';
-                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .= '<td style="width:50%; padding:20px; vertical-align:top;">';
                     $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
-                    $tbody .= '<b>Dimensions:</b> <br> Height:' . htmlspecialchars($item['prod_height'] ?? '') . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
-                    $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight'] ?? '') . '<br>';
-                    $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size'] ?? '') . ' <br>';
-                    $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color'] ?? '') . '<br>';
-                    $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material'] ?? '') . ' <br>';
+                    $tbody .= '<b>Dimensions:</b> <br> Height:' . $item['prod_height'] ? $item['prod_height'] : '' . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
+                    if (!empty($item['product_weight'])) {
+                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . '<br>';
+                    }
+                    if (!empty($item['size'])) {
+                        $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size']) . ' <br>';
+                    }
+                    if (!empty($item['color'])) {
+                        $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color']) . '<br>';
+                    }
+                    if (!empty($item['material'])) {
+                        $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material']) . ' <br>';
+                    }
                     $tbody .= '</p>';
                     $tbody .= '</td>';
-                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .= '<td style="width:50%; padding:20px; border:1px solid #000;">';
                     $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:400px;">';
                     $tbody .= '</td>';
                     $tbody .= '</tr>';
                 }else if($design_format == 'largeImageWithPrice'){
                     $tbody .= '<tr style="border:1px solid #000;">';
-                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .= '<td style="width:50%; padding:20px; vertical-align:top;">';
                     $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
                     $tbody .= '<b>Dimensions:</b> <br> Height:' . htmlspecialchars($item['prod_height'] ?? '') . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
-                    $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight'] ?? '') . '<br>';
-                    $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size'] ?? '') . ' <br>';
-                    $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color'] ?? '') . '<br>';
-                    $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material'] ?? '') . ' <br>';
+                    
+                    if (!empty($item['product_weight'])) {
+                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . '<br>';
+                    }
+                    if (!empty($item['size'])) {
+                        $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size']) . ' <br>';
+                    }
+                    if (!empty($item['color'])) {
+                        $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color']) . '<br>';
+                    }
+                    if (!empty($item['material'])) {
+                        $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material']) . ' <br>';
+                    }
                     $tbody .= '</p>';
                     $tbody .= '<hr class="border-t mx-5  border-gray-400">';
-                    $tbody .= '<p><b>Price Details:</b><br><br>';
+                    $tbody .= '<p><br>';
                     $tbody .= '<b>Quantity:</b> ' . htmlspecialchars($item['quantity'] ?? '') . '<br>';
                     $tbody .= '<b>Unit Price:</b> ₹' . number_format($item['price'] ?? 0, 2) . '<br>';
                     $tbody .= '<b>GST:</b> ' . htmlspecialchars($item['gst'] ?? '') . '%<br>';
                     $tbody .= '<b>Amount:</b> ₹' . number_format($item['amount'] ?? 0, 2) . '<br>';
                     $tbody .= '</p>';
                     $tbody .= '</td>';
-                    $tbody .= '<td style="width:50%; padding:20px;">';
+                    $tbody .= '<td style="width:50%; padding:20px; border:1px solid #000;">';
                     $tbody .=  '<img src="' . htmlspecialchars($item['image'] ?? '') . '" style="width:auto; max-height:400px;">';
                     $tbody .= '</td>';
                     $tbody .= '</tr>';
