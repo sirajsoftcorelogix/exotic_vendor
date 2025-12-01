@@ -323,7 +323,7 @@ switch ($page) {
                 break;
             case 'delete':
                 $controller->product_delete();
-                break;/
+                break;*/
             default:
                 $controller->product_list();
                 break;
