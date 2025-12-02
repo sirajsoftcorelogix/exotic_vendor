@@ -420,6 +420,19 @@ class Order{
                     'quantity' => $row['quantity'],
                     'options' => $row['options'],
                     'order_date' => $row['order_date'],
+                    'color' => $row['color'], 
+                    'size' => $row['size'], 
+                    'itemprice' => $row['itemprice'], 
+                    'cost_price' => $row['cost_price'], 
+                    'local_stock' => $row['local_stock'], 
+                    //'leadtime' => $row['leadtime'],                     
+                    'numsold' => $row['numsold'], 
+                    //'numsold_india' => $row['numsold_india'], 
+                    //'numsold_global' => $row['numsold_global'],                     
+                    //'instock_leadtime' => $row['instock_leadtime'],
+                    //'fba_in' => $row['fba_in'], 
+                    //'fba_us' => $row['fba_us'], 
+                    //'lastsold' => $row['lastsold'],
                 ];
             }
         }
