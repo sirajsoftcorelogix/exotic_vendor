@@ -59,7 +59,7 @@ class NotificationController {
         is_login();
         global $conn;
         $user_id = $_SESSION["user"]["id"];
-        $sql = "SELECT * FROM vp_notifications WHERE user_id=$user_id AND is_read=0 ORDER BY id DESC";
+        $sql = "SELECT * FROM vp_notifications WHERE user_id=$user_id AND is_display=0 ORDER BY id DESC";
         $result = $conn->query($sql);
         $notifications = [];
         if ($result->num_rows > 0) {
@@ -77,6 +77,18 @@ class NotificationController {
             $ids_str = implode(",", array_map('intval', $ids));
 
             $sql = "UPDATE vp_notifications SET is_read = 1, read_at=now() WHERE id IN ($ids_str)";
+            mysqli_query($conn, $sql);
+        }
+        echo "success";
+        exit;
+    }
+    function isdisplay() {
+        global $conn;
+        $ids = $_POST['ids'];  // array of ids from AJAX
+        if (!empty($ids)) {
+            $ids_str = implode(",", array_map('intval', $ids));
+
+            $sql = "UPDATE vp_notifications SET is_display = 1 WHERE id IN ($ids_str)";
             mysqli_query($conn, $sql);
         }
         echo "success";

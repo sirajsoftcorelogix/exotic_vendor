@@ -480,6 +480,9 @@ switch ($page) {
             case 'delete_all_notifications':
                 $controller->deleteAllNotifications();
                 break;
+            case 'is_display':
+                $controller->isdisplay();
+                break;
             default:
                 $controller->fetchNotifications();   
                 break;

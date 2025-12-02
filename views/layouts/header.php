@@ -376,7 +376,7 @@ unset($usersModel);
         };
 
         // Mark as read
-        //$.post("index.php?page=notifications&action=mark_as_read", { ids: [notif.id] });
+        $.post("index.php?page=notifications&action=is_display", { ids: [notif.id] });
 
         // Show next after 1 second
         setTimeout(() => showNotificationsQueue(notifs), 5000);

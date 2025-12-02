@@ -67,7 +67,12 @@
                         <?php foreach ($notifications as $index => $tc): ?>
                             <tr class="table-content-text">
                                 <td class="px-6 py-4 whitespace-nowrap"><?= $index + 1 ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($tc['title']) ?? '' ?></td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <?php if($tc["is_read"]==0) { echo "<strong style='color: black;'>".htmlspecialchars($tc['title'])."</strong>"; } else { ?>
+                                    <?= htmlspecialchars($tc['title']) ?? '' ?>
+                                    <?php } ?>
+                                
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($tc['message']) ?? '' ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
