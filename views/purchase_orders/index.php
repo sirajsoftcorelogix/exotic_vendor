@@ -339,7 +339,7 @@
                 </a>
             <?php endif; ?>
             <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
-                    onchange="location.href='?page=purchase_orders&acton=list&page_no=1&limit=' + this.value;">
+                    onchange="location.href='?page=purchase_orders&action=list&page_no=1&limit=' + this.value;">
                 <?php foreach ([10, 20, 50, 100] as $opt): ?>
                     <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                         <?= $opt ?>

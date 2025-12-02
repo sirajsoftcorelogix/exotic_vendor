@@ -322,4 +322,23 @@ class ProductsController {
         echo json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
         exit;
     }
+    public function getProductDetailsHTML() {
+        is_login();
+        global $productModel, $commanModel;
+        //print_array($_GET);
+        $item_code = isset($_GET['item_code']) ? $_GET['item_code'] : 0;
+        if ($item_code != 0) {
+            $order = $productModel->getProductByItemCode($item_code);
+            
+            if ($order) {
+                //renderPartial('views/products/partial_product_details.php', ['products' => $order]);
+                renderTemplateClean('views/products/partial_product_details.php', ['products' => $order], 'Product Details');
+            } else {
+                echo '<p>Order details not found.</p>';
+            }
+        } else {
+            echo '<p>Invalid Order Number.</p>';
+        }
+        exit;
+    }
 }

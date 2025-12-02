@@ -310,7 +310,7 @@
 
 <!-- Details Modal -->
 <div id="details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden">
-    <div id="details-modal-slider" class="fixed top-0 right-0 h-full w-full max-w-md flex transform translate-x-full">
+    <div id="details-modal-slider" class="fixed top-0 right-0 h-full flex transform translate-x-full" style="width: calc(45% + 61px); min-width: 950px;">
 
         <!-- Close Button -->
         <div class="flex-shrink-0 flex items-start pt-5">
@@ -480,21 +480,20 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
                 console.error('Failed to parse product JSON', e);
                 return;
             }
-            //console.log(data);
-            let content = `
-                <h2 class="text-2xl font-bold mb-4">Inventory Details for ${data.item_code}</h2>
-                <p><strong>Local Location:</strong> ${data.location}</p>
-                <p><strong>Local Stock:</strong> ${data.local_stock}</p>
-                <p><strong>FBA (US):</strong> ${data.fba_us}</p>            
-                <p><strong>FBA (IN):</strong> ${data.fba_in}</p>
-                <p><strong>Leadtime:</strong> ${data.leadtime}</p>
-                <p><strong>instock_leadtime:</strong> ${data.instock_leadtime}</p>
-                <p><strong>Num Sold:</strong> ${data.numsold}</p>
-                <p><strong>Num Sold (India):</strong> ${data.numsold_india}</p>
-                <p><strong>Num Sold (Global):</strong> ${data.numsold_global}</p>
-                <p><strong>Num Sold (Last):</strong> ${data.lastsold}</p>
-            `;
-            modalContent.innerHTML = content;
+            modalContent.innerHTML = '<p>Loading...</p>'; // Show loading indicator
+            fetch(`?page=products&action=get_product_details_html&item_code=${encodeURIComponent(data.item_code)}`)
+                .then(response => response.text())
+                .then(html => {
+                    modalContent.innerHTML = html; // Insert the fetched HTML
+                    // Initialize accordion triggers inside the newly injected content so they work.
+                    // if (typeof initAccordionTriggers === 'function') {
+                    //     initAccordionTriggers(modalContent);
+                    // }
+                })
+                .catch(error => {
+                    console.error('Error loading order details:', error);
+                    modalContent.innerHTML = '<p>Error loading order details.</p>';
+                });
         });
     });
     document.querySelectorAll('.sfdetails').forEach(link => {
@@ -520,14 +519,29 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
                 return;
             }
             //console.log(data);
-            let content = `
-                <h2 class="text-2xl font-bold mb-4">S & F Details for ${data.item_code}</h2>
-                <p><strong>Item Price:</strong> ₹${data.itemprice}</p>
-                <p><strong>Final Price:</strong> ₹${data.finalprice}</p>
-                <p><strong>Shipping Fee:</strong> ₹${data.shipping_fee}</p>            
-                <p><strong>Cost price:</strong> ₹${data.cost_price}</p>                
-            `;
-            modalContent.innerHTML = content;
+            // let content = `
+            //     <h2 class="text-2xl font-bold mb-4">S & F Details for ${data.item_code}</h2>
+            //     <p><strong>Item Price:</strong> ₹${data.itemprice}</p>
+            //     <p><strong>Final Price:</strong> ₹${data.finalprice}</p>
+            //     <p><strong>Shipping Fee:</strong> ₹${data.shipping_fee}</p>            
+            //     <p><strong>Cost price:</strong> ₹${data.cost_price}</p>                
+            // `;
+            // modalContent.innerHTML = content;
+            modalContent.innerHTML = '<p>Loading...</p>'; // Show loading indicator
+            fetch(`?page=products&action=get_product_details_html&item_code=${encodeURIComponent(data.item_code)}`)
+                .then(response => response.text())
+                .then(html => {
+                    modalContent.innerHTML = html; // Insert the fetched HTML
+                    // Initialize accordion triggers inside the newly injected content so they work.
+                    // if (typeof initAccordionTriggers === 'function') {
+                    //     initAccordionTriggers(modalContent);
+                    // }
+                })
+                .catch(error => {
+                    console.error('Error loading order details:', error);
+                    modalContent.innerHTML = '<p>Error loading order details.</p>';
+                });
+            
         });
     });
     // Select/Deselect all checkboxes
