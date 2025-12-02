@@ -50,7 +50,7 @@ $countries = country_array();
 
                             <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['local_stock'] ?? 'N/A'; ?></span>
 
-                            <!-- <span class="grid-label">Location</span> <span class="grid-label">:</span> <span class="grid-value"><?php //echo $item['location'] ?? 'N/A'; ?></span> -->
+                            <span class="grid-label">Location</span> <span class="grid-label">:</span> <span class="grid-value"><?php //echo $item['location'] ?? 'N/A'; ?></span>
                         </div>
 
                         <!-- Divider -->
