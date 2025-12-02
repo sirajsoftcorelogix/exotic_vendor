@@ -56,7 +56,7 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                     <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">#</th>
+                        <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Date & Time</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Title</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Message</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Action</th>
@@ -66,7 +66,7 @@
                     <?php if (!empty($notifications)): ?>
                         <?php foreach ($notifications as $index => $tc): ?>
                             <tr class="table-content-text">
-                                <td class="px-6 py-4 whitespace-nowrap"><?= $index + 1 ?></td>
+                                <td class="px-2 py-2 whitespace-nowrap"><?= date("d M Y H:i") ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <?php if($tc["is_read"]==0) { echo "<strong style='color: black;'>".htmlspecialchars($tc['title'])."</strong>"; } else { ?>
                                     <?= htmlspecialchars($tc['title']) ?? '' ?>

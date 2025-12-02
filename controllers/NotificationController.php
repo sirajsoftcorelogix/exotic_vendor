@@ -16,7 +16,6 @@ class NotificationController {
         $limit = in_array($limit, [5, 20, 50, 100]) ? $limit : 20; // If user select value from dropdown
 
         $nt_data = $notificationsModel->getAll($page_no, $limit, $search); 
-
         $data = [
             'notifications' => $nt_data["notifications"],
             'page_no' => $page_no,
@@ -29,6 +28,13 @@ class NotificationController {
         ];
         
         renderTemplate('views/notifications/index.php', $data, 'Manage Notifications');
+    }
+    public function getUnreadCount() {
+        is_login();
+        global $notificationsModel;
+        $user_id = $_SESSION["user"]["id"];
+        $unreadCount = $notificationsModel->getUnreadCount($user_id);
+        return $unreadCount ?? '';
     }
     public function delete() {
         is_login();
