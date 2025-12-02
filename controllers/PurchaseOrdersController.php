@@ -860,17 +860,20 @@ class PurchaseOrdersController {
                 $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '');
                     if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
                         $tbody .= ' <br> Dimensions: ';
-                        if (!empty($item['prod_height'])) {
+                        if ($item['prod_height'] != '0.00') {
                             $tbody .= ' Height: ' . htmlspecialchars($item['prod_height']);
                         }
-                        if (!empty($item['prod_width'])) {
+                        if ($item['prod_width'] != '0.00') {
                             $tbody .= ' Width: ' . htmlspecialchars($item['prod_width']);
                         }
-                        if (!empty($item['prod_length'])) {
-                            $tbody .= ' Depth: ' . htmlspecialchars($item['prod_length']);
+                        if ($item['prod_length'] != '0.00') {
+                            $tbody .= ' Depth: ' . $item['prod_length'] . $item['length_unit'];
+                        }
+                        if ($item['product_weight'] != '0.00') {
+                            $tbody .= ' Weight: ' . $item['product_weight'] . $item['product_weight_unit'];
                         }
                     }
-                    if (!empty($item['size'])) {
+                    /*if (!empty($item['size'])) {
                         $tbody .= ' Size: ' . htmlspecialchars($item['size']);
                     }
                     if (!empty($item['color'])) {
@@ -878,7 +881,7 @@ class PurchaseOrdersController {
                     }
                     if (!empty($item['material'])) {
                         $tbody .= ' Material: ' . htmlspecialchars($item['material']);
-                    }
+                    }*/
                 $tbody .= '</p>';
                 $tbody .= '<td style="width:13% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
                 $tbody .= '<td style="width:8% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
@@ -888,45 +891,25 @@ class PurchaseOrdersController {
                 $tbody .= '<td style="width:16% !important; border:1px solid #000; padding:6px; text-align:right;">₹' . number_format($item['amount'], 2) . '</td>';
                 //}
                 $tbody .= '</tr>';
-                $summary_rows .= '<tr>
-            <td style="width: 60%;"></td>
-            <td style="width: 40%; vertical-align:top;">
-                <table>
-                    <tr>
-                        <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['subtotal'].'</td>
-                    </tr>
-                    <tr>
-                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">Shipping:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['shipping_cost'].'</td>
-                    </tr>
-                    <tr>
-                        <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
-                        <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['total_gst'].'</td>
-                    </tr>
-                    <tr>
-                        <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
-                        <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$purchaseOrder['total_cost'].'</td>
-                    </tr>
-                </table>
-            </td>
-        </tr>';
+                
                 }else if($design_format == 'largeImageWithoutPrice'){
                     $tbody .= '<tr style="border:1px solid #000;">';
                     $tbody .= '<td style="width:50%; padding:20px; vertical-align:top;">';
                     $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
-                    $tbody .= '<b>Dimensions:</b> <br> Height:' . $item['prod_height'] ? $item['prod_height'] : '' . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
-                    if (!empty($item['product_weight'])) {
-                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . '<br>';
-                    }
-                    if (!empty($item['size'])) {
-                        $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size']) . ' <br>';
-                    }
-                    if (!empty($item['color'])) {
-                        $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color']) . '<br>';
-                    }
-                    if (!empty($item['material'])) {
-                        $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material']) . ' <br>';
+                    if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
+                        $tbody .= '<b>Dimensions:</b>';
+                        if ($item['prod_height'] != '0.00') {
+                        $tbody .= '<br> Height:' . $item['prod_height'] ;
+                        }
+                        if ($item['prod_width'] != '0.00') {
+                        $tbody .=  '<br> Width:' . htmlspecialchars($item['prod_width'] ?? '');
+                        }
+                        if ($item['prod_length'] != '0.00') {
+                        $tbody .=   '<br> Depth:' . htmlspecialchars($item['prod_length'] ?? '') . $item['length_unit'].' <br>';
+                        }
+                        if ($item['product_weight'] != '0.00') {
+                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . $item['product_weight_unit']. '<br>';
+                        }
                     }
                     $tbody .= '</p>';
                     $tbody .= '</td>';
@@ -938,19 +921,20 @@ class PurchaseOrdersController {
                     $tbody .= '<tr style="border:1px solid #000;">';
                     $tbody .= '<td style="width:50%; padding:20px; vertical-align:top;">';
                     $tbody .= '<p> <b>Order details:</b> <br><br>' . htmlspecialchars($item['title'] ?? '') . ' <br>';
-                    $tbody .= '<b>Dimensions:</b> <br> Height:' . htmlspecialchars($item['prod_height'] ?? '') . ' Width:' . htmlspecialchars($item['prod_width'] ?? '') . ' Depth:' . htmlspecialchars($item['prod_length'] ?? '') . ' <br>';
-                    
-                    if (!empty($item['product_weight'])) {
-                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . '<br>';
-                    }
-                    if (!empty($item['size'])) {
-                        $tbody .= '<b>Size:</b> ' . htmlspecialchars($item['size']) . ' <br>';
-                    }
-                    if (!empty($item['color'])) {
-                        $tbody .= '<b>Color:</b> ' . htmlspecialchars($item['color']) . '<br>';
-                    }
-                    if (!empty($item['material'])) {
-                        $tbody .= '<b>Material:</b> ' . htmlspecialchars($item['material']) . ' <br>';
+                    if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
+                        $tbody .= '<b>Dimensions:</b>';
+                        if ($item['prod_height'] != '0.00') {
+                        $tbody .= '<br> Height:' . $item['prod_height'] ;
+                        }
+                        if ($item['prod_width'] != '0.00') {
+                        $tbody .=  '<br> Width:' . htmlspecialchars($item['prod_width'] ?? '');
+                        }
+                        if ($item['prod_length'] != '0.00') {
+                        $tbody .=   '<br> Depth:' . htmlspecialchars($item['prod_length'] ?? '') . $item['length_unit']. ' <br>';
+                        }
+                        if ($item['product_weight'] != '0.00') {
+                        $tbody .= '<b>Weight:</b> ' . htmlspecialchars($item['product_weight']) . $item['product_weight_unit']. '<br>';
+                        }
                     }
                     $tbody .= '</p>';
                     $tbody .= '<hr class="border-t mx-5  border-gray-400">';
@@ -970,7 +954,23 @@ class PurchaseOrdersController {
                 $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . ($index + 1) . '</td>';
                 $tbody .= '<td style="width:50% !important; border:1px solid #000; padding:6px;">';
                 //$tbody .= '<p style="font-family: ' . $font . ';">' . $text[0] . ' | ' . $font . '</p>'.'<p style="font-family: ' . $font2 . ';">' . $text[1] . ' | ' . $lang2 . '</p>';
-                $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '') . '</p>';
+                $tbody .= '<p>' . htmlspecialchars($item['title'] ?? '') . ' - ' . htmlspecialchars($item['order_number'] ?? '');
+                if (!empty($item['prod_height']) || !empty($item['prod_width']) || !empty($item['prod_length'])) {
+                    $tbody .= ' <br> Dimensions: ';
+                    if ($item['prod_height'] != '0.00') {
+                        $tbody .= ' Height: ' . htmlspecialchars($item['prod_height']);
+                    }
+                    if ($item['prod_width'] != '0.00') {
+                        $tbody .= ' Width: ' . htmlspecialchars($item['prod_width']);
+                    }
+                    if ($item['prod_length'] != '0.00') {
+                        $tbody .= ' Depth: ' . $item['prod_length'] . $item['length_unit'];
+                    }
+                    if ($item['product_weight'] != '0.00') {
+                        $tbody .= ' Weight: ' . $item['product_weight'] . $item['product_weight_unit'];
+                    }
+                }
+                $tbody .= '</p>';
                 $tbody .= '<td style="width:20% !important; border:1px solid #000; text-align:center;"><img src="' . htmlspecialchars($item['image']) . '" style="width:auto; max-height:150px;"></td>';
                 $tbody .= '<td style="width:10% !important; border:1px solid #000; padding:6px; text-align:center;">' . htmlspecialchars($item['quantity']) . '</td>';
                 
@@ -978,6 +978,31 @@ class PurchaseOrdersController {
                 
                 }
                 
+            }
+            if($design_format == 'smallImageWithPrice'){
+                $summary_rows .= '<tr>
+                    <td style="width: 60%;"></td>
+                    <td style="width: 40%; vertical-align:top;">
+                        <table>
+                            <tr>
+                                <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['subtotal'].'</td>
+                            </tr>
+                            <tr>
+                                <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">Shipping:</th>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['shipping_cost'].'</td>
+                            </tr>
+                            <tr>
+                                <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$purchaseOrder['total_gst'].'</td>
+                            </tr>
+                            <tr>
+                                <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
+                                <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$purchaseOrder['total_cost'].'</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>';
             }
         }
        
