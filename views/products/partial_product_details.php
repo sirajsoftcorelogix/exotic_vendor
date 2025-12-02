@@ -86,7 +86,7 @@ $countries = country_array();
 
                             <div class="grid grid-cols-[90px_10px_1fr] w-full gap-y-1">
                                 <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['fba_in'] ?? 'N/A'; ?></span>
-                                <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value"><<?php echo $item['fba_us'] ?? 'N/A'; ?></span>
+                                <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['fba_us'] ?? 'N/A'; ?></span>
                             </div>
                         </div>
 
