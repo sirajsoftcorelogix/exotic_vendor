@@ -46,16 +46,6 @@ class Notifications {
             'search'       => $search
         ];
 	}
-    public function getUnreadCount($user_id) {
-        $user_id = (int)$user_id;
-        $sql = "SELECT COUNT(*) AS unread_count FROM vp_notifications WHERE user_id = ? AND is_read = 0";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('i', $user_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        return (int)$row['unread_count'];
-    }
     public function deleteRecord($id) {
         $sql = "DELETE FROM vp_notifications WHERE id = ?";
         $stmt = $this->conn->prepare($sql);

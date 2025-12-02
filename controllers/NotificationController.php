@@ -31,10 +31,15 @@ class NotificationController {
     }
     public function getUnreadCount() {
         is_login();
-        global $notificationsModel;
-        $user_id = $_SESSION["user"]["id"];
-        $unreadCount = $notificationsModel->getUnreadCount($user_id);
-        return $unreadCount ?? '';
+        global $conn;
+        $user_id = $_SESSION["user"]["id"] ?? 0;
+        $sql = "SELECT COUNT(*) AS unread_count FROM vp_notifications WHERE user_id = ? AND is_read = 0";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        return (int)$row['unread_count'];
     }
     public function delete() {
         is_login();
