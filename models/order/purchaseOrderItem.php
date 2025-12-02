@@ -17,7 +17,41 @@ class PurchaseOrderItem {
     }
 
     public function getPurchaseOrderItemById($po_id) {
-        $query = "SELECT * FROM vp_po_items WHERE purchase_orders_id = ?";
+        $query = "SELECT poi.*,
+                    CASE 
+                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+                        THEN vp.product_weight
+                        ELSE vo.product_weight
+                    END AS product_weight,
+                    CASE 
+                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+                        THEN vp.product_weight_unit
+                        ELSE vo.product_weight_unit
+                    END AS product_weight_unit,
+                    CASE 
+                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+                        THEN vp.prod_height
+                        ELSE vo.prod_height
+                    END AS prod_height,
+                    CASE 
+                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+                        THEN vp.prod_width
+                        ELSE vo.prod_width
+                    END AS prod_width,
+                    CASE 
+                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+                        THEN vp.prod_length
+                        ELSE vo.prod_length
+                    END AS prod_length,
+                    CASE 
+                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+                        THEN vp.length_unit
+                        ELSE vo.length_unit
+                    END AS length_unit
+                FROM vp_po_items poi
+                LEFT JOIN vp_products vp ON poi.product_id = vp.id
+                LEFT JOIN vp_orders vo ON poi.order_number = vo.order_number
+                WHERE poi.purchase_orders_id = ?";
         $stmt = $this->conn->prepare($query);
         $stmt->bind_param("i", $po_id);
         $stmt->execute();

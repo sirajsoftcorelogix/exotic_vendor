@@ -164,7 +164,7 @@
                         <div class="flex flex-col">
                             <div class="flex items-center gap-2">
                                 <span class="typo-sku-label w-[70px]">Item Code :</span>
-                                <span class="typo-sku-value"><?php echo $product['item_code']; ?></span>
+                                <span class="typo-sku-value"><a href="javascript:void(0);" class="invdetails typo-sf-column text-details-link mt-1"><?php echo $product['item_code']; ?></a></span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="typo-sku-label w-[70px]">ASIN :</span>
@@ -185,16 +185,16 @@
                                 <p class="typo-product-title mb-2 max-w-xs"><?php echo $product['title']; ?></p>
                                 <p class="typo-product-title mb-2 max-w-xs">
                                      <?php echo $product['size'] ? '<strong>Size :</strong>'.$product['size'] : ''; ?> 
-                                     <?php echo $product['color'] ? ' <strong>Color :</strong>'.$product['color'] .'' : ''; ?>
+                                     <?php echo $product['color'] ? ' <strong>Color :</strong>'.ucfirst($product['color']) : ''; ?>
                                 </p>
                                 <div class="flex items-center mt-auto">
                                     
                                     <span class="typo-vendor">Vendor : <?php echo $product['vendor']; ?></span>
-                                    <a href="#" class="ml-2 text-details-link hover:text-amber-700">
+                                    <!-- <a href="#" class="ml-2 text-details-link hover:text-amber-700">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
-                                    </a>
+                                    </a> -->
                                 </div>
                             </div>
                         </div>
@@ -205,7 +205,7 @@
                         <div class="flex flex-col space-y-1">
                             <span class="typo-sf-column">₹<?php echo $product['itemprice']; ?></span>
                             <span class="typo-sf-column"><?php echo $product['local_stock']; ?></span>
-                            <a href="javascript:void(0);" class="sfdetails typo-sf-column text-details-link mt-1">details</a>
+                            <!-- <a href="javascript:void(0);" class="sfdetails typo-sf-column text-details-link mt-1">details</a> -->
                         </div>
                     </td>
 
@@ -216,7 +216,7 @@
                             <div class="typo-sf-column">
                                 FBA (US): <span class="text-healthy"><?php echo $product['fba_us']; ?></span>
                             </div>
-                            <a href="javascript:void(0);" class="invdetails typo-sf-column text-details-link mt-1">details</a>
+                            <!-- <a href="javascript:void(0);" class="invdetails typo-sf-column text-details-link mt-1">details</a> -->
                         </div>
                     </td>
 
@@ -310,7 +310,7 @@
 
 <!-- Details Modal -->
 <div id="details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden">
-    <div id="details-modal-slider" class="fixed top-0 right-0 h-full w-full max-w-md flex transform translate-x-full">
+    <div id="details-modal-slider" class="fixed top-0 right-0 h-full flex transform translate-x-full" style="width: calc(45% + 61px); min-width: 950px;">
 
         <!-- Close Button -->
         <div class="flex-shrink-0 flex items-start pt-5">
@@ -324,7 +324,7 @@
             </button>
         </div>
 
-        <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
+        <div class="h-full bg-white shadow-xl px-8 overflow-y-auto flex flex-col w-full">
             <!-- Modal Content -->
             <div class="flex-grow space-y-4" id="details-modal-content">
                 <!-- Dynamic content will be loaded here -->
@@ -480,56 +480,70 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
                 console.error('Failed to parse product JSON', e);
                 return;
             }
-            //console.log(data);
-            let content = `
-                <h2 class="text-2xl font-bold mb-4">Inventory Details for ${data.item_code}</h2>
-                <p><strong>Local Location:</strong> ${data.location}</p>
-                <p><strong>Local Stock:</strong> ${data.local_stock}</p>
-                <p><strong>FBA (US):</strong> ${data.fba_us}</p>            
-                <p><strong>FBA (IN):</strong> ${data.fba_in}</p>
-                <p><strong>Leadtime:</strong> ${data.leadtime}</p>
-                <p><strong>instock_leadtime:</strong> ${data.instock_leadtime}</p>
-                <p><strong>Num Sold:</strong> ${data.numsold}</p>
-                <p><strong>Num Sold (India):</strong> ${data.numsold_india}</p>
-                <p><strong>Num Sold (Global):</strong> ${data.numsold_global}</p>
-                <p><strong>Num Sold (Last):</strong> ${data.lastsold}</p>
-            `;
-            modalContent.innerHTML = content;
+            modalContent.innerHTML = '<p>Loading...</p>'; // Show loading indicator
+            fetch(`?page=products&action=get_product_details_html&item_code=${encodeURIComponent(data.item_code)}`)
+                .then(response => response.text())
+                .then(html => {
+                    modalContent.innerHTML = html; // Insert the fetched HTML
+                    // Initialize accordion triggers inside the newly injected content so they work.
+                    // if (typeof initAccordionTriggers === 'function') {
+                    //     initAccordionTriggers(modalContent);
+                    // }
+                })
+                .catch(error => {
+                    console.error('Error loading order details:', error);
+                    modalContent.innerHTML = '<p>Error loading order details.</p>';
+                });
         });
     });
-    document.querySelectorAll('.sfdetails').forEach(link => {
-        link.addEventListener('click', function() {
-            event.preventDefault();
-            openModal(); // Open the modal first
-            const modalContent = document.getElementById('details-modal-content');
-            const row = this.closest('tr');
-            // Try to find the element with the product JSON attribute inside the row (or fall back to the row itself)
-            const productEl = row.querySelector('[data-product]') || row;
-            const productJson = productEl ? (productEl.getAttribute('data-product') || productEl.dataset.product) : null;
+    // document.querySelectorAll('.sfdetails').forEach(link => {
+    //     link.addEventListener('click', function() {
+    //         event.preventDefault();
+    //         openModal(); // Open the modal first
+    //         const modalContent = document.getElementById('details-modal-content');
+    //         const row = this.closest('tr');
+    //         // Try to find the element with the product JSON attribute inside the row (or fall back to the row itself)
+    //         const productEl = row.querySelector('[data-product]') || row;
+    //         const productJson = productEl ? (productEl.getAttribute('data-product') || productEl.dataset.product) : null;
 
-            if (!productJson) {
-                console.error('Product data not found on this row.');
-                return;
-            }
+    //         if (!productJson) {
+    //             console.error('Product data not found on this row.');
+    //             return;
+    //         }
 
-            let data;
-            try {
-                data = JSON.parse(productJson);
-            } catch (e) {
-                console.error('Failed to parse product JSON', e);
-                return;
-            }
-            //console.log(data);
-            let content = `
-                <h2 class="text-2xl font-bold mb-4">S & F Details for ${data.item_code}</h2>
-                <p><strong>Item Price:</strong> ₹${data.itemprice}</p>
-                <p><strong>Final Price:</strong> ₹${data.finalprice}</p>
-                <p><strong>Shipping Fee:</strong> ₹${data.shipping_fee}</p>            
-                <p><strong>Cost price:</strong> ₹${data.cost_price}</p>                
-            `;
-            modalContent.innerHTML = content;
-        });
-    });
+    //         let data;
+    //         try {
+    //             data = JSON.parse(productJson);
+    //         } catch (e) {
+    //             console.error('Failed to parse product JSON', e);
+    //             return;
+    //         }
+    //         //console.log(data);
+    //         // let content = `
+    //         //     <h2 class="text-2xl font-bold mb-4">S & F Details for ${data.item_code}</h2>
+    //         //     <p><strong>Item Price:</strong> ₹${data.itemprice}</p>
+    //         //     <p><strong>Final Price:</strong> ₹${data.finalprice}</p>
+    //         //     <p><strong>Shipping Fee:</strong> ₹${data.shipping_fee}</p>            
+    //         //     <p><strong>Cost price:</strong> ₹${data.cost_price}</p>                
+    //         // `;
+    //         // modalContent.innerHTML = content;
+    //         modalContent.innerHTML = '<p>Loading...</p>'; // Show loading indicator
+    //         fetch(`?page=products&action=get_product_details_html&item_code=${encodeURIComponent(data.item_code)}`)
+    //             .then(response => response.text())
+    //             .then(html => {
+    //                 modalContent.innerHTML = html; // Insert the fetched HTML
+    //                 // Initialize accordion triggers inside the newly injected content so they work.
+    //                 // if (typeof initAccordionTriggers === 'function') {
+    //                 //     initAccordionTriggers(modalContent);
+    //                 // }
+    //             })
+    //             .catch(error => {
+    //                 console.error('Error loading order details:', error);
+    //                 modalContent.innerHTML = '<p>Error loading order details.</p>';
+    //             });
+            
+    //     });
+    // });
     // Select/Deselect all checkboxes
     const selectAllCheckbox = document.getElementById('selectAll');
     if (selectAllCheckbox) {
