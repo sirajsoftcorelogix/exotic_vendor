@@ -84,7 +84,63 @@
                 <?php foreach ($data as $index => $item): ?>
             <tr class="bg-white ">
                 <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
-                <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?></textarea></td>
+                <td class="p-1">
+                    <div class="flex items-center gap-2">
+                        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?></textarea>
+                        <div class="relative group">
+                            <i class="fas fa-info-circle text-blue-500 cursor-help"></i>
+                            <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                                <div class="variation-card p-6 flex">
+                                    <!-- Image -->
+                                    <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
+                                        <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image" class="w-full h-full object-cover">
+                                    </div>
+
+                                    <!-- Details Container -->
+                                    <div class="flex-grow flex">
+
+                                        <!-- Column 1 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['color'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['size'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['cost_price'] ? "₹".$item['cost_price'] : 'N/A'; ?></span>
+
+                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['itemprice'] ? "₹".$item['itemprice'] : 'N/A'; ?></span>
+
+                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['local_stock'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Location</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['location'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['leadtime'] ?? 'N/A'; ?></span>
+
+                                        </div>
+
+                                        <!-- Divider -->
+                                        <div class="vertical-divider mx-6 self-stretch"></div>
+
+                                        <!-- Column 2 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['numsold'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['numsold_india'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['numsold_global'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['lastsold'] ?? 'N/A'; ?></span>
+
+
+                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['instock_leadtime'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['fba_in'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['fba_us'] ?? 'N/A'; ?></span>
+                                           
+                                        </div>
+                                       
+                                    </div>
+                                </div>
+                            </div>
+                    </div>
+                </td>
                 <td class="p-1"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
                 <td class="p-1"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
                 <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>

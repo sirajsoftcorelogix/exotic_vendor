@@ -3,7 +3,7 @@
 $countries = country_array();
 //print_array($countries);
 ?>
-<div class="p-8">
+<div class="">
 
     <!-- Header Content -->
     <div id="product-details-content" class="space-y-6">
