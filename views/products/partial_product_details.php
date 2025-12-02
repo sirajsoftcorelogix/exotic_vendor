@@ -40,7 +40,7 @@ $countries = country_array();
 
                         <!-- Column 1 (Data) -->
                         <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
-                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['color'] ?? 'N/A'; ?></span>
+                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['color'] ? ucfirst($item['color']) : 'N/A'; ?></span>
 
                             <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['size'] ?? 'N/A'; ?></span>
 
