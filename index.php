@@ -312,6 +312,9 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();         
                 break;
+            case 'get_product_details_html';
+                $controller->getProductDetailsHTML();         
+                break;
             /*case 'view':
                 $controller->product_view();
                 break;

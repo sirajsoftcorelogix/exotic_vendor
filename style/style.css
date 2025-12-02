@@ -586,6 +586,9 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
     .timeline-step.completed:not(:first-child)::before {
       background-color: rgba(39, 174, 96, 1); /* Green for completed steps */
     }
+.font-instrument {
+    font-family: 'Instrument Sans', sans-serif;
+}
 .popup-transition {
     transition: transform 0.3s ease-in-out;
 }         
@@ -941,3 +944,95 @@ background-color: #f0f0f0;
         .bg-create-po:hover {
             background-color: rgba(180, 90, 5, 1); /* Slightly darker for hover */
         }
+        /* product detail popup*/
+        /* Typography Classes */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .text-breadcrumb {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 500;
+            font-size: 20px;
+            line-height: 24px;
+            color: rgba(208, 103, 6, 1);
+        }
+        .text-product-title {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            line-height: 24px;
+            color: rgba(5, 19, 33, 1);
+        }
+        .text-item-code-label {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            line-height: 24px;
+            color: rgba(5, 19, 33, 1);
+        }
+        .text-item-code-value {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 500;
+            font-size: 20px;
+            line-height: 24px;
+            color: rgba(5, 19, 33, 1);
+        }
+        .text-section-title {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            line-height: 24px;
+            color: rgba(5, 19, 33, 1);
+        }
+
+        /* Card Styles */
+        .variation-card {
+            background-color: #F9FAFB;
+            border-radius: 12px;
+        }
+
+        /* Grid Text Styles */
+        .grid-label {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            line-height: 191%;
+            color: rgba(58, 58, 73, 1);
+        }
+        .grid-value {
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            font-size: 13px;
+            line-height: 191%;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        /* Button Styles */
+        .create-po-btn {
+            background-color: rgba(208, 103, 6, 1);
+            width: 130px;
+            height: 30px;
+            border-radius: 33px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 12px;
+            transition: opacity 0.2s;
+        }
+        .create-po-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Vertical Divider */
+        .vertical-divider {
+            width: 1px;
+            background-color: #D1D5DB; /* gray-300 */
+        }
+        
