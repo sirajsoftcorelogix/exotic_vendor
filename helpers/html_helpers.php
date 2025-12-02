@@ -520,7 +520,7 @@
 		echo "All Records Updated in the Countries Table.";
 		$conn->close();
 	}
-	function insertNotification($user_id, $title, $message, $link = '') {
+	function insertNotification($user_id, $title='', $message='', $link = '') {
 		global $conn;
 		$sql = "INSERT INTO vp_notifications (user_id, title, `message`, is_read, link, created_at) VALUES (?, ?, ?, 0, ?, NOW())";
 		$stmt = $conn->prepare($sql);
