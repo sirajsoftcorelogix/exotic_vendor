@@ -10,7 +10,6 @@ $action = $_GET['action'] ?? 'list';
 //$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
 
 switch ($page) {
-	
 	case 'users':
         require_once 'controllers/UsersController.php';
 		$controller = new UsersController($conn);
@@ -247,7 +246,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'payement_terms':        
+    case 'payement_terms':
         require_once 'controllers/PaymenetTermsController.php';
         $controller = new PaymenetTermsController();
         switch ($action) {
@@ -270,7 +269,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'orders_priority_status':        
+    case 'orders_priority_status':
         require_once 'controllers/OrdersPriorityStatusController.php';
         $controller = new OrdersPriorityStatusController();
         switch ($action) {
@@ -293,7 +292,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'dashboard':        
+    case 'dashboard':
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
         $controller->index();
@@ -329,7 +328,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'roles':        
+    case 'roles':
         require_once 'controllers/RolesController.php';
         $controller = new RolesController();
         switch ($action) {
@@ -364,7 +363,7 @@ switch ($page) {
                 break;
         }
         break;
-    case 'teams':        
+    case 'teams':
         require_once 'controllers/TeamsController.php';
         $controller = new TeamsController();
         switch ($action) {
@@ -457,6 +456,35 @@ switch ($page) {
                 $controller->getDetails();
             default:
                 $controller->index();
+                break;
+        }
+        break;
+    case 'notifications':
+        require_once 'controllers/NotificationController.php';
+        $controller = new NotificationController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'fetch_notifications':
+                $controller->fetchNotifications();   
+                break;
+            case 'mark_as_read':
+                $controller->markAsRead();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'getDetails':
+                $controller->deleteAllNotifications();
+            case 'delete_all_notifications':
+                $controller->deleteAllNotifications();
+                break;
+            case 'is_display':
+                $controller->isdisplay();
+                break;
+            default:
+                $controller->fetchNotifications();   
                 break;
         }
         break;
