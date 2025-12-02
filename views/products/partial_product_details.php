@@ -10,7 +10,7 @@ $countries = country_array();
 
         <!-- Top Info -->
         <div>
-            <div class="text-breadcrumb mb-1"><?php echo $products[0]['groupname'];?> / <?php echo $products[0]['subcategories'];?></div>
+            <div class="text-breadcrumb mb-1"><?php echo ucfirst($products[0]['groupname']);?> / <?php echo $products[0]['subcategories'];?></div>
             <div class="text-product-title mb-1"><?php echo $products[0]['title'];?></div>
             <div class="flex items-center gap-2">
                 <span class="text-item-code-label">Item Code :</span>
@@ -50,7 +50,7 @@ $countries = country_array();
 
                             <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['local_stock'] ?? 'N/A'; ?></span>
 
-                            <span class="grid-label">Location</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['location'] ?? 'N/A'; ?></span>
+                            <!-- <span class="grid-label">Location</span> <span class="grid-label">:</span> <span class="grid-value"><?php //echo $item['location'] ?? 'N/A'; ?></span> -->
                         </div>
 
                         <!-- Divider -->
