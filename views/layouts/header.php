@@ -382,5 +382,5 @@ unset($usersModel);
         setTimeout(() => showNotificationsQueue(notifs), 5000);
     }
 
-    //setInterval(checkNewNotification, 5000);
+    setInterval(checkNewNotification, 5000);
 </script>
