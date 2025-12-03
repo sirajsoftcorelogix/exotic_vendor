@@ -92,7 +92,80 @@
                     
                 </td>
                 
-                <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?php echo $data[0]['title'] ?? ''; ?> <?= isset($data[0]['size']) ? ' size:'.$data[0]['size'] : '' ?> <?= isset($data[0]['color']) ? ' color:'.$data[0]['color'] : '' ?> <?= isset($data[0]['material']) ? ' material:'.$data[0]['material'] : '' ?></textarea></td>
+                <td class="p-1 ">
+                        <div class="flex items-center gap-2">
+                        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?php echo $data[0]['title'] ?? ''; ?> <?= isset($data[0]['size']) ? ' size:'.$data[0]['size'] : '' ?> <?= isset($data[0]['color']) ? ' color:'.$data[0]['color'] : '' ?> <?= isset($data[0]['material']) ? ' material:'.$data[0]['material'] : '' ?></textarea>
+                        <?php //if(isset($data[0]['id']) && !empty($data[0]['id'])){ ?>
+                        <div class="relative group info-popup-container">
+                            <i class="fas fa-info-circle text-blue-500 cursor-help info-icon" 
+                               data-item-code="<?php echo $data[0]['item_code'] ?? ''; ?>"
+                               data-color="<?php echo $data[0]['color'] ?? ''; ?>"
+                               data-size="<?php echo $data[0]['size'] ?? ''; ?>"
+                               data-image="<?php echo $data[0]['image'] ?? ''; ?>"
+                               data-cost-price="<?php echo $data[0]['cost_price'] ?? ''; ?>"
+                               data-itemprice="<?php echo $data[0]['itemprice'] ?? ''; ?>"
+                               data-local-stock="<?php echo $data[0]['local_stock'] ?? ''; ?>"
+                               data-leadtime="<?php echo $data[0]['leadtime'] ?? ''; ?>"
+                               data-numsold="<?php echo $data[0]['numsold'] ?? ''; ?>"
+                               data-numsold-india="<?php echo $data[0]['numsold_india'] ?? ''; ?>"
+                               data-numsold-global="<?php echo $data[0]['numsold_global'] ?? ''; ?>"
+                               data-lastsold="<?php echo $data[0]['lastsold'] ?? ''; ?>"
+                               data-instock-leadtime="<?php echo $data[0]['instock_leadtime'] ?? ''; ?>"
+                               data-fba-in="<?php echo $data[0]['fba_in'] ?? ''; ?>"
+                               data-fba-us="<?php echo $data[0]['fba_us'] ?? ''; ?>"></i>
+                            <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                                <div class="variation-card p-6 flex">
+                                    <!-- Image -->
+                                    <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
+                                        <img src="<?php echo $data[0]['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image" class="w-full h-full object-cover popup-image">
+                                    </div>
+
+                                    <!-- Details Container -->
+                                    <div class="flex-grow flex">
+
+                                        <!-- Column 1 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value popup-item-code"><?php echo $data[0]['item_code'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value popup-color"><?php echo $data[0]['color'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value popup-size"><?php echo $data[0]['size'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value popup-cost-price"><?php echo $data[0]['cost_price'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value popup-itemprice"><?php echo $data[0]['itemprice'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value popup-local-stock"><?php echo $data[0]['local_stock'] ?? 'N/A'; ?></span>
+                                            
+                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-leadtime"><?php echo $data[0]['leadtime'] ?? 'N/A'; ?></span>
+
+                                        </div>
+
+                                        <!-- Divider -->
+                                        <div class="vertical-divider mx-6 self-stretch"></div>
+
+                                        <!-- Column 2 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold"><?php echo $data[0]['numsold'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-india"><?php echo $data[0]['numsold_india'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-global"><?php echo $data[0]['numsold_global'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value popup-lastsold"><?php echo $data[0]['lastsold'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-instock-leadtime"><?php echo $data[0]['instock_leadtime'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-in"><?php echo $data[0]['fba_in'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-us"><?php echo $data[0]['fba_us'] ?? 'N/A'; ?></span>
+                                            
+                                        </div>
+                                        
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php //} ?>
+                        </div>
+                </td>
                 <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['hsn'] ?? ''; ?>"></td>
                 <td class="p-1">
                     <?php if(isset($data[0]['image']) && !empty($data[0]['image'])){ ?>
@@ -100,7 +173,7 @@
                         <input type="hidden" name="img[]" value="<?php echo $data[0]['image']; ?>">
                        <?php }else{ ?>
                     <input type="hidden" name="img[]" value="">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 items-image-cpo">
                         <img onclick="this.parentElement.querySelector('.img-upload').click();" src="https://placehold.co/100x100/e2e8f0/4a5568?text=Upload" class="rounded-lg cursor-pointer">
                         <input type="file" name="img_upload[]" class="img-upload hidden" accept="image/*" onchange="handleImageUpload(this)">
                         <!-- <button type="button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs" onclick="">Upload</button> -->
@@ -495,6 +568,20 @@ function fetchOrderItems(query) {
                                 data-hsn="${(item.hsn ? item.hsn : '').replace(/"/g, '&quot;')}"
                                 data-image="${item.image.replace(/"/g, '&quot;')}"
                                 data-gst="${item.gst || 18}"
+                                data-item-code="${item.item_code}"
+                                data-color="${item.color}"
+                                data-size="${item.size}"
+                                data-cost-price="${item.cost_price}"
+                                data-itemprice="${item.itemprice}"
+                                data-local-stock="${item.local_stock}"
+                                data-leadtime="${item.leadtime}"
+                                data-numsold="${item.numsold}"
+                                data-numsold-india="${item.numsold_india}"
+                                data-numsold-global="${item.numsold_global}"
+                                data-instock-leadtime="${item.instock_leadtime}"
+                                data-instock-fba_in="${item.fba_in}"
+                                data-instock-fba_us="${item.fba_us}" 
+                                data-instock-lastsold="${item.lastsold}"  
                                 >+</button>
                         </td>
                     `;
@@ -522,7 +609,20 @@ function addSelectOrderListeners() {
             const poTable = document.querySelector('#poTable tbody');
             const rowCount = poTable.querySelectorAll('tr').length + 1;
             const gst = this.getAttribute('data-gst') || 18; // Default GST
-
+            const item_code = this.getAttribute('data-item-code');
+            const color = this.getAttribute('data-color');
+            const size = this.getAttribute('data-size');
+            const cost_price = this.getAttribute('data-cost-price');
+            const itemprice = this.getAttribute('data-itemprice');
+            const local_stock = this.getAttribute('data-local-stock');
+            const leadtime = this.getAttribute('data-leadtime');
+            const numsold = this.getAttribute('data-numsold');
+            const numsold_india = this.getAttribute('data-numsold-india');
+            const numsold_global = this.getAttribute('data-numsold-global');
+            const lastsold = this.getAttribute('data-lastsold');
+            const instock_leadtime = this.getAttribute('data-instock-leadtime');
+            const fba_in = this.getAttribute('data-fba-in');
+            const fba_us = this.getAttribute('data-fba-us');
             // Prevent duplicate items
             let exists = false;
             poTable.querySelectorAll('input[name="orderid[]"]').forEach(function(input) {
@@ -537,7 +637,65 @@ function addSelectOrderListeners() {
             tr.className = 'bg-white';
             tr.innerHTML = `
                 <td class="p-2 rounded-l-lg"><input type="hidden" name="product_id[]" value="${id}"><input name="item_code[]" value="${itemCode}"></td>
-                <td class="p-1"><textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea></td>
+                <td class="p-1">
+                    <div class="flex items-center gap-2">
+                    <textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea>
+                    <div class="relative group">
+                            <i class="fas fa-info-circle text-blue-500 cursor-help"></i>
+                            <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                                <div class="variation-card p-6 flex">
+                                    <!-- Image -->
+                                    <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
+                                        <img src="${image}" alt="Product Image" class="w-full h-full object-cover">
+                                    </div>
+
+                                    <!-- Details Container -->
+                                    <div class="flex-grow flex">
+
+                                        <!-- Column 1 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value">${item_code}</span>
+                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value">${color}</span>
+
+                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value">${size}</span>
+
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value">${cost_price}</span>
+
+                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value">${itemprice}</span>
+
+                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value">${local_stock}</span>
+                                            
+                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value">${leadtime}</span>
+
+                                        </div>
+
+                                        <!-- Divider -->
+                                        <div class="vertical-divider mx-6 self-stretch"></div>
+
+                                        <!-- Column 2 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value">${numsold}</span>
+
+                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value">${numsold_india}</span>
+
+                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value">${numsold_global}</span>
+
+                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value">${lastsold}</span>
+
+
+                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value">${instock_leadtime}</span>
+                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value">${fba_in}</span>
+                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value">${fba_us}</span>
+                                            
+                                        </div>
+                                        
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </td>
                 <td class="p-1"><input name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${hsn}"></td>
                 <td class="p-1"><input type="hidden" name="img[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" ></td>
                 <td class="p-1"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${gst}" oninput="calculateTotals()" required></td>
@@ -568,6 +726,26 @@ function addSelectOrderListeners() {
                 tr.remove();
                 calculateTotals();
             });
+
+            // Ensure the info icon carries data attributes so the info popup shows correct values
+            const infoIcon = tr.querySelector('.fa-info-circle');
+            if (infoIcon) {
+                infoIcon.setAttribute('data-item-code', item_code || '');
+                infoIcon.setAttribute('data-color', color || '');
+                infoIcon.setAttribute('data-size', size || '');
+                infoIcon.setAttribute('data-image', image || '');
+                infoIcon.setAttribute('data-cost-price', cost_price || '');
+                infoIcon.setAttribute('data-itemprice', itemprice || '');
+                infoIcon.setAttribute('data-local-stock', local_stock || '');
+                infoIcon.setAttribute('data-leadtime', leadtime || '');
+                infoIcon.setAttribute('data-numsold', numsold || '');
+                infoIcon.setAttribute('data-numsold-india', numsold_india || '');
+                infoIcon.setAttribute('data-numsold-global', numsold_global || '');
+                infoIcon.setAttribute('data-lastsold', lastsold || '');
+                infoIcon.setAttribute('data-instock-leadtime', instock_leadtime || '');
+                infoIcon.setAttribute('data-fba-in', fba_in || '');
+                infoIcon.setAttribute('data-fba-us', fba_us || '');
+            }
 
             calculateTotals();
             document.getElementById('orderModal').style.display = 'none';
@@ -636,6 +814,27 @@ document.getElementById('vendor_autocomplete').addEventListener('input', functio
 </script>
 <script>
 // Reusable: fill row fields from item data
+// Update popup content dynamically
+function updatePopupContent(container, item) {
+    if (!container) return;
+    container.querySelector('.popup-image').src = item.image || '';
+    container.querySelector('.popup-item-code').textContent = item.item_code || 'N/A';
+    container.querySelector('.popup-color').textContent = item.color || 'N/A';
+    container.querySelector('.popup-size').textContent = item.size || 'N/A';
+    container.querySelector('.popup-cost-price').textContent = item.cost_price || 'N/A';
+    container.querySelector('.popup-itemprice').textContent = item.itemprice || 'N/A';
+    container.querySelector('.popup-local-stock').textContent = item.local_stock || 'N/A';
+    container.querySelector('.popup-leadtime').textContent = item.leadtime || 'N/A';
+    container.querySelector('.popup-numsold').textContent = item.numsold || 'N/A';
+    container.querySelector('.popup-numsold-india').textContent = item.numsold_india || 'N/A';
+    container.querySelector('.popup-numsold-global').textContent = item.numsold_global || 'N/A';
+    container.querySelector('.popup-lastsold').textContent = item.lastsold || 'N/A';
+    container.querySelector('.popup-instock-leadtime').textContent = item.instock_leadtime || 'N/A';
+    container.querySelector('.popup-fba-in').textContent = item.fba_in || 'N/A';
+    container.querySelector('.popup-fba-us').textContent = item.fba_us || 'N/A';
+}
+
+// Reusable: fill row fields from item data
 function fillRowFromProduct(tr, item) {
     // Title
     //console.log(item);
@@ -650,7 +849,7 @@ function fillRowFromProduct(tr, item) {
     // Image hidden and preview
     const imgHidden = tr.querySelector('input[name="img[]"]');
     if (imgHidden) imgHidden.value = item.image || '';
-    const imgTag = tr.querySelector('img');
+    const imgTag = tr.querySelector('td:nth-child(4) img');
     if (imgTag) {
         imgTag.src = item.image || '';
         imgTag.onclick = function() { openImagePopup(item.image || '') };
@@ -671,11 +870,34 @@ function fillRowFromProduct(tr, item) {
     // item_code field value
     const codeEl = tr.querySelector('input.item_code');
     if (codeEl) codeEl.value = item.item_code || '';
+    
+    // info icon data attributes update
+    const infoIcon = tr.querySelector('.info-icon');
+    if (infoIcon) {
+        infoIcon.setAttribute('data-item-code', item.item_code || '');
+        infoIcon.setAttribute('data-color', item.color || '');
+        infoIcon.setAttribute('data-size', item.size || '');
+        infoIcon.setAttribute('data-image', item.image || '');
+        infoIcon.setAttribute('data-cost-price', item.cost_price || '');
+        infoIcon.setAttribute('data-itemprice', item.itemprice || '');
+        infoIcon.setAttribute('data-local-stock', item.local_stock || '');
+        infoIcon.setAttribute('data-leadtime', item.leadtime || '');
+        infoIcon.setAttribute('data-numsold', item.numsold || '');
+        infoIcon.setAttribute('data-numsold-india', item.numsold_india || '');
+        infoIcon.setAttribute('data-numsold-global', item.numsold_global || '');
+        infoIcon.setAttribute('data-lastsold', item.lastsold || '');
+        infoIcon.setAttribute('data-instock-leadtime', item.instock_leadtime || '');
+        infoIcon.setAttribute('data-fba-in', item.fba_in || '');
+        infoIcon.setAttribute('data-fba-us', item.fba_us || '');
+    }
+    
+    // Update the popup content
+    const popupContainer = tr.querySelector('.info-popup-container');
+    updatePopupContent(popupContainer, item);
 
     // Recalculate totals
     if (typeof calculateTotals === 'function') calculateTotals();
 }
-
 // Suggestion/autocomplete for a given item_code input
 function initItemCodeInput(input) {
     const tr = input.closest('tr');
