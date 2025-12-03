@@ -88,7 +88,17 @@ class product{
                     'gst' => $row['gst'],
                     'hsn' => $row['hsn'],
                     'description' => $row['description'],
-                    'image' => $row['image']
+                    'image' => $row['image'],
+                    'local_stock' => $row['local_stock'],
+                    'itemprice' => $row['itemprice'],
+                    'leadtime' => $row['leadtime'],
+                    'numsold' => $row['numsold'],
+                    'numsold_india' => $row['numsold_india'],
+                    'numsold_global' => $row['numsold_global'],
+                    'lastsold' => $row['lastsold'],
+                    'instock_leadtime' => $row['instock_leadtime'],
+                    'fba_in' => $row['fba_in'],
+                    'fba_us' => $row['fba_us']
                 ];
             }
         }
