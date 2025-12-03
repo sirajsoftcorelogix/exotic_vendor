@@ -642,11 +642,11 @@ function addSelectOrderListeners() {
                     <textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea>
                     <div class="relative group">
                             <i class="fas fa-info-circle text-blue-500 cursor-help"></i>
-                            <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                            <div class="info-popup-container absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
                                 <div class="variation-card p-6 flex">
                                     <!-- Image -->
                                     <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
-                                        <img src="${image}" alt="Product Image" class="w-full h-full object-cover">
+                                        <img src="${image}" alt="Product Image" class="w-full h-full object-cover popup-image">
                                     </div>
 
                                     <!-- Details Container -->
@@ -654,18 +654,18 @@ function addSelectOrderListeners() {
 
                                         <!-- Column 1 (Data) -->
                                         <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
-                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value">${item_code}</span>
-                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value">${color}</span>
+                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value popup-item_code">${item_code}</span>
+                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value popup-color">${color}</span>
 
-                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value">${size}</span>
+                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value popup-size">${size}</span>
 
-                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value">${cost_price}</span>
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value popup-cost_price">${cost_price}</span>
 
-                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value">${itemprice}</span>
+                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value popup-itemprice">${itemprice}</span>
 
-                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value">${local_stock}</span>
+                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value popup-local_stock">${local_stock}</span>
                                             
-                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value">${leadtime}</span>
+                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-leadtime">${leadtime}</span>
 
                                         </div>
 
@@ -674,18 +674,17 @@ function addSelectOrderListeners() {
 
                                         <!-- Column 2 (Data) -->
                                         <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
-                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value">${numsold}</span>
+                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold">${numsold}</span>
 
-                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value">${numsold_india}</span>
+                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold_india">${numsold_india}</span>
 
-                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value">${numsold_global}</span>
+                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold_global">${numsold_global}</span>
+                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold_last">${lastsold}</span>
 
-                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value">${lastsold}</span>
 
-
-                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value">${instock_leadtime}</span>
-                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value">${fba_in}</span>
-                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value">${fba_us}</span>
+                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-instock_leadtime">${instock_leadtime}</span>
+                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba_in">${fba_in}</span>
+                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba_us">${fba_us}</span>
                                             
                                         </div>
                                         
@@ -705,14 +704,14 @@ function addSelectOrderListeners() {
                     </div>
                 </td>
                 
-                <td class="p-4">
+                <td class="p-1">
                     <div class="flex items-center space-x-2">
                         <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         
                     </div>
                 </td>
-                <td class="p-4 rowTotal"></td>
-                <td class="">
+                <td class="p-1 rowTotal"></td>
+                <td class="p-4 text-right rounded-r-lg">
                     <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button>
                 </td>
             `;
@@ -1049,7 +1048,63 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
             <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code">
             <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto; left:0; right:0;"></div>
         </td>
-        <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea></td>
+        <td class="p-1 ">
+        <div class="flex items-center gap-2">
+        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"></textarea>
+        <div class="relative group">
+                <i class="fas fa-info-circle text-blue-500 cursor-help"></i>
+                <div class="info-popup-container absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                    <div class="variation-card p-6 flex">
+                        <!-- Image -->
+                        <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
+                            <img src="https://placehold.co/100x100/e2e8f0/4a5568?text=Image" alt="Product Image" class="w-full h-full object-cover popup-image">
+                        </div>
+
+                        <!-- Details Container -->
+                        <div class="flex-grow flex">
+
+                            <!-- Column 1 (Data) -->
+                            <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value popup-item-code"></span>
+                                <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value popup-color"></span>
+
+                                <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value popup-size"></span>
+
+                                <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value popup-cost-price"></span>
+                                <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value popup-itemprice"></span>
+
+                                <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value popup-local_stock"></span>
+                                
+                                <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-leadtime"></span>
+
+                            </div>
+
+                            <!-- Divider -->
+                            <div class="vertical-divider mx-6 self-stretch"></div>
+
+                            <!-- Column 2 (Data) -->
+                            <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
+                                <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold"></span>
+
+                                <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-india"></span>
+
+                                <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-global"></span>
+                                <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value popup-lastsold"></span>
+
+
+                                <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-instock-leadtime"></span>
+                                <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-in"></span>
+                                <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-us"></span>
+                                
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+        </td>
         <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value=""></td>
         <td class="p-1">
         <input type="hidden" name="img[]" value=""><img onclick="this.parentElement.querySelector('.img-upload').click()" src="https://placehold.co/100x100/e2e8f0/4a5568?text=Upload" class="rounded-lg cursor-pointer">
