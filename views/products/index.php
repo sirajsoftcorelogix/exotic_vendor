@@ -180,7 +180,7 @@
                     <!-- Product Details -->
                     <td class="px-6 py-4 align-top">
                         <div class="flex items-start space-x-4">
-                            <img class="w-16 rounded-md object-cover flex-shrink-0 cursor-pointer" onclick="openImagePopup('<?php echo $product['image']; ?>')" src="<?php echo $product['image'];?>" alt="Product Image">
+                            <img class="w-16 rounded-md object-cover flex-shrink-0 cursor-pointer" onclick="openImagePopup('<?php echo $product['image']; ?>')" src="<?php echo $product['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image';?>" alt="Product Image">
                             <div class="flex flex-col justify-between h-full">
                                 <p class="typo-product-title mb-2 max-w-xs"><?php echo $product['title']; ?></p>
                                 <p class="typo-product-title mb-2 max-w-xs">

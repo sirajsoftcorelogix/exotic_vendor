@@ -15,8 +15,15 @@ class PurchaseOrderItem {
         }   
         return $items;
     }
-
     public function getPurchaseOrderItemById($po_id) {
+        $query = "SELECT * FROM vp_po_items WHERE purchase_orders_id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function getPurchaseOrderItemByIdNew($po_id) {
         $query = "SELECT poi.*,
                     CASE 
                         WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 

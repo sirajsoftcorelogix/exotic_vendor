@@ -56,7 +56,7 @@
                 <select id="delivery_address" name="delivery_address" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[300px]">
                     <option value="">Select Delivery Address</option>
                     <?php foreach ($exotic_address as $address): ?>
-                        <option value="<?= $address['id'] ?>"><?= htmlspecialchars($address['address']) ?></option>
+                        <option value="<?= $address['id'] ?>" <?= $address['is_default'] ? 'selected' : '' ?>><?= htmlspecialchars($address['address_title']) ?></option>
                     <?php endforeach; ?>
                 </select>   
             </div>
