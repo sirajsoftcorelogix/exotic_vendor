@@ -86,7 +86,7 @@
                 <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
                 <td class="p-1">
                     <div class="flex items-center gap-2">
-                        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?></textarea>
+                        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?><?= isset($item['size']) ? ' size:'.$item['size'] : '' ?> <?= isset($item['color']) ? ' color:'.$item['color'] : '' ?> <?= isset($item['material']) ? ' material:'.$item['material'] : '' ?></textarea>
                         <div class="relative group">
                             <i class="fas fa-info-circle text-blue-500 cursor-help"></i>
                             <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
