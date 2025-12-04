@@ -56,7 +56,7 @@
                 <select id="delivery_address" name="delivery_address" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[300px]">
                     <option value="">Select Delivery Address</option>
                     <?php foreach ($exotic_address as $address): ?>
-                        <option value="<?= $address['id'] ?>"><?= htmlspecialchars($address['address']) ?></option>
+                        <option value="<?= $address['id'] ?>" <?= $address['is_default'] ? 'selected' : '' ?>><?= htmlspecialchars($address['address_title']) ?></option>
                     <?php endforeach; ?>
                 </select>   
             </div>
@@ -84,7 +84,64 @@
                 <?php foreach ($data as $index => $item): ?>
             <tr class="bg-white ">
                 <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
-                <td class="p-1 "><textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?></textarea></td>
+                <td class="p-1">
+                    <div class="flex items-center gap-2">
+                        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?></textarea>
+                        <div class="relative group">
+                            <i class="fas fa-info-circle text-blue-500 cursor-help"></i>
+                            <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                                <div class="variation-card p-6 flex">
+                                    <!-- Image -->
+                                    <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
+                                        <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image" class="w-full h-full object-cover">
+                                    </div>
+
+                                    <!-- Details Container -->
+                                    <div class="flex-grow flex">
+
+                                        <!-- Column 1 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['item_code'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['color'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['size'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['cost_price'] ? "₹".$item['cost_price'] : 'N/A'; ?></span>
+
+                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['itemprice'] ? "₹".$item['itemprice'] : 'N/A'; ?></span>
+
+                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['local_stock'] ?? 'N/A'; ?></span>
+                                            
+                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['leadtime'] ?? 'N/A'; ?></span>
+
+                                        </div>
+
+                                        <!-- Divider -->
+                                        <div class="vertical-divider mx-6 self-stretch"></div>
+
+                                        <!-- Column 2 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['numsold'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['numsold_india'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['numsold_global'] ?? 'N/A'; ?></span>
+
+                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['lastsold'] ?? 'N/A'; ?></span>
+
+
+                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['instock_leadtime'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['fba_in'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['fba_us'] ?? 'N/A'; ?></span>
+                                            
+                                        </div>
+                                        
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
                 <td class="p-1"><input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>"><?php echo $item['hsn']; ?></td>
                 <td class="p-1"><input type="hidden" name="img[]" value="<?= $item['image'] ?>"><img onclick="openImagePopup('<?= $item['image'] ?>')" src="<?php echo $item['image']; ?>" class="rounded-lg cursor-pointer"></td>
                 <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $item['gst']; ?>" oninput="calculateTotals()" required></td>
@@ -447,6 +504,20 @@ function fetchOrderItems(query) {
                                 data-hsn="${(item.hsn ? item.hsn : '').replace(/"/g, '&quot;')}"
                                 data-image="${item.image.replace(/"/g, '&quot;')}"
                                 data-gst="${item.gst || 18}"
+                                data-item-code="${item.item_code}"
+                                data-color="${item.color}"
+                                data-size="${item.size}"
+                                data-cost-price="${item.cost_price}"
+                                data-itemprice="${item.itemprice}"
+                                data-local-stock="${item.local_stock}"
+                                data-leadtime="${item.leadtime}"
+                                data-numsold="${item.numsold}"
+                                data-numsold-india="${item.numsold_india}"
+                                data-numsold-global="${item.numsold_global}"
+                                data-instock-leadtime="${item.instock_leadtime}"
+                                data-instock-fba_in="${item.fba_in}"
+                                data-instock-fba_us="${item.fba_us}" 
+                                data-instock-lastsold="${item.lastsold}"           
                                 >+</button>
                         </td>
                     `;
@@ -473,7 +544,20 @@ function addSelectOrderListeners() {
             const poTable = document.querySelector('#poTable tbody');
             const rowCount = poTable.querySelectorAll('tr').length + 1;
             const gst = this.getAttribute('data-gst') || 18; // Default GST
-
+            const item_code = this.getAttribute('data-item-code');
+            const color = this.getAttribute('data-color');
+            const size = this.getAttribute('data-size');
+            const cost_price = this.getAttribute('data-cost-price');
+            const itemprice = this.getAttribute('data-itemprice');
+            const local_stock = this.getAttribute('data-local-stock');
+            const leadtime = this.getAttribute('data-leadtime');
+            const numsold = this.getAttribute('data-numsold');
+            const numsold_india = this.getAttribute('data-numsold-india');
+            const numsold_global = this.getAttribute('data-numsold-global');
+            const lastsold = this.getAttribute('data-lastsold');
+            const instock_leadtime = this.getAttribute('data-instock-leadtime');
+            const fba_in = this.getAttribute('data-fba-in');
+            const fba_us = this.getAttribute('data-fba-us');
             // Prevent duplicate items
             let exists = false;
             poTable.querySelectorAll('input[name="orderid[]"]').forEach(function(input) {
@@ -488,7 +572,64 @@ function addSelectOrderListeners() {
             tr.className = 'bg-white';
             tr.innerHTML = `
                 <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
-                <td class="p-1"><textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea></td>
+                <td class="p-1">
+                <div class="flex items-center gap-2">
+                <textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea>
+                    <div class="relative group">
+                            <i class="fas fa-info-circle text-blue-500 cursor-help"></i>
+                            <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                                <div class="variation-card p-6 flex">
+                                    <!-- Image -->
+                                    <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
+                                        <img src="${image}" alt="Product Image" class="w-full h-full object-cover">
+                                    </div>
+
+                                    <!-- Details Container -->
+                                    <div class="flex-grow flex">
+
+                                        <!-- Column 1 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value">${item_code}</span>
+                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value">${color}</span>
+
+                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value">${size}</span>
+
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value">${cost_price}</span>
+
+                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value">${itemprice}</span>
+
+                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value">${local_stock}</span>
+                                            
+                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value">${leadtime}</span>
+
+                                        </div>
+
+                                        <!-- Divider -->
+                                        <div class="vertical-divider mx-6 self-stretch"></div>
+
+                                        <!-- Column 2 (Data) -->
+                                        <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value">${numsold}</span>
+
+                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value">${numsold_india}</span>
+
+                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value">${numsold_global}</span>
+
+                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value">${lastsold}</span>
+
+
+                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value">${instock_leadtime}</span>
+                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value">${fba_in}</span>
+                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value">${fba_us}</span>
+                                            
+                                        </div>
+                                        
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
                 <td class="p-1"><input type="hidden" name="hsn[]" value="${hsn}">${hsn}</td>
                 <td class="p-1"><input type="hidden" name="img[]" value="${image}"><img src="${image}" onclick="openImagePopup('${image}')" class="rounded-lg cursor-pointer" ></td>
                 <td class="p-1"><input type="number" name="gst[]" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="${gst}" oninput="calculateTotals()" required></td>
@@ -498,14 +639,14 @@ function addSelectOrderListeners() {
                     </div>
                 </td>
                 
-                <td class="p-4">
+                <td class="p-1">
                     <div class="flex items-center space-x-2">
                         <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         
                     </div>
                 </td>
-                <td class="p-4 rowTotal"></td>
-                <td class="">
+                <td class="p-1 rowTotal"></td>
+                <td class="p-4 text-right rounded-r-lg">
                     <button type="button" class="remove-row text-gray-500 hover:text-red-700" title="Remove Item"><span class="text-lg"><i class="fa fa-trash-alt"></i></span></button>
                 </td>
             `;
