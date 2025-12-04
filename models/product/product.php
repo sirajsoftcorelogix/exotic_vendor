@@ -88,7 +88,17 @@ class product{
                     'gst' => $row['gst'],
                     'hsn' => $row['hsn'],
                     'description' => $row['description'],
-                    'image' => $row['image']
+                    'image' => $row['image'],
+                    'local_stock' => $row['local_stock'],
+                    'itemprice' => $row['itemprice'],
+                    'leadtime' => $row['leadtime'],
+                    'numsold' => $row['numsold'],
+                    'numsold_india' => $row['numsold_india'],
+                    'numsold_global' => $row['numsold_global'],
+                    'lastsold' => $row['lastsold'],
+                    'instock_leadtime' => $row['instock_leadtime'],
+                    'fba_in' => $row['fba_in'],
+                    'fba_us' => $row['fba_us']
                 ];
             }
         }
@@ -389,5 +399,21 @@ class product{
             $id
         );
         return $stmt->execute();
+    }
+    public function getProductByItemCode($item_code) {
+        $sql = "SELECT * FROM vp_products WHERE item_code = ?";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('s', $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            // If only one row is found, return an associative array for backward compatibility,
+            // otherwise return all matching rows as an array of associative arrays.
+            /*if ($result->num_rows === 1) {
+                return $result->fetch_assoc();
+            }*/
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return null;
     }
 }
