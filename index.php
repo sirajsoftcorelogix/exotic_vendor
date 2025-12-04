@@ -385,6 +385,8 @@ switch ($page) {
                 break;
             case 'getDetails':
                 $controller->getDetails();
+            case 'getItamcode':
+                $controller->getItamcode();
             default:
                 $controller->index();
                 break;

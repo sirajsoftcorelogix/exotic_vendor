@@ -57,6 +57,14 @@ class Inbounding {
             'search'       => $search
         ];
 	}
+    public function getItamcode(){
+        $result1 = $this->conn->query("SELECT `item_code`,`title` FROM `vp_products`");
+        if ($result1) {
+            $ItamcodeData = $result1->fetch_all(MYSQLI_ASSOC);
+            $result1->free();
+        }
+        return $ItamcodeData;
+    }
 	public function getform1data($id){
         $inbounding = null;
         $vendors = null;
@@ -87,8 +95,31 @@ class Inbounding {
         $inbounding = $result->fetch_assoc();
         $result->free();
     }
+    $sql1 = "SELECT * FROM `vp_users`";
+    $result1 = $this->conn->query($sql1);
+    if ($result1) {
+        $user = $result1->fetch_all(MYSQLI_ASSOC);
+        $result1->free();
+    }
+    $sql2 = "SELECT * FROM `vp_vendors`";
+    $result2 = $this->conn->query($sql2);
+
+    if ($result2) {
+        $vendors = $result2->fetch_all(MYSQLI_ASSOC);
+        $result2->free();
+    }
+    $sql3 = "SELECT * FROM `material`";
+    $result3 = $this->conn->query($sql3);
+
+    if ($result3) {
+        $material = $result3->fetch_all(MYSQLI_ASSOC);
+        $result3->free();
+    }
     return [
-        'form2' => $inbounding
+        'form2' => $inbounding,
+        'user'  => $user,
+        'vendors' => $vendors,
+        'material' => $material
     ];
 }
     public function getform2($id) {

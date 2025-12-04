@@ -33,6 +33,11 @@ class InboundingController {
         
         renderTemplateClean('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
+    public function getItamcode(){
+        global $inboundingModel;
+        $data = $inboundingModel->getItamcode();
+        echo json_encode($data);exit;
+    }
     public function label($value=''){
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
@@ -264,6 +269,9 @@ class InboundingController {
         } else {
             echo "Update failed.";
         }
+    }
+    public function updatedesktopform(){
+        echo "<pre>";print_r($_POST[]);exit;
     }
     public function updateform3()
     {
