@@ -38,9 +38,12 @@ $record_id = $_GET['id'] ?? '';
                         <label class="text-xs font-bold text-[#333] mb-1.5">Variant:</label>
                         <select id="variant_select" name="is_variant" 
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
-                            <option value="" selected disabled>Select...</option>
-                            <option value="Y">Yes</option>
-                            <option value="N">No</option>
+                            
+                            <option value="" disabled <?php echo empty($data['form2']['is_variant']) ? 'selected' : ''; ?>>Select...</option>
+                            
+                            <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
+                            <option value="N" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
+                        
                         </select>
                     </div>
                     <div class="flex-1 flex flex-col">
@@ -55,16 +58,35 @@ $record_id = $_GET['id'] ?? '';
 
                 <div class="flex gap-[30px] items-end">
                     <div class="flex-1 flex flex-col">
-                        <label class="text-xs font-bold text-[#333] mb-1.5">
-                            Parent Item Code:
-                        </label>
+                        <label class="text-xs font-bold text-[#333] mb-1.5">Parent Item Code:</label>
+                        
                         <div id="wrapper_select" style="display:none;">
                             <select id="item_code_select" name="Item_code" placeholder="Type to search title...">
-                                </select>
+                                
+                                <?php 
+                                // Check if Variant is Yes ('Y') and we have an Item Code stored
+                                if (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y' && !empty($data['form2']['Item_code'])) { 
+                                    
+                                    // 1. Get the Code (for the value)
+                                    $code = $data['form2']['Item_code'];
+
+                                    // 2. Get the Title (for the display label)
+                                    // NOTE: You must ensure 'parent_item_title' exists in your $data. 
+                                    // If it doesn't exist, this code falls back to showing the code ($code).
+                                    $title = isset($data['form2']['parent_item_title']) ? $data['form2']['parent_item_title'] : $code;
+                                ?>
+                                    <option value="<?php echo $code; ?>" selected>
+                                        <?php echo $title; ?>
+                                    </option>
+
+                                <?php } ?>
+
+                            </select>
                         </div>
+
                         <div id="wrapper_input" style="display:none;">
                             <input type="text" 
-                                   value="FIXED-VALUE" 
+                                   value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : 'FIXED-VALUE'; ?>" 
                                    readonly
                                    class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full bg-gray-100 focus:outline-none" 
                                    name="Item_code">
@@ -496,12 +518,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const variantSelect = document.getElementById('variant_select');
     const wrapperSelect = document.getElementById('wrapper_select');
     const wrapperInput  = document.getElementById('wrapper_input');
-    
-    // Select the actual input element inside the fixed wrapper
-    // (You can also add an id="fixed_item_input" to your HTML input to make this easier)
-    const fixedInput = wrapperInput.querySelector('input'); 
-    
-    // Select the underlying select element for TomSelect
+    const fixedInput    = wrapperInput.querySelector('input'); 
     const selectElement = document.getElementById('item_code_select');
 
     // --- INITIALIZE TOM SELECT ---
@@ -527,51 +544,49 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- LOGIC FUNCTION ---
     function toggleVariantFields(val) {
-        
         if (val === 'Y') {
-            // 1. VISUALS
+            // SHOW SELECT
             wrapperSelect.style.display = 'block';
             wrapperInput.style.display  = 'none';
             
-            // 2. DATA LOGIC (CRITICAL FIX)
-            // Enable the dropdown so its value is sent
+            // Enable Select, Disable Input
             tomSelectInstance.enable(); 
             selectElement.disabled = false; 
-
-            // Disable the fixed input so its value is NOT sent
             fixedInput.disabled = true;
 
-            // Trigger load if needed
-            tomSelectInstance.load(''); 
+            // If the select is empty (no PHP value pre-filled), trigger a load
+            if (tomSelectInstance.getValue() === "") {
+                tomSelectInstance.load(''); 
+            }
 
         } else if (val === 'N') {
-            // 1. VISUALS
+            // SHOW INPUT
             wrapperSelect.style.display = 'none';
             wrapperInput.style.display  = 'block';
             
-            // 2. DATA LOGIC (CRITICAL FIX)
-            // Disable the dropdown so its value is NOT sent
+            // Disable Select, Enable Input
             tomSelectInstance.disable();
             selectElement.disabled = true;
-
-            // Enable the fixed input so its value IS sent
             fixedInput.disabled = false;
-            
-            tomSelectInstance.clear();
         }
     }
 
     // --- EVENT LISTENER ---
     variantSelect.addEventListener('change', function() {
         toggleVariantFields(this.value);
+        
+        // Optional: If user manually switches to 'N', you might want to clear the TomSelect
+        if(this.value === 'N') {
+            tomSelectInstance.clear(); 
+        }
     });
 
-    // --- RUN ON PAGE LOAD ---
+    // --- RUN ON PAGE LOAD (CRITICAL) ---
+    // This reads the PHP "selected" value and sets the UI correctly immediately
     if(variantSelect.value) {
         toggleVariantFields(variantSelect.value);
     } else {
-        // Default state if nothing selected (optional: hide both or pick default)
-        // Usually good to disable the fixed input by default if "Select..." is showing
+        // Default state if nothing is selected yet
         fixedInput.disabled = true; 
     }
 
