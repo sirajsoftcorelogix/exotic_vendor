@@ -1,5 +1,5 @@
  <?php
-require_once 'models/inbounding/inbounding.php';
+require_once 'models/inbounding/Inbounding.php';
 
 $inboundingModel = new Inbounding($conn);
 
