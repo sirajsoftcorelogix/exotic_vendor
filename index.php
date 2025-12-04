@@ -353,6 +353,9 @@ switch ($page) {
             case 'desktopform':
                 $controller->getdesktopform();
                 break;
+            case 'updatedesktopform':
+                $controller->updatedesktopform();
+                break;
             case 'saveform1':
                 $controller->saveform1();
                 break;

@@ -20,8 +20,11 @@
         box-shadow: none;
     }
 </style>
+<?php
+$record_id = $_GET['id'] ?? '';
+?>
 <div class="w-full max-w-[1200px] mx-auto p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
-    <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform'); ?>">
+    <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
         <div class="flex items-stretch w-full">
             <div class="shrink-0 w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 ml-5 relative">
                 <img src="<?php echo base_url($data['form2']['product_photo']); ?>" class="w-full h-full object-cover rounded-[3px] block bg-[#ddd]">
@@ -101,7 +104,7 @@
                     <div class="flex flex-col mb-4">
                         <span class="text-[11px] font-bold text-[#222] mb-[3px]">Received by:</span>
                         
-                        <select id="received_by_select" name="received_by_user" placeholder="Select User...">
+                        <select id="received_by_select" name="received_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
                             <?php foreach ($data['user'] as $value1) { 
                                 // Logic for Received By
@@ -140,6 +143,11 @@
                             <?php } ?>
                         </select>
                     </div>
+                    <div class="flex flex-col">
+                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Invoice Number:</span>
+                        <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="invoice_no" value="<?php echo !empty($data['form2']['invoice_no']) 
+                                ? $data['form2']['invoice_no'] : ''; ?>">
+                    </div>
                 </div>
             </fieldset>
         </div>
@@ -158,7 +166,7 @@
                                 <?php foreach ($data['material'] as $value2) {
                                     $isSelected = ($data['form2']['material_code'] == $value2['id']) ? 'selected' : '';
                                 ?> 
-                                <option <?php echo $isSelected; ?> value="<?php echo $value2['id'];"> <?php echo $value2['material_name']; ?></option>
+                                <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
                             <?php } ?>
                             </select>
                         </div>
@@ -237,7 +245,7 @@
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Title:</label>
-                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" <?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>>
+                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" value="<?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
@@ -287,7 +295,7 @@
                     
                     <img id="invoice_img_tag" 
                          src="<?php echo $imageSrc; ?>" 
-                         class="w-full h-full object-cover rounded-[3px]">
+                         class="w-full h-full object-cover rounded-[3px]" name="invoice_image">
                     
                     <div onclick="removeInvoice(event)" 
                          class="absolute -top-[6px] -right-[6px] w-4 h-4 bg-[#d32f2f] text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm cursor-pointer z-10 hover:bg-[#b71c1c]">
@@ -332,34 +340,34 @@
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">INR Price:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['inr_pricing'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['inr_pricing'] ?? '') ?>" name = "inr_pricing">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Amazon Price:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['amazon_price'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['amazon_price'] ?? '') ?>" name="amazon_price">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['usd_price'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['usd_price'] ?? '') ?>" name="usd_price">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
                         </div>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">HSN Code:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['hsn_code'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['hsn_code'] ?? '') ?>" name="hsn_code">
                         </div>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>" name="gst_rate">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
@@ -374,34 +382,34 @@
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Height:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['height'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['height'] ?? '') ?>" name="height">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">cm</span>
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Width:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['width'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['width'] ?? '') ?>" name="width">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">cm</span>
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Depth:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['depth'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['depth'] ?? '') ?>" name="depth">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">cm</span>
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Weight:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['weight'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['weight'] ?? '') ?>" name="weight">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Size:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['size'] ?? '') ?>">
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['size'] ?? '') ?>" name="size">
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Colour:</label>
@@ -418,28 +426,29 @@
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Quantity:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['local_stock'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['quantity_received'] ?? '') ?>" name="quantity_received">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">NOS</span>
                         </div>
                         
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
-                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                            <option>No</option>
-                            <option>Yes</option>
-                        </select>
+                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
+    
+                        <?php $selectedVal = $data['form2']['permanently_available'] ?? ''; ?>
+
+                        <option value="N" <?php echo ($selectedVal == 'N') ? 'selected' : ''; ?>>No</option>
+                        <option value="Y" <?php echo ($selectedVal == 'Y') ? 'selected' : ''; ?>>Yes</option>
+
+                    </select>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse:</label>
-                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                            <option>Wazirpur</option>
-                            <option>Other</option>
-                        </select>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse Code:</label>
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['ware_house_code'] ?? '') ?>" name="ware_house_code">
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>">
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" name="store_location">
                     </div>
                 </div>
 
@@ -447,23 +456,27 @@
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Local Stock:</label>
                          <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['local_stock'] ?? '') ?>">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['local_stock'] ?? '') ?>" name="local_stock">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">NOS</span>
                         </div>
                         
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">In Stock Lead Time:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '') ?>">
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '') ?>" name="lead_time_days">
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['us_block'] ?? '') ?>">
+                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="us_block">
+    
+                        <?php $selectedVal = $data['form2']['us_block'] ?? ''; ?>
+
+                        <option value="N" <?php echo ($selectedVal == 'N') ? 'selected' : ''; ?>>No</option>
+                        <option value="Y" <?php echo ($selectedVal == 'Y') ? 'selected' : ''; ?>>Yes</option>
+
+                    </select>
                     </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Ware House Code:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['ware_house_code'] ?? '') ?>" name="ware_house_code">
-                    </div>
+
                 </div>
             </fieldset>
         </div>
@@ -477,21 +490,28 @@
 document.addEventListener('DOMContentLoaded', function() {
     
     // --- CONFIGURATION ---
-    const apiUrl = '/index.php?page=inbounding&action=getItamcode'; // Relative path works since same domain
+    const apiUrl = '/index.php?page=inbounding&action=getItamcode'; 
     
     // --- ELEMENTS ---
     const variantSelect = document.getElementById('variant_select');
     const wrapperSelect = document.getElementById('wrapper_select');
     const wrapperInput  = document.getElementById('wrapper_input');
     
+    // Select the actual input element inside the fixed wrapper
+    // (You can also add an id="fixed_item_input" to your HTML input to make this easier)
+    const fixedInput = wrapperInput.querySelector('input'); 
+    
+    // Select the underlying select element for TomSelect
+    const selectElement = document.getElementById('item_code_select');
+
     // --- INITIALIZE TOM SELECT ---
     let tomSelectInstance = new TomSelect("#item_code_select", {
-        valueField: 'item_code', // The value saved to DB (e.g., ZCU88)
-        labelField: 'title',     // The text user sees (e.g., Abhisheka Patra)
-        searchField: 'title',    // User searches by Title
+        valueField: 'item_code', 
+        labelField: 'title',     
+        searchField: 'title',    
         maxItems: 1,
         create: false,
-        preload: true,           // Loads data immediately when user clicks
+        preload: true,            
         load: function(query, callback) {
             fetch(apiUrl)
                 .then(response => response.json())
@@ -505,27 +525,55 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // --- LOGIC ---
-    variantSelect.addEventListener('change', function() {
-        const val = this.value;
-
-        if (val === 'Yes') {
-            // Show Dropdown
+    // --- LOGIC FUNCTION ---
+    function toggleVariantFields(val) {
+        
+        if (val === 'Y') {
+            // 1. VISUALS
             wrapperSelect.style.display = 'block';
             wrapperInput.style.display  = 'none';
             
-            // Trigger the data load
+            // 2. DATA LOGIC (CRITICAL FIX)
+            // Enable the dropdown so its value is sent
+            tomSelectInstance.enable(); 
+            selectElement.disabled = false; 
+
+            // Disable the fixed input so its value is NOT sent
+            fixedInput.disabled = true;
+
+            // Trigger load if needed
             tomSelectInstance.load(''); 
 
-        } else if (val === 'No') {
-            // Show Fixed Input
+        } else if (val === 'N') {
+            // 1. VISUALS
             wrapperSelect.style.display = 'none';
             wrapperInput.style.display  = 'block';
             
-            // Clear selection
+            // 2. DATA LOGIC (CRITICAL FIX)
+            // Disable the dropdown so its value is NOT sent
+            tomSelectInstance.disable();
+            selectElement.disabled = true;
+
+            // Enable the fixed input so its value IS sent
+            fixedInput.disabled = false;
+            
             tomSelectInstance.clear();
         }
+    }
+
+    // --- EVENT LISTENER ---
+    variantSelect.addEventListener('change', function() {
+        toggleVariantFields(this.value);
     });
+
+    // --- RUN ON PAGE LOAD ---
+    if(variantSelect.value) {
+        toggleVariantFields(variantSelect.value);
+    } else {
+        // Default state if nothing selected (optional: hide both or pick default)
+        // Usually good to disable the fixed input by default if "Select..." is showing
+        fixedInput.disabled = true; 
+    }
 
 });
 </script>

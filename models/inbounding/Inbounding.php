@@ -180,8 +180,7 @@ class Inbounding {
 
         return mysqli_query($conn, $sql);
     }
-    public function updateForm3($id, $data)
-    {
+    public function updateForm3($id, $data){
         $sql = "UPDATE vp_inbound 
                 SET gate_entry_date_time = ?, 
                     material_code = ?, 
@@ -194,16 +193,13 @@ class Inbounding {
                     item_code = ?,
                     received_by_user_id = ?
                 WHERE id = ?";
-
         $stmt = $this->conn->prepare($sql);
-
         if (!$stmt) {
             return [
                 'success' => false,
                 'message' => "Prepare failed: " . $this->conn->error
             ];
         }
-
         $stmt->bind_param(
             "sssiiiiisii",
             $data['gate_entry_date_time'],
@@ -218,18 +214,50 @@ class Inbounding {
             $data['received_by_user_id'],
             $id
         );
-
         if ($stmt->execute()) {
             return [
                 'success' => true,
                 'message' => "Record updated successfully."
             ];
         }
-
         return [
             'success' => false,
             'message' => "Update failed: " . $stmt->error
         ];
+    }
+    public function updatedesktopform($id, $data) {
+        if (isset($data['id'])) unset($data['id']);
+        $cols = [];
+        $values = [];
+        $types = "";
+        foreach ($data as $key => $val) {
+            if ($val !== '' && $val !== null) {
+                $cols[] = "$key = ?";
+                $values[] = $val;
+                if (is_int($val)) {
+                    $types .= "i";
+                } elseif (is_float($val) || (is_numeric($val) && strpos((string)$val, '.') !== false)) {
+                    $types .= "d";
+                } else {
+                    $types .= "s";
+                }
+            }
+        }
+        if (empty($cols)) {
+            return ['success' => true, 'message' => "No changes made (all fields were empty)."];
+        }
+        $types .= "i";
+        $values[] = $id;
+        $sql = "UPDATE vp_inbound SET " . implode(', ', $cols) . " WHERE id = ?";        
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => "Prepare failed: " . $this->conn->error];
+        }
+        $stmt->bind_param($types, ...$values);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => "Record updated successfully."];
+        }
+        return ['success' => false, 'message' => "Update failed: " . $stmt->error];
     }
     public function saveform2($id,$data) {
          global $conn;

@@ -271,7 +271,74 @@ class InboundingController {
         }
     }
     public function updatedesktopform(){
-        echo "<pre>";print_r($_POST[]);exit;
+        global $inboundingModel;
+        $id       = $_GET['id'] ?? 0;
+        $oldData = $inboundingModel->getform1data($id);;
+        if (!$oldData) {
+            echo "Record not found.";
+            exit;
+        }
+        $invoicePath = $oldData['form1']['invoice_image'];
+        if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
+            $uploadDir = __DIR__ . '/../uploads/invoice/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            $fileTmp  = $_FILES['invoice_image']['tmp_name'];
+            $fileName = $_FILES['invoice_image']['name'];
+            $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            $allowed  = ['jpg','jpeg','png','webp'];
+            if (!in_array($fileExt, $allowed)) {
+                echo "Only JPG, PNG, WEBP allowed.";
+                exit;
+            }
+            $newFile = "IMG_" . time() . "." . $fileExt;
+            $dest    = $uploadDir . $newFile;
+            if (move_uploaded_file($fileTmp, $dest)) {
+                $invoicePath = "uploads/invoice/" . $newFile;
+            }
+        }
+        $data = [
+            'id'                    => $id,
+            'invoice_image'         => $invoicePath,
+            'is_variant'            => $_POST['is_variant'] ?? '',
+            'Item_code'             => $_POST['Item_code'] ?? '',
+            'stock_added_date'      => $_POST['stock_added_date'] ?? '',
+            'received_by_user_id'   => $_POST['received_by_user'] ?? '',
+            'updated_by_user_id'    => $_POST['updated_by_user_id'] ?? '',
+            'invoice_no'            => $_POST['invoice_no'] ?? '',
+            'material_code'         => $_POST['material_code'] ?? '',
+            'product_title'         => $_POST['product_title'] ?? '',
+            'key_words'             => $_POST['key_words'] ?? '',
+            'vendor_code'           => $_POST['vendor_code'] ?? '',
+            'inr_pricing'           => $_POST['inr_pricing'] ?? '',
+            'amazon_price'          => $_POST['amazon_price'] ?? '',
+            'usd_price'             => $_POST['usd_price'] ?? '',
+            'hsn_code'              => $_POST['hsn_code'] ?? '',
+            'gst_rate'              => $_POST['gst_rate'] ?? '',
+            'height'                => $_POST['height'] ?? '',
+            'width'                 => $_POST['width'] ?? '',
+            'depth'                 => $_POST['depth'] ?? '',
+            'weight'                => $_POST['weight'] ?? '',
+            'size'                  => $_POST['size'] ?? '',
+            'color'                 => $_POST['color'] ?? '',
+            'quantity_received'     => $_POST['quantity_received'] ?? '',
+            'permanently_available' => $_POST['permanently_available'] ?? '',
+            'ware_house_code'       => $_POST['ware_house_code'] ?? '',
+            'store_location'        => $_POST['store_location'] ?? '',
+            'local_stock'           => $_POST['local_stock'] ?? '',
+            'lead_time_days'        => $_POST['lead_time_days'] ?? '',
+            'us_block'              => $_POST['us_block'] ?? '',
+        ];
+        // echo "<pre>";print_r($data);exit;
+        $result = $inboundingModel->updatedesktopform($id,$data);
+        if ($result) {
+            header("location: " . base_url('?page=inbounding&action=list'));
+            exit;
+        } else {
+            echo "Update failed.";
+        }
+        
     }
     public function updateform3()
     {
