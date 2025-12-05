@@ -425,7 +425,7 @@ class vendor {
         return $vTeamMembers;
     }
     public function getTeamMembers($team_id) {
-        $sql = "SELECT vu.id as user_id, vu.name, vt.id as team_id, vt.team_name FROM vp_users AS vu INNER JOIN vp_teams AS vt ON vt.id = vu.team_id WHERE vu.is_active = 1 AND vu.team_id IN (".$team_id.") ORDER BY vt.team_name, vu.id ASC";
+        $sql = "SELECT vu.id as user_id, vu.name, vt.id as team_id, vt.team_name FROM vp_users AS vu INNER JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id INNER JOIN vp_teams AS vt ON vutm.team_id = vt.id WHERE vu.is_active = 1 AND vutm.team_id IN (".$team_id.") ORDER BY vt.team_name, vu.id ASC";
         $result = $this->conn->query($sql);
         $teamMembers = [];
         if ($result && $result->num_rows > 0) {
