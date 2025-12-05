@@ -65,10 +65,34 @@ class PurchaseOrderItem {
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
-    public function createPurchaseOrderItem($data) {
-        $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ? )";
+    public function getPurchaseOrderItemWithOrderNo($po_id) {
+        // join with vp_orders to get dimensions
+        $query = "SELECT poi.*, vo.prod_height, vo.prod_width, vo.prod_length, vo.length_unit
+                  FROM vp_po_items poi
+                  LEFT JOIN vp_orders vo ON poi.order_number = vo.order_number AND poi.item_code = vo.item_code
+                  WHERE poi.purchase_orders_id = ?";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("iisssiddd", 
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function getPurchaseOrderItemWithProductId($po_id) {
+        // join with vp_products to get product details
+        $query = "SELECT poi.*, vp.prod_height, vp.prod_width, vp.prod_length, vp.length_unit
+                  FROM vp_po_items poi
+                  LEFT JOIN vp_products vp ON poi.product_id = vp.id
+                  WHERE poi.purchase_orders_id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function createPurchaseOrderItem($data) {
+        $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount, item_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ? )";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("iisssiddds", 
             $data['purchase_orders_id'],
             $data['order_number'], 
             $data['title'],
@@ -77,7 +101,8 @@ class PurchaseOrderItem {
             $data['gst'],
             $data['quantity'],
             $data['price'],
-            $data['amount']
+            $data['amount'],
+            $data['item_code']
         );
         if ($stmt->execute()) {
             return $this->conn->insert_id; // Return the ID of the newly created item

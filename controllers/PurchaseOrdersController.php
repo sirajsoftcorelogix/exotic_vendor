@@ -213,7 +213,10 @@ class PurchaseOrdersController {
         $data = isset($_POST) ? $_POST : [];  
         $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
         $status = isset($_POST['status']) ? $_POST['status'] : 'pending';
+        $item_code = isset($_POST['item_code']) ? $_POST['item_code'] : [];
 
+        // print_array($_POST);
+        //     exit;
         if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($user_id)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
             exit;
@@ -256,7 +259,8 @@ class PurchaseOrdersController {
                 'gst' => $gstValue,
                 'quantity' => isset($quantity[$index]) ? $quantity[$index] : 0,
                 'price' => isset($rate[$index]) ? $rate[$index] : 0,
-                'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0
+                'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0,
+                'item_code' => isset($item_code[$index]) ? $item_code[$index] : '',
             ];
             //Print_array($items);
             $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);

@@ -83,7 +83,7 @@
             <tbody class="table-row-text">
                 <?php foreach ($data as $index => $item): ?>
             <tr class="bg-white ">
-                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><?php echo $index + 1; ?></td>
+                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="<?= $item['id'] ?>"><input type="hidden" name="ordernumber[]" value="<?= $item['order_number'] ?>"><input type="hidden" name="item_code[]" value="<?= $item['item_code'] ?>"><?php echo $index + 1; ?></td>
                 <td class="p-1">
                     <div class="flex items-center gap-2">
                         <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?= $item['title'] ?><?= isset($item['size']) ? ' size:'.$item['size'] : '' ?> <?= isset($item['color']) ? ' color:'.$item['color'] : '' ?> <?= isset($item['material']) ? ' material:'.$item['material'] : '' ?></textarea>
@@ -571,7 +571,7 @@ function addSelectOrderListeners() {
             const tr = document.createElement('tr');
             tr.className = 'bg-white';
             tr.innerHTML = `
-                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}">${rowCount}</td>
+                <td class="p-2 rounded-l-lg"><input type="hidden" name="orderid[]" value="${id}"><input type="hidden" name="ordernumber[]" value="${orderNumber}"><input type="hidden" name="item_code[]" value="${item_code}">${rowCount}</td>
                 <td class="p-1">
                 <div class="flex items-center gap-2">
                 <textarea class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2" name="title[]">${title}</textarea>

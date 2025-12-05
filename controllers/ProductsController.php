@@ -341,4 +341,5 @@ class ProductsController {
         }
         exit;
     }
+    
 }
