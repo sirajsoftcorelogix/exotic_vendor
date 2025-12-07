@@ -24,6 +24,8 @@ $width = $form2['width'] ?? '';
 $depth = $form2['depth'] ?? '';
 $weight = $form2['weight'] ?? '';
 $color = $form2['color'] ?? '';
+$weight_unit = $form2['weight_unit'] ?? '';
+$dimention_unit = $form2['dimention_unit'] ?? '';
 $quantity_received = $form2['quantity_received'] ?? '';
 $Item_code = $form2['Item_code'] ?? '';
 
@@ -129,7 +131,22 @@ $formAction = $isEdit
                                 <input type="text" name="depth" value="<?php echo $depth; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                         </div>
-
+                        <div class="grid grid-cols-2 gap-4">
+                             <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Weight Unit</label>
+                                <select class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm" name="weight_unit">
+                                  <option value="gm" <?php echo ($weight_unit == 'gm') ? 'selected' : ''; ?>>gm</option>
+                                  <option value="kg" <?php echo ($weight_unit == 'kg') ? 'selected' : ''; ?>>kg</option>
+                              </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Dimention Unit</label>
+                                <select class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm" name="dimention_unit">
+                                    <option value="inch" <?php echo ($dimention_unit == 'inch') ? 'selected' : ''; ?>>inch</option>
+                                    <option value="cm" <?php echo ($dimention_unit == 'cm') ? 'selected' : ''; ?>>cm</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="grid grid-cols-2 gap-4">
                              <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">Weight (kg)</label>

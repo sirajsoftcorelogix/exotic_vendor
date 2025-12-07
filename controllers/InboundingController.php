@@ -213,6 +213,7 @@ class InboundingController {
 
         $id       = $_GET['id'] ?? 0;
         $vendor_id = $_POST['vendor_id'] ?? '';
+        $invoice_no = $_POST['invoice_no'] ?? '';
 
         // Get old record
         $oldData = $inboundingModel->getform1data($id);;
@@ -256,7 +257,8 @@ class InboundingController {
         $data = [
             'id'       => $id,
             'vendor_id' => $vendor_id,
-            'invoice'    => $invoicePath
+            'invoice'    => $invoicePath,
+            'invoice_no' => $invoice_no
         ];
 
         $updated = $inboundingModel->updateform2($data);
@@ -460,6 +462,8 @@ class InboundingController {
         $quantity_received    = $_POST['quantity_received'] ?? '';
         $item_code            = $_POST['Item_code'] ?? '';
         $received_by_user_id  = $_POST['received_by_user_id'] ?? '';
+        $weight_unit  = $_POST['weight_unit'] ?? '';
+        $dimention_unit  = $_POST['dimention_unit'] ?? '';
 
         // Prepare data array for update
         $updateData = [
@@ -472,7 +476,9 @@ class InboundingController {
             'color'                => $color,
             'quantity_received'    => $quantity_received,
             'item_code'            => $item_code,
-            'received_by_user_id'            => $received_by_user_id,
+            'received_by_user_id'  => $received_by_user_id,
+            'weight_unit'          => $weight_unit,
+            'dimention_unit'       => $dimention_unit,
         ];
 
         // Call model update
@@ -491,6 +497,7 @@ class InboundingController {
          global $inboundingModel;
         $vendor_id = $_POST['vendor_id'] ?? '';
         $record_id = $_POST['record_id'] ?? '';
+        $invoice_no = $_POST['invoice_no'] ?? '';
         if (!isset($_FILES['invoice']) || $_FILES['invoice']['error'] !== 0) {
             echo "invoice upload error.";
             exit;
@@ -516,6 +523,7 @@ class InboundingController {
             $saveData = [
                 'vendor_id' => $vendor_id,
                 'invoice'    => $invoicePath,
+                'invoice_no' => $invoice_no,
                 'temp_code' => $temp_code
             ];
             $insertId = $inboundingModel->saveform2($record_id,$saveData);

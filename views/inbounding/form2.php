@@ -1,5 +1,5 @@
 <?php
-// 1. PHP Logic (Kept exactly as provided)
+// 1. PHP Logic & Login Check
 is_login();
 require_once 'settings/database/database.php';
 $conn = Database::getConnection();
@@ -13,10 +13,11 @@ $record_id = $_GET['id'] ?? '';
 // Fetch Data
 $form1 = $data['form1'] ?? [];
 $category = $form1['category_code'] ?? 'Unknown';
-$photo    = $form1['product_photo'] ?? ''; // Previous step photo
+$photo    = $form1['product_photo'] ?? ''; 
 
 $vendor = $form1['vendor_code'] ?? '';
 $invoiceImg = $form1['invoice_image'] ?? '';
+$invoice_no = $form1['invoice_no'] ?? '';
 
 // Determine Edit Mode & Action URL
 $isEdit  = (!empty($vendor) || !empty($invoiceImg));
@@ -25,10 +26,37 @@ $formAction = $isEdit
     : base_url('?page=inbounding&action=saveform2');
 ?>
 
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 
-<div class="bg-gray-100 min-h-screen w-full flex items-center justify-center p-0 md:p-6">
+<style>
+    /* Custom overrides for Tom Select to match Tailwind */
+    .ts-control {
+        border-radius: 0.75rem; /* rounded-xl */
+        padding: 12px 16px;
+        border-color: #d1d5db;
+        font-family: 'Inter', sans-serif;
+        font-size: 1rem;
+    }
+    .ts-control.focus {
+        border-color: #d9822b;
+        box-shadow: 0 0 0 2px rgba(217, 130, 43, 0.2);
+    }
+    .ts-dropdown {
+        border-radius: 0.5rem;
+        border-color: #d9822b;
+        overflow: hidden;
+        z-index: 50;
+    }
+    .ts-dropdown .active {
+        background-color: #fff7ed; /* orange-50 */
+        color: #9a3412; /* orange-800 */
+    }
+</style>
 
-    <div class="w-full h-screen md:h-auto md:min-h-[600px] md:max-w-5xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200">
+<div class="w-full flex items-center justify-center p-0 md:p-6 bg-gray-100 min-h-screen">
+
+    <div class="w-full h-screen md:h-auto md:min-h-[700px] md:max-w-5xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200">
         
         <div class="bg-[#d9822b] px-4 py-4 flex items-center justify-between text-white shadow-md z-20 flex-shrink-0">
             <button type="button" id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
@@ -37,7 +65,8 @@ $formAction = $isEdit
                 </svg>
             </button>
             <h1 class="font-semibold text-lg tracking-wide">Invoice Upload - Step: 2/4</h1>
-            <div class="w-6"></div> </div>
+            <div class="w-6"></div> 
+        </div>
 
         <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="invoiceForm" class="flex flex-col flex-1 overflow-hidden">
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
@@ -62,28 +91,31 @@ $formAction = $isEdit
                             </div>
                         </div>
 
-                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <label class="block text-gray-700 font-bold text-sm mb-2">Select Vendor</label>
-                            <div class="relative">
-                                <select id="vendor_id" name="vendor_id" class="w-full appearance-none bg-white border border-gray-300 text-gray-700 py-3.5 px-4 pr-8 rounded-lg leading-tight focus:outline-none focus:ring-2 focus:ring-[#d9822b] focus:border-transparent font-medium cursor-pointer hover:border-gray-400 transition-colors">
-                                    <option value="">Search and Select Vendor...</option>
-                                    <?php if (!empty($data['vendors'])): ?>
-                                        <?php foreach ($data['vendors'] as $v) { ?>
-                                            <option value="<?php echo $v['id']; ?>" <?php echo ($vendor == $v['id']) ? 'selected' : ''; ?>>
-                                                <?php echo $v['vendor_name']; ?>
-                                            </option>
-                                        <?php } ?>
-                                    <?php endif; ?>
-                                </select>
-                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                </div>
-                            </div>
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative z-30">
+                            <label class="block text-gray-700 font-bold text-sm mb-2 ml-1">Select Vendor</label>
+                            
+                            <select id="vendor_id" name="vendor_id" placeholder="Type to search vendor..." autocomplete="off">
+                                <option value="">Select Vendor...</option>
+                                <?php if (!empty($data['vendors'])): ?>
+                                    <?php foreach ($data['vendors'] as $v) { ?>
+                                        <option value="<?php echo $v['id']; ?>" <?php echo ($vendor == $v['id']) ? 'selected' : ''; ?>>
+                                            <?php echo $v['vendor_name']; ?>
+                                        </option>
+                                    <?php } ?>
+                                <?php endif; ?>
+                            </select>
                         </div>
-                        
-                        <div class="hidden md:block mt-auto p-4 bg-orange-50 border border-orange-100 rounded-xl">
-                            <h4 class="text-[#d9822b] font-bold text-sm mb-2">Instructions</h4>
-                            <p class="text-sm text-gray-600">Please upload a clear photo of the invoice. Ensure the Vendor name and Total Amount are visible.</p>
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative z-0">
+                            <label class="block text-gray-700 font-bold text-sm mb-2 ml-1">Invoice Number</label>
+                            <input type="text" 
+                                   name="invoice_no" 
+                                   placeholder="Enter Invoice No"
+                                   value="<?php echo $invoice_no; ?>" 
+                                   class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] focus:border-[#d9822b] outline-none font-medium shadow-sm transition-all text-gray-800">
+                        </div>
+                        <div class="hidden md:block mt-auto p-4 bg-orange-50 border border-orange-100 rounded-xl text-sm text-orange-800">
+                            <p class="font-bold mb-1">Instructions:</p>
+                            <p class="opacity-80">Search for the vendor in the dropdown above. If not found, contact the admin.</p>
                         </div>
 
                     </div>
@@ -145,60 +177,78 @@ $formAction = $isEdit
         </form>
     </div>
 </div>
-    <script>
-        const invoiceInput = document.getElementById('invoice');
-        const previewImg = document.getElementById('preview');
-        const deleteBtn = document.getElementById('delete-preview-btn');
-        const placeholder = document.getElementById('placeholder-box');
-        const errorBox = document.getElementById("photo-error");
 
-        // Preview Logic
-        invoiceInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    previewImg.src = e.target.result;
-                    previewImg.classList.remove('hidden');
-                    deleteBtn.classList.remove('hidden');
-                    placeholder.classList.add('hidden');
-                    errorBox.textContent = ""; 
-                }
-                reader.readAsDataURL(file);
+<script>
+    // 1. Initialize Tom Select (Searchable Dropdown)
+    new TomSelect("#vendor_id",{
+        create: false,
+        sortField: {
+            field: "text",
+            direction: "asc"
+        }
+    });
+
+    const invoiceInput = document.getElementById('invoice');
+    const previewImg = document.getElementById('preview');
+    const deleteBtn = document.getElementById('delete-preview-btn');
+    const placeholder = document.getElementById('placeholder-box');
+    const errorBox = document.getElementById("photo-error");
+
+    // 2. Preview Logic
+    invoiceInput.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImg.src = e.target.result;
+                previewImg.classList.remove('hidden');
+                deleteBtn.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                errorBox.textContent = ""; 
             }
-        });
+            reader.readAsDataURL(file);
+        }
+    });
 
-        // Delete Logic
-        deleteBtn.addEventListener('click', function() {
-            invoiceInput.value = ''; // Clear input
-            previewImg.src = '#';
-            previewImg.classList.add('hidden');
-            deleteBtn.classList.add('hidden');
-            placeholder.classList.remove('hidden');
-        });
+    // 3. Delete Logic
+    deleteBtn.addEventListener('click', function() {
+        invoiceInput.value = ''; // Clear input
+        previewImg.src = '#';
+        previewImg.classList.add('hidden');
+        deleteBtn.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+    });
 
-        // Back Button Logic
-        const recordId = <?php echo json_encode($record_id); ?>;
-        document.getElementById("back-btn").addEventListener("click", function () {
-            window.location.href = window.location.origin + "/index.php?page=inbounding&action=form1&id=" + recordId;
-        });
+    // 4. Back Button Logic
+    const recordId = <?php echo json_encode($record_id); ?>;
+    document.getElementById("back-btn").addEventListener("click", function () {
+        window.location.href = window.location.origin + "/index.php?page=inbounding&action=form1&id=" + recordId;
+    });
 
-        // Form Validation
-        document.getElementById("invoiceForm").addEventListener("submit", function(e) {
-            const isEditMode = "<?php echo $isEdit ? '1' : '0'; ?>";
-            const hasFile = invoiceInput.files.length > 0;
-            const previewVisible = !previewImg.classList.contains('hidden');
+    // 5. Validation
+    document.getElementById("invoiceForm").addEventListener("submit", function(e) {
+        const isEditMode = "<?php echo $isEdit ? '1' : '0'; ?>";
+        const hasFile = invoiceInput.files.length > 0;
+        const previewVisible = !previewImg.classList.contains('hidden');
 
-            // If not edit mode and no file, block
-            if (isEditMode === '0' && !hasFile) {
-                errorBox.textContent = "Please upload an invoice photo.";
-                e.preventDefault();
-                return false;
-            }
-            // If edit mode but preview was deleted and no new file, block
-            if (isEditMode === '1' && !previewVisible) {
-                 errorBox.textContent = "Please upload an invoice photo.";
-                 e.preventDefault();
-            }
-        });
-    </script>
+        // Validate File Upload
+        if (isEditMode === '0' && !hasFile) {
+            errorBox.textContent = "Please upload an invoice photo.";
+            e.preventDefault();
+            return false;
+        }
+        if (isEditMode === '1' && !previewVisible) {
+             errorBox.textContent = "Please upload an invoice photo.";
+             e.preventDefault();
+             return false;
+        }
+
+        // Validate Vendor Selection
+        const vendorSelect = document.getElementById("vendor_id");
+        if(vendorSelect.value === "") {
+            alert("Please select a vendor.");
+            e.preventDefault();
+            return false;
+        }
+    });
+</script>

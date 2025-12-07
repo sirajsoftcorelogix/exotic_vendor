@@ -217,17 +217,34 @@ class Inbounding {
     }
 
     public function updateform2($data) {
-        global $conn;
-
-        $id       = intval($data['id']);
-        $vendor_code = mysqli_real_escape_string($conn, $data['vendor_id']);
-        $invoice    = mysqli_real_escape_string($conn, $data['invoice']);
+        // 1. Prepare the query with placeholders (?)
         $sql = "UPDATE vp_inbound 
-                SET vendor_code='$vendor_code', 
-                    invoice_image='$invoice'
-                WHERE id=$id";
+                SET vendor_code = ?, 
+                    invoice_image = ?, 
+                    invoice_no = ? 
+                WHERE id = ?";
 
-        return mysqli_query($conn, $sql);
+        // 2. Prepare statement
+        $stmt = $this->conn->prepare($sql);
+
+        if (!$stmt) {
+            // Optional: Error handling
+            // echo "Prepare failed: (" . $this->conn->errno . ") " . $this->conn->error;
+            return false;
+        }
+
+        // 3. Extract and cast variables
+        $id = intval($data['id']);
+        $vendor_code = $data['vendor_id'];
+        $invoice_img = $data['invoice'];
+        $invoice_no  = $data['invoice_no'];
+
+        // 4. Bind Parameters
+        // "sssi" means: String, String, String, Integer
+        $stmt->bind_param("sssi", $vendor_code, $invoice_img, $invoice_no, $id);
+
+        // 5. Execute and return result
+        return $stmt->execute();
     }
     public function updateForm3($id, $data){
         $sql = "UPDATE vp_inbound 
@@ -240,7 +257,9 @@ class Inbounding {
                     color = ?, 
                     quantity_received = ?, 
                     item_code = ?,
-                    received_by_user_id = ?
+                    received_by_user_id = ?,
+                    dimention_unit = ?,
+                    weight_unit = ?
                 WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
@@ -250,7 +269,7 @@ class Inbounding {
             ];
         }
         $stmt->bind_param(
-            "sssiiiiisii",
+            "sssiiiiisissi",
             $data['gate_entry_date_time'],
             $data['material_code'],
             $data['height'],
@@ -261,6 +280,8 @@ class Inbounding {
             $data['quantity_received'],
             $data['item_code'],
             $data['received_by_user_id'],
+            $data['dimention_unit'],
+            $data['weight_unit'],
             $id
         );
         if ($stmt->execute()) {
@@ -343,7 +364,7 @@ class Inbounding {
     }
     public function saveform2($id,$data) {
          global $conn;
-        $sql = "UPDATE vp_inbound SET vendor_code = ?, invoice_image = ?,temp_code = ? WHERE id = ?";
+        $sql = "UPDATE vp_inbound SET vendor_code = ?, invoice_image = ?,temp_code = ?,invoice_no = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return [
@@ -351,10 +372,11 @@ class Inbounding {
                 'message' => 'Prepare failed: ' . $this->conn->error
             ];
         }
-        $stmt->bind_param('sssi',
+        $stmt->bind_param('sssii',
             $data['vendor_id'],   
             $data['invoice'],  
             $data['temp_code'],  
+            $data['invoice_no'],  
             $id              
         );
         if ($stmt->execute()) {

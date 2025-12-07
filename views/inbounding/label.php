@@ -84,11 +84,11 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 </div>
 
                 <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] font-bold text-gray-800 border-t border-b border-gray-200 py-2 mb-3">
-                    <div>Height: <span class="font-normal"><?php echo safe($label_data['height'] ?? '-'); ?> cm</span></div>
-                    <div>Width: <span class="font-normal"><?php echo safe($label_data['width'] ?? '-'); ?> cm</span></div>
-                    <div>Depth: <span class="font-normal"><?php echo safe($label_data['depth'] ?? '-'); ?> cm</span></div>
-                    <div>Weight: <span class="font-normal"><?php echo safe($label_data['weight'] ?? '-'); ?> kg</span></div>
-                    <div>Size: <span class="font-normal">XL</span> </div>
+                    <div>Height: <span class="font-normal"><?php echo safe($label_data['height'] ?? '-'); ?> <?php echo safe($label_data['dimention_unit'] ?? '-'); ?></span></div>
+                    <div>Width: <span class="font-normal"><?php echo safe($label_data['width'] ?? '-'); ?> <?php echo safe($label_data['dimention_unit'] ?? '-'); ?></span></div>
+                    <div>Depth: <span class="font-normal"><?php echo safe($label_data['depth'] ?? '-'); ?> <?php echo safe($label_data['dimention_unit'] ?? '-'); ?></span></div>
+                    <div>Weight: <span class="font-normal"><?php echo safe($label_data['weight'] ?? '-'); ?> <?php echo safe($label_data['weight_unit'] ?? '-'); ?></span></div>
+                    <div>Size: <span class="font-normal"><?php echo safe($label_data['size'] ?? '-'); ?></span> </div>
                     <div>Color: <span class="font-normal"><?php echo safe($label_data['color'] ?? '-'); ?></span></div>
                 </div>
 
