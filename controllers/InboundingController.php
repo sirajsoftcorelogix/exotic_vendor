@@ -56,8 +56,6 @@ class InboundingController {
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
-        $category_data = $this->getCategoryList();
-        // echo "<pre>test: ";print_r($category_data);exit;
         $data = $inboundingModel->getform2data($id);
         renderTemplateClean('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
@@ -329,6 +327,10 @@ class InboundingController {
             'local_stock'           => $_POST['local_stock'] ?? '',
             'lead_time_days'        => $_POST['lead_time_days'] ?? '',
             'us_block'              => $_POST['us_block'] ?? '',
+            'group_name'            => $_POST['group_name'] ?? '',
+            'category_code'         => $_POST['category_code'] ?? '',
+            'sub_category_code'     => $_POST['sub_category_code'] ?? '',
+            'sub_sub_category_code' => $_POST['sub_sub_category_code'] ?? '',
         ];
         // echo "<pre>";print_r($data);exit;
         $result = $inboundingModel->updatedesktopform($id,$data);

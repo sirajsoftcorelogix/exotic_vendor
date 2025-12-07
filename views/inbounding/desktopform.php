@@ -66,13 +66,7 @@ $record_id = $_GET['id'] ?? '';
                                 <?php 
                                 // Check if Variant is Yes ('Y') and we have an Item Code stored
                                 if (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y' && !empty($data['form2']['Item_code'])) { 
-                                    
-                                    // 1. Get the Code (for the value)
                                     $code = $data['form2']['Item_code'];
-
-                                    // 2. Get the Title (for the display label)
-                                    // NOTE: You must ensure 'parent_item_title' exists in your $data. 
-                                    // If it doesn't exist, this code falls back to showing the code ($code).
                                     $title = isset($data['form2']['parent_item_title']) ? $data['form2']['parent_item_title'] : $code;
                                 ?>
                                     <option value="<?php echo $code; ?>" selected>
@@ -192,22 +186,44 @@ $record_id = $_GET['id'] ?? '';
                             <?php } ?>
                             </select>
                         </div>
+                        <?php
+                            $categoriesByParent1 = [];
+                            $rootCategories = [];
+                            if (!empty($data['category'])) {
+                                foreach ($data['category'] as $row) {
+                                    // Only process active categories
+                                    if (isset($row['is_active']) && $row['is_active'] != 1) {
+                                        continue; 
+                                    }
+                                    $categoriesByParent1[$row['parent_id']][] = [
+                                        'id'   => $row['id'],
+                                        'name' => $row['display_name'] // Using display_name
+                                    ];
+                                    if ($row['parent_id'] == 0) {
+                                        $rootCategories[] = [
+                                            'id'   => $row['id'],
+                                            'name' => $row['display_name']
+                                        ];
+                                    }
+                                }
+                            }
+                        ?>
                         <div>
                             <label class="block text-xs font-bold text-[#222] mb-1">
                                 Group: 
                             </label>
-                            <select class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]">
-                                <option>Statue</option>
-                                <option>Artifact</option>
+                            <select id="group_select" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Group..." name="group_name">
+                                <?php foreach($rootCategories as $group): ?>
+                                    <option value="<?php echo $group['id']; ?>"><?php echo $group['name']; ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-[#222] mb-1">
                                 Category: 
                             </label>
-                            <select class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]">
-                                <option>Hindu god and goddesses</option>
-                                <option>Decor</option>
+                            <select id="category_select" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Group First..." disabled name="category_code">
+                                <option value="">Select Group First...</option>
                             </select>
                         </div>
                     </div>
@@ -216,47 +232,16 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-1">
                             Sub Category: 
                         </label>
-                        <div class="border border-[#ccc] h-[140px] overflow-y-auto p-[5px] bg-white">
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Modern Art</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Ganesha</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Wooden Carving</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Goddess</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Abstract</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Vintage</span>
-                            </div>
-                        </div>
+                        <select id="sub_category_select" name="sub_category" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Category First..." disabled name="sub_category_code">
+                                <option value="">Select Category First...</option>
+                        </select>
                     </div>
 
                     <div class="flex-1 flex flex-col gap-2.5">
                         <label class="block text-xs font-bold text-[#222] mb-1">SubSubCategory:</label>
-                        <div class="border border-[#ccc] h-[140px] overflow-y-auto p-[5px] bg-white">
-                             <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Modern Art</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Ganesha</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Wooden Carving</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Goddess</span>
-                            </div>
-                            <div class="flex items-center py-[5px] px-[2px] border-b border-[#f0f0f0]">
-                                <input type="checkbox" class="mr-2"> <span class="text-xs text-[#333]">Abstract</span>
-                            </div>
-                        </div>
+                        <select id="sub_sub_category_select" name="sub_sub_category" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]"  placeholder="Select Sub Category First..." disabled name="sub_sub_category_code">
+                                <option value="">Select Category First...</option>
+                        </select>
                     </div>
                 </div>
             </fieldset>
@@ -272,25 +257,6 @@ $record_id = $_GET['id'] ?? '';
                 <div>
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['key_words'] ?? '') ?>" name= "key_words">
-                </div>
-            </fieldset>
-        </div>
-
-        <div class="mt-[15px] mx-5 w-auto max-w-full">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2.5 w-full bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Related Items:</legend>
-                <button class="bg-[#d97824] text-white border-none rounded-[3px] py-1.5 px-[15px] font-bold text-xs cursor-pointer mb-2.5 hover:bg-[#c0651a]">Load Related Items</button>
-                
-                <div class="custom-scrollbar flex gap-[15px] overflow-x-auto w-full pb-[5px]">
-                    <?php $items = ['PHC439', 'PHC229', 'DON839', 'DON836', 'DDP774', 'EXT123', 'PHC439', 'PHC229', 'DON839', 'DON836', 'DDP774', 'EXT123']; ?>
-                    <?php foreach($items as $item): ?>
-                    <div class="flex flex-col items-center w-[110px] shrink-0">
-                        <div class="w-full h-[110px] border border-[#555] rounded-[5px] p-[3px] bg-white box-border">
-                            <img src="https://via.placeholder.com/110x110?text=<?php echo $item; ?>" alt="Item" class="w-full h-full object-cover rounded-[3px] block bg-[#eee]">
-                        </div>
-                        <span class="text-xs font-bold text-black mt-[5px] text-center"><?php echo $item; ?></span>
-                    </div>
-                    <?php endforeach; ?>
                 </div>
             </fieldset>
         </div>
@@ -645,4 +611,94 @@ document.addEventListener('DOMContentLoaded', function() {
         // Hide the preview box (Text box automatically centers itself via Flexbox)
         document.getElementById('invoice_preview_box').classList.add('hidden');
     }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Pass the PHP array to JavaScript
+    const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
+
+    // --- INITIALIZE TOM SELECT INSTANCES ---
+    // We store the instances to programmatically add/remove options later
+    
+    const config = {
+        create: false,
+        sortField: { field: "text", direction: "asc" }
+    };
+
+    const groupTs      = new TomSelect("#group_select", config);
+    const categoryTs   = new TomSelect("#category_select", config);
+    const subCatTs     = new TomSelect("#sub_category_select", config);
+    const subSubCatTs  = new TomSelect("#sub_sub_category_select", config);
+
+    // --- 1. GROUP CHANGED ---
+    groupTs.on('change', function(groupId) {
+        // Clear & Disable all children
+        resetTomSelect(categoryTs, 'Select Category...');
+        resetTomSelect(subCatTs, 'Select Category First...');
+        resetTomSelect(subSubCatTs, 'Select Sub Category First...');
+
+        // Populate Category
+        if (groupId && categoriesByParent[groupId]) {
+            categoryTs.enable();
+            populateTomSelect(categoryTs, categoriesByParent[groupId]);
+        } else {
+            categoryTs.disable();
+        }
+    });
+
+    // --- 2. CATEGORY CHANGED ---
+    categoryTs.on('change', function(catId) {
+        // Clear & Disable children
+        resetTomSelect(subCatTs, 'Select Sub Category...');
+        resetTomSelect(subSubCatTs, 'Select Sub Category First...');
+
+        // Populate Sub Category
+        if (catId && categoriesByParent[catId]) {
+            subCatTs.enable();
+            populateTomSelect(subCatTs, categoriesByParent[catId]);
+        } else {
+            subCatTs.disable();
+        }
+    });
+
+    // --- 3. SUB CATEGORY CHANGED ---
+    subCatTs.on('change', function(subCatId) {
+        // Clear & Disable children
+        resetTomSelect(subSubCatTs, 'Select Sub Sub Category...');
+
+        // Populate Sub Sub Category
+        if (subCatId && categoriesByParent[subCatId]) {
+            subSubCatTs.enable();
+            populateTomSelect(subSubCatTs, categoriesByParent[subCatId]);
+        } else {
+            subSubCatTs.disable();
+        }
+    });
+
+    // --- HELPER FUNCTIONS ---
+
+    // Adds options to a TomSelect instance
+    function populateTomSelect(instance, optionsData) {
+        instance.clearOptions(); // Remove old options
+        optionsData.forEach(item => {
+            instance.addOption({
+                value: item.id,
+                text: item.name
+            });
+        });
+        instance.refreshOptions(false); // Refresh UI
+    }
+
+    // Clears value, options, and disables a TomSelect instance
+    function resetTomSelect(instance, placeholder) {
+        instance.clear(true);         // Clear selected value
+        instance.clearOptions();      // Clear list of options
+        instance.settings.placeholder = placeholder; // Update placeholder text
+        instance.sync();              // Sync changes
+        instance.disable();           // Disable input
+    }
+
+});
 </script>

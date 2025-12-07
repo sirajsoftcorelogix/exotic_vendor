@@ -57,6 +57,7 @@ class Inbounding {
             'search'       => $search
         ];
 	}
+   
     public function getItamcode(){
         $result1 = $this->conn->query("SELECT `item_code`,`title` FROM `vp_products`");
         if ($result1) {
@@ -83,6 +84,7 @@ class Inbounding {
             'vendors' => $vendors
         ];
     }
+
 
     public function getform2data($id) {
     // Always secure the ID
@@ -115,11 +117,19 @@ class Inbounding {
         $material = $result3->fetch_all(MYSQLI_ASSOC);
         $result3->free();
     }
+    $sql4 = "SELECT * FROM `category`";
+    $result4 = $this->conn->query($sql4);
+
+    if ($result4) {
+        $category = $result4->fetch_all(MYSQLI_ASSOC);
+        $result4->free();
+    }
     return [
         'form2' => $inbounding,
         'user'  => $user,
         'vendors' => $vendors,
-        'material' => $material
+        'material' => $material,
+        'category' => $category
     ];
 }
     public function getform2($id) {
@@ -167,6 +177,7 @@ class Inbounding {
 
         return mysqli_query($conn, $sql);
     }
+    
     public function updateform2($data) {
         global $conn;
 
