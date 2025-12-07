@@ -261,6 +261,8 @@ class PurchaseOrdersController {
                 'price' => isset($rate[$index]) ? $rate[$index] : 0,
                 'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0,
                 'item_code' => isset($item_code[$index]) ? $item_code[$index] : '',
+                'size' => isset($data['size'][$index]) ? $data['size'][$index] : '',
+                'color' => isset($data['color'][$index]) ? $data['color'][$index] : '',
             ];
             //Print_array($items);
             $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);

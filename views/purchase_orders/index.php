@@ -250,6 +250,7 @@
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
                                 <li onclick="handleAction('UploadPerforma', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Performa</li>
                                 <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice</li>
+                                <li onclick="handleAction('AddGRN', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-plus-circle"></i> Add GRN</li>
                                 
                                 
                                 <?php //endif; ?>
@@ -946,7 +947,10 @@ function handleAction(action, poId, el) {
                 alert('Error approving purchase order.');
             });
         }
-  } else {
+  } else if (action === 'AddGRN') {
+        // Redirect to add GRN page
+        window.location.href = '?page=grns&action=create&po_id='+ poId;
+   } else {
       alert('Unknown action: ' + action);
       console.debug('Unknown action:', action);
       // Optionally, you could also log the entire data object

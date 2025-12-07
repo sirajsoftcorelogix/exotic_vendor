@@ -527,4 +527,15 @@
 		$stmt->bind_param("isss", $user_id, $title, $message, $link);
 		return $stmt->execute();
 	}
+	function isMobile() {
+		$userAgent = $_SERVER['HTTP_USER_AGENT'];
+		$mobileAgents = ['iPhone', 'iPad', 'Android', 'webOS', 'BlackBerry', 'iPod', 'Symbian', 'Windows Phone'];
+
+		foreach ($mobileAgents as $device) {
+			if (stripos($userAgent, $device) !== false) {
+				return true;
+			}
+		}
+		return false;
+	}
 ?>
