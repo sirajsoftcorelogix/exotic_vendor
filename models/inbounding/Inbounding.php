@@ -177,7 +177,7 @@ class Inbounding {
 
         return mysqli_query($conn, $sql);
     }
-    
+
     public function updateform2($data) {
         global $conn;
 
@@ -269,6 +269,39 @@ class Inbounding {
             return ['success' => true, 'message' => "Record updated successfully."];
         }
         return ['success' => false, 'message' => "Update failed: " . $stmt->error];
+    }
+    // --- Add these functions inside your InboundingModel class ---
+
+    /**
+     * Helper to get category/group name by ID
+     */
+    public function getCategoryName($id) {
+        if (empty($id)) return '';
+        
+        // Prepare statement to prevent injection and ensure connection usage
+        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE id = ?");
+        if (!$stmt) return ''; // Error handling
+        
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($row = $result->fetch_assoc()) {
+            return $row['display_name'];
+        }
+        return '';
+    }
+
+    /**
+     * Helper to get the next incremental ID count from vp_products
+     */
+    public function getNextProductCount() {
+        // We run a simple query to count existing rows
+        $result = $this->conn->query("SELECT COUNT(*) as total FROM vp_products");
+        if ($row = $result->fetch_assoc()) {
+            return (int)$row['total'] + 1;
+        }
+        return 1; // Default to 1 if table is empty
     }
     public function saveform2($id,$data) {
          global $conn;

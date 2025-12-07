@@ -40,66 +40,46 @@ $record_id = $_GET['id'] ?? '';
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
                             
                             <option value="" disabled <?php echo empty($data['form2']['is_variant']) ? 'selected' : ''; ?>>Select...</option>
-                            
                             <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
                             <option value="N" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
-                        
                         </select>
                     </div>
-                    <div class="flex-1 flex flex-col">
-                        <label class="text-xs font-bold text-[#333] mb-1.5">Date Added</label>
-                        <?php if (!empty($data['form2']['gate_entry_date_time']) && $data['form2']['gate_entry_date_time'] != "0000-00-00 00:00:00"): ?>
-                            <input type="datetime-local" class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" value="<?php echo date('Y-m-d\TH:i', strtotime($data['form2']['gate_entry_date_time'])); ?>">
-                        <?php else: ?>
-                            <input type="datetime-local" class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" value="<?php echo date('Y-m-d\TH:i'); ?>">
-                        <?php endif; ?>
-                    </div>
-                </div>
 
-                <div class="flex gap-[30px] items-end">
                     <div class="flex-1 flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Parent Item Code:</label>
-                        
+                        <input type="hidden" id="original_variant_status" value="<?php echo $data['form2']['is_variant'] ?? ''; ?>">
                         <div id="wrapper_select" style="display:none;">
                             <select id="item_code_select" name="Item_code" placeholder="Type to search title...">
-                                
                                 <?php 
-                                // Check if Variant is Yes ('Y') and we have an Item Code stored
+                                // Only pre-fill the select option if it is currently a Variant
                                 if (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y' && !empty($data['form2']['Item_code'])) { 
                                     $code = $data['form2']['Item_code'];
                                     $title = isset($data['form2']['parent_item_title']) ? $data['form2']['parent_item_title'] : $code;
                                 ?>
-                                    <option value="<?php echo $code; ?>" selected>
-                                        <?php echo $title; ?>
-                                    </option>
-
+                                    <option value="<?php echo $code; ?>" selected><?php echo $title; ?></option>
                                 <?php } ?>
-
                             </select>
                         </div>
 
                         <div id="wrapper_input" style="display:none;">
                             <input type="text" 
-                                   value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : 'FIXED-VALUE'; ?>" 
+                                   id="fixed_item_code_input"
+                                   value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : ''; ?>" 
                                    readonly
                                    class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full bg-gray-100 focus:outline-none" 
                                    name="Item_code">
+                                   
+                            <input type="hidden" id="existing_item_code" value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : ''; ?>">
                         </div>
                     </div>
+
                     <div class="flex-1 flex flex-col">
-                        <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On:</label>
-                        <?php if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00"): ?>
-                            <input type="date" 
-                                   class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" 
-                                   value="<?php echo date('Y-m-d', strtotime($data['form2']['stock_added_date'])); ?>" 
-                                   name="stock_added_date">
+                        <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On</label>
+                         <?php if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00"): ?>
+                            <input type="date" class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" value="<?php echo date('Y-m-d', strtotime($data['form2']['stock_added_date'])); ?>" name="stock_added_date">
                         <?php else: ?>
-                            <input type="date" 
-                                   class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" 
-                                   value="<?php echo date('Y-m-d'); ?>" 
-                                   name="stock_added_date">
+                            <input type="date" class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" value="<?php echo date('Y-m-d'); ?>" name="stock_added_date">
                         <?php endif; ?>
-                        
                     </div>
                 </div>
             </fieldset>
@@ -502,7 +482,7 @@ $record_id = $_GET['id'] ?? '';
     </form>
 </div>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function() {
     
     // --- CONFIGURATION ---
     const apiUrl = '/index.php?page=inbounding&action=getItamcode'; 
@@ -511,8 +491,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const variantSelect = document.getElementById('variant_select');
     const wrapperSelect = document.getElementById('wrapper_select');
     const wrapperInput  = document.getElementById('wrapper_input');
-    const fixedInput    = wrapperInput.querySelector('input'); 
+    const fixedInput    = document.getElementById('fixed_item_code_input'); 
     const selectElement = document.getElementById('item_code_select');
+    const existingCode  = document.getElementById('existing_item_code').value;
 
     // --- INITIALIZE TOM SELECT ---
     let tomSelectInstance = new TomSelect("#item_code_select", {
@@ -537,30 +518,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- LOGIC FUNCTION ---
     function toggleVariantFields(val) {
+        const originalStatus = document.getElementById('original_variant_status').value;
+
         if (val === 'Y') {
-            // SHOW SELECT
+            // ... (Existing logic for Yes) ...
             wrapperSelect.style.display = 'block';
             wrapperInput.style.display  = 'none';
-            
-            // Enable Select, Disable Input
             tomSelectInstance.enable(); 
             selectElement.disabled = false; 
             fixedInput.disabled = true;
 
-            // If the select is empty (no PHP value pre-filled), trigger a load
-            if (tomSelectInstance.getValue() === "") {
-                tomSelectInstance.load(''); 
-            }
-
         } else if (val === 'N') {
-            // SHOW INPUT
+            // ... (Existing logic for No) ...
             wrapperSelect.style.display = 'none';
             wrapperInput.style.display  = 'block';
-            
-            // Disable Select, Enable Input
             tomSelectInstance.disable();
             selectElement.disabled = true;
             fixedInput.disabled = false;
+
+            // --- VISUAL FIX ---
+            // If the user is switching to 'N', but it WAS 'Y' in the database,
+            // clear the input so they don't see the old Parent Code.
+            if (originalStatus === 'Y') {
+                fixedInput.value = ""; 
+                fixedInput.placeholder = "Auto-generated on Save";
+            }
         }
     }
 
@@ -568,19 +550,27 @@ document.addEventListener('DOMContentLoaded', function() {
     variantSelect.addEventListener('change', function() {
         toggleVariantFields(this.value);
         
-        // Optional: If user manually switches to 'N', you might want to clear the TomSelect
+        // If switching to 'N', clear the TomSelect logic visually
         if(this.value === 'N') {
             tomSelectInstance.clear(); 
         }
     });
 
-    // --- RUN ON PAGE LOAD (CRITICAL) ---
-    // This reads the PHP "selected" value and sets the UI correctly immediately
+    // --- SUBMISSION HANDLER ---
+    // This cleans up the "Auto-generated" text before sending to PHP
+    document.querySelector('form').addEventListener('submit', function() {
+        if(variantSelect.value === 'N' && fixedInput.value === "Auto-generated on Save") {
+            fixedInput.value = ""; // Send empty string so PHP knows to generate
+        }
+    });
+
+    // --- RUN ON PAGE LOAD ---
     if(variantSelect.value) {
         toggleVariantFields(variantSelect.value);
     } else {
-        // Default state if nothing is selected yet
+        // Default state: Hide both or disable inputs
         fixedInput.disabled = true; 
+        selectElement.disabled = true;
     }
 
 });

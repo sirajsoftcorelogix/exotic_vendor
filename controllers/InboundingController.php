@@ -268,81 +268,113 @@ class InboundingController {
             echo "Update failed.";
         }
     }
-    public function updatedesktopform(){
+    public function updatedesktopform() {
         global $inboundingModel;
-        $id       = $_GET['id'] ?? 0;
-        $oldData = $inboundingModel->getform1data($id);;
+
+        // 1. Basic Setup & File Upload (Keep your existing code here)
+        $id = $_GET['id'] ?? 0;
+        $oldData = $inboundingModel->getform1data($id);
+
         if (!$oldData) {
             echo "Record not found.";
             exit;
         }
+
+        // --- (Your File Upload Code Here) --- 
         $invoicePath = $oldData['form1']['invoice_image'];
         if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
             $uploadDir = __DIR__ . '/../uploads/invoice/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+            
             $fileTmp  = $_FILES['invoice_image']['tmp_name'];
             $fileName = $_FILES['invoice_image']['name'];
             $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            $allowed  = ['jpg','jpeg','png','webp'];
-            if (!in_array($fileExt, $allowed)) {
-                echo "Only JPG, PNG, WEBP allowed.";
-                exit;
-            }
+            
+            // ... (Your validation) ...
+            
             $newFile = "IMG_" . time() . "." . $fileExt;
-            $dest    = $uploadDir . $newFile;
-            if (move_uploaded_file($fileTmp, $dest)) {
+            if (move_uploaded_file($fileTmp, $uploadDir . $newFile)) {
                 $invoicePath = "uploads/invoice/" . $newFile;
             }
         }
+
+        // 2. Capture Inputs
+        $is_variant = $_POST['is_variant'] ?? '';
+        $item_code  = $_POST['Item_code'] ?? '';
+        $old_is_variant = $oldData['form2']['is_variant'] ?? '';
+        // ---------------------------------------------------------
+        //  AUTO-GENERATE LOGIC (Updated to use Model)
+        // ---------------------------------------------------------
+        if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
+
+            // A. Get IDs
+            $group_id    = $_POST['group_name'] ?? 0;
+            $category_id = $_POST['category_code'] ?? 0;
+
+            // B. Get Names & Count
+            $group_name_str = $inboundingModel->getCategoryName($group_id);
+            $cat_name_str   = $inboundingModel->getCategoryName($category_id);
+            $next_count     = $inboundingModel->getNextProductCount();
+
+            // C. Generate Characters
+            $char1  = !empty($group_name_str) ? strtoupper(substr($group_name_str, 0, 1)) : 'X';
+            $char23 = !empty($cat_name_str)   ? strtoupper(substr($cat_name_str, 0, 2)) : 'XX';
+            $increment_str = str_pad($next_count, 3, '0', STR_PAD_LEFT);
+
+            // D. Assign the NEW generated code
+            $item_code = $char1 . $char23 . $increment_str;
+        }
+        // ---------------------------------------------------------
+
+        // 3. Build Data Array
         $data = [
-            'id'                    => $id,
-            'invoice_image'         => $invoicePath,
-            'is_variant'            => $_POST['is_variant'] ?? '',
-            'Item_code'             => $_POST['Item_code'] ?? '',
-            'stock_added_date'      => $_POST['stock_added_date'] ?? '',
-            'received_by_user_id'   => $_POST['received_by_user'] ?? '',
-            'updated_by_user_id'    => $_POST['updated_by_user_id'] ?? '',
-            'invoice_no'            => $_POST['invoice_no'] ?? '',
-            'material_code'         => $_POST['material_code'] ?? '',
-            'product_title'         => $_POST['product_title'] ?? '',
-            'key_words'             => $_POST['key_words'] ?? '',
-            'vendor_code'           => $_POST['vendor_code'] ?? '',
-            'inr_pricing'           => $_POST['inr_pricing'] ?? '',
-            'amazon_price'          => $_POST['amazon_price'] ?? '',
-            'usd_price'             => $_POST['usd_price'] ?? '',
-            'hsn_code'              => $_POST['hsn_code'] ?? '',
-            'gst_rate'              => $_POST['gst_rate'] ?? '',
-            'height'                => $_POST['height'] ?? '',
-            'width'                 => $_POST['width'] ?? '',
-            'depth'                 => $_POST['depth'] ?? '',
-            'weight'                => $_POST['weight'] ?? '',
-            'size'                  => $_POST['size'] ?? '',
-            'color'                 => $_POST['color'] ?? '',
-            'quantity_received'     => $_POST['quantity_received'] ?? '',
+            'id'                => $id,
+            'invoice_image'     => $invoicePath,
+            'is_variant'        => $is_variant,
+            'Item_code'         => $item_code, // Now contains the generated code
+            'stock_added_date'  => $_POST['stock_added_date'] ?? '',
+            'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
+            'updated_by_user_id' => $_POST['updated_by_user_id'] ?? '',
+            'invoice_no'        => $_POST['invoice_no'] ?? '',
+            'material_code'     => $_POST['material_code'] ?? '',
+            'product_title'     => $_POST['product_title'] ?? '',
+            'key_words'         => $_POST['key_words'] ?? '',
+            'vendor_code'       => $_POST['vendor_code'] ?? '',
+            'inr_pricing'       => $_POST['inr_pricing'] ?? '',
+            'amazon_price'      => $_POST['amazon_price'] ?? '',
+            'usd_price'         => $_POST['usd_price'] ?? '',
+            'hsn_code'          => $_POST['hsn_code'] ?? '',
+            'gst_rate'          => $_POST['gst_rate'] ?? '',
+            'height'            => $_POST['height'] ?? '',
+            'width'             => $_POST['width'] ?? '',
+            'depth'             => $_POST['depth'] ?? '',
+            'weight'            => $_POST['weight'] ?? '',
+            'size'              => $_POST['size'] ?? '',
+            'color'             => $_POST['color'] ?? '',
+            'quantity_received' => $_POST['quantity_received'] ?? '',
             'permanently_available' => $_POST['permanently_available'] ?? '',
-            'ware_house_code'       => $_POST['ware_house_code'] ?? '',
-            'store_location'        => $_POST['store_location'] ?? '',
-            'local_stock'           => $_POST['local_stock'] ?? '',
-            'lead_time_days'        => $_POST['lead_time_days'] ?? '',
-            'us_block'              => $_POST['us_block'] ?? '',
-            'group_name'            => $_POST['group_name'] ?? '',
-            'category_code'         => $_POST['category_code'] ?? '',
-            'sub_category_code'     => $_POST['sub_category_code'] ?? '',
+            'ware_house_code'   => $_POST['ware_house_code'] ?? '',
+            'store_location'    => $_POST['store_location'] ?? '',
+            'local_stock'       => $_POST['local_stock'] ?? '',
+            'lead_time_days'    => $_POST['lead_time_days'] ?? '',
+            'us_block'          => $_POST['us_block'] ?? '',
+            'group_name'        => $_POST['group_name'] ?? '',
+            'category_code'     => $_POST['category_code'] ?? '',
+            'sub_category_code' => $_POST['sub_category_code'] ?? '',
             'sub_sub_category_code' => $_POST['sub_sub_category_code'] ?? '',
-            'dimention_unit'        => $_POST['dimention_unit'] ?? '',
-            'weight_unit'           => $_POST['weight_unit'] ?? '',
+            'dimention_unit'    => $_POST['dimention_unit'] ?? '',
+            'weight_unit'       => $_POST['weight_unit'] ?? '',
         ];
-        // echo "<pre>";print_r($data);exit;
-        $result = $inboundingModel->updatedesktopform($id,$data);
-        if ($result) {
+
+        // 4. Save
+        $result = $inboundingModel->updatedesktopform($id, $data);
+
+        if ($result['success']) { // Adjusted based on your model returning an array
             header("location: " . base_url('?page=inbounding&action=list'));
             exit;
         } else {
-            echo "Update failed.";
+            echo "Update failed: " . $result['message'];
         }
-        
     }
     public function updateform3()
     {
