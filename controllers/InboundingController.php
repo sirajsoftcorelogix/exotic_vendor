@@ -331,6 +331,8 @@ class InboundingController {
             'category_code'         => $_POST['category_code'] ?? '',
             'sub_category_code'     => $_POST['sub_category_code'] ?? '',
             'sub_sub_category_code' => $_POST['sub_sub_category_code'] ?? '',
+            'dimention_unit'        => $_POST['dimention_unit'] ?? '',
+            'weight_unit'           => $_POST['weight_unit'] ?? '',
         ];
         // echo "<pre>";print_r($data);exit;
         $result = $inboundingModel->updatedesktopform($id,$data);

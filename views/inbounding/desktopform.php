@@ -168,85 +168,91 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
+        <?php 
+            // Extract existing values or set to null/empty string to avoid PHP errors
+            $selected_material = $data['form2']['material_code'] ?? '';
+            $selected_group    = $data['form2']['group_name'] ?? '';
+            $selected_cat      = $data['form2']['category_code'] ?? '';
+            $selected_sub      = $data['form2']['sub_category_code'] ?? '';
+            $selected_sub_sub  = $data['form2']['sub_sub_category_code'] ?? '';
+
+            // Prepare Category Data
+            $categoriesByParent1 = [];
+            $rootCategories = [];
+            
+            if (!empty($data['category'])) {
+                foreach ($data['category'] as $row) {
+                    if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
+                    
+                    $categoriesByParent1[$row['parent_id']][] = [
+                        'id'   => $row['id'],
+                        'name' => $row['display_name']
+                    ];
+                    
+                    if ($row['parent_id'] == 0) {
+                        $rootCategories[] = [
+                            'id'   => $row['id'],
+                            'name' => $row['display_name']
+                        ];
+                    }
+                }
+            }
+        ?>
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2.5 pb-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
-                <div class="flex gap-5">
-                    <div class="flex-1 flex flex-col gap-2.5">
-                        <div>
-                            <label class="block text-xs font-bold text-[#222] mb-1">
-                                Material:</span>
-                            </label>
-                            <select class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" name="material_code">
-                                <option value="">Select User</option>
-                                <?php foreach ($data['material'] as $value2) {
-                                    $isSelected = ($data['form2']['material_code'] == $value2['id']) ? 'selected' : '';
-                                ?> 
+                
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+
+                    <div>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
+                        <select class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" name="material_code">
+                            <option value="">Select Material</option>
+                            <?php foreach ($data['material'] as $value2) { 
+                                $isSelected = ($selected_material == $value2['id']) ? 'selected' : '';
+                            ?> 
                                 <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
                             <?php } ?>
-                            </select>
-                        </div>
-                        <?php
-                            $categoriesByParent1 = [];
-                            $rootCategories = [];
-                            if (!empty($data['category'])) {
-                                foreach ($data['category'] as $row) {
-                                    // Only process active categories
-                                    if (isset($row['is_active']) && $row['is_active'] != 1) {
-                                        continue; 
-                                    }
-                                    $categoriesByParent1[$row['parent_id']][] = [
-                                        'id'   => $row['id'],
-                                        'name' => $row['display_name'] // Using display_name
-                                    ];
-                                    if ($row['parent_id'] == 0) {
-                                        $rootCategories[] = [
-                                            'id'   => $row['id'],
-                                            'name' => $row['display_name']
-                                        ];
-                                    }
-                                }
-                            }
-                        ?>
-                        <div>
-                            <label class="block text-xs font-bold text-[#222] mb-1">
-                                Group: 
-                            </label>
-                            <select id="group_select" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Group..." name="group_name">
-                                <?php foreach($rootCategories as $group): ?>
-                                    <option value="<?php echo $group['id']; ?>"><?php echo $group['name']; ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-[#222] mb-1">
-                                Category: 
-                            </label>
-                            <select id="category_select" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Group First..." disabled name="category_code">
-                                <option value="">Select Group First...</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="flex-1 flex flex-col gap-2.5">
-                        <label class="block text-xs font-bold text-[#222] mb-1">
-                            Sub Category: 
-                        </label>
-                        <select id="sub_category_select" name="sub_category" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Category First..." disabled name="sub_category_code">
-                                <option value="">Select Category First...</option>
                         </select>
                     </div>
 
-                    <div class="flex-1 flex flex-col gap-2.5">
+                    <div>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
+                        <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
+                            <option value="">Select Group...</option>
+                            <?php foreach($rootCategories as $group): 
+                                // PHP Select Logic for Group
+                                $isGroupSelected = ($selected_group == $group['id']) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo $group['id']; ?>" <?php echo $isGroupSelected; ?>><?php echo $group['name']; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
+                        <select id="category_select" name="category_code" placeholder="Select Group First..." disabled autocomplete="off">
+                            <option value="">Select Group First...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Sub Category:</label>
+                        <select id="sub_category_select" name="sub_category_code" placeholder="Select Category First..." disabled autocomplete="off">
+                             <option value="">Select Category First...</option>
+                        </select>
+                    </div>
+
+                    <div>
                         <label class="block text-xs font-bold text-[#222] mb-1">SubSubCategory:</label>
-                        <select id="sub_sub_category_select" name="sub_sub_category" class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]"  placeholder="Select Sub Category First..." disabled name="sub_sub_category_code">
-                                <option value="">Select Category First...</option>
+                        <select id="sub_sub_category_select" name="sub_sub_category_code" placeholder="Select Sub Category First..." disabled autocomplete="off">
+                             <option value="">Select Sub Category First...</option>
                         </select>
                     </div>
+
                 </div>
             </fieldset>
         </div>
-
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
@@ -362,7 +368,32 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
+        <div class="mt-[15px] mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Unit:</legend>
+                <div class="flex gap-5 items-start mb-[15px]">
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Dimention Unit:</label>
+                        <div class="relative flex items-center w-full">
+                            <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="dimention_unit">
+                                <option value="cm">cm</option>
+                                <option value="inch" selected="">inch</option>
+                            </select>
+                        </div>
 
+                    </div>
+                     <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Weight Unit:</label>
+                        <div class="relative flex items-center w-full">
+                            <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="weight_unit">
+                                <option value="kg">kg</option>
+                                <option value="gm" selected="">gm</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Dimensions:</legend>
@@ -371,28 +402,24 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Height:</label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['height'] ?? '') ?>" name="height">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">cm</span>
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Width:</label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['width'] ?? '') ?>" name="width">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">cm</span>
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Depth:</label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['depth'] ?? '') ?>" name="depth">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">cm</span>
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Weight:</label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['weight'] ?? '') ?>" name="weight">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
                      <div class="flex-1">
@@ -616,89 +643,99 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Pass the PHP array to JavaScript
+    // 1. Data from PHP
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
-
-    // --- INITIALIZE TOM SELECT INSTANCES ---
-    // We store the instances to programmatically add/remove options later
     
-    const config = {
-        create: false,
-        sortField: { field: "text", direction: "asc" }
+    // 2. Pre-selected Values from PHP (Converted to strings for comparison)
+    const preSelected = {
+        group:  "<?php echo $selected_group; ?>",
+        cat:    "<?php echo $selected_cat; ?>",
+        sub:    "<?php echo $selected_sub; ?>",
+        subsub: "<?php echo $selected_sub_sub; ?>"
     };
 
+    // 3. TomSelect Configuration
+    const config = {
+        create: false,
+        sortField: { field: "text", direction: "asc" },
+        // This ensures the styling matches your Tailwind heights better
+        controlInput: null 
+    };
+
+    // 4. Initialize Instances
     const groupTs      = new TomSelect("#group_select", config);
     const categoryTs   = new TomSelect("#category_select", config);
     const subCatTs     = new TomSelect("#sub_category_select", config);
     const subSubCatTs  = new TomSelect("#sub_sub_category_select", config);
 
-    // --- 1. GROUP CHANGED ---
-    groupTs.on('change', function(groupId) {
-        // Clear & Disable all children
-        resetTomSelect(categoryTs, 'Select Category...');
-        resetTomSelect(subCatTs, 'Select Category First...');
-        resetTomSelect(subSubCatTs, 'Select Sub Category First...');
+    // --- HELPER: Populate Function ---
+    // Handles adding options and setting a value if provided
+    function populateAndSelect(instance, parentId, valueToSelect = null) {
+        instance.clearOptions();
+        instance.clear(true);
+        
+        if (parentId && categoriesByParent[parentId]) {
+            instance.enable();
+            categoriesByParent[parentId].forEach(item => {
+                instance.addOption({ value: item.id, text: item.name });
+            });
+            instance.refreshOptions(false);
 
-        // Populate Category
-        if (groupId && categoriesByParent[groupId]) {
-            categoryTs.enable();
-            populateTomSelect(categoryTs, categoriesByParent[groupId]);
+            // If we have a value to select, set it
+            if (valueToSelect) {
+                instance.setValue(valueToSelect);
+            }
         } else {
-            categoryTs.disable();
+            instance.disable();
         }
+    }
+
+    // --- EVENT LISTENERS ---
+
+    // Group Changed -> Update Category
+    groupTs.on('change', function(groupId) {
+        // Reset children
+        subCatTs.clear(true); subCatTs.clearOptions(); subCatTs.disable();
+        subSubCatTs.clear(true); subSubCatTs.clearOptions(); subSubCatTs.disable();
+        
+        // Populate Category (No pre-select on manual change)
+        populateAndSelect(categoryTs, groupId, null);
     });
 
-    // --- 2. CATEGORY CHANGED ---
+    // Category Changed -> Update Sub Category
     categoryTs.on('change', function(catId) {
-        // Clear & Disable children
-        resetTomSelect(subCatTs, 'Select Sub Category...');
-        resetTomSelect(subSubCatTs, 'Select Sub Category First...');
+        // Reset child
+        subSubCatTs.clear(true); subSubCatTs.clearOptions(); subSubCatTs.disable();
 
         // Populate Sub Category
-        if (catId && categoriesByParent[catId]) {
-            subCatTs.enable();
-            populateTomSelect(subCatTs, categoriesByParent[catId]);
-        } else {
-            subCatTs.disable();
-        }
+        populateAndSelect(subCatTs, catId, null);
     });
 
-    // --- 3. SUB CATEGORY CHANGED ---
+    // Sub Category Changed -> Update Sub Sub Category
     subCatTs.on('change', function(subCatId) {
-        // Clear & Disable children
-        resetTomSelect(subSubCatTs, 'Select Sub Sub Category...');
-
         // Populate Sub Sub Category
-        if (subCatId && categoriesByParent[subCatId]) {
-            subSubCatTs.enable();
-            populateTomSelect(subSubCatTs, categoriesByParent[subCatId]);
-        } else {
-            subSubCatTs.disable();
-        }
+        populateAndSelect(subSubCatTs, subCatId, null);
     });
 
-    // --- HELPER FUNCTIONS ---
+    // --- INITIALIZATION LOGIC (The Fix for Pre-selection) ---
+    
+    // If Group is already selected (via PHP Render), trigger the chain
+    if (preSelected.group) {
+        // 1. Group is set in HTML, wait for TomSelect to sync, then load Category
+        // Note: Group value is already set by PHP <option selected>, TomSelect picks it up automatically.
+        
+        // 2. Load Category Options & Select Category Value
+        populateAndSelect(categoryTs, preSelected.group, preSelected.cat);
 
-    // Adds options to a TomSelect instance
-    function populateTomSelect(instance, optionsData) {
-        instance.clearOptions(); // Remove old options
-        optionsData.forEach(item => {
-            instance.addOption({
-                value: item.id,
-                text: item.name
-            });
-        });
-        instance.refreshOptions(false); // Refresh UI
+        // 3. If Category was selected, Load Sub Category Options & Select Sub Value
+        if (preSelected.cat) {
+            populateAndSelect(subCatTs, preSelected.cat, preSelected.sub);
+
+            // 4. If Sub Category was selected, Load Sub Sub Options & Select Sub Sub Value
+            if (preSelected.sub) {
+                populateAndSelect(subSubCatTs, preSelected.sub, preSelected.subsub);
+            }
+        }
     }
-
-    // Clears value, options, and disables a TomSelect instance
-    function resetTomSelect(instance, placeholder) {
-        instance.clear(true);         // Clear selected value
-        instance.clearOptions();      // Clear list of options
-        instance.settings.placeholder = placeholder; // Update placeholder text
-        instance.sync();              // Sync changes
-        instance.disable();           // Disable input
-    }
-
 });
 </script>
