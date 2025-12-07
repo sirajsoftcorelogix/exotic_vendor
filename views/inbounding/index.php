@@ -110,12 +110,18 @@ unset($vendorsModel);
                                                     <p class="item-code">Weight: <?php echo ($tc['weight']); ?></p>
                                                     <p class="quantity">Quantity : <?php echo ($tc['quantity_received']); ?></p>
                                                     <p class="quantity">Vendor : <?php print_r($tc['vendor_name']); ?></p>
-                                                    <button style="background:#d9822b;color:#fff;border:none;padding:8px 14px;font-size:14px;font-weight:600;border-radius:6px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">Photos</button>
-                                                    <button 
-                                                        onclick="window.location.href='http://exotic.local/index.php?page=inbounding&action=form1&id=<?php echo $tc['id']; ?>'"
-                                                        style="background:#d9822b;color:#fff;border:none;padding:8px 14px;font-size:14px;font-weight:600;border-radius:6px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                                                    <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" style="width:120px;height:40px;font-family:Inter;font-weight:500;font-size:13px;text-decoration:none;" class="bg-[#d9822b] hover:bg-[#bf7326] text-white rounded-lg hidden md:inline-flex items-center justify-center gap-2 transition-colors">Photos</a>
+                                                    <a href="<?php echo base_url('?page=inbounding&action=form1&id=' . $tc['id']); ?>"
+                                                       style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; text-decoration: none;"
+                                                       class="bg-[#d9822b] hover:bg-[#bf7326] text-white rounded-lg inline-flex md:hidden items-center justify-center gap-2 transition-colors">
                                                         Update
-                                                    </button>
+                                                    </a>
+
+                                                    <a href="<?php echo base_url('?page=inbounding&action=desktopform&id=' . $tc['id']); ?>"
+                                                       style="width: 120px; height: 40px; font-family: Inter; font-weight: 500; font-size: 13px; text-decoration: none;"
+                                                       class="bg-[#d9822b] hover:bg-[#bf7326] text-white rounded-lg hidden md:inline-flex items-center justify-center gap-2 transition-colors">
+                                                        Process
+                                                    </a>
 
                                                 </div>
                                             </div>

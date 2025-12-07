@@ -425,6 +425,12 @@ switch ($page) {
             case 'desktopform':
                 $controller->getdesktopform();
                 break;
+            case 'i_photos':
+                $controller->i_photos();
+                break;
+             case 'itmimgsave':
+                $controller->itmimgsave();
+                break;
             case 'updatedesktopform':
                 $controller->updatedesktopform();
                 break;

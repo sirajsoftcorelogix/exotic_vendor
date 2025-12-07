@@ -268,6 +268,68 @@ class InboundingController {
             echo "Update failed.";
         }
     }
+
+    // PAGE: Display the photos form
+    public function i_photos() {
+        global $inboundingModel;
+        
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        
+        // Fetch data
+        $data['images'] = $inboundingModel->getitem_imgs($id);
+        $data['record_id'] = $id;
+
+        // Render View
+        renderTemplateClean('views/inbounding/i_photos.php', $data, 'desktopform inbounding');
+    }
+
+    // ACTION: Save (Uploads & Deletions)
+    public function itmimgsave() {
+        global $inboundingModel;
+        
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            
+            // 1. Handle Deletions (User removed existing images)
+            if (!empty($_POST['delete_ids'])) {
+                foreach ($_POST['delete_ids'] as $del_id) {
+                    $inboundingModel->delete_image(intval($del_id));
+                }
+            }
+
+            // 2. Handle New File Uploads
+            if (!empty($_FILES['new_photos']['name'][0])) {
+                
+                // Define Upload Directory
+                $uploadDir = __DIR__ . '/../uploads/itm_img/';
+                
+                // Auto-create directory if missing
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                
+                foreach ($_FILES['new_photos']['name'] as $key => $name) {
+                    if ($_FILES['new_photos']['error'][$key] === 0) {
+                        $tmpName = $_FILES['new_photos']['tmp_name'][$key];
+                        $ext = pathinfo($name, PATHINFO_EXTENSION);
+                        
+                        // Generate Unique Filename: img_ID_TIMESTAMP_RANDOM.ext
+                        $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
+                        
+                        if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
+                            // Save to DB
+                            $inboundingModel->add_image($id, $newName);
+                        }
+                    }
+                }
+            }
+
+            // Redirect with success message
+            header("Location: " . base_url("?page=inbounding&action=list"));
+            exit;
+        }
+    }
     public function updatedesktopform() {
         global $inboundingModel;
 

@@ -66,6 +66,44 @@ class Inbounding {
         }
         return $ItamcodeData;
     }
+
+    // Fetch all images for a specific item
+    public function getitem_imgs($item_id) {
+        $item_id = intval($item_id);
+        $result = $this->conn->query("SELECT * FROM `item_images` WHERE item_id = $item_id");
+        
+        $images = [];
+        if ($result) {
+            $images = $result->fetch_all(MYSQLI_ASSOC);
+            $result->free();
+        }
+        return $images;
+    }
+
+    // Insert new image record
+    public function add_image($item_id, $filename) {
+        $stmt = $this->conn->prepare("INSERT INTO `item_images` (item_id, file_name) VALUES (?, ?)");
+        $stmt->bind_param("is", $item_id, $filename);
+        return $stmt->execute();
+    }
+
+    // Delete image from DB and Server
+    public function delete_image($img_id) {
+        $img_id = intval($img_id);
+        
+        // 1. Get filename to delete from disk
+        $res = $this->conn->query("SELECT file_name FROM `item_images` WHERE id = $img_id");
+        if ($row = $res->fetch_assoc()) {
+            // Use the exact same path defined in the controller
+            $path = __DIR__ . '/../uploads/itm_img/' . $row['file_name'];
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+        
+        // 2. Delete from DB
+        return $this->conn->query("DELETE FROM `item_images` WHERE id = $img_id");
+    }
 	public function getform1data($id){
         $inbounding = null;
         $vendors = null;
