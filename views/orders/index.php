@@ -718,7 +718,7 @@
                                         <div class="pt-1 w-full max-w-xs">
                                             <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
                                             <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></p>
-                                            <p class="quantity">Quantity: <?= $order['quantity'] ?></p>
+                                            <p class="quantity">Quantity: <?= $order['quantity'] ?> </p>
                                         </div>
                                     </div>
                                     <!-- Col 1, Row 2: Order Details -->
@@ -836,6 +836,7 @@
                                                 <?= $addontxt ?>
                                             </div>
                                             <div>
+                                                <?= $order['po_number'] ? '<a href="?page=purchase_orders&action=view&po_id='.$order['po_id'].'" target="_blank" class="mx-10 icon-link create-po-btn">'.$order['po_number'].'</a>' : '' ?>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
                                                     <a href="<?= base_url($order['vendor_invoice']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
                                                         <p class="mr-1">Download Invoice</p>
