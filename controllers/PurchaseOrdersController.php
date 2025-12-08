@@ -335,6 +335,10 @@ class PurchaseOrdersController {
         }
         $data = [];
         $purchaseOrder = $purchaseOrdersModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            renderTemplate('views/errors/error.php', ['message' => ['type'=>'error','text'=>'Purchase Order not found.']], 'Error');
+            return;
+        }
         $data['purchaseOrder'] = $purchaseOrder;
         $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
         $data['items'] = $purchaseOrderItems;

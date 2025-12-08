@@ -33,6 +33,11 @@ class InboundingController {
         
         renderTemplateClean('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
+    public function getItamcode(){
+        global $inboundingModel;
+        $data = $inboundingModel->getItamcode();
+        echo json_encode($data);exit;
+    }
     public function label($value=''){
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
@@ -51,8 +56,6 @@ class InboundingController {
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
-        $category_data = $this->getCategoryList();
-        // echo "<pre>test: ";print_r($category_data);exit;
         $data = $inboundingModel->getform2data($id);
         renderTemplateClean('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
@@ -210,6 +213,7 @@ class InboundingController {
 
         $id       = $_GET['id'] ?? 0;
         $vendor_id = $_POST['vendor_id'] ?? '';
+        $invoice_no = $_POST['invoice_no'] ?? '';
 
         // Get old record
         $oldData = $inboundingModel->getform1data($id);;
@@ -253,7 +257,8 @@ class InboundingController {
         $data = [
             'id'       => $id,
             'vendor_id' => $vendor_id,
-            'invoice'    => $invoicePath
+            'invoice'    => $invoicePath,
+            'invoice_no' => $invoice_no
         ];
 
         $updated = $inboundingModel->updateform2($data);
@@ -263,6 +268,176 @@ class InboundingController {
             exit;
         } else {
             echo "Update failed.";
+        }
+    }
+
+    // PAGE: Display the photos form
+    public function i_photos() {
+        global $inboundingModel;
+        
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        
+        // Fetch data
+        $data['images'] = $inboundingModel->getitem_imgs($id);
+        $data['record_id'] = $id;
+
+        // Render View
+        renderTemplateClean('views/inbounding/i_photos.php', $data, 'desktopform inbounding');
+    }
+
+    // ACTION: Save (Uploads & Deletions)
+    public function itmimgsave() {
+        global $inboundingModel;
+        
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            
+            // 1. Handle Deletions (User removed existing images)
+            if (!empty($_POST['delete_ids'])) {
+                foreach ($_POST['delete_ids'] as $del_id) {
+                    $inboundingModel->delete_image(intval($del_id));
+                }
+            }
+
+            // 2. Handle New File Uploads
+            if (!empty($_FILES['new_photos']['name'][0])) {
+                
+                // Define Upload Directory
+                $uploadDir = __DIR__ . '/../uploads/itm_img/';
+                
+                // Auto-create directory if missing
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0777, true);
+                }
+                
+                foreach ($_FILES['new_photos']['name'] as $key => $name) {
+                    if ($_FILES['new_photos']['error'][$key] === 0) {
+                        $tmpName = $_FILES['new_photos']['tmp_name'][$key];
+                        $ext = pathinfo($name, PATHINFO_EXTENSION);
+                        
+                        // Generate Unique Filename: img_ID_TIMESTAMP_RANDOM.ext
+                        $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
+                        
+                        if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
+                            // Save to DB
+                            $inboundingModel->add_image($id, $newName);
+                        }
+                    }
+                }
+            }
+
+            // Redirect with success message
+            header("Location: " . base_url("?page=inbounding&action=list"));
+            exit;
+        }
+    }
+    public function updatedesktopform() {
+        global $inboundingModel;
+
+        // 1. Basic Setup & File Upload (Keep your existing code here)
+        $id = $_GET['id'] ?? 0;
+        $oldData = $inboundingModel->getform1data($id);
+
+        if (!$oldData) {
+            echo "Record not found.";
+            exit;
+        }
+
+        // --- (Your File Upload Code Here) --- 
+        $invoicePath = $oldData['form1']['invoice_image'];
+        if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
+            $uploadDir = __DIR__ . '/../uploads/invoice/';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+            
+            $fileTmp  = $_FILES['invoice_image']['tmp_name'];
+            $fileName = $_FILES['invoice_image']['name'];
+            $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            
+            // ... (Your validation) ...
+            
+            $newFile = "IMG_" . time() . "." . $fileExt;
+            if (move_uploaded_file($fileTmp, $uploadDir . $newFile)) {
+                $invoicePath = "uploads/invoice/" . $newFile;
+            }
+        }
+
+        // 2. Capture Inputs
+        $is_variant = $_POST['is_variant'] ?? '';
+        $item_code  = $_POST['Item_code'] ?? '';
+        $old_is_variant = $oldData['form2']['is_variant'] ?? '';
+        // ---------------------------------------------------------
+        //  AUTO-GENERATE LOGIC (Updated to use Model)
+        // ---------------------------------------------------------
+        if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
+
+            // A. Get IDs
+            $group_id    = $_POST['group_name'] ?? 0;
+            $category_id = $_POST['category_code'] ?? 0;
+
+            // B. Get Names & Count
+            $group_name_str = $inboundingModel->getCategoryName($group_id);
+            $cat_name_str   = $inboundingModel->getCategoryName($category_id);
+            $next_count     = $inboundingModel->getNextProductCount();
+
+            // C. Generate Characters
+            $char1  = !empty($group_name_str) ? strtoupper(substr($group_name_str, 0, 1)) : 'X';
+            $char23 = !empty($cat_name_str)   ? strtoupper(substr($cat_name_str, 0, 2)) : 'XX';
+            $increment_str = str_pad($next_count, 3, '0', STR_PAD_LEFT);
+
+            // D. Assign the NEW generated code
+            $item_code = $char1 . $char23 . $increment_str;
+        }
+        // ---------------------------------------------------------
+
+        // 3. Build Data Array
+        $data = [
+            'id'                => $id,
+            'invoice_image'     => $invoicePath,
+            'is_variant'        => $is_variant,
+            'Item_code'         => $item_code, // Now contains the generated code
+            'stock_added_date'  => $_POST['stock_added_date'] ?? '',
+            'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
+            'updated_by_user_id' => $_POST['updated_by_user_id'] ?? '',
+            'invoice_no'        => $_POST['invoice_no'] ?? '',
+            'material_code'     => $_POST['material_code'] ?? '',
+            'product_title'     => $_POST['product_title'] ?? '',
+            'key_words'         => $_POST['key_words'] ?? '',
+            'vendor_code'       => $_POST['vendor_code'] ?? '',
+            'inr_pricing'       => $_POST['inr_pricing'] ?? '',
+            'amazon_price'      => $_POST['amazon_price'] ?? '',
+            'usd_price'         => $_POST['usd_price'] ?? '',
+            'hsn_code'          => $_POST['hsn_code'] ?? '',
+            'gst_rate'          => $_POST['gst_rate'] ?? '',
+            'height'            => $_POST['height'] ?? '',
+            'width'             => $_POST['width'] ?? '',
+            'depth'             => $_POST['depth'] ?? '',
+            'weight'            => $_POST['weight'] ?? '',
+            'size'              => $_POST['size'] ?? '',
+            'color'             => $_POST['color'] ?? '',
+            'quantity_received' => $_POST['quantity_received'] ?? '',
+            'permanently_available' => $_POST['permanently_available'] ?? '',
+            'ware_house_code'   => $_POST['ware_house_code'] ?? '',
+            'store_location'    => $_POST['store_location'] ?? '',
+            'local_stock'       => $_POST['local_stock'] ?? '',
+            'lead_time_days'    => $_POST['lead_time_days'] ?? '',
+            'us_block'          => $_POST['us_block'] ?? '',
+            'group_name'        => $_POST['group_name'] ?? '',
+            'category_code'     => $_POST['category_code'] ?? '',
+            'sub_category_code' => $_POST['sub_category_code'] ?? '',
+            'sub_sub_category_code' => $_POST['sub_sub_category_code'] ?? '',
+            'dimention_unit'    => $_POST['dimention_unit'] ?? '',
+            'weight_unit'       => $_POST['weight_unit'] ?? '',
+        ];
+
+        // 4. Save
+        $result = $inboundingModel->updatedesktopform($id, $data);
+
+        if ($result['success']) { // Adjusted based on your model returning an array
+            header("location: " . base_url('?page=inbounding&action=list'));
+            exit;
+        } else {
+            echo "Update failed: " . $result['message'];
         }
     }
     public function updateform3()
@@ -287,6 +462,8 @@ class InboundingController {
         $quantity_received    = $_POST['quantity_received'] ?? '';
         $item_code            = $_POST['Item_code'] ?? '';
         $received_by_user_id  = $_POST['received_by_user_id'] ?? '';
+        $weight_unit  = $_POST['weight_unit'] ?? '';
+        $dimention_unit  = $_POST['dimention_unit'] ?? '';
 
         // Prepare data array for update
         $updateData = [
@@ -299,7 +476,9 @@ class InboundingController {
             'color'                => $color,
             'quantity_received'    => $quantity_received,
             'item_code'            => $item_code,
-            'received_by_user_id'            => $received_by_user_id,
+            'received_by_user_id'  => $received_by_user_id,
+            'weight_unit'          => $weight_unit,
+            'dimention_unit'       => $dimention_unit,
         ];
 
         // Call model update
@@ -318,6 +497,7 @@ class InboundingController {
          global $inboundingModel;
         $vendor_id = $_POST['vendor_id'] ?? '';
         $record_id = $_POST['record_id'] ?? '';
+        $invoice_no = $_POST['invoice_no'] ?? '';
         if (!isset($_FILES['invoice']) || $_FILES['invoice']['error'] !== 0) {
             echo "invoice upload error.";
             exit;
@@ -343,6 +523,7 @@ class InboundingController {
             $saveData = [
                 'vendor_id' => $vendor_id,
                 'invoice'    => $invoicePath,
+                'invoice_no' => $invoice_no,
                 'temp_code' => $temp_code
             ];
             $insertId = $inboundingModel->saveform2($record_id,$saveData);
