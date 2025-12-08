@@ -318,6 +318,9 @@
             <span class="text-sm text-gray-600">of <?= $total_pages ?></span>
             <?php endif; ?>
             <?php endif; */?>
+            <div>
+                <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($purchaseOrders) ?></span> of <span class="font-medium"><?= $total_orders ?></span> orders</p>
+            </div>
             <?php            
             //echo '****************************************  '.$query_string;
             if ($total_pages > 1): ?>          
