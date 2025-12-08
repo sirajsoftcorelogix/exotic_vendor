@@ -411,7 +411,7 @@ class Inbounding {
             ];
         }
         $stmt->bind_param(
-            'ssdddssisi',
+            'ssdddssisii',
             $data['gate_entry_date_time'], // s
             $data['material_code'],        // s
             $data['height'],               // d
