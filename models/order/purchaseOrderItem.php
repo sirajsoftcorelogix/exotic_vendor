@@ -23,42 +23,53 @@ class PurchaseOrderItem {
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
-    public function getPurchaseOrderItemByIdNew($po_id) {
-        $query = "SELECT poi.*,
-                    CASE 
-                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
-                        THEN vp.product_weight
-                        ELSE vo.product_weight
-                    END AS product_weight,
-                    CASE 
-                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
-                        THEN vp.product_weight_unit
-                        ELSE vo.product_weight_unit
-                    END AS product_weight_unit,
-                    CASE 
-                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
-                        THEN vp.prod_height
-                        ELSE vo.prod_height
-                    END AS prod_height,
-                    CASE 
-                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
-                        THEN vp.prod_width
-                        ELSE vo.prod_width
-                    END AS prod_width,
-                    CASE 
-                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
-                        THEN vp.prod_length
-                        ELSE vo.prod_length
-                    END AS prod_length,
-                    CASE 
-                        WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
-                        THEN vp.length_unit
-                        ELSE vo.length_unit
-                    END AS length_unit
-                FROM vp_po_items poi
-                LEFT JOIN vp_products vp ON poi.product_id = vp.id
-                LEFT JOIN vp_orders vo ON poi.order_number = vo.order_number
-                WHERE poi.purchase_orders_id = ?";
+    public function getPurchaseOrderItemByIdNew($po_id) {        
+           $query = "SELECT poi.*,
+          CASE WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+              THEN vp.product_weight ELSE vo.product_weight END AS product_weight,
+          CASE WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+              THEN vp.product_weight_unit ELSE vo.product_weight_unit END AS product_weight_unit,
+          CASE WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+              THEN vp.prod_height ELSE vo.prod_height END AS prod_height,
+          CASE WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+              THEN vp.prod_width ELSE vo.prod_width END AS prod_width,
+          CASE WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+              THEN vp.prod_length ELSE vo.prod_length END AS prod_length,
+          CASE WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+              THEN vp.length_unit ELSE vo.length_unit END AS length_unit,
+          CASE WHEN poi.product_id IS NOT NULL AND poi.product_id != '' 
+              THEN vp.material ELSE vo.material END AS material,
+          COALESCE(vs.current_stock, 0) AS current_stock
+           FROM vp_po_items poi
+           LEFT JOIN vp_products vp ON poi.product_id = vp.id
+           LEFT JOIN vp_orders vo ON poi.order_number = vo.order_number AND poi.item_code = vo.item_code
+           LEFT JOIN vp_stock vs ON vs.item_code = poi.item_code AND COALESCE(vs.size,'') = COALESCE(poi.size,'') AND COALESCE(vs.color,'') = COALESCE(poi.color,'')
+           WHERE poi.purchase_orders_id = ? ";
+
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function getPurchaseOrderItemWithOrderNo($po_id) {
+        // join with vp_orders to get dimensions
+        $query = "SELECT poi.*, vo.prod_height, vo.prod_width, vo.prod_length, vo.length_unit
+                  FROM vp_po_items poi
+                  LEFT JOIN vp_orders vo ON poi.order_number = vo.order_number AND poi.item_code = vo.item_code
+                  WHERE poi.purchase_orders_id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function getPurchaseOrderItemWithProductId($po_id) {
+        // join with vp_products to get product details
+        $query = "SELECT poi.*, vp.prod_height, vp.prod_width, vp.prod_length, vp.length_unit
+                  FROM vp_po_items poi
+                  LEFT JOIN vp_products vp ON poi.product_id = vp.id
+                  WHERE poi.purchase_orders_id = ?";
         $stmt = $this->conn->prepare($query);
         $stmt->bind_param("i", $po_id);
         $stmt->execute();
@@ -66,9 +77,9 @@ class PurchaseOrderItem {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     public function createPurchaseOrderItem($data) {
-        $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ? )";
+        $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount, item_code, size, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("iisssiddd", 
+        $stmt->bind_param("iisssidddsss", 
             $data['purchase_orders_id'],
             $data['order_number'], 
             $data['title'],
@@ -77,7 +88,10 @@ class PurchaseOrderItem {
             $data['gst'],
             $data['quantity'],
             $data['price'],
-            $data['amount']
+            $data['amount'],
+            $data['item_code'],
+            $data['size'],
+            $data['color']
         );
         if ($stmt->execute()) {
             return $this->conn->insert_id; // Return the ID of the newly created item

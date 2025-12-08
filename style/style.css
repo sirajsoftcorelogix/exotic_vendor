@@ -1036,3 +1036,85 @@ background-color: #f0f0f0;
             background-color: #D1D5DB; /* gray-300 */
         }
         
+        /* grn part*/
+        /* Typography Mapping */
+        .type-page-header {
+            font-family: 'Instrument Sans', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            line-height: 24px;
+            color: rgba(5, 19, 33, 1);
+        }
+
+        .type-label-small {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            line-height: 200%;
+            letter-spacing: -0.02em;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .type-data-small {
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            font-size: 13px;
+            line-height: 200%;
+            letter-spacing: -0.02em;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .type-item-name {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            line-height: 162%;
+            letter-spacing: -0.02em;
+            color: rgba(0, 0, 0, 1);
+        }
+
+        .type-checkbox-label {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            line-height: 200%;
+            letter-spacing: -0.02em;
+            color: rgba(58, 58, 73, 1);
+        }
+
+        .custom-card {
+            background-color: #F9F9F9;
+            border-radius: 12px;
+        }
+
+        .custom-checkbox {
+            appearance: none;
+            background-color: white;
+            border: 1px solid #D1D5DB;
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+        }
+
+        .custom-checkbox::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em rgba(18, 136, 7, 1);
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .custom-checkbox:checked::before {
+            transform: scale(1);
+        }
+
+        .custom-checkbox:checked {
+            border-color: rgba(18, 136, 7, 1);
+        }
+        
