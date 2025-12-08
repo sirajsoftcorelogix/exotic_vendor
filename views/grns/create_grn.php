@@ -101,13 +101,13 @@
 
             <!-- Checkboxes -->
             <div class="flex flex-wrap gap-4 mb-5">
-                <label class="flex items-center gap-2 cursor-pointer">
+                <!-- <label class="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" class="custom-checkbox">
                     <span class="type-checkbox-label">Received</span>
-                </label>
-
+                </label> -->
+                  
                 <label class="flex items-center gap-2 cursor-pointer">
-                    <input name="qty_acceptable[]" type="number" min="0" class="ml-2 w-16 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder="Qty">
+                    <input name="qty_acceptable[]" type="checkbox" class="custom-checkbox" value="1">
                     <span class="type-checkbox-label">Quality Acceptable</span>                    
                 </label>
 
@@ -115,6 +115,12 @@
                     <input name="qty_received[]" type="number" min="0" class="ml-2 w-16 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder="Qty">
                     <span class="type-checkbox-label">Quantity Received</span>                    
                 </label>
+                <select id="delivery_address" name="delivery_address" class="flex items-center gap-2 w-auto px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 border rounded-md">
+                    <option value="">Select Delivery Address</option>
+                    <?php foreach ($exotic_address as $address): ?>
+                        <option value="<?= $address['id'] ?>" <?= $address['is_default'] ? 'selected' : '' ?>><?= htmlspecialchars($address['address_title']) ?></option>
+                    <?php endforeach; ?>
+                </select> 
             </div>
 
             <!-- Remarks Area -->
@@ -149,7 +155,13 @@
             </div>
             <div class="w-[210px]">
                 <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Received by <span class="text-red-500">*</span></label>
-                <input type="text" name="received_by" value="<?php echo $_SESSION['user']['name'] ?? '' ?>" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
+                <select name="user_id" id="employee_name" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
+                    <option value="">Select User</option>
+                    <?php foreach ($users as $id => $name): ?>
+                        <option value="<?= $id ?>" <?= ($id == $_SESSION['user']['id']) ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <!-- <input type="text" name="received_by" value="<?php //echo $_SESSION['user']['name'] ?? '' ?>" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none"> -->
             </div>
         </div>
 
@@ -240,7 +252,7 @@
                     submitBtn.disabled = false;
                     // 5 seconds redirect
                     setTimeout(() => {
-                    window.location.href = "<?php echo $_SERVER['REQUEST_URI'] ?? base_url('?page=purchase_orders&action=list'); ?>"; // Redirect to the reffer page
+                    window.location.href = "<?php echo base_url('?page=purchase_orders&action=list'); ?>"; // Redirect to the reffer page
                     }, 5000);
                 } else {
                     alert("Error: " + data.message);

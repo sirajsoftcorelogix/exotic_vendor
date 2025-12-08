@@ -2,9 +2,14 @@
 require_once 'models/grns/grn.php';
 require_once 'models/order/purchaseOrder.php';
 require_once 'models/order/purchaseOrderItem.php';
+require_once 'models/comman/tables.php';
+require_once 'models/user/user.php';
 $grnModel = new grn($conn);
 $purchaseOrderModel = new PurchaseOrder($conn);
 $purchaseOrderItemsModel = new PurchaseOrderItem($conn);
+$commanModel = new Tables($conn);
+$usersModel = new User($conn);
+
 class GrnsController {
 
     public function viewGrn($id) {
@@ -22,6 +27,8 @@ class GrnsController {
         global $purchaseOrderModel;
         global $purchaseOrderItemsModel;
         global $conn;
+        global $commanModel;
+        global $usersModel;
         // fetch po details to create grn
         $poId = $_GET['po_id'] ?? null;
         if (!$poId) {
@@ -38,7 +45,9 @@ class GrnsController {
         $data['purchaseOrder'] = $purchaseOrder;
         $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemByIdNew($poId);
         $data['items'] = $purchaseOrderItems;
-        
+        // fetch exotic addresses 
+        $data['exotic_address'] = $commanModel->get_exotic_address();
+        $data['users'] = $usersModel->getAllUsers();
         //$data['selectStockStmt'] = $res;
         // render clean for mobile users
         if (isMobile())
