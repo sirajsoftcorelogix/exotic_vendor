@@ -46,7 +46,7 @@
                 <!-- Image Placeholder -->
                 <div class="w-full sm:w-32 h-40 shrink-0 bg-gray-200 rounded-md overflow-hidden border border-gray-300 flex items-center justify-center">
                     <?php if (!empty($item['image'])): ?>
-                        <img src="<?= htmlspecialchars($item['image']) ?>" alt="Product Image" class="object-cover w-full h-full">
+                        <img onclick="openImagePopup('<?php echo $item['image']; ?>')" src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image';?>" alt="Item Image" class="max-w-full max-h-full object-contain cursor-pointer ">
                     <?php else: ?>
                         <span class="text-gray-500 text-sm">No Image</span>
                     <?php endif; ?>
@@ -115,12 +115,12 @@
                     <input name="qty_received[]" type="number" min="0" class="ml-2 w-16 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder="Qty">
                     <span class="type-checkbox-label">Quantity Received</span>                    
                 </label>
-                <select name="warehouse_id[]" class="flex items-center gap-2 w-auto px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 border rounded-md">
+                <!-- <select name="warehouse_id[]" class="flex items-center gap-2 w-auto px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 border rounded-md">
                     <option value="">Select Delivery Address</option>
-                    <?php foreach ($exotic_address as $address): ?>
+                    <?php /*foreach ($exotic_address as $address): ?>
                         <option value="<?= $address['id'] ?>" <?= $address['is_default'] ? 'selected' : '' ?>><?= htmlspecialchars($address['address_title']) ?></option>
-                    <?php endforeach; ?>
-                </select> 
+                    <?php endforeach; */?>
+                </select>  -->
             </div>
 
             <!-- Remarks Area -->
@@ -162,6 +162,19 @@
                     <?php endforeach; ?>
                 </select>
                 <!-- <input type="text" name="received_by" value="<?php //echo $_SESSION['user']['name'] ?? '' ?>" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none"> -->
+            </div>
+            <div class="w-[210px]">
+                <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Warehouse <span class="text-red-500">*</span></label>
+                <select name="warehouse_id" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
+                    <option value="">Select Warehouse</option>
+                    <?php foreach ($exotic_address as $warehouse): ?>
+                        <option value="<?= $warehouse['id'] ?>"><?= htmlspecialchars($warehouse['address_title']) ?></option>
+                    <?php endforeach; ?>
+                </select>            
+            </div>
+            <div class="w-[210px]">
+                <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Image <span class="text-red-500"></span></label>
+                <input type="file" name="grn_file[]" multiple class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
             </div>
         </div>
 
@@ -208,6 +221,12 @@
         <a href="?page=purchase_orders&action=list" class="create-po-btn">Continue</a>
     </div>
 </div>
+<div id="imagePopup" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 hidden">
+    <div class="relative">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" src="" alt="Popup Image" class="max-w-full max-h-screen rounded-lg shadow-lg">
+    </div>
+</div>
 <script>
         function closePopup() {
             const successPopup = document.getElementById('successPopup');
@@ -229,7 +248,7 @@
                 return;
             }
             //wherehouse validation
-            const warehouseSelect = document.querySelector('select[name="warehouse_id[]"]');
+            const warehouseSelect = document.querySelector('select[name="warehouse_id"]');
             if (!warehouseSelect || !warehouseSelect.value) {
                 alert("Please select a warehouse.");
                 return;
@@ -272,5 +291,16 @@
                 submitBtn.textContent = originalText;
                 alert("An error occurred while creating the Purchase Order.");
             });
+        }
+        function openImagePopup(imageUrl) {
+            const popup = document.getElementById('imagePopup');
+            const popupImage = document.getElementById('popupImage');
+            popupImage.src = imageUrl;
+            popup.classList.remove('hidden');
+        }
+        function closeImagePopup() {
+            const popup = document.getElementById('imagePopup');
+            popup.classList.add('hidden');
+            popupImage.src = '';
         }
     </script>

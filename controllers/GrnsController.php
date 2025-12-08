@@ -88,7 +88,8 @@ class GrnsController {
         $qtyReceivedArr = $_POST['qty_received'] ?? [];
         $remarksArr = $_POST['remarks'] ?? [];
         $qtyAcceptableArr = $_POST['qty_acceptable'] ?? [];
-        $warehouseIdArr = $_POST['warehouse_id'] ?? []; // default warehouse id
+        //$warehouseIdArr = $_POST['warehouse_id'] ?? []; // default warehouse id
+        $warehouseId = $_POST['warehouse_id'] ?? 0;
 
         // Begin DB transaction
         try {
@@ -115,7 +116,7 @@ class GrnsController {
             foreach ($poItems as $index => $item) {
                 $qtyReceived = isset($qtyReceivedArr[$index]) ? floatval($qtyReceivedArr[$index]) : 0;
                 if ($qtyReceived <= 0) continue; // nothing to receive for this item
-
+                //$warehouseId = isset($warehouseIdArr[$index]) ? intval($warehouseIdArr[$index]) : 0;
                 $itemCode = $item['item_code'] ?? $item['order_number'] ?? '';
                 $size = $item['size'] ?? '';
                 $color = $item['color'] ?? '';
@@ -130,7 +131,7 @@ class GrnsController {
                     'size' => $size,
                     'qty_received' => $qtyReceived,
                     'qty_acceptable' => $qtyAcceptableArr[$index] ?? 0,
-                    'location' => $warehouseIdArr[$index] ?? 0,
+                    'location' => $warehouseId,
                     'received_by' => $_POST['received_by'] ?? $_SESSION['user']['id'] ?? 0,
                     'remarks' => $remarksArr[$index] ?? '',
                     'received_date' => $grnDate
@@ -179,6 +180,26 @@ class GrnsController {
 
             // commit transaction
             $conn->commit();
+
+            //image upload handling can be added here
+            if (isset($_FILES['grn_file']) && !empty($_FILES['grn_file']['name'][0])) {
+                $uploadDir = __DIR__ . '/../uploads/grn_files/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+
+                foreach ($_FILES['grn_file']['tmp_name'] as $key => $tmpName) {
+                    $originalName = basename($_FILES['grn_file']['name'][$key]);
+                    $targetFile = $uploadDir . $originalName;
+
+                    if (move_uploaded_file($tmpName, $targetFile)) {
+                        // Optionally, save file info to vp_grn_files database here
+                        $grnModel->uploadGrnFile($poId, 'uploads/grn_files/' . $originalName);
+                    } else {
+                        throw new Exception('Failed to upload file: ' . $originalName);
+                    }
+                }
+            }
 
             header('Content-Type: application/json');
             echo json_encode(['success' => true, 'grn_id' => $grnId]);

@@ -22,5 +22,11 @@ class grn{
             return false;
         }
     }
+    public function uploadGrnFile($grnId, $fileName) {
+        $query = "INSERT INTO vp_grn_files (po_id, file_name) VALUES (?, ?)";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("is", $grnId, $fileName);
+        return $stmt->execute();
+    }
 }
 ?>
