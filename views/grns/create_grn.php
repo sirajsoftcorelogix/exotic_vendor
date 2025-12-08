@@ -115,7 +115,7 @@
                     <input name="qty_received[]" type="number" min="0" class="ml-2 w-16 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder="Qty">
                     <span class="type-checkbox-label">Quantity Received</span>                    
                 </label>
-                <select id="delivery_address" name="delivery_address" class="flex items-center gap-2 w-auto px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 border rounded-md">
+                <select name="warehouse_id[]" class="flex items-center gap-2 w-auto px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 border rounded-md">
                     <option value="">Select Delivery Address</option>
                     <?php foreach ($exotic_address as $address): ?>
                         <option value="<?= $address['id'] ?>" <?= $address['is_default'] ? 'selected' : '' ?>><?= htmlspecialchars($address['address_title']) ?></option>
@@ -131,7 +131,7 @@
                             placeholder="Remarks, if any"
                             name="remarks[]"></textarea>
             </div>
-            <input type="hidden" name="warehouse_id" value="1">
+            
             <input type="hidden" name="item_code[]" value="<?php echo htmlspecialchars($item['item_code'] ?? '') ?>">
             <input type="hidden" name="color[]" value="<?php echo htmlspecialchars($item['color'] ?? '') ?>">
             <input type="hidden" name="size[]" value="<?php echo htmlspecialchars($item['size'] ?? '') ?>">
@@ -149,13 +149,13 @@
             <div class="w-[210px]">
                 <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Received Date <span class="text-red-500">*</span></label>
                 <div class="relative">
-                    <input type="date" name="received_date" value="" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-sm focus:outline-none">
+                    <input type="date" name="received_date" value="<?php echo htmlspecialchars(date('Y-m-d')); ?>" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-sm focus:outline-none">
                     
                 </div>
             </div>
             <div class="w-[210px]">
                 <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Received by <span class="text-red-500">*</span></label>
-                <select name="user_id" id="employee_name" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
+                <select name="received_by" id="employee_name" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
                     <option value="">Select User</option>
                     <?php foreach ($users as $id => $name): ?>
                         <option value="<?= $id ?>" <?= ($id == $_SESSION['user']['id']) ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
@@ -225,7 +225,13 @@
                 }
             });
             if (!valid) {
-                alert("Please enter valid quantities for at least one item.");
+                alert("Please enter valid quantities.");
+                return;
+            }
+            //wherehouse validation
+            const warehouseSelect = document.querySelector('select[name="warehouse_id[]"]');
+            if (!warehouseSelect || !warehouseSelect.value) {
+                alert("Please select a warehouse.");
                 return;
             }
             const submitBtn = document.getElementById('saveChanges');

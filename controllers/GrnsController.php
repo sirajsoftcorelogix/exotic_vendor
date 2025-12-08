@@ -88,7 +88,7 @@ class GrnsController {
         $qtyReceivedArr = $_POST['qty_received'] ?? [];
         $remarksArr = $_POST['remarks'] ?? [];
         $qtyAcceptableArr = $_POST['qty_acceptable'] ?? [];
-        $warehouseId = isset($_POST['warehouse_id']) ? intval($_POST['warehouse_id']) : 1; // default warehouse id
+        $warehouseIdArr = $_POST['warehouse_id'] ?? []; // default warehouse id
 
         // Begin DB transaction
         try {
@@ -130,8 +130,8 @@ class GrnsController {
                     'size' => $size,
                     'qty_received' => $qtyReceived,
                     'qty_acceptable' => $qtyAcceptableArr[$index] ?? 0,
-                    'location' => $warehouseId,
-                    'received_by' => $_SESSION['user']['id'] ?? 0,
+                    'location' => $warehouseIdArr[$index] ?? 0,
+                    'received_by' => $_POST['received_by'] ?? $_SESSION['user']['id'] ?? 0,
                     'remarks' => $remarksArr[$index] ?? '',
                     'received_date' => $grnDate
                 ];
