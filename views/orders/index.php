@@ -717,8 +717,8 @@
 										</div>
                                         <div class="pt-1 w-full max-w-xs">
                                             <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
-                                            <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></p>
-                                            <p class="quantity">Quantity: <?= $order['quantity'] ?></p>
+                                            <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a><?= $order['po_number'] ? '<a href="?page=purchase_orders&action=view&po_id='.$order['po_id'].'" target="_blank" class="mx-10 icon-link text-blue-600 hover:underline">'.$order['po_number'].'</a>' : '' ?></p>
+                                            <p class="quantity">Quantity: <?= $order['quantity'] ?> </p>
                                         </div>
                                     </div>
                                     <!-- Col 1, Row 2: Order Details -->
