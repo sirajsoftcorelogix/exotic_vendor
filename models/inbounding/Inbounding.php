@@ -5,7 +5,7 @@ class Inbounding {
         $this->conn = $db;
     }
     public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '') {
-		$page = (int)$page;
+        $page = (int)$page;
         if ($page < 1) $page = 1;
 
         $limit = (int)$limit;
@@ -13,9 +13,9 @@ class Inbounding {
 
         // calculate offset
         $offset = ($page - 1) * $limit;
-		$where = "";
+        $where = "";
         
-		if (!empty($search) && !empty($status_filter)) {
+        if (!empty($search) && !empty($status_filter)) {
             $search = $this->conn->real_escape_string($search);
             $status_filter = $this->conn->real_escape_string($status_filter);
             $where = "WHERE team_name LIKE('%$search%') AND is_active = '$status_filter'";
@@ -26,20 +26,20 @@ class Inbounding {
             }
 
             if (!empty($status_filter)) {
-                $search = $this->conn->real_escape_string($status_filter);   
+                $status_filter = $this->conn->real_escape_string($status_filter);   
                 $where = "WHERE is_active = '$status_filter'";
             }
         }
 
-		// total records
+        // total records
         $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
 
         $totalPages = ceil($totalRecords / $limit);
 
-        // fetch data
-        $sql = "SELECT * FROM vp_inbound $where LIMIT $limit OFFSET $offset";
+        // fetch data - ADDED ORDER BY id DESC HERE
+        $sql = "SELECT * FROM vp_inbound $where ORDER BY id DESC LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $data = [];
@@ -49,14 +49,14 @@ class Inbounding {
 
         // return structured data
         return [
-            'inbounding'        => $data,
+            'inbounding'       => $data,
             'totalPages'   => $totalPages,
             'currentPage'  => $page,
             'limit'        => $limit,
             'totalRecords' => $totalRecords,
             'search'       => $search
         ];
-	}
+    }
    
     public function getItamcode(){
         $result1 = $this->conn->query("SELECT `item_code`,`title` FROM `vp_products`");
@@ -117,9 +117,17 @@ class Inbounding {
              $vendors = $result1->fetch_all(MYSQLI_ASSOC);
             $result1->free();
         }
+        $sql4 = "SELECT * FROM `category`";
+        $result4 = $this->conn->query($sql4);
+
+        if ($result4) {
+            $category = $result4->fetch_all(MYSQLI_ASSOC);
+            $result4->free();
+        }
         return [
             'form1'   => $inbounding,
-            'vendors' => $vendors
+            'vendors' => $vendors,
+            'category' => $category
         ];
     }
 
@@ -246,7 +254,8 @@ class Inbounding {
         // 5. Execute and return result
         return $stmt->execute();
     }
-    public function updateForm3($id, $data){
+    public function updateForm3($id, $data) {
+        // 1. The SQL has 11 placeholders (?)
         $sql = "UPDATE vp_inbound 
                 SET gate_entry_date_time = ?, 
                     material_code = ?, 
@@ -255,41 +264,45 @@ class Inbounding {
                     depth = ?, 
                     weight = ?, 
                     color = ?, 
-                    quantity_received = ?, 
-                    item_code = ?,
                     received_by_user_id = ?,
                     dimention_unit = ?,
                     weight_unit = ?
                 WHERE id = ?";
+                
         $stmt = $this->conn->prepare($sql);
+        
         if (!$stmt) {
             return [
                 'success' => false,
                 'message' => "Prepare failed: " . $this->conn->error
             ];
         }
+
+        // 2. Corrected bind_param
+        // The type string "sssssssissi" corresponds to the 11 variables below:
+        // s (string), s (string), s (string), s (string), s (string), s (string), s (string), i (int), s (string), s (string), i (int)
         $stmt->bind_param(
-            "sssiiiiisissi",
-            $data['gate_entry_date_time'],
-            $data['material_code'],
-            $data['height'],
-            $data['width'],
-            $data['depth'],
-            $data['weight'],
-            $data['color'],
-            $data['quantity_received'],
-            $data['item_code'],
-            $data['received_by_user_id'],
-            $data['dimention_unit'],
-            $data['weight_unit'],
-            $id
+            "sssssssissi", 
+            $data['gate_entry_date_time'], // 1. Matches gate_entry_date_time
+            $data['material_code'],        // 2. Matches material_code
+            $data['height'],               // 3. Matches height
+            $data['width'],                // 4. Matches width
+            $data['depth'],                // 5. Matches depth
+            $data['weight'],               // 6. Matches weight
+            $data['color'],                // 7. Matches color
+            $data['received_by_user_id'],  // 8. Matches received_by_user_id (int)
+            $data['dimention_unit'],       // 9. Matches dimention_unit (Added this)
+            $data['weight_unit'],          // 10. Matches weight_unit (Added this)
+            $id                            // 11. Matches WHERE id (int)
         );
+
         if ($stmt->execute()) {
             return [
                 'success' => true,
                 'message' => "Record updated successfully."
             ];
         }
+        
         return [
             'success' => false,
             'message' => "Update failed: " . $stmt->error
@@ -400,18 +413,20 @@ class Inbounding {
             weight = ?,
             color = ?,
             quantity_received = ?,
-            Item_code = ?,
             received_by_user_id = ?
         WHERE id = ?";
+        
         $stmt = $this->conn->prepare($sql);
+        
         if (!$stmt) {
             return [
                 'success' => false,
                 'message' => 'Prepare failed: ' . $this->conn->error
             ];
         }
+
         $stmt->bind_param(
-            'ssdddssisii',
+            'ssdddssiii',
             $data['gate_entry_date_time'], // s
             $data['material_code'],        // s
             $data['height'],               // d
@@ -420,16 +435,17 @@ class Inbounding {
             $data['weight'],               // d
             $data['color'],                // s
             $data['Quantity'],             // i
-            $data['Item_code'],            // s
-            $data['received_by_user_id'],   // i
-            $id                             // i
+            $data['received_by_user_id'],  // i
+            $id                            // i
         );
+
         if ($stmt->execute()) {
             return [
                 'success' => true,
                 'message' => 'Record updated successfully.'
             ];
         }
+        
         return [
             'success' => false,
             'message' => 'Update failed: ' . $stmt->error

@@ -95,11 +95,11 @@ unset($vendorsModel);
                 $percentage = ($filled / $total) * 100;
                 ?>
 
-                <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200" style="margin: 0px 0px 10px 0px">
+                <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200" style="margin: 0px 10px 10px 10px;">
                     
                     <div class="flex md:hidden p-3 gap-3 items-center relative">
                         <div class="w-20 h-20 rounded-lg flex-shrink-0 bg-gray-50 border border-gray-100 overflow-hidden">
-                            <img src="<?php echo base_url($tc['product_photo']); ?>" alt="Product" class="w-full h-full object-cover">
+                            <img src="<?php echo base_url($tc['product_photo']); ?>" alt="Product" class="w-full h-full object-cover" onclick="openImagePopup('<?= $tc['product_photo'] ?>')">
                         </div>
                         <div class="flex-1 min-w-0 flex flex-col justify-center space-y-1">
                             <p class="text-sm font-bold text-gray-800 truncate">
@@ -125,10 +125,10 @@ unset($vendorsModel);
                             <div class="flex flex-col gap-4">
                                 <div class="flex items-start gap-4 ">
                                     <div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
-                                        <img src="<?php echo base_url($tc['product_photo']); ?>" alt="" class="max-w-full max-h-full object-contain cursor-pointer">
+                                        <img src="<?php echo base_url($tc['product_photo']); ?>" alt="" class="max-w-full max-h-full object-contain cursor-pointer" onclick="openImagePopup('<?= $tc['product_photo'] ?>')">
                                     </div>
                                     <div class="w-24 h-24 rounded-md flex-shrink-0 flex items-center justify-center bg-gray-50 overflow-hidden">
-                                        <img src="<?php echo base_url($tc['invoice_image']); ?>" alt="" class="max-w-full max-h-full object-contain cursor-pointer">
+                                        <img src="<?php echo base_url($tc['invoice_image']); ?>" alt="" class="max-w-full max-h-full object-contain cursor-pointer" onclick="openImagePopup('<?= $tc['invoice_image'] ?>')">
                                     </div>
                                     
                                     <div class="pt-1 w-full max-w-xs">
@@ -220,7 +220,12 @@ unset($vendorsModel);
     <?php endif; ?>
 
 </div>
-
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
 <?php
 function isFilled($value) {
     if ($value === null) return false;
@@ -230,3 +235,13 @@ function isFilled($value) {
     return true;
 }
 ?>
+<script>
+    function openImagePopup(imageUrl) {
+        popupImage.src = imageUrl;
+        document.getElementById('imagePopup').classList.remove('hidden');
+    }
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    } 
+</script>

@@ -39,6 +39,7 @@ class InboundingController {
         echo json_encode($data);exit;
     }
     public function label($value=''){
+        is_login();
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
@@ -46,6 +47,7 @@ class InboundingController {
         renderTemplateClean('views/inbounding/label.php', $data, 'label');
     }
     public function getform1() {
+        is_login();
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
@@ -53,6 +55,7 @@ class InboundingController {
         renderTemplateClean('views/inbounding/form1.php', $data, 'form1 inbounding');
     }
     public function getdesktopform() {
+        is_login();
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
@@ -90,6 +93,7 @@ class InboundingController {
         return json_decode($response, true);
     }
     public function getform2() {
+        is_login();
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         if (isset($id) && $id != 0) {
@@ -100,6 +104,7 @@ class InboundingController {
         }
     }
     public function getform3() {
+        is_login();
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         if (isset($id) && $id != 0) {
@@ -110,27 +115,45 @@ class InboundingController {
         }
     }
     public function saveform1() {
-         global $inboundingModel;
+        global $inboundingModel;
         $category = $_POST['category'] ?? '';
+
+        // 1. Check if file uploaded
         if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== 0) {
             echo "Photo upload error.";
             exit;
         }
+
+        // 2. Validate Size (50KB Limit)
+        if ($_FILES['photo']['size'] > 51200) { // 50 * 1024
+            echo "File is too large. Maximum allowed size is 50KB.";
+            exit;
+        }
+
         $uploadDir = __DIR__ . '/../uploads/products/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
-        $fileTmp  = $_FILES['photo']['tmp_name'];
+
+        // 3. Process & Resize Image
+        // We generate a unique name, resize it, and save it.
         $fileName = $_FILES['photo']['name'];
         $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-        $allowed = ['jpg','jpeg','png','webp'];
+        $allowed  = ['jpg','jpeg','png','webp'];
+
         if (!in_array($fileExt, $allowed)) {
             echo "Only JPG, PNG, WEBP allowed.";
             exit;
         }
-        $newFile = "IMG_" . time() . "." . $fileExt;
+
+        // Define new filename (Saving as JPG is usually best for size optimization)
+        $newFile = "IMG_" . time() . ".jpg";
         $dest    = $uploadDir . $newFile;
-        if (move_uploaded_file($fileTmp, $dest)) {
+
+        // CALL THE RESIZE FUNCTION
+        $processed = $this->processAndResizeImage($_FILES['photo']['tmp_name'], $dest, 500, 500);
+
+        if ($processed) {
             $photoPath = "uploads/products/" . $newFile;
             $saveData = [
                 'category' => $category,
@@ -144,36 +167,36 @@ class InboundingController {
                 echo "Database error.";
             }
         } else {
-            echo "Upload failed.";
+            echo "Image processing failed.";
         }        
     }
+
     public function updateform1() {
         global $inboundingModel;
 
         $id       = $_GET['id'] ?? 0;
         $category = $_POST['category'] ?? '';
 
-        // Get old record
-        $oldData = $inboundingModel->getform1data($id);;
-
+        $oldData = $inboundingModel->getform1data($id);
         if (!$oldData) {
             echo "Record not found.";
             exit;
         }
 
-        // Keep old image if new one not uploaded
         $photoPath = $oldData['form1']['product_photo'];
 
         // If new photo uploaded
         if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
-
-            $uploadDir = __DIR__ . '/../uploads/products/';
-
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
+            
+            // 1. Validate Size
+            if ($_FILES['photo']['size'] > 51200) {
+                echo "File is too large. Maximum allowed size is 50KB.";
+                exit;
             }
 
-            $fileTmp  = $_FILES['photo']['tmp_name'];
+            $uploadDir = __DIR__ . '/../uploads/products/';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
             $fileName = $_FILES['photo']['name'];
             $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
             $allowed  = ['jpg','jpeg','png','webp'];
@@ -183,16 +206,20 @@ class InboundingController {
                 exit;
             }
 
-            // Rename
-            $newFile = "IMG_" . time() . "." . $fileExt;
+            $newFile = "IMG_" . time() . ".jpg";
             $dest    = $uploadDir . $newFile;
 
-            if (move_uploaded_file($fileTmp, $dest)) {
+            // 2. Process & Resize
+            $processed = $this->processAndResizeImage($_FILES['photo']['tmp_name'], $dest, 500, 500);
+
+            if ($processed) {
                 $photoPath = "uploads/products/" . $newFile;
+                
+                // Optional: Unlink (delete) old file here if needed
+                // if(file_exists(__DIR__ . '/../' . $oldData['form1']['product_photo'])) { ... }
             }
         }
 
-        // Save data
         $data = [
             'id'       => $id,
             'category' => $category,
@@ -207,6 +234,48 @@ class InboundingController {
         } else {
             echo "Update failed.";
         }
+    }
+
+    /**
+     * Helper function to resize image to fixed width/height
+     * and compress it to keep file size low.
+     */
+    private function processAndResizeImage($sourcePath, $destPath, $fixedW, $fixedH) {
+        // Get original dimensions
+        list($width, $height, $type) = getimagesize($sourcePath);
+
+        // Load image based on type
+        switch ($type) {
+            case IMAGETYPE_JPEG: $src = imagecreatefromjpeg($sourcePath); break;
+            case IMAGETYPE_PNG:  $src = imagecreatefrompng($sourcePath); break;
+            case IMAGETYPE_WEBP: $src = imagecreatefromwebp($sourcePath); break;
+            default: return false; 
+        }
+
+        if (!$src) return false;
+
+        // Create new blank image with fixed dimensions
+        $dst = imagecreatetruecolor($fixedW, $fixedH);
+
+        // Maintain transparency for PNG/WEBP (though we convert to JPG later, good practice)
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $white = imagecolorallocate($dst, 255, 255, 255);
+        imagefill($dst, 0, 0, $white);
+
+        // Resize (Stretch to fit fixed size - as requested "set in fix size")
+        // If you want to maintain aspect ratio, logic needs to change slightly.
+        // This strictly forces 500x500.
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $fixedW, $fixedH, $width, $height);
+
+        // Save as JPEG with 75% Quality (Good balance for <50KB)
+        // We force JPG because it handles compression better than PNG for photos
+        $result = imagejpeg($dst, $destPath, 75);
+
+        imagedestroy($src);
+        imagedestroy($dst);
+
+        return $result;
     }
     public function updateform2() {
         global $inboundingModel;
@@ -273,6 +342,7 @@ class InboundingController {
 
     // PAGE: Display the photos form
     public function i_photos() {
+        is_login();
         global $inboundingModel;
         
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
@@ -460,10 +530,7 @@ class InboundingController {
         $weight               = $_POST['weight'] ?? '';
         $color                = $_POST['color'] ?? '';
         $quantity_received    = $_POST['quantity_received'] ?? '';
-        $item_code            = $_POST['Item_code'] ?? '';
         $received_by_user_id  = $_POST['received_by_user_id'] ?? '';
-        $weight_unit  = $_POST['weight_unit'] ?? '';
-        $dimention_unit  = $_POST['dimention_unit'] ?? '';
 
         // Prepare data array for update
         $updateData = [
@@ -475,10 +542,7 @@ class InboundingController {
             'weight'               => $weight,
             'color'                => $color,
             'quantity_received'    => $quantity_received,
-            'item_code'            => $item_code,
             'received_by_user_id'  => $received_by_user_id,
-            'weight_unit'          => $weight_unit,
-            'dimention_unit'       => $dimention_unit,
         ];
 
         // Call model update
@@ -550,7 +614,6 @@ class InboundingController {
             'weight'               => $_POST['weight'] ?? '',
             'color'                => $_POST['color'] ?? '',
             'Quantity'             => $_POST['quantity_received'] ?? '',
-            'Item_code'            => $_POST['Item_code'] ?? '',
             'received_by_user_id'            => $_POST['received_by_user_id'] ?? '',
         ];
         $insertId = $inboundingModel->saveform3($record_id,$saveData);

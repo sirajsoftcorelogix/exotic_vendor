@@ -27,7 +27,7 @@ $record_id = $_GET['id'] ?? '';
     <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
         <div class="flex items-stretch w-full">
             <div class="shrink-0 w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 ml-5 relative">
-                <img src="<?php echo base_url($data['form2']['product_photo']); ?>" class="w-full h-full object-cover rounded-[3px] block bg-[#ddd]">
+                <img src="<?php echo base_url($data['form2']['product_photo']); ?>" class="w-full h-full object-cover rounded-[3px] block bg-[#ddd]" onclick="openImagePopup('<?= $data['form2']['product_photo'] ?>')">
             </div>
 
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-5 pt-[15px] pb-5 bg-white ml-2.5 mr-5">
@@ -342,7 +342,7 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:</label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>" name="gst_rate">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
+                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
                         </div>
                     </div>
                 </div>
@@ -458,7 +458,19 @@ $record_id = $_GET['id'] ?? '';
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">In Stock Lead Time:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '') ?>" name="lead_time_days">
+                        
+                        <div class="relative w-full">
+                            <input 
+                                type="text" 
+                                name="lead_time_days"
+                                value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '') ?>" 
+                                class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]"
+                            >
+                            
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">
+                                Days
+                            </span>
+                        </div>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
@@ -480,6 +492,12 @@ $record_id = $_GET['id'] ?? '';
             <button class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a]">Save and Generate Item Code</button>
         </div>
     </form>
+</div>
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
 </div>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -728,4 +746,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+</script>
+<script>
+    function openImagePopup(imageUrl) {
+        popupImage.src = imageUrl;
+        document.getElementById('imagePopup').classList.remove('hidden');
+    }
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    } 
 </script>
