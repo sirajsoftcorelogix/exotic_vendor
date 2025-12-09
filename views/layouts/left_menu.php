@@ -26,7 +26,8 @@
         </div>
       <nav id="main-nav" class="flex-1 overflow-y-auto p-4">
             <!-- Navigation Links -->
-            <?php                  
+            <?php
+                  is_login();
                   $userRoleId = (int)$_SESSION["user"]["role_id"];
                   global $conn;
                   if($userRoleId == 1) {
