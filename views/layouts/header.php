@@ -137,7 +137,13 @@ $msgCnt = $notificationController->getUnreadCount();
                                 </button> -->
                             </div>
                         </div>
+                        <div class="border-t border-gray-100 mt-2 pt-2">
 
+                            <a href="chat.php" class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200" target="_blank">
+                                <i class="fas fa-chat text-2xl text-gray-700"></i>
+                                <span class="font-medium text-gray-700" style="font-size: 15px; font-family: 'Canva Sans', sans-serif;">💬 Chat</span>
+                            </a>
+                        </div>
                         <!-- Sign Out -->
                         <div class="border-t border-gray-100 mt-2 pt-2">
                             <a href="?page=users&action=logout" class="flex items-center space-x-3 px-3 py-1 text-sm font-medium hover:bg-gray-100 rounded-md transition-colors">

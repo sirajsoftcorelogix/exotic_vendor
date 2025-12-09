@@ -1,0 +1,83 @@
+<?php
+require_once 'bootstrap/init/init.php';
+require_once("helpers/html_helpers.php");
+is_login();
+$currentUserId = $_SESSION["user"]['id'] ?? null;
+$currentUserName = $_SESSION['user']['name'] ?? 'You';
+$apiToken = fetchAPIToken($currentUserId);
+if (!$currentUserId) {
+    die('You must be logged in with $_SESSION["user"]["id"] set.');
+}
+?>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Internal Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="assets/chat.css">
+</head>
+<body>
+<div id="chat-app">
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <h2>Users</h2>
+      <div class="sidebar-sub">Logged in as: <?php echo htmlspecialchars($currentUserName); ?></div>
+    </div>
+
+    <div id="users-section">
+      <input type="text" id="user-search" placeholder="Search users..." />
+      <div id="user-list"></div>
+    </div>
+
+    <div class="sidebar-header" style="margin-top:8px;">
+      <h2>Recent Chats</h2>
+    </div>
+    <div id="conversation-list"></div>
+  </aside>
+
+  <main id="chat-main">
+    <header id="chat-header">
+      <div>
+        <div id="chat-title">Select a conversation</div>
+        <div id="chat-subtitle"></div>
+      </div>
+      <div id="chat-presence"></div>
+    </header>
+
+    <section id="messages"></section>
+
+    <footer id="chat-footer">
+      <div id="typing-indicator" style="display:none;">Someone is typing...</div>
+      <div id="input-row">
+        <input type="file" id="file-input" style="display:none;">
+        <button id="attach-btn" title="Attach file">📎</button>
+        <input id="message-input" placeholder="Type a message" autocomplete="off">
+        <button id="send-btn">Send</button>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<!-- Popup notifications container -->
+<div id="chat-popup-container"></div>
+<script>
+window.CURRENT_USER = <?php echo (int)$currentUserId; ?>;
+window.API_TOKEN = <?php echo json_encode($apiToken); ?>;
+//window.WS_URL = "ws://localhost:8080/";
+window.API_BASE = "api"; // api folder under exotic_vendor/
+
+// Ask notification permission early
+if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+    Notification.requestPermission();
+}
+
+window.WS_URL =
+    (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+    location.hostname +
+    ':8080/?token=' + encodeURIComponent(window.API_TOKEN);
+console.log("URL: " + window.WS_URL + " Current User: " + window.CURRENT_USER);
+</script>
+<script src="assets/chat.js"></script>
+</body>
+</html>

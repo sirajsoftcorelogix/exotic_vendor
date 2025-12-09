@@ -527,4 +527,33 @@
 		$stmt->bind_param("isss", $user_id, $title, $message, $link);
 		return $stmt->execute();
 	}
+	function generateApiToken($length = 32) {
+		// Generate random bytes (length in bytes, e.g., 32 for 256 bits)
+		$randomBytes = random_bytes($length);
+		
+		// Encode to Base64 for a readable, URL-safe string
+		$token = base64_encode($randomBytes);
+		
+		// Remove any padding characters for cleaner tokens
+		return rtrim($token, '=');
+	}
+	function assignAPIToken($user_id) {
+		global $conn;
+		$token = generateApiToken();
+		$sql = "INSERT INTO api_tokens (user_id, token, created_at) VALUES (?, ?, NOW())";
+		$stmt = $conn->prepare($sql);
+		$stmt->bind_param("is", $user_id, $token);
+		return $stmt->execute();
+	}
+	function fetchAPIToken($user_id) {
+		global $conn;
+		$sql = "SELECT token FROM api_tokens WHERE user_id = ".$user_id." ORDER BY id DESC";
+        $result = $conn->query($sql);
+		if($result->num_rows > 0) {
+			$row = $result->fetch_assoc();
+			return $row["token"] ?? "";
+		}else{
+			return "";
+		}
+	}
 ?>

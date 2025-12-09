@@ -2,6 +2,10 @@
     "require": {
         "phpmailer/phpmailer": "^6.10",
         "mpdf/mpdf": "^8.2",
-        "pear/text_languagedetect": "^1.0"
-    }
+        "pear/text_languagedetect": "^1.0",
+		"cboden/ratchet": "^0.4"
+    },
+	"autoload": {
+		"psr-4": { "ChatModule\\": "src/" }
+	}
 }
