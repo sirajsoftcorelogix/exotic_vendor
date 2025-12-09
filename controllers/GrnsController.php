@@ -111,13 +111,13 @@ class GrnsController {
             $selectStockSql = "SELECT id, current_stock FROM vp_stock WHERE item_code = ? AND COALESCE(size,'') = COALESCE(?, '') AND COALESCE(color,'') = COALESCE(?, '') AND warehouse_id = ? LIMIT 1";
             $selectStockStmt = $conn->prepare($selectStockSql);
 
-            $updateStockSql = "UPDATE vp_stock SET current_stock = ? WHERE id = ?";
+            $updateStockSql = "UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?";
             $updateStockStmt = $conn->prepare($updateStockSql);
 
-            $insertStockSql = "INSERT INTO vp_stock (item_code, size, color, warehouse_id, current_stock) VALUES (?, ?, ?, ?, ?)";
+            $insertStockSql = "INSERT INTO vp_stock (item_code, size, color, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?, ?, ?)";
             $insertStockStmt = $conn->prepare($insertStockSql);
 
-            $insertMovementSql = "INSERT INTO vp_stock_movements (product_id, item_code, size, color, warehouse_id, movement_type, quantity, running_stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            $insertMovementSql = "INSERT INTO vp_stock_movements (product_id, item_code, size, color, warehouse_id, movement_type, quantity, running_stock, created_at, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)";
             $insertMovementStmt = $conn->prepare($insertMovementSql);
 
             foreach ($poItems as $index => $item) {
@@ -157,14 +157,15 @@ class GrnsController {
                     $currentStock = floatval($row['current_stock']);
                     $runningStock = $currentStock + $qtyReceived;
                     // update stock
-                    $updateStockStmt->bind_param('di', $runningStock, $stockId);
+                    $updateStockStmt->bind_param('dii', $runningStock, $grnId, $stockId);
                     if (!$updateStockStmt->execute()) {
                         throw new Exception('Failed to update vp_stock for item ' . $itemCode);
                     }
                 } else {
                     // insert stock record
                     $runningStock = $qtyReceived;
-                    $insertStockStmt->bind_param('sssid', $itemCode, $size, $color, $warehouseId, $runningStock);
+                    
+                    $insertStockStmt->bind_param('sssidi', $itemCode, $size, $color, $warehouseId, $runningStock, $grnId);
                     if (!$insertStockStmt->execute()) {
                         throw new Exception('Failed to insert vp_stock for item ' . $itemCode);
                     }
@@ -174,7 +175,8 @@ class GrnsController {
                 // insert stock movement (IN)
                 $movementType = 'IN';
                 $pidBind = $productId ? $productId : 0;
-                $insertMovementStmt->bind_param('isssisdd', $pidBind, $itemCode, $size, $color, $warehouseId, $movementType, $qtyReceived, $runningStock);
+                $refType = 'GRN';
+                $insertMovementStmt->bind_param('isssisddsd', $pidBind, $itemCode, $size, $color, $warehouseId, $movementType, $qtyReceived, $runningStock, $refType, $grnId);
                 if (!$insertMovementStmt->execute()) {
                     throw new Exception('Failed to insert vp_stock_movements for item ' . $itemCode);
                 }
