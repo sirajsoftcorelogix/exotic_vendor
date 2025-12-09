@@ -23,6 +23,7 @@ class GrnsController {
     }
 
     public function createGrn() {
+        is_login();
         global $grnModel;
         global $purchaseOrderModel;
         global $purchaseOrderItemsModel;
