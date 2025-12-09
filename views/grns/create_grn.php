@@ -1,11 +1,14 @@
 <div class="container mx-auto px-4">    
-    <div class="pt-8 pb-6 text-center"> <h1 class="type-page-header">Goods Receipt Note</h1> </div>
+    <div class="pt-8 pb-6 text-center">
+        <h1 class="type-page-header text-base md:text-lg">Create</h1>
+        <h1 class="text-2xl md:text-4xl font-bold">Goods Receipt Note</h1> 
+    </div>
     <!-- Vendor Info Section -->
      <?php //print_array($purchaseOrder);?>
     <!-- Added border-b border-gray-200 to this container so line takes full width of main container -->
     <div class="w-full mb-8 border-b border-gray-200 pb-8">
         <!-- Inner content centered with specific width -->
-        <div class="w-full md:w-[800px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2">
+        <div class="w-full md:w-[800px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0">
             <!-- Left Column -->
             <div class="space-y-0">
                 <div class="flex">
@@ -112,7 +115,7 @@
                 </label>
 
                 <label class="flex items-center gap-2 cursor-pointer">
-                    <input name="qty_received[]" type="number" min="0" class="ml-2 w-16 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder="Qty">
+                    <input name="qty_received[]" type="number" min="0" class="ml-0 w-16 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder="Qty">
                     <span class="type-checkbox-label">Quantity Received</span>                    
                 </label>
                 <!-- <select name="warehouse_id[]" class="flex items-center gap-2 w-auto px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 border rounded-md">
