@@ -189,9 +189,9 @@
             <button onclick="savegrn(event)" id="saveChanges" class="w-[210px] bg-black text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
                 Save & Submit
             </button>
-            <button class="w-[210px] bg-black text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
+            <!-- <button class="w-[210px] bg-black text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
                 Back to Scan
-            </button>
+            </button> -->
         </div>
     </form>
     </div>
