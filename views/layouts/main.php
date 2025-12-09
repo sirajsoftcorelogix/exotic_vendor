@@ -1,4 +1,7 @@
-<?php $loginUser = getloginUser();?>
+<?php 
+is_login();
+$loginUser = getloginUser();
+?>
 <?php //$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
 //$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor";
 global $domain, $root_path, $page, $action, $conn;
