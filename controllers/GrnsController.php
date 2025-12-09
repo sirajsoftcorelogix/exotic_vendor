@@ -51,9 +51,14 @@ class GrnsController {
         $data['users'] = $usersModel->getAllUsers();
         //$data['selectStockStmt'] = $res;
         // render clean for mobile users
-        if (isMobile())
-        renderTemplateClean('views/grns/create_grn.php', $data, 'Create Goods Receipt Note');
-        renderTemplate('views/grns/create_grn.php', $data, 'Create Goods Receipt Note');
+        if (isMobile()){
+            renderTemplateClean('views/grns/create_grn.php', $data, 'Create Goods Receipt Note');
+            return;
+        }else{
+            renderTemplate('views/grns/create_grn.php', $data, 'Create Goods Receipt Note');
+        }
+        
+       
     }
 
     public function createGrnPost() {
