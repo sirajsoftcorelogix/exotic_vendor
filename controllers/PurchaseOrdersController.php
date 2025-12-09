@@ -1089,7 +1089,7 @@ class PurchaseOrdersController {
 
         //$qrCode = new QrCode(base_url('?page=grns&action=create&po_id=').$purchaseOrder['po_number']);
         $qrCode = new Endroid\QrCode\QrCode(
-            data: base_url('?page=grns&action=create&po_id=').$purchaseOrder['po_id'],
+            data: base_url('?page=grns&action=create&po_id='.$poId),
             size: 400,
             margin: 10
         );
