@@ -56,6 +56,7 @@ class GrnsController {
     }
 
     public function createGrnPost() {
+        is_login();
         global $grnModel;
         global $purchaseOrderModel;
         global $purchaseOrderItemsModel;
