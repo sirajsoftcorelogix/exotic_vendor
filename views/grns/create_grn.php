@@ -22,11 +22,11 @@
             <div class="space-y-0">
                 <div class="flex">
                     <span class="type-label-small w-32">Vendor Phone</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($purchaseOrder['vendor_phone'] ?? '') ?></span>
+                    <span class="type-data-small">: &nbsp;<a href="tel:<?= htmlspecialchars($purchaseOrder['vendor_phone'] ?? '') ?>"><?= htmlspecialchars($purchaseOrder['vendor_phone'] ?? '') ?></a></span>
                 </div>
                 <div class="flex">
                     <span class="type-label-small w-32">Vendor Email</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($purchaseOrder['vendor_email'] ?? '') ?></span>
+                    <span class="type-data-small">: &nbsp; <a href="mailto:<?= htmlspecialchars($purchaseOrder['vendor_email'] ?? '') ?>"><?= htmlspecialchars($purchaseOrder['vendor_email'] ?? '') ?></a></span>
                 </div>
             </div>
         </div>
@@ -89,7 +89,7 @@
                         </div>
                         <!-- Row 4 -->
                         <div class="flex items-baseline">
-                            <span class="type-label-small w-20 shrink-0">QtyReceived</span>
+                            <span class="type-label-small w-20 shrink-0">Previously Received Qty</span>
                             <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['current_stock'] ?? '') ?></span>
                         </div>
                         
