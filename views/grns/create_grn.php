@@ -67,7 +67,7 @@
                         </div>
                         <div class="flex items-baseline">
                             <span class="type-label-small w-20 shrink-0">Height</span>
-                            <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['prod_height'] ?? '') ?> cm</span>
+                            <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['prod_height'] ?? '') ?> </span>
                         </div>
 
                         <!-- Row 2 -->
