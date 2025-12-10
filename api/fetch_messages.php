@@ -32,7 +32,7 @@ if (!$stmt->fetchColumn()) {
 
 $limit = isset($_GET['limit']) ? max(1, min((int)$_GET['limit'], 200)) : 100;
 
-$sql = "SELECT id, conversation_id, sender_id, message, file_path, created_at
+$sql = "SELECT id, conversation_id, sender_id, `message`, file_path, original_name, created_at
         FROM messages
         WHERE conversation_id = ?
         ORDER BY created_at DESC

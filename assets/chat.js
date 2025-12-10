@@ -281,7 +281,7 @@
         const link = document.createElement('a');
         link.href = msg.file_path;
         link.target = '_blank';
-        link.textContent = 'Attachment';
+        link.textContent = msg.original_name ? msg.original_name : "Attachment";
         fileDiv.appendChild(link);
         bubble.appendChild(fileDiv);
       }
@@ -311,6 +311,9 @@
 
     if (fileInput.dataset.uploadedPath) {
       payload.file_path = fileInput.dataset.uploadedPath;
+    }
+    if (fileInput.dataset.uploadedOriginalName) {
+      payload.original_name = fileInput.dataset.uploadedOriginalName;
     }
 
     if (ws.readyState === WebSocket.OPEN) {
@@ -364,7 +367,6 @@
       scrollToBottom();
       sendReadReceipt();
     }
-    
 
     // Show popup and browser notification for messages not from me
     if (msg.sender_id != window.CURRENT_USER) {
@@ -449,6 +451,7 @@
       .then(res => {
         if (res.error) { alert('Upload error: ' + res.error); fileInput.value = ''; return; }
         fileInput.dataset.uploadedPath = res.path;
+        fileInput.dataset.uploadedOriginalName = res.original_name;
         sendMessage();
       })
       .catch(err => console.error('upload error', err));

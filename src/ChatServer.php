@@ -94,7 +94,6 @@ class ChatServer implements MessageComponentInterface
             }
 
             $type = $payload['type'] ?? '';
-
             switch ($type) {
                 case 'send_message':
                     $this->handleSendMessage($from, $payload);
@@ -125,9 +124,9 @@ class ChatServer implements MessageComponentInterface
     {
         try {
             // Use contains() and remove() per modern SplObjectStorage API
-            if ($this->clients->contains($conn)) {
+            /*if ($this->clients->contains($conn)) {
                 $this->clients->remove($conn);
-            }
+            }*/
 
             $rid = $conn->resourceId;
             if (isset($this->users[$rid])) {
@@ -376,6 +375,7 @@ class ChatServer implements MessageComponentInterface
         $text = trim($payload['message'] ?? '');
         $senderId = $from->userId ?? null;
         $filePath = $payload['file_path'] ?? null;
+        $originalName = trim($payload['original_name']) ?? null;
 
         if (!$conversationId || !$senderId) {
             $from->send(json_encode(['type' => 'error', 'msg' => 'Invalid conversation or sender']));
@@ -395,21 +395,29 @@ class ChatServer implements MessageComponentInterface
             return;
         }
 
-        // Insert message
-        $insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, message, file_path, created_at) VALUES (?, ?, ?, ?, NOW())");
-        $insert->execute([$conversationId, $senderId, $text ?: null, $filePath ?: null]);
-        $msgId = (int)$this->conn->lastInsertId();
-
         $createdAt = date('Y-m-d H:i:s');
+        // Insert message
+        //$insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, message, file_path, created_at) VALUES (?, ?, ?, ?, NOW())");
+        $insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, `message`, file_path, original_name, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+        $insert->execute([
+            $conversationId,
+            $senderId,
+            $text ?: null,
+            $filePath ?: null,
+            $originalName,
+            $createdAt
+        ]);
+        $msgId = (int)$this->conn->lastInsertId();
 
         $msgRow = [
             'type' => 'new_message',
             'message' => [
-                'id' => $msgId,
+                'id' => (int)$msgId,
                 'conversation_id' => $conversationId,
                 'sender_id' => $senderId,
                 'message' => htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
                 'file_path' => $filePath,
+                'original_name' => $originalName,
                 'created_at' => $createdAt,
             ],
         ];

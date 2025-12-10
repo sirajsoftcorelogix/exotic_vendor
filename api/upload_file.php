@@ -54,9 +54,13 @@ if (!in_array($mime, $allowed, true)) {
     exit;
 }
 
-$ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-$name = bin2hex(random_bytes(16)) . ($ext ? '.' . $ext : '');
-$dest = $uploadDir . '/' . $name;
+// Extract original filename safely
+$originalName = $file['name'];
+$ext = pathinfo($originalName, PATHINFO_EXTENSION);
+
+// Generate safe random filename for storing
+$safeName = bin2hex(random_bytes(16)) . ($ext ? '.' . $ext : '');
+$dest = $uploadDir . '/' . $safeName;
 
 if (!move_uploaded_file($file['tmp_name'], $dest)) {
     http_response_code(500);
@@ -64,8 +68,11 @@ if (!move_uploaded_file($file['tmp_name'], $dest)) {
     exit;
 }
 
-// Public path - you may need to adjust depending on how Apache exposes /uploads
-$publicPath = '/exotic_vendor/uploads/' . $name;
+// Public path - adjust if needed
+$publicPath = '/exotic_vendor/uploads/' . $safeName;
 
 header('Content-Type: application/json');
-echo json_encode(['path' => $publicPath]);
+echo json_encode([
+    'path' => $publicPath,
+    'original_name' => $originalName // <-- Return original filename
+]);
