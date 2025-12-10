@@ -81,5 +81,6 @@ console.log("URL: " + window.WS_URL + " Current User: " + window.CURRENT_USER);
 </script>
 <script src="assets/chat.js"></script>
 <div id="ui-popup-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 999999;"></div>
+<div id="toast-container"></div>
 </body>
 </html>

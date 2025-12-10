@@ -23,6 +23,10 @@
   let activeConversationId = null;
   let typingTimeout = null;
   let lastTypingSentAt = 0;
+  let notificationSound = new Audio("assets/message.mp3");
+  // --- Tab blinking notification ---
+  let originalTitle = document.title;
+  let blinkInterval = null;
 
   const urlParams = new URLSearchParams(window.location.search);
   const openConvParam = urlParams.get("conversation_id");
@@ -68,7 +72,9 @@
   /*userSearchEl.addEventListener('input', (e) => {
     renderUserList(userSearchEl.value.trim());
   });*/
-
+  function playSound() {
+      notificationSound.play().catch(() => {});
+  }
   function loadUsers() {
     fetch(window.API_BASE + '/fetch_users.php', { credentials: 'include' })
       .then(r => r.json())
@@ -85,7 +91,13 @@
       const item = document.createElement('div');
       item.className = 'conversation-item';
       item.dataset.userId = u.id;
-      item.innerHTML = '<div class="conv-avatar">U</div><div class="conv-main"><div class="conv-title">' + escapeHtml(u.name) + '</div></div>';
+      item.innerHTML = `
+          <div class="conv-avatar ${u.is_online ? 'online' : 'offline'}">U</div>
+          <div class="conv-main">
+              <div class="conv-title">${escapeHtml(u.name)}</div>
+              <div class="conv-sub">${u.is_online ? 'Online' : 'Offline'}</div>
+          </div>
+      `;
       item.addEventListener('click', () => { openChatWithUser(u.id); });
       userListEl.appendChild(item);
     });
@@ -352,10 +364,14 @@
       scrollToBottom();
       sendReadReceipt();
     }
+    
 
     // Show popup and browser notification for messages not from me
     if (msg.sender_id != window.CURRENT_USER) {
+      playSound();
       //showPopupNotification(msg);
+      //showBottomBarNotification(msg);
+      //showDesktopToast(msg); // Desktop-like toast notification
       showUiPopup(msg);
       /*if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         const body = msg.message ? msg.message : "📎 Attachment received";
@@ -365,6 +381,31 @@
     }
 
     renderConversationList();
+  }
+  function showDesktopToast(msg) {
+      const container = document.getElementById("toast-container");
+      if (!container) return;
+
+      const div = document.createElement("div");
+      div.className = "toast";
+
+      const preview = msg.message ? msg.message.substring(0, 100) : "📎 Attachment received";
+      const sender = msg.sender_name || ("User " + msg.sender_id);
+
+      div.innerHTML = `
+          <strong>${escapeHtml(sender)}</strong>
+          <small>${escapeHtml(preview)}</small>
+      `;
+
+      div.addEventListener('click', () => {
+          setActiveConversation(msg.conversation_id);
+          div.remove();
+      });
+
+      container.appendChild(div);
+
+      // Auto-remove after animation
+      setTimeout(() => div.remove(), 5500);
   }
   function handleTyping() {
     const now = Date.now();
@@ -385,9 +426,17 @@
     typingTimeout = setTimeout(() => { typingIndicatorEl.style.display = 'none'; }, 1500);
   }
   function handlePresence(data) {
-    if (data.user_id === window.CURRENT_USER) {
-      presenceEl.textContent = data.is_online ? 'You are online' : 'You are offline';
-    }
+      // update my presence text
+      if (data.user_id === window.CURRENT_USER) {
+          presenceEl.textContent = data.is_online ? 'You are online' : 'You are offline';
+      }
+
+      // update other users in the list
+      const user = users.find(u => u.id == data.user_id);
+      if (user) {
+          user.is_online = data.is_online;
+          renderUserList(userSearchEl.value.trim());
+      }
   }
   function handleFileUpload() {
     if (!fileInput.files.length) return;
@@ -452,6 +501,34 @@
       // Auto-remove after 5 seconds
       setTimeout(() => div.remove(), 5000);
   }
+  function showBottomBarNotification(msg) {
+      // Remove old bar if exists
+      let old = document.getElementById("bottom-bar-notify");
+      if (old) old.remove();
+
+      const bar = document.createElement("div");
+      bar.id = "bottom-bar-notify";
+
+      const preview = msg.message ? msg.message.substring(0, 80) : "📎 Attachment";
+      const senderName = msg.sender_name || ("User " + msg.sender_id);
+
+      bar.innerHTML = `
+          <div><strong>${escapeHtml(senderName)}</strong>: ${escapeHtml(preview)}</div>
+          <button id="bar-open-btn">Open</button>
+      `;
+
+      document.body.appendChild(bar);
+
+      document.getElementById("bar-open-btn").onclick = () => {
+          setActiveConversation(msg.conversation_id);
+          bar.remove();
+      };
+
+      // Auto-hide after 6 seconds
+      setTimeout(() => { try { bar.remove(); } catch(e){} }, 6000);
+  }
+  // Stop blinking when user focuses the page
+  window.addEventListener("focus", stopBlink);
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
 

@@ -98,6 +98,9 @@ class ChatServer implements MessageComponentInterface
                 $this->setUserOnline($uid, false);
                 $this->broadcastPresence($uid, false);
             }
+            $sql = "UPDATE online_users SET is_online = 0, last_seen = NOW() WHERE user_id = ?"; // User gets Offline
+            $stmt = $this->conn->prepare($sql);
+            $stmt->execute([$uid]);
         }
         echo "CONNECTION CLOSED for user: " . ($conn->userId ?? 'unknown') . PHP_EOL;
     }

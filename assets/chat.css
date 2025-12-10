@@ -266,3 +266,109 @@ body {
     from { opacity: 1; }
     to { opacity: 0; transform: translateX(28px); }
 }
+/* Conversation highlight on new message */
+.conv-highlight {
+    background-color: #1e293b !important;
+    animation: convPulse 0.5s ease;
+}
+
+@keyframes convPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+    100% { transform: scale(1); }
+}
+#bottom-bar-notify {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #0f172a;
+    color: white;
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+    z-index: 999999;
+    animation: slideUpNotify 0.3s ease;
+}
+
+#bottom-bar-notify button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+@keyframes slideUpNotify {
+    from { transform: translateY(60px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+/* Desktop-like toast notifications */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 999999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.toast {
+    background: #1e293b;
+    color: #fff;
+    padding: 14px 18px;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    width: 280px;
+    animation: toastSlideIn 0.35s ease, toastFadeOut 0.4s ease forwards 5s;
+    cursor: pointer;
+}
+
+.toast strong {
+    font-size: 14px;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.toast small {
+    font-size: 13px;
+    opacity: 0.9;
+    display: block;
+}
+
+@keyframes toastSlideIn {
+    from { transform: translateX(40px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toastFadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; transform: translateX(40px); }
+}
+.conv-avatar {
+    position: relative;
+}
+
+.conv-avatar.online::after,
+.conv-avatar.offline::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #1e293b;
+}
+
+.conv-avatar.online::after {
+    background: #10b981; /* green */
+}
+
+.conv-avatar.offline::after {
+    background: #6b7280; /* gray */
+}
