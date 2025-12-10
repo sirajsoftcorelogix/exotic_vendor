@@ -58,7 +58,17 @@ if (!$currentUserId) {
     </footer>
   </main>
 </div>
+<button id="create-group-btn">+ Create Group</button>
 
+<div id="group-modal" class="modal hidden">
+  <div class="modal-content">
+    <h2>Create Group</h2>
+    <input id="group-name" placeholder="Group Name" />
+    <div id="group-members-list"></div>
+    <button id="create-group-submit">Create</button>
+    <button id="group-close-btn">Cancel</button>
+  </div>
+</div>
 <!-- Popup notifications container 
 <div id="chat-popup-container"></div>-->
 

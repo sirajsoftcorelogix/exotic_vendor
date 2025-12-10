@@ -435,7 +435,7 @@
       const user = users.find(u => u.id == data.user_id);
       if (user) {
           user.is_online = data.is_online;
-          renderUserList(userSearchEl.value.trim());
+          //renderUserList(userSearchEl.value.trim());
       }
   }
   function handleFileUpload() {
@@ -527,8 +527,52 @@
       // Auto-hide after 6 seconds
       setTimeout(() => { try { bar.remove(); } catch(e){} }, 6000);
   }
-  // Stop blinking when user focuses the page
-  window.addEventListener("focus", stopBlink);
+  document.getElementById("create-group-btn").addEventListener("click", openGroupModal);
+
+  function openGroupModal() {
+      document.getElementById("group-modal").classList.remove("hidden");
+      renderGroupMemberSelector();
+  }
+
+  function renderGroupMemberSelector() {
+      const list = document.getElementById("group-members-list");
+      list.innerHTML = '';
+
+      users.forEach(u => {
+          const div = document.createElement("div");
+          div.innerHTML = `
+              <label>
+                  <input type="checkbox" class="group-member" value="${u.id}">
+                  ${u.name}
+              </label>
+          `;
+          list.appendChild(div);
+      });
+  }
+  document.getElementById("create-group-submit").addEventListener("click", submitGroup);
+
+  function submitGroup() {
+      const name = document.getElementById("group-name").value.trim();
+      const memberEls = document.querySelectorAll(".group-member:checked");
+
+      const members = Array.from(memberEls).map(el => parseInt(el.value, 10));
+
+      fetch(window.API_BASE + "/create_group.php", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, members })
+      })
+      .then(r => r.json())
+      .then(res => {
+          if (res.conversation_id) {
+              loadConversations().then(() => {
+                  setActiveConversation(res.conversation_id);
+              });
+          }
+          document.getElementById("group-modal").classList.add("hidden");
+      });
+  }
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
 

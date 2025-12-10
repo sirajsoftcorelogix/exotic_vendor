@@ -352,7 +352,6 @@ body {
 .conv-avatar {
     position: relative;
 }
-
 .conv-avatar.online::after,
 .conv-avatar.offline::after {
     content: '';
@@ -364,11 +363,12 @@ body {
     border-radius: 50%;
     border: 2px solid #1e293b;
 }
-
 .conv-avatar.online::after {
     background: #10b981; /* green */
 }
-
 .conv-avatar.offline::after {
     background: #6b7280; /* gray */
 }
+.modal.hidden { display: none; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display:flex; justify-content:center; align-items:center; }
+.modal-content { background:#fff; padding:20px; border-radius:8px; width:320px; }

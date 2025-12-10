@@ -3,116 +3,179 @@ namespace ChatModule;
 
 use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
+use PDO;
+use Throwable;
 
+/**
+ * Modernized ChatServer for Ratchet 0.5+ and PHP 8.x
+ *
+ * - Uses SplObjectStorage->remove() instead of deprecated detach()
+ * - Defensive checks and error handling
+ * - Session-based authentication reading session files
+ * - Clean helpers for broadcasting and per-user sends
+ */
 class ChatServer implements MessageComponentInterface
 {
-    protected $clients;
-    protected $conn; // PDO
-    protected $users = []; // connId => userId
-    protected $connectionsByUser = []; // userId => [connId => conn]
+    /** @var \SplObjectStorage<ConnectionInterface, array> */
+    protected \SplObjectStorage $clients;
 
-    public function __construct(\PDO $pdo)
+    protected PDO $conn; // PDO instance for DB access
+
+    /** resourceId => userId */
+    protected array $users = [];
+
+    /** userId => [ resourceId => ConnectionInterface, ... ] */
+    protected array $connectionsByUser = [];
+
+    public function __construct(PDO $pdo)
     {
         $this->clients = new \SplObjectStorage();
         $this->conn = $pdo;
     }
 
-    public function onOpen(ConnectionInterface $conn)
+    /**
+     * A new connection opened
+     */
+    public function onOpen(ConnectionInterface $conn): void
     {
-        // Read cookies to get PHP session id and restore session
-        $cookiesHeader = $conn->httpRequest->getHeader('Cookie');
-        $userId = $this->getUserIdFromSession($cookiesHeader);
+        try {
+            // Read cookies from handshake and restore session user id
+            $cookiesHeader = $conn->httpRequest->getHeader('Cookie') ?? '';
+            $userId = $this->getUserIdFromSession($cookiesHeader);
 
-        if (!$userId) {
-            $conn->send(json_encode(['type' => 'error', 'msg' => 'Unauthorized (no valid session)']));
+            if (!$userId) {
+                $conn->send(json_encode(['type' => 'error', 'msg' => 'Unauthorized (no valid session)']));
+                $conn->close();
+                return;
+            }
+
+            $conn->userId = (int)$userId;
+
+            // Track connection
+            $this->clients->attach($conn);
+            $this->users[$conn->resourceId] = $conn->userId;
+
+            if (!isset($this->connectionsByUser[$conn->userId])) {
+                $this->connectionsByUser[$conn->userId] = [];
+            }
+            $this->connectionsByUser[$conn->userId][$conn->resourceId] = $conn;
+
+            // Mark user online and broadcast presence
+            $this->setUserOnline($conn->userId, true);
+            $this->broadcastPresence($conn->userId, true);
+
+            // Confirm to client
+            $conn->send(json_encode([
+                'type' => 'system',
+                'msg'  => 'connected',
+                'user_id' => $conn->userId,
+            ]));
+
+            echo "WS CONNECT: user {$conn->userId}, resourceId {$conn->resourceId}\n";
+        } catch (Throwable $e) {
+            // If anything goes wrong here, close the connection safely
+            error_log("onOpen error: " . $e->getMessage());
+            try { $conn->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
             $conn->close();
-            return;
         }
-
-        $conn->userId = (int)$userId;
-        $this->clients->attach($conn);
-        $this->users[$conn->resourceId] = $conn->userId;
-
-        if (!isset($this->connectionsByUser[$conn->userId])) {
-            $this->connectionsByUser[$conn->userId] = [];
-        }
-        $this->connectionsByUser[$conn->userId][$conn->resourceId] = $conn;
-
-        // Mark user online in DB
-        $this->setUserOnline($conn->userId, true);
-
-        // Broadcast presence to all
-        $this->broadcastPresence($conn->userId, true);
-
-        // Confirm connection
-        $conn->send(json_encode([
-            'type' => 'system',
-            'msg'  => 'connected',
-            'user_id' => $conn->userId,
-        ]));
     }
 
-    public function onMessage(ConnectionInterface $from, $msg)
+    /**
+     * Message received from a client
+     */
+    public function onMessage(ConnectionInterface $from, $msg): void
     {
-        $payload = json_decode($msg, true);
-        if (!$payload) {
-            return;
-        }
+        try {
+            $payload = json_decode($msg, true);
+            if (!is_array($payload)) {
+                // ignore non-json or malformed messages
+                $from->send(json_encode(['type' => 'error', 'msg' => 'Invalid payload']));
+                return;
+            }
 
-        $type = $payload['type'] ?? '';
+            $type = $payload['type'] ?? '';
 
-        switch ($type) {
-            case 'send_message':
-                $this->handleSendMessage($from, $payload);
-                break;
-            case 'typing':
-                $this->handleTyping($from, $payload);
-                break;
-            case 'mark_read':
-                $this->handleMarkRead($from, $payload);
-                break;
-            case 'ping':
-                $from->send(json_encode(['type' => 'pong']));
-                break;
-            default:
-                $from->send(json_encode(['type' => 'error', 'msg' => 'Unknown command']));
-                break;
+            switch ($type) {
+                case 'send_message':
+                    $this->handleSendMessage($from, $payload);
+                    break;
+                case 'typing':
+                    $this->handleTyping($from, $payload);
+                    break;
+                case 'mark_read':
+                    $this->handleMarkRead($from, $payload);
+                    break;
+                case 'ping':
+                    $from->send(json_encode(['type' => 'pong']));
+                    break;
+                default:
+                    $from->send(json_encode(['type' => 'error', 'msg' => 'Unknown command']));
+                    break;
+            }
+        } catch (Throwable $e) {
+            error_log("onMessage error: " . $e->getMessage());
+            try { $from->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
         }
     }
 
-    public function onClose(ConnectionInterface $conn)
+    /**
+     * Connection closed
+     */
+    public function onClose(ConnectionInterface $conn): void
     {
-        $this->clients->detach($conn);
-        $rid = $conn->resourceId;
-        if (isset($this->users[$rid])) {
-            $uid = $this->users[$rid];
-            unset($this->users[$rid]);
-
-            if (isset($this->connectionsByUser[$uid][$rid])) {
-                unset($this->connectionsByUser[$uid][$rid]);
+        try {
+            // Use contains() and remove() per modern SplObjectStorage API
+            if ($this->clients->contains($conn)) {
+                $this->clients->remove($conn);
             }
-            if (empty($this->connectionsByUser[$uid])) {
-                unset($this->connectionsByUser[$uid]);
 
-                // this was last connection for this user -> offline
-                $this->setUserOnline($uid, false);
-                $this->broadcastPresence($uid, false);
+            $rid = $conn->resourceId;
+            if (isset($this->users[$rid])) {
+                $uid = $this->users[$rid];
+                unset($this->users[$rid]);
+
+                // Remove that connection from the per-user map
+                if (isset($this->connectionsByUser[$uid][$rid])) {
+                    unset($this->connectionsByUser[$uid][$rid]);
+                }
+
+                // If no more connections left for that user => offline
+                if (empty($this->connectionsByUser[$uid])) {
+                    unset($this->connectionsByUser[$uid]);
+                    $this->setUserOnline($uid, false);
+                    $this->broadcastPresence($uid, false);
+                }
+
+                // Update online_users table as well (defensive)
+                try {
+                    $sql = "UPDATE online_users SET is_online = 0, last_seen = NOW() WHERE user_id = ?";
+                    $stmt = $this->conn->prepare($sql);
+                    $stmt->execute([$uid]);
+                } catch (Throwable $e) {
+                    // log and continue
+                    error_log("onClose DB update failed: " . $e->getMessage());
+                }
             }
-            $sql = "UPDATE online_users SET is_online = 0, last_seen = NOW() WHERE user_id = ?"; // User gets Offline
-            $stmt = $this->conn->prepare($sql);
-            $stmt->execute([$uid]);
+
+            echo "CONNECTION CLOSED for user: " . ($conn->userId ?? 'unknown') . PHP_EOL;
+        } catch (Throwable $e) {
+            error_log("onClose error: " . $e->getMessage());
         }
-        echo "CONNECTION CLOSED for user: " . ($conn->userId ?? 'unknown') . PHP_EOL;
     }
 
-    public function onError(ConnectionInterface $conn, \Exception $e)
+    /**
+     * Error on connection
+     */
+    public function onError(ConnectionInterface $conn, \Exception $e): void
     {
         echo "WS ERROR: " . $e->getMessage() . PHP_EOL;
-        $conn->close();
+        try { $conn->close(); } catch (\Throwable $_) {}
     }
 
     /**
      * Get user id from PHP session using cookies in handshake.
+     *
+     * $cookiesHeader may be array|string (Ratchet provides array of headers)
      */
     private function getUserIdFromSession($cookiesHeader)
     {
@@ -120,7 +183,7 @@ class ChatServer implements MessageComponentInterface
             return false;
         }
 
-        // Normalize cookies header
+        // Normalize header to string
         $cookiesStr = is_array($cookiesHeader) ? implode(';', $cookiesHeader) : $cookiesHeader;
         $cookies = [];
         foreach (explode(';', $cookiesStr) as $part) {
@@ -130,17 +193,15 @@ class ChatServer implements MessageComponentInterface
             }
         }
 
-        // Use current PHP session name, fallback to PHPSESSID
+        // Use configured session name or default
         $sessionName = session_name() ?: 'PHPSESSID';
         if (!isset($cookies[$sessionName])) {
-            // Uncomment for debugging:
-            // echo "No session cookie ({$sessionName}) found\n";
             return false;
         }
 
         $sessionId = $cookies[$sessionName];
 
-        // Resolve session.save_path (it might be "N;MODE;path")
+        // Resolve session.save_path (may contain prefix like "N;MODE;path")
         $sessionPath = ini_get('session.save_path');
         if (!$sessionPath) {
             $sessionPath = sys_get_temp_dir();
@@ -152,92 +213,97 @@ class ChatServer implements MessageComponentInterface
         $sessionFile = rtrim($sessionPath, "/\\") . DIRECTORY_SEPARATOR . 'sess_' . $sessionId;
 
         if (!is_file($sessionFile) || !is_readable($sessionFile)) {
-            // echo "Session file not found: {$sessionFile}\n";
             return false;
         }
 
         $data = @file_get_contents($sessionFile);
         if ($data === false || $data === '') {
-            // echo "Session file empty or unreadable: {$sessionFile}\n";
             return false;
         }
 
         $sessionData = $this->decodeSessionData($data);
 
-        /*echo "Cookies: {$cookiesStr}\n";
-        echo "Session file: {$sessionFile}\n";
-        echo "User from session: " . print_r($sessionData, true) . "\n";*/
-
-        // IMPORTANT: adjust 'user_id' if your app uses another key
+        // Adjust to your app's session shape: here we expect $_SESSION['user']['id']
         return $sessionData['user']['id'] ?? false;
     }
 
-    private function decodeSessionData($data)
+    /**
+     * Robust session decode supporting typical PHP session serialization.
+     *
+     * This tries to parse "name|serialized" pairs.
+     */
+    private function decodeSessionData(string $data): array
     {
         $result = [];
         $offset = 0;
         $length = strlen($data);
 
         while ($offset < $length) {
-            if (!strstr(substr($data, $offset), '|')) {
-                break;
-            }
-
             $pos = strpos($data, '|', $offset);
-            if ($pos === false) {
-                break;
-            }
+            if ($pos === false) break;
 
             $varname = substr($data, $offset, $pos - $offset);
-            $offset  = $pos + 1;
+            $offset = $pos + 1;
 
-            // Extract serialized value
+            // read serialized value; find end by attempting unserialize progressively
             $serialized = '';
-            $inString   = false;
-            $braceLevel = 0;
-
-            for ($i = $offset; $i < $length; $i++) {
-                $ch = $data[$i];
-                $serialized .= $ch;
-
-                if ($ch === '"') {
-                    $inString = !$inString;
-                }
-
-                if (!$inString) {
-                    if ($ch === '{') {
-                        $braceLevel++;
-                    } elseif ($ch === '}') {
-                        $braceLevel--;
-                    }
-
-                    if ($braceLevel <= 0 && $ch === ';') {
-                        $i++;
+            $i = $offset;
+            $found = false;
+            for (; $i < $length; $i++) {
+                $serialized .= $data[$i];
+                // attempt unserialize if looks reasonable (ends with ; or })
+                if ($data[$i] === ';' || $data[$i] === '}') {
+                    $try = @unserialize($serialized);
+                    if ($try !== false || $serialized === 'b:0;') {
+                        $result[$varname] = $try;
+                        $offset = $i + 1;
+                        $found = true;
                         break;
                     }
                 }
             }
 
-            $offset += strlen($serialized);
-
-            $value = @unserialize($serialized);
-            $result[$varname] = $value;
+            if (!$found) {
+                // fallback: store raw and break
+                $result[$varname] = null;
+                break;
+            }
         }
 
         return $result;
     }
 
-    private function setUserOnline($userId, $online)
+    /**
+     * Mark user online/offline in DB (user_status or online_users)
+     */
+    private function setUserOnline(int $userId, bool $online): void
     {
-        $stmt = $this->conn->prepare("
-            INSERT INTO user_status (user_id, is_online, last_seen)
-            VALUES (?, ?, NOW())
-            ON DUPLICATE KEY UPDATE is_online = VALUES(is_online), last_seen = VALUES(last_seen)
-        ");
-        $stmt->execute([$userId, $online ? 1 : 0]);
+        try {
+            // Prefer an 'online_users' table if present; otherwise fallback to user_status
+            $sql1 = "INSERT INTO online_users (user_id, is_online, last_seen) VALUES (?, ?, NOW())
+                     ON DUPLICATE KEY UPDATE is_online = VALUES(is_online), last_seen = VALUES(last_seen)";
+            $stmt = $this->conn->prepare($sql1);
+            $stmt->execute([$userId, $online ? 1 : 0]);
+            return;
+        } catch (Throwable $e) {
+            // fallback to user_status table if online_users doesn't exist
+            try {
+                $sql2 = "INSERT INTO user_status (user_id, is_online, last_seen) VALUES (?, ?, NOW())
+                         ON DUPLICATE KEY UPDATE is_online = VALUES(is_online), last_seen = VALUES(last_seen)";
+                $stmt2 = $this->conn->prepare($sql2);
+                $stmt2->execute([$userId, $online ? 1 : 0]);
+                return;
+            } catch (Throwable $_) {
+                // last resort: log error
+                error_log("setUserOnline failed: " . $e->getMessage());
+            }
+        }
     }
 
-    private function broadcastPresence($userId, $online)
+    /**
+     * Broadcast presence change to all connected clients
+     */
+    private function broadcastPresence(int $userId, bool $online): void
     {
         $payload = json_encode([
             'type' => 'presence',
@@ -245,15 +311,66 @@ class ChatServer implements MessageComponentInterface
             'is_online' => $online ? 1 : 0,
         ]);
 
+        $this->broadcastRaw($payload);
+    }
+
+    /**
+     * Broadcast a raw string to all connected clients
+     */
+    private function broadcastRaw(string $payload): void
+    {
         foreach ($this->clients as $client) {
-            $client->send($payload);
+            try {
+                $client->send($payload);
+            } catch (Throwable $e) {
+                // ignore send errors for individual clients
+                error_log("broadcast send failed: " . $e->getMessage());
+            }
         }
     }
 
     /**
-     * MESSAGE HANDLERS
+     * Send payload (array or string) to all connections of a specific userId
      */
-    private function handleSendMessage(ConnectionInterface $from, array $payload)
+    private function sendToUser(int $userId, array|string $payload): void
+    {
+        $payloadStr = is_array($payload) ? json_encode($payload) : $payload;
+
+        if (!isset($this->connectionsByUser[$userId])) {
+            return;
+        }
+        foreach ($this->connectionsByUser[$userId] as $c) {
+            try {
+                $c->send($payloadStr);
+            } catch (Throwable $e) {
+                error_log("sendToUser failed for user {$userId}: " . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Send payload to multiple members (array of user ids)
+     */
+    private function sendToMembers(array $members, array|string $payload): void
+    {
+        $payloadStr = is_array($payload) ? json_encode($payload) : $payload;
+        foreach ($members as $uid) {
+            if (isset($this->connectionsByUser[$uid])) {
+                foreach ($this->connectionsByUser[$uid] as $c) {
+                    try {
+                        $c->send($payloadStr);
+                    } catch (Throwable $e) {
+                        error_log("sendToMembers send failed: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle an outgoing message from a client (insert into DB, broadcast to members)
+     */
+    private function handleSendMessage(ConnectionInterface $from, array $payload): void
     {
         $conversationId = (int)($payload['conversation_id'] ?? 0);
         $text = trim($payload['message'] ?? '');
@@ -261,10 +378,12 @@ class ChatServer implements MessageComponentInterface
         $filePath = $payload['file_path'] ?? null;
 
         if (!$conversationId || !$senderId) {
+            $from->send(json_encode(['type' => 'error', 'msg' => 'Invalid conversation or sender']));
             return;
         }
 
         if ($text === '' && empty($filePath)) {
+            $from->send(json_encode(['type' => 'error', 'msg' => 'Empty message']));
             return;
         }
 
@@ -277,16 +396,16 @@ class ChatServer implements MessageComponentInterface
         }
 
         // Insert message
-        $stmt = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, message, file_path) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$conversationId, $senderId, $text ?: null, $filePath ?: null]);
-        $msgId = $this->conn->lastInsertId();
+        $insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, message, file_path, created_at) VALUES (?, ?, ?, ?, NOW())");
+        $insert->execute([$conversationId, $senderId, $text ?: null, $filePath ?: null]);
+        $msgId = (int)$this->conn->lastInsertId();
 
         $createdAt = date('Y-m-d H:i:s');
 
         $msgRow = [
             'type' => 'new_message',
             'message' => [
-                'id' => (int)$msgId,
+                'id' => $msgId,
                 'conversation_id' => $conversationId,
                 'sender_id' => $senderId,
                 'message' => htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
@@ -295,21 +414,19 @@ class ChatServer implements MessageComponentInterface
             ],
         ];
 
-        // Broadcast to all members
+        // Fetch conversation members
         $stmt = $this->conn->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
         $stmt->execute([$conversationId]);
-        $members = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        foreach ($members as $uid) {
-            if (isset($this->connectionsByUser[$uid])) {
-                foreach ($this->connectionsByUser[$uid] as $c) {
-                    $c->send(json_encode($msgRow));
-                }
-            }
-        }
+        // Send only to members that are connected
+        $this->sendToMembers($members, $msgRow);
     }
 
-    private function handleTyping(ConnectionInterface $from, array $payload)
+    /**
+     * Typing indicator — broadcast to other members in conversation
+     */
+    private function handleTyping(ConnectionInterface $from, array $payload): void
     {
         $conversationId = (int)($payload['conversation_id'] ?? 0);
         $senderId = $from->userId ?? null;
@@ -319,25 +436,21 @@ class ChatServer implements MessageComponentInterface
 
         $stmt = $this->conn->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
         $stmt->execute([$conversationId]);
-        $members = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        foreach ($members as $uid) {
-            if ($uid == $senderId) {
-                continue;
-            }
-            if (isset($this->connectionsByUser[$uid])) {
-                foreach ($this->connectionsByUser[$uid] as $c) {
-                    $c->send(json_encode([
-                        'type' => 'typing',
-                        'conversation_id' => $conversationId,
-                        'from' => $senderId,
-                    ]));
-                }
-            }
-        }
+        $out = [
+            'type' => 'typing',
+            'conversation_id' => $conversationId,
+            'from' => $senderId,
+        ];
+
+        $this->sendToMembers(array_filter($members, fn($u) => $u != $senderId), $out);
     }
 
-    private function handleMarkRead(ConnectionInterface $from, array $payload)
+    /**
+     * Mark read handling and broadcast read receipt
+     */
+    private function handleMarkRead(ConnectionInterface $from, array $payload): void
     {
         $conversationId = (int)($payload['conversation_id'] ?? 0);
         $lastReadId = (int)($payload['last_read_message_id'] ?? 0);
@@ -354,7 +467,7 @@ class ChatServer implements MessageComponentInterface
             return;
         }
 
-        // mark all messages up to lastReadId as read
+        // Mark read: insert missing read entries up to lastReadId
         $sql = "
             INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
             SELECT m.id, ?, 1, NOW()
@@ -365,24 +478,18 @@ class ChatServer implements MessageComponentInterface
         $stmt = $this->conn->prepare($sql);
         $stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
 
-        // Broadcast read receipt to other members
-        $payload = json_encode([
+        // Broadcast receipt to members
+        $payloadOut = [
             'type' => 'read_receipt',
             'conversation_id' => $conversationId,
             'user_id' => $userId,
             'last_read_message_id' => $lastReadId,
-        ]);
+        ];
 
         $stmt = $this->conn->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
         $stmt->execute([$conversationId]);
-        $members = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        foreach ($members as $uid) {
-            if (isset($this->connectionsByUser[$uid])) {
-                foreach ($this->connectionsByUser[$uid] as $c) {
-                    $c->send($payload);
-                }
-            }
-        }
+        $this->sendToMembers($members, $payloadOut);
     }
 }

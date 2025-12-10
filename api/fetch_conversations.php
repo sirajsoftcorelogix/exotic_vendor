@@ -69,7 +69,7 @@ foreach ($rows as &$r) {
     if ($r['type'] === 'single') {
         $r['display_name'] = $r['other_user_name'] ?: "User";
     } else {
-        $r['display_name'] = $r['group_name'] ?: "Group Chat";
+        $r['display_name'] = $r['name'] ?: "Group Chat";
     }
 }
 
