@@ -19,6 +19,25 @@
         border-color: #999; /* Your focus color */
         box-shadow: none;
     }
+     /* Custom Scrollbar for the checkbox lists */
+    .checkbox-list-container::-webkit-scrollbar { width: 8px; }
+    .checkbox-list-container::-webkit-scrollbar-track { background: #f1f1f1; }
+    .checkbox-list-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+    .checkbox-list-container::-webkit-scrollbar-thumb:hover { background: #999; }
+    
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        padding: 6px 8px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+    }
+    .checkbox-item:hover { background-color: #f9f9f9; }
+    .checkbox-item:last-child { border-bottom: none; }
+    .checkbox-item input[type="checkbox"] {
+        width: 16px; height: 16px; margin-right: 10px; accent-color: #666;
+    }
+    .checkbox-item label { font-size: 13px; color: #333; cursor: pointer; flex-grow: 1; }
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
@@ -148,86 +167,113 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <?php 
-            // Extract existing values or set to null/empty string to avoid PHP errors
+       <?php 
+            // --- DATA PREPARATION ---
             $selected_material = $data['form2']['material_code'] ?? '';
-            $selected_group    = $data['form2']['group_name'] ?? '';
-            $selected_cat      = $data['form2']['category_code'] ?? '';
-            $selected_sub      = $data['form2']['sub_category_code'] ?? '';
-            $selected_sub_sub  = $data['form2']['sub_sub_category_code'] ?? '';
+            
+            // This variable now holds the stored "Category Index" string (e.g., "MENS_WEAR")
+            $selected_group_val = $data['form2']['group_name'] ?? ''; 
+            $selected_cat_id    = $data['form2']['category_code'] ?? '';
 
-            // Prepare Category Data
+            // Handle Multi-Select Arrays
+            $sub_raw = $data['form2']['sub_category_code'] ?? '';
+            $selected_sub = is_array($sub_raw) ? $sub_raw : explode(',', $sub_raw);
+
+            $sub_sub_raw = $data['form2']['sub_sub_category_code'] ?? '';
+            $selected_sub_sub = is_array($sub_sub_raw) ? $sub_sub_raw : explode(',', $sub_sub_raw);
+
+            // Prepare Data Arrays
             $categoriesByParent1 = [];
             $rootCategories = [];
+            $groupMap = []; // Maps the stored Value -> ID (for JS logic)
             
             if (!empty($data['category'])) {
                 foreach ($data['category'] as $row) {
                     if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
                     
+                    // Build Parent-Child Lookup for JS
                     $categoriesByParent1[$row['parent_id']][] = [
                         'id'   => $row['id'],
                         'name' => $row['display_name']
                     ];
                     
+                    // Build Root (Group) List
                     if ($row['parent_id'] == 0) {
+                        // IMPORTANT: Ensure $row['category'] exists in your DB fetch, 
+                        // otherwise fallback to display_name or another unique field.
+                        $storeValue = $row['category'] ?? $row['display_name'];
+
                         $rootCategories[] = [
-                            'id'   => $row['id'],
-                            'name' => $row['display_name']
+                            'id'          => $row['id'],
+                            'name'        => $row['display_name'],
+                            'store_value' => $storeValue // This is what gets saved to DB
                         ];
+
+                        // Create a map so JS knows "MENS_WEAR" corresponds to ID 5
+                        $groupMap[$storeValue] = $row['id'];
                     }
                 }
             }
         ?>
         <div class="mt-[15px] mx-5">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2.5 pb-[15px] bg-white">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
                 
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div class="flex flex-col md:flex-row gap-5 items-stretch">
 
-                    <div>
-                        <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
-                        <select class="w-full h-[30px] border border-[#ccc] rounded-[3px] pl-[5px] text-[12px] text-[#333] focus:outline-none focus:border-[#999]" name="material_code">
-                            <option value="">Select Material</option>
-                            <?php foreach ($data['material'] as $value2) { 
-                                $isSelected = ($selected_material == $value2['id']) ? 'selected' : '';
-                            ?> 
-                                <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
-                            <?php } ?>
-                        </select>
+                    <div class="w-full md:w-1/3 flex flex-col gap-4">
+                        
+                        <div>
+                            <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
+                            <select class="w-full h-[36px] border border-[#ccc] rounded px-2 text-[13px]" name="material_code">
+                                <option value="">Select Material</option>
+                                <?php foreach ($data['material'] as $value2) { 
+                                    $isSelected = ($selected_material == $value2['id']) ? 'selected' : '';
+                                ?> 
+                                    <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
+                                <?php } ?>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
+                            <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
+                                <option value="">Select Group...</option>
+                                <?php foreach($rootCategories as $group): 
+                                    // Compare Stored Value vs Current Option Value
+                                    $isGroupSelected = ($selected_group_val == $group['store_value']) ? 'selected' : '';
+                                ?>
+                                    <option value="<?php echo $group['store_value']; ?>" <?php echo $isGroupSelected; ?>>
+                                        <?php echo $group['name']; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
+                            <select id="category_select" name="category_code" placeholder="Select Group First..." disabled autocomplete="off">
+                                <option value="">Select Group First...</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
-                        <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
-                            <option value="">Select Group...</option>
-                            <?php foreach($rootCategories as $group): 
-                                // PHP Select Logic for Group
-                                $isGroupSelected = ($selected_group == $group['id']) ? 'selected' : '';
-                            ?>
-                                <option value="<?php echo $group['id']; ?>" <?php echo $isGroupSelected; ?>><?php echo $group['name']; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
-                        <select id="category_select" name="category_code" placeholder="Select Group First..." disabled autocomplete="off">
-                            <option value="">Select Group First...</option>
-                        </select>
-                    </div>
-
-                    <div>
+                    <div class="w-full md:w-1/3 flex flex-col">
                         <label class="block text-xs font-bold text-[#222] mb-1">Sub Category:</label>
-                        <select id="sub_category_select" name="sub_category_code" placeholder="Select Category First..." disabled autocomplete="off">
-                             <option value="">Select Category First...</option>
-                        </select>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div id="sub_category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category to view options</div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div>
+                    <div class="w-full md:w-1/3 flex flex-col">
                         <label class="block text-xs font-bold text-[#222] mb-1">SubSubCategory:</label>
-                        <select id="sub_sub_category_select" name="sub_sub_category_code" placeholder="Select Sub Category First..." disabled autocomplete="off">
-                             <option value="">Select Sub Category First...</option>
-                        </select>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div id="sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category to view options</div>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -653,96 +699,117 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 1. Data from PHP
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
+    const groupMap = <?php echo json_encode($groupMap); ?>; // { "MENS_WEAR": 5, "WOMENS": 8 }
     
-    // 2. Pre-selected Values from PHP (Converted to strings for comparison)
+    // 2. Pre-selected Values
     const preSelected = {
-        group:  "<?php echo $selected_group; ?>",
-        cat:    "<?php echo $selected_cat; ?>",
-        sub:    "<?php echo $selected_sub; ?>",
-        subsub: "<?php echo $selected_sub_sub; ?>"
+        groupVal: "<?php echo $selected_group_val; ?>",
+        catId:    "<?php echo $selected_cat_id; ?>",
+        sub:      new Set(<?php echo json_encode($selected_sub); ?>.map(String)), 
+        subsub:   new Set(<?php echo json_encode($selected_sub_sub); ?>.map(String))
     };
 
-    // 3. TomSelect Configuration
-    const config = {
-        create: false,
-        sortField: { field: "text", direction: "asc" },
-        // This ensures the styling matches your Tailwind heights better
-        controlInput: null 
-    };
+    // 3. Elements
+    const subCatContainer = document.getElementById('sub_category_container');
+    const subSubCatContainer = document.getElementById('sub_sub_category_container');
 
-    // 4. Initialize Instances
-    const groupTs      = new TomSelect("#group_select", config);
-    const categoryTs   = new TomSelect("#category_select", config);
-    const subCatTs     = new TomSelect("#sub_category_select", config);
-    const subSubCatTs  = new TomSelect("#sub_sub_category_select", config);
+    // 4. TomSelect Init
+    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
+    const groupTs = new TomSelect("#group_select", config);
+    const categoryTs = new TomSelect("#category_select", config);
 
-    // --- HELPER: Populate Function ---
-    // Handles adding options and setting a value if provided
-    function populateAndSelect(instance, parentId, valueToSelect = null) {
+    // --- HELPER: Render Checkbox List ---
+    function renderCheckboxList(container, items, selectedSet, inputName, onChangeCallback) {
+        container.innerHTML = ''; 
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No options available</div>';
+            return;
+        }
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'checkbox-item';
+            const isChecked = selectedSet.has(String(item.id)) ? 'checked' : '';
+            div.innerHTML = `
+                <input type="checkbox" id="${inputName}_${item.id}" name="${inputName}[]" value="${item.id}" ${isChecked}>
+                <label for="${inputName}_${item.id}">${item.name}</label>
+            `;
+            const checkbox = div.querySelector('input');
+            checkbox.addEventListener('change', () => { if(onChangeCallback) onChangeCallback(); });
+            container.appendChild(div);
+        });
+    }
+
+    // --- HELPER: Populate Dropdown ---
+    function populateDropdown(instance, parentId, valueToSelect = null) {
         instance.clearOptions();
         instance.clear(true);
-        
         if (parentId && categoriesByParent[parentId]) {
             instance.enable();
             categoriesByParent[parentId].forEach(item => {
                 instance.addOption({ value: item.id, text: item.name });
             });
             instance.refreshOptions(false);
-
-            // If we have a value to select, set it
-            if (valueToSelect) {
-                instance.setValue(valueToSelect);
-            }
+            if (valueToSelect) instance.setValue(valueToSelect);
         } else {
             instance.disable();
         }
     }
 
+    // --- LOGIC FLOW ---
+
+    function updateSubCategoryList(catId) {
+        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
+        if(!catId || !categoriesByParent[catId]) {
+            subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Category...</div>';
+            return;
+        }
+        renderCheckboxList(subCatContainer, categoriesByParent[catId], preSelected.sub, 'sub_category_code', handleSubCategoryChange);
+        if(preSelected.sub.size > 0) handleSubCategoryChange();
+    }
+
+    function handleSubCategoryChange() {
+        const checkedSubCats = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        if(checkedSubCats.length === 0) {
+            subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
+            return;
+        }
+        let allSubSubOptions = [];
+        checkedSubCats.forEach(subId => {
+            if(categoriesByParent[subId]) allSubSubOptions = allSubSubOptions.concat(categoriesByParent[subId]);
+        });
+        renderCheckboxList(subSubCatContainer, allSubSubOptions, preSelected.subsub, 'sub_sub_category_code', null);
+    }
+
     // --- EVENT LISTENERS ---
 
-    // Group Changed -> Update Category
-    groupTs.on('change', function(groupId) {
+    // Group Changed -> Find ID from Map -> Populate Category
+    groupTs.on('change', function(groupValue) {
         // Reset children
-        subCatTs.clear(true); subCatTs.clearOptions(); subCatTs.disable();
-        subSubCatTs.clear(true); subSubCatTs.clearOptions(); subSubCatTs.disable();
+        preSelected.sub.clear(); preSelected.subsub.clear();
         
-        // Populate Category (No pre-select on manual change)
-        populateAndSelect(categoryTs, groupId, null);
+        // Lookup the Numeric ID using the String Value
+        const groupId = groupMap[groupValue]; 
+
+        populateDropdown(categoryTs, groupId, null);
+        subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Category...</div>';
+        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
     });
 
-    // Category Changed -> Update Sub Category
+    // Category Changed -> Sub Category
     categoryTs.on('change', function(catId) {
-        // Reset child
-        subSubCatTs.clear(true); subSubCatTs.clearOptions(); subSubCatTs.disable();
-
-        // Populate Sub Category
-        populateAndSelect(subCatTs, catId, null);
+        if (catId !== preSelected.catId) { preSelected.sub.clear(); preSelected.subsub.clear(); }
+        updateSubCategoryList(catId);
     });
 
-    // Sub Category Changed -> Update Sub Sub Category
-    subCatTs.on('change', function(subCatId) {
-        // Populate Sub Sub Category
-        populateAndSelect(subSubCatTs, subCatId, null);
-    });
-
-    // --- INITIALIZATION LOGIC (The Fix for Pre-selection) ---
-    
-    // If Group is already selected (via PHP Render), trigger the chain
-    if (preSelected.group) {
-        // 1. Group is set in HTML, wait for TomSelect to sync, then load Category
-        // Note: Group value is already set by PHP <option selected>, TomSelect picks it up automatically.
+    // --- INITIALIZATION ---
+    if (preSelected.groupVal) {
+        // 1. Get ID from the Pre-selected String
+        const initialGroupId = groupMap[preSelected.groupVal];
         
-        // 2. Load Category Options & Select Category Value
-        populateAndSelect(categoryTs, preSelected.group, preSelected.cat);
-
-        // 3. If Category was selected, Load Sub Category Options & Select Sub Value
-        if (preSelected.cat) {
-            populateAndSelect(subCatTs, preSelected.cat, preSelected.sub);
-
-            // 4. If Sub Category was selected, Load Sub Sub Options & Select Sub Sub Value
-            if (preSelected.sub) {
-                populateAndSelect(subSubCatTs, preSelected.sub, preSelected.subsub);
-            }
+        // 2. Trigger Chain
+        if(initialGroupId) {
+            populateDropdown(categoryTs, initialGroupId, preSelected.catId);
+            if(preSelected.catId) updateSubCategoryList(preSelected.catId);
         }
     }
 });

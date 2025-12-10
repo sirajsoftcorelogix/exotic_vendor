@@ -4,6 +4,8 @@ class Inbounding {
     public function __construct($db) {
         $this->conn = $db;
     }
+    // models/inbounding/InboundingModel.php (or wherever your getAll is defined)
+
     public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '') {
         $page = (int)$page;
         if ($page < 1) $page = 1;
@@ -11,35 +13,36 @@ class Inbounding {
         $limit = (int)$limit;
         if ($limit < 1) $limit = 10;
 
-        // calculate offset
         $offset = ($page - 1) * $limit;
-        $where = "";
-        
-        if (!empty($search) && !empty($status_filter)) {
-            $search = $this->conn->real_escape_string($search);
-            $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE team_name LIKE('%$search%') AND is_active = '$status_filter'";
-        } else {
-            if (!empty($search)) {
-                $search = $this->conn->real_escape_string($search);
-                $where = "WHERE team_name LIKE('%$search%')";
-            }
+        $where = [];
 
-            if (!empty($status_filter)) {
-                $status_filter = $this->conn->real_escape_string($status_filter);   
-                $where = "WHERE is_active = '$status_filter'";
-            }
+        // 1. Search Logic (Item Code, Title, Keywords)
+        if (!empty($search)) {
+            $search = $this->conn->real_escape_string($search);
+            // Using OR logic for broad search
+            $where[] = "(Item_code LIKE '%$search%' OR product_title LIKE '%$search%' OR key_words LIKE '%$search%')";
         }
 
-        // total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound $where");
+        // 2. Status Filter
+        if (!empty($status_filter)) {
+            $status_filter = $this->conn->real_escape_string($status_filter);
+            $where[] = "is_active = '$status_filter'";
+        }
+
+        // Combine WHERE clauses
+        $whereSql = "";
+        if (!empty($where)) {
+            $whereSql = "WHERE " . implode(' AND ', $where);
+        }
+
+        // Total Count
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound $whereSql");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
-
         $totalPages = ceil($totalRecords / $limit);
 
-        // fetch data - ADDED ORDER BY id DESC HERE
-        $sql = "SELECT * FROM vp_inbound $where ORDER BY id DESC LIMIT $limit OFFSET $offset";
+        // Fetch Data
+        $sql = "SELECT * FROM vp_inbound $whereSql ORDER BY id DESC LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $data = [];
@@ -47,9 +50,8 @@ class Inbounding {
             $data[] = $row;
         }
 
-        // return structured data
         return [
-            'inbounding'       => $data,
+            'inbounding'   => $data,
             'totalPages'   => $totalPages,
             'currentPage'  => $page,
             'limit'        => $limit,
@@ -67,10 +69,11 @@ class Inbounding {
         return $ItamcodeData;
     }
 
-    // Fetch all images for a specific item
+    // 1. Fetch all images for a specific item (UPDATED: Now sorts by Display Order)
     public function getitem_imgs($item_id) {
         $item_id = intval($item_id);
-        $result = $this->conn->query("SELECT * FROM `item_images` WHERE item_id = $item_id");
+        // Added ORDER BY display_order ASC so images appear in the correct sequence
+        $result = $this->conn->query("SELECT * FROM `item_images` WHERE item_id = $item_id ORDER BY display_order ASC");
         
         $images = [];
         if ($result) {
@@ -80,14 +83,42 @@ class Inbounding {
         return $images;
     }
 
-    // Insert new image record
+    // 2. Fetch Item Details with Joins (NEW: For the top info header)
+    public function getItemDetails($id) {
+        $id = intval($id);
+        
+        // This query joins your tables to get real names (e.g., 'Brass' instead of '1')
+        // Adjust table names (e.g., 'vendors' or 'vp_vendors') if needed
+        $sql = "SELECT vi.*,c.display_name as category,vv.vendor_name as vendor_name,m.material_name as material,vu.name as recived_by_name FROM vp_inbound as vi
+LEFT JOIN category as c on vi.group_name=c.category
+LEFT JOIN vp_vendors as vv on vi.vendor_code=vv.id
+LEFT JOIN material as m on vi.material_code=m.id
+LEFT JOIN vp_users as vu on vi.received_by_user_id=vu.id
+WHERE vi.id=".$id;
+                
+        $result = $this->conn->query($sql);
+        return $result ? $result->fetch_assoc() : [];
+    }
+
+    // 3. Insert new image record (KEPT EXISTING)
     public function add_image($item_id, $filename) {
-        $stmt = $this->conn->prepare("INSERT INTO `item_images` (item_id, file_name) VALUES (?, ?)");
+        // Default order is 0, Caption is NULL
+        $stmt = $this->conn->prepare("INSERT INTO `item_images` (item_id, file_name, display_order, image_caption) VALUES (?, ?, 0, '')");
         $stmt->bind_param("is", $item_id, $filename);
         return $stmt->execute();
     }
 
-    // Delete image from DB and Server
+    // 4. Update Image Metadata (NEW: For Captions & Order)
+    public function update_image_meta($img_id, $caption, $order) {
+        $img_id = intval($img_id);
+        $order = intval($order);
+        $caption = $this->conn->real_escape_string($caption);
+        
+        $sql = "UPDATE item_images SET image_caption = '$caption', display_order = $order WHERE id = $img_id";
+        $this->conn->query($sql);
+    }
+
+    // 5. Delete image from DB and Server (KEPT EXISTING)
     public function delete_image($img_id) {
         $img_id = intval($img_id);
         
@@ -200,7 +231,7 @@ class Inbounding {
         global $conn; // DB connection
         $category = $data['category'];
         $photo    = $data['photo'];
-        $sql = "INSERT INTO vp_inbound (category_code, product_photo)
+        $sql = "INSERT INTO vp_inbound (group_name, product_photo)
                 VALUES ('$category', '$photo')";
         $result = mysqli_query($conn, $sql);
         if ($result) {
@@ -217,7 +248,7 @@ class Inbounding {
         $photo    = mysqli_real_escape_string($conn, $data['photo']);
 
         $sql = "UPDATE vp_inbound 
-                SET category_code='$category', 
+                SET group_name='$category', 
                     product_photo='$photo'
                 WHERE id=$id";
 
@@ -310,36 +341,32 @@ class Inbounding {
     }
     public function updatedesktopform($id, $data) {
         if (isset($data['id'])) unset($data['id']);
-        $cols = [];
-        $values = [];
-        $types = "";
+        $cols = []; $values = []; $types = "";
+
         foreach ($data as $key => $val) {
             if ($val !== '' && $val !== null) {
                 $cols[] = "$key = ?";
                 $values[] = $val;
-                if (is_int($val)) {
-                    $types .= "i";
-                } elseif (is_float($val) || (is_numeric($val) && strpos((string)$val, '.') !== false)) {
-                    $types .= "d";
-                } else {
-                    $types .= "s";
-                }
+                
+                // Type logic: integers, floats, or default to string
+                if (is_int($val)) $types .= "i";
+                elseif (is_float($val)) $types .= "d";
+                else $types .= "s"; // Handles your comma-separated strings and Group Name strings
             }
         }
-        if (empty($cols)) {
-            return ['success' => true, 'message' => "No changes made (all fields were empty)."];
-        }
-        $types .= "i";
+
+        if (empty($cols)) return ['success' => true, 'message' => "No changes made."];
+
+        $types .= "i"; 
         $values[] = $id;
-        $sql = "UPDATE vp_inbound SET " . implode(', ', $cols) . " WHERE id = ?";        
+
+        $sql = "UPDATE vp_inbound SET " . implode(', ', $cols) . " WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return ['success' => false, 'message' => "Prepare failed: " . $this->conn->error];
-        }
+        if (!$stmt) return ['success' => false, 'message' => "Prepare failed: " . $this->conn->error];
+        
         $stmt->bind_param($types, ...$values);
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => "Record updated successfully."];
-        }
+        
+        if ($stmt->execute()) return ['success' => true, 'message' => "Updated successfully."];
         return ['success' => false, 'message' => "Update failed: " . $stmt->error];
     }
     // --- Add these functions inside your InboundingModel class ---

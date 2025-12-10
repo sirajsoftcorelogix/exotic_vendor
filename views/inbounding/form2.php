@@ -16,7 +16,7 @@ $raw_categories = $data['category'] ?? []; // This contains your list of categor
 
 // --- NEW LOGIC START ---
 // 1. Get the raw ID (e.g., "-2")
-$cat_id = $form1['category_code'] ?? ''; 
+$cat_id = $form1['group_name'] ?? ''; 
 
 // 2. Default display name
 $category_display_name = 'Unknown'; 

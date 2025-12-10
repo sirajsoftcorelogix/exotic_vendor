@@ -15,7 +15,7 @@ $form2 = $data['form2'] ?? [];
 $raw_categories = $data['category'] ?? []; // FETCH CATEGORY LIST
 
 // --- NEW LOGIC START: Resolve Category Name ---
-$cat_id = $form2['category_code'] ?? ''; 
+$cat_id = $form2['group_name'] ?? ''; 
 $category_display_name = 'Unknown'; // Default value
 
 if (!empty($raw_categories) && !empty($cat_id)) {

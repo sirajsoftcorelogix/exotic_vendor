@@ -419,6 +419,9 @@ switch ($page) {
             case 'list':
                 $controller->index();   
                 break;
+            case 'exportSelected':
+                $controller->exportSelected();
+                break;
             case 'form1':
                 $controller->getform1();
                 break;
@@ -428,8 +431,14 @@ switch ($page) {
             case 'i_photos':
                 $controller->i_photos();
                 break;
-             case 'itmimgsave':
+
+            case 'itmimgsave':
                 $controller->itmimgsave();
+                break;
+
+            // --- ADD THIS NEW CASE ---
+            case 'download_photos':
+                $controller->download_photos();
                 break;
             case 'updatedesktopform':
                 $controller->updatedesktopform();

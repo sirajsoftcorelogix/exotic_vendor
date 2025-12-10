@@ -7,7 +7,7 @@ $raw_categories = $data['category'] ?? []; // This is your big array from DB
 $isEdit = !empty($form1);
 $id = $form1['id'] ?? '';
 // The value currently saved in the database (for editing)
-$saved_category_code = $form1['category_code'] ?? ''; 
+$saved_category_code = $form1['group_name'] ?? ''; 
 $photo = $form1['product_photo'] ?? '';
 
 $actionUrl = $isEdit
