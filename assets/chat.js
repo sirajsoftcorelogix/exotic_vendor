@@ -10,6 +10,7 @@
   const typingIndicatorEl = document.getElementById('typing-indicator');
   const popupContainer = document.getElementById('chat-popup-container');
   const userSearchEl = document.getElementById('user-search');
+  const PAGE_STARTED_AT = Date.now();
 
   const inputEl = document.getElementById('message-input');
   const sendBtn = document.getElementById('send-btn');
@@ -64,9 +65,9 @@
   messagesEl.addEventListener('scroll', () => { if (isAtBottom()) sendReadReceipt(); });
   window.addEventListener('focus', sendReadReceipt);
 
-  userSearchEl.addEventListener('input', (e) => {
+  /*userSearchEl.addEventListener('input', (e) => {
     renderUserList(userSearchEl.value.trim());
-  });
+  });*/
 
   function loadUsers() {
     fetch(window.API_BASE + '/fetch_users.php', { credentials: 'include' })
@@ -77,7 +78,6 @@
       })
       .catch(err => console.error('fetch_users error', err));
   }
-
   function renderUserList(filter) {
     userListEl.innerHTML = '';
     const q = (filter || '').toLowerCase();
@@ -90,7 +90,6 @@
       userListEl.appendChild(item);
     });
   }
-
   function openChatWithUser(userId) {
     // create or fetch single conversation via existing API
     fetch(window.API_BASE + '/create_conversation.php', {
@@ -110,7 +109,6 @@
     })
     .catch(err => console.error('create_conversation error', err));
   }
-
   function loadConversations() {
     return fetch(window.API_BASE + '/fetch_conversations.php', { credentials: 'include' })
       .then(r => r.json())
@@ -127,7 +125,6 @@
       })
       .catch(err => { console.error('fetch_conversations error', err); return Promise.reject(err); });
   }
-
   function renderConversationList() {
     convListEl.innerHTML = '';
     conversations.forEach(conv => {
@@ -169,9 +166,18 @@
         meta.appendChild(badge);
       }
 
+      const del = document.createElement('button');
+      del.textContent = "×";
+      del.className = "conv-delete-btn";
+      del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteConversation(conv.id);
+      });
+
       item.appendChild(ava);
       item.appendChild(main);
       item.appendChild(meta);
+      item.appendChild(del);
 
       item.addEventListener('click', () => {
         setActiveConversation(conv.id);
@@ -180,7 +186,34 @@
       convListEl.appendChild(item);
     });
   }
+  function deleteConversation(convId) {
+      if (!confirm("Delete this chat from your list?")) return;
 
+      fetch(window.API_BASE + '/delete_conversation.php', {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation_id: convId })
+      })
+      .then(r => r.json())
+      .then(res => {
+          if (res.success) {
+              // Remove from local array
+              conversations = conversations.filter(c => c.id != convId);
+
+              // If currently open, reset UI
+              if (activeConversationId === convId) {
+                  activeConversationId = null;
+                  messagesEl.innerHTML = "";
+                  titleEl.textContent = "Select a conversation";
+                  subtitleEl.textContent = "";
+              }
+
+              // Re-render list
+              renderConversationList();
+          }
+      });
+  }
   function setActiveConversation(convId) {
     activeConversationId = convId;
 
@@ -202,7 +235,6 @@
       sendReadReceipt();
     });
   }
-
   function loadMessages(convId) {
     return fetch(window.API_BASE + '/fetch_messages.php?conversation_id=' + encodeURIComponent(convId), {
       credentials: 'include'
@@ -216,7 +248,6 @@
       })
       .catch(err => console.error('fetch_messages error', err));
   }
-
   function renderMessages(convId) {
     messagesEl.innerHTML = '';
     (messages[convId] || []).forEach(msg => {
@@ -252,7 +283,6 @@
       messagesEl.appendChild(row);
     });
   }
-
   function sendMessage() {
     const txt = inputEl.value.trim();
     if (!txt && !fileInput.dataset.uploadedPath) return;
@@ -280,7 +310,6 @@
     fileInput.value = '';
     delete fileInput.dataset.uploadedPath;
   }
-
   function handleWsMessage(data) {
     switch (data.type) {
       case 'system':
@@ -303,7 +332,6 @@
         break;
     }
   }
-
   function handleNewMessage(msg) {
     const convId = msg.conversation_id;
     messages[convId] = messages[convId] || [];
@@ -327,18 +355,17 @@
 
     // Show popup and browser notification for messages not from me
     if (msg.sender_id != window.CURRENT_USER) {
-      showPopupNotification(msg);
-
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      //showPopupNotification(msg);
+      showUiPopup(msg);
+      /*if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         const body = msg.message ? msg.message : "📎 Attachment received";
         const n = new Notification("New message", { body: body });
         n.onclick = function () { window.focus(); setActiveConversation(convId); this.close(); };
-      }
+      }*/
     }
 
     renderConversationList();
   }
-
   function handleTyping() {
     const now = Date.now();
     if (now - lastTypingSentAt < 1500) return;
@@ -350,7 +377,6 @@
       ws.send(JSON.stringify({ type: 'typing', conversation_id: activeConversationId }));
     }
   }
-
   function handleTypingIndicator(data) {
     if (data.conversation_id != activeConversationId) return;
     typingIndicatorEl.style.display = 'block';
@@ -358,13 +384,11 @@
     if (typingTimeout) clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => { typingIndicatorEl.style.display = 'none'; }, 1500);
   }
-
   function handlePresence(data) {
     if (data.user_id === window.CURRENT_USER) {
       presenceEl.textContent = data.is_online ? 'You are online' : 'You are offline';
     }
   }
-
   function handleFileUpload() {
     if (!fileInput.files.length) return;
     const file = fileInput.files[0];
@@ -380,10 +404,8 @@
       })
       .catch(err => console.error('upload error', err));
   }
-
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
   function isAtBottom() { return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 50; }
-
   function sendReadReceipt() {
     if (!activeConversationId) return;
     const list = messages[activeConversationId] || [];
@@ -406,7 +428,30 @@
     popupContainer.appendChild(div);
     setTimeout(() => { div.remove(); }, 4000);
   }
+  function showUiPopup(message) {
+      const container = document.getElementById("ui-popup-container");
+      const div = document.createElement("div");
+      div.className = "ui-popup";
 
+      const preview = message.message 
+          ? message.message.substring(0, 70) 
+          : "📎 Attachment received";
+
+      div.innerHTML = `
+          <strong>${escapeHtml(message.sender_name || "New Message")}</strong>
+          <small>${escapeHtml(preview)}</small>
+      `;
+
+      div.addEventListener("click", () => {
+          setActiveConversation(message.conversation_id);
+          div.remove();
+      });
+
+      container.appendChild(div);
+
+      // Auto-remove after 5 seconds
+      setTimeout(() => div.remove(), 5000);
+  }
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
 

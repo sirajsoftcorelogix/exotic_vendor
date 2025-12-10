@@ -54,7 +54,7 @@ SELECT c.id,
     ) AS other_user_name
 FROM conversations c
 JOIN conversation_members cm ON cm.conversation_id = c.id
-WHERE cm.user_id = :uid
+WHERE cm.user_id = :uid AND cm.deleted_at IS NULL
 ORDER BY last_message_at DESC, c.created_at DESC
 ";
 

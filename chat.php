@@ -26,7 +26,7 @@ if (!$currentUserId) {
     </div>
 
     <div id="users-section">
-      <input type="text" id="user-search" placeholder="Search users..." />
+      <!-- <input type="text" id="user-search" placeholder="Search users..." /> -->
       <div id="user-list"></div>
     </div>
 
@@ -59,8 +59,9 @@ if (!$currentUserId) {
   </main>
 </div>
 
-<!-- Popup notifications container -->
-<div id="chat-popup-container"></div>
+<!-- Popup notifications container 
+<div id="chat-popup-container"></div>-->
+
 <script>
 window.CURRENT_USER = <?php echo (int)$currentUserId; ?>;
 window.API_TOKEN = <?php echo json_encode($apiToken); ?>;
@@ -68,9 +69,9 @@ window.API_TOKEN = <?php echo json_encode($apiToken); ?>;
 window.API_BASE = "api"; // api folder under exotic_vendor/
 
 // Ask notification permission early
-if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+/*if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
     Notification.requestPermission();
-}
+}*/
 
 window.WS_URL =
     (location.protocol === 'https:' ? 'wss://' : 'ws://') +
@@ -79,5 +80,6 @@ window.WS_URL =
 console.log("URL: " + window.WS_URL + " Current User: " + window.CURRENT_USER);
 </script>
 <script src="assets/chat.js"></script>
+<div id="ui-popup-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 999999;"></div>
 </body>
 </html>
