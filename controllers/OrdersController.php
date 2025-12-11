@@ -254,6 +254,7 @@ class OrdersController {
                         }
                     }
 					$rdata = [
+                    'sku' => $item['sku'] ?? '',
 					'order_number' => $order['orderid'] ?? '',
 					'shipping_country' => $order['shipping_country'] ?? '',
 					'title' => $item['title'] ?? '',

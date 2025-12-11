@@ -1,4 +1,6 @@
 <?php 
+require 'vendor/autoload.php';
+
 require_once 'models/order/purchaseOrder.php';
 require_once 'models/order/order.php';
 require_once 'models/order/purchaseOrderItem.php';
@@ -10,7 +12,10 @@ require_once 'models/product/product.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-require 'vendor/autoload.php';
+
+//use Endroid\QrCode\QrCode;
+//use Endroid\QrCode\Writer\PngWriter;
+
 
 $purchaseOrdersModel = new PurchaseOrder($conn);
 $ordersModel = new Order($conn);
@@ -213,7 +218,11 @@ class PurchaseOrdersController {
         $data = isset($_POST) ? $_POST : [];  
         $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
         $status = isset($_POST['status']) ? $_POST['status'] : 'pending';
+        $item_code = isset($_POST['item_code']) ? $_POST['item_code'] : [];
+        $sku = isset($_POST['sku']) ? $_POST['sku'] : [];
 
+        // print_array($_POST);
+        //     exit;
         if (empty($vendor) || empty($deliveryDueDate) || empty($deliveryAddress) || empty($total_gst) || empty($user_id)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
             exit;
@@ -256,7 +265,11 @@ class PurchaseOrdersController {
                 'gst' => $gstValue,
                 'quantity' => isset($quantity[$index]) ? $quantity[$index] : 0,
                 'price' => isset($rate[$index]) ? $rate[$index] : 0,
-                'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0
+                'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0,
+                'item_code' => isset($item_code[$index]) ? $item_code[$index] : '',
+                'size' => isset($data['size'][$index]) ? $data['size'][$index] : '',
+                'color' => isset($data['color'][$index]) ? $data['color'][$index] : '',
+                'sku' => isset($sku[$index]) ? $sku[$index] : '',
             ];
             //Print_array($items);
             $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);
@@ -984,9 +997,7 @@ class PurchaseOrdersController {
                 
             }
             if($design_format == 'smallImageWithPrice'){
-                $summary_rows .= '<tr>
-                    <td style="width: 60%;"></td>
-                    <td style="width: 40%; vertical-align:top;">
+                $summary_rows .= '
                         <table>
                             <tr>
                                 <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
@@ -1005,12 +1016,11 @@ class PurchaseOrdersController {
                                 <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$purchaseOrder['total_cost'].'</td>
                             </tr>
                         </table>
-                    </td>
-                </tr>';
+                    ';
             }
         }
        
-        require_once('vendor/autoload.php');
+        //require_once('vendor/autoload.php');
         define('_MPDF_TTFONTPATH',  __DIR__ . '/../templates/fonts/');      
 
         $mpdf = new \Mpdf\Mpdf([
@@ -1066,11 +1076,38 @@ class PurchaseOrdersController {
         $term = '<div style="font-size:10px; font-weight:bold; margin-bottom:10px;">Terms & Conditions</div>' . nl2br($purchaseOrder['terms_and_conditions']);
         if(empty($purchaseOrder['terms_and_conditions'])){
             $term = '';
-        }      
+        }
+       // Generate QR code for PO number or any URL/text
+        /*$result = (new Builder())
+        ->data(base_url('?page=grns&action=create&po_id=').$purchaseOrder['po_number']) // or any URL/text
+        ->size(200)
+        ->margin(10)
+        ->build();*/
+        // $result = (new \Endroid\QrCode\Builder\Builder())
+        // ->withData('https://example.com/po/'.$purchaseOrder['po_number']) // your dynamic URL
+        // ->withSize(200)
+        // ->withMargin(10)
+        // ->build();
+
+        //$qrCode = new QrCode(base_url('?page=grns&action=create&po_id=').$purchaseOrder['po_number']);
+        $qrCode = new Endroid\QrCode\QrCode(
+            data: base_url('?page=grns&action=create&po_id='.$poId),
+            size: 400,
+            margin: 10
+        );
+        //$qrCode->margin(10);
+
+        $writer = new Endroid\QrCode\Writer\PngWriter();
+        $result = $writer->write($qrCode);       
+        $qrBase64 = base64_encode($result->getString());
+
+        // Step 4: Create <img> tag for embedding in mPDF
+        $qrImgTag = '<img src="data:image/png;base64,'.$qrBase64.'" style="width:150px; height:150px;">';        
+   
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}','{{thead}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}','{{thead}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}', '{{qr_code}}'],
             [
                 $purchaseOrder['po_number'],
                 date('d M Y', strtotime($purchaseOrder['created_at'])),
@@ -1080,7 +1117,8 @@ class PurchaseOrdersController {
                 $summary_rows,
                 $term,
                 $vendorInfo,
-                $contactPerson
+                $contactPerson,
+                $qrImgTag
             ],
             $temphtml
         );
@@ -1823,6 +1861,7 @@ class PurchaseOrdersController {
             $data['img'][$index] = $imgPath;
             $items = [
                 'purchase_orders_id' => $poId,
+                'sku' => isset($data['sku'][$index]) ? $data['sku'][$index] : '',
                 'item_code' => isset($data['item_code'][$index]) ? $data['item_code'][$index] : '',
                 'product_id' => isset($data['product_id'][$index]) ? $data['product_id'][$index] : '',
                 'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',

@@ -313,7 +313,7 @@ switch ($page) {
                 break;
             case 'get_product_details_html';
                 $controller->getProductDetailsHTML();         
-                break;
+                break;            
             /*case 'view':
                 $controller->product_view();
                 break;
@@ -425,6 +425,15 @@ switch ($page) {
             case 'desktopform':
                 $controller->getdesktopform();
                 break;
+            case 'i_photos':
+                $controller->i_photos();
+                break;
+             case 'itmimgsave':
+                $controller->itmimgsave();
+                break;
+            case 'updatedesktopform':
+                $controller->updatedesktopform();
+                break;
             case 'saveform1':
                 $controller->saveform1();
                 break;
@@ -457,6 +466,8 @@ switch ($page) {
                 break;
             case 'getDetails':
                 $controller->getDetails();
+            case 'getItamcode':
+                $controller->getItamcode();
             default:
                 $controller->index();
                 break;
@@ -488,6 +499,30 @@ switch ($page) {
                 break;
             default:
                 $controller->fetchNotifications();   
+                break;
+        }
+        break;
+    case 'grns':
+        require_once 'controllers/GrnsController.php';
+        $controller = new GrnsController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'view':
+                $controller->viewGrn();   
+                break;
+            case 'create':
+                $controller->createGrn();   
+                break;
+            case 'create_post':
+                $controller->createGrnPost();   
+                break;
+            case 'delete':
+                $controller->deleteGrn();   
+                break;
+            default:
+                $controller->index();   
                 break;
         }
         break;

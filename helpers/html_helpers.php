@@ -3,7 +3,7 @@
 		global $domain;
 		if (session_status() === PHP_SESSION_NONE) session_start();
 
-		if (!isset($_SESSION) || !isset($_SESSION['user'])) {
+		if (!isset($_SESSION['user'])) {
 			// store current URL to redirect back after successful login
 			$currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
 				. '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
@@ -17,7 +17,7 @@
 				exit;
 			}
 
-			if (empty($_SESSION['redirect_after_login'])) {
+			if (!isset($_SESSION['redirect_after_login']) || empty($_SESSION['redirect_after_login'])) {
 				if(strpos($currentUrl, 'get_order_details_html') !== false){
 					$_SESSION['redirect_after_login'] = $domain . '?page=orders&action=list';
 					echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
@@ -27,7 +27,7 @@
 					exit;
 				}
 				else
-					$_SESSION['redirect_after_login'] = $currentUrl;
+					$_SESSION['redirect_after_login'] = $currentUrl;					
 			}
 
 			header('Location: ' . $domain . '?page=users&action=login');
@@ -526,5 +526,16 @@
 		$stmt = $conn->prepare($sql);
 		$stmt->bind_param("isss", $user_id, $title, $message, $link);
 		return $stmt->execute();
+	}
+	function isMobile() {
+		$userAgent = $_SERVER['HTTP_USER_AGENT'];
+		$mobileAgents = ['iPhone', 'iPad', 'Android', 'webOS', 'BlackBerry', 'iPod', 'Symbian', 'Windows Phone'];
+
+		foreach ($mobileAgents as $device) {
+			if (stripos($userAgent, $device) !== false) {
+				return true;
+			}
+		}
+		return false;
 	}
 ?>

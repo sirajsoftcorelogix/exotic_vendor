@@ -203,6 +203,7 @@ class ProductsController {
             // map API item to DB fields (adjust as needed)
             $item = [];
             $item['item_code'] = $code;
+            $item['sku'] = $apiItem['sku'] ?? '';
             $item['title'] = $apiItem['title'] ?? '';
             $item['image'] = 'https://cdn.exoticindia.com/images/products/original/'.$apiItem['image'] ?? '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
@@ -248,7 +249,13 @@ class ProductsController {
             $item['updated_at'] = date('Y-m-d H:i:s');
 
             // check if product exists
-            $existing = $productModel->findByItemCodeSizeColor($item['item_code'], $item['size'], $item['color']);
+            // if(!empty($item['sku'])){
+            //     $existing = $productModel->findBySku($item['sku']);
+            // }else{
+                $existing = $productModel->findByItemCodeSizeColor($item['item_code'], $item['size'], $item['color']);
+            //}
+            
+            
             if ($existing) {            
             $ok = $productModel->updateProduct($existing['id'], $item);
             if ($ok) $updated++;
@@ -266,6 +273,7 @@ class ProductsController {
                 foreach ($apiItem['variations'] as $variant) {
                     $variantItem = $item; // start with base item
                     $variantItem['item_code'] = $apiItem['itemcode'] ?? $apiItem['item_code'];
+                    $variantItem['sku'] = $variant['sku'] ?? '';
                     $variantItem['size'] = $variant['size'] ?? '';
                     $variantItem['color'] = $variant['color'] ?? '';
                     $variantItem['title'] = $variant['title'] ?? $item['title'];                    
@@ -341,4 +349,5 @@ class ProductsController {
         }
         exit;
     }
+    
 }
