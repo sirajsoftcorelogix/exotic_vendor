@@ -407,6 +407,7 @@ class Order{
             while ($row = $result->fetch_assoc()) {
                 $orderItems[] = [
                     'id' => $row['id'],
+                    'sku' => $row['sku'],
                     'order_number' => $row['order_number'],
                     'order_date' => $row['order_date'],
                     'item_code' => $row['item_code'],
