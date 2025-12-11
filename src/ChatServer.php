@@ -107,6 +107,9 @@ class ChatServer implements MessageComponentInterface
                 case 'ping':
                     $from->send(json_encode(['type' => 'pong']));
                     break;
+                case 'delete_message':
+                    $this->handleDeleteMessage($from, $payload);
+                    break;
                 default:
                     $from->send(json_encode(['type' => 'error', 'msg' => 'Unknown command']));
                     break;
@@ -116,6 +119,38 @@ class ChatServer implements MessageComponentInterface
             try { $from->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
         }
     }
+
+    private function handleDeleteMessage(ConnectionInterface $from, array $payload)
+    {
+        $messageId = (int)($payload['message_id'] ?? 0);
+        $userId = $from->userId;
+
+        $stmt = $this->conn->prepare("SELECT sender_id, conversation_id FROM messages WHERE id = ?");
+        $stmt->execute([$messageId]);
+        $row = $stmt->fetch();
+
+        if (!$row || $row['sender_id'] != $userId) {
+            $from->send(json_encode(['type'=>'error','msg'=>'Not allowed']));
+            return;
+        }
+
+        $this->conn->prepare("UPDATE messages SET is_deleted = 1 WHERE id = ?")
+                ->execute([$messageId]);
+
+        // Notify all participants
+        $payloadOut = [
+            'type' => 'message_deleted',
+            'message_id' => $messageId,
+            'conversation_id' => $row['conversation_id']
+        ];
+
+        $stmt = $this->conn->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
+        $stmt->execute([$row['conversation_id']]);
+        $members = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+        $this->sendToMembers($members, $payloadOut);
+    }
+
 
     /**
      * Connection closed
@@ -427,8 +462,40 @@ class ChatServer implements MessageComponentInterface
         $stmt->execute([$conversationId]);
         $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
+        $mentions = $this->extractMentions($text);
+
+        // Save mentions in DB if JSON column exists
+        if (!empty($mentions)) {
+            $stmt = $this->conn->prepare("
+                UPDATE messages SET mentioned_users = ?
+                WHERE id = ?
+            ");
+            $stmt->execute([json_encode($mentions), $msgId]);
+        }
+
+        foreach ($mentions as $mentionName) {
+            $stmt = $this->conn->prepare("SELECT id FROM users WHERE name = ?");
+            $stmt->execute([$mentionName]);
+            $uid = $stmt->fetchColumn();
+
+            if ($uid && isset($this->connectionsByUser[$uid])) {
+                $this->sendToUser($uid, [
+                    'type' => 'mention',
+                    'conversation_id' => $conversationId,
+                    'sender_id' => $senderId,
+                    'message_id' => $msgId,
+                ]);
+            }
+        }
+
         // Send only to members that are connected
         $this->sendToMembers($members, $msgRow);
+    }
+
+    private function extractMentions(string $text): array
+    {
+        preg_match_all('/@([A-Za-z0-9_]+)/', $text, $matches);
+        return $matches[1] ?? [];
     }
 
     /**

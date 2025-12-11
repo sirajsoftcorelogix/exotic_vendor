@@ -27,6 +27,9 @@
   // --- Tab blinking notification ---
   let originalTitle = document.title;
   let blinkInterval = null;
+  let mentionActive = false;
+  let mentionStartPos = 0;
+  const mentionDropdown = document.getElementById("mention-dropdown");
 
   const urlParams = new URLSearchParams(window.location.search);
   const openConvParam = urlParams.get("conversation_id");
@@ -64,6 +67,92 @@
     }
   });
 
+  inputEl.addEventListener("keyup", function (e) {
+      const pos = inputEl.selectionStart;
+      const text = inputEl.value;
+
+      // If @ typed, activate dropdown
+      if (e.key === "@") {
+          mentionActive = true;
+          mentionStartPos = pos - 1;
+          showMentionDropdown("");
+          return;
+      }
+
+      // If mention active, update search filter
+      if (mentionActive) {
+          let current = text.substring(mentionStartPos + 1, pos);
+
+          // Stop mention if space or punctuation
+          if (current.includes(" ") || current.includes("\n") || current.includes(".")) {
+              hideMentionDropdown();
+              return;
+          }
+
+          showMentionDropdown(current);
+      }
+  });
+
+  function showMentionDropdown(filterText) {
+      if (!mentionActive) return;
+
+      // Position dropdown below the input box
+      const rect = inputEl.getBoundingClientRect();
+      mentionDropdown.style.left = rect.left + "px";
+      mentionDropdown.style.top = (rect.top - 210) + "px"; // above input; adjust if needed
+
+      mentionDropdown.innerHTML = "";
+
+      const q = (filterText || "").toLowerCase();
+
+      const filtered = users.filter(u =>
+          u.name.toLowerCase().includes(q)
+      );
+
+      if (filtered.length === 0) {
+          hideMentionDropdown();
+          return;
+      }
+
+      filtered.forEach(u => {
+          const div = document.createElement("div");
+          div.className = "mention-item";
+          div.textContent = u.name;
+
+          div.addEventListener("click", () => {
+              insertMention(u.name);
+          });
+
+          mentionDropdown.appendChild(div);
+      });
+
+      mentionDropdown.classList.remove("hidden");
+  }
+  function insertMention(name) {
+      const text = inputEl.value;
+      const pos = inputEl.selectionStart;
+
+      const before = text.substring(0, mentionStartPos);
+      const after = text.substring(pos);
+
+      inputEl.value = before + "@" + name + " " + after;
+
+      inputEl.focus();
+      inputEl.selectionStart = inputEl.selectionEnd = (before.length + name.length + 2);
+
+      hideMentionDropdown();
+  }
+  document.addEventListener("click", function (e) {
+      if (!mentionDropdown.contains(e.target)) {
+          hideMentionDropdown();
+      }
+  });
+  function hideMentionDropdown() {
+      mentionActive = false;
+      mentionDropdown.classList.add("hidden");
+  }
+  // -- End User mentioned
+  
   attachBtn.addEventListener('click', () => { fileInput.click(); });
   fileInput.addEventListener('change', handleFileUpload);
   messagesEl.addEventListener('scroll', () => { if (isAtBottom()) sendReadReceipt(); });
@@ -271,6 +360,7 @@
 
       if (msg.message) {
         const text = document.createElement('div');
+        text.innerHTML = msg.message.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
         text.textContent = msg.message;
         bubble.appendChild(text);
       }
@@ -285,6 +375,7 @@
         fileDiv.appendChild(link);
         bubble.appendChild(fileDiv);
       }
+      
 
       const meta = document.createElement('div');
       meta.className = 'message-meta';
@@ -344,6 +435,9 @@
         break;
       case 'read_receipt':
         console.log('read_receipt', data);
+        break;
+      case 'message_deleted':
+        handleDeletedMessage(data);
         break;
     }
   }
@@ -576,6 +670,31 @@
           document.getElementById("group-modal").classList.add("hidden");
       });
   }
+  function deleteMessage(id){
+      if (!confirm("Delete this message?")) return;
+
+      ws.send(JSON.stringify({
+          type: 'delete_message',
+          message_id: id
+      }));
+  }
+  function handleDeletedMessage(data){
+      const { message_id, conversation_id } = data;
+      
+      // Remove from local memory
+      messages[conversation_id] = messages[conversation_id].map(m => {
+          if (m.id == message_id) {
+              m.is_deleted = 1;
+              m.message = "Message deleted";
+          }
+          return m;
+      });
+
+      if (conversation_id === activeConversationId) {
+          renderMessages(conversation_id);
+      }
+  }
+
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
 

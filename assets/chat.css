@@ -372,3 +372,28 @@ body {
 .modal.hidden { display: none; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display:flex; justify-content:center; align-items:center; }
 .modal-content { background:#fff; padding:20px; border-radius:8px; width:320px; }
+.mention { color: #0b5ed7; font-weight: bold; }
+.mention-dropdown {
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    padding: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    width: 220px;
+    border-radius: 4px;
+    z-index: 9999;
+}
+
+.mention-dropdown.hidden {
+    display: none;
+}
+
+.mention-item {
+    padding: 6px 8px;
+    cursor: pointer;
+}
+
+.mention-item:hover {
+    background: #f2f2f2;
+}

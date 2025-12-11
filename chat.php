@@ -57,6 +57,7 @@ if (!$currentUserId) {
       </div>
     </footer>
   </main>
+  <div id="mention-dropdown" class="mention-dropdown hidden"></div>
 </div>
 <button id="create-group-btn">+ Create Group</button>
 
