@@ -296,7 +296,7 @@ class Order{
         // Insert
         $table_name = 'vp_orders';
         $InsertFields = [
-            'order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
+            'sku','order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
             'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 
             'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 
             'cost_price', 'location', 'order_date','processed_time','numsold','product_weight','product_weight_unit',
@@ -502,9 +502,10 @@ class Order{
         }
                
         if(!empty($data)) {
-        $sql = "INSERT INTO vp_products (item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_products (sku, item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('sssssssiissdisiiisi', 
+        $stmt->bind_param('ssssssssiissdisiiisi', 
+            $data['sku'],
             $data['item_code'], 
             $data['title'],
             $data['description'],

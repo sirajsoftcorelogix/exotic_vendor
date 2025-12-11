@@ -167,6 +167,10 @@
                                 <span class="typo-sku-value"><a href="javascript:void(0);" class="invdetails typo-sf-column text-details-link mt-1"><?php echo $product['item_code']; ?></a></span>
                             </div>
                             <div class="flex items-center gap-2">
+                                <span class="typo-sku-label w-[70px]">SKU :</span>
+                                <span class="typo-sku-value"><?php echo $product['sku']; ?></span>
+                            </div>
+                            <div class="flex items-center gap-2">
                                 <span class="typo-sku-label w-[70px]">ASIN :</span>
                                 <span class="typo-sku-value"><?php echo $product['asin']; ?></span>
                             </div>

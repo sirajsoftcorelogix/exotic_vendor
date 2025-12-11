@@ -138,9 +138,10 @@ class product{
         if (isset($productData) && is_array($productData)) {            
             foreach ($productData as $product) {  
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ? WHERE item_code = ? AND color = ? AND size = ?");
+                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                 if ($stmt) {
                     // $title = isset($product['title']) ? $product['title'] : '';
+                        $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
                         $color = isset($product['color']) ? $product['color'] : '';
                         $size = isset($product['size']) ? $product['size'] : '';
                     // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
@@ -174,7 +175,7 @@ class product{
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                     $updated_at = date('Y-m-d H:i:s');
                     $stmt->bind_param(
-                        'sissiissiiiissdddddddddssss',                            
+                        'sissiissiiiissdddddddddsssss',                            
                         $asin,
                         $localStock,
                         $upc,
@@ -199,6 +200,7 @@ class product{
                         $discount_global,
                         $discount_india,
                         $updated_at,
+                        $sku,
                         $product['itemcode'],$color,$size
                     );  
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
@@ -213,9 +215,10 @@ class product{
                 if (isset($product['variations'])) {
                     foreach ($product['variations'] as $variation) {                            
                             //echo "Updating variations itemcode: ".$product['itemcode']."<br/>";
-                            $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ? WHERE item_code = ? AND color = ? AND size = ?");
+                            $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, price_india_suggested = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, updated_at = ?, sku = ? WHERE item_code = ? AND color = ? AND size = ?");
                             if ($stmt) {
                                 // $title = isset($product['title']) ? $product['title'] : '';
+                                 $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
                                  $color = isset($variation['color']) ? $variation['color'] : '';
                                  $size = isset($variation['size']) ? $variation['size'] : '';
                                 // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
@@ -249,7 +252,7 @@ class product{
                                 $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                                 $updated_at = date('Y-m-d H:i:s');
                                 $stmt->bind_param(
-                                    'sissiissiiiissdddddddddssss',                                    
+                                    'sissiissiiiissdddddddddsssss',                                    
                                     $asin,
                                     $localStock,
                                     $upc,
@@ -274,6 +277,7 @@ class product{
                                     $discount_global,
                                     $discount_india,
                                     $updated_at,
+                                    $sku,
                                     $product['itemcode'],$color,$size
                                 );                                   
                                 if ($stmt->execute()) {
@@ -299,12 +303,21 @@ class product{
         $res = $stmt->get_result()->fetch_assoc();
         return $res;
     }
+    public function findBySku($sku) {
+        $sql = "SELECT * FROM vp_products WHERE sku = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        return $res;
+    }   
     public function createProduct($data) {
-        $sql = "INSERT INTO vp_products (item_code, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql); 
-        $stmt->bind_param('sssssdddsssisssssssssssssisddddddddddsiiisss',
+        $stmt->bind_param('ssssssdddsssisssssssssssssisddddddddddsiiisss',
             $data['item_code'],
+            $data['sku'],
             $data['size'],
             $data['color'],
             $data['title'],

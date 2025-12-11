@@ -44,8 +44,10 @@ class GrnsController {
             return;
         }
         $data['purchaseOrder'] = $purchaseOrder;
-        $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemByIdNew($poId);
-        $data['items'] = $purchaseOrderItems;
+        //$purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemByIdNew($poId);
+        //print_r($purchaseOrderItems);
+        $data['items'] = $purchaseOrderItemsModel->getPurchaseOrderItemFromProduct($poId);
+        //print_array($data['items']);
         // fetch exotic addresses 
         $data['exotic_address'] = $commanModel->get_exotic_address();
         $data['users'] = $usersModel->getAllUsers();
@@ -105,19 +107,21 @@ class GrnsController {
            
 
             // Fetch PO items to update stock
-            $poItems = $purchaseOrderItemsModel->getPurchaseOrderItemByIdNew($poId);
+            //$poItems = $purchaseOrderItemsModel->getPurchaseOrderItemByIdNew($poId);
+            $poItems = $purchaseOrderItemsModel->getPurchaseOrderItemFromProduct($poId);
 
             // Prepare statements for stock and movements
-            $selectStockSql = "SELECT id, current_stock FROM vp_stock WHERE item_code = ? AND COALESCE(size,'') = COALESCE(?, '') AND COALESCE(color,'') = COALESCE(?, '') AND warehouse_id = ? LIMIT 1";
+            //$selectStockSql = "SELECT id, current_stock FROM vp_stock WHERE item_code = ? AND COALESCE(size,'') = COALESCE(?, '') AND COALESCE(color,'') = COALESCE(?, '') AND warehouse_id = ? LIMIT 1";
+            $selectStockSql = "SELECT id, current_stock FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1";
             $selectStockStmt = $conn->prepare($selectStockSql);
 
             $updateStockSql = "UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?";
             $updateStockStmt = $conn->prepare($updateStockSql);
 
-            $insertStockSql = "INSERT INTO vp_stock (item_code, size, color, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?, ?, ?)";
+            $insertStockSql = "INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)";
             $insertStockStmt = $conn->prepare($insertStockSql);
 
-            $insertMovementSql = "INSERT INTO vp_stock_movements (product_id, item_code, size, color, warehouse_id, movement_type, quantity, running_stock, created_at, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)";
+            $insertMovementSql = "INSERT INTO vp_stock_movements (product_id, sku, warehouse_id, movement_type, quantity, running_stock, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
             $insertMovementStmt = $conn->prepare($insertMovementSql);
 
             foreach ($poItems as $index => $item) {
@@ -128,14 +132,13 @@ class GrnsController {
                 $size = $item['size'] ?? '';
                 $color = $item['color'] ?? '';
                 $productId = isset($item['product_id']) && $item['product_id'] !== '' ? intval($item['product_id']) : null;
+                $sku = $_POST['sku'][$index] ?? '';
                  // create GRN
                 $data = [];
                 $data = [
                     'po_id' => $poId,
                     'po_number' => $_POST['po_number'] ?? '',
-                    'item_code' => $itemCode,
-                    'color' => $color,
-                    'size' => $size,
+                    'sku' => $sku,
                     'qty_received' => $qtyReceived,
                     'qty_acceptable' => $qtyAcceptableArr[$index] ?? 0,
                     'location' => $warehouseId,
@@ -148,7 +151,7 @@ class GrnsController {
                     throw new Exception('Failed to create GRN');
                 }
                 // ensure select statement prepared
-                $selectStockStmt->bind_param('sssi', $itemCode, $size, $color, $warehouseId);
+                $selectStockStmt->bind_param('si', $sku, $warehouseId);
                 $selectStockStmt->execute();
                 $res = $selectStockStmt->get_result();
                 $runningStock = 0;
@@ -165,9 +168,9 @@ class GrnsController {
                     // insert stock record
                     $runningStock = $qtyReceived;
                     
-                    $insertStockStmt->bind_param('sssidi', $itemCode, $size, $color, $warehouseId, $runningStock, $grnId);
+                    $insertStockStmt->bind_param('sidi', $sku, $warehouseId, $runningStock, $grnId);
                     if (!$insertStockStmt->execute()) {
-                        throw new Exception('Failed to insert vp_stock for item ' . $itemCode);
+                        throw new Exception('Failed to insert vp_stock for item ' . $sku);
                     }
                     $stockId = $conn->insert_id;
                 }
@@ -176,15 +179,15 @@ class GrnsController {
                 $movementType = 'IN';
                 $pidBind = $productId ? $productId : 0;
                 $refType = 'GRN';
-                $insertMovementStmt->bind_param('isssisddsd', $pidBind, $itemCode, $size, $color, $warehouseId, $movementType, $qtyReceived, $runningStock, $refType, $grnId);
+                $insertMovementStmt->bind_param('isissdid', $pidBind, $sku, $warehouseId, $movementType, $qtyReceived, $runningStock, $refType, $grnId);
                 if (!$insertMovementStmt->execute()) {
-                    throw new Exception('Failed to insert vp_stock_movements for item ' . $itemCode);
+                    throw new Exception('Failed to insert vp_stock_movements for item ' . $sku);
                 }
             }
 
-            // Optionally update purchase order status to received
+            // Optionally update purchase order status to received 
             if (method_exists($purchaseOrderModel, 'updateStatus')) {
-                $purchaseOrderModel->updateStatus($poId, 'received');
+                //$purchaseOrderModel->updateStatus($poId, 'received');
             }
 
             // commit transaction

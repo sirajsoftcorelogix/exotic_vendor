@@ -64,11 +64,12 @@ class PurchaseOrderItem {
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
-    public function getPurchaseOrderItemWithProductId($po_id) {
+    public function getPurchaseOrderItemFromProduct($po_id) {
         // join with vp_products to get product details
-        $query = "SELECT poi.*, vp.prod_height, vp.prod_width, vp.prod_length, vp.length_unit
+        $query = "SELECT poi.*, vp.prod_height, vp.prod_width, vp.prod_length, vp.length_unit, vp.product_weight, vp.product_weight_unit, vp.material, vs.current_stock
                   FROM vp_po_items poi
-                  LEFT JOIN vp_products vp ON poi.product_id = vp.id
+                  LEFT JOIN vp_products vp ON poi.sku = vp.sku
+                  LEFT JOIN vp_stock vs ON vs.sku = poi.sku
                   WHERE poi.purchase_orders_id = ?";
         $stmt = $this->conn->prepare($query);
         $stmt->bind_param("i", $po_id);
@@ -77,9 +78,9 @@ class PurchaseOrderItem {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     public function createPurchaseOrderItem($data) {
-        $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount, item_code, size, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount, item_code, size, color, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("iisssidddsss", 
+        $stmt->bind_param("iisssidddssss", 
             $data['purchase_orders_id'],
             $data['order_number'], 
             $data['title'],
@@ -91,7 +92,8 @@ class PurchaseOrderItem {
             $data['amount'],
             $data['item_code'],
             $data['size'],
-            $data['color']
+            $data['color'],
+            $data['sku']
         );
         if ($stmt->execute()) {
             return $this->conn->insert_id; // Return the ID of the newly created item
