@@ -464,6 +464,21 @@ class ChatServer implements MessageComponentInterface
 
         $mentions = $this->extractMentions($text);
 
+        foreach ($mentions as $mentionName) {
+            $stmt = $this->conn->prepare("SELECT id FROM users WHERE name = ? LIMIT 1");
+            $stmt->execute([$mentionName]);
+            $uid = $stmt->fetchColumn();
+
+            if ($uid && isset($this->connectionsByUser[$uid])) {
+                $this->sendToUser($uid, [
+                    'type' => 'mention',
+                    'conversation_id' => $conversationId,
+                    'sender_id' => $senderId,
+                    'message_id' => $msgId
+                ]);
+            }
+        }
+
         // Save mentions in DB if JSON column exists
         if (!empty($mentions)) {
             $stmt = $this->conn->prepare("

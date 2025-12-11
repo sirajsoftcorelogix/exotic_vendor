@@ -29,6 +29,9 @@
   let blinkInterval = null;
   let mentionActive = false;
   let mentionStartPos = 0;
+  let mentionIndex = -1; // currently highlighted user in dropdown
+  let mentionItems = []; // reference to rendered items
+
   const mentionDropdown = document.getElementById("mention-dropdown");
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -58,13 +61,37 @@
 
   sendBtn.addEventListener('click', sendMessage);
 
-  inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      sendMessage();
-    } else {
-      handleTyping();
-    }
+  inputEl.addEventListener("keydown", function (e) {
+      if (!mentionActive) return;
+
+      // Arrow Down
+      if (e.key === "ArrowDown") {
+          e.preventDefault();
+          mentionIndex++;
+
+          if (mentionIndex >= mentionItems.length) mentionIndex = 0;
+
+          updateMentionHighlight();
+      }
+
+      // Arrow Up
+      if (e.key === "ArrowUp") {
+          e.preventDefault();
+          mentionIndex--;
+
+          if (mentionIndex < 0) mentionIndex = mentionItems.length - 1;
+
+          updateMentionHighlight();
+      }
+
+      // Enter to select
+      if (e.key === "Enter") {
+          if (mentionIndex >= 0 && mentionIndex < mentionItems.length) {
+              e.preventDefault();
+              const name = mentionItems[mentionIndex].textContent;
+              insertMention(name);
+          }
+      }
   });
 
   inputEl.addEventListener("keyup", function (e) {
@@ -93,38 +120,58 @@
       }
   });
 
-  function showMentionDropdown(filterText) {
-      if (!mentionActive) return;
+  function updateMentionHighlight() {
+      mentionItems.forEach((item, idx) => {
+          if (idx === mentionIndex) {
+              item.classList.add("active");
+              item.scrollIntoView({ block: "nearest" });
+          } else {
+              item.classList.remove("active");
+          }
+      });
+  }
 
-      // Position dropdown below the input box
+  function showMentionDropdown(filterText) {
+    if (!mentionActive) return;
+
+      // Position dropdown below input
       const rect = inputEl.getBoundingClientRect();
       mentionDropdown.style.left = rect.left + "px";
-      mentionDropdown.style.top = (rect.top - 210) + "px"; // above input; adjust if needed
+      mentionDropdown.style.top = (rect.top - 210) + "px"; // adjust as needed
 
-      mentionDropdown.innerHTML = "";
-
-      const q = (filterText || "").toLowerCase();
+      // Filter users based on input after '@'
+      const query = (filterText || "").toLowerCase();
 
       const filtered = users.filter(u =>
-          u.name.toLowerCase().includes(q)
+          u.name.toLowerCase().includes(query)
       );
 
+      // If no users match, hide dropdown
       if (filtered.length === 0) {
           hideMentionDropdown();
           return;
       }
 
-      filtered.forEach(u => {
+      mentionDropdown.innerHTML = "";
+      mentionItems = [];
+
+      filtered.forEach((u, index) => {
           const div = document.createElement("div");
           div.className = "mention-item";
           div.textContent = u.name;
+
+          div.dataset.index = index;
 
           div.addEventListener("click", () => {
               insertMention(u.name);
           });
 
           mentionDropdown.appendChild(div);
+          mentionItems.push(div);
       });
+
+      // Reset highlight index
+      mentionIndex = -1;
 
       mentionDropdown.classList.remove("hidden");
   }
@@ -152,7 +199,7 @@
       mentionDropdown.classList.add("hidden");
   }
   // -- End User mentioned
-  
+
   attachBtn.addEventListener('click', () => { fileInput.click(); });
   fileInput.addEventListener('change', handleFileUpload);
   messagesEl.addEventListener('scroll', () => { if (isAtBottom()) sendReadReceipt(); });
@@ -349,7 +396,7 @@
       })
       .catch(err => console.error('fetch_messages error', err));
   }
-  function renderMessages(convId) {
+  /*function renderMessages(convId) {
     messagesEl.innerHTML = '';
     (messages[convId] || []).forEach(msg => {
       const row = document.createElement('div');
@@ -361,7 +408,8 @@
       if (msg.message) {
         const text = document.createElement('div');
         text.innerHTML = msg.message.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-        text.textContent = msg.message;
+        text.innerHTML = msg.message.replace(/@([A-Za-z0-9_]+)/g,
+    '<span class="mention">@\$1</span>');
         bubble.appendChild(text);
       }
 
@@ -385,6 +433,67 @@
       row.appendChild(bubble);
       messagesEl.appendChild(row);
     });
+  }*/
+  function renderMessages(convId) {
+      messagesEl.innerHTML = '';
+
+      (messages[convId] || []).forEach(msg => {
+          const row = document.createElement('div');
+          row.className = 'message-row' + (msg.sender_id == window.CURRENT_USER ? ' own' : '');
+
+          const bubble = document.createElement('div');
+          bubble.className = 'message-bubble';
+
+          // If message is deleted
+          if (msg.is_deleted == 1) {
+              bubble.innerHTML = "<i>Message deleted</i>";
+          } 
+          else {
+              // Normal text message
+              if (msg.message) {
+                  const text = document.createElement('div');
+                  text.className = "message-text";
+
+                  // Highlight @mentions
+                  text.innerHTML = msg.message.replace(/@([A-Za-z0-9_]+)/g,
+                      '<span class="mention">@$1</span>');
+                  
+                  bubble.appendChild(text);
+              }
+
+              // File attachment
+              if (msg.file_path) {
+                  const fileDiv = document.createElement('div');
+                  fileDiv.className = 'message-file';
+
+                  const link = document.createElement('a');
+                  link.href = msg.file_path;
+                  link.target = '_blank';
+                  link.textContent = msg.original_name || "Attachment";
+
+                  fileDiv.appendChild(link);
+                  bubble.appendChild(fileDiv);
+              }
+
+              // DELETE BUTTON — only for your own messages
+              if (msg.sender_id == window.CURRENT_USER) {
+                  const delBtn = document.createElement("button");
+                  delBtn.className = "delete-btn";
+                  delBtn.innerHTML = "🗑";
+                  delBtn.onclick = () => deleteMessage(msg.id);
+                  bubble.appendChild(delBtn);
+              }
+          }
+
+          // Timestamp
+          const meta = document.createElement('div');
+          meta.className = 'message-meta';
+          meta.textContent = msg.created_at;
+          bubble.appendChild(meta);
+
+          row.appendChild(bubble);
+          messagesEl.appendChild(row);
+      });
   }
   function sendMessage() {
     const txt = inputEl.value.trim();
@@ -439,7 +548,24 @@
       case 'message_deleted':
         handleDeletedMessage(data);
         break;
+      case 'mention':
+        handleMentionNotification(data);
+        break;
     }
+  }
+  function handleMentionNotification(data) {
+      const sender = users.find(u => u.id == data.sender_id);
+
+      const name = sender ? sender.name : "Someone";
+
+      showUiPopup({
+          sender_name: name,
+          message: "mentioned you in a chat",
+          conversation_id: data.conversation_id
+      });
+
+      // Optional: Blink tab or change favicon
+      if (typeof startBlink === 'function') startBlink("Mention");
   }
   function handleNewMessage(msg) {
     const convId = msg.conversation_id;
@@ -630,7 +756,6 @@
       document.getElementById("group-modal").classList.remove("hidden");
       renderGroupMemberSelector();
   }
-
   function renderGroupMemberSelector() {
       const list = document.getElementById("group-members-list");
       list.innerHTML = '';

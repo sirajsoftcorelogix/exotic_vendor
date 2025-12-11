@@ -384,16 +384,21 @@ body {
     border-radius: 4px;
     z-index: 9999;
 }
-
 .mention-dropdown.hidden {
     display: none;
 }
-
 .mention-item {
     padding: 6px 8px;
     cursor: pointer;
 }
-
 .mention-item:hover {
     background: #f2f2f2;
+}
+.mention-item.active {
+    background: #0b5ed7;
+    color: white;
+}
+span.mention {
+    color: #0b5ed7;
+    font-weight: bold;
 }
