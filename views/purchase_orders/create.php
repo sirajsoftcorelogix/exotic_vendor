@@ -519,7 +519,7 @@ function fetchOrderItems(query) {
                                 data-instock-fba_in="${item.fba_in}"
                                 data-instock-fba_us="${item.fba_us}" 
                                 data-instock-lastsold="${item.lastsold}"
-                                data-sku="${item.sku.replace(/"/g, '&quot;')}"           
+                                data-sku="${(item.sku || '').replace(/"/g, '&quot;')}"           
                                 >+</button>
                         </td>
                     `;
