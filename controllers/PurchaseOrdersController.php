@@ -219,6 +219,7 @@ class PurchaseOrdersController {
         $terms_and_conditions = isset($_POST['terms_and_conditions']) ? $_POST['terms_and_conditions'] : '';
         $status = isset($_POST['status']) ? $_POST['status'] : 'pending';
         $item_code = isset($_POST['item_code']) ? $_POST['item_code'] : [];
+        $sku = isset($_POST['sku']) ? $_POST['sku'] : [];
 
         // print_array($_POST);
         //     exit;
@@ -268,6 +269,7 @@ class PurchaseOrdersController {
                 'item_code' => isset($item_code[$index]) ? $item_code[$index] : '',
                 'size' => isset($data['size'][$index]) ? $data['size'][$index] : '',
                 'color' => isset($data['color'][$index]) ? $data['color'][$index] : '',
+                'sku' => isset($sku[$index]) ? $sku[$index] : '',
             ];
             //Print_array($items);
             $itemId = $purchaseOrderItemsModel->createPurchaseOrderItem($items);

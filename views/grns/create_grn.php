@@ -1,7 +1,7 @@
-<div class="container mx-auto px-4">    
+<div class="container mx-auto px-8 bg-white">    
     <div class="pt-8 pb-6 text-center">
-        <h1 class="type-page-header text-base md:text-lg">Create</h1>
-        <h1 class="text-2xl md:text-4xl font-bold">Goods Receipt Note</h1> 
+        <h1 class="text-2xl md:text-4xl font-bold text-orange-600">Create</h1>
+        <h1 class="type-page-header text-base md:text-lg text-orange-600">Goods Receipt Note</h1> 
     </div>
     <!-- Vendor Info Section -->
      <?php //print_array($purchaseOrder);?>
@@ -25,18 +25,19 @@
             <div class="space-y-0">
                 <div class="flex">
                     <span class="type-label-small w-32">Vendor Phone</span>
-                    <span class="type-data-small">: &nbsp;<a href="tel:<?= htmlspecialchars($purchaseOrder['vendor_phone'] ?? '') ?>"><?= htmlspecialchars($purchaseOrder['vendor_phone'] ?? '') ?></a></span>
+                    <span class="type-data-small">: &nbsp;<a href="tel:<?= htmlspecialchars($purchaseOrder['vendor_phone'] ?? '') ?>" class="text-orange-600 hover:underline"><?= htmlspecialchars($purchaseOrder['vendor_phone'] ?? '') ?></a></span>
                 </div>
                 <div class="flex">
                     <span class="type-label-small w-32">Vendor Email</span>
-                    <span class="type-data-small">: &nbsp; <a href="mailto:<?= htmlspecialchars($purchaseOrder['vendor_email'] ?? '') ?>"><?= htmlspecialchars($purchaseOrder['vendor_email'] ?? '') ?></a></span>
+                    <span class="type-data-small">: &nbsp; <a href="mailto:<?= htmlspecialchars($purchaseOrder['vendor_email'] ?? '') ?>" class="text-orange-600 hover:underline"><?= htmlspecialchars($purchaseOrder['vendor_email'] ?? '') ?></a></span>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Item Summary Header -->
-    <div class="mb-4">
+    <div class="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2 ">
+        <span class="bg-[#d9822b] w-1 h-5 rounded-full"></span>
         <h2 class="type-page-header inline-block">Item Summary</h2>
     </div>
     <form method="post" id="createGrnForm" action="">
@@ -91,8 +92,8 @@
                             <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['prod_length'] ?? '') ?> <?= htmlspecialchars($item['length_unit'] ?? '') ?></span>
                         </div>
                         <!-- Row 4 -->
-                        <div class="flex items-baseline">
-                            <span class="type-label-small w-20 shrink-0">Previously Received Qty</span>
+                        <div class="flex items-baseline w-48">
+                            <span class="type-label-small shrink-0">Previously Received Qty</span>
                             <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['current_stock'] ?? '') ?></span>
                         </div>
                         
@@ -138,6 +139,7 @@
             <input type="hidden" name="item_code[]" value="<?php echo htmlspecialchars($item['item_code'] ?? '') ?>">
             <input type="hidden" name="color[]" value="<?php echo htmlspecialchars($item['color'] ?? '') ?>">
             <input type="hidden" name="size[]" value="<?php echo htmlspecialchars($item['size'] ?? '') ?>">
+            <input type="hidden" name="sku[]" value="<?php echo htmlspecialchars($item['sku'] ?? '') ?>">
         </div>
     <?php endforeach; ?>
        
@@ -149,14 +151,14 @@
 
         <!-- Row 1: Inputs (Centered with fixed 210px width) -->
         <div class="flex flex-col md:flex-row gap-6 justify-center w-full">
-            <div class="w-[210px]">
+            <div class="w-[320px]">
                 <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Received Date <span class="text-red-500">*</span></label>
                 <div class="relative">
                     <input type="date" name="received_date" value="<?php echo htmlspecialchars(date('Y-m-d')); ?>" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-sm focus:outline-none">
                     
                 </div>
             </div>
-            <div class="w-[210px]">
+            <div class="w-[320px]">
                 <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Received by <span class="text-red-500">*</span></label>
                 <select name="received_by" id="employee_name" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
                     <option value="">Select User</option>
@@ -166,27 +168,27 @@
                 </select>
                 <!-- <input type="text" name="received_by" value="<?php //echo $_SESSION['user']['name'] ?? '' ?>" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none"> -->
             </div>
-            <div class="w-[210px]">
+            <div class="w-[320px]">
                 <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Warehouse <span class="text-red-500">*</span></label>
                 <select name="warehouse_id" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
                     <option value="">Select Warehouse</option>
                     <?php foreach ($exotic_address as $warehouse): ?>
-                        <option value="<?= $warehouse['id'] ?>"><?= htmlspecialchars($warehouse['address_title']) ?></option>
+                        <option value="<?= $warehouse['id'] ?>" <?= ($warehouse['is_default']) ? 'selected' : '' ?>><?= htmlspecialchars($warehouse['address_title']) ?></option>
                     <?php endforeach; ?>
                 </select>            
             </div>
-            <div class="w-[210px]">
+            <div class="w-[320px]">
                 <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Image <span class="text-red-500"></span></label>
                 <input type="file" name="grn_file[]" multiple class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
             </div>
         </div>
 
         <!-- Row 2: Buttons (Centered with fixed 210px width) -->
-        <div class="flex flex-col md:flex-row gap-4 justify-center w-full">
+        <div class="flex flex-col md:flex-row gap-4 justify-center w-full pb-8">
             <input type="hidden" name="purchase_order_id" value="<?= $purchaseOrder['id'] ?>">
             <input type="hidden" name="po_id" value="<?php echo htmlspecialchars($purchaseOrder['id'] ?? '') ?>">
             <input type="hidden" name="po_number" value="<?php echo htmlspecialchars($purchaseOrder['po_number'] ?? '') ?>">
-            <button onclick="savegrn(event)" id="saveChanges" class="w-[210px] bg-black text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
+            <button onclick="savegrn(event)" id="saveChanges" class="w-[320px] bg-[#d9822b] text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
                 Save & Submit
             </button>
             <!-- <button class="w-[210px] bg-black text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
