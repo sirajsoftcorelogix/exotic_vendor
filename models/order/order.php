@@ -92,7 +92,7 @@ class Order{
             $params[] = $filters['vendor_id'];            
         }
         if(!empty($filters['agent'])){
-            $sql .= " AND vp_orders.agent_id = ?";
+            $sql .= " AND vp_orders.status != 'shipped'  AND vp_orders.agent_id = ?";
             $params[] = $filters['agent'];            
         }
         //echo $sql;
@@ -201,7 +201,7 @@ class Order{
             $params[] = $filters['vendor_id'];            
         }
         if(!empty($filters['agent'])){
-            $sql .= " AND vp_orders.agent_id = ?";
+            $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.agent_id = ?";
             $params[] = $filters['agent'];            
         }
         // Add sorting based on filter
