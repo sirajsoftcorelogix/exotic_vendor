@@ -201,12 +201,20 @@ WHERE vi.id=".$id;
         $category = $result4->fetch_all(MYSQLI_ASSOC);
         $result4->free();
     }
+    $sql5 = "SELECT * FROM `exotic_address`";
+    $result5 = $this->conn->query($sql5);
+
+    if ($result5) {
+        $address = $result5->fetch_all(MYSQLI_ASSOC);
+        $result5->free();
+    }
     return [
         'form2' => $inbounding,
         'user'  => $user,
         'vendors' => $vendors,
         'material' => $material,
-        'category' => $category
+        'category' => $category,
+        '$address' => $address
     ];
 }
     public function getform2($id) {

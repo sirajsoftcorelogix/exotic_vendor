@@ -129,7 +129,7 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        renderTemplateClean('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
+        renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
     function getCategoryList() {
         $url = 'https://www.exoticindia.com/vendor-api/product/categorylist';
@@ -633,6 +633,7 @@ class InboundingController {
             'store_location'      => $_POST['store_location'] ?? '',
             'local_stock'         => $_POST['local_stock'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
+            'in_stock_leadtime_days'      => $_POST['in_stock_leadtime_days'] ?? '',
             'us_block'            => $_POST['us_block'] ?? '',
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
