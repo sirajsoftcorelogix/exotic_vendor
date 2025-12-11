@@ -31,8 +31,8 @@ $countries = country_array();
                 <!-- Card 1 -->
                 <div class="variation-card p-6 flex">
                     <!-- Image -->
-                    <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
-                        <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image" class="w-full h-full object-cover">
+                    <div class="flex-shrink-0 w-full sm:w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
+                        <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image" class="max-w-32 object-cover">
                     </div>
 
                     <!-- Details Container -->
