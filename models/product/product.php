@@ -79,7 +79,8 @@ class product{
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
                 $orderItems[] = [
-                    'id' => $row['id'],                                     
+                    'id' => $row['id'],
+                    'sku' => $row['sku'],                                     
                     'item_code' => $row['item_code'],
                     'title' => $row['title'],
                     'color' => $row['color'],
@@ -115,7 +116,8 @@ class product{
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
                 $orderItems[] = [
-                    'id' => $row['id'],                    
+                    'id' => $row['id'], 
+                    'sku' => $row['sku'],                   
                     'item_code' => $row['item_code'],
                     'title' => $row['title'],
                     'color' => $row['color'],

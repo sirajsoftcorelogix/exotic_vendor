@@ -102,9 +102,9 @@ class PurchaseOrderItem {
         }
     }
     public function createCustomPoItem($data) {
-        $query = "INSERT INTO vp_po_items (purchase_orders_id, item_code, product_id, title, image, hsn, gst, quantity, price, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ? )";
+        $query = "INSERT INTO vp_po_items (purchase_orders_id, item_code, product_id, title, image, hsn, gst, quantity, price, amount, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("isissidddd", 
+        $stmt->bind_param("isissidddds", 
             $data['purchase_orders_id'],
             $data['item_code'],
             $data['product_id'], 
@@ -114,7 +114,8 @@ class PurchaseOrderItem {
             $data['gst'],
             $data['quantity'],
             $data['price'],
-            $data['amount']
+            $data['amount'],
+            $data['sku']
         );
         if ($stmt->execute()) {
             return $this->conn->insert_id; // Return the ID of the newly created item

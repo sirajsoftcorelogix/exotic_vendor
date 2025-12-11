@@ -1861,6 +1861,7 @@ class PurchaseOrdersController {
             $data['img'][$index] = $imgPath;
             $items = [
                 'purchase_orders_id' => $poId,
+                'sku' => isset($data['sku'][$index]) ? $data['sku'][$index] : '',
                 'item_code' => isset($data['item_code'][$index]) ? $data['item_code'][$index] : '',
                 'product_id' => isset($data['product_id'][$index]) ? $data['product_id'][$index] : '',
                 'title' => isset($data['title'][$index]) ? $data['title'][$index] : '',
