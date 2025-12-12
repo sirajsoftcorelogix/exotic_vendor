@@ -22,7 +22,7 @@ foreach ($data['result'] as $result) {
         echo "<p>Item Code: {$result['item_code']}</p>";
     } else {
         echo "<h2>Import Update Failed</h2>";
-        echo "<p>{$result['message']}</p>";
+		echo isset($result['message'])?  "<p>{$result['message']}</p>" : '';
     }
 }
 ?>
