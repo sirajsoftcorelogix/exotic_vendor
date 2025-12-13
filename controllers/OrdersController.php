@@ -707,6 +707,118 @@ class OrdersController {
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
+    public function skuUpdateImportedOrders() {        
+        global $ordersModel;
+        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+            http_response_code(403); // Forbidden
+            die('Unauthorized access.');
+        }
+        //order status list
+       // $statusList = $ordersModel->adminOrderStatusList('true');
+        //last order log fetch
+        // Set your date range (example: last 7 days)
+        //print_array($_GET);
+        $from_date = !empty($_GET['from_date']) ? strtotime($_GET['from_date'] . ' 00:00:00') : strtotime('-1 days');
+        //echo "<br>";
+        // if ($lastLog && !empty($lastLog['max_ordered_time'])) {         
+        //     $from_date = $lastLog['max_ordered_time'];
+        // }
+        $to_date = !empty($_GET['to_date']) ? strtotime($_GET['to_date'] . ' 23:59:59') : time();
+        //$from_date = '1758240000';
+        //$to_date = '1758330134';
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
+       
+        $postData = [
+            'makeRequestOf' => 'vendors-orderjson',
+            'from_date' => $from_date,
+            'to_date' => $to_date
+        ];
+        if (!empty($_GET['orderid'])) {
+            $postData = [
+                'makeRequestOf' => 'vendors-orderjson',
+                'orderid' => $_GET['orderid']
+            ];
+        }
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded'
+        ];
+
+        // Initialize cURL
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $response = curl_exec($ch);
+        
+        $error = curl_error($ch);
+        curl_close($ch);
+        // print_r($error);
+        // print_r($headers);
+        // print_r($response);
+        if ($response === false) {
+            renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
+            return;
+        }
+
+        $orders = json_decode($response, true);
+        if (!is_array($orders)) {
+            //echo "Invalid API response format.";
+            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'Invalid API response format.']], 'API Error');
+            return;
+        }
+        // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
+        // print_array($orders);
+        // exit;
+        if (empty($orders['orders'])) {
+            //echo "No orders found in the API response.";
+            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+            return;
+        }
+        $imported = 0; $totalorder = 0;
+        foreach ($orders['orders'] as $order) { 
+            
+            //print_r($order['cart']);
+            // Check if the order has the required fields
+            // Map API fields to your table columns
+                
+            foreach ($order['cart'] as $item) {
+                $rdata = [
+                'sku' => $item['sku'] ?? '',
+                'order_number' => $order['orderid'] ?? '',
+                'item_code' => $item['itemcode'] ?? '',					
+                'updated_at' => date('Y-m-d H:i:s')
+                ];
+                $totalorder++;                
+                
+                $data = $ordersModel->skuUpdateImportedOrder($rdata);
+                $result[] = $data;
+                //add products
+                //$pdata[] = $ordersModel->addProducts($rdata);                   
+                
+                if (isset($data['success']) && $data['success'] == true) {                        
+                    $imported++;
+                } 
+                //print_array($rdata);                   
+            }
+           
+        }
+        //print_array($pdata);
+        //print_r($result);
+        //update log end time and imported count
+        
+        renderTemplateClean('views/orders/import_update_result.php', [
+            'imported' => $imported,
+            'result' => $result,
+            'total' => $totalorder,
+            //'products' => json_encode($pdata)
+        ], 'Import Orders Result');
+    }
 }
 ?>
 

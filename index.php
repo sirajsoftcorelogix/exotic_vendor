@@ -143,7 +143,7 @@ switch ($page) {
                 $controller->getOrderDetailsHTML();
                 break;
             case 'update_import':
-                $controller->updateImportedOrders();
+                $controller->skuUpdateImportedOrders();
                 break;
             default:
                 $controller->index();

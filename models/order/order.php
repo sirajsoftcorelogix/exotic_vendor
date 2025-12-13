@@ -656,6 +656,65 @@ class Order{
         //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         // }
     }
+    function skuUpdateImportedOrder($data) {
+        // Validate inputs
+        if (empty($data['order_number']) || empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Order number or item code is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET 
+                sku = ?, updated_at = ?
+                WHERE order_number = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        // Prepare values in the same order as the SQL placeholders
+        $values = [
+            $data['sku'],
+            $data['updated_at'],
+            $data['order_number'], $data['item_code']
+        ];
+
+        // Build types string dynamically based on actual PHP types
+        $types = '';
+        foreach ($values as $val) {
+            if (is_int($val)) {
+                $types .= 'i';
+            } elseif (is_float($val) || is_double($val)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        // mysqli_stmt::bind_param requires arguments passed by reference when using call_user_func_array
+        $refs = [];
+        foreach ($values as $key => $value) {
+            $refs[$key] = &$values[$key];
+        }
+        array_unshift($refs, $types);
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        // print binded parameters for debugging
+        //print_array($refs);        
+
+        // foreach ($refs as $ref) {
+        //     if ($ref === $types) continue; // Skip types string
+        //     echo $ref . "\n";
+        // }
+        //print_r($stmt);
+        //comment the below line after execution on 09-06-2024
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
     public function getPaymentTypes(){
         $sql = "SELECT DISTINCT payment_type FROM `vp_orders` WHERE 1;";
         $stmt = $this->db->prepare($sql);   
