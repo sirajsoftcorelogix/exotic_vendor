@@ -714,7 +714,7 @@ class OrdersController {
             die('Unauthorized access.');
         }
         //order status list
-        $statusList = $ordersModel->adminOrderStatusList('true');
+       // $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
         // Set your date range (example: last 7 days)
         //print_array($_GET);
@@ -724,7 +724,8 @@ class OrdersController {
         //     $from_date = $lastLog['max_ordered_time'];
         // }
         $to_date = !empty($_GET['to_date']) ? strtotime($_GET['to_date'] . ' 23:59:59') : time();
-      
+        //$from_date = '1758240000';
+        //$to_date = '1758330134';
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
        
         $postData = [
@@ -788,7 +789,7 @@ class OrdersController {
                 
             foreach ($order['cart'] as $item) {
                 $rdata = [
-                'sku' => $order['sku'] ?? '',
+                'sku' => $item['sku'] ?? '',
                 'order_number' => $order['orderid'] ?? '',
                 'item_code' => $item['itemcode'] ?? '',					
                 'updated_at' => date('Y-m-d H:i:s')
@@ -803,7 +804,7 @@ class OrdersController {
                 if (isset($data['success']) && $data['success'] == true) {                        
                     $imported++;
                 } 
-                print_array($rdata);                   
+                //print_array($rdata);                   
             }
            
         }
