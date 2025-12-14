@@ -59,10 +59,7 @@ if (!$currentUserId) {
       </div>
     </footer>
   </main>
-  <div id="group-members-panel" class="group-members hidden">
-    <div class="group-members-header">Group Members</div>
-    <div id="group-members-list"></div>
-</div>
+
   <div id="group-modal" class="modal hidden">
     <div class="modal-overlay"></div>
 
@@ -87,7 +84,10 @@ if (!$currentUserId) {
     </div>
   </div>
 </div>
-
+<div id="group-members-panel" class="group-members hidden">
+  <div class="group-members-header">Group Members</div>
+  <div id="group-members-list"></div>
+</div>
 
 
 

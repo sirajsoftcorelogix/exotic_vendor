@@ -804,27 +804,42 @@
       // Auto-hide after 6 seconds
       setTimeout(() => { try { bar.remove(); } catch(e){} }, 6000);
   }
-  document.getElementById("create-group-btn").addEventListener("click", openGroupModal);
-
-  function openGroupModal() {
-      document.getElementById("group-modal").classList.remove("hidden");
-      renderGroupMemberSelector();
-  }
   function renderGroupMemberSelector() {
-      const list = document.getElementById("group-members-list");
-      list.innerHTML = '';
+    const list = document.getElementById("group-members-list");
 
-      users.forEach(u => {
-          const div = document.createElement("div");
-          div.innerHTML = `
-              <label>
-                  <input type="checkbox" class="group-member" value="${u.id}">
-                  ${u.name}
-              </label>
-          `;
-          list.appendChild(div);
-      });
-  }
+    console.log("RENDER GROUP MEMBERS");
+    console.log("USERS:", users);
+
+    if (!list) {
+        console.error("group-members-list not found");
+        return;
+    }
+
+    list.innerHTML = '';
+
+    if (!users || users.length === 0) {
+        list.innerHTML = '<div style="padding:8px;color:#999;">No users found</div>';
+        return;
+    }
+
+    users.forEach(u => {
+        const label = document.createElement("label");
+        label.style.display = "block";
+        label.style.cursor = "pointer";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = u.id;
+        cb.className = "group-member";
+
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(" " + u.name));
+
+        list.appendChild(label);
+    });
+}
+
+
   document.getElementById("create-group-submit").addEventListener("click", submitGroup);
 
   function submitGroup() {
@@ -873,11 +888,12 @@
           renderMessages(conversation_id);
       }
   }
-
   // Group Model
   // Open modal
   document.getElementById("create-group-btn").addEventListener("click", () => {
+      console.log("GROUP MODAL OPEN CLICKED");
       groupModal.classList.remove("hidden");
+      renderGroupMemberSelector();
   });
 
   // Close modal (X button)
