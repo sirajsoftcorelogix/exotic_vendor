@@ -465,7 +465,7 @@ class ChatServer implements MessageComponentInterface
         $mentions = $this->extractMentions($text);
 
         foreach ($mentions as $mentionName) {
-            $stmt = $this->conn->prepare("SELECT id FROM users WHERE name = ? LIMIT 1");
+            $stmt = $this->conn->prepare("SELECT id FROM vp_users WHERE name = ? LIMIT 1");
             $stmt->execute([$mentionName]);
             $uid = $stmt->fetchColumn();
 
@@ -489,7 +489,7 @@ class ChatServer implements MessageComponentInterface
         }
 
         foreach ($mentions as $mentionName) {
-            $stmt = $this->conn->prepare("SELECT id FROM users WHERE name = ?");
+            $stmt = $this->conn->prepare("SELECT id FROM vp_users WHERE name = ?");
             $stmt->execute([$mentionName]);
             $uid = $stmt->fetchColumn();
 

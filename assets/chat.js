@@ -17,6 +17,11 @@
   const attachBtn = document.getElementById('attach-btn');
   const fileInput = document.getElementById('file-input');
 
+  const groupModal = document.getElementById("group-modal");
+  const groupCloseBtn = document.getElementById("group-close-btn");
+  const groupCancelBtn = document.getElementById("group-cancel-btn");
+  const groupOverlay = groupModal.querySelector(".modal-overlay");
+
   let users = [];
   let conversations = [];
   let messages = {};
@@ -24,15 +29,14 @@
   let typingTimeout = null;
   let lastTypingSentAt = 0;
   let notificationSound = new Audio("assets/message.mp3");
-  // --- Tab blinking notification ---
-  let originalTitle = document.title;
-  let blinkInterval = null;
+
   let mentionActive = false;
-  let mentionStartPos = 0;
-  let mentionIndex = -1; // currently highlighted user in dropdown
-  let mentionItems = []; // reference to rendered items
+  let mentionStartPos = -1;
+  let mentionItems = [];
+  let mentionIndex = -1;
 
   const mentionDropdown = document.getElementById("mention-dropdown");
+
 
   const urlParams = new URLSearchParams(window.location.search);
   const openConvParam = urlParams.get("conversation_id");
@@ -62,64 +66,70 @@
   sendBtn.addEventListener('click', sendMessage);
 
   inputEl.addEventListener("keydown", function (e) {
-      if (!mentionActive) return;
 
-      // Arrow Down
-      if (e.key === "ArrowDown") {
-          e.preventDefault();
-          mentionIndex++;
+      const cursorPos = inputEl.selectionStart;
+      const value = inputEl.value;
 
-          if (mentionIndex >= mentionItems.length) mentionIndex = 0;
+      /* =========================
+        DETECT MENTION CONTEXT
+      ========================= */
+      const beforeCursor = value.slice(0, cursorPos);
+      const match = beforeCursor.match(/(?:^|\s)@([A-Za-z0-9_]*)$/);
 
-          updateMentionHighlight();
-      }
-
-      // Arrow Up
-      if (e.key === "ArrowUp") {
-          e.preventDefault();
-          mentionIndex--;
-
-          if (mentionIndex < 0) mentionIndex = mentionItems.length - 1;
-
-          updateMentionHighlight();
-      }
-
-      // Enter to select
-      if (e.key === "Enter") {
-          if (mentionIndex >= 0 && mentionIndex < mentionItems.length) {
-              e.preventDefault();
-              const name = mentionItems[mentionIndex].textContent;
-              insertMention(name);
-          }
-      }
-  });
-
-  inputEl.addEventListener("keyup", function (e) {
-      const pos = inputEl.selectionStart;
-      const text = inputEl.value;
-
-      // If @ typed, activate dropdown
-      if (e.key === "@") {
+      if (match) {
           mentionActive = true;
-          mentionStartPos = pos - 1;
-          showMentionDropdown("");
-          return;
+          mentionStartPos = cursorPos - match[1].length - 1;
+          showMentionDropdown(match[1]);
+      } else {
+          hideMentionDropdown();
       }
 
-      // If mention active, update search filter
+      /* =========================
+        MENTION NAVIGATION
+      ========================= */
       if (mentionActive) {
-          let current = text.substring(mentionStartPos + 1, pos);
 
-          // Stop mention if space or punctuation
-          if (current.includes(" ") || current.includes("\n") || current.includes(".")) {
-              hideMentionDropdown();
+          if (e.key === "ArrowDown") {
+              e.preventDefault();
+              mentionIndex = (mentionIndex + 1) % mentionItems.length;
+              updateMentionHighlight();
               return;
           }
 
-          showMentionDropdown(current);
+          if (e.key === "ArrowUp") {
+              e.preventDefault();
+              mentionIndex =
+                  (mentionIndex - 1 + mentionItems.length) % mentionItems.length;
+              updateMentionHighlight();
+              return;
+          }
+
+          if (e.key === "Enter" && mentionIndex >= 0) {
+              e.preventDefault();
+              const name = mentionItems[mentionIndex].textContent;
+              insertMention(name);
+              return;
+          }
+
+          if (e.key === "Escape") {
+              hideMentionDropdown();
+              return;
+          }
+      }
+
+      /* =========================
+        SEND MESSAGE
+      ========================= */
+      if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+          return;
+      }
+
+      if (e.key !== "Enter") {
+          handleTyping();
       }
   });
-
   function updateMentionHighlight() {
       mentionItems.forEach((item, idx) => {
           if (idx === mentionIndex) {
@@ -130,62 +140,48 @@
           }
       });
   }
-
   function showMentionDropdown(filterText) {
-    if (!mentionActive) return;
+    const query = (filterText || "").toLowerCase();
 
-      // Position dropdown below input
-      const rect = inputEl.getBoundingClientRect();
-      mentionDropdown.style.left = rect.left + "px";
-      mentionDropdown.style.top = (rect.top - 210) + "px"; // adjust as needed
+    const filtered = users.filter(u =>
+        u.name.toLowerCase().includes(query)
+    );
 
-      // Filter users based on input after '@'
-      const query = (filterText || "").toLowerCase();
+    if (!filtered.length) {
+        hideMentionDropdown();
+        return;
+    }
 
-      const filtered = users.filter(u =>
-          u.name.toLowerCase().includes(query)
-      );
+    mentionDropdown.innerHTML = "";
+    mentionItems = [];
+    mentionIndex = 0;
 
-      // If no users match, hide dropdown
-      if (filtered.length === 0) {
-          hideMentionDropdown();
-          return;
-      }
+    filtered.forEach(u => {
+        const div = document.createElement("div");
+        div.className = "mention-item";
+        div.textContent = u.name;
 
-      mentionDropdown.innerHTML = "";
-      mentionItems = [];
+        div.addEventListener("click", () => insertMention(u.name));
 
-      filtered.forEach((u, index) => {
-          const div = document.createElement("div");
-          div.className = "mention-item";
-          div.textContent = u.name;
+        mentionDropdown.appendChild(div);
+        mentionItems.push(div);
+    });
 
-          div.dataset.index = index;
+    updateMentionHighlight();
+    mentionDropdown.classList.remove("hidden");
+}
 
-          div.addEventListener("click", () => {
-              insertMention(u.name);
-          });
-
-          mentionDropdown.appendChild(div);
-          mentionItems.push(div);
-      });
-
-      // Reset highlight index
-      mentionIndex = -1;
-
-      mentionDropdown.classList.remove("hidden");
-  }
   function insertMention(name) {
-      const text = inputEl.value;
-      const pos = inputEl.selectionStart;
+      const value = inputEl.value;
+      const cursorPos = inputEl.selectionStart;
 
-      const before = text.substring(0, mentionStartPos);
-      const after = text.substring(pos);
+      const before = value.slice(0, mentionStartPos);
+      const after = value.slice(cursorPos);
 
       inputEl.value = before + "@" + name + " " + after;
 
-      inputEl.focus();
-      inputEl.selectionStart = inputEl.selectionEnd = (before.length + name.length + 2);
+      const newPos = before.length + name.length + 2;
+      inputEl.setSelectionRange(newPos, newPos);
 
       hideMentionDropdown();
   }
@@ -196,6 +192,9 @@
   });
   function hideMentionDropdown() {
       mentionActive = false;
+      mentionStartPos = -1;
+      mentionIndex = -1;
+      mentionItems = [];
       mentionDropdown.classList.add("hidden");
   }
   // -- End User mentioned
@@ -375,6 +374,16 @@
       titleEl.textContent = 'Conversation #' + convId;
       subtitleEl.textContent = '';
     }
+    const groupPanel = document.getElementById("group-members-panel");
+    if (conv && conv.type === 'group') {
+        if (groupPanel) {
+            loadGroupMembers(conv.id);
+        }
+    } else {
+        if (groupPanel) {
+            groupPanel.classList.add("hidden");
+        }
+    }
 
     messages[convId] = messages[convId] || [];
     renderMessages(convId);
@@ -382,6 +391,53 @@
       scrollToBottom();
       sendReadReceipt();
     });
+  }
+  function loadGroupMembers(conversationId) {
+      fetch(
+          window.API_BASE + '/fetch_group_members.php?conversation_id=' + conversationId,
+          { credentials: 'include' }
+      )
+      .then(r => r.json())
+      .then(data => {
+          renderGroupMembers(data);
+      })
+      .catch(err => console.error(err));
+  }
+  function renderGroupMembers(members) {
+      const panel = document.getElementById("group-members-panel");
+      const list = document.getElementById("group-members-list");
+
+      list.innerHTML = '';
+
+      members.forEach(m => {
+          const div = document.createElement("div");
+          div.className = 'group-member';
+          div.dataset.userId = m.id; // 👈 store user_id
+
+          const dot = document.createElement("span");
+          dot.className = 'status-dot ' + (m.is_online ? 'status-online' : 'status-offline');
+
+          const name = document.createElement("span");
+          name.textContent = m.name;
+
+          div.appendChild(dot);
+          div.appendChild(name);
+          list.appendChild(div);
+      });
+
+      panel.classList.remove("hidden");
+  }
+  function updateGroupMemberPresence(data) {
+      const el = document.querySelector(
+          `.group-member[data-user-id="${data.user_id}"]`
+      );
+
+      if (!el) return;
+
+      const dot = el.querySelector('.status-dot');
+      if (!dot) return;
+
+      dot.className = 'status-dot ' + (data.is_online ? 'status-online' : 'status-offline');
   }
   function loadMessages(convId) {
     return fetch(window.API_BASE + '/fetch_messages.php?conversation_id=' + encodeURIComponent(convId), {
@@ -396,44 +452,6 @@
       })
       .catch(err => console.error('fetch_messages error', err));
   }
-  /*function renderMessages(convId) {
-    messagesEl.innerHTML = '';
-    (messages[convId] || []).forEach(msg => {
-      const row = document.createElement('div');
-      row.className = 'message-row' + (msg.sender_id == window.CURRENT_USER ? ' own' : '');
-
-      const bubble = document.createElement('div');
-      bubble.className = 'message-bubble';
-
-      if (msg.message) {
-        const text = document.createElement('div');
-        text.innerHTML = msg.message.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-        text.innerHTML = msg.message.replace(/@([A-Za-z0-9_]+)/g,
-    '<span class="mention">@\$1</span>');
-        bubble.appendChild(text);
-      }
-
-      if (msg.file_path) {
-        const fileDiv = document.createElement('div');
-        fileDiv.className = 'message-file';
-        const link = document.createElement('a');
-        link.href = msg.file_path;
-        link.target = '_blank';
-        link.textContent = msg.original_name ? msg.original_name : "Attachment";
-        fileDiv.appendChild(link);
-        bubble.appendChild(fileDiv);
-      }
-      
-
-      const meta = document.createElement('div');
-      meta.className = 'message-meta';
-      meta.textContent = msg.created_at;
-      bubble.appendChild(meta);
-
-      row.appendChild(bubble);
-      messagesEl.appendChild(row);
-    });
-  }*/
   function renderMessages(convId) {
       messagesEl.innerHTML = '';
 
@@ -453,11 +471,7 @@
               if (msg.message) {
                   const text = document.createElement('div');
                   text.className = "message-text";
-
-                  // Highlight @mentions
-                  text.innerHTML = msg.message.replace(/@([A-Za-z0-9_]+)/g,
-                      '<span class="mention">@$1</span>');
-                  
+                  text.innerHTML = formatMessageText(msg.message);
                   bubble.appendChild(text);
               }
 
@@ -495,6 +509,41 @@
           messagesEl.appendChild(row);
       });
   }
+  function formatMessageText(text) {
+      if (!text) return '';
+
+      const baseUrl = window.location.origin + '/exotic_vendor/';
+
+      // Escape HTML first (important for security)
+      let safe = text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+
+      // $12345 → Orders
+      safe = safe.replace(/\$([0-9]+)/g, function (_, id) {
+          return `<a href="${baseUrl}?page=orders&action=view&ord_id=${id}" target="_blank">$${id}</a>`;
+      });
+
+      // #12345 → Purchase Orders
+      safe = safe.replace(/#([0-9]+)/g, function (_, id) {
+          return `<a href="${baseUrl}?page=purchase_orders&action=view&po_id=${id}" target="_blank">#${id}</a>`;
+      });
+
+      // *12345 → Products
+      safe = safe.replace(/\*([0-9]+)/g, function (_, id) {
+          return `<a href="${baseUrl}?page=products&action=view&itm_id=${id}" target="_blank">*${id}</a>`;
+      });
+
+      // @mentions
+      safe = safe.replace(/@([A-Za-z0-9_]+)/g,
+          '<span class="mention">@$1</span>'
+      );
+
+      return safe;
+  }
   function sendMessage() {
     const txt = inputEl.value.trim();
     if (!txt && !fileInput.dataset.uploadedPath) return;
@@ -512,8 +561,11 @@
     if (fileInput.dataset.uploadedPath) {
       payload.file_path = fileInput.dataset.uploadedPath;
     }
+    
     if (fileInput.dataset.uploadedOriginalName) {
       payload.original_name = fileInput.dataset.uploadedOriginalName;
+    }else{
+      payload.original_name = null;
     }
 
     if (ws.readyState === WebSocket.OPEN) {
@@ -524,6 +576,7 @@
     inputEl.value = '';
     fileInput.value = '';
     delete fileInput.dataset.uploadedPath;
+    delete fileInput.dataset.uploadedOriginalName;
   }
   function handleWsMessage(data) {
     switch (data.type) {
@@ -540,6 +593,7 @@
         handleTypingIndicator(data);
         break;
       case 'presence':
+        updateGroupMemberPresence(data);
         handlePresence(data);
         break;
       case 'read_receipt':
@@ -818,6 +872,32 @@
       if (conversation_id === activeConversationId) {
           renderMessages(conversation_id);
       }
+  }
+
+  // Group Model
+  // Open modal
+  document.getElementById("create-group-btn").addEventListener("click", () => {
+      groupModal.classList.remove("hidden");
+  });
+
+  // Close modal (X button)
+  groupCloseBtn.addEventListener("click", closeGroupModal);
+
+  // Cancel button
+  groupCancelBtn.addEventListener("click", closeGroupModal);
+
+  // Click outside modal
+  groupOverlay.addEventListener("click", closeGroupModal);
+
+  // ESC key closes modal
+  document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !groupModal.classList.contains("hidden")) {
+          closeGroupModal();
+      }
+  });
+  function closeGroupModal() {
+      groupModal.classList.add("hidden");
+      document.getElementById("group-name").value = "";
   }
 
   // small util

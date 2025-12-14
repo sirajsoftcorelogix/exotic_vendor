@@ -34,6 +34,7 @@ if (!$currentUserId) {
       <h2>Recent Chats</h2>
     </div>
     <div id="conversation-list"></div>
+    <button id="create-group-btn">+ Create Group</button>
   </aside>
 
   <main id="chat-main">
@@ -54,22 +55,42 @@ if (!$currentUserId) {
         <button id="attach-btn" title="Attach file">📎</button>
         <input id="message-input" placeholder="Type a message" autocomplete="off">
         <button id="send-btn">Send</button>
+        <div id="mention-dropdown" class="mention-dropdown hidden"></div>
       </div>
     </footer>
   </main>
-  <div id="mention-dropdown" class="mention-dropdown hidden"></div>
-</div>
-<button id="create-group-btn">+ Create Group</button>
-
-<div id="group-modal" class="modal hidden">
-  <div class="modal-content">
-    <h2>Create Group</h2>
-    <input id="group-name" placeholder="Group Name" />
+  <div id="group-members-panel" class="group-members hidden">
+    <div class="group-members-header">Group Members</div>
     <div id="group-members-list"></div>
-    <button id="create-group-submit">Create</button>
-    <button id="group-close-btn">Cancel</button>
+</div>
+  <div id="group-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create Group</h2>
+        <button class="modal-close" id="group-close-btn">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <label for="group-name">Group Name</label>
+        <input id="group-name" type="text" placeholder="Enter group name" />
+
+        <label>Select Members</label>
+        <div id="group-members-list" class="members-list"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="group-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="create-group-submit">Create Group</button>
+      </div>
+    </div>
   </div>
 </div>
+
+
+
+
 <!-- Popup notifications container 
 <div id="chat-popup-container"></div>-->
 

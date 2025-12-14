@@ -69,8 +69,7 @@ $msgCnt = $notificationController->getUnreadCount();
                 </div>
                     <div class="relative flex-shrink-0">
                         <a href="chat.php" title="Chat" class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200" target="_blank">
-                            <i class="fa fa-comments-o" aria-hidden="true"></i>
-                            <span class="font-medium text-gray-700" style="font-size: 15px; font-family: 'Canva Sans', sans-serif;">💬</span>
+                            <span class="font-medium text-gray-700" style="font-size: 15px; font-family: 'Canva Sans', sans-serif;"><i class="fas fa-comments"></i></span>
                         </a>
                     </div>
                 <!-- User Profile with Logout Popup -->
