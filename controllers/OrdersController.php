@@ -707,7 +707,9 @@ class OrdersController {
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
     }
-    public function skuUpdateImportedOrders() {        
+    public function skuUpdateImportedOrders() {      
+        ini_set('max_execution_time', 300);
+        set_time_limit(300);  
         global $ordersModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
