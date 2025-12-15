@@ -120,8 +120,16 @@ class Order{
             $params[] = $filters['vendor_id'];            
         }
         if(!empty($filters['agent'])){
-            $sql .= " AND vp_orders.status != 'shipped'  AND vp_orders.agent_id = ?";
-            $params[] = $filters['agent'];            
+            if(is_array($filters['agent'])){
+                $placeholders = implode(',', array_fill(0, count($filters['agent']), '?'));
+                $sql .= " AND vp_orders.agent_id IN ($placeholders)";
+                foreach ($filters['agent'] as $agent) {
+                    $params[] = $agent;
+                }
+            }else{
+                $sql .= " AND vp_orders.agent_id = ?";
+                $params[] = $filters['agent'];   
+            }         
         }
         //echo $sql;
         // Add sorting based on filter
@@ -257,8 +265,16 @@ class Order{
             $params[] = $filters['vendor_id'];            
         }
         if(!empty($filters['agent'])){
+            if(is_array($filters['agent'])){
+                $placeholders = implode(',', array_fill(0, count($filters['agent']), '?'));
+                $sql .= " AND vp_orders.agent_id IN ($placeholders)";
+                foreach ($filters['agent'] as $agent) {
+                    $params[] = $agent;
+                }
+            }else{
             $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.agent_id = ?";
-            $params[] = $filters['agent'];            
+            $params[] = $filters['agent'];     
+            }       
         }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {

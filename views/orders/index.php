@@ -273,12 +273,12 @@
                 <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-0">
                     <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
-                        <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <span class="text-gray-500 pb-2">→</span>
                     <div class="w-1/2">
                         <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Order To</label>
-                        <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
                 
@@ -327,13 +327,13 @@
                 <!-- Order Number -->
                 <div>
                     <label for="order-number" class="block text-sm font-medium text-gray-600 mb-1">Order No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Status -->
                 <div>
                     <label for="priority" class="block text-sm font-medium text-gray-600 mb-1">Priority</label>
-                    <select id="priority" name="priority" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="priority" name="priority" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected>-Select-</option>
                         <option value="critical" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'critical') ? 'selected' : ''; ?>>Critical</option>
                         <option value="urgent" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'urgent') ? 'selected' : ''; ?>>Urgent</option>
@@ -344,7 +344,7 @@
                 </div>
                 <div class="">
                     <label for="country" class="block text-sm font-medium text-gray-600 mb-1">Country</label>
-                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="country" name="country" class="max-w-48 px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected >All Country</option>
 						<optgroup label="Easy">
 							<option value="overseas">Overseas</option>
@@ -360,7 +360,7 @@
                     <select id="staff_name" name="staff_name[]" multiple class="advanced-multiselect w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <!-- <option value="" >All Staff</option> -->
 						<?php foreach ($staff_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && $_GET['staff_name'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && is_array($_GET['staff_name']) && in_array($key, $_GET['staff_name'])) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
                     </select>
                 </div>
@@ -369,7 +369,7 @@
                     <input
                         type="text"
                         id="vendor_autocomplete"
-                        class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                         placeholder="Search vendor by name..."
                         autocomplete="off"
                         value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>"
@@ -392,25 +392,25 @@
                 <!-- Item Code -->
                 <div>
                     <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 <!-- PO No -->
                 <div>
                     <label for="po-no" class="block text-sm font-medium text-gray-600 mb-1">PO No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
                 </div>
 
                 <!-- Item Name -->
                 <div>
                     <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
                 </div>
                 <div>
                     <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
-                    <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" selected>-Select-</option>
+                    <select id="agent" multiple name="agent[]" class="advanced-multiselect w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <!-- <option value="" selected>-Select-</option> -->
                         <?php foreach ($staff_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['agent']) && $_GET['agent'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['agent']) && is_array($_GET['agent']) && in_array($key, $_GET['agent'])) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
                     </select>
                 </div>
@@ -1938,6 +1938,25 @@
             const preselectedStaff = <?php echo json_encode(isset($_GET['staff']) ? (is_array($_GET['staff']) ? $_GET['staff'] : [$_GET['staff']]) : []); ?>;
             if (preselectedStaff.length > 0) {
                 $(staffSelect).val(preselectedStaff).trigger('change');
+            }
+        }
+
+    });
+    //agent multiselect Initialize Select2 for agent 
+    document.addEventListener('DOMContentLoaded', function() {
+        const agentSelect = document.querySelector('#agent');
+        if (agentSelect) {
+            // Initialize Select2
+            $(agentSelect).select2({
+                placeholder: "Select Agent",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedAgents = <?php echo json_encode(isset($_GET['agent']) ? (is_array($_GET['agent']) ? $_GET['agent'] : [$_GET['agent']]) : []); ?>;
+            if (preselectedAgents.length > 0) {
+                $(agentSelect).val(preselectedAgents).trigger('change');
             }
         }
 
