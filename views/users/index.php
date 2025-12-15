@@ -22,15 +22,16 @@
                     <div class="relative">
                         <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="role_filter" id="role_filter">
                             <option value="" selected>All Roles</option>
-                            <option value="admin" <?php echo ($data['role_filter']=="admin") ? "selected" : ""?>>Admin</option>
-                            <option value="onboarding_executive" <?php echo ($data['role_filter']=="onboarding_executive") ? "selected" : ""?>>Onboarding Executive</option>
+                            <?php foreach($roles_list as $role): ?>
+                                <option value="<?php echo $role['id']; ?>" <?php echo ($data['role_filter'] == $role['id']) ? "selected" : ""?>><?php echo $role['role_name']; ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="relative">
                         <select style="width: 152px; height: 37px; border-radius: 5px;" class="custom-select border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition bg-white" name="status_filter" id="status_filter">
                             <option value="" selected>All Status</option>
-                            <option value="active" <?php echo ($data['status_filter'] == "active") ? "selected" : ""?>>Active</option>
-                            <option value="inactive" <?php echo ($data['status_filter'] == "inactive") ? "selected" : ""?>>Inactive</option>
+                            <option value="1" <?php echo ($data['status_filter'] == "1") ? "selected" : ""?>>Active</option>
+                            <option value="0" <?php echo ($data['status_filter'] == "0") ? "selected" : ""?>>Inactive</option>
                         </select>
                     </div>
                     <div class="relative">
