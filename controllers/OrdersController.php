@@ -47,7 +47,7 @@ class OrdersController {
             $filters['status_filter'] = $_GET['status'];
         } 
 
-        if (!empty($_GET['category']) && in_array($_GET['category'], array_keys(getCategories()))) {
+        if (!empty($_GET['category']) && $_GET['category'] != 'all') {
             $filters['category'] = $_GET['category'];
         } else {
             $filters['category'] = 'all';
@@ -87,6 +87,8 @@ class OrdersController {
         $countryList= $commanModel->get_counry_list();
         //print_array($order_status_list);
         // Use pagination in the database query for better performance
+        //print_r($_GET);
+        //print_r($filters);
         $orders = $ordersModel->getAllOrders($filters, $limit, $offset);             
         foreach ($orders as $key => $order) {
             $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);            

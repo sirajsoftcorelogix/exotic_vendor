@@ -81,7 +81,7 @@ class Order{
             //$sql .= " AND vp_orders.groupname LIKE ?";
             //$params[] = '%' . $filters['category'] . '%';
             $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
-            $sql .= " AND vp_orders.category IN ($placeholders)";
+            $sql .= " AND vp_orders.groupname IN ($placeholders)";
             foreach ($filters['category'] as $category) {
                 $params[] = $category;
             }
@@ -133,6 +133,7 @@ class Order{
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
+        //echo $sql;
         // Add limit and offset to params and types
         $params[] = $limit;
         $params[] = $offset;
@@ -218,7 +219,7 @@ class Order{
             //$sql .= " AND groupname LIKE ?";
             //$params[] = '%' . $filters['category'] . '%';
             $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
-            $sql .= " AND vp_orders.category IN ($placeholders)";
+            $sql .= " AND vp_orders.groupname IN ($placeholders)";
             foreach ($filters['category'] as $category) {
                 $params[] = $category;
             }
