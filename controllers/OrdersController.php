@@ -63,7 +63,7 @@ class OrdersController {
         } else {
             $filters['sort'] = 'desc'; // Default sort order
         }
-        if (!empty($_GET['payment_type']) && in_array($_GET['payment_type'], array_keys($ordersModel->getPaymentTypes()))) {
+        if (!empty($_GET['payment_type']) && $_GET['payment_type'] != 'all') {
             $filters['payment_type'] = $_GET['payment_type'];
         } else {
             $filters['payment_type'] = 'all';
