@@ -1,8 +1,6 @@
 <?php
-require __DIR__ . '/../config.php';
-$config = require __DIR__ . '/../config.php';
+require 'auth.php';
 
-session_start();
 $currentUser = $_SESSION["user"]['id'] ?? null;
 if (!$currentUser) {
     http_response_code(401);

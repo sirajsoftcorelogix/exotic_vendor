@@ -1,13 +1,6 @@
 <?php
-require __DIR__ . '/../config.php';
-$config = require __DIR__ . '/../config.php';
+require 'auth.php';
 
-$dsn = "mysql:host={$config['db']['host']};dbname={$config['db']['name']};charset={$config['db']['charset']}";
-$pdo = new PDO($dsn, $config['db']['user'], $config['db']['pass'], [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-]);
-
-session_start();
 $currentUser = $_SESSION["user"]['id'] ?? null;
 if (!$currentUser) {
     http_response_code(401);

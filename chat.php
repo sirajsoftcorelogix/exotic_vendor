@@ -5,11 +5,24 @@ is_login();
 $currentUserId = $_SESSION["user"]['id'] ?? null;
 $currentUserName = $_SESSION['user']['name'] ?? 'You';
 $apiToken = fetchAPIToken($currentUserId);
-if (!$currentUserId) {
-    die('You must be logged in with $_SESSION["user"]["id"] set.');
+
+require __DIR__ . '/config.php';
+$config = require __DIR__ . '/config.php';
+
+$env = $config['ENV'];
+
+if($env === 'local') {
+    $API_BASE = $config['LOCAL_API_BASE'];
+    $WS_URL   = $config['LOCAL_WS_URL'];
+}elseif ($env === 'test') {
+    $API_BASE = $config['TEST_API_BASE'];
+    $WS_URL   = $config['TEST_WS_URL'];
+}elseif ($env === 'live') {
+    $API_BASE = $config['LIVE_API_BASE'];
+    $WS_URL   = $config['LIVE_WS_URL'];
 }
+
 global $domain, $root_path, $page, $action, $conn;
-is_login();
 require_once 'models/user/user.php';
 $usersModel = new User($conn);
 $userDetails = $usersModel->getUserById($_SESSION['user']['id']);
@@ -79,6 +92,12 @@ $msgCnt = $notificationController->getUnreadCount();
       <h2>Recent Chats</h2>
     </div>
     <div id="conversation-list"></div>
+    <!-- Group chat members -->
+    <div id="group-members-panel" class="group-members hidden">
+      <div class="group-members-header">Group Members</div>
+      <div id="group-members-list"></div>
+    </div>
+    <!-- End -->
     <button id="create-group-btn">+ Create Group</button>
   </aside>
 
@@ -128,32 +147,18 @@ $msgCnt = $notificationController->getUnreadCount();
       </div>
     </div>
   </div>
-</div>
-<div id="group-members-panel" class="group-members hidden">
-  <div class="group-members-header">Group Members</div>
-  <div id="group-members-list"></div>
-</div>
+
 </div>
 
-
-<!-- Popup notifications container 
-<div id="chat-popup-container"></div>-->
+</div>
 
 <script>
 window.CURRENT_USER = <?php echo (int)$currentUserId; ?>;
 window.API_TOKEN = <?php echo json_encode($apiToken); ?>;
-//window.WS_URL = "ws://localhost:8080/";
-window.API_BASE = "api"; // api folder under exotic_vendor/
 
-// Ask notification permission early
-/*if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
-    Notification.requestPermission();
-}*/
+window.API_BASE = "<?php echo $API_BASE ?>";
 
-window.WS_URL =
-    (location.protocol === 'https:' ? 'wss://' : 'ws://') +
-    location.hostname +
-    ':8080/?token=' + encodeURIComponent(window.API_TOKEN);
+window.WS_URL = "<?php echo $WS_URL ?>/" + encodeURIComponent(window.API_TOKEN);
 console.log("URL: " + window.WS_URL + " Current User: " + window.CURRENT_USER);
 </script>
 <script src="assets/chat.js"></script>
