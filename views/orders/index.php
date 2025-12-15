@@ -265,7 +265,7 @@
             </svg>
         </button>
 
-        <div id="accordion-content-search" class="accordion-content hidden overflow-visible">
+        <div id="accordion-content-search" class="accordion-content  overflow-visible">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
@@ -284,9 +284,9 @@
                 
                 <div >
                     <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="status" name="status[]" multiple="multiple" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white advanced-multiselect">
 
-                        <option value="all" selected >All Status</option>
+                        <!-- <option value="all" disabled >Select Status</option> -->
                         <?php foreach ($status_list as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>
@@ -294,9 +294,9 @@
                 </div>
                 <div >
                     <label for="payment_type" class="block text-sm font-medium text-gray-600 mb-1">Payment Type</label>
-                    <select id="payment_type" name="payment_type" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="payment_type" name="payment_type[]" multiple="multiple" class="advanced-multiselect max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
 
-                        <option value="all" selected >All Payment Types</option>
+                        <!-- <option value="all" disabled >Select</option> -->
                         <?php foreach ($payment_types as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['payment_type']) && $_GET['payment_type'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>
@@ -304,9 +304,9 @@
                 </div>
                 <div class="">
                     <label for="category" class="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="category" name="category[]" multiple="multiple" class="advanced-multiselect px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         
-                        <option value="all" selected >All Categories</option>
+                        <!-- <option value="all" selected >All Categories</option> -->
                         <?php foreach (getCategories() as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
@@ -357,8 +357,8 @@
                 </div>
                 <div class="">
                     <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">Staff Name</label>
-                    <select id="staff_name" name="staff_name" class="w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" >All Staff</option>
+                    <select id="staff_name" name="staff_name[]" multiple class="advanced-multiselect w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <!-- <option value="" >All Staff</option> -->
 						<?php foreach ($staff_list as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && $_GET['staff_name'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
@@ -1866,4 +1866,81 @@
             }
         });
     });
+    //advanced multiselect Initialize Select2 for status 
+    document.addEventListener('DOMContentLoaded', function() {
+        const statusSelect = document.querySelector('.advanced-multiselect');
+        if (statusSelect) {
+            // Initialize Select2
+            $(statusSelect).select2({
+                placeholder: "Select Status",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedStatus = <?php echo json_encode(isset($_GET['status']) ? (is_array($_GET['status']) ? $_GET['status'] : [$_GET['status']]) : []); ?>;
+            if (preselectedStatus.length > 0) {
+                $(statusSelect).val(preselectedStatus).trigger('change');
+            }
+        }
+
+    });
+    //payment_type multiselect Initialize Select2 for payment_type 
+    document.addEventListener('DOMContentLoaded', function() {
+        const paymentTypeSelect = document.querySelector('#payment_type');
+        if (paymentTypeSelect) {
+            // Initialize Select2
+            $(paymentTypeSelect).select2({
+                placeholder: "Select Payment Type",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedPaymentTypes = <?php echo json_encode(isset($_GET['payment_type']) ? (is_array($_GET['payment_type']) ? $_GET['payment_type'] : [$_GET['payment_type']]) : []); ?>;
+            if (preselectedPaymentTypes.length > 0) {
+                $(paymentTypeSelect).val(preselectedPaymentTypes).trigger('change');
+            }
+        }
+
+    });
+    //category multiselect Initialize Select2 for category 
+    document.addEventListener('DOMContentLoaded', function() {
+        const categorySelect = document.querySelector('#category');
+        if (categorySelect) {
+            // Initialize Select2
+            $(categorySelect).select2({
+                placeholder: "Select Category",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedCategories = <?php echo json_encode(isset($_GET['category']) ? (is_array($_GET['category']) ? $_GET['category'] : [$_GET['category']]) : []); ?>;
+            if (preselectedCategories.length > 0) {
+                $(categorySelect).val(preselectedCategories).trigger('change');
+            }
+        }
+
+    });
+    //staff multiselect Initialize Select2 for staff 
+    document.addEventListener('DOMContentLoaded', function() {
+        const staffSelect = document.querySelector('#staff_name');
+        if (staffSelect) {
+            // Initialize Select2
+            $(staffSelect).select2({
+                placeholder: "Select Staff",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedStaff = <?php echo json_encode(isset($_GET['staff']) ? (is_array($_GET['staff']) ? $_GET['staff'] : [$_GET['staff']]) : []); ?>;
+            if (preselectedStaff.length > 0) {
+                $(staffSelect).val(preselectedStaff).trigger('change');
+            }
+        }
+
+    });
+    
 </script>

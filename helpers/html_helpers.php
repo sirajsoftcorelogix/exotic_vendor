@@ -538,4 +538,37 @@
 		}
 		return false;
 	}
+	/**
+	 * Sanitize and remove spaces from $_GET values
+	 *
+	 * @param array $input The $_GET array
+	 * @return array Sanitized array
+	 */
+	function sanitizeGet(array $input): array {
+		$sanitized = [];
+
+		foreach ($input as $key => $value) {
+			// If the value is an array, sanitize each element recursively
+			if (is_array($value)) {
+				$sanitized[$key] = sanitizeGet($value);
+				continue;
+			}
+			// Trim leading/trailing whitespace
+			$value = trim($value);
+
+			// Remove all spaces inside the string
+			$value = str_replace(' ', '', $value);
+
+			// Sanitize special characters (prevent XSS)
+			$value = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+			// Optionally, strip tags if you don’t want HTML at all
+			$value = strip_tags($value);
+
+			$sanitized[$key] = $value;
+		}
+
+		return $sanitized;
+	}
+
 ?>

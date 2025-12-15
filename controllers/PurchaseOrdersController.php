@@ -805,7 +805,8 @@ class PurchaseOrdersController {
             exit;
         }else{
             // Fetch purchase order items
-            $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
+            //$purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemById($poId);
+            $purchaseOrderItems = $purchaseOrderItemsModel->getPurchaseOrderItemFromProduct($poId);
             //print_array($purchaseOrderItems);
            
             if ($purchaseOrderItems === false) {

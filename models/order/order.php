@@ -57,7 +57,16 @@ class Order{
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
+                //array of statuses
+                if(is_array($filters['status_filter'])){
+                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
+                    $sql .= " AND vp_orders.status IN ($placeholders)";
+                    foreach ($filters['status_filter'] as $status) {
+                        $params[] = $status;
+                    }
+                }else{
                 $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
+                }
             } 
         }
         if (!empty($filters['country'])) {
@@ -69,19 +78,38 @@ class Order{
             //$params[] = '%' . $filters['country'] . '%';
         } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
-            $sql .= " AND vp_orders.groupname LIKE ?";
-            $params[] = '%' . $filters['category'] . '%';
+            //$sql .= " AND vp_orders.groupname LIKE ?";
+            //$params[] = '%' . $filters['category'] . '%';
+            $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
+            $sql .= " AND vp_orders.category IN ($placeholders)";
+            foreach ($filters['category'] as $category) {
+                $params[] = $category;
+            }
         }
         if (!empty($filters['options']) && $filters['options'] === 'express' ) {
             $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            $sql .= " AND vp_orders.payment_type = ?";
-            $params[] = $filters['payment_type'];
+            //array of payment types
+            if(is_array($filters['payment_type'])){
+                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
+                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
+                foreach ($filters['payment_type'] as $payment_type) {
+                    $params[] = $payment_type;
+                }
+            }else{
+                $sql .= " AND vp_orders.payment_type = ?";
+                $params[] = $filters['payment_type'];
+            }
         }
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
-            $sql .= " AND vp_users.id = ?";
-            $params[] = $filters['staff_name'];
+            //$sql .= " AND vp_users.id = ?";
+            //$params[] = $filters['staff_name'];
+            $placeholders = implode(',', array_fill(0, count($filters['staff_name']), '?'));
+            $sql .= " AND vp_users.id IN ($placeholders)";
+            foreach ($filters['staff_name'] as $staff_name) {
+                $params[] = $staff_name;
+            }
         }
         if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
             $sql .= " AND vp_orders.priority = ?";
@@ -170,7 +198,16 @@ class Order{
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
+                //array of statuses
+                if(is_array($filters['status_filter'])){
+                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
+                    $sql .= " AND vp_orders.status IN ($placeholders)";
+                    foreach ($filters['status_filter'] as $status) {
+                        $params[] = $status;
+                    }
+                }else{
                 $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
+                }
             }
         }
         if (!empty($filters['country'])) {
@@ -178,19 +215,37 @@ class Order{
             //$params[] = '%' . $filters['country'] . '%';
         } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
-            $sql .= " AND groupname LIKE ?";
-            $params[] = '%' . $filters['category'] . '%';
+            //$sql .= " AND groupname LIKE ?";
+            //$params[] = '%' . $filters['category'] . '%';
+            $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
+            $sql .= " AND vp_orders.category IN ($placeholders)";
+            foreach ($filters['category'] as $category) {
+                $params[] = $category;
+            }
         }
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            if(is_array($filters['payment_type'])){
+                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
+                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
+                foreach ($filters['payment_type'] as $payment_type) {
+                    $params[] = $payment_type;
+                }
+            }else{
             $sql .= " AND payment_type = ?";
             $params[] = $filters['payment_type'];
+            }
         }
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
-            $sql .= " AND vp_users.id = ?";
-            $params[] = $filters['staff_name'];
+            //$sql .= " AND vp_users.id = ?";
+            //$params[] = $filters['staff_name'];
+            $placeholders = implode(',', array_fill(0, count($filters['staff_name']), '?'));
+            $sql .= " AND vp_users.id IN ($placeholders)";
+            foreach ($filters['staff_name'] as $staff_name) {
+                $params[] = $staff_name;
+            }
         }
         if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
             $sql .= " AND priority = ?";
