@@ -8,6 +8,15 @@ $apiToken = fetchAPIToken($currentUserId);
 if (!$currentUserId) {
     die('You must be logged in with $_SESSION["user"]["id"] set.');
 }
+global $domain, $root_path, $page, $action, $conn;
+is_login();
+require_once 'models/user/user.php';
+$usersModel = new User($conn);
+$userDetails = $usersModel->getUserById($_SESSION['user']['id']);
+unset($usersModel);
+require_once 'controllers/NotificationController.php';
+$notificationController = new NotificationController();
+$msgCnt = $notificationController->getUnreadCount();
 ?>
 <!doctype html>
 <html>
@@ -15,14 +24,50 @@ if (!$currentUserId) {
   <meta charset="utf-8">
   <title>Internal Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ96j3p6QhL6pG6L7Jz4uB4pB7I9fX6p5z5w2k4t5N6g9/5o5e+n8t1t2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link rel="stylesheet" href="assets/chat.css">
+  <link rel="stylesheet" href="style/style.css" />
+  <style>
+    .bell-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .bell {
+      width: 60px;
+    }
+
+    /* Badge that supports 1–3 digits */
+    .notification-badge {
+      position: absolute;
+      top: -12px;
+      right: -12px;
+      background: red;
+      color: white;
+      padding: 4px 4px;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 12px; /* pill shape */
+      font-size: 14px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+</style>
 </head>
 <body>
+<div class="flex-1 flex flex-col overflow-hidden">
+
 <div id="chat-app">
+  <?php include 'views/layouts/left_menu.php'; ?>
   <aside id="sidebar">
     <div class="sidebar-header">
       <h2>Users</h2>
-      <div class="sidebar-sub">Logged in as: <?php echo htmlspecialchars($currentUserName); ?></div>
     </div>
 
     <div id="users-section">
@@ -43,7 +88,7 @@ if (!$currentUserId) {
         <div id="chat-title">Select a conversation</div>
         <div id="chat-subtitle"></div>
       </div>
-      <div id="chat-presence"></div>
+      <div id="chat-presence" style="display: none;"></div>
     </header>
 
     <section id="messages"></section>
@@ -88,7 +133,7 @@ if (!$currentUserId) {
   <div class="group-members-header">Group Members</div>
   <div id="group-members-list"></div>
 </div>
-
+</div>
 
 
 <!-- Popup notifications container 
