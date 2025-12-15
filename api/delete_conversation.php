@@ -32,7 +32,21 @@ if ($conv['type'] === 'group' && $conv['created_by'] != $userId) {
 }
 
 // Safe delete (soft delete recommended)
+//$pdo->prepare("DELETE FROM conversations WHERE id = ?")->execute([$conversationId]);
+//$pdo->prepare("DELETE FROM conversation_members WHERE conversation_id = ?")->execute([$conversationId]);
+
+$stmt = $pdo->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
+$stmt->execute([$conversationId]);
+$members = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+// Delete conversation
 $pdo->prepare("DELETE FROM conversations WHERE id = ?")->execute([$conversationId]);
 $pdo->prepare("DELETE FROM conversation_members WHERE conversation_id = ?")->execute([$conversationId]);
+
+// Notify WebSocket server via temp table or direct trigger
+$pdo->prepare("
+    INSERT INTO ws_events (event_type, conversation_id, created_at)
+    VALUES ('conversation_deleted', ?, NOW())
+")->execute([$conversationId]);
 
 echo json_encode(['success' => true]);

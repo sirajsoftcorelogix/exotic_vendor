@@ -95,7 +95,7 @@ $msgCnt = $notificationController->getUnreadCount();
     <!-- Group chat members -->
     <div id="group-members-panel" class="group-members hidden">
       <div class="group-members-header">Group Members</div>
-      <div id="group-members-list"></div>
+      <div id="chat-group-members-list"></div>
     </div>
     <!-- End -->
     <button id="create-group-btn">+ Create Group</button>
@@ -124,7 +124,10 @@ $msgCnt = $notificationController->getUnreadCount();
     </footer>
   </main>
 
-  <div id="group-modal" class="modal hidden">
+</div>
+
+</div>
+<div id="group-modal" class="modal hidden">
     <div class="modal-overlay"></div>
 
     <div class="modal-content">
@@ -138,7 +141,10 @@ $msgCnt = $notificationController->getUnreadCount();
         <input id="group-name" type="text" placeholder="Enter group name" />
 
         <label>Select Members</label>
-        <div id="group-members-list" class="members-list"></div>
+        <div id="group-members-list"
+             class="members-list border rounded p-2"
+             style="max-height: 230px; overflow-y: auto; background: #fff;">
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -147,11 +153,6 @@ $msgCnt = $notificationController->getUnreadCount();
       </div>
     </div>
   </div>
-
-</div>
-
-</div>
-
 <script>
 window.CURRENT_USER = <?php echo (int)$currentUserId; ?>;
 window.API_TOKEN = <?php echo json_encode($apiToken); ?>;

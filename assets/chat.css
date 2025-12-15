@@ -443,9 +443,17 @@ body {
 }
 
 .members-list label {
-    display: block;
-    padding: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;                /* space between checkbox and name */
+    padding: 6px 4px;
     cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+.members-list input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
 }
 
 .modal-footer {

@@ -358,6 +358,9 @@
 
               // Re-render list
               renderConversationList();
+          }else if(res.error == "only_owner_can_delete") {
+            alert("Permission Denied: You do not have permission to delete groups owned by other users. You can only delete groups that you own.");
+            return true;
           }
       });
   }
@@ -605,7 +608,25 @@
       case 'mention':
         handleMentionNotification(data);
         break;
+      case 'conversation_deleted':
+        handleConversationDeleted(data.conversation_id);
+        break;
     }
+  }
+  function handleConversationDeleted(convId) {
+      // Remove from memory
+      conversations = conversations.filter(c => c.id != convId);
+
+      // If currently open, clear UI
+      if (activeConversationId == convId) {
+          activeConversationId = null;
+          messagesEl.innerHTML = "";
+          titleEl.textContent = "Select a conversation";
+          subtitleEl.textContent = "";
+      }
+
+      // Re-render chat list
+      renderConversationList();
   }
   function handleMentionNotification(data) {
       const sender = users.find(u => u.id == data.sender_id);
@@ -824,21 +845,16 @@
 
     users.forEach(u => {
         const label = document.createElement("label");
-        label.style.display = "block";
-        label.style.cursor = "pointer";
 
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.value = u.id;
-        cb.className = "group-member";
-
-        label.appendChild(cb);
-        label.appendChild(document.createTextNode(" " + u.name));
+        label.innerHTML = `
+            <input type="checkbox" class="group-member" value="${u.id}">
+            <span>${escapeHtml(u.name)}</span>
+        `;
 
         list.appendChild(label);
     });
-}
-
+  }
+  window.renderGroupMemberSelector = renderGroupMemberSelector;
 
   document.getElementById("create-group-submit").addEventListener("click", submitGroup);
 
@@ -889,11 +905,10 @@
       }
   }
   // Group Model
-  // Open modal
   document.getElementById("create-group-btn").addEventListener("click", () => {
       console.log("GROUP MODAL OPEN CLICKED");
       groupModal.classList.remove("hidden");
-      renderGroupMemberSelector();
+      window.renderGroupMemberSelector();
   });
 
   // Close modal (X button)

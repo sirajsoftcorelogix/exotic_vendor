@@ -110,6 +110,9 @@ class ChatServer implements MessageComponentInterface
                 case 'delete_message':
                     $this->handleDeleteMessage($from, $payload);
                     break;
+                case 'delete_conversation':
+                    $this->handleDeleteConversation($from, $payload);
+                    break;
                 default:
                     $from->send(json_encode(['type' => 'error', 'msg' => 'Unknown command']));
                     break;
@@ -581,5 +584,54 @@ class ChatServer implements MessageComponentInterface
         $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
         $this->sendToMembers($members, $payloadOut);
+    }
+    private function handleDeleteConversation(ConnectionInterface $from, array $payload)
+    {
+        $conversationId = (int)($payload['conversation_id'] ?? 0);
+        $userId = $from->userId;
+
+        if (!$conversationId || !$userId) {
+            return;
+        }
+
+        // Check group + owner
+        $stmt = $this->conn->prepare("SELECT type, created_by FROM conversations WHERE id = ?");
+        $stmt->execute([$conversationId]);
+        $conv = $stmt->fetch();
+
+        if (!$conv) return;
+        if ($conv['type'] !== 'group') return; // only groups deleted here
+        if ($conv['created_by'] != $userId) {
+            $from->send(json_encode(['type' => 'error', 'msg' => 'Only the owner can delete this group']));
+            return;
+        }
+
+        // Fetch members before deleting
+        $stmt = $this->conn->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
+        $stmt->execute([$conversationId]);
+        $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        // Delete the conversation
+        $this->conn->prepare("DELETE FROM conversations WHERE id = ?")->execute([$conversationId]);
+        $this->conn->prepare("DELETE FROM conversation_members WHERE conversation_id = ?")->execute([$conversationId]);
+        $this->conn->prepare("DELETE FROM messages WHERE conversation_id = ?")->execute([$conversationId]);
+
+        // 🔥 EXACT PLACE YOU MUST CALL THE BROADCAST
+        $this->broadcastConversationDeleted($conversationId, $members);
+    }
+    private function broadcastConversationDeleted(int $conversationId, array $members)
+    {
+        $payload = json_encode([
+            'type' => 'conversation_deleted',
+            'conversation_id' => $conversationId
+        ]);
+
+        foreach ($members as $uid) {
+            if (isset($this->connectionsByUser[$uid])) {
+                foreach ($this->connectionsByUser[$uid] as $conn) {
+                    $conn->send($payload);
+                }
+            }
+        }
     }
 }
