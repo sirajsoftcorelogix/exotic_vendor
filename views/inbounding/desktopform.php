@@ -2,38 +2,41 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 <style>
     .draggable-item {
-    cursor: grab; /* Shows a hand icon */
-    user-select: none; /* Prevents text highlighting while dragging */
-}
-.draggable-item:active {
-    cursor: grabbing; /* Shows a closed hand while holding */
-}
+        cursor: grab;
+        user-select: none;
+    }
+    .draggable-item:active {
+        cursor: grabbing;
+    }
     .custom-scrollbar::-webkit-scrollbar { height: 14px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border: 1px solid #ccc; border-radius: 2px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #666; border: 2px solid #e0e0e0; border-radius: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+    
+    /* Tom Select Customization */
     .ts-wrapper.single .ts-control {
-        background: #fff !important;         /* Force White Background */
-        border: 1px solid #ccc !important;   /* Exact border color */
-        border-radius: 4px !important;       /* Exact rounding */
-        height: 36px !important;             /* Exact Height */
-        padding: 0 8px !important;           /* Alignment padding */
+        background: #fff !important;
+        border: 1px solid #ccc !important;
+        border-radius: 4px !important;
+        height: 36px !important;
+        padding: 0 8px !important;
         display: flex;
         align-items: center;
         font-size: 13px;
         color: #333;
-        box-shadow: none !important;         /* Remove default shadows */
-        background-image: none !important;   /* Remove default gradients */
+        box-shadow: none !important;
+        background-image: none !important;
     }
     .ts-wrapper.focus .ts-control {
-        border-color: #999 !important;       /* Darker border on click */
-        box-shadow: none !important;
+        border-color: #999 !important;
     }
     .ts-dropdown {
         border: 1px solid #ccc;
         border-radius: 0 0 4px 4px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        z-index: 50; /* Ensure dropdown appears above grid items */
     }
+
     /* Checkbox List Styles */
     .checkbox-list-container::-webkit-scrollbar { width: 8px; }
     .checkbox-list-container::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -51,7 +54,7 @@
     .checkbox-item input[type="checkbox"] { width: 16px; height: 16px; margin-right: 10px; accent-color: #666; }
     .checkbox-item label { font-size: 13px; color: #333; cursor: pointer; flex-grow: 1; }
     
-    /* Dimension Input Style for Calculator */
+    /* Dimension Input Style */
     .dim-input { transition: border-color 0.2s; }
     .dim-input:focus { border-color: #d97824 !important; }
 </style>
@@ -60,17 +63,20 @@
 $record_id = $_GET['id'] ?? '';
 ?>
 
-<div class="w-full max-w-[1200px] mx-auto p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
+<div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
     <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
-        <div class="flex items-stretch w-full">
-            <div class="shrink-0 w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 ml-5 relative">
-                <img src="<?php echo base_url($data['form2']['product_photo']); ?>" class="w-full h-full object-cover rounded-[3px] block bg-[#ddd]" onclick="openImagePopup('<?= $data['form2']['product_photo'] ?>')">
+        
+        <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
+            
+            <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-auto">
+                <img src="<?php echo base_url($data['form2']['product_photo']); ?>" class="w-full h-full object-contain md:object-cover rounded-[3px] block bg-[#ddd]" onclick="openImagePopup('<?= $data['form2']['product_photo'] ?>')">
             </div>
 
-            <fieldset class="grow border border-[#ccc] rounded-[5px] px-5 pt-[15px] pb-5 bg-white ml-2.5 mr-5">
+            <fieldset class="grow border border-[#ccc] rounded-[5px] px-3 md:px-5 pt-[15px] pb-5 bg-white md:ml-2.5 md:mr-5">
                 <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
-                <div class="flex gap-[30px] mb-[15px] items-end">
-                    <div class="flex-1 flex flex-col">
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-[30px] mb-[15px] items-end">
+                    <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Variant:</label>
                         <select id="variant_select" name="is_variant" 
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
@@ -79,7 +85,7 @@ $record_id = $_GET['id'] ?? '';
                             <option value="N" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
                         </select>
                     </div>
-                    <div class="flex-1 flex flex-col">
+                    <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">SKU (Auto):</label>
                         <input type="text" 
                                readonly
@@ -87,11 +93,11 @@ $record_id = $_GET['id'] ?? '';
                                class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#555] w-full bg-gray-200 cursor-not-allowed focus:outline-none" 
                                placeholder="Generated on Save">
                     </div>
-                    <div class="flex-1 flex flex-col">
+                    <div class="flex flex-col sm:col-span-2 md:col-span-1">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Parent Item Code:</label>
                         <input type="hidden" id="original_variant_status" value="<?php echo $data['form2']['is_variant'] ?? ''; ?>">
-                        <div id="wrapper_select" style="display:none;">
-                            <select id="item_code_select" name="Item_code" placeholder="Type to search title...">
+                        <div id="wrapper_select" style="display:none;" class="w-full">
+                            <select id="item_code_select" name="Item_code" placeholder="Type to search title..." class="w-full">
                                 <?php 
                                 if (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y' && !empty($data['form2']['Item_code'])) { 
                                     $code = $data['form2']['Item_code'];
@@ -111,7 +117,7 @@ $record_id = $_GET['id'] ?? '';
                             <input type="hidden" id="existing_item_code" value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : ''; ?>">
                         </div>
                     </div>
-                    <div class="flex-1 flex flex-col">
+                    <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On</label>
                          <?php if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00"): ?>
                             <input type="date" class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" value="<?php echo date('Y-m-d', strtotime($data['form2']['stock_added_date'])); ?>" name="stock_added_date">
@@ -123,10 +129,10 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2 pb-3 bg-white w-full">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Receipt:</legend>
-                <div class="flex gap-[50px]">      
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-[50px]">       
                     <div class="flex flex-col">
                         <span class="text-[11px] font-bold text-[#222] mb-[3px]">Gate Entry Date & Time:</span>
                         <span class="text-xs text-[#444]">
@@ -135,7 +141,7 @@ $record_id = $_GET['id'] ?? '';
                                 : ''; ?>
                         </span>
                     </div>
-                    <div class="flex flex-col mb-4 flex-1">
+                    <div class="flex flex-col mb-4">
                         <span class="text-[11px] font-bold text-[#222] mb-[3px]">Received by:</span>
                         <select id="received_by_select" name="received_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
@@ -148,7 +154,7 @@ $record_id = $_GET['id'] ?? '';
                             <?php } ?>
                         </select>
                     </div>
-                    <div class="flex flex-col flex-1">
+                    <div class="flex flex-col">
                         <span class="text-[11px] font-bold text-[#222] mb-[3px]">Updated by:</span>
                         <select id="updated_by_select" name="updated_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
@@ -169,7 +175,7 @@ $record_id = $_GET['id'] ?? '';
                             <?php } ?>
                         </select>
                     </div>
-                    <div class="flex flex-col flex-1">
+                    <div class="flex flex-col">
                         <span class="text-[11px] font-bold text-[#222] mb-[3px]">Vendor:</span>
                         <select name="vendor_code" id="vendor_code" placeholder="Select Vendor...">
                             <option value="">Select Vendor</option>
@@ -201,7 +207,7 @@ $record_id = $_GET['id'] ?? '';
                 foreach ($data['category'] as $row) {
                     if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
                     $categoriesByParent1[$row['parent_id']][] = [
-                        'id'   => $row['id'],
+                        'id'    => $row['id'],
                         'name' => $row['display_name']
                     ];
                     if ($row['parent_id'] == 0) {
@@ -216,7 +222,7 @@ $record_id = $_GET['id'] ?? '';
                 }
             }
         ?>
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
@@ -272,7 +278,7 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
                 <div class="mb-[15px]">
@@ -294,18 +300,14 @@ $record_id = $_GET['id'] ?? '';
                         
                         <div class="checkbox-list-container overflow-y-auto p-1 h-full">
                             <?php 
-                                // 1. Get Options
                                 $icon_options = $data['form2']['icon_data']['description_icons'] ?? [];
-                                
-                                // 2. Get Saved Values
                                 $saved_raw = $data['form2']['description_icons'] ?? ''; 
                                 $saved_values = is_array($saved_raw) ? $saved_raw : explode(',', $saved_raw);
 
-                                // 3. Loop and Render Checkboxes
                                 if (!empty($icon_options)) {
                                     foreach ($icon_options as $key => $label) {
                                         $isChecked = in_array($key, $saved_values) ? 'checked' : '';
-                                        $uniqueId = 'icon_' . $key; // Create unique ID for label clicking
+                                        $uniqueId = 'icon_' . $key; 
                             ?>
                                     <div class="checkbox-item">
                                         <input type="checkbox" 
@@ -313,7 +315,7 @@ $record_id = $_GET['id'] ?? '';
                                                name="description_icons[]" 
                                                value="<?= $key ?>" 
                                                <?= $isChecked ?>>
-                                        
+                                            
                                         <label for="<?= $uniqueId ?>"><?= $label ?></label>
                                     </div>
                             <?php 
@@ -328,10 +330,10 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Invoice Details:</legend>
-                <div class="flex gap-5 items-stretch">
+                <div class="flex flex-col sm:flex-row gap-5 items-stretch">
                     <?php 
                         $hasImage = !empty($data['form2']['invoice_image']);
                         $imageSrc = $hasImage ? base_url($data['form2']['invoice_image']) : '';
@@ -363,10 +365,10 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Pricing:</legend>
-                <div class="flex gap-5 items-start mb-[15px]">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-start mb-[15px]">
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">INR Price:</label>
                         <div class="relative flex items-center w-full">
@@ -412,7 +414,7 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <div class="mt-[15px] mx-5" style="display:none;">
+        <div class="mt-[15px] md:mx-5" style="display:none;">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Unit:</legend>
                 <div class="flex gap-5 items-start mb-[15px]">
@@ -438,10 +440,10 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Dimensions:</legend>
-                <div class="flex gap-5 items-start mb-[15px]">
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-start mb-[15px]">
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Height:</label>
                         <div class="relative flex items-center w-full">
@@ -487,10 +489,10 @@ $record_id = $_GET['id'] ?? '';
             </fieldset>
         </div>
 
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Stock:</legend>
-                <div class="flex gap-5 items-start mb-[15px]">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-start mb-[15px]">
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Quantity:</label>
                         <div class="relative flex items-center w-full">
@@ -524,7 +526,7 @@ $record_id = $_GET['id'] ?? '';
                         <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" name="store_location">
                     </div>
                 </div>
-                <div class="flex gap-5 items-start mb-[15px] mt-[10px]">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px] mt-[10px]">
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Local Stock:</label>
                          <div class="relative flex items-center w-full">
@@ -546,60 +548,61 @@ $record_id = $_GET['id'] ?? '';
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
-                        
-                        <div class="flex items-center h-[32px] gap-4">
-                            <?php $selectedVal = $data['form2']['us_block'] ?? ''; ?>
-                            
-                            <label class="flex items-center cursor-pointer">
-                                <input type="radio" 
-                                       name="us_block" 
-                                       value="Y" 
-                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
-                                       <?php echo ($selectedVal == 'Y') ? 'checked' : ''; ?>>
-                                <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
-                            </label>
+                    <div class="flex-1 flex gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
+                            <div class="flex items-center h-[32px] gap-4">
+                                <?php $selectedVal = $data['form2']['us_block'] ?? ''; ?>
+                                
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="radio" 
+                                           name="us_block" 
+                                           value="Y" 
+                                           class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                           <?php echo ($selectedVal == 'Y') ? 'checked' : ''; ?>>
+                                    <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
+                                </label>
 
-                            <label class="flex items-center cursor-pointer">
-                                <input type="radio" 
-                                       name="us_block" 
-                                       value="N" 
-                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
-                                       <?php echo ($selectedVal == 'N' || $selectedVal == '') ? 'checked' : ''; ?>>
-                                <span class="ml-1.5 text-[13px] text-[#333]">No</span>
-                            </label>
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="radio" 
+                                           name="us_block" 
+                                           value="N" 
+                                           class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                           <?php echo ($selectedVal == 'N' || $selectedVal == '') ? 'checked' : ''; ?>>
+                                    <span class="ml-1.5 text-[13px] text-[#333]">No</span>
+                                </label>
+                            </div>
                         </div>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">India Stock:</label>
-                        
-                        <div class="flex items-center h-[32px] gap-4">
-                            <?php $selectedVal = $data['form2']['india_block'] ?? ''; ?>
+                        <div>
+                            <label class="block text-xs font-bold text-[#222] mb-[5px]">India Stock:</label>
                             
-                            <label class="flex items-center cursor-pointer">
-                                <input type="radio" 
-                                       name="india_block" 
-                                       value="Y" 
-                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
-                                       <?php echo ($selectedVal == 'Y') ? 'checked' : ''; ?>>
-                                <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
-                            </label>
+                            <div class="flex items-center h-[32px] gap-4">
+                                <?php $selectedVal = $data['form2']['india_block'] ?? ''; ?>
+                                
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="radio" 
+                                           name="india_block" 
+                                           value="Y" 
+                                           class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                           <?php echo ($selectedVal == 'Y') ? 'checked' : ''; ?>>
+                                    <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
+                                </label>
 
-                            <label class="flex items-center cursor-pointer">
-                                <input type="radio" 
-                                       name="india_block" 
-                                       value="N" 
-                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
-                                       <?php echo ($selectedVal == 'N' || $selectedVal == '') ? 'checked' : ''; ?>>
-                                <span class="ml-1.5 text-[13px] text-[#333]">No</span>
-                            </label>
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="radio" 
+                                           name="india_block" 
+                                           value="N" 
+                                           class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                           <?php echo ($selectedVal == 'N' || $selectedVal == '') ? 'checked' : ''; ?>>
+                                    <span class="ml-1.5 text-[13px] text-[#333]">No</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] mx-5">
+        <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Drag to Reorder):</legend>
                 
@@ -642,7 +645,7 @@ $record_id = $_GET['id'] ?? '';
                 <?php endif; ?>
             </fieldset>
         </div>
-        <div class="flex justify-end my-[25px] mx-5 mb-10">
+        <div class="flex justify-end my-[25px] md:mx-5 mb-10">
             <button class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a]">Save and Generate Item Code</button>
         </div>
     </form>
@@ -1110,8 +1113,6 @@ document.addEventListener('DOMContentLoaded', function() {
         new TomSelect("#vendor_code", commonConfig);
         new TomSelect("#received_by_select", commonConfig);
         new TomSelect("#updated_by_select", commonConfig);
-
-        // --- NEW INITIALIZATION FOR ICONS ---
         
     });
 </script>
