@@ -66,6 +66,7 @@ class InboundingController {
 
         // 4. Fetch Data (Direct Query)
         $conn = Database::getConnection(); 
+        // We select * so we have all DB fields available to map below
         $sql = "SELECT * FROM vp_inbound WHERE id IN ($ids_sql)";
         $result = $conn->query($sql);
 
@@ -79,21 +80,115 @@ class InboundingController {
             
             $output = fopen('php://output', 'w');
 
-            // Column Headers
-            fputcsv($output, ['ID', 'Item Code', 'Temp Code', 'Title', 'Keywords', 'Quantity', 'Vendor Code', 'Received Date']);
+            // A. Define Excel Column Headers (Exactly as you requested)
+            $excel_headers = [
+                'itemcode', 'groupname', 'category', 'itemtype', 'title', 
+                'image', 'redirect', 'snippet_description', 'long_description', 'long_description_india', 
+                'important_info', 'description_icons', 'bundled_items', 'keywords', 'usblock', 
+                'indiablock', 'numsold', 'lastsold', 'qty_step', 'related_items', 
+                'search_term', 'search_category', 'hscode', 'vendor', 'cp', 
+                'isbn', 'author', 'publisher', 'language', 'pages', 
+                'cover_type', 'edition', 'publication_date', 'description', 'weight_to_show', 
+                'variation_name_color', 'variation_name_size', 'india_net_qty', 'author_description', 'publisher_description', 
+                'publisher_field_name', 'material', 'pweight_to_show', 'optionals', 'pvariation_name_color', 
+                'pvariation_name_size', 'amazon_dimensionunit', 'amazon_diameter', 'amazon_height', 'amazon_width', 
+                'amazon_length', 'amazon_metalweight', 'amazon_metalweightunit', 'amazon_metaltype', 'amazon_metalstamp', 
+                'amazon_settingtype', 'amazon_necklace_clasptype', 'amazon_necklace_chaintype', 'amazon_earrings_backfinding', 'amazon_gemtypes', 
+                'amazon_gemtypes_shape', 'amazon_gemtypes_totalgemweight', 'amazon_gemtypes_numberofstones', 'amazon_gemtypes_stonewidth', 'amazon_gemtypes_stoneweight', 
+                'amazon_language'
+            ];
 
-            // Data Rows
+            // Write Headers to CSV
+            fputcsv($output, $excel_headers);
+
+            // B. Data Rows (Mapping DB fields to Headers)
             while ($row = $result->fetch_assoc()) {
-                fputcsv($output, [
-                    $row['id'],
-                    $row['Item_code'],
-                    $row['temp_code'],
-                    $row['product_title'],
-                    $row['key_words'],
-                    $row['quantity_received'],
-                    $row['vendor_code'],
-                    $row['gate_entry_date_time']
-                ]);
+                $us_block_val = ($row['us_block'] === 'Y') ? '1' : '0';
+                $india_block_val = ($row['india_block'] === 'Y') ? '1' : '0';
+                // Prepare the row data in the EXACT order of $excel_headers
+                $csv_row = [
+                    $row['Item_code'] ?? '',                // itemcode
+                    $row['group_name'] ?? '',               // groupname
+                    $row['category_code'] ?? '',            // category (mapped to category_code)
+                    'product',                              // itemtype (product)
+                    $row['product_title'] ?? '',            // title
+                    
+                    $row['product_photo'] ?? '',            // image
+                    '',                                     // redirect (Blank)
+                    $row['snippet_description'] ?? '',      // snippet_description
+                    '',                                     // long_description (Blank)
+                    '',                                     // long_description_india (Blank)
+                    
+                    '',                                     // important_info (Blank)
+                    $row['description_icons'] ?? '',        // description_icons
+                    '',                                     // bundled_items (Blank)
+                    $row['key_words'] ?? '',                // keywords
+                    $us_block_val,                          // usblock
+                    
+                    $india_block_val,                       // indiablock
+                    '0',                                     // numsold (Blank)
+                    '0',                                     // lastsold (Blank)
+                    '1',                                    // qty_step (Blank)
+                    '',                                     // related_items (Blank)
+                    
+                    '',                                     // search_term (Blank)
+                    '',                                     // search_category (Blank)
+                    $row['hsn_code'] ?? '',                 // hscode (Mapped to hsn_code)
+                    $row['vendor_code'] ?? '',              // vendor
+                    $row['cp'] ?? '',                       // cp
+                    
+                    '',                                     // isbn (Blank)
+                    '',                                     // author (Blank)
+                    '',                                     // publisher (Blank)
+                    '',                                     // language (Blank)
+                    '',                                     // pages (Blank)
+                    
+                    '',                                     // cover_type (Blank)
+                    '',                                     // edition (Blank)
+                    '',                                     // publication_date (Blank)
+                    '',                                     // description (Blank)
+                    $row['weight'] . ' ' . ($row['weight_unit'] ?? ''), // weight_to_show (Combined weight + unit)
+                    
+                    $row['color'] ?? '',                    // variation_name_color
+                    $row['size'] ?? '',                     // variation_name_size
+                    '1',                                     // india_net_qty (Blank)
+                    '',                                     // author_description (Blank)
+                    '',                                     // publisher_description (Blank)
+                    
+                    '',                                     // publisher_field_name (Blank)
+                    $row['material_code'] ?? '',            // material
+                    '',                                     // pweight_to_show (Blank)
+                    '',                                     // optionals (Blank)
+                    '',                                     // pvariation_name_color (Blank)
+                    
+                    '',                                     // pvariation_name_size (Blank)
+                    $row['dimention_unit'] ?? '',           // amazon_dimensionunit (Mapped to dimention_unit)
+                    '',                                     // amazon_diameter (Blank)
+                    $row['height'] ?? '',                   // amazon_height
+                    $row['width'] ?? '',                    // amazon_width
+                    
+                    $row['depth'] ?? '',                    // amazon_length (Mapped Depth to Length usually)
+                    '',                                     // amazon_metalweight (Blank)
+                    '',                                     // amazon_metalweightunit (Blank)
+                    '',                                     // amazon_metaltype (Blank)
+                    '',                                     // amazon_metalstamp (Blank)
+                    
+                    '',                                     // amazon_settingtype (Blank)
+                    '',                                     // amazon_necklace_clasptype (Blank)
+                    '',                                     // amazon_necklace_chaintype (Blank)
+                    '',                                     // amazon_earrings_backfinding (Blank)
+                    '',                                     // amazon_gemtypes (Blank)
+                    
+                    '',                                     // amazon_gemtypes_shape (Blank)
+                    '',                                     // amazon_gemtypes_totalgemweight (Blank)
+                    '',                                     // amazon_gemtypes_numberofstones (Blank)
+                    '',                                     // amazon_gemtypes_stonewidth (Blank)
+                    '',                                     // amazon_gemtypes_stoneweight (Blank)
+                    
+                    ''                                      // amazon_language (Blank)
+                ];
+
+                fputcsv($output, $csv_row);
             }
             fclose($output);
             exit;
@@ -129,10 +224,13 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
+        $data['form2']['icon_data'] = $this->geticonList();
+        $data['images'] = $inboundingModel->getitem_imgs($id);
+        // echo "<pre>";print_r($data['icon_data']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
-    function getCategoryList() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/categorylist';
+    function geticonList() {
+        $url = 'https://www.exoticindia.com/vendor-api/product/descriptionicons';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
@@ -467,7 +565,7 @@ class InboundingController {
                 }
             }
 
-            header("Location: " . base_url("?page=inbounding&action=i_photos&id=$id"));
+            header("Location: " . base_url("?page=inbounding&action=list"));
             exit;
         }
     }
@@ -478,7 +576,7 @@ class InboundingController {
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         
         // 1. Get images from DB
-        $images = $inboundingModel->getitem_imgs($id);
+        $images = $inboundingModel->get_raw_item_imgs($id);
         
         if(empty($images)) {
             echo "<script>alert('No images found for this item.'); history.back();</script>";
@@ -494,7 +592,7 @@ class InboundingController {
             exit("Error: Cannot create zip file at $tmp_file");
         }
 
-        $basePath = __DIR__ . '/../uploads/itm_img/';
+        $basePath = __DIR__ . '/../uploads/itm_raw_img/';
         $filesAdded = 0;
 
         foreach ($images as $img) {
@@ -542,6 +640,62 @@ class InboundingController {
             exit("Error: Zip file was not created.");
         }
     }
+    public function i_raw_photos() {
+        is_login();
+        global $inboundingModel;
+        
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        
+        // 1. Get Raw Images
+        $data['images'] = $inboundingModel->get_raw_imgs($id);
+        
+        // 2. Get Item Details (Reusing your existing function for the header)
+        $data['item'] = $inboundingModel->getItemDetails($id);
+        $data['record_id'] = $id;
+
+        // Load the new view file
+        renderTemplateClean('views/inbounding/i_raw_photos.php', $data, 'Raw Photos');
+    }
+
+    public function itmrawimgsave() {
+        global $inboundingModel;
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            
+            // 1. Handle Deletions
+            if (!empty($_POST['delete_ids'])) {
+                foreach ($_POST['delete_ids'] as $del_id) {
+                    $inboundingModel->delete_raw_image(intval($del_id));
+                }
+            }
+
+            // 2. Handle New File Uploads
+            if (!empty($_FILES['new_photos']['name'][0])) {
+                // NEW FOLDER PATH
+                $uploadDir = __DIR__ . '/../uploads/itm_raw_img/';
+                
+                // Create folder if it doesn't exist
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+                
+                foreach ($_FILES['new_photos']['name'] as $key => $name) {
+                    if ($_FILES['new_photos']['error'][$key] === 0) {
+                        $tmpName = $_FILES['new_photos']['tmp_name'][$key];
+                        $ext = pathinfo($name, PATHINFO_EXTENSION);
+                        // Unique name for raw image
+                        $newName = 'raw_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
+                        
+                        if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
+                            $inboundingModel->add_raw_image($id, $newName);
+                        }
+                    }
+                }
+            }
+
+            header("Location: " . base_url("?page=inbounding&action=list"));
+            exit;
+        }
+    }
     public function updatedesktopform() {
         global $inboundingModel;
 
@@ -551,7 +705,7 @@ class InboundingController {
 
         if (!$oldData) { echo "Record not found."; exit; }
 
-        // --- File Upload Logic (Standard) ---
+        // --- File Upload Logic ---
         $invoicePath = $oldData['form1']['invoice_image'] ?? '';
         if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
             $uploadDir = __DIR__ . '/../uploads/invoice/';
@@ -570,27 +724,45 @@ class InboundingController {
         $item_code  = $_POST['Item_code'] ?? '';
         $old_is_variant = $oldData['form2']['is_variant'] ?? '';
 
+        // --- Auto-Generate Item Code Logic (For Non-Variants) ---
+        // --- Auto-Generate Item Code Logic ---
         // --- Auto-Generate Item Code Logic ---
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
 
-            // A. Get Group Name (This is now the Direct Value from POST)
-            $group_name_str = $_POST['group_name'] ?? ''; 
-            
-            // B. Get Category Name (Still need to look this up via ID)
+            // 1. Get Group Name (Use the NEW function to search by 'category' column)
+            $group_val = $_POST['group_name'] ?? ''; 
+            $group_real_name = $inboundingModel->getGroupNameByCode($group_val); 
+
+            // 2. Get Category Name (Use the EXISTING function to search by 'id' column)
             $category_id = $_POST['category_code'] ?? 0;
-            $cat_name_str = $inboundingModel->getCategoryName($category_id);
+            $cat_real_name = $inboundingModel->getCategoryName($category_id);
             
             $next_count = $inboundingModel->getNextProductCount();
 
-            // C. Generate Chars
-            $char1  = !empty($group_name_str) ? strtoupper(substr($group_name_str, 0, 1)) : 'X';
-            $char23 = !empty($cat_name_str)   ? strtoupper(substr($cat_name_str, 0, 2)) : 'XX';
+            // 3. Generate Chars
+            // If name is found, take 1st letter. If not found (empty), default to 'X'
+            $char1  = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
+            $char23 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 2)) : 'XX';
             $increment_str = str_pad($next_count, 3, '0', STR_PAD_LEFT);
 
             $item_code = $char1 . $char23 . $increment_str;
         }
 
-        // --- Handle Array Inputs (Multi-select) ---
+        // --- SKU GENERATION LOGIC ---
+        $size  = trim($_POST['size'] ?? '');
+        $color = trim($_POST['color'] ?? '');
+        $generated_sku = '';
+
+        if ($is_variant === 'N') {
+            // Rule: If Variant is No, SKU is exactly the Item Code
+            $generated_sku = $item_code;
+        } elseif ($is_variant === 'Y') {
+            // Rule: If Variant is Yes, SKU is ItemCode-Size-Color
+            // Note: We use the POSTed Item_code here, which comes from the selection
+            $generated_sku = $item_code . '-' . $size . '-' . $color;
+        }
+
+        // --- Handle Array Inputs ---
         $sub_cat_input = $_POST['sub_category_code'] ?? '';
         $sub_cat_val   = is_array($sub_cat_input) ? implode(',', $sub_cat_input) : $sub_cat_input;
 
@@ -602,12 +774,11 @@ class InboundingController {
             'invoice_image'       => $invoicePath,
             'is_variant'          => $is_variant,
             'Item_code'           => $item_code,
-            'group_name'          => $_POST['group_name'] ?? '', // Stores "Category Index" string
+            'sku'                 => $generated_sku, // <--- ADDED SKU HERE
+            'group_name'          => $_POST['group_name'] ?? '', 
             'category_code'       => $_POST['category_code'] ?? '',
-            'sub_category_code'     => $sub_cat_val, // Stores "1,2,3" string
-            'sub_sub_category_code' => $sub_sub_val, // Stores "5,8,9" string
-            
-            // ... (Rest of your fields) ...
+            'sub_category_code'   => $sub_cat_val, 
+            'sub_sub_category_code' => $sub_sub_val,
             'stock_added_date'    => $_POST['stock_added_date'] ?? '',
             'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
             'updated_by_user_id'  => $_POST['updated_by_user_id'] ?? '',
@@ -615,8 +786,10 @@ class InboundingController {
             'material_code'       => $_POST['material_code'] ?? '',
             'product_title'       => $_POST['product_title'] ?? '',
             'key_words'           => $_POST['key_words'] ?? '',
+            'snippet_description' => $_POST['snippet_description'] ?? '',
             'vendor_code'         => $_POST['vendor_code'] ?? '',
             'inr_pricing'         => $_POST['inr_pricing'] ?? '',
+            'cp'                  => $_POST['cp'] ?? '',
             'amazon_price'        => $_POST['amazon_price'] ?? '',
             'usd_price'           => $_POST['usd_price'] ?? '',
             'hsn_code'            => $_POST['hsn_code'] ?? '',
@@ -628,12 +801,13 @@ class InboundingController {
             'size'                => $_POST['size'] ?? '',
             'color'               => $_POST['color'] ?? '',
             'quantity_received'   => $_POST['quantity_received'] ?? '',
-            'permanently_available' => $_POST['permanently_available'] ?? '',
+            'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'local_stock'         => $_POST['local_stock'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
-            'in_stock_leadtime_days'      => $_POST['in_stock_leadtime_days'] ?? '',
+            'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
+            'description_icons'   => $icons_val, 
             'us_block'            => $_POST['us_block'] ?? '',
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
@@ -641,7 +815,12 @@ class InboundingController {
 
         // 4. Save
         $result = $inboundingModel->updatedesktopform($id, $data);
-
+        if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
+            foreach ($_POST['photo_order'] as $img_id => $order_num) {
+                // Call the new specific function
+                $inboundingModel->update_image_order($img_id, $order_num);
+            }
+        }
         if ($result['success']) {
             header("location: " . base_url('?page=inbounding&action=list'));
             exit;
@@ -722,12 +901,10 @@ class InboundingController {
         if (move_uploaded_file($fileTmp, $dest)) {
             $invoicePath = "uploads/invoice/" . $newFile;
             
-            $temp_code = $this->generateTeamCode();
             $saveData = [
                 'vendor_id' => $vendor_id,
                 'invoice'    => $invoicePath,
-                'invoice_no' => $invoice_no,
-                'temp_code' => $temp_code
+                'invoice_no' => $invoice_no
             ];
             $insertId = $inboundingModel->saveform2($record_id,$saveData);
             if ($insertId) {
@@ -789,28 +966,5 @@ class InboundingController {
         header("location: " . base_url('?page=inbounding&action=list'));
         exit;
     }
-    function generateTeamCode()
-    {
-        global $inboundingModel;
-        do {
-            // Generate random prefix
-            $prefix = '';
-            for ($i = 0; $i < 3; $i++) {
-                $prefix .= chr(rand(65, 90));
-            }
-
-            // Generate random 6 digits
-            $number = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-
-            $code = $prefix . $number;
-
-        } while ($inboundingModel->isCodeExists($code));
-
-        return $code;
-    }
-
-
-
-
 }
 ?>

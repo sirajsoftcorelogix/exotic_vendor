@@ -431,7 +431,12 @@ switch ($page) {
             case 'i_photos':
                 $controller->i_photos();
                 break;
-
+            case 'i_raw_photos':
+                $controller->i_raw_photos();
+                break;
+            case 'itmrawimgsave':
+                $controller->itmrawimgsave();
+                break;
             case 'itmimgsave':
                 $controller->itmimgsave();
                 break;

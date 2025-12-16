@@ -90,11 +90,11 @@ class Inbounding {
         // This query joins your tables to get real names (e.g., 'Brass' instead of '1')
         // Adjust table names (e.g., 'vendors' or 'vp_vendors') if needed
         $sql = "SELECT vi.*,c.display_name as category,vv.vendor_name as vendor_name,m.material_name as material,vu.name as recived_by_name FROM vp_inbound as vi
-LEFT JOIN category as c on vi.group_name=c.category
-LEFT JOIN vp_vendors as vv on vi.vendor_code=vv.id
-LEFT JOIN material as m on vi.material_code=m.id
-LEFT JOIN vp_users as vu on vi.received_by_user_id=vu.id
-WHERE vi.id=".$id;
+            LEFT JOIN category as c on vi.group_name=c.category
+            LEFT JOIN vp_vendors as vv on vi.vendor_code=vv.id
+            LEFT JOIN material as m on vi.material_code=m.id
+            LEFT JOIN vp_users as vu on vi.received_by_user_id=vu.id
+            WHERE vi.id=".$id;
                 
         $result = $this->conn->query($sql);
         return $result ? $result->fetch_assoc() : [];
@@ -117,7 +117,12 @@ WHERE vi.id=".$id;
         $sql = "UPDATE item_images SET image_caption = '$caption', display_order = $order WHERE id = $img_id";
         $this->conn->query($sql);
     }
-
+    public function update_image_order($img_id, $order) {
+        $img_id = intval($img_id);
+        $order = intval($order);
+        // SQL that ONLY updates the display_order
+        $this->conn->query("UPDATE item_images SET display_order = $order WHERE id = $img_id");
+    }
     // 5. Delete image from DB and Server (KEPT EXISTING)
     public function delete_image($img_id) {
         $img_id = intval($img_id);
@@ -134,6 +139,55 @@ WHERE vi.id=".$id;
         
         // 2. Delete from DB
         return $this->conn->query("DELETE FROM `item_images` WHERE id = $img_id");
+    }
+    public function get_raw_item_imgs($item_id) {
+        $item_id = intval($item_id);
+        // Added ORDER BY display_order ASC so images appear in the correct sequence
+        $result = $this->conn->query("SELECT * FROM `item_raw_images` WHERE item_id = $item_id");
+        
+        $images = [];
+        if ($result) {
+            $images = $result->fetch_all(MYSQLI_ASSOC);
+            $result->free();
+        }
+        return $images;
+    }
+    // 1. Fetch Raw Images
+    public function get_raw_imgs($item_id) {
+        $item_id = intval($item_id);
+        // No order needed, usually just by upload date
+        $result = $this->conn->query("SELECT * FROM `item_raw_images` WHERE item_id = $item_id ORDER BY id DESC");
+        
+        $images = [];
+        if ($result) {
+            $images = $result->fetch_all(MYSQLI_ASSOC);
+            $result->free();
+        }
+        return $images;
+    }
+
+    // 2. Add Raw Image
+    public function add_raw_image($item_id, $filename) {
+        $stmt = $this->conn->prepare("INSERT INTO `item_raw_images` (item_id, file_name) VALUES (?, ?)");
+        $stmt->bind_param("is", $item_id, $filename);
+        return $stmt->execute();
+    }
+
+    // 3. Delete Raw Image
+    public function delete_raw_image($img_id) {
+        $img_id = intval($img_id);
+        
+        // Get filename to delete from disk
+        $res = $this->conn->query("SELECT file_name FROM `item_raw_images` WHERE id = $img_id");
+        if ($row = $res->fetch_assoc()) {
+            // Note the folder change here: 'itm_raw_img'
+            $path = __DIR__ . '/../uploads/itm_raw_img/' . $row['file_name'];
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+        
+        return $this->conn->query("DELETE FROM `item_raw_images` WHERE id = $img_id");
     }
 	public function getform1data($id){
         $inbounding = null;
@@ -214,7 +268,7 @@ WHERE vi.id=".$id;
         'vendors' => $vendors,
         'material' => $material,
         'category' => $category,
-        '$address' => $address
+        'address' => $address
     ];
 }
     public function getform2($id) {
@@ -398,6 +452,23 @@ WHERE vi.id=".$id;
         }
         return '';
     }
+    public function getGroupNameByCode($code) {
+        if (empty($code)) return '';
+
+        // Search by the 'category' column, NOT 'id'
+        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE category = ?");
+        if (!$stmt) return '';
+
+        // Use 's' (string) because your codes might be "-2" or "10002"
+        $stmt->bind_param("s", $code); 
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($row = $result->fetch_assoc()) {
+            return $row['display_name'];
+        }
+        return ''; // Return empty if not found
+    }
 
     /**
      * Helper to get the next incremental ID count from vp_products
@@ -420,10 +491,9 @@ WHERE vi.id=".$id;
                 'message' => 'Prepare failed: ' . $this->conn->error
             ];
         }
-        $stmt->bind_param('sssii',
+        $stmt->bind_param('ssii',
             $data['vendor_id'],   
             $data['invoice'],  
-            $data['temp_code'],  
             $data['invoice_no'],  
             $id              
         );

@@ -1,6 +1,13 @@
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 <style>
+    .draggable-item {
+    cursor: grab; /* Shows a hand icon */
+    user-select: none; /* Prevents text highlighting while dragging */
+}
+.draggable-item:active {
+    cursor: grabbing; /* Shows a closed hand while holding */
+}
     .custom-scrollbar::-webkit-scrollbar { height: 14px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border: 1px solid #ccc; border-radius: 2px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #666; border: 2px solid #e0e0e0; border-radius: 4px; }
@@ -27,6 +34,7 @@
         border-radius: 0 0 4px 4px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
+    /* Checkbox List Styles */
     .checkbox-list-container::-webkit-scrollbar { width: 8px; }
     .checkbox-list-container::-webkit-scrollbar-track { background: #f1f1f1; }
     .checkbox-list-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
@@ -42,16 +50,23 @@
     .checkbox-item:last-child { border-bottom: none; }
     .checkbox-item input[type="checkbox"] { width: 16px; height: 16px; margin-right: 10px; accent-color: #666; }
     .checkbox-item label { font-size: 13px; color: #333; cursor: pointer; flex-grow: 1; }
+    
+    /* Dimension Input Style for Calculator */
+    .dim-input { transition: border-color 0.2s; }
+    .dim-input:focus { border-color: #d97824 !important; }
 </style>
+
 <?php
 $record_id = $_GET['id'] ?? '';
 ?>
+
 <div class="w-full max-w-[1200px] mx-auto p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
     <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
         <div class="flex items-stretch w-full">
             <div class="shrink-0 w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 ml-5 relative">
                 <img src="<?php echo base_url($data['form2']['product_photo']); ?>" class="w-full h-full object-cover rounded-[3px] block bg-[#ddd]" onclick="openImagePopup('<?= $data['form2']['product_photo'] ?>')">
             </div>
+
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-5 pt-[15px] pb-5 bg-white ml-2.5 mr-5">
                 <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
                 <div class="flex gap-[30px] mb-[15px] items-end">
@@ -63,6 +78,14 @@ $record_id = $_GET['id'] ?? '';
                             <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
                             <option value="N" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
                         </select>
+                    </div>
+                    <div class="flex-1 flex flex-col">
+                        <label class="text-xs font-bold text-[#333] mb-1.5">SKU (Auto):</label>
+                        <input type="text" 
+                               readonly
+                               value="<?php echo htmlspecialchars($data['form2']['sku'] ?? ''); ?>"
+                               class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#555] w-full bg-gray-200 cursor-not-allowed focus:outline-none" 
+                               placeholder="Generated on Save">
                     </div>
                     <div class="flex-1 flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Parent Item Code:</label>
@@ -84,7 +107,7 @@ $record_id = $_GET['id'] ?? '';
                                    value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : ''; ?>" 
                                    readonly
                                    class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full bg-gray-100 focus:outline-none" 
-                                   name="Item_code">     
+                                   name="Item_code">      
                             <input type="hidden" id="existing_item_code" value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : ''; ?>">
                         </div>
                     </div>
@@ -99,6 +122,7 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
+
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2 pb-3 bg-white w-full">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Receipt:</legend>
@@ -161,6 +185,7 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
+
         <?php 
             $selected_material = $data['form2']['material_code'] ?? '';
             $selected_group_val = $data['form2']['group_name'] ?? ''; 
@@ -193,7 +218,7 @@ $record_id = $_GET['id'] ?? '';
         ?>
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
                     <div class="w-full md:w-1/3 flex flex-col gap-4">
                         <div>
@@ -246,6 +271,7 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
+
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
@@ -253,12 +279,55 @@ $record_id = $_GET['id'] ?? '';
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Title:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" value="<?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>">
                 </div>
-                <div>
+                <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['key_words'] ?? '') ?>" name= "key_words">
                 </div>
+                <div class="mb-[15px]">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
+                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name= "snippet_description">
+                </div>
+                <div class="">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Description Icons:</label>
+                    
+                    <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
+                        
+                        <div class="checkbox-list-container overflow-y-auto p-1 h-full">
+                            <?php 
+                                // 1. Get Options
+                                $icon_options = $data['form2']['icon_data']['description_icons'] ?? [];
+                                
+                                // 2. Get Saved Values
+                                $saved_raw = $data['form2']['description_icons'] ?? ''; 
+                                $saved_values = is_array($saved_raw) ? $saved_raw : explode(',', $saved_raw);
+
+                                // 3. Loop and Render Checkboxes
+                                if (!empty($icon_options)) {
+                                    foreach ($icon_options as $key => $label) {
+                                        $isChecked = in_array($key, $saved_values) ? 'checked' : '';
+                                        $uniqueId = 'icon_' . $key; // Create unique ID for label clicking
+                            ?>
+                                    <div class="checkbox-item">
+                                        <input type="checkbox" 
+                                               id="<?= $uniqueId ?>" 
+                                               name="description_icons[]" 
+                                               value="<?= $key ?>" 
+                                               <?= $isChecked ?>>
+                                        
+                                        <label for="<?= $uniqueId ?>"><?= $label ?></label>
+                                    </div>
+                            <?php 
+                                    }
+                                } else {
+                                    echo '<div class="text-xs text-gray-400 p-2 text-center mt-5">No icons available</div>';
+                                }
+                            ?>
+                        </div>
+                    </div>
+                </div>
             </fieldset>
         </div>
+
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Invoice Details:</legend>
@@ -293,6 +362,7 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
+
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Pricing:</legend>
@@ -301,6 +371,13 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">INR Price:</label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['inr_pricing'] ?? '') ?>" name = "inr_pricing">
+                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">CP:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['cp'] ?? '') ?>" name = "cp">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
@@ -334,7 +411,8 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] mx-5">
+
+        <div class="mt-[15px] mx-5" style="display:none;">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Unit:</legend>
                 <div class="flex gap-5 items-start mb-[15px]">
@@ -342,8 +420,8 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Dimention Unit:</label>
                         <div class="relative flex items-center w-full">
                             <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="dimention_unit">
-                                <option value="cm">cm</option>
-                                <option value="inch" selected="">inch</option>
+                                <option value="cm" selected>cm</option>
+                                <option value="inch">inch</option>
                             </select>
                         </div>
                     </div>
@@ -351,14 +429,15 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Weight Unit:</label>
                         <div class="relative flex items-center w-full">
                             <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="weight_unit">
-                                <option value="kg">kg</option>
-                                <option value="gm" selected="">gm</option>
+                                <option value="kg" selected>kg</option>
+                                <option value="gm">gm</option>
                             </select>
                         </div>
                     </div>
                 </div>
             </fieldset>
         </div>
+
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Dimensions:</legend>
@@ -366,25 +445,25 @@ $record_id = $_GET['id'] ?? '';
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Height:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['height'] ?? '') ?>" name="height">
+                            <input type="text" id="dim_height" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['height'] ?? '') ?>" name="height">
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Width:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['width'] ?? '') ?>" name="width">
+                            <input type="text" id="dim_width" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['width'] ?? '') ?>" name="width">
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Depth:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['depth'] ?? '') ?>" name="depth">
+                            <input type="text" id="dim_depth" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['depth'] ?? '') ?>" name="depth">
                         </div>
                     </div>
                      <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Weight:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['weight'] ?? '') ?>" name="weight">
+                            <input type="text" id="dim_weight" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['weight'] ?? '') ?>" name="weight">
                         </div>
                     </div>
                      <div class="flex-1">
@@ -396,8 +475,18 @@ $record_id = $_GET['id'] ?? '';
                         <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
                     </div>
                 </div>
+
+                <div class="flex justify-end border-t border-dashed border-[#ddd] pt-3 mt-2">
+                    <div class="text-right bg-gray-50 p-2 rounded border border-gray-200">
+                        <span class="text-xs font-bold text-gray-500 block">Est. Courier Price (₹700/kg)</span>
+                        <div class="text-lg font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
+                        <div class="text-[10px] text-gray-400" id="courier_calc_details">Enter dimensions to calculate</div>
+                    </div>
+                </div>
+
             </fieldset>
         </div>
+
         <div class="mt-[15px] mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Stock:</legend>
@@ -413,13 +502,22 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
                         <?php $selectedVal = $data['form2']['permanently_available'] ?? ''; ?>
-                        <option value="N" <?php echo ($selectedVal == 'N') ? 'selected' : ''; ?>>No</option>
-                        <option value="Y" <?php echo ($selectedVal == 'Y') ? 'selected' : ''; ?>>Yes</option>
-                    </select>
+                            <option value="N" <?php echo ($selectedVal == 'N') ? 'selected' : ''; ?>>No</option>
+                            <option value="Y" <?php echo ($selectedVal == 'Y') ? 'selected' : ''; ?>>Yes</option>
+                        </select>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse Code:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['ware_house_code'] ?? '') ?>" name="ware_house_code">
+                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="ware_house_code">
+                        <option value="">Select Warehouse</option>
+                            <?php foreach ($data['address'] as $k => $va) { 
+                                $isSelected = (isset($data['form2']['ware_house_code']) && $data['form2']['ware_house_code'] == $va['id']) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                    <?php echo htmlspecialchars($va['address_tile'] ?? ''); ?>
+                                </option>
+                            <?php } ?>
+                         </select>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
@@ -450,14 +548,98 @@ $record_id = $_GET['id'] ?? '';
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
-                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="us_block">
-                        <?php $selectedVal = $data['form2']['us_block'] ?? ''; ?>
-                        <option value="N" <?php echo ($selectedVal == 'N') ? 'selected' : ''; ?>>No</option>
-                        <option value="Y" <?php echo ($selectedVal == 'Y') ? 'selected' : ''; ?>>Yes</option>
-                    </select>
-                    </div>
+                        
+                        <div class="flex items-center h-[32px] gap-4">
+                            <?php $selectedVal = $data['form2']['us_block'] ?? ''; ?>
+                            
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" 
+                                       name="us_block" 
+                                       value="Y" 
+                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                       <?php echo ($selectedVal == 'Y') ? 'checked' : ''; ?>>
+                                <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
+                            </label>
 
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" 
+                                       name="us_block" 
+                                       value="N" 
+                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                       <?php echo ($selectedVal == 'N' || $selectedVal == '') ? 'checked' : ''; ?>>
+                                <span class="ml-1.5 text-[13px] text-[#333]">No</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">India Stock:</label>
+                        
+                        <div class="flex items-center h-[32px] gap-4">
+                            <?php $selectedVal = $data['form2']['india_block'] ?? ''; ?>
+                            
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" 
+                                       name="india_block" 
+                                       value="Y" 
+                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                       <?php echo ($selectedVal == 'Y') ? 'checked' : ''; ?>>
+                                <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
+                            </label>
+
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" 
+                                       name="india_block" 
+                                       value="N" 
+                                       class="w-4 h-4 accent-[#666] cursor-pointer" 
+                                       <?php echo ($selectedVal == 'N' || $selectedVal == '') ? 'checked' : ''; ?>>
+                                <span class="ml-1.5 text-[13px] text-[#333]">No</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
+            </fieldset>
+        </div>
+        <div class="mt-[15px] mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Drag to Reorder):</legend>
+                
+                <?php 
+                // Assuming $data['images'] contains the processed photos from 'item_images' table
+                // If the array key is different, please update $data['images'] below
+                $item_photos = $data['images'] ?? []; 
+                ?>
+
+                <?php if (empty($item_photos)): ?>
+                    <div class="text-center text-gray-400 py-8 text-sm border border-dashed border-gray-300 rounded">
+                        No processed photos found in itm_img.
+                    </div>
+                <?php else: ?>
+                    <div id="photo-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        <?php foreach($item_photos as $img): ?>
+                        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-gray-50 flex flex-col items-center group" 
+                             draggable="true" 
+                             data-id="<?php echo $img['id']; ?>">
+                            
+                            <div class="absolute top-1 right-1 text-gray-400 cursor-grab active:cursor-grabbing p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                            </div>
+
+                            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" onclick="openImagePopup('uploads/itm_img/<?php echo $img['file_name']; ?>')">
+                                <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain cursor-pointer">
+                            </div>
+
+                            <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
+                                <?php echo $img['file_name']; ?>
+                            </span>
+
+                            <input type="hidden" 
+                                   name="photo_order[<?php echo $img['id']; ?>]" 
+                                   value="<?php echo $img['display_order']; ?>" 
+                                   class="order-input">
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </fieldset>
         </div>
         <div class="flex justify-end my-[25px] mx-5 mb-10">
@@ -465,74 +647,175 @@ $record_id = $_GET['id'] ?? '';
         </div>
     </form>
 </div>
+
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
         <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
+
+<div id="deleteConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[60]">
+    <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
+        <h3 class="text-lg font-bold mb-2 text-gray-800">Remove Invoice?</h3>
+        <p class="text-sm text-gray-600 mb-4">
+            Are you sure you want to remove the invoice image?<br>
+            Type <strong>Delete</strong> below to confirm.
+        </p>
+        
+        <input type="text" 
+               id="deleteConfirmationInput" 
+               class="border border-gray-300 rounded p-2 w-full mb-5 text-center focus:outline-none focus:border-red-500 text-sm" 
+               placeholder="Type Delete here"
+               autocomplete="off">
+               
+        <div class="flex gap-3 justify-center">
+            <button type="button" onclick="closeDeletePopup()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Cancel</button>
+            <button type="button" onclick="confirmDeleteInvoice()" class="bg-[#d32f2f] text-white px-4 py-2 rounded text-sm font-semibold hover:bg-[#b71c1c] transition">Confirm Remove</button>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const grid = document.getElementById('photo-grid');
+    if (!grid) return;
+
+    let draggedItem = null;
+
+    // 1. Select all draggable items
+    const items = grid.querySelectorAll('.draggable-item');
+    
+    items.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragenter', handleDragEnter);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('dragleave', handleDragLeave);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
+    });
+
+    function handleDragStart(e) {
+        draggedItem = this;
+        this.style.opacity = '0.4';
+        
+        // This is required for Firefox
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.innerHTML);
+    }
+
+    function handleDragOver(e) {
+        // Essential: Prevent default to allow dropping
+        e.preventDefault(); 
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    }
+
+    function handleDragEnter(e) {
+        // Visual cue: Add a blue border when hovering
+        this.classList.add('border-blue-500', 'border-2');
+    }
+
+    function handleDragLeave(e) {
+        // Remove visual cue
+        this.classList.remove('border-blue-500', 'border-2');
+    }
+
+    function handleDrop(e) {
+        e.stopPropagation(); // Stops browser from redirecting
+        e.preventDefault();
+
+        // Remove visual cue
+        this.classList.remove('border-blue-500', 'border-2');
+
+        // Don't do anything if dropping on the same item
+        if (draggedItem !== this) {
+            
+            // Logic to swap elements in the DOM
+            // We convert the NodeList to an Array to find indexes
+            const allItems = Array.from(grid.querySelectorAll('.draggable-item'));
+            const draggedIdx = allItems.indexOf(draggedItem);
+            const droppedIdx = allItems.indexOf(this);
+
+            if (draggedIdx < droppedIdx) {
+                // Dragging from left to right -> Insert after drop target
+                this.parentNode.insertBefore(draggedItem, this.nextSibling);
+            } else {
+                // Dragging from right to left -> Insert before drop target
+                this.parentNode.insertBefore(draggedItem, this);
+            }
+            
+            // Re-calculate the numbers immediately
+            updateOrderInputs();
+        }
+        return false;
+    }
+
+    function handleDragEnd(e) {
+        this.style.opacity = '1';
+        
+        // Safety cleanup: remove borders from everyone
+        items.forEach(item => {
+            item.classList.remove('border-blue-500', 'border-2');
+        });
+    }
+
+    // Update the hidden input values (1, 2, 3...) based on new visual order
+    function updateOrderInputs() {
+        const currentItems = grid.querySelectorAll('.draggable-item');
+        currentItems.forEach((item, index) => {
+            const input = item.querySelector('.order-input');
+            if(input) {
+                input.value = index + 1; 
+                // Optional: Visually show the order number for debugging
+                // console.log(`Photo ID ${item.dataset.id} is now order ${index + 1}`);
+            }
+        });
+    }
+});
+</script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
     const apiUrl = '/index.php?page=inbounding&action=getItamcode';
+    const formElement = document.querySelector('form');
     const variantSelect = document.getElementById('variant_select');
     const wrapperSelect = document.getElementById('wrapper_select');
     const wrapperInput  = document.getElementById('wrapper_input');
     const fixedInput    = document.getElementById('fixed_item_code_input'); 
     const selectElement = document.getElementById('item_code_select');
     const existingCode  = document.getElementById('existing_item_code').value;
+    const originalStatus = document.getElementById('original_variant_status').value;
+
     // --- INITIALIZE TOM SELECT FOR PARENT ITEM ---
     let tomSelectInstance = new TomSelect("#item_code_select", {
         valueField: 'item_code',
         labelField: 'title',
-        
-        // 1. ENABLE SEARCH BY CODE AND TITLE
         searchField: ['item_code', 'title'], 
-        
         maxItems: 1,
         create: false,
         preload: true,
-        
-        // 2. CUSTOM DISPLAY (Fixes Duplication & Styles List)
         render: {
-            // Dropdown List Style: "Code - Title"
             option: function(data, escape) {
                 return '<div class="py-1 px-2 flex flex-col">' +
                         '<span class="font-bold text-gray-800">' + escape(data.item_code) + '</span>' +
                         '<span class="text-gray-500 text-xs">' + escape(data.title) + '</span>' +
                     '</div>';
             },
-            // Selected Item Style: "Code - Title"
             item: function(data, escape) {
-                // SMART FIX: If the title is just the code (e.g. "SWL33"), don't repeat it.
-                if (data.title === data.item_code) {
-                    return '<div>' + escape(data.item_code) + '</div>';
-                }
-                
-                // SMART FIX: If the title already contains the code (from PHP), don't add it again.
-                // This prevents "SWL33 - SWL33 - Name"
-                if (data.title.indexOf(data.item_code) === 0) {
-                     return '<div>' + escape(data.title) + '</div>';
-                }
-
-                // Standard format: "Code - Title"
+                if (data.title === data.item_code) return '<div>' + escape(data.item_code) + '</div>';
+                if (data.title.indexOf(data.item_code) === 0) return '<div>' + escape(data.title) + '</div>';
                 return '<div>' + escape(data.item_code) + ' - ' + escape(data.title) + '</div>';
             }
         },
-        
         load: function(query, callback) {
             fetch(apiUrl)
                 .then(response => response.json())
-                .then(json => {
-                    callback(json);
-                })
-                .catch(err => {
-                    console.error("Error loading items:", err);
-                    callback();
-                });
+                .then(json => { callback(json); })
+                .catch(err => { console.error("Error loading items:", err); callback(); });
         }
     });
+
+    // --- VARIANT TOGGLE ---
     function toggleVariantFields(val) {
-        const originalStatus = document.getElementById('original_variant_status').value;
         if (val === 'Y') {
             wrapperSelect.style.display = 'block';
             wrapperInput.style.display  = 'none';
@@ -551,43 +834,57 @@ $record_id = $_GET['id'] ?? '';
             }
         }
     }
+
     variantSelect.addEventListener('change', function() {
         toggleVariantFields(this.value);
         if(this.value === 'N') {
             tomSelectInstance.clear(); 
         }
     });
-    document.querySelector('form').addEventListener('submit', function() {
+
+    // --- FORM VALIDATION ---
+    formElement.addEventListener('submit', function(e) {
+        // 1. Auto-Gen Cleanup
         if(variantSelect.value === 'N' && fixedInput.value === "Auto-generated on Save") {
-            fixedInput.value = ""; // Send empty string so PHP knows to generate
+            fixedInput.value = ""; 
+        }
+        // 2. Strict Check for Variant Yes
+        if (variantSelect.value === 'Y') {
+            const selectedVal = tomSelectInstance.getValue();
+            if (!selectedVal || selectedVal === "") {
+                e.preventDefault(); 
+                e.stopPropagation(); 
+                alert("⛔ Error: You selected Variant 'Yes' but left the Parent Item Code blank.\n\nPlease search and select a parent item.");
+                wrapperSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                tomSelectInstance.focus();
+                return false;
+            }
         }
     });
+
+    // --- INITIAL LOAD CHECK ---
     if(variantSelect.value) {
         toggleVariantFields(variantSelect.value);
     } else {
         fixedInput.disabled = true; 
         selectElement.disabled = true;
     }
-
 });
 </script>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const commonConfig = {
             create: false,
-            sortField: {
-                field: "text",
-                direction: "asc"
-            },
-            onInitialize: function() {
-                this.wrapper.classList.add('w-full'); // Ensures full width
-            }
+            sortField: { field: "text", direction: "asc" },
+            onInitialize: function() { this.wrapper.classList.add('w-full'); }
         };
         new TomSelect("#vendor_code", commonConfig);
         new TomSelect("#received_by_select", commonConfig);
         new TomSelect("#updated_by_select", commonConfig);
     });
 </script>
+
 <script>
     function previewInvoice(input) {
         if (input.files && input.files[0]) {
@@ -599,13 +896,36 @@ $record_id = $_GET['id'] ?? '';
             reader.readAsDataURL(input.files[0]);
         }
     }
+    
+    // Open Delete Popup
     function removeInvoice(event) {
         event.stopPropagation(); 
-        document.getElementById('invoice_input').value = ""; 
-        document.getElementById('invoice_img_tag').src = ""; 
-        document.getElementById('invoice_preview_box').classList.add('hidden');
+        const popup = document.getElementById('deleteConfirmPopup');
+        popup.classList.remove('hidden');
+        const input = document.getElementById('deleteConfirmationInput');
+        input.value = '';
+        input.focus();
+    }
+
+    // Confirm Delete
+    function confirmDeleteInvoice() {
+        const inputVal = document.getElementById('deleteConfirmationInput').value;
+        if (inputVal === 'Delete') {
+            document.getElementById('invoice_input').value = ""; 
+            document.getElementById('invoice_img_tag').src = ""; 
+            document.getElementById('invoice_preview_box').classList.add('hidden');
+            closeDeletePopup();
+        } else {
+            alert("Please type 'Delete' exactly to confirm.");
+        }
+    }
+
+    // Close Delete Popup
+    function closeDeletePopup() {
+        document.getElementById('deleteConfirmPopup').classList.add('hidden');
     }
 </script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
@@ -621,6 +941,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     const groupTs = new TomSelect("#group_select", config);
     const categoryTs = new TomSelect("#category_select", config);
+    
     function renderCheckboxList(container, items, selectedSet, inputName, onChangeCallback) {
         container.innerHTML = ''; 
         if (!items || items.length === 0) {
@@ -640,6 +961,7 @@ document.addEventListener('DOMContentLoaded', function() {
             container.appendChild(div);
         });
     }
+    
     function populateDropdown(instance, parentId, valueToSelect = null) {
         instance.clearOptions();
         instance.clear(true);
@@ -654,6 +976,7 @@ document.addEventListener('DOMContentLoaded', function() {
             instance.disable();
         }
     }
+    
     function updateSubCategoryList(catId) {
         subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
         if(!catId || !categoriesByParent[catId]) {
@@ -663,6 +986,7 @@ document.addEventListener('DOMContentLoaded', function() {
         renderCheckboxList(subCatContainer, categoriesByParent[catId], preSelected.sub, 'sub_category_code', handleSubCategoryChange);
         if(preSelected.sub.size > 0) handleSubCategoryChange();
     }
+    
     function handleSubCategoryChange() {
         const checkedSubCats = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
         if(checkedSubCats.length === 0) {
@@ -675,6 +999,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         renderCheckboxList(subSubCatContainer, allSubSubOptions, preSelected.subsub, 'sub_sub_category_code', null);
     }
+    
     groupTs.on('change', function(groupValue) {
         preSelected.sub.clear(); preSelected.subsub.clear();        
         const groupId = groupMap[groupValue]; 
@@ -682,10 +1007,12 @@ document.addEventListener('DOMContentLoaded', function() {
         subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Category...</div>';
         subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
     });
+    
     categoryTs.on('change', function(catId) {
         if (catId !== preSelected.catId) { preSelected.sub.clear(); preSelected.subsub.clear(); }
         updateSubCategoryList(catId);
     });
+    
     if (preSelected.groupVal) {
         const initialGroupId = groupMap[preSelected.groupVal];        
         if(initialGroupId) {
@@ -695,6 +1022,73 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Select Inputs using IDs
+    const heightInput = document.getElementById('dim_height');
+    const widthInput  = document.getElementById('dim_width');
+    const depthInput  = document.getElementById('dim_depth');
+    const weightInput = document.getElementById('dim_weight'); 
+    const dimUnitSelect = document.querySelector('select[name="dimention_unit"]');
+    
+    // Display Elements
+    const displayElement = document.getElementById('courier_price_display');
+    const detailsElement = document.getElementById('courier_calc_details');
+
+    function calculateCourierPrice() {
+        if (!heightInput || !widthInput || !depthInput || !weightInput) return;
+
+        // Get Values
+        let h = parseFloat(heightInput.value) || 0;
+        let w = parseFloat(widthInput.value) || 0;
+        let d = parseFloat(depthInput.value) || 0;
+        let actualWt = parseFloat(weightInput.value) || 0; // In KG
+
+        // Get Unit
+        const dimUnit = dimUnitSelect ? dimUnitSelect.value : 'cm';
+
+        // Convert Inches to CM if necessary
+        if (dimUnit === 'inch') {
+            h = h * 2.54;
+            w = w * 2.54;
+            d = d * 2.54;
+        }
+
+        // Calculate Volumetric Weight: (L x W x H) / 5000
+        const volWt = (h * w * d) / 5000;
+
+        // Compare: Chargeable Weight is the higher of Actual vs Volumetric
+        const chargeableWt = Math.max(volWt, actualWt);
+
+        // Price: ₹700 per KG
+        const price = chargeableWt * 700;
+
+        // Update Display
+        if (displayElement) {
+            displayElement.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        
+        if (detailsElement) {
+            const usedType = (volWt > actualWt) ? "Volumetric" : "Actual";
+            detailsElement.innerText = `Using ${usedType}: ${chargeableWt.toFixed(3)} kg`;
+        }
+    }
+
+    // Attach Listeners
+    const inputs = [heightInput, widthInput, depthInput, weightInput, dimUnitSelect];
+    inputs.forEach(input => {
+        if(input) {
+            input.addEventListener('input', calculateCourierPrice);
+            input.addEventListener('change', calculateCourierPrice); // Helps with dropdown changes
+        }
+    });
+
+    // Run immediately
+    calculateCourierPrice();
+});
+</script>
+
 <script>
     function openImagePopup(imageUrl) {
         popupImage.src = imageUrl;
@@ -704,4 +1098,20 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('imagePopup').classList.add('hidden');
         document.getElementById('popupImage').src = '';
     } 
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const commonConfig = {
+            create: false,
+            sortField: { field: "text", direction: "asc" },
+            onInitialize: function() { this.wrapper.classList.add('w-full'); }
+        };
+        
+        new TomSelect("#vendor_code", commonConfig);
+        new TomSelect("#received_by_select", commonConfig);
+        new TomSelect("#updated_by_select", commonConfig);
+
+        // --- NEW INITIALIZATION FOR ICONS ---
+        
+    });
 </script>

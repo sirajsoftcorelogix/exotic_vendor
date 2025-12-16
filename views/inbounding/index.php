@@ -114,7 +114,7 @@ unset($vendorsModel);
                         <div class="flex-1 min-w-0 flex flex-col justify-center space-y-1">
                             <p class="text-sm font-bold text-gray-800 truncate">Category: <span class="font-normal"><?php echo ($tc['category_code']); ?></span></p>
                             <p class="text-xs text-gray-500">Entry: <span class="text-gray-700"><?php echo date('d M Y h:i A', strtotime($tc['gate_entry_date_time'])); ?></span></p>
-                            <p class="text-xs font-bold text-gray-800">Temp Code: <span class="text-gray-600 font-medium"><?php echo ($tc['temp_code']); ?></span></p>
+                            <p class="text-xs font-bold text-gray-800">SKU Code: <span class="text-gray-600 font-medium"><?php echo ($tc['sku']); ?></span></p>
                         </div>
                         <div class="flex-shrink-0">
                             <a href="<?php echo base_url('?page=inbounding&action=form1&id=' . $tc['id']); ?>" class="bg-[#d9822b] text-white text-xs px-4 py-2 rounded-lg">Update</a>
@@ -141,7 +141,7 @@ unset($vendorsModel);
                                     </div>
                                     
                                     <div class="pt-1 w-full max-w-xs">
-                                        <p class="item-code">Temp Code: <?php echo ($tc['temp_code']); ?></p> 
+                                        <p class="item-code">SKU Code: <?php echo ($tc['sku']); ?></p> 
                                         <p class="item-code font-bold text-blue-600">Item Code: <?php echo ($tc['Item_code']); ?></p>
                                         <p class="quantity">Category : <?php echo ($tc['category_code']); ?></p>
                                         <p class="quantity">Received_by : <?php print_r($tc['received_name']); ?></p>
@@ -162,6 +162,7 @@ unset($vendorsModel);
                                         </div>
                                         <div class="mt-1 flex gap-2"> 
                                             <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" class="bg-[#d9822b] hover:bg-[#bf7326] text-white rounded px-3 py-2 text-xs font-bold">Photos</a>
+                                            <a href="<?php echo base_url('?page=inbounding&action=i_raw_photos&id=' . $tc['id']); ?>" class="bg-[#d9822b] hover:bg-[#bf7326] text-white rounded px-3 py-2 text-xs font-bold">Raw Photos</a>
                                             <a href="<?php echo base_url('?page=inbounding&action=desktopform&id=' . $tc['id']); ?>" class="bg-[#d9822b] hover:bg-[#bf7326] text-white rounded px-3 py-2 text-xs font-bold">Process</a>
                                         </div>
                                     </div>
