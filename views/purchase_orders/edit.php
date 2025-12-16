@@ -244,16 +244,17 @@
         function updateTotals() {
             let subtotal = 0;
             let totalGst = 0;
-
+            
             itemTable.querySelectorAll('tr').forEach(row => {
                 const price = parseFloat(row.querySelector('input[name="price[]"]').value) || 0;
                 const quantity = parseFloat(row.querySelector('input[name="quantity[]"]').value) || 0;
                 const gst = parseFloat(row.querySelector('input[name="gst[]"]').value) || 0;
 
-                const amount = price * quantity;
+                const amount = (price * quantity) + ((price * quantity * gst) / 100);
+                const lineSubtotal = price * quantity;
                 row.querySelector('input[name="amount[]"]').value = amount.toFixed(2);
-                subtotal += amount;
-                totalGst += (amount * gst) / 100;
+                subtotal += lineSubtotal;
+                totalGst += (lineSubtotal * gst) / 100;
             });
 
             const grandTotal = subtotal + totalGst; //+ (parseFloat(shippingCostElement.value) || 0);
