@@ -237,6 +237,12 @@ unset($vendorsModel);
 </div>
 
 </div>
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
 
 <?php
 function isFilled($value) {
