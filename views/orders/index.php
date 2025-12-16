@@ -731,6 +731,8 @@
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
+                                            <span class="heading-typography">Color</span>
+                                            <p>: <span class="data-typography"><?= $order['color'] ?? 'N/A' ?></span></p>
                                             
                                         </div>
                                         <div class="w-1/2 pl-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
@@ -740,6 +742,8 @@
                                             <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
                                             <span class="heading-typography">Agent</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
+                                            <span class="heading-typography">Size</span>
+                                            <p>: <span class="data-typography"><?= $order['size'] ?? 'N/A' ?></span></p>
                                         </div>
                                     </div>
                                 </div>

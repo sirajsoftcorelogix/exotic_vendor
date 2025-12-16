@@ -305,10 +305,12 @@ class OrdersController {
                     'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
                         ? 'shipped'
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),
-                    'esd' => $esd
+                    'esd' => $esd,
+                    'agent_id' => 0
                     ];
-                    if($order['payment_type'] == 'COD' &&  $item['itemprice'] >= 5000){
+                    if(strtoupper($order['payment_type']) == 'COD' &&  $item['itemprice'] >= 5000){
                         $rdata['status'] = 'cod_confirmation_required';
+                        $rdata['agent_id'] = 31; // Assign to specific agent Ashutosh for COD confirmation
                     }
 					$totalorder++;                
                     
@@ -320,7 +322,7 @@ class OrdersController {
                     if (isset($data['success']) && $data['success'] == 1) {                        
                         $imported++;
                     } 
-                   // print_array($rdata);                   
+                    //print_array($rdata);                   
             }
            
         }

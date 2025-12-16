@@ -389,7 +389,8 @@ class Order{
             'country',
             'material',
             'status',
-            'esd'
+            'esd',
+            'agent_id'
         ];
 
         // Build SQL query
