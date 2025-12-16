@@ -189,6 +189,28 @@ class Inbounding {
         
         return $this->conn->query("DELETE FROM `item_raw_images` WHERE id = $img_id");
     }
+    public function getExportData($ids_array = []) { // 1. Fixed argument name
+        // 2. Safety check for empty array
+        if (empty($ids_array)) return false;
+
+        // 3. Ensure IDs are integers for security
+        $ids_clean = implode(',', array_map('intval', $ids_array));
+        
+        // 4. Added the missing Category Join so the Excel column isn't empty
+        // 5. Fixed table names back to standard ones (vp_vendors, etc.)
+        $sql = "SELECT 
+                    vi.*,
+                    grp.display_name AS group_real_name,
+                    v.vendor_name AS vendor_real_name,
+                    m.material_name AS material_real_name
+                FROM vp_inbound vi
+                LEFT JOIN category grp ON vi.group_name = grp.category    -- Join for Category Name
+                LEFT JOIN vp_vendors v ON vi.vendor_code = v.id        -- Join for Vendor
+                LEFT JOIN material m   ON vi.material_code = m.id      -- Join for Material
+                WHERE vi.id IN ($ids_clean)";
+
+        return $this->conn->query($sql);
+    }
 	public function getform1data($id){
         $inbounding = null;
         $vendors = null;

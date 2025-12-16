@@ -44,7 +44,9 @@ class InboundingController {
     // In your Inbounding Controller
 
     public function exportSelected() {
-        // 1. Clean buffer to prevent empty lines at start of CSV
+        global $inboundingModel; // Use the global model instance
+
+        // 1. Clean buffer
         if (ob_get_level()) ob_end_clean();
 
         // 2. Get IDs
@@ -57,30 +59,20 @@ class InboundingController {
 
         // 3. Sanitization
         $ids_array = explode(',', $ids_string);
-        $sanitized_ids = array_map('intval', $ids_array);
         
-        // Safety check
-        if(empty($sanitized_ids)) { exit; }
-        
-        $ids_sql = implode(',', $sanitized_ids);
-
-        // 4. Fetch Data (Direct Query)
-        $conn = Database::getConnection(); 
-        // We select * so we have all DB fields available to map below
-        $sql = "SELECT * FROM vp_inbound WHERE id IN ($ids_sql)";
-        $result = $conn->query($sql);
+        // 4. Fetch Data using the Model (This handles the JOINs for names)
+        $result = $inboundingModel->getExportData($ids_array);
 
         // 5. Generate CSV
         if ($result && $result->num_rows > 0) {
             $filename = "inbound_export_" . date('Y-m-d_H-i') . ".csv";
             
-            // Headers to force download
             header('Content-Type: text/csv; charset=utf-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
             
             $output = fopen('php://output', 'w');
 
-            // A. Define Excel Column Headers (Exactly as you requested)
+            // A. Define Excel Column Headers
             $excel_headers = [
                 'itemcode', 'groupname', 'category', 'itemtype', 'title', 
                 'image', 'redirect', 'snippet_description', 'long_description', 'long_description_india', 
@@ -98,94 +90,99 @@ class InboundingController {
                 'amazon_language'
             ];
 
-            // Write Headers to CSV
+            // Write Headers
             fputcsv($output, $excel_headers);
 
             // B. Data Rows (Mapping DB fields to Headers)
             while ($row = $result->fetch_assoc()) {
+                
+                // Logic: Y = 1, N = 0
                 $us_block_val = ($row['us_block'] === 'Y') ? '1' : '0';
                 $india_block_val = ($row['india_block'] === 'Y') ? '1' : '0';
-                // Prepare the row data in the EXACT order of $excel_headers
+
+                // Logic: Combined Weight + Unit
+                $weight_display = $row['weight'] . ' ' . ($row['weight_unit'] ?? '');
+
                 $csv_row = [
-                    $row['Item_code'] ?? '',                // itemcode
-                    $row['group_name'] ?? '',               // groupname
-                    $row['category_code'] ?? '',            // category (mapped to category_code)
-                    'product',                              // itemtype (product)
-                    $row['product_title'] ?? '',            // title
+                    $row['Item_code'] ?? '',                
+                    $row['group_real_name'] ?? '',          // Fetched via Model JOIN
+                    $row['category_code'] ?? '',       // Fetched via Model JOIN
+                    'product',                              // Fixed value as per your code
+                    $row['product_title'] ?? '',            
                     
-                    $row['product_photo'] ?? '',            // image
-                    '',                                     // redirect (Blank)
-                    $row['snippet_description'] ?? '',      // snippet_description
-                    '',                                     // long_description (Blank)
-                    '',                                     // long_description_india (Blank)
+                    $row['product_photo'] ?? '',            
+                    '',                                     
+                    $row['snippet_description'] ?? '',      
+                    '',                                     
+                    '',                                     
                     
-                    '',                                     // important_info (Blank)
-                    $row['description_icons'] ?? '',        // description_icons
-                    '',                                     // bundled_items (Blank)
-                    $row['key_words'] ?? '',                // keywords
-                    $us_block_val,                          // usblock
+                    '',                                     
+                    $row['description_icons'] ?? '',        
+                    '',                                     
+                    $row['key_words'] ?? '',                
+                    $us_block_val,                          
                     
-                    $india_block_val,                       // indiablock
-                    '0',                                     // numsold (Blank)
-                    '0',                                     // lastsold (Blank)
-                    '1',                                    // qty_step (Blank)
-                    '',                                     // related_items (Blank)
+                    $india_block_val,                       
+                    '0',                                     
+                    '0',                                     
+                    '1',                                     
+                    '',                                     
                     
-                    '',                                     // search_term (Blank)
-                    '',                                     // search_category (Blank)
-                    $row['hsn_code'] ?? '',                 // hscode (Mapped to hsn_code)
-                    $row['vendor_code'] ?? '',              // vendor
-                    $row['cp'] ?? '',                       // cp
+                    '',                                     
+                    '',                                     
+                    $row['hsn_code'] ?? '',                 
+                    $row['vendor_real_name'] ?? '',         // Fetched via Model JOIN
+                    $row['cp'] ?? '',                       
                     
-                    '',                                     // isbn (Blank)
-                    '',                                     // author (Blank)
-                    '',                                     // publisher (Blank)
-                    '',                                     // language (Blank)
-                    '',                                     // pages (Blank)
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
                     
-                    '',                                     // cover_type (Blank)
-                    '',                                     // edition (Blank)
-                    '',                                     // publication_date (Blank)
-                    '',                                     // description (Blank)
-                    $row['weight'] . ' ' . ($row['weight_unit'] ?? ''), // weight_to_show (Combined weight + unit)
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    $weight_display, 
                     
-                    $row['color'] ?? '',                    // variation_name_color
-                    $row['size'] ?? '',                     // variation_name_size
-                    '1',                                     // india_net_qty (Blank)
-                    '',                                     // author_description (Blank)
-                    '',                                     // publisher_description (Blank)
+                    $row['color'] ?? '',                    
+                    $row['size'] ?? '',                     
+                    '1',                                     
+                    '',                                     
+                    '',                                     
                     
-                    '',                                     // publisher_field_name (Blank)
-                    $row['material_code'] ?? '',            // material
-                    '',                                     // pweight_to_show (Blank)
-                    '',                                     // optionals (Blank)
-                    '',                                     // pvariation_name_color (Blank)
+                    '',                                     
+                    $row['material_real_name'] ?? '',       // Fetched via Model JOIN
+                    '',                                     
+                    '',                                     
+                    '',                                     
                     
-                    '',                                     // pvariation_name_size (Blank)
-                    $row['dimention_unit'] ?? '',           // amazon_dimensionunit (Mapped to dimention_unit)
-                    '',                                     // amazon_diameter (Blank)
-                    $row['height'] ?? '',                   // amazon_height
-                    $row['width'] ?? '',                    // amazon_width
+                    '',                                     
+                    $row['dimention_unit'] ?? '',           
+                    '',                                     
+                    $row['height'] ?? '',                   
+                    $row['width'] ?? '',                    
                     
-                    $row['depth'] ?? '',                    // amazon_length (Mapped Depth to Length usually)
-                    '',                                     // amazon_metalweight (Blank)
-                    '',                                     // amazon_metalweightunit (Blank)
-                    '',                                     // amazon_metaltype (Blank)
-                    '',                                     // amazon_metalstamp (Blank)
+                    $row['depth'] ?? '',                    
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
                     
-                    '',                                     // amazon_settingtype (Blank)
-                    '',                                     // amazon_necklace_clasptype (Blank)
-                    '',                                     // amazon_necklace_chaintype (Blank)
-                    '',                                     // amazon_earrings_backfinding (Blank)
-                    '',                                     // amazon_gemtypes (Blank)
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
                     
-                    '',                                     // amazon_gemtypes_shape (Blank)
-                    '',                                     // amazon_gemtypes_totalgemweight (Blank)
-                    '',                                     // amazon_gemtypes_numberofstones (Blank)
-                    '',                                     // amazon_gemtypes_stonewidth (Blank)
-                    '',                                     // amazon_gemtypes_stoneweight (Blank)
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
+                    '',                                     
                     
-                    ''                                      // amazon_language (Blank)
+                    ''                                      
                 ];
 
                 fputcsv($output, $csv_row);
@@ -193,7 +190,7 @@ class InboundingController {
             fclose($output);
             exit;
         } else {
-            echo "No records found or SQL Error: " . $conn->error;
+            echo "No records found.";
             exit;
         }
     }
