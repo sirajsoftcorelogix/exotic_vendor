@@ -1,94 +1,146 @@
 <?php
-// Retrieve variables passed from controller
+// Retrieve variables
 $images = $data['images'] ?? [];
+$item = $data['item'] ?? [];
 $record_id = $data['record_id'] ?? 0;
 ?>
 
+<div class="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6 font-['Segoe_UI']">
 
-
-<div class="max-w-5xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-
-    <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-        <div>
-            <h1 class="text-xl font-semibold text-gray-800">Item Photos</h1>
-            <p class="text-sm text-gray-500">Managing photos for Item ID: #<?php echo $record_id; ?></p>
+    <div class="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-200 mb-6">
+        <div class="shrink-0 w-32 h-32 bg-gray-100 rounded-lg border border-gray-200 p-1">
+            <img src="<?php echo base_url($item['product_photo'] ?? 'assets/no-img.png'); ?>" class="w-full h-full object-contain rounded">
         </div>
-        <a href="<?php echo base_url('?page=inbounding&action=list') ?>" 
-           class="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-            Back to Item
-        </a>
+
+        <div class="flex-grow grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-[13px] text-gray-700">
+            <div>
+                <span class="font-bold text-gray-900 block">Category:</span>
+                <?php echo $item['category'] ?? '-'; ?>
+            </div>
+            <div>
+                <span class="font-bold text-gray-900 block">Height:</span>
+                <?php echo $item['height'] ?? '-'; ?> <?php echo $item['dimention_unit'] ?? ''; ?>
+            </div>
+            <div>
+                <span class="font-bold text-gray-900 block">Width:</span>
+                <?php echo $item['width'] ?? '-'; ?> <?php echo $item['dimention_unit'] ?? ''; ?>
+            </div>
+            <div>
+                <span class="font-bold text-gray-900 block">Weight:</span>
+                <?php echo $item['weight'] ?? '-'; ?> <?php echo $item['weight_unit'] ?? ''; ?>
+            </div>
+
+            <div>
+                <span class="font-bold text-gray-900 block">Material:</span>
+                <?php echo $item['material'] ?? '-'; ?>
+            </div>
+            <div>
+                <span class="font-bold text-gray-900 block">Vendor:</span>
+                <?php echo $item['vendor_name'] ?? '-'; ?>
+            </div>
+            <div>
+                <span class="font-bold text-gray-900 block">Depth:</span>
+                <?php echo $item['depth'] ?? '-'; ?> <?php echo $item['dimention_unit'] ?? ''; ?>
+            </div>
+            <div>
+                <span class="font-bold text-gray-900 block">Received by:</span>
+                <?php echo $item['recived_by_name'] ?? '-'; // Ensure 'received_name' is fetched if available ?>
+            </div>
+
+            <div class="col-span-2 mt-2">
+                <span class="font-bold text-gray-900 block">Gate Entry Date & Time:</span>
+                <?php echo !empty($item['gate_entry_date_time']) ? date('d M Y h:i A', strtotime($item['gate_entry_date_time'])) : '-'; ?>
+            </div>
+        </div>
+
+        <div class="w-full md:w-auto flex flex-col items-end justify-center">
+            <div class="border border-gray-200 rounded-lg p-3 bg-gray-50 w-full md:w-[280px] flex items-center justify-between">
+                <span class="text-sm font-bold text-gray-700">Download Raw Photos</span>
+                <a href="<?php echo base_url('?page=inbounding&action=download_photos&id='.$record_id); ?>" 
+                   class="bg-black text-white text-xs font-bold px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-800 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download
+                </a>
+            </div>
+        </div>
     </div>
 
     <form action="<?php echo base_url('?page=inbounding&action=itmimgsave&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
         
         <div id="deletedInputsContainer"></div>
 
-        <div id="dropZone" 
-             class="relative border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:bg-orange-50/30 transition-all cursor-pointer group">
-            
-            <input type="file" name="new_photos[]" id="fileInput" multiple accept="image/*" 
-                   class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-            
-            <div class="space-y-3 pointer-events-none">
-                <div class="w-14 h-14 bg-orange-50 text-[#d9822b] rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
+        <div class="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-6 items-center border border-gray-300 rounded-lg p-6 mb-8">
+            <div class="flex flex-col items-center justify-center text-center">
+                <div class="mb-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                 </div>
-                <h3 class="text-gray-700 font-medium">Click to upload or drag & drop</h3>
-                <p class="text-xs text-gray-400">Supported formats: JPG, PNG, WEBP</p>
+                <h3 class="font-bold text-gray-800">Upload Edited Photos</h3>
+                <p class="text-xs text-gray-500">Drag or paste a file here, or choose an option below</p>
+            </div>
+            
+            <div class="flex items-center gap-4 border-l border-gray-200 pl-6 h-full">
+                <label class="cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded inline-flex items-center text-sm transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    Choose File
+                    <input type="file" name="new_photos[]" id="fileInput" multiple accept="image/*" class="hidden">
+                </label>
             </div>
         </div>
 
-        <div class="mt-8">
-            <h3 class="text-sm font-semibold text-gray-800 mb-4">Gallery Preview</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="previewContainer">
             
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" id="previewContainer">
-                
-                <?php if(!empty($images)): ?>
-                    <?php foreach($images as $img): ?>
-                        <div class="relative group bg-gray-100 rounded-lg overflow-hidden aspect-square border border-gray-200 existing-photo">
-                            <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="w-full h-full object-cover">
-                            
-                            <button type="button" onclick="markForDeletion(this, <?php echo $img['id']; ?>)" 
-                                    class="absolute top-2 right-2 bg-white text-red-500 p-1.5 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 z-20">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                                </svg>
-                            </button>
+            <?php if(!empty($images)): ?>
+                <?php foreach($images as $img): ?>
+                <div class="flex border border-gray-400 rounded-md p-2 gap-3 bg-white existing-photo relative shadow-sm">
+                    <div class="absolute top-2 left-1 cursor-move text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M7 2a2 2 0 10-.001 4.001A2 2 0 007 2zm0 6a2 2 0 10-.001 4.001A2 2 0 007 8zm0 6a2 2 0 10-.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z" /></svg>
+                    </div>
+
+                    <div class="w-32 h-32 bg-[#e6e2dd] rounded ml-4 flex items-center justify-center shrink-0 border border-gray-300">
+                        <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain">
+                    </div>
+
+                    <div class="flex-grow flex flex-col justify-center space-y-3 relative pr-8">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Image Caption:</label>
+                            <input type="text" name="captions[<?php echo $img['id']; ?>]" 
+                                   value="<?php echo htmlspecialchars($img['image_caption'] ?? ''); ?>"
+                                   class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-gray-500">
                         </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Display Order:</label>
+                            <input type="number" name="orders[<?php echo $img['id']; ?>]" 
+                                   value="<?php echo $img['display_order']; ?>"
+                                   class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-gray-500">
+                        </div>
 
+                        <button type="button" onclick="markForDeletion(this, <?php echo $img['id']; ?>)" 
+                                class="absolute bottom-0 right-0 text-gray-800 hover:text-red-600 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div>
                 </div>
-        </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            
+            </div>
 
-        <div class="mt-8 pt-5 border-t border-gray-100 flex justify-end gap-3">
-            <a href="<?php echo base_url('?page=inbounding'); ?>" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+        <div class="mt-8 flex justify-end gap-3">
+             <a href="<?php echo base_url('?page=inbounding'); ?>" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                 Cancel
             </a>
-            <button type="submit" 
-                    class="px-6 py-2.5 text-sm font-medium text-white rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center gap-2"
-                    style="background-color: #d9822b;">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-                Save Changes
+            <button type="submit" class="bg-black hover:bg-gray-800 text-white font-bold py-2.5 px-6 rounded text-sm shadow-md transition">
+                Save & Update
             </button>
         </div>
+
     </form>
 </div>
 
 <script>
     const fileInput = document.getElementById('fileInput');
     const previewContainer = document.getElementById('previewContainer');
-    const dropZone = document.getElementById('dropZone');
     const deletedContainer = document.getElementById('deletedInputsContainer');
-    
-    // Use DataTransfer to manage file list
     let dt = new DataTransfer();
 
     // 1. Handle File Selection
@@ -101,57 +153,49 @@ $record_id = $data['record_id'] ?? 0;
         this.files = dt.files; 
     });
 
-    // 2. Drag & Drop Visuals
-    ['dragenter', 'dragover'].forEach(eName => {
-        dropZone.addEventListener(eName, (e) => {
-            e.preventDefault();
-            dropZone.classList.add('border-[#d9822b]', 'bg-orange-50');
-        });
-    });
-
-    ['dragleave', 'drop'].forEach(eName => {
-        dropZone.addEventListener(eName, (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-[#d9822b]', 'bg-orange-50');
-        });
-    });
-
-    // 3. Handle Drop Event
-    dropZone.addEventListener('drop', (e) => {
-        let droppedFiles = e.dataTransfer.files;
-        for(let i = 0; i < droppedFiles.length; i++){
-            let file = droppedFiles[i];
-            dt.items.add(file);
-            createPreview(file);
-        }
-        fileInput.files = dt.files;
-    });
-
-    // 4. Create Preview Element
+    // 2. Create Preview (Designed to look like the Screenshot cards)
     function createPreview(file) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onloadend = function() {
             const div = document.createElement('div');
             const tempId = 'new-' + Math.random().toString(36).substr(2, 9);
+            
+            // New card HTML structure
             div.id = tempId;
-            div.className = "relative group bg-gray-100 rounded-lg overflow-hidden aspect-square border border-gray-200 new-photo shadow-sm";
+            div.className = "flex border border-gray-400 rounded-md p-2 gap-3 bg-gray-50 relative shadow-sm opacity-90";
 
             div.innerHTML = `
-                <img src="${reader.result}" class="w-full h-full object-cover opacity-90">
-                <div class="absolute top-2 left-2 bg-[#d9822b] text-white text-[10px] px-2 py-0.5 rounded-md shadow-sm">New</div>
-                <button type="button" onclick="removeNewFile('${file.name}', '${tempId}')" 
-                        class="absolute top-2 right-2 bg-white text-red-500 p-1.5 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 hover:scale-110 z-20">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                        <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                    </svg>
-                </button>
+                <div class="absolute top-2 left-1 text-gray-400">
+                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 10-.001 4.001A2 2 0 007 2zm0 6a2 2 0 10-.001 4.001A2 2 0 007 8zm0 6a2 2 0 10-.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z" /></svg>
+                </div>
+
+                <div class="w-32 h-32 bg-[#e6e2dd] rounded ml-4 flex items-center justify-center shrink-0 border border-gray-300 relative">
+                    <img src="${reader.result}" class="max-w-full max-h-full object-contain opacity-80">
+                    <span class="absolute top-1 left-1 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">NEW</span>
+                </div>
+
+                <div class="flex-grow flex flex-col justify-center space-y-3 relative pr-8">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Image Caption:</label>
+                        <input type="text" disabled placeholder="Save first to edit" class="w-full border border-gray-300 bg-gray-100 rounded px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Display Order:</label>
+                        <input type="number" disabled placeholder="0" class="w-full border border-gray-300 bg-gray-100 rounded px-2 py-1 text-sm">
+                    </div>
+
+                    <button type="button" onclick="removeNewFile('${file.name}', '${tempId}')" 
+                            class="absolute bottom-0 right-0 text-red-500 hover:text-red-700 transition">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                </div>
             `;
             previewContainer.appendChild(div);
         }
     }
 
-    // 5. Remove New File (Before Upload)
+    // 3. Remove New File
     window.removeNewFile = function(fileName, domId) {
         document.getElementById(domId).remove();
         const newDt = new DataTransfer();
@@ -162,13 +206,13 @@ $record_id = $data['record_id'] ?? 0;
         fileInput.files = dt.files;
     }
 
-    // 6. Mark DB File for Deletion
+    // 4. Mark Existing for Deletion
     window.markForDeletion = function(btn, dbId) {
-        if(!confirm("Delete this image? (Changes apply after Save)")) return;
+        if(!confirm("Are you sure you want to delete this image?")) return;
         
         const parent = btn.closest('.existing-photo');
-        parent.style.opacity = '0.5';
-        setTimeout(() => parent.remove(), 300);
+        parent.style.opacity = '0.3';
+        parent.style.pointerEvents = 'none';
 
         const input = document.createElement('input');
         input.type = 'hidden';

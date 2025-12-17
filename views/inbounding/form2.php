@@ -12,9 +12,28 @@ $record_id = $_GET['id'] ?? '';
 
 // Fetch Data
 $form1 = $data['form1'] ?? [];
-$category = $form1['category_code'] ?? 'Unknown';
-$photo    = $form1['product_photo'] ?? ''; 
+$raw_categories = $data['category'] ?? []; // This contains your list of categories
 
+// --- NEW LOGIC START ---
+// 1. Get the raw ID (e.g., "-2")
+$cat_id = $form1['group_name'] ?? ''; 
+
+// 2. Default display name
+$category_display_name = 'Unknown'; 
+
+// 3. Search for the ID in the array to find the display name
+if (!empty($raw_categories) && !empty($cat_id)) {
+    foreach ($raw_categories as $cat_item) {
+        // Compare loosely (==) to handle string/int differences
+        if (isset($cat_item['category']) && $cat_item['category'] == $cat_id) {
+            $category_display_name = $cat_item['display_name'];
+            break; // Stop loop once found
+        }
+    }
+}
+// --- NEW LOGIC END ---
+
+$photo    = $form1['product_photo'] ?? ''; 
 $vendor = $form1['vendor_code'] ?? '';
 $invoiceImg = $form1['invoice_image'] ?? '';
 $invoice_no = $form1['invoice_no'] ?? '';
@@ -59,14 +78,20 @@ $formAction = $isEdit
     <div class="w-full h-screen md:h-auto md:min-h-[700px] md:max-w-5xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200">
         
         <div class="bg-[#d9822b] px-4 py-4 flex items-center justify-between text-white shadow-md z-20 flex-shrink-0">
-            <button type="button" id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                </svg>
-            </button>
-            <h1 class="font-semibold text-lg tracking-wide">Invoice Upload - Step: 2/4</h1>
-            <div class="w-6"></div> 
-        </div>
+    <button type="button" id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+        </svg>
+    </button>
+
+    <h1 class="font-semibold text-lg tracking-wide">Invoice Upload - Step: 2/4</h1>
+
+    <button type="button" id="cancel-btn" class="p-2 hover:bg-white/20 rounded-full transition">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+</div>
 
         <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="invoiceForm" class="flex flex-col flex-1 overflow-hidden">
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
@@ -80,14 +105,14 @@ $formAction = $isEdit
                         <div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4 shadow-sm">
                             <div class="w-20 h-20 bg-gray-50 border border-gray-100 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
                                 <?php if(!empty($photo)): ?>
-                                    <img src="<?php echo base_url($photo); ?>" class="w-full h-full object-cover">
+                                    <img src="<?php echo base_url($photo); ?>" class="w-full h-full object-cover" onclick="openImagePopup('<?= $photo ?>')">
                                 <?php else: ?>
                                     <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                                 <?php endif; ?>
                             </div>
                             <div class="flex flex-col">
                                 <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Selected Category</span>
-                                <span class="text-gray-800 font-bold text-xl leading-tight"><?php echo htmlspecialchars($category); ?></span>
+                                <span class="text-gray-800 font-bold text-xl leading-tight"><?php echo htmlspecialchars($category_display_name); ?></span>
                             </div>
                         </div>
 
@@ -171,13 +196,19 @@ $formAction = $isEdit
 
             <div class="p-5 bg-white border-t border-gray-100 mt-auto z-20">
                 <button type="submit" form="invoiceForm" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3.5 rounded-xl shadow-lg transform transition active:scale-[0.99] flex justify-center items-center gap-2">
-                    <?php echo $isEdit ? "Update & Next" : "Update & Next >"; ?>
+                    <?php echo $isEdit ? "Update & Next" : "Update & Next >"; ?><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                 </button>
             </div>
         </form>
     </div>
 </div>
-
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
 <script>
     // 1. Initialize Tom Select (Searchable Dropdown)
     new TomSelect("#vendor_id",{
@@ -224,6 +255,9 @@ $formAction = $isEdit
     document.getElementById("back-btn").addEventListener("click", function () {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=form1&id=" + recordId;
     });
+    document.getElementById("cancel-btn").addEventListener("click", function () {
+        window.location.href = window.location.origin + "/index.php?page=inbounding&action=lsit";
+    });
 
     // 5. Validation
     document.getElementById("invoiceForm").addEventListener("submit", function(e) {
@@ -251,4 +285,14 @@ $formAction = $isEdit
             return false;
         }
     });
+</script>
+<script>
+    function openImagePopup(imageUrl) {
+        popupImage.src = imageUrl;
+        document.getElementById('imagePopup').classList.remove('hidden');
+    }
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    } 
 </script>
