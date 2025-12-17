@@ -229,7 +229,9 @@ function isFilled($value) {
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">SKU / Code</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['sku']; ?></span></div>
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Item Code</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow font-bold text-blue-600"><?php echo $tc['Item_code']; ?></span></div>
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Vendor</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['vendor_name']; ?></span></div>
-                                <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Date</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo date('d M Y', strtotime($tc['gate_entry_date_time'])); ?></span></div>
+                                
+                                <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Date</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo !empty($tc['gate_entry_date_time']) ? date('d M Y', strtotime($tc['gate_entry_date_time'])) : '-'; ?></span></div>
+                                
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Category</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['category_code']; ?></span></div>
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Received by</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['received_name']; ?></span></div>
                             </div>
@@ -291,7 +293,7 @@ function isFilled($value) {
                                     <div>
                                         <p class="timeline-text <?= $s1_active ? 'timeline-label-completed' : 'timeline-label-pending' ?>">Inbound</p>
                                         <p class="timeline-text <?= $s1_active ? 'timeline-date-completed' : 'timeline-date-pending' ?> lg:mt-1">
-                                            <?= date('d M', strtotime($tc['gate_entry_date_time'])) ?>
+                                            <?= !empty($tc['gate_entry_date_time']) ? date('d M', strtotime($tc['gate_entry_date_time'])) : '-' ?>
                                         </p>
                                     </div>
                                 </div>
@@ -349,7 +351,7 @@ function isFilled($value) {
         </div>
     <?php endif; ?>
 
-    <?php           
+    <?php            
         $page_no = $data["page_no"] ?? 1;
         $limit = $data["limit"] ?? 10;
         $total_records = $data["totalRecords"] ?? 0;
