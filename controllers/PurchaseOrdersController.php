@@ -265,7 +265,7 @@ class PurchaseOrdersController {
                 'gst' => $gstValue,
                 'quantity' => isset($quantity[$index]) ? $quantity[$index] : 0,
                 'price' => isset($rate[$index]) ? $rate[$index] : 0,
-                'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) : 0,
+                'amount' => isset($rate[$index]) ? $rate[$index] * (1 + ($gstValue / 100)) * (isset($quantity[$index]) ? $quantity[$index] : 0) : 0,
                 'item_code' => isset($item_code[$index]) ? $item_code[$index] : '',
                 'size' => isset($data['size'][$index]) ? $data['size'][$index] : '',
                 'color' => isset($data['color'][$index]) ? $data['color'][$index] : '',
@@ -578,7 +578,7 @@ class PurchaseOrdersController {
                 'gst' => $gstValue,
                 'quantity' => isset($quantity[$index]) ? $quantity[$index] : 0,
                 'price' => isset($price[$index]) ? $price[$index] : 0,
-                'amount' => isset($amount[$index]) ? $amount[$index] * (1 + ($gstValue / 100)) : 0,
+                'amount' => isset($price[$index]) ? $price[$index] * (1 + ($gstValue / 100)) * (isset($quantity[$index]) ? $quantity[$index] : 0) : 0,
                 
             ];
             $id = isset($_POST['item_ids'][$index]) ? $_POST['item_ids'][$index] : 0;
@@ -1430,12 +1430,31 @@ class PurchaseOrdersController {
                 $tbody .= '</tr>';
             }
         }
+        //summary rows can be added similarly if needed
+        $summary_rows = '
+                        <table>
+                            <tr>
+                                <th style="padding:5px 10px; text-align:right; font: size 17px; font-weight:bold;">Subtotal:</th>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$data['subtotal'].'</td>
+                            </tr>
+                           
+                            <tr>
+                                <th style="padding:5px 10px; text-align:right; font-size:17px; font-weight:bold;">GST:</th>
+                                <td style="padding:5px 10px; text-align:right; font-size:17px;">'.$data['total_gst'].'</td>
+                            </tr>
+                            <tr>
+                                <th style="padding-left:5px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;"> Grand Total:</th>
+                                <td style="padding:5px 10px; background-color: #495057; color: #fff; font-weight: bold; border-top: 2px solid #000; font-size: 17px;">'.$data['grand_total'].'</td>
+                            </tr>
+                        </table>
+                    ';
+            
 
         // Load template
         $temphtml = file_get_contents('templates/purchaseOrder/PurchaseOrder.html');
         $html = str_replace(
-            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{subtotal}}', '{{shipping}}', '{{gst}}', '{{grand_total}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}'],
-            [$po_number, $date, $delivery_due, $tbody, $subtotal, $shipping, $gst, $grand_total, $terms, $vendorInfo, $contactPerson],
+            ['{{po_number}}', '{{date}}', '{{delivery_due}}', '{{tbody}}', '{{summary_rows}}', '{{terms}}', '{{vendor_info}}', '{{contact_person}}','{{qr_code}}'],
+            [$po_number, $date, $delivery_due, $tbody,  $summary_rows, $terms, $vendorInfo, $contactPerson, ''],
             $temphtml
         );
 
