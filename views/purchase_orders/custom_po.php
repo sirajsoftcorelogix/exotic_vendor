@@ -85,6 +85,7 @@
                 
             <tr class="bg-white">
                 <td class="p-2 position-relative">
+                    <input type="hidden" name="sku[]" value="<?= $data[0]['sku'] ?? '' ?>">
                     <input type="hidden" name="product_id[]" value="<?php echo $data[0]['id'] ?? ''; ?>">
                     <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['item_code'] ?? ''; ?>" placeholder="Item code" onblur="fetchProductDetails(this)">
                     <!--suggestion box-->
@@ -98,6 +99,7 @@
                         <?php //if(isset($data[0]['id']) && !empty($data[0]['id'])){ ?>
                         <div class="relative group info-popup-container">
                             <i class="fas fa-info-circle text-blue-500 cursor-help info-icon" 
+                               data-sku="<?php echo $data[0]['sku'] ?? ''; ?>"
                                data-item-code="<?php echo $data[0]['item_code'] ?? ''; ?>"
                                data-color="<?php echo $data[0]['color'] ?? ''; ?>"
                                data-size="<?php echo $data[0]['size'] ?? ''; ?>"
@@ -125,6 +127,7 @@
 
                                         <!-- Column 1 (Data) -->
                                         <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                            <span class="grid-label">SKU</span> <span class="grid-label">:</span> <span class="grid-value popup-sku"><?php echo $data[0]['sku'] ?? 'N/A'; ?></span>
                                             <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value popup-item-code"><?php echo $data[0]['item_code'] ?? 'N/A'; ?></span>
                                             <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value popup-color"><?php echo $data[0]['color'] ?? 'N/A'; ?></span>
 
@@ -560,6 +563,7 @@ function fetchOrderItems(query) {
                         <td class="p-2"><img src="${item.image}" alt="" class="w-10 h-10 rounded"></td>
                         <td class="p-2">
                             <button type="button" title="Select" class="select-order bg-blue-500 text-white px-3 py-1 rounded"
+                                data-sku="${item.sku}"
                                 data-id="${item.id}"
                                 data-item-code="${(item.item_code ? item.item_code : '').replace(/"/g, '&quot;')}"
                                 data-size="${(item.size ? item.size : '').replace(/"/g, '&quot;')}"
@@ -600,6 +604,7 @@ function fetchOrderItems(query) {
 function addSelectOrderListeners() {
     document.querySelectorAll('.select-order').forEach(function(btn) {
         btn.addEventListener('click', function() {
+            const sku = this.getAttribute('data-sku');
             const id = this.getAttribute('data-id');
             const itemCode = this.getAttribute('data-item-code');
             const orderNumber = this.getAttribute('data-order-number');
@@ -636,6 +641,7 @@ function addSelectOrderListeners() {
             const tr = document.createElement('tr');
             tr.className = 'bg-white';
             tr.innerHTML = `
+                <input type="hidden" name="sku[]" value="${sku}">
                 <td class="p-2 rounded-l-lg"><input type="hidden" name="product_id[]" value="${id}"><input name="item_code[]" value="${itemCode}"></td>
                 <td class="p-1">
                     <div class="flex items-center gap-2">
@@ -728,7 +734,8 @@ function addSelectOrderListeners() {
 
             // Ensure the info icon carries data attributes so the info popup shows correct values
             const infoIcon = tr.querySelector('.fa-info-circle');
-            if (infoIcon) {
+            if (infoIcon) {                
+                infoIcon.setAttribute('data-sku', sku || '');
                 infoIcon.setAttribute('data-item-code', item_code || '');
                 infoIcon.setAttribute('data-color', color || '');
                 infoIcon.setAttribute('data-size', size || '');
@@ -831,6 +838,7 @@ function updatePopupContent(container, item) {
     container.querySelector('.popup-instock-leadtime').textContent = item.instock_leadtime || 'N/A';
     container.querySelector('.popup-fba-in').textContent = item.fba_in || 'N/A';
     container.querySelector('.popup-fba-us').textContent = item.fba_us || 'N/A';
+    container.querySelector('.popup-sku').textContent = item.sku || 'N/A';
 }
 
 // Reusable: fill row fields from item data
@@ -869,10 +877,16 @@ function fillRowFromProduct(tr, item) {
     // item_code field value
     const codeEl = tr.querySelector('input.item_code');
     if (codeEl) codeEl.value = item.item_code || '';
-    
+    // SKU field value
+    const skuEl = tr.querySelector('input[name="sku[]"]');
+    if (skuEl) {
+        skuEl.value = (typeof item.sku !== 'undefined' && item.sku !== null) ? item.sku : '';
+    }
+    console.log('SKU set to:', skuEl ? skuEl.value : 'N/A');
     // info icon data attributes update
     const infoIcon = tr.querySelector('.info-icon');
     if (infoIcon) {
+        infoIcon.setAttribute('data-sku', item.sku || '');
         infoIcon.setAttribute('data-item-code', item.item_code || '');
         infoIcon.setAttribute('data-color', item.color || '');
         infoIcon.setAttribute('data-size', item.size || '');
@@ -1045,6 +1059,7 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
     newRow.innerHTML = `
         <td class="p-2" style="position:relative;">
             <input type="hidden" name="product_id[]" value="">
+            <input type="hidden" name="sku[]" value="">
             <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="" placeholder="Item code">
             <div class="suggestion-box position-absolute z-10 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; z-index:50; max-height:240px; overflow:auto; left:0; right:0;"></div>
         </td>
@@ -1065,6 +1080,7 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
 
                             <!-- Column 1 (Data) -->
                             <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
+                                <span class="grid-label">SKU</span> <span class="grid-label">:</span> <span class="grid-value popup-sku"></span>
                                 <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value popup-item-code"></span>
                                 <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value popup-color"></span>
 

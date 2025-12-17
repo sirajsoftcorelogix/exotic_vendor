@@ -203,6 +203,7 @@ class ProductsController {
             // map API item to DB fields (adjust as needed)
             $item = [];
             $item['item_code'] = $code;
+            $item['sku'] = $apiItem['sku'] ?? '';
             $item['title'] = $apiItem['title'] ?? '';
             $item['image'] = 'https://cdn.exoticindia.com/images/products/original/'.$apiItem['image'] ?? '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
@@ -248,7 +249,13 @@ class ProductsController {
             $item['updated_at'] = date('Y-m-d H:i:s');
 
             // check if product exists
-            $existing = $productModel->findByItemCodeSizeColor($item['item_code'], $item['size'], $item['color']);
+            // if(!empty($item['sku'])){
+            //     $existing = $productModel->findBySku($item['sku']);
+            // }else{
+                $existing = $productModel->findByItemCodeSizeColor($item['item_code'], $item['size'], $item['color']);
+            //}
+            
+            
             if ($existing) {            
             $ok = $productModel->updateProduct($existing['id'], $item);
             if ($ok) $updated++;
@@ -266,6 +273,7 @@ class ProductsController {
                 foreach ($apiItem['variations'] as $variant) {
                     $variantItem = $item; // start with base item
                     $variantItem['item_code'] = $apiItem['itemcode'] ?? $apiItem['item_code'];
+                    $variantItem['sku'] = $variant['sku'] ?? '';
                     $variantItem['size'] = $variant['size'] ?? '';
                     $variantItem['color'] = $variant['color'] ?? '';
                     $variantItem['title'] = $variant['title'] ?? $item['title'];                    
@@ -282,13 +290,13 @@ class ProductsController {
                     $variantItem['location'] = isset($variant['location']) ? $variant['location'] : '';
                     $variantItem['fba_in'] = isset($variant['fba_in']) ? (int)$variant['fba_in'] : 0;
                     $variantItem['fba_us'] = isset($variant['fba_us']) ? (int)$variant['fba_us'] : 0;
-                    $variantItem['leadtime'] = isset($variant['leadtime']) ? $variant['leadtime'] : '';
-                    $variantItem['instock_leadtime'] = isset($variant['instock_leadtime']) ? $variant['instock_leadtime'] : '';
+                    $variantItem['leadtime'] = isset($variant['leadtime']) ? (int)$variant['leadtime'] : 0;
+                    $variantItem['instock_leadtime'] = isset($variant['instock_leadtime']) ? (int)$variant['instock_leadtime'] : 0;
                     $variantItem['permanently_available'] = isset($variant['permanently_available']) ? (int)$variant['permanently_available'] : 0;
                     $variantItem['numsold'] = isset($variant['numsold']) ? (int)$variant['numsold'] : 0;
                     $variantItem['numsold_india'] = isset($variant['numsold_india']) ? (int)$variant['numsold_india'] : 0;
                     $variantItem['numsold_global'] = isset($variant['numsold_global']) ? (int)$variant['numsold_global'] : 0;
-                    $variantItem['lastsold'] = isset($variant['lastsold']) ? $variant['lastsold'] : '';
+                    $variantItem['lastsold'] = isset($variant['lastsold']) ? (int)$variant['lastsold'] : 0;
                     $variantItem['vendor'] = isset($variant['vendor']) ? $variant['vendor'] : '';
                     $variantItem['shippingfee'] = isset($variant['shippingfee']) ? (float)$variant['shippingfee'] : 0.0;
                     $variantItem['sourcingfee'] = isset($variant['sourcingfee']) ? (float)$variant['sourcingfee'] : 0.0;
@@ -341,4 +349,5 @@ class ProductsController {
         }
         exit;
     }
+    
 }

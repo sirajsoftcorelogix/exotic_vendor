@@ -265,7 +265,7 @@
             </svg>
         </button>
 
-        <div id="accordion-content-search" class="accordion-content hidden overflow-visible">
+        <div id="accordion-content-search" class="accordion-content  overflow-visible">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
@@ -273,20 +273,20 @@
                 <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-0">
                     <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
-                        <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <span class="text-gray-500 pb-2">→</span>
                     <div class="w-1/2">
                         <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Order To</label>
-                        <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                 </div>
                 
                 <div >
                     <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                    <select id="status" name="status" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="status" name="status[]" multiple="multiple" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white advanced-multiselect">
 
-                        <option value="all" selected >All Status</option>
+                        <!-- <option value="all" disabled >Select Status</option> -->
                         <?php foreach ($status_list as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>
@@ -294,9 +294,9 @@
                 </div>
                 <div >
                     <label for="payment_type" class="block text-sm font-medium text-gray-600 mb-1">Payment Type</label>
-                    <select id="payment_type" name="payment_type" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="payment_type" name="payment_type[]" multiple="multiple" class="advanced-multiselect max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
 
-                        <option value="all" selected >All Payment Types</option>
+                        <!-- <option value="all" disabled >Select</option> -->
                         <?php foreach ($payment_types as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['payment_type']) && $_GET['payment_type'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>
@@ -304,9 +304,9 @@
                 </div>
                 <div class="">
                     <label for="category" class="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                    <select id="category" name="category" class="px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="category" name="category[]" multiple="multiple" class="advanced-multiselect px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         
-                        <option value="all" selected >All Categories</option>
+                        <!-- <option value="all" selected >All Categories</option> -->
                         <?php foreach (getCategories() as $key => $value): ?>
                             <option value="<?php echo $key; ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
@@ -327,13 +327,13 @@
                 <!-- Order Number -->
                 <div>
                     <label for="order-number" class="block text-sm font-medium text-gray-600 mb-1">Order No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
 
                 <!-- Status -->
                 <div>
                     <label for="priority" class="block text-sm font-medium text-gray-600 mb-1">Priority</label>
-                    <select id="priority" name="priority" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="priority" name="priority" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected>-Select-</option>
                         <option value="critical" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'critical') ? 'selected' : ''; ?>>Critical</option>
                         <option value="urgent" <?php echo (isset($_GET['priority']) && $_GET['priority'] === 'urgent') ? 'selected' : ''; ?>>Urgent</option>
@@ -344,7 +344,7 @@
                 </div>
                 <div class="">
                     <label for="country" class="block text-sm font-medium text-gray-600 mb-1">Country</label>
-                    <select id="country" name="country" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="country" name="country" class="max-w-48 px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected >All Country</option>
 						<optgroup label="Easy">
 							<option value="overseas">Overseas</option>
@@ -357,10 +357,10 @@
                 </div>
                 <div class="">
                     <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">Staff Name</label>
-                    <select id="staff_name" name="staff_name" class="w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" >All Staff</option>
+                    <select id="staff_name" name="staff_name[]" multiple class="advanced-multiselect w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <!-- <option value="" >All Staff</option> -->
 						<?php foreach ($staff_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && $_GET['staff_name'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['staff_name']) && is_array($_GET['staff_name']) && in_array($key, $_GET['staff_name'])) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
                     </select>
                 </div>
@@ -369,7 +369,7 @@
                     <input
                         type="text"
                         id="vendor_autocomplete"
-                        class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                         placeholder="Search vendor by name..."
                         autocomplete="off"
                         value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>"
@@ -392,25 +392,25 @@
                 <!-- Item Code -->
                 <div>
                     <label for="item-code" class="block text-sm font-medium text-gray-600 mb-1">Item Code</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>" name="item_code" id="item-code" placeholder="Item Code" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 <!-- PO No -->
                 <div>
                     <label for="po-no" class="block text-sm font-medium text-gray-600 mb-1">PO No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['po_no'] ?? '') ?>" name="po_no" id="po-no" placeholder="PO No" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
                 </div>
 
                 <!-- Item Name -->
                 <div>
                     <label for="item-name" class="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_name'] ?? '') ?>" name="item_name" id="item-name" placeholder="Item Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
                 </div>
                 <div>
                     <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
-                    <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-                        <option value="" selected>-Select-</option>
+                    <select id="agent" multiple name="agent[]" class="advanced-multiselect w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <!-- <option value="" selected>-Select-</option> -->
                         <?php foreach ($staff_list as $key => $value): ?>
-                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['agent']) && $_GET['agent'] == $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+                            <option value="<?php echo $key; ?>" <?php echo (isset($_GET['agent']) && is_array($_GET['agent']) && in_array($key, $_GET['agent'])) ? 'selected' : ''; ?>><?php echo $value; ?></option>
                         <?php endforeach; ?>                    
                     </select>
                 </div>
@@ -718,7 +718,7 @@
                                         <div class="pt-1 w-full max-w-xs">
                                             <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
                                             <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></p>
-                                            <p class="quantity">Quantity: <?= $order['quantity'] ?></p>
+                                            <p class="quantity">Quantity: <?= $order['quantity'] ?> </p>
                                         </div>
                                     </div>
                                     <!-- Col 1, Row 2: Order Details -->
@@ -731,6 +731,8 @@
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
+                                            <span class="heading-typography">Color</span>
+                                            <p>: <span class="data-typography"><?= $order['color'] ?? 'N/A' ?></span></p>
                                             
                                         </div>
                                         <div class="w-1/2 pl-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
@@ -740,6 +742,8 @@
                                             <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
                                             <span class="heading-typography">Agent</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
+                                            <span class="heading-typography">Size</span>
+                                            <p>: <span class="data-typography"><?= $order['size'] ?? 'N/A' ?></span></p>
                                         </div>
                                     </div>
                                 </div>
@@ -836,6 +840,7 @@
                                                 <?= $addontxt ?>
                                             </div>
                                             <div>
+                                                <?= $order['po_number'] ? '<a href="?page=purchase_orders&action=view&po_id='.$order['po_id'].'" target="_blank" class="mx-10 icon-link create-po-btn">'.$order['po_number'].'</a>' : '' ?>
                                                 <?php /*if (!empty($order['vendor_invoice'])): ?>
                                                     <a href="<?= base_url($order['vendor_invoice']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
                                                         <p class="mr-1">Download Invoice</p>
@@ -1865,4 +1870,100 @@
             }
         });
     });
+    //advanced multiselect Initialize Select2 for status 
+    document.addEventListener('DOMContentLoaded', function() {
+        const statusSelect = document.querySelector('.advanced-multiselect');
+        if (statusSelect) {
+            // Initialize Select2
+            $(statusSelect).select2({
+                placeholder: "Select Status",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedStatus = <?php echo json_encode(isset($_GET['status']) ? (is_array($_GET['status']) ? $_GET['status'] : [$_GET['status']]) : []); ?>;
+            if (preselectedStatus.length > 0) {
+                $(statusSelect).val(preselectedStatus).trigger('change');
+            }
+        }
+
+    });
+    //payment_type multiselect Initialize Select2 for payment_type 
+    document.addEventListener('DOMContentLoaded', function() {
+        const paymentTypeSelect = document.querySelector('#payment_type');
+        if (paymentTypeSelect) {
+            // Initialize Select2
+            $(paymentTypeSelect).select2({
+                placeholder: "Select Payment Type",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedPaymentTypes = <?php echo json_encode(isset($_GET['payment_type']) ? (is_array($_GET['payment_type']) ? $_GET['payment_type'] : [$_GET['payment_type']]) : []); ?>;
+            if (preselectedPaymentTypes.length > 0) {
+                $(paymentTypeSelect).val(preselectedPaymentTypes).trigger('change');
+            }
+        }
+
+    });
+    //category multiselect Initialize Select2 for category 
+    document.addEventListener('DOMContentLoaded', function() {
+        const categorySelect = document.querySelector('#category');
+        if (categorySelect) {
+            // Initialize Select2
+            $(categorySelect).select2({
+                placeholder: "Select Category",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedCategories = <?php echo json_encode(isset($_GET['category']) ? (is_array($_GET['category']) ? $_GET['category'] : [$_GET['category']]) : []); ?>;
+            if (preselectedCategories.length > 0) {
+                $(categorySelect).val(preselectedCategories).trigger('change');
+            }
+        }
+
+    });
+    //staff multiselect Initialize Select2 for staff 
+    document.addEventListener('DOMContentLoaded', function() {
+        const staffSelect = document.querySelector('#staff_name');
+        if (staffSelect) {
+            // Initialize Select2
+            $(staffSelect).select2({
+                placeholder: "Select Staff",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedStaff = <?php echo json_encode(isset($_GET['staff']) ? (is_array($_GET['staff']) ? $_GET['staff'] : [$_GET['staff']]) : []); ?>;
+            if (preselectedStaff.length > 0) {
+                $(staffSelect).val(preselectedStaff).trigger('change');
+            }
+        }
+
+    });
+    //agent multiselect Initialize Select2 for agent 
+    document.addEventListener('DOMContentLoaded', function() {
+        const agentSelect = document.querySelector('#agent');
+        if (agentSelect) {
+            // Initialize Select2
+            $(agentSelect).select2({
+                placeholder: "Select Agent",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Preselect values if any
+            const preselectedAgents = <?php echo json_encode(isset($_GET['agent']) ? (is_array($_GET['agent']) ? $_GET['agent'] : [$_GET['agent']]) : []); ?>;
+            if (preselectedAgents.length > 0) {
+                $(agentSelect).val(preselectedAgents).trigger('change');
+            }
+        }
+
+    });
+    
 </script>

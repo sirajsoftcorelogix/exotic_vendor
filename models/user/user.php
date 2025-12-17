@@ -240,13 +240,10 @@ class User {
         // sanitize
         $page = (int)$page;
         if ($page < 1) $page = 1;
-
         $limit = (int)$limit;
         if ($limit < 1) $limit = 10;
-
         // calculate offset
         $offset = ($page - 1) * $limit;
-
         if (!empty($status_filter)) {
             if($status_filter == 'active') {
                 $status_filter = 1;
@@ -254,47 +251,46 @@ class User {
                 $status_filter = 0;
             }
         }
-
         // 🔹 Build search condition
         $where = "";
-        if (!empty($search) && !empty($role_filter) && !empty($status_filter)) {
+        if (!empty($search) && is_numeric($role_filter) && is_numeric($status_filter)) {
             $search = $this->db->real_escape_string($search);
             $role_filter = $this->db->real_escape_string($role_filter);
             $status_filter = $this->db->real_escape_string($status_filter);
-            $where = "WHERE (name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%') AND role = '$role_filter' AND is_active = '$status_filter'";
-        } else if (!empty($search) && !empty($role_filter)) {
+            $where = "WHERE (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.role_id = '$role_filter' AND vu.is_active = '$status_filter'";
+        } elseif (!empty($search) && is_numeric($role_filter)) {
             $search = $this->db->real_escape_string($search);
             $role_filter = $this->db->real_escape_string($role_filter);
-            $where = "WHERE (name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%') AND role = '$role_filter'";
-        } else if (!empty($search) && !empty($status_filter)) {
+            $where = "WHERE (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.role_id = '$role_filter'";
+        } elseif (!empty($search) && is_numeric($status_filter)) {
             $search = $this->db->real_escape_string($search);
             $status_filter = $this->db->real_escape_string($status_filter);
-            $where = "WHERE (name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%') AND is_active = '$status_filter'";
-        } else if (!empty($role_filter) && !empty($status_filter)) {
+            $where = "WHERE (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.is_active = '$status_filter'";
+        } elseif (is_numeric($role_filter) && is_numeric($status_filter)) {
             $role_filter = $this->db->real_escape_string($role_filter);
             $status_filter = $this->db->real_escape_string($status_filter);
-            $where = "WHERE role = '$role_filter' AND is_active = '$status_filter'";
+            $where = "WHERE vu.role_id = '$role_filter' AND vu.is_active = '$status_filter'";
         } else {
             if (!empty($search)) {
                 $search = $this->db->real_escape_string($search);
-                $where = "WHERE name LIKE '%$search%' OR email LIKE '%$search%' OR phone LIKE '%$search%'";
+                $where = "WHERE vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%'";
             }
 
-            if (!empty($role_filter)) {
+            if (is_numeric($role_filter)) {
                 $search = $this->db->real_escape_string($role_filter);
-                $where = "WHERE role = '$role_filter'";
+                $where = "WHERE vu.role_id = '$role_filter'";
             }
 
-            if (!empty($status_filter)) {
+            if (is_numeric($status_filter)) {
                 $search = $this->db->real_escape_string($status_filter);   
-                $where = "WHERE is_active = '$status_filter'";
+                $where = "WHERE vu.is_active = '$status_filter'";
             }
         }
-
         // total records
-        $resultCount = $this->db->query("SELECT COUNT(*) AS total FROM vp_users $where");
+        $sql = "SELECT COUNT(*) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id";
+        $resultCount = $this->db->query($sql);
         $rowCount = $resultCount->fetch_assoc();
-        $totalRecords = $rowCount['total'];
+        $totalRecords = $rowCount['total'] ?? 0;
 
         $totalPages = ceil($totalRecords / $limit);
 

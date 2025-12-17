@@ -167,6 +167,10 @@
                                 <span class="typo-sku-value"><a href="javascript:void(0);" class="invdetails typo-sf-column text-details-link mt-1"><?php echo $product['item_code']; ?></a></span>
                             </div>
                             <div class="flex items-center gap-2">
+                                <span class="typo-sku-label w-[70px]">SKU :</span>
+                                <span class="typo-sku-value"><?php echo $product['sku']; ?></span>
+                            </div>
+                            <div class="flex items-center gap-2">
                                 <span class="typo-sku-label w-[70px]">ASIN :</span>
                                 <span class="typo-sku-value"><?php echo $product['asin']; ?></span>
                             </div>
@@ -204,7 +208,7 @@
                     <td class="px-6 py-4 whitespace-nowrap align-top">
                         <div class="flex flex-col space-y-1">
                             <span class="typo-sf-column">₹<?php echo $product['itemprice']; ?></span>
-                            <span class="typo-sf-column"><?php echo $product['local_stock']; ?></span>
+                            <span class="typo-sf-column">CP:₹<?php echo $product['cost_price']; ?></span>
                             <!-- <a href="javascript:void(0);" class="sfdetails typo-sf-column text-details-link mt-1">details</a> -->
                         </div>
                     </td>

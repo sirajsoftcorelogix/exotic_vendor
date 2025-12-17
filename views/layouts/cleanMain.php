@@ -1,4 +1,5 @@
-<?php $loginUser = getloginUser();
+<?php
+$loginUser = getloginUser();
 global $domain, $root_path;
 ?>
 
