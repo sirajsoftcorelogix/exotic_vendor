@@ -29,6 +29,7 @@ $icon_map = [
 $display_categories = [];
 if (!empty($raw_categories)) {
     foreach ($raw_categories as $cat) {
+		printarray($cat);
         // FILTER: Only show if parent_id is 0
         if (isset($cat['parent_id']) && $cat['parent_id'] == 0) {
 
