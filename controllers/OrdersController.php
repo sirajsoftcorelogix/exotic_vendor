@@ -926,7 +926,7 @@ class OrdersController {
                         ];
                         $totalorder++;                
                         
-                        $data = $ordersModel->importedStatusUpdate($rdata);
+                        $data = $ordersModel->importedStatusUpdate2($rdata);
                         $result[] = $data;
                         //add products
                         //$pdata[] = $ordersModel->addProducts($rdata);                   
