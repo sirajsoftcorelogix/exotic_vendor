@@ -882,7 +882,7 @@ class OrdersController {
             if(!empty($error)){
                 break;
             }
-            // if($key >= 10){
+            // if($key >= 20){
             //     //limit to 5 chunks per execution
             //     break;
             // }
@@ -892,7 +892,7 @@ class OrdersController {
         // print_r($headers);
        
         // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
-        print_array($response);
+        //print_array($response);
         // exit;
         if (empty($response)) {
             //echo "No orders found in the API response.";
@@ -906,7 +906,7 @@ class OrdersController {
                 //continue; // Skip invalid or empty responses
             
             foreach ($respData['orders'] as $order) {             
-                //print_r($order);
+                print_r($order);
                 // Check if the order has the required fields
                 // Map API fields to your table columns
                     
