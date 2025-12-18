@@ -850,7 +850,7 @@ class Order{
         }
     }
     public function importedStatusUpdate2($data){
-        $sql = "UPDATE vp_orders SET update_flag = 2, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
+       echo $sql = "UPDATE vp_orders SET update_flag = 2, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
         $stmt = $this->db->prepare($sql);   
         $stmt->bind_param('sss', $data['updated_at'], $data['sku'], $data['order_number']);
         if ($stmt->execute()) {
