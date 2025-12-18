@@ -714,8 +714,8 @@ class OrdersController {
         ], 'Import Orders Result');
     }
     public function skuUpdateImportedOrders() {      
-        ini_set('max_execution_time', 300);
-        set_time_limit(300);  
+        //ini_set('max_execution_time', 300);
+        //set_time_limit(300);  
         global $ordersModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
@@ -815,6 +815,129 @@ class OrdersController {
                 //print_array($rdata);                   
             }
            
+        }
+        //print_array($pdata);
+        //print_r($result);
+        //update log end time and imported count
+        
+        renderTemplateClean('views/orders/import_update_result.php', [
+            'imported' => $imported,
+            'result' => $result,
+            'total' => $totalorder,
+            //'products' => json_encode($pdata)
+        ], 'Import Orders Result');
+    }
+    public function ordersStatusImportBulk() {   
+           
+        ini_set('max_execution_time', 3000);
+        set_time_limit(3000);  
+        global $ordersModel;
+        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+            http_response_code(403); // Forbidden
+            die('Unauthorized access.');
+        }
+        //fetch order 
+        $odr = $ordersModel->fetchOrdersForUpdate();
+        //order status list
+        $statusList = $ordersModel->adminOrderStatusList('true');
+        //$from_date = '1758240000';
+        //$to_date = '1758330134';
+        //print_array($odr);
+        //exit;
+        
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint       
+        
+        $orderChunks = array_chunk(array_filter($odr, function($order) {
+            return !empty($order);
+        }), 50);
+       
+        $response = [];
+        foreach ($orderChunks as $key => $chunk) {
+            $orderIds = implode(',', $chunk);
+            $postData = [
+            'makeRequestOf' => 'vendors-orderjson',
+            'orderid' => $orderIds
+            ];
+
+            $headers = [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Content-Type: application/x-www-form-urlencoded'
+            ];
+            // print_r($postData);
+            // exit;
+            // Initialize cURL
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            $response[] = curl_exec($ch);
+            
+            $error = curl_error($ch);
+            curl_close($ch);
+            //echo $orderIds."<br>Chunk ".($key+1)." Response:<br>";
+            //print_array(json_decode($response[0]), true);
+            if(!empty($error)){
+                break;
+            }
+            if($key >= 10){
+                //limit to 5 chunks per execution
+                break;
+            }
+            
+        }
+        //print_r($error);
+        // print_r($headers);
+       
+        // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
+        // print_array($orders);
+        // exit;
+        if (empty($response)) {
+            //echo "No orders found in the API response.";
+            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
+            return;
+        }
+        $imported = 0; $totalorder = 0;
+        foreach ($response as $resp) {
+            $respData = json_decode($resp, true);
+            if (!is_array($respData) || empty($respData['orders'])) {
+                continue; // Skip invalid or empty responses
+            }
+            foreach ($respData['orders'] as $order) {             
+                //print_r($order);
+                // Check if the order has the required fields
+                // Map API fields to your table columns
+                    
+                foreach ($order['cart'] as $item) {
+                    //check status other than 1 (pending)
+                    if(empty($item['order_status']) || $item['order_status'] == 1){
+                        continue;
+                    }
+                    $rdata = [
+                    'sku' => $item['sku'] ?? '',
+                    'order_number' => $order['orderid'] ?? '',
+                    'item_code' => $item['itemcode'] ?? '',	
+                    'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
+                        ? 'shipped'
+                        : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),				
+                    'updated_at' => date('Y-m-d H:i:s')
+                    ];
+                    $totalorder++;                
+                    
+                    $data = $ordersModel->importedStatusUpdate($rdata);
+                    $result[] = $data;
+                    //add products
+                    //$pdata[] = $ordersModel->addProducts($rdata);                   
+                    
+                    if (isset($data['success']) && $data['success'] == true) {                        
+                        $imported++;
+                    } 
+                    //print_array($rdata);                   
+                }
+            
+            }
         }
         //print_array($pdata);
         //print_r($result);
