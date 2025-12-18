@@ -513,7 +513,7 @@ class Inbounding {
                 'message' => 'Prepare failed: ' . $this->conn->error
             ];
         }
-        $stmt->bind_param('ssii',
+        $stmt->bind_param('sssii',
             $data['vendor_id'],   
             $data['invoice'],  
             $data['invoice_no'],  
