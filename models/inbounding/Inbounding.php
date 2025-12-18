@@ -441,6 +441,7 @@ class Inbounding {
         $photo    = $data['photo'];
         $sql = "INSERT INTO vp_inbound (group_name, product_photo)
                 VALUES ('$category', '$photo')";
+        echo "<pre>";print_r($sql);exit;
         $result = mysqli_query($conn, $sql);
         if ($result) {
             return mysqli_insert_id($conn);
