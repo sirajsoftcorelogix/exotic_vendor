@@ -766,6 +766,10 @@ class InboundingController {
         $sub_sub_input = $_POST['sub_sub_category_code'] ?? '';
         $sub_sub_val   = is_array($sub_sub_input) ? implode(',', $sub_sub_input) : $sub_sub_input;
 
+
+        $icons_raw = $_POST['description_icons'] ?? ''; 
+        $icons_val = is_array($icons_raw) ? implode(',', $icons_raw) : $icons_raw;
+
         // 3. Data Array
         $data = [
             'invoice_image'       => $invoicePath,
