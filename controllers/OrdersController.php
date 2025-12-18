@@ -882,7 +882,7 @@ class OrdersController {
             if(!empty($error)){
                 break;
             }
-            // if($key >= 20){
+            // if($key >= 10){
             //     //limit to 5 chunks per execution
             //     break;
             // }
@@ -892,7 +892,7 @@ class OrdersController {
         // print_r($headers);
        
         // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
-        //print_array($response);
+        // print_array($orders);
         // exit;
         if (empty($response)) {
             //echo "No orders found in the API response.";
@@ -903,41 +903,41 @@ class OrdersController {
         foreach ($response as $resp) {
             $respData = json_decode($resp, true);
             if (!is_array($respData) || empty($respData['orders'])) {
-                //continue; // Skip invalid or empty responses
-            
+                continue; // Skip invalid or empty responses
+            }
             foreach ($respData['orders'] as $order) {             
-                print_r($order);
+                //print_r($order);
                 // Check if the order has the required fields
                 // Map API fields to your table columns
                     
                 foreach ($order['cart'] as $item) {
                     //check status other than 1 (pending)
                     if(empty($item['order_status']) || $item['order_status'] == 1){
-                        continue;
+                        //continue;
+                    
+                        $rdata = [
+                        'sku' => $item['sku'] ?? '',
+                        'order_number' => $order['orderid'] ?? '',
+                        'item_code' => $item['itemcode'] ?? '',	
+                        'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
+                            ? 'shipped'
+                            : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),				
+                        'updated_at' => date('Y-m-d H:i:s')
+                        ];
+                        $totalorder++;                
+                        
+                        $data = $ordersModel->importedStatusUpdate($rdata);
+                        $result[] = $data;
+                        //add products
+                        //$pdata[] = $ordersModel->addProducts($rdata);                   
+                        
+                        if (isset($data['success']) && $data['success'] == true) {                        
+                            $imported++;
+                        } 
                     }
-                    $rdata = [
-                    'sku' => $item['sku'] ?? '',
-                    'order_number' => $order['orderid'] ?? '',
-                    'item_code' => $item['itemcode'] ?? '',	
-                    'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
-                        ? 'shipped'
-                        : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),				
-                    'updated_at' => date('Y-m-d H:i:s')
-                    ];
-                    $totalorder++;                
-                    
-                    $data = $ordersModel->importedStatusUpdate2($rdata);
-                    $result[] = $data;
-                    //add products
-                    //$pdata[] = $ordersModel->addProducts($rdata);                   
-                    
-                    if (isset($data['success']) && $data['success'] == true) {                        
-                        $imported++;
-                    } 
                     //print_array($rdata);                   
                 }
             
-            }
             }
         }
         //print_array($pdata);
