@@ -842,7 +842,7 @@ class OrdersController {
         $statusList = $ordersModel->adminOrderStatusList('true');
         //$from_date = '1758240000';
         //$to_date = '1758330134';
-        print_array($odr);
+        //print_array($odr);
         //exit;
         
         $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint       
@@ -892,7 +892,7 @@ class OrdersController {
         // print_r($headers);
        
         // echo "Total Orders Fetched: " . count($orders['orders']) . "<br>";
-        // print_array($orders);
+        print_array($response);
         // exit;
         if (empty($response)) {
             //echo "No orders found in the API response.";
