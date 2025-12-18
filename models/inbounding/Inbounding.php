@@ -110,35 +110,103 @@ class Inbounding {
 
     // 4. Update Image Metadata (NEW: For Captions & Order)
     public function update_image_meta($img_id, $caption, $order) {
-        $img_id = intval($img_id);
-        $order = intval($order);
-        $caption = $this->conn->real_escape_string($caption);
-        
-        $sql = "UPDATE item_images SET image_caption = '$caption', display_order = $order WHERE id = $img_id";
-        $this->conn->query($sql);
+        // 1. Prepare the query with placeholders (?)
+        $sql = "UPDATE item_images 
+                SET image_caption = ?, 
+                    display_order = ? 
+                WHERE id = ?";
+
+        // 2. Prepare statement
+        $stmt = $this->conn->prepare($sql);
+
+        if (!$stmt) {
+            // Optional: Error handling
+            // echo "Prepare failed: (" . $this->conn->errno . ") " . $this->conn->error;
+            return false;
+        }
+
+        // 3. Extract and cast variables
+        // It is good practice to ensure integers are actually integers before binding
+        $id = intval($img_id);
+        $display_order = intval($order);
+        // Note: No need for real_escape_string() on $caption when using bind_param
+
+        // 4. Bind Parameters
+        // "sii" means: String (caption), Integer (order), Integer (id)
+        $stmt->bind_param("sii", $caption, $display_order, $id);
+
+        // 5. Execute and return result
+        return $stmt->execute();
     }
     public function update_image_order($img_id, $order) {
-        $img_id = intval($img_id);
-        $order = intval($order);
-        // SQL that ONLY updates the display_order
-        $this->conn->query("UPDATE item_images SET display_order = $order WHERE id = $img_id");
+        // 1. Prepare the query with placeholders (?)
+        $sql = "UPDATE item_images 
+                SET display_order = ? 
+                WHERE id = ?";
+
+        // 2. Prepare statement
+        $stmt = $this->conn->prepare($sql);
+
+        if (!$stmt) {
+            // Optional: Error handling
+            return false;
+        }
+
+        // 3. Extract and cast variables
+        $id = intval($img_id);
+        $display_order = intval($order);
+
+        // 4. Bind Parameters
+        // "ii" means: Integer (order), Integer (id)
+        $stmt->bind_param("ii", $display_order, $id);
+
+        // 5. Execute and return result
+        return $stmt->execute();
     }
     // 5. Delete image from DB and Server (KEPT EXISTING)
     public function delete_image($img_id) {
-        $img_id = intval($img_id);
-        
-        // 1. Get filename to delete from disk
-        $res = $this->conn->query("SELECT file_name FROM `item_images` WHERE id = $img_id");
-        if ($row = $res->fetch_assoc()) {
-            // Use the exact same path defined in the controller
-            $path = __DIR__ . '/../uploads/itm_img/' . $row['file_name'];
-            if (file_exists($path)) {
-                unlink($path);
+        $id = intval($img_id);
+
+        // ---------------------------------------------------------
+        // 1. Get filename to delete from disk (SELECT)
+        // ---------------------------------------------------------
+        $sql_select = "SELECT file_name FROM item_images WHERE id = ?";
+        $stmt = $this->conn->prepare($sql_select);
+
+        if ($stmt) {
+            // Bind ID (Integer)
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            
+            // Get the result set
+            $res = $stmt->get_result();
+
+            if ($row = $res->fetch_assoc()) {
+                // Use the exact same path defined in the controller
+                $path = __DIR__ . '/../uploads/itm_img/' . $row['file_name'];
+                if (file_exists($path)) {
+                    unlink($path);
+                }
             }
+            // CRITICAL: Close the first statement before creating a new one
+            $stmt->close(); 
         }
-        
+
+        // ---------------------------------------------------------
         // 2. Delete from DB
-        return $this->conn->query("DELETE FROM `item_images` WHERE id = $img_id");
+        // ---------------------------------------------------------
+        $sql_delete = "DELETE FROM item_images WHERE id = ?";
+        $stmt = $this->conn->prepare($sql_delete);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        // Bind ID (Integer)
+        $stmt->bind_param("i", $id);
+
+        // Execute and return result
+        return $stmt->execute();
     }
     public function get_raw_item_imgs($item_id) {
         $item_id = intval($item_id);
@@ -175,19 +243,48 @@ class Inbounding {
 
     // 3. Delete Raw Image
     public function delete_raw_image($img_id) {
-        $img_id = intval($img_id);
-        
-        // Get filename to delete from disk
-        $res = $this->conn->query("SELECT file_name FROM `item_raw_images` WHERE id = $img_id");
-        if ($row = $res->fetch_assoc()) {
-            // Note the folder change here: 'itm_raw_img'
-            $path = __DIR__ . '/../uploads/itm_raw_img/' . $row['file_name'];
-            if (file_exists($path)) {
-                unlink($path);
+        $id = intval($img_id);
+
+        // ---------------------------------------------------------
+        // 1. Get filename to delete from disk (SELECT)
+        // ---------------------------------------------------------
+        $sql_select = "SELECT file_name FROM item_raw_images WHERE id = ?";
+        $stmt = $this->conn->prepare($sql_select);
+
+        if ($stmt) {
+            // Bind ID (Integer)
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+
+            // Get the result set
+            $res = $stmt->get_result();
+
+            if ($row = $res->fetch_assoc()) {
+                // Note the folder change here: 'itm_raw_img'
+                $path = __DIR__ . '/../uploads/itm_raw_img/' . $row['file_name'];
+                if (file_exists($path)) {
+                    unlink($path);
+                }
             }
+            // CRITICAL: Close the first statement before creating a new one
+            $stmt->close();
         }
-        
-        return $this->conn->query("DELETE FROM `item_raw_images` WHERE id = $img_id");
+
+        // ---------------------------------------------------------
+        // 2. Delete from DB
+        // ---------------------------------------------------------
+        $sql_delete = "DELETE FROM item_raw_images WHERE id = ?";
+        $stmt = $this->conn->prepare($sql_delete);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        // Bind ID (Integer)
+        $stmt->bind_param("i", $id);
+
+        // Execute and return result
+        return $stmt->execute();
     }
     public function getExportData($ids_array = []) { // 1. Fixed argument name
         // 2. Safety check for empty array
@@ -211,29 +308,56 @@ class Inbounding {
 
         return $this->conn->query($sql);
     }
-	public function getform1data($id){
+	public function getform1data($id) {
+        $id = intval($id);
+        
+        // Initialize variables
         $inbounding = null;
         $vendors = null;
-        $result = $this->conn->query("SELECT * FROM `vp_inbound` WHERE id = $id");
-        $result1 = $this->conn->query("SELECT * FROM `vp_vendors`");
-        if ($result) {
-            $inbounding = $result->fetch_assoc();
-            $result->free();
-        }
-        if ($result1) {
-             $vendors = $result1->fetch_all(MYSQLI_ASSOC);
-            $result1->free();
-        }
-        $sql4 = "SELECT * FROM `category`";
-        $result4 = $this->conn->query($sql4);
+        $category = null;
 
-        if ($result4) {
-            $category = $result4->fetch_all(MYSQLI_ASSOC);
-            $result4->free();
+        // ---------------------------------------------------------
+        // 1. Secure Query: Get specific inbound record (Requires Prepared Statement)
+        // ---------------------------------------------------------
+        $sql_inbound = "SELECT * FROM vp_inbound WHERE id = ?";
+        $stmt = $this->conn->prepare($sql_inbound);
+
+        if ($stmt) {
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            
+            $res = $stmt->get_result();
+            if ($res) {
+                $inbounding = $res->fetch_assoc();
+            }
+            // Critical: Close statement to free the connection for the next queries
+            $stmt->close();
         }
+
+        // ---------------------------------------------------------
+        // 2. Static Query: Get all vendors (Standard query is safe here)
+        // ---------------------------------------------------------
+        $res_vendors = $this->conn->query("SELECT * FROM vp_vendors");
+        if ($res_vendors) {
+            $vendors = $res_vendors->fetch_all(MYSQLI_ASSOC);
+            // Free result set memory
+            $res_vendors->free(); 
+        }
+
+        // ---------------------------------------------------------
+        // 3. Static Query: Get all categories (Standard query is safe here)
+        // ---------------------------------------------------------
+        $res_cat = $this->conn->query("SELECT * FROM category");
+        if ($res_cat) {
+            $category = $res_cat->fetch_all(MYSQLI_ASSOC);
+            // Free result set memory
+            $res_cat->free();
+        }
+
+        // Return the combined array
         return [
-            'form1'   => $inbounding,
-            'vendors' => $vendors,
+            'form1'    => $inbounding,
+            'vendors'  => $vendors,
             'category' => $category
         ];
     }
@@ -503,28 +627,42 @@ class Inbounding {
         }
         return 1; // Default to 1 if table is empty
     }
-    public function saveform2($id,$data) {
-         global $conn;
-        $sql = "UPDATE vp_inbound SET vendor_code = ?, invoice_image = ?,temp_code = ?,invoice_no = ? WHERE id = ?";
+    public function saveform2($id, $data) {
+        // global $conn; // Not typically needed if using $this->conn in a class method
+
+        // 1. SQL Update (Removed temp_code)
+        $sql = "UPDATE vp_inbound 
+                SET vendor_code = ?, 
+                    invoice_image = ?, 
+                    invoice_no = ? 
+                WHERE id = ?";
+
         $stmt = $this->conn->prepare($sql);
+
         if (!$stmt) {
             return [
                 'success' => false,
                 'message' => 'Prepare failed: ' . $this->conn->error
             ];
         }
-        $stmt->bind_param('sssii',
+
+        // 2. Bind Parameters
+        // "sssi" means: String, String, String, Integer
+        $stmt->bind_param('sssi',
             $data['vendor_id'],   
             $data['invoice'],  
             $data['invoice_no'],  
             $id              
         );
+
+        // 3. Execute
         if ($stmt->execute()) {
             return [
                 'success' => true,
                 'message' => 'Record updated successfully.'
             ];
         }
+
         return [
             'success' => false,
             'message' => 'Update failed: ' . $stmt->error
@@ -597,13 +735,5 @@ class Inbounding {
             'message' => 'Update failed: ' . $stmt->error . '. Please check your input and try again.'
         ];
     }
-    public function isCodeExists($code) {
-        $stmt = $this->conn->prepare("SELECT COUNT(*) AS c FROM vp_inbound WHERE temp_code = ?");
-        $stmt->bind_param("s", $code);
-        $stmt->execute();
-        $result = $stmt->get_result()->fetch_assoc();
-        return $result['c'] > 0;
-    }
-
 }
 ?>
