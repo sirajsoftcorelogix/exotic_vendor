@@ -919,7 +919,7 @@ class OrdersController {
                     'sku' => $item['sku'] ?? '',
                     'order_number' => $order['orderid'] ?? '',
                     'item_code' => $item['itemcode'] ?? '',	
-                    'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
+                    'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
                         ? 'shipped'
                         : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),				
                     'updated_at' => date('Y-m-d H:i:s')
