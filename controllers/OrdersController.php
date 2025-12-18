@@ -911,6 +911,10 @@ class OrdersController {
                 // Map API fields to your table columns
                     
                 foreach ($order['cart'] as $item) {
+                    //check status other than 1 (pending)
+                    if(empty($item['order_status']) || $item['order_status'] == 1){
+                        continue;
+                    }
                     $rdata = [
                     'sku' => $item['sku'] ?? '',
                     'order_number' => $order['orderid'] ?? '',
