@@ -516,7 +516,7 @@ $record_id = $_GET['id'] ?? '';
                                 $isSelected = (isset($data['form2']['ware_house_code']) && $data['form2']['ware_house_code'] == $va['id']) ? 'selected' : '';
                             ?>
                                 <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                    <?php echo htmlspecialchars($va['address_tile'] ?? ''); ?>
+                                    <?php echo htmlspecialchars($va['address_title'] ?? ''); ?>
                                 </option>
                             <?php } ?>
                          </select>
