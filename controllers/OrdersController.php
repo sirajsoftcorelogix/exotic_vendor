@@ -903,8 +903,8 @@ class OrdersController {
         foreach ($response as $resp) {
             $respData = json_decode($resp, true);
             if (!is_array($respData) || empty($respData['orders'])) {
-                continue; // Skip invalid or empty responses
-            }
+                //continue; // Skip invalid or empty responses
+            
             foreach ($respData['orders'] as $order) {             
                 //print_r($order);
                 // Check if the order has the required fields
@@ -926,7 +926,7 @@ class OrdersController {
                     ];
                     $totalorder++;                
                     
-                    $data = $ordersModel->importedStatusUpdate($rdata);
+                    $data = $ordersModel->importedStatusUpdate2($rdata);
                     $result[] = $data;
                     //add products
                     //$pdata[] = $ordersModel->addProducts($rdata);                   
@@ -937,6 +937,7 @@ class OrdersController {
                     //print_array($rdata);                   
                 }
             
+            }
             }
         }
         //print_array($pdata);
