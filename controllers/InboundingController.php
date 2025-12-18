@@ -931,7 +931,7 @@ class InboundingController {
         ];
         $insertId = $inboundingModel->saveform3($record_id,$saveData);
         if ($insertId) {
-            header("location: " . base_url('?page=inbounding&action=print&id='.$record_id));
+            header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
             exit;
         } else {
             echo "Database error.";
