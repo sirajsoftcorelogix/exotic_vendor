@@ -504,8 +504,6 @@ class Inbounding {
                     weight = ?, 
                     color = ?, 
                     received_by_user_id = ?,
-                    dimention_unit = ?,
-                    weight_unit = ?
                 WHERE id = ?";
                 
         $stmt = $this->conn->prepare($sql);
@@ -521,7 +519,7 @@ class Inbounding {
         // The type string "sssssssissi" corresponds to the 11 variables below:
         // s (string), s (string), s (string), s (string), s (string), s (string), s (string), i (int), s (string), s (string), i (int)
         $stmt->bind_param(
-            "sssssssissi", 
+            "sssssssii", 
             $data['gate_entry_date_time'], // 1. Matches gate_entry_date_time
             $data['material_code'],        // 2. Matches material_code
             $data['height'],               // 3. Matches height
@@ -530,8 +528,6 @@ class Inbounding {
             $data['weight'],               // 6. Matches weight
             $data['color'],                // 7. Matches color
             $data['received_by_user_id'],  // 8. Matches received_by_user_id (int)
-            $data['dimention_unit'],       // 9. Matches dimention_unit (Added this)
-            $data['weight_unit'],          // 10. Matches weight_unit (Added this)
             $id                            // 11. Matches WHERE id (int)
         );
 
