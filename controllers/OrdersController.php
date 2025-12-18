@@ -882,10 +882,10 @@ class OrdersController {
             if(!empty($error)){
                 break;
             }
-            if($key >= 10){
-                //limit to 5 chunks per execution
-                break;
-            }
+            // if($key >= 10){
+            //     //limit to 5 chunks per execution
+            //     break;
+            // }
             
         }
         //print_r($error);
