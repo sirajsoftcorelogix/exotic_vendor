@@ -405,7 +405,7 @@
   <div class="space-y-1.5">
     <div class="flex items-center justify-between mb-4">
     <h3 class="payment-details-title mb-4">Goods Receipt Notes (GRN):</h3>
-    <a href="?page=grns&action=create&po_id=<?= htmlspecialchars($purchaseOrder['id'] ?? '') ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button mb-4 float-right">+ Add GRN</button></a>
+    <a href="?page=grns&action=create&po_id=<?= htmlspecialchars($purchaseOrder['id'] ?? '') ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md mb-4 float-right">+ Add GRN</button></a>
     </div>
     <?php
     if (empty($grns)) { ?>
