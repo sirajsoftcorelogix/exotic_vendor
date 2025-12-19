@@ -15,7 +15,7 @@ class grn{
     public function createGrn($data) {
         $query = "INSERT INTO vp_grns (po_id,po_number,sku,qty_received,qty_acceptable,remarks,location,received_by,received_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("issssiiss", $data['po_id'], $data['po_number'], $data['sku'], $data['qty_received'], $data['qty_acceptable'], $data['remarks'], $data['location'], $data['received_by'], $data['received_date']);
+        $stmt->bind_param("isssssiis", $data['po_id'], $data['po_number'], $data['sku'], $data['qty_received'], $data['qty_acceptable'], $data['remarks'], $data['location'], $data['received_by'], $data['received_date']);
         if ($stmt->execute()) {
             return $this->conn->insert_id;
         } else {
@@ -27,6 +27,15 @@ class grn{
         $stmt = $this->conn->prepare($query);
         $stmt->bind_param("is", $grnId, $fileName);
         return $stmt->execute();
+    }
+    public function getGrnsByPoId($poId) {
+        $query = "SELECT * FROM vp_grns WHERE po_id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $poId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+
     }
 }
 ?>

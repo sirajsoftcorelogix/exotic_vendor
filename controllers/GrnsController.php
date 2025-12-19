@@ -1,4 +1,5 @@
 <?php
+require_once 'vendor/autoload.php';
 require_once 'models/grns/grn.php';
 require_once 'models/order/purchaseOrder.php';
 require_once 'models/order/purchaseOrderItem.php';
@@ -224,6 +225,89 @@ class GrnsController {
             echo json_encode(['success' => false, 'message' => $e->getMessage(),'try_again' => true]);
             return;
         }
+    }
+    public function downloadQrCode() {
+        is_login();
+        global $purchaseOrderModel;
+        // fetch po details to create grn
+        $poId = $_GET['po_id'] ?? null;
+        if (!$poId) {
+            renderTemplate('views/errors/error.php', ['message' => ['type'=>'error','text'=>'Purchase Order ID is required to download QR Code.']], 'Error');
+            return;
+        }
+
+        $purchaseOrder = $purchaseOrderModel->getPurchaseOrder($poId);
+        if (!$purchaseOrder) {
+            renderTemplate('views/errors/error.php', ['message' => ['type'=>'error','text'=>'Purchase Order not found.']], 'Error');
+            return;
+        }
+
+        // generate QR code
+        $qrCode = new Endroid\QrCode\QrCode(
+            data: base_url('?page=grns&action=create&po_id='.$poId),
+            size: 400,
+            margin: 10
+        );
+
+        $writer = new Endroid\QrCode\Writer\PngWriter();
+        $result = $writer->write($qrCode);
+        $qrPng = $result->getString();
+
+        // Add PO number text on top of QR image using GD if available
+        if (function_exists('imagecreatefromstring') && ($qrImg = @imagecreatefromstring($qrPng)) !== false) {
+            $qrW = imagesx($qrImg);
+            $qrH = imagesy($qrImg);
+            $paddingTop = 50; // space for PO number text
+            $newH = $qrH + $paddingTop;
+
+            $newImg = imagecreatetruecolor($qrW, $newH);
+            // white background
+            $white = imagecolorallocate($newImg, 255, 255, 255);
+            imagefilledrectangle($newImg, 0, 0, $qrW, $newH, $white);
+
+            // copy QR image down below the text area
+            imagecopy($newImg, $qrImg, 0, $paddingTop, 0, 0, $qrW, $qrH);
+
+            // PO number text
+            $poText = $purchaseOrder['po_number'] ?? '';
+            $black = imagecolorallocate($newImg, 0, 0, 0);
+
+            // Try to use a TTF font from the project's fonts folder, fallback to built-in font
+            $fontFile = __DIR__ . '/../fonts/DejaVuSans.ttf';
+            $fontSize = 18; // pts
+
+            if (file_exists($fontFile) && function_exists('imagettfbbox')) {
+                $bbox = imagettfbbox($fontSize, 0, $fontFile, $poText);
+                $textWidth = $bbox[2] - $bbox[0];
+                $x = max(0, intval(($qrW - $textWidth) / 2));
+                // y - baseline: put baseline around half of paddingTop
+                $y = intval(($paddingTop / 2) + ($fontSize / 2));
+                imagettftext($newImg, $fontSize, 0, $x, $y, $black, $fontFile, $poText);
+            } else {
+                // fallback small font
+                $font = 5;
+                $textWidth = imagefontwidth($font) * strlen($poText);
+                $x = max(0, intval(($qrW - $textWidth) / 2));
+                $y = intval(($paddingTop - imagefontheight($font)) / 2);
+                imagestring($newImg, $font, $x, $y, $poText, $black);
+            }
+
+            // send headers and output
+            header('Content-Type: image/png');
+            header('Content-Disposition: attachment; filename="'.$purchaseOrder['po_number'].'_QRCode.png"');
+            imagepng($newImg);
+
+            imagedestroy($newImg);
+            imagedestroy($qrImg);
+            exit;
+        }
+
+        // Fallback: send original QR PNG if GD is unavailable
+        header('Content-Type: image/png');
+        header('Content-Disposition: attachment; filename="'.$purchaseOrder['po_number'].'_QRCode.png"');
+        echo $qrPng;
+        exit;
+
     }
 }
 ?>
