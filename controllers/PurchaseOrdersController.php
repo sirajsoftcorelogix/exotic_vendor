@@ -9,6 +9,7 @@ require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/order/po_invoice.php';
 require_once 'models/product/product.php';
+require_once 'models/grns/grn.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -25,6 +26,7 @@ $usersModel = new User($conn);
 $commanModel = new Tables($conn);
 $poInvoiceModel = new POInvoice($conn);
 $productModel = new Product($conn);
+$grnModel = new grn($conn);
 global $root_path;
  
 class PurchaseOrdersController {
@@ -332,6 +334,7 @@ class PurchaseOrdersController {
         global $poInvoiceModel;
         global $domain;
         global $commanModel;
+        global $grnModel;
 
         $poId = isset($_GET['po_id']) ? $_GET['po_id'] : 0;
 
@@ -363,6 +366,7 @@ class PurchaseOrdersController {
         $data['vendor_bank'] = $poInvoiceModel->getBankDetailsById($purchaseOrder['vendor_id']);
         $data['total_amount_paid'] = $poInvoiceModel->findTotalAmountPaid($poId);
         $data['challan'] = $poInvoiceModel->getChallanByPoId($poId);
+        $data['grns'] = $grnModel->getGrnsByPoId($poId);
         //print_array($data['payment']);
        
         
@@ -380,7 +384,7 @@ class PurchaseOrdersController {
                 break;
             }
         }   
-        //$data['exotic_address'] = $address;
+        $data['users'] = $users;
          //print_array($data);
          // Render the create purchase order form
          //echo json_encode(['success' => true, 'data' => $purchaseOrder]);

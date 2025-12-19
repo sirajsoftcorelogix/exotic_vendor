@@ -632,7 +632,7 @@ input[type="date"]:required:invalid::-webkit-datetime-edit {
   display: none;
   z-index: 1000;
   min-width: 120px;
-  max-height: 265px;
+  max-height: 336px;
   overflow-y: auto;
   border-radius: 4px;
 }
