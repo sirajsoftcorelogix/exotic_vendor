@@ -77,6 +77,15 @@ class PurchaseOrderItem {
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
+    public function getPoItemByIdProduct($po_id) {
+        $query = "SELECT * FROM vp_po_items poi
+                  LEFT JOIN vp_products vp ON poi.sku = vp.sku WHERE purchase_orders_id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
     public function createPurchaseOrderItem($data) {
         $query = "INSERT INTO vp_po_items (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount, item_code, size, color, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($query);

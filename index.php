@@ -535,6 +535,9 @@ switch ($page) {
             case 'create_post':
                 $controller->createGrnPost();   
                 break;
+            case 'qrcode':
+                $controller->downloadQrCode();
+                break;
             case 'delete':
                 $controller->deleteGrn();   
                 break;

@@ -913,27 +913,28 @@ class OrdersController {
                 foreach ($order['cart'] as $item) {
                     //check status other than 1 (pending)
                     if(empty($item['order_status']) || $item['order_status'] == 1){
-                        continue;
+                        //continue;
+                    
+                        $rdata = [
+                        'sku' => $item['sku'] ?? '',
+                        'order_number' => $order['orderid'] ?? '',
+                        'item_code' => $item['itemcode'] ?? '',	
+                        'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
+                            ? 'shipped'
+                            : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),				
+                        'updated_at' => date('Y-m-d H:i:s')
+                        ];
+                        $totalorder++;                
+                        
+                        $data = $ordersModel->importedStatusUpdate2($rdata);
+                        $result[] = $data;
+                        //add products
+                        //$pdata[] = $ordersModel->addProducts($rdata);                   
+                        
+                        if (isset($data['success']) && $data['success'] == true) {                        
+                            $imported++;
+                        } 
                     }
-                    $rdata = [
-                    'sku' => $item['sku'] ?? '',
-                    'order_number' => $order['orderid'] ?? '',
-                    'item_code' => $item['itemcode'] ?? '',	
-                    'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA' || strtoupper($order['payment_type'] ?? '') === 'INDIAAMAZONFBA')
-                        ? 'shipped'
-                        : (!empty($statusList[$item['order_status']]) ? $statusList[$item['order_status']] : 'pending'),				
-                    'updated_at' => date('Y-m-d H:i:s')
-                    ];
-                    $totalorder++;                
-                    
-                    $data = $ordersModel->importedStatusUpdate($rdata);
-                    $result[] = $data;
-                    //add products
-                    //$pdata[] = $ordersModel->addProducts($rdata);                   
-                    
-                    if (isset($data['success']) && $data['success'] == true) {                        
-                        $imported++;
-                    } 
                     //print_array($rdata);                   
                 }
             
