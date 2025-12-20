@@ -6,7 +6,7 @@ $record_id = $data['record_id'] ?? 0;
 ?>
 
 <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6 font-['Segoe_UI']">
-
+    <h2 class="text-xl font-bold text-gray-900 mb-5 ml-[5px]">Edited Photo</h2>
     <div class="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-200 mb-6">
         <div class="shrink-0 w-32 h-32 bg-gray-100 rounded-lg border border-gray-200 p-1">
             <img src="<?php echo base_url($item['product_photo'] ?? 'assets/no-img.png'); ?>" class="w-full h-full object-contain rounded">
@@ -66,7 +66,7 @@ $record_id = $data['record_id'] ?? 0;
     </div>
 
     <form action="<?php echo base_url('?page=inbounding&action=itmimgsave&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
-        
+        <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
         <div id="deletedInputsContainer"></div>
 
         <div class="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-6 items-center border border-gray-300 rounded-lg p-6 mb-8">

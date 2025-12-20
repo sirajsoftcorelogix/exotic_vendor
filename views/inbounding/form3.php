@@ -42,9 +42,11 @@ $color = $form2['color'] ?? '';
 $weight_unit = $form2['weight_unit'] ?? '';
 $dimention_unit = $form2['dimention_unit'] ?? '';
 $quantity_received = $form2['quantity_received'] ?? '';
+$size = $form2['size'] ?? '';
+$cp = $form2['cp'] ?? '';
 $Item_code = $form2['Item_code'] ?? '';
 
-$isEdit = (!empty($gate_entry_date_time) || !empty($material_code) || !empty($height) || !empty($width) || !empty($depth) || !empty($weight) || !empty($color) || !empty($quantity_received) || !empty($Item_code));
+$isEdit = (!empty($gate_entry_date_time) || !empty($material_code) || !empty($height) || !empty($width) || !empty($depth) || !empty($weight) || !empty($color) || !empty($quantity_received) || !empty($Item_code) || !empty($size) || !empty($cp));
 
 $formAction = $isEdit
     ? base_url('?page=inbounding&action=updateform3&id=' . $record_id)
@@ -148,40 +150,46 @@ $formAction = $isEdit
                         <div class="grid grid-cols-3 gap-3">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Height (cm)</label>
-                                <input type="text" name="height" value="<?php echo $height; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
+                                <input type="number" step="any" min="0" name="height" value="<?php echo $height; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Width (cm)</label>
-                                <input type="text" name="width" value="<?php echo $width; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
+                                <input type="number" step="any" min="0" name="width" value="<?php echo $width; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Depth (cm)</label>
-                                <input type="text" name="depth" value="<?php echo $depth; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
+                                <input type="number" step="any" min="0" name="depth" value="<?php echo $depth; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                         </div>
+
                         <div class="grid grid-cols-2 gap-4">
-                             <div>
+                            <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">Weight (kg)</label>
-                                <input type="text" name="weight" value="<?php echo $weight; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                                <input type="number" step="any" min="0" name="weight" value="<?php echo $weight; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
-                                <input 
-                                    type="text" 
-                                    name="color" 
-                                    value="<?php echo !empty($color) ? $color : 'Black'; ?>" 
-                                    class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm"
-                                >
+                                <input type="text" name="color" value="<?php echo !empty($color) ? $color : 'Black'; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
-                             <div>
+                            <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">Quantity</label>
-                                <input type="text" name="quantity_received" value="<?php echo $quantity_received; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                                <input type="number" min="0" name="quantity_received" value="<?php echo $quantity_received; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Size</label>
+                                <input type="text" name="size" value="<?php echo $size; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
                             </div>
                         </div>
 
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">CP</label>
+                                <input type="number" step="any" min="0" name="cp" value="<?php echo $cp; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                            </div>
+                        </div>
                     </div>
 
                 </div>

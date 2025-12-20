@@ -133,7 +133,14 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         <span class="font-extrabold text-gray-900">Color:</span> 
                         <span class="text-gray-600 font-bold"><?php echo safe($label_data['color'] ?? '0'); ?></span>
                     </div>
-                
+                    <div class="flex justify-between">
+                        <span class="font-extrabold text-gray-900">CP:</span> 
+                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['cp'] ?? '0'); ?></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-extrabold text-gray-900">Temp Code:</span> 
+                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['temp_code'] ?? '0'); ?></span>
+                    </div>
                 </div>
 
                 <div class="mt-1 pt-2">

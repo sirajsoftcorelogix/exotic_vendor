@@ -76,11 +76,13 @@ if (!empty($raw_categories)) {
                             </div>
                             
                             <div class="grid grid-cols-3 gap-3">
+                                <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
                                 <?php if(empty($display_categories)): ?>
                                     <p class="col-span-3 text-center text-gray-400 text-xs">No categories found.</p>
                                 <?php else: ?>
                                     <?php foreach ($display_categories as $item) { ?>
                                         <label class="relative cursor-pointer group">
+                                            
                                             <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
                                             
                                             <div class="aspect-square flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200
