@@ -623,6 +623,56 @@ class Inbounding {
         // 5. Execute and return result
         return $stmt->execute();
     }
+    public function updateForm3($id, $data) {
+        // 1. The SQL has 11 placeholders (?)
+        $sql = "UPDATE vp_inbound 
+                SET gate_entry_date_time = ?, 
+                    material_code = ?, 
+                    height = ?, 
+                    width = ?, 
+                    depth = ?, 
+                    weight = ?, 
+                    color = ?, 
+                    received_by_user_id = ?,
+                WHERE id = ?";
+                
+        $stmt = $this->conn->prepare($sql);
+        
+        if (!$stmt) {
+            return [
+                'success' => false,
+                'message' => "Prepare failed: " . $this->conn->error
+            ];
+        }
+
+        // 2. Corrected bind_param
+        // The type string "sssssssissi" corresponds to the 11 variables below:
+        // s (string), s (string), s (string), s (string), s (string), s (string), s (string), i (int), s (string), s (string), i (int)
+        $stmt->bind_param(
+            "sssssssii", 
+            $data['gate_entry_date_time'], // 1. Matches gate_entry_date_time
+            $data['material_code'],        // 2. Matches material_code
+            $data['height'],               // 3. Matches height
+            $data['width'],                // 4. Matches width
+            $data['depth'],                // 5. Matches depth
+            $data['weight'],               // 6. Matches weight
+            $data['color'],                // 7. Matches color
+            $data['received_by_user_id'],  // 8. Matches received_by_user_id (int)
+            $id                            // 11. Matches WHERE id (int)
+        );
+
+        if ($stmt->execute()) {
+            return [
+                'success' => true,
+                'message' => "Record updated successfully."
+            ];
+        }
+        
+        return [
+            'success' => false,
+            'message' => "Update failed: " . $stmt->error
+        ];
+    }
     public function updatedesktopform($id, $data) {
         if (isset($data['id'])) unset($data['id']);
         $cols = []; $values = []; $types = "";

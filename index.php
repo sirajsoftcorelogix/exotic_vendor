@@ -145,6 +145,9 @@ switch ($page) {
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
                 break;
+            case 'update_import_bulk':
+                $controller->ordersStatusImportBulk();
+                break;
             default:
                 $controller->index();
                 break;
@@ -537,6 +540,9 @@ switch ($page) {
                 break;
             case 'create_post':
                 $controller->createGrnPost();   
+                break;
+            case 'qrcode':
+                $controller->downloadQrCode();
                 break;
             case 'delete':
                 $controller->deleteGrn();   

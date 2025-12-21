@@ -576,7 +576,11 @@ $record_id = $_GET['id'] ?? '';
                                     }
                                 }
                             ?>
-                        </select>
+                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                    <?php echo htmlspecialchars($va['address_title'] ?? ''); ?>
+                                </option>
+                            <?php } ?>
+                         </select>
                     </div>
 
                     <div class="flex-1">

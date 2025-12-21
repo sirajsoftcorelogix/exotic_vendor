@@ -825,5 +825,39 @@ class Order{
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+    public function fetchOrdersForUpdate(){
+        //1= shipped !=cancelled !=return ORDERS
+        $sql = "SELECT * FROM vp_orders WHERE status != 'shipped' AND status != 'cancelled' AND status != 'return' AND status = 'pending' ORDER BY order_date";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orders = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orders[] = $row['order_number'];
+            }
+        }
+        return array_unique($orders);
+    }
+    public function importedStatusUpdate($data){
+        $sql = "UPDATE vp_orders SET status = ?, update_flag = 1, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('ssss', $data['status'], $data['updated_at'], $data['sku'], $data['order_number']);
+        if ($stmt->execute()) {
+            return ['success' => true, 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'sku' => $data['sku'],'message' => 'Order status updated successfully.','item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function importedStatusUpdate2($data){
+        $sql = "UPDATE vp_orders SET update_flag = 2, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('sss', $data['updated_at'], $data['sku'], $data['order_number']);
+        if ($stmt->execute()) {
+            return ['success' => true, 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'sku' => $data['sku'],'message' => 'Order status updated successfully.','item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
 ?>
