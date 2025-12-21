@@ -572,15 +572,15 @@ $record_id = $_GET['id'] ?? '';
                                 if (!empty($data['address'])) {
                                     foreach ($data['address'] as $va) {
                                         $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
-                                        echo '<option value="' . $va['id'] . '" ' . $isSelected . '>' . htmlspecialchars($va['address_title']) . '</option>';
-                                    }
-                                }
                             ?>
-                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                    <?php echo htmlspecialchars($va['address_title'] ?? ''); ?>
-                                </option>
-                            <?php } ?>
-                         </select>
+                                        <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                            <?php echo htmlspecialchars($va['address_title']); ?>
+                                        </option>
+                            <?php 
+                                    }
+                                } 
+                            ?>
+                        </select>
                     </div>
 
                     <div class="flex-1">
