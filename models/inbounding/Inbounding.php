@@ -818,6 +818,22 @@ class Inbounding {
         }
         return false;
     }
+    public function getlabeldata($id){
+        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name  FROM vp_inbound as v 
+        LEFT JOIN category as c on v.category_code=c.category
+        LEFT JOIN material as m on v.material_code=m.id
+        LEFT JOIN vp_vendors as vv on v.vendor_code=vv.id
+        WHERE v.id = $id";
+        $result = $this->conn->query($sql);
+        $inbounding = [];
+        if ($result) {
+            $labeldata = $result->fetch_assoc();
+            $result->free();
+        }
+        return [
+            'form2' => $labeldata
+        ];
+    }
     // 1. Fetch Category Name
     public function getCategoryById($id) {
         $sql = "SELECT * FROM category WHERE category = '$id'"; // Check your actual column name
