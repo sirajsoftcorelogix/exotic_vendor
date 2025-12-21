@@ -443,7 +443,13 @@ switch ($page) {
             case 'itmimgsave':
                 $controller->itmimgsave();
                 break;
+            case 'getNextMaterialOrderAjax':
+                $controller->getNextMaterialOrderAjax();
+                break;
 
+            case 'addMaterialAjax':
+                $controller->addMaterialAjax();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
