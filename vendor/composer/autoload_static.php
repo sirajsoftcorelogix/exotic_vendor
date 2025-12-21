@@ -171,6 +171,7 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
         'ChatModule\\' => 
         array (
             0 => __DIR__ . '/../..' . '/src',
+        ),
         'Endroid\\QrCode\\' =>
         array (
             0 => __DIR__ . '/..' . '/endroid/qr-code/src',
