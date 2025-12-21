@@ -22,9 +22,8 @@ $server = IoServer::factory(
             $chat
         )
     ),
-    8080
+    $config['WS_PORT']
 );
 
-echo "Starting Ratchet WebSocket server on port 8080
-";
+echo "Starting Ratchet WebSocket server on port ".$config['WS_PORT'];
 $server->run();
