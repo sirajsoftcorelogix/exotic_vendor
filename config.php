@@ -3,12 +3,12 @@ return [
   'db' => [
     'host' => 'localhost',
     'name' => 'vendor_portal_test',
-    'user' => 'root',
-    'pass' => 'SwAn@007',
+    'user' => 'vendor_user',
+    'pass' => 'eXotic@123',
     'charset' => 'utf8mb4'
   ],
   'token_secret' => 'a1b2c3d4e5f678901234567890abcdef',
-  'ENV' => 'local',   // change to 'live' on production
+  'ENV' => 'test',   // change to 'live' on production
 
   'LOCAL_API_BASE' => 'http://localhost/exotic_vendor/api',
   'LOCAL_WS_URL'   => 'ws://localhost:8080',
