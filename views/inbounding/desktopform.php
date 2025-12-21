@@ -1,5 +1,7 @@
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <style>
     .draggable-item {
         cursor: grab;
@@ -119,16 +121,67 @@ $record_id = $_GET['id'] ?? '';
                     </div>
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On</label>
-                         <?php if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00"): ?>
-                            <input type="date" class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" value="<?php echo date('Y-m-d', strtotime($data['form2']['stock_added_date'])); ?>" name="stock_added_date">
-                        <?php else: ?>
-                            <input type="date" class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]" value="<?php echo date('Y-m-d'); ?>" name="stock_added_date">
-                        <?php endif; ?>
+                        
+                        <?php 
+                            // 1. Determine the value in standard Y-m-d format first
+                            if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00") {
+                                $dateValue = date('Y-m-d', strtotime($data['form2']['stock_added_date']));
+                            } else {
+                                $dateValue = date('Y-m-d');
+                            }
+                        ?>
+
+                        <input type="text" 
+                               class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white" 
+                               value="<?php echo $dateValue; ?>" 
+                               name="stock_added_date">
                     </div>
                 </div>
             </fieldset>
         </div>
+        <div class="mt-[15px] md:mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Drag to Reorder):</legend>
+                
+                <?php 
+                // Assuming $data['images'] contains the processed photos from 'item_images' table
+                // If the array key is different, please update $data['images'] below
+                $item_photos = $data['images'] ?? []; 
+                ?>
 
+                <?php if (empty($item_photos)): ?>
+                    <div class="text-center text-gray-400 py-8 text-sm border border-dashed border-gray-300 rounded">
+                        No processed photos found in itm_img.
+                    </div>
+                <?php else: ?>
+                    <div id="photo-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        <?php foreach($item_photos as $img): ?>
+                        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-gray-50 flex flex-col items-center group" 
+                             draggable="true" 
+                             data-id="<?php echo $img['id']; ?>">
+                            
+                            <div class="absolute top-1 right-1 text-gray-400 cursor-grab active:cursor-grabbing p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                            </div>
+
+                            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" onclick="openImagePopup('uploads/itm_img/<?php echo $img['file_name']; ?>')">
+                                <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain cursor-pointer">
+                            </div>
+
+                            <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
+                                <?php echo $img['file_name']; ?>
+                            </span>
+
+                            <input type="hidden" 
+                                   name="photo_order[<?php echo $img['id']; ?>]" 
+                                   value="<?php echo $img['display_order']; ?>" 
+                                   class="order-input">
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </fieldset>
+        </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2 pb-3 bg-white w-full">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Receipt:</legend>
@@ -564,7 +617,7 @@ $record_id = $_GET['id'] ?? '';
                     </div>
 
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse Code:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="ware_house_code">
                             <option value="">Select Warehouse</option>
                             <?php 
@@ -622,10 +675,7 @@ $record_id = $_GET['id'] ?? '';
                         </div>
                     </div>
 
-                    <div class="flex-1 flex gap-4">
-                        
-                        <div>
-                            <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
+                    <div class="flex-1 flex"> <div class="pr-4 border-r border-[#ccc]"> <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
                             <div class="flex items-center h-[32px] gap-4">
                                 <?php $us_val = $data['form2']['us_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
@@ -639,8 +689,7 @@ $record_id = $_GET['id'] ?? '';
                             </div>
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-[#222] mb-[5px]">India Stock:</label>
+                        <div class="pl-4"> <label class="block text-xs font-bold text-[#222] mb-[5px]">India Stock:</label>
                             <div class="flex items-center h-[32px] gap-4">
                                 <?php $in_val = $data['form2']['india_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
@@ -658,51 +707,15 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Drag to Reorder):</legend>
-                
-                <?php 
-                // Assuming $data['images'] contains the processed photos from 'item_images' table
-                // If the array key is different, please update $data['images'] below
-                $item_photos = $data['images'] ?? []; 
-                ?>
-
-                <?php if (empty($item_photos)): ?>
-                    <div class="text-center text-gray-400 py-8 text-sm border border-dashed border-gray-300 rounded">
-                        No processed photos found in itm_img.
-                    </div>
-                <?php else: ?>
-                    <div id="photo-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                        <?php foreach($item_photos as $img): ?>
-                        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-gray-50 flex flex-col items-center group" 
-                             draggable="true" 
-                             data-id="<?php echo $img['id']; ?>">
-                            
-                            <div class="absolute top-1 right-1 text-gray-400 cursor-grab active:cursor-grabbing p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                            </div>
-
-                            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" onclick="openImagePopup('uploads/itm_img/<?php echo $img['file_name']; ?>')">
-                                <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain cursor-pointer">
-                            </div>
-
-                            <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
-                                <?php echo $img['file_name']; ?>
-                            </span>
-
-                            <input type="hidden" 
-                                   name="photo_order[<?php echo $img['id']; ?>]" 
-                                   value="<?php echo $img['display_order']; ?>" 
-                                   class="order-input">
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </fieldset>
-        </div>
-        <div class="flex justify-end my-[25px] md:mx-5 mb-10">
-            <button class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a]">Save and Generate Item Code</button>
+        
+        <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
+            <button class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
+                Save and Draft
+            </button>
+            
+            <button class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
+                Save and Generate Item Code
+            </button>
         </div>
     </form>
 </div>
@@ -747,7 +760,7 @@ $record_id = $_GET['id'] ?? '';
             </div>
 
             <div>
-                <label class="block text-xs font-bold text-[#333] mb-1">Material Slug:</label>
+                <label class="block text-xs font-bold text-[#333] mb-1">Material Code:</label>
                 <input type="text" id="new_material_slug" class="w-full h-[34px] border border-[#ccc] rounded px-2.5 text-[13px] bg-gray-50 focus:outline-none focus:border-[#d97824]" placeholder="e.g. cotton-fabric">
             </div>
 
@@ -1371,4 +1384,28 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('imagePopup').classList.add('hidden');
         document.getElementById('popupImage').src = '';
     } 
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        flatpickr(".date-picker", {
+            altInput: true,         // Create a "fake" input for display
+            altFormat: "d M Y",     // Display format: "21 Dec 2025"
+            dateFormat: "Y-m-d",    // Save format (hidden value): "2025-12-21"
+            allowInput: true        // Allow user to type manually if they want
+        });
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        window.addEventListener('keydown', function(e) {
+            // Check if the key pressed is 'Enter'
+            if (e.key === 'Enter') {
+                // Allow Enter only in Textareas (for multi-line text) or on Buttons (to click them)
+                if (e.target.nodeName === 'INPUT' || e.target.nodeName === 'SELECT') {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+    });
 </script>

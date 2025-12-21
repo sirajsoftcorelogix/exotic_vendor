@@ -287,6 +287,16 @@ class Inbounding {
         // Execute and return result
         return $stmt->execute();
     }
+    public function get_temp_code($item_id){
+        $result = $this->conn->query("SELECT temp_code FROM `vp_inbound` WHERE id = $item_id");
+        $id = intval($item_id);
+        $sql = "SELECT temp_code FROM vp_inbound WHERE id = $id";
+        $result = $this->conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return false;
+    }
     public function get_raw_item_imgs($item_id) {
         $item_id = intval($item_id);
         // Added ORDER BY display_order ASC so images appear in the correct sequence

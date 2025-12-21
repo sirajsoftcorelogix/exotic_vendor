@@ -276,14 +276,6 @@ $formAction = $isEdit
              e.preventDefault();
              return false;
         }
-
-        // Validate Vendor Selection
-        const vendorSelect = document.getElementById("vendor_id");
-        if(vendorSelect.value === "") {
-            alert("Please select a vendor.");
-            e.preventDefault();
-            return false;
-        }
     });
 </script>
 <script>

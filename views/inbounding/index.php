@@ -444,7 +444,7 @@ function isFilled($value) {
                                     <a href="<?php echo base_url('?page=inbounding&action=desktopform&id=' . $tc['id']); ?>" class="btn-base btn-edit">Edit Information</a>
                                 <?php endif; ?>
                                 
-                                <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" class="btn-base btn-upload">Photos</a>
+                                <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" class="btn-base btn-upload">Edited Photos</a>
                                 <a href="<?php echo base_url('?page=inbounding&action=i_raw_photos&id=' . $tc['id']); ?>" class="btn-base btn-upload">Raw Photos</a>
                             </div>
                         </div>

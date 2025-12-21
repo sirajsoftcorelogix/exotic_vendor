@@ -300,7 +300,7 @@ class InboundingController {
         }
 
         // 2. Validate Size (50KB Limit)
-        if ($_FILES['photo']['size'] > 51200) { // 50 * 1024
+        if ($_FILES['photo']['size'] > 5242880) { // 50 * 1024
             echo "File is too large. Maximum allowed size is 50KB.";
             exit;
         }
@@ -369,7 +369,7 @@ class InboundingController {
         if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
             
             // 1. Validate Size
-            if ($_FILES['photo']['size'] > 51200) {
+            if ($_FILES['photo']['size'] > 5242880) {
                 echo "File is too large. Maximum allowed size is 50KB.";
                 exit;
             }
@@ -557,11 +557,17 @@ class InboundingController {
                 }
             }
 
-            // 2. Handle Metadata Updates (Caption & Order)
-            if (!empty($_POST['captions']) && is_array($_POST['captions'])) {
-                foreach ($_POST['captions'] as $img_id => $caption) {
-                    $order = $_POST['orders'][$img_id] ?? 0;
-                    $inboundingModel->update_image_meta($img_id, $caption, $order);
+            // 2. Handle Updates (Captions AND Order)
+            // We use image_ids_ordered because it arrives in the exact order they are on screen
+            if (!empty($_POST['image_ids_ordered'])) {
+                $counter = 1; 
+                foreach ($_POST['image_ids_ordered'] as $img_id) {
+                    $caption = $_POST['captions'][$img_id] ?? '';
+                    
+                    // The loop index ($counter) IS the new sort order
+                    $inboundingModel->update_image_meta($img_id, $caption, $counter);
+                    
+                    $counter++;
                 }
             }
 
@@ -570,6 +576,9 @@ class InboundingController {
                 $uploadDir = __DIR__ . '/../uploads/itm_img/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
+                // Get current max order to append new ones at the end
+                $currentMaxOrder = isset($counter) ? $counter : 1;
+
                 foreach ($_FILES['new_photos']['name'] as $key => $name) {
                     if ($_FILES['new_photos']['error'][$key] === 0) {
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
@@ -577,17 +586,26 @@ class InboundingController {
                         $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
                         
                         if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
+                            // Add image, potentially passing order if your model supports it
+                            // Assuming add_image just inserts:
                             $inboundingModel->add_image($id, $newName);
+                            
+                            // Optional: Immediately update its order to be last
+                            // $lastId = $inboundingModel->last_insert_id(); 
+                            // $inboundingModel->update_image_meta($lastId, '', $currentMaxOrder++);
                         }
                     }
                 }
             }
+            
+            // Logging
             $logData = [
                     'userid_log' => $_POST['userid_log'] ?? '',
                     'i_id' => $id,
                     'stat' => 'Editing'
                 ];
             $log_res =  $inboundingModel->stat_logs($logData);
+            
             header("Location: " . base_url("?page=inbounding&action=list"));
             exit;
         }
@@ -600,7 +618,7 @@ class InboundingController {
         
         // 1. Get images from DB
         $images = $inboundingModel->get_raw_item_imgs($id);
-        
+        $item_code = $inboundingModel->get_temp_code($id);
         if(empty($images)) {
             echo "<script>alert('No images found for this item.'); history.back();</script>";
             exit;
@@ -608,7 +626,7 @@ class InboundingController {
 
         // 2. Setup Zip
         $zip = new ZipArchive();
-        $zipName = "Item_{$id}_Photos_" . date('Ymd_His') . ".zip";
+        $zipName = "Item_{$item_code['temp_code']}_Photos_" . date('Ymd_His') . ".zip";
         $tmp_file = sys_get_temp_dir() . '/' . $zipName;
 
         if ($zip->open($tmp_file, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
@@ -788,9 +806,12 @@ class InboundingController {
             // Rule: If Variant is No, SKU is exactly the Item Code
             $generated_sku = $item_code;
         } elseif ($is_variant === 'Y') {
-            // Rule: If Variant is Yes, SKU is ItemCode-Size-Color
-            // Note: We use the POSTed Item_code here, which comes from the selection
-            $generated_sku = $item_code . '-' . $size . '-' . $color;
+            // Safety check: ensure item_code isn't empty (though JS validation handles this)
+            if(!empty($item_code)) {
+                $generated_sku = $item_code . '-' . $size . '-' . $color;
+            } else {
+                echo "Error: Parent Item Code is missing."; exit;
+            }
         }
 
         // --- Handle Array Inputs ---

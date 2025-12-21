@@ -172,7 +172,7 @@ photoInput.addEventListener('change', function(event) {
     const file = event.target.files[0];
     photoError.innerHTML = "";
     if (file) {
-        if (file.size > 51200) {
+        if (file.size > 5242880) {
             photoError.innerHTML = "Error: Image size must be less than 50KB.";
             photoInput.value = ""; 
             previewImg.src = "#";

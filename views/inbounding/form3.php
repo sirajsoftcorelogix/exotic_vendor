@@ -1,6 +1,5 @@
 <?php
 // PHP Logic (Unchanged)
-if (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code']) {
     is_login();
     require_once 'settings/database/database.php';
     $conn = Database::getConnection();
@@ -8,7 +7,6 @@ if (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code']) {
     $usersModel = new User($conn);
     $currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
     unset($usersModel);
-}
 
 $record_id = $_GET['id'] ?? '';
 $form2 = $data['form2'] ?? [];
@@ -147,15 +145,15 @@ $formAction = $isEdit
 
                         <div class="grid grid-cols-3 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Height (cm)</label>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Height (inch)</label>
                                 <input type="number" step="any" min="0" name="height" value="<?php echo $height; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Width (cm)</label>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Width (inch)</label>
                                 <input type="number" step="any" min="0" name="width" value="<?php echo $width; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Depth (cm)</label>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Depth (inch)</label>
                                 <input type="number" step="any" min="0" name="depth" value="<?php echo $depth; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                         </div>
