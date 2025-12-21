@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/../vendor/autoload.php';
 
-ini_set('session.save_path', 'C:\\xampp\\tmp'); // <<< use exactly what phpinfo() shows
+#ini_set('session.save_path', 'C:\\xampp\\tmp'); // <<< use exactly what phpinfo() shows
 
 use Ratchet\Server\IoServer;
 use Ratchet\Http\HttpServer;
