@@ -126,13 +126,11 @@ $formAction = $isEdit
                                 <div class="relative">
                                     <select name="material_code" class="w-full appearance-none bg-white border border-gray-300 text-gray-700 py-3 px-4 pr-8 rounded-lg focus:ring-2 focus:ring-[#d9822b] outline-none font-medium cursor-pointer shadow-sm">
                                         <option value="">Select Material</option>
-                                        <?php
-                                        $materials = ["Brass","Copper","Bronze","Marble","Wood","Stone","Other"];
-                                        foreach ($materials as $m) {
-                                            $sel = ($material_code == $m) ? "selected" : "";
-                                            echo "<option value='$m' $sel>$m</option>";
-                                        }
-                                        ?>
+                                        <?php foreach ($data['material'] as $value2) { 
+                                            $isSelected = ($selected_material == $value2['id']) ? 'selected' : '';
+                                        ?> 
+                                            <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
+                                        <?php } ?>
                                     </select>
                                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>

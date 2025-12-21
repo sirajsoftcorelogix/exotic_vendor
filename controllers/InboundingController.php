@@ -839,7 +839,7 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
-            'local_stock'         => $_POST['local_stock'] ?? '',
+            'back_order'          => $_POST['back_order'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
             'description_icons'   => $icons_val, 
@@ -914,21 +914,57 @@ class InboundingController {
     public function saveform3() {
         global $inboundingModel;
         $record_id = $_POST['record_id'] ?? '';
+        
+        // 1. Fetch Existing Data for Logic (We need Category & Material IDs)
+        // Assuming getById returns the row from vp_inbound
+        $existingData = $inboundingModel->getById($record_id); 
+        
+        // 2. Fetch Names for Initials
+        // A. Get Category Name (First Char)
+        $categoryName = '';
+        if (!empty($existingData['group_name'])) {
+            // Fetch from 'vp_categories' table using group_name (which is category ID)
+            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
+            $categoryName = $catData['display_name'] ?? ''; // Assuming column is 'category' or 'name'
+        }
+
+        // B. Get Material Name (First Char)
+        $materialId = $_POST['material_code'] ?? '';
+        $materialName = '';
+        if (!empty($materialId)) {
+            $matData = $inboundingModel->getMaterialById($materialId);
+            $materialName = $matData['material_name'] ?? '';
+        }
+
+        // C. Get Color (First Char)
+        $colorName = $_POST['color'] ?? '';
+
+        // 3. Generate Prefix (e.g., "BSB")
+        $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
+        $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
+        $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
+        $prefix = $char1 . $char2 . $char3;
+
+        // 4. Generate Full Temp Code (e.g., "BSB001")
+        // This function checks the DB for the last code starting with this prefix
+        $temp_code = $inboundingModel->generateNextTempCode($prefix);
+
+        // 5. Prepare Save Data
         $gate_entry_date_time = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
         
         $saveData = [
-            'gate_entry_date_time' => $gate_entry_date_time ?? '',
-            'material_code'        => $_POST['material_code'] ?? '',
+            'gate_entry_date_time' => $gate_entry_date_time,
+            'material_code'        => $materialId,
             'height'               => $_POST['height'] ?? '',
             'width'                => $_POST['width'] ?? '',
             'depth'                => $_POST['depth'] ?? '',
             'weight'               => $_POST['weight'] ?? '',
-            'color'                => $_POST['color'] ?? '',
+            'color'                => $colorName,
             'Quantity'             => $_POST['quantity_received'] ?? '',
-            // ADDED FIELDS
             'size'                 => $_POST['size'] ?? '',
-            'cp'                   => $_POST['cp'] ?? '', 
+            'cp'                   => $_POST['cp'] ?? '',
             'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
+            'temp_code'            => $temp_code // Add generated code
         ];
 
         $insertId = $inboundingModel->saveform3($record_id, $saveData);
@@ -950,40 +986,62 @@ class InboundingController {
             exit;
         }
 
-        $gate_entry_date_time = $_POST['gate_entry_date_time'] ?? '';
-        $material_code        = $_POST['material_code'] ?? '';
-        $height               = $_POST['height'] ?? '';
-        $width                = $_POST['width'] ?? '';
-        $depth                = $_POST['depth'] ?? '';
-        $weight               = $_POST['weight'] ?? '';
-        $color                = $_POST['color'] ?? '';
-        $quantity_received    = $_POST['quantity_received'] ?? '';
-        $received_by_user_id  = $_POST['received_by_user_id'] ?? '';
-        // ADDED VARS
-        $size                 = $_POST['size'] ?? '';
-        $cp                   = $_POST['cp'] ?? '';
+        // --- 1. TEMP CODE GENERATION LOGIC ---
+        
+        // A. Fetch existing inbound data to get the Group ID (which maps to Category)
+        $existingData = $inboundingModel->getById($record_id); 
+        
+        // B. Get Category Name (First Char)
+        $categoryName = '';
+        if (!empty($existingData['group_name'])) {
+            // Fetch from 'vp_categories' table using group_name (which is category ID)
+            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
+            $categoryName = $catData['display_name'] ?? ''; // Assuming column is 'category' or 'name'
+        }
 
-        // Prepare data array for update
+        // C. Get Material Name (First Char)
+        $materialId = $_POST['material_code'] ?? '';
+        $materialName = '';
+        if (!empty($materialId)) {
+            $matData = $inboundingModel->getMaterialById($materialId);
+            $materialName = $matData['material_name'] ?? '';
+        }
+
+        // D. Get Color (First Char)
+        $colorName = $_POST['color'] ?? '';
+
+        // E. Construct Prefix (e.g., "BSB")
+        $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
+        $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
+        $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
+        $prefix = $char1 . $char2 . $char3;
+
+        // F. Generate Full Temp Code (e.g., "BSB001")
+        $temp_code = $inboundingModel->generateNextTempCode($prefix);
+        // --- 2. PREPARE UPDATE DATA ---
+
+        $gate_entry_date_time = $_POST['gate_entry_date_time'] ?? '';
+        
         $updateData = [
             'gate_entry_date_time' => $gate_entry_date_time,
-            'material_code'        => $material_code,
-            'height'               => $height,
-            'width'                => $width,
-            'depth'                => $depth,
-            'weight'               => $weight,
-            'color'                => $color,
-            'quantity_received'    => $quantity_received,
-            // ADDED FIELDS
-            'size'                 => $size,
-            'cp'                   => $cp,
-            'received_by_user_id'  => $received_by_user_id,
+            'material_code'        => $materialId,
+            'height'               => $_POST['height'] ?? '',
+            'width'                => $_POST['width'] ?? '',
+            'depth'                => $_POST['depth'] ?? '',
+            'weight'               => $_POST['weight'] ?? '',
+            'color'                => $colorName,
+            'quantity_received'    => $_POST['quantity_received'] ?? '',
+            'size'                 => $_POST['size'] ?? '',
+            'cp'                   => $_POST['cp'] ?? '',
+            'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
+            'temp_code'            => $temp_code // Add Generated Code here
         ];
 
         // Call model update
         $updated = $inboundingModel->updateForm3($record_id, $updateData);
 
         if ($updated['success']) {
-            // redirect to label
+            // Redirect to label page
             header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
             exit;
         } else {

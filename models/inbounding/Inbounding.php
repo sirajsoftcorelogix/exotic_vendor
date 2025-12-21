@@ -745,7 +745,7 @@ class Inbounding {
         ];
     }
     public function updateForm3($id, $data) {
-        // Added size and cp to the query
+        // Added temp_code to the query
         $sql = "UPDATE vp_inbound 
                 SET gate_entry_date_time = ?, 
                     material_code = ?, 
@@ -758,9 +758,10 @@ class Inbounding {
                     cp = ?, 
                     received_by_user_id = ?,
                     dimention_unit = ?,
-                    weight_unit = ?
+                    weight_unit = ?,
+                    temp_code = ? 
                 WHERE id = ?";
-                
+        
         $stmt = $this->conn->prepare($sql);
         
         if (!$stmt) {
@@ -771,23 +772,28 @@ class Inbounding {
         }
 
         // UPDATED bind_param
-        // Added 's' for size and 'd' for cp
-        // Type string: ssssssssdissi (13 params)
+        // Added 's' for temp_code at the end before the ID
+        // New Type String: ssssssssdisssi (14 params total)
+        // 1. gate (s) 2. mat (s) 3. h (s) 4. w (s) 5. d (s) 6. wt (s) 7. col (s) 
+        // 8. size (s) 9. cp (d) 10. user (i) 11. dim_u (s) 12. wt_u (s) 
+        // 13. temp_code (s) 14. id (i)
+
         $stmt->bind_param(
-            "ssssssssdissi", 
+            "ssssssssdisssi", 
             $data['gate_entry_date_time'], 
             $data['material_code'],        
             $data['height'],               
             $data['width'],                
             $data['depth'],                
             $data['weight'],               
-            $data['color'],   
-            $data['size'],                  // Added Size
-            $data['cp'],                    // Added CP (Double)
-            $data['received_by_user_id'],   // int
+            $data['color'],    
+            $data['size'],                 
+            $data['cp'],                   
+            $data['received_by_user_id'],   
             $data['dimention_unit'],        
             $data['weight_unit'],          
-            $id                             // int
+            $data['temp_code'], // Added temp_code here
+            $id
         );
 
         if ($stmt->execute()) {
@@ -802,9 +808,63 @@ class Inbounding {
             'message' => "Update failed: " . $stmt->error
         ];
     }
+    // --- Add this to your Inbounding.php Model ---
+    public function getById($id) {
+        $id = (int)$id;
+        $sql = "SELECT * FROM vp_inbound WHERE id = $id";
+        $result = $this->conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return false;
+    }
+    // 1. Fetch Category Name
+    public function getCategoryById($id) {
+        $sql = "SELECT * FROM category WHERE category = '$id'"; // Check your actual column name
+        $result = $this->conn->query($sql);
+        return $result->fetch_assoc();
+    }
 
+    // 2. Fetch Material Name
+    public function getMaterialById($id) {
+        $sql = "SELECT * FROM material WHERE id = '$id'"; // Check your actual table name
+        $result = $this->conn->query($sql);
+        return $result->fetch_assoc();
+    }
+
+    // 3. Generate Incremental Temp Code
+    public function generateNextTempCode($prefix) {
+        // Search for codes like 'BSB%'
+        // Order by length first (to sort 10 after 9), then value DESC
+        $sql = "SELECT temp_code FROM vp_inbound 
+                WHERE temp_code LIKE '$prefix%' 
+                AND temp_code REGEXP '^{$prefix}[0-9]+$' 
+                ORDER BY LENGTH(temp_code) DESC, temp_code DESC LIMIT 1";
+                
+        $result = $this->conn->query($sql);
+        
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $lastCode = $row['temp_code'];
+            
+            // Extract number (Remove prefix)
+            $numberStr = substr($lastCode, 3); 
+            $number = (int)$numberStr;
+            $nextNumber = $number + 1;
+        } else {
+            // No existing code found, start at 1
+            $nextNumber = 1;
+        }
+
+        // Pad with zeros (e.g., 1 -> 001)
+        return $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+    }
+
+    // 4. Updated saveform3 (Includes temp_code)
     public function saveform3($id, $data) {
-        // Added size and cp to the query
+        // Ensure temp_code isn't overwritten if it exists already (Optional check)
+        // Here we update it every time saveform3 is called.
+        
         $sql = "UPDATE vp_inbound SET 
                 gate_entry_date_time = ?,
                 material_code = ?,
@@ -816,48 +876,35 @@ class Inbounding {
                 size = ?,
                 cp = ?,
                 quantity_received = ?,
-                received_by_user_id = ?
-            WHERE id = ?";
+                received_by_user_id = ?,
+                temp_code = ? 
+                WHERE id = ?";
         
         $stmt = $this->conn->prepare($sql);
         
         if (!$stmt) {
-            return [
-                'success' => false,
-                'message' => 'Prepare failed: ' . $this->conn->error
-            ];
+            return false;
         }
 
-        // UPDATED bind_param
-        // Added 's' for size and 'd' for cp
-        // Type string: ssdddsssdiii (12 params)
+        // Types: s s d d d d s s d i i s i
         $stmt->bind_param(
-            'ssdddsssdiii',
-            $data['gate_entry_date_time'], // s
-            $data['material_code'],        // s
-            $data['height'],               // d
-            $data['width'],                // d
-            $data['depth'],                // d
-            $data['weight'],               // d
-            $data['color'],                // s
-            $data['size'],                 // s (Added)
-            $data['cp'],                   // d (Added)
-            $data['Quantity'],             // i
-            $data['received_by_user_id'],  // i
-            $id                            // i
+            'ssdddsssdisi', // Added 's' for temp_code
+            $data['gate_entry_date_time'],
+            $data['material_code'],
+            $data['height'],
+            $data['width'],
+            $data['depth'],
+            $data['weight'],
+            $data['color'],
+            $data['size'],
+            $data['cp'],
+            $data['Quantity'],
+            $data['received_by_user_id'],
+            $data['temp_code'], // New Field
+            $id
         );
 
-        if ($stmt->execute()) {
-            return [
-                'success' => true,
-                'message' => 'Record updated successfully.'
-            ];
-        }
-        
-        return [
-            'success' => false,
-            'message' => 'Update failed: ' . $stmt->error
-        ];
+        return $stmt->execute();
     }
 
 

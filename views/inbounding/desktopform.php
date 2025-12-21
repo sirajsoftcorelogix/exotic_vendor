@@ -557,19 +557,25 @@ $record_id = $_GET['id'] ?? '';
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
-                            <?php $pa = $data['form2']['permanently_available'] ?? 'Y'; // Default to Yes ?>
-                            <option value="N" <?= ($pa === 'N') ? 'selected' : '' ?>>No</option>
-                            <option value="Y" <?= ($pa === 'Y') ? 'selected' : '' ?>>Yes</option>
+                            <?php $perm = $data['form2']['permanently_available'] ?? 'Y'; ?>
+                            <option value="N" <?= ($perm == 'N') ? 'selected' : '' ?>>No</option>
+                            <option value="Y" <?= ($perm == 'Y') ? 'selected' : '' ?>>Yes</option>
                         </select>
                     </div>
 
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse Code:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="ware_house_code">
-                            <?php $wh = $data['form2']['ware_house_code'] ?? ''; ?>
-                            <option value="" <?= ($wh == '') ? 'selected' : '' ?>>Select Warehouse</option>
-                            <option value="1" <?= ($wh == '1') ? 'selected' : '' ?>>Wazirpur, Delhi</option>
-                            <option value="2" <?= ($wh == '2') ? 'selected' : '' ?>>Noida, UP</option>
+                            <option value="">Select Warehouse</option>
+                            <?php 
+                                $selectedWH = $data['form2']['ware_house_code'] ?? '';
+                                if (!empty($data['address'])) {
+                                    foreach ($data['address'] as $va) {
+                                        $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
+                                        echo '<option value="' . $va['id'] . '" ' . $isSelected . '>' . htmlspecialchars($va['address_title']) . '</option>';
+                                    }
+                                }
+                            ?>
                         </select>
                     </div>
 
@@ -584,13 +590,12 @@ $record_id = $_GET['id'] ?? '';
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px] mt-[10px]">
                     
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Local Stock:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                                   value="<?= htmlspecialchars($data['form2']['local_stock'] ?? '0') ?>" 
-                                   name="local_stock">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">NOS</span>
-                        </div>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
+                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="back_order">
+                            <?php $backOrder = $data['form2']['back_order'] ?? '0'; // Default to No (0) ?>
+                            <option value="0" <?= ($backOrder == '0') ? 'selected' : '' ?>>No</option>
+                            <option value="1" <?= ($backOrder == '1') ? 'selected' : '' ?>>Yes</option>
+                        </select>
                     </div>
 
                     <div class="flex-1">
@@ -617,17 +622,14 @@ $record_id = $_GET['id'] ?? '';
                         
                         <div>
                             <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
-                            <?php 
-                                // Default to 'Y' (Yes) if not set, otherwise use DB value
-                                $usBlock = $data['form2']['us_block'] ?? 'Y'; 
-                            ?>
                             <div class="flex items-center h-[32px] gap-4">
+                                <?php $us_val = $data['form2']['us_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="us_block" value="Y" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($usBlock === 'Y') ? 'checked' : '' ?>>
+                                    <input type="radio" name="us_block" value="Y" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($us_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
                                 </label>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="us_block" value="N" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($usBlock === 'N') ? 'checked' : '' ?>>
+                                    <input type="radio" name="us_block" value="N" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($us_val == 'N') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[13px] text-[#333]">No</span>
                                 </label>
                             </div>
@@ -635,17 +637,14 @@ $record_id = $_GET['id'] ?? '';
 
                         <div>
                             <label class="block text-xs font-bold text-[#222] mb-[5px]">India Stock:</label>
-                            <?php 
-                                // Default to 'Y' (Yes) if not set, otherwise use DB value
-                                $indiaBlock = $data['form2']['india_block'] ?? 'Y'; 
-                            ?>
                             <div class="flex items-center h-[32px] gap-4">
+                                <?php $in_val = $data['form2']['india_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="india_block" value="Y" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($indiaBlock === 'Y') ? 'checked' : '' ?>>
+                                    <input type="radio" name="india_block" value="Y" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($in_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
                                 </label>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="india_block" value="N" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($indiaBlock === 'N') ? 'checked' : '' ?>>
+                                    <input type="radio" name="india_block" value="N" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($in_val == 'N') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[13px] text-[#333]">No</span>
                                 </label>
                             </div>
