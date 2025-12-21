@@ -250,7 +250,8 @@
                                 <li onclick="handleAction('Email', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-envelope"></i> Email PO to Vendor</li>
                                 <li onclick="handleAction('UploadPerforma', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Performa</li>
                                 <li onclick="handleAction('UploadInvoice', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-upload"></i> Upload Vendor Invoice</li>
-                                
+                                <li onclick="handleAction('AddGRN', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-plus-circle"></i> Add GRN</li>
+                                <li onclick="handleAction('qrcode', <?= htmlspecialchars($order['id']) ?>, this)"><i class="fa fa-qrcode"></i> QR Code Download</li>
                                 
                                 <?php //endif; ?>
                             </ul>
@@ -317,6 +318,9 @@
             <span class="text-sm text-gray-600">of <?= $total_pages ?></span>
             <?php endif; ?>
             <?php endif; */?>
+            <div>
+                <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($purchaseOrders) ?></span> of <span class="font-medium"><?= $total_orders ?></span> orders</p>
+            </div>
             <?php            
             //echo '****************************************  '.$query_string;
             if ($total_pages > 1): ?>          
@@ -946,7 +950,13 @@ function handleAction(action, poId, el) {
                 alert('Error approving purchase order.');
             });
         }
-  } else {
+  } else if (action === 'AddGRN') {
+        // Redirect to add GRN page
+        window.location.href = '?page=grns&action=create&po_id='+ poId;
+   } else if (action === 'qrcode') {
+        // QR code download 
+        window.location.href = '?page=grns&action=qrcode&po_id='+ poId;
+   } else {
       alert('Unknown action: ' + action);
       console.debug('Unknown action:', action);
       // Optionally, you could also log the entire data object

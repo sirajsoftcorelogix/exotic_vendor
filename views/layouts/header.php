@@ -1,5 +1,5 @@
 <?php
-is_login();
+//is_login();
 require_once 'models/user/user.php';
 $usersModel = new User($conn);
 $userDetails = $usersModel->getUserById($_SESSION['user']['id']);

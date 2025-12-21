@@ -143,7 +143,10 @@ switch ($page) {
                 $controller->getOrderDetailsHTML();
                 break;
             case 'update_import':
-                $controller->updateImportedOrders();
+                $controller->skuUpdateImportedOrders();
+                break;
+            case 'update_import_bulk':
+                $controller->ordersStatusImportBulk();
                 break;
             default:
                 $controller->index();
@@ -313,7 +316,7 @@ switch ($page) {
                 break;
             case 'get_product_details_html';
                 $controller->getProductDetailsHTML();         
-                break;
+                break;            
             /*case 'view':
                 $controller->product_view();
                 break;
@@ -419,11 +422,34 @@ switch ($page) {
             case 'list':
                 $controller->index();   
                 break;
+            case 'exportSelected':
+                $controller->exportSelected();
+                break;
             case 'form1':
                 $controller->getform1();
                 break;
             case 'desktopform':
                 $controller->getdesktopform();
+                break;
+            case 'i_photos':
+                $controller->i_photos();
+                break;
+            case 'i_raw_photos':
+                $controller->i_raw_photos();
+                break;
+            case 'itmrawimgsave':
+                $controller->itmrawimgsave();
+                break;
+            case 'itmimgsave':
+                $controller->itmimgsave();
+                break;
+
+            // --- ADD THIS NEW CASE ---
+            case 'download_photos':
+                $controller->download_photos();
+                break;
+            case 'updatedesktopform':
+                $controller->updatedesktopform();
                 break;
             case 'saveform1':
                 $controller->saveform1();
@@ -457,6 +483,8 @@ switch ($page) {
                 break;
             case 'getDetails':
                 $controller->getDetails();
+            case 'getItamcode':
+                $controller->getItamcode();
             default:
                 $controller->index();
                 break;
@@ -488,6 +516,33 @@ switch ($page) {
                 break;
             default:
                 $controller->fetchNotifications();   
+                break;
+        }
+        break;
+    case 'grns':
+        require_once 'controllers/GrnsController.php';
+        $controller = new GrnsController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'view':
+                $controller->viewGrn();   
+                break;
+            case 'create':
+                $controller->createGrn();   
+                break;
+            case 'create_post':
+                $controller->createGrnPost();   
+                break;
+            case 'qrcode':
+                $controller->downloadQrCode();
+                break;
+            case 'delete':
+                $controller->deleteGrn();   
+                break;
+            default:
+                $controller->index();   
                 break;
         }
         break;

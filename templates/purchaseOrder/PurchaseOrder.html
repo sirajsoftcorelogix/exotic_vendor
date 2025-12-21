@@ -70,10 +70,16 @@
             <!-- Repeat <tr> for each item -->
         </tbody>
     </table>
+    
 
     <!-- Summary Table -->
-    <table style="width:100%; border-collapse:collapse; margin-left:auto; margin-right:0; margin-bottom:20px; text-align:right;">
+    <table style="width:100%; border-collapse:collapse; margin-left:auto; margin-right:0; margin-bottom:20px; ">
+       <tr>
+        <td style="width: 60%; text-align:left;">{{qr_code}}</td>
+        <td style="width: 40%; vertical-align:top; text-align:right;">        
         {{summary_rows}}
+        </td>
+    </tr>
         
     </table>
 

@@ -57,7 +57,16 @@ class Order{
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
+                //array of statuses
+                if(is_array($filters['status_filter'])){
+                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
+                    $sql .= " AND vp_orders.status IN ($placeholders)";
+                    foreach ($filters['status_filter'] as $status) {
+                        $params[] = $status;
+                    }
+                }else{
                 $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
+                }
             } 
         }
         if (!empty($filters['country'])) {
@@ -69,19 +78,38 @@ class Order{
             //$params[] = '%' . $filters['country'] . '%';
         } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
-            $sql .= " AND vp_orders.groupname LIKE ?";
-            $params[] = '%' . $filters['category'] . '%';
+            //$sql .= " AND vp_orders.groupname LIKE ?";
+            //$params[] = '%' . $filters['category'] . '%';
+            $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
+            $sql .= " AND vp_orders.groupname IN ($placeholders)";
+            foreach ($filters['category'] as $category) {
+                $params[] = $category;
+            }
         }
         if (!empty($filters['options']) && $filters['options'] === 'express' ) {
             $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            $sql .= " AND vp_orders.payment_type = ?";
-            $params[] = $filters['payment_type'];
+            //array of payment types
+            if(is_array($filters['payment_type'])){
+                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
+                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
+                foreach ($filters['payment_type'] as $payment_type) {
+                    $params[] = $payment_type;
+                }
+            }else{
+                $sql .= " AND vp_orders.payment_type = ?";
+                $params[] = $filters['payment_type'];
+            }
         }
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
-            $sql .= " AND vp_users.id = ?";
-            $params[] = $filters['staff_name'];
+            //$sql .= " AND vp_users.id = ?";
+            //$params[] = $filters['staff_name'];
+            $placeholders = implode(',', array_fill(0, count($filters['staff_name']), '?'));
+            $sql .= " AND vp_users.id IN ($placeholders)";
+            foreach ($filters['staff_name'] as $staff_name) {
+                $params[] = $staff_name;
+            }
         }
         if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
             $sql .= " AND vp_orders.priority = ?";
@@ -92,8 +120,16 @@ class Order{
             $params[] = $filters['vendor_id'];            
         }
         if(!empty($filters['agent'])){
-            $sql .= " AND vp_orders.agent_id = ?";
-            $params[] = $filters['agent'];            
+            if(is_array($filters['agent'])){
+                $placeholders = implode(',', array_fill(0, count($filters['agent']), '?'));
+                $sql .= " AND vp_orders.agent_id IN ($placeholders)";
+                foreach ($filters['agent'] as $agent) {
+                    $params[] = $agent;
+                }
+            }else{
+                $sql .= " AND vp_orders.agent_id = ?";
+                $params[] = $filters['agent'];   
+            }         
         }
         //echo $sql;
         // Add sorting based on filter
@@ -105,6 +141,7 @@ class Order{
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
+        //echo $sql;
         // Add limit and offset to params and types
         $params[] = $limit;
         $params[] = $offset;
@@ -170,7 +207,16 @@ class Order{
             } elseif ($filters['status_filter'] === 'shipped') {
                 $sql .= " AND vp_orders.status = 'shipped'";
             } elseif (!empty($filters['status_filter'])) {
+                //array of statuses
+                if(is_array($filters['status_filter'])){
+                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
+                    $sql .= " AND vp_orders.status IN ($placeholders)";
+                    foreach ($filters['status_filter'] as $status) {
+                        $params[] = $status;
+                    }
+                }else{
                 $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
+                }
             }
         }
         if (!empty($filters['country'])) {
@@ -178,19 +224,37 @@ class Order{
             //$params[] = '%' . $filters['country'] . '%';
         } 
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
-            $sql .= " AND groupname LIKE ?";
-            $params[] = '%' . $filters['category'] . '%';
+            //$sql .= " AND groupname LIKE ?";
+            //$params[] = '%' . $filters['category'] . '%';
+            $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
+            $sql .= " AND vp_orders.groupname IN ($placeholders)";
+            foreach ($filters['category'] as $category) {
+                $params[] = $category;
+            }
         }
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            if(is_array($filters['payment_type'])){
+                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
+                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
+                foreach ($filters['payment_type'] as $payment_type) {
+                    $params[] = $payment_type;
+                }
+            }else{
             $sql .= " AND payment_type = ?";
             $params[] = $filters['payment_type'];
+            }
         }
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
-            $sql .= " AND vp_users.id = ?";
-            $params[] = $filters['staff_name'];
+            //$sql .= " AND vp_users.id = ?";
+            //$params[] = $filters['staff_name'];
+            $placeholders = implode(',', array_fill(0, count($filters['staff_name']), '?'));
+            $sql .= " AND vp_users.id IN ($placeholders)";
+            foreach ($filters['staff_name'] as $staff_name) {
+                $params[] = $staff_name;
+            }
         }
         if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
             $sql .= " AND priority = ?";
@@ -201,8 +265,16 @@ class Order{
             $params[] = $filters['vendor_id'];            
         }
         if(!empty($filters['agent'])){
-            $sql .= " AND vp_orders.agent_id = ?";
-            $params[] = $filters['agent'];            
+            if(is_array($filters['agent'])){
+                $placeholders = implode(',', array_fill(0, count($filters['agent']), '?'));
+                $sql .= " AND vp_orders.agent_id IN ($placeholders)";
+                foreach ($filters['agent'] as $agent) {
+                    $params[] = $agent;
+                }
+            }else{
+            $sql .= " AND vp_orders.status NOT IN ('shipped','cancelled') AND vp_orders.agent_id = ?";
+            $params[] = $filters['agent'];     
+            }       
         }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
@@ -296,7 +368,7 @@ class Order{
         // Insert
         $table_name = 'vp_orders';
         $InsertFields = [
-            'order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
+            'sku','order_number', 'shipping_country', 'title', 'description', 'item_code', 'size', 'color', 
             'groupname', 'subcategories', 'currency', 'itemprice', 'finalprice', 'image', 
             'marketplace_vendor', 'quantity', 'options', 'gst', 'hsn', 'local_stock', 
             'cost_price', 'location', 'order_date','processed_time','numsold','product_weight','product_weight_unit',
@@ -317,7 +389,8 @@ class Order{
             'country',
             'material',
             'status',
-            'esd'
+            'esd',
+            'agent_id'
         ];
 
         // Build SQL query
@@ -407,6 +480,7 @@ class Order{
             while ($row = $result->fetch_assoc()) {
                 $orderItems[] = [
                     'id' => $row['id'],
+                    'sku' => $row['sku'],
                     'order_number' => $row['order_number'],
                     'order_date' => $row['order_date'],
                     'item_code' => $row['item_code'],
@@ -502,9 +576,10 @@ class Order{
         }
                
         if(!empty($data)) {
-        $sql = "INSERT INTO vp_products (item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_products (sku, item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('sssssssiissdisiiisi', 
+        $stmt->bind_param('ssssssssiissdisiiisi', 
+            $data['sku'],
             $data['item_code'], 
             $data['title'],
             $data['description'],
@@ -654,6 +729,65 @@ class Order{
         //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         // }
     }
+    function skuUpdateImportedOrder($data) {
+        // Validate inputs
+        if (empty($data['order_number']) || empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Order number or item code is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET 
+                sku = ?, updated_at = ?
+                WHERE order_number = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        // Prepare values in the same order as the SQL placeholders
+        $values = [
+            $data['sku'],
+            $data['updated_at'],
+            $data['order_number'], $data['item_code']
+        ];
+
+        // Build types string dynamically based on actual PHP types
+        $types = '';
+        foreach ($values as $val) {
+            if (is_int($val)) {
+                $types .= 'i';
+            } elseif (is_float($val) || is_double($val)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        // mysqli_stmt::bind_param requires arguments passed by reference when using call_user_func_array
+        $refs = [];
+        foreach ($values as $key => $value) {
+            $refs[$key] = &$values[$key];
+        }
+        array_unshift($refs, $types);
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        // print binded parameters for debugging
+        //print_array($refs);        
+
+        // foreach ($refs as $ref) {
+        //     if ($ref === $types) continue; // Skip types string
+        //     echo $ref . "\n";
+        // }
+        //print_r($stmt);
+        //comment the below line after execution on 09-06-2024
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
     public function getPaymentTypes(){
         $sql = "SELECT DISTINCT payment_type FROM `vp_orders` WHERE 1;";
         $stmt = $this->db->prepare($sql);   
@@ -687,6 +821,40 @@ class Order{
         $stmt->bind_param('s', $vendor_name);
         if ($stmt->execute()) {
             return ['success' => true, 'vendor_id' => $stmt->insert_id, 'message' => 'Vendor added successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function fetchOrdersForUpdate(){
+        //1= shipped !=cancelled !=return ORDERS
+        $sql = "SELECT * FROM vp_orders WHERE status != 'shipped' AND status != 'cancelled' AND status != 'return' AND status = 'pending' ORDER BY order_date";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orders = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orders[] = $row['order_number'];
+            }
+        }
+        return array_unique($orders);
+    }
+    public function importedStatusUpdate($data){
+        $sql = "UPDATE vp_orders SET status = ?, update_flag = 1, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('ssss', $data['status'], $data['updated_at'], $data['sku'], $data['order_number']);
+        if ($stmt->execute()) {
+            return ['success' => true, 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'sku' => $data['sku'],'message' => 'Order status updated successfully.','item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function importedStatusUpdate2($data){
+        $sql = "UPDATE vp_orders SET update_flag = 2, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('sss', $data['updated_at'], $data['sku'], $data['order_number']);
+        if ($stmt->execute()) {
+            return ['success' => true, 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'sku' => $data['sku'],'message' => 'Order status updated successfully.','item_code' => $data['item_code']];
         } else {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
