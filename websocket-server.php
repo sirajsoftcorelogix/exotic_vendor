@@ -23,12 +23,12 @@ require __DIR__ . '/src/ChatServer.php';
  ******************************************/
 
 $DB_HOST = "localhost";
-$DB_NAME = "exotic_vendor";
-$DB_USER = "your_db_user";
-$DB_PASS = "your_db_pass";
+$DB_NAME = "vendor_portal_test";
+$DB_USER = "vendor_user";
+$DB_PASS = "eXotic@123";
 
 // WebSocket Port (Change only if needed)
-$WS_PORT = 8080;
+$WS_PORT = 8888;
 
 /******************************************
  * 2. DATABASE CONNECTION
