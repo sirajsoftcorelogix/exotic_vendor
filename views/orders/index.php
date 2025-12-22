@@ -2163,7 +2163,7 @@
             const img = document.createElement('img');            
             img.src = image;
             img.style.width = '145px';
-            img.style.height = '145px';
+            //img.style.height = '145px';
             //selectedItemsContainer.appendChild(img);
             div.prepend(img);
             //append hidden order_id
