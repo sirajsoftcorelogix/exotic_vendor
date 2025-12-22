@@ -450,7 +450,19 @@
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
             <div class="flex  ">
             <div class="w-1/2">
-            <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button>
+            <!-- <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button> -->
+             <!-- Actions dropdown for bulk operations -->
+            <div class="relative inline-block text-left">
+                <button id="bulk-action-toggle" type="button" class="btn btn-success inline-flex items-center px-4 py-2" aria-haspopup="true" aria-expanded="false">
+                    Actions
+                    <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
+                    <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                    <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
+                    <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
+                </div>
+            </div>
             </div>
             <div class="ml-auto flex items-center space-x-4">
             <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
@@ -700,9 +712,9 @@
                         <div class="flex items-start p-4 gap-4">
                             <!-- Checkbox -->
                             <div class="flex-shrink-0 pt-1">
-                                <?php if($order['status']=='pending'): ?>
+                                <?php //if($order['status']=='pending'): ?>
                                 <input type="checkbox" name="poitem[]" value="<?=$order['order_id']?>" class="custom-checkbox" >
-                                <?php endif; ?>
+                                <?php //endif; ?>
                             </div>
 
                             <!-- Main two-column layout -->
@@ -1345,6 +1357,103 @@
     </div>
 </div>
 <!-- image popup close -->
+
+<!-- Bulk Update Status Modal -->
+<div id="bulkStatusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkStatusPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
+        <button onclick="closeBulkStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <h2 class="text-xl font-bold mb-4">Bulk Update Status</h2>
+        <form id="bulkStatusForm" method="post" action="?page=orders&action=bulk_update_status">
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-2">Order Status</label>
+                <select id="bulkOrderStatus" name="orderStatus" class="border rounded px-3 py-2 w-full">
+                    <option value="">-- Select Status --</option>
+                    <?php
+                    // reuse status options logic
+                    $procurement_id = null;
+                    $sorder_id = null;
+                    foreach ($order_status_list as $s) {
+                        if ((isset($s['slug']) && strtolower($s['slug']) === 'procurement') ||
+                            (isset($s['title']) && strtolower($s['title']) === 'procurement')) {
+                            $procurement_id = $s['id'] ?? null;
+                        }
+                        if($s['parent_id'] === 0 && strtolower($s['slug']) === 'order'){
+                            $sorder_id = $s['id'] ?? null;
+                        }
+                    }
+                    $procurement_children = [];
+                    $other_statuses = [];
+                    foreach ($order_status_list as $status) {
+                        if ($procurement_id !== null && isset($status['id']) && $status['id'] == $procurement_id) continue;
+                        if($sorder_id !== null &&  $status['id'] == $sorder_id) continue;
+                        if ($procurement_id !== null && isset($status['parent_id']) && $status['parent_id'] == $procurement_id) {
+                            $procurement_children[] = $status;
+                        } else {
+                            $other_statuses[] = $status;
+                        }
+                    }
+                    if (!empty($other_statuses)) {
+                        echo '<optgroup label="Order">';
+                        foreach ($other_statuses as $st) {
+                            $value = htmlspecialchars($st['slug'] ?? '');
+                            $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
+                            echo "<option value=\"{$value}\">{$label}</option>";
+                        }
+                        echo '</optgroup>';
+                    }
+                    if (!empty($procurement_children)) {
+                        echo '<optgroup label="Procurement">';
+                        foreach ($procurement_children as $st) {
+                            $value = htmlspecialchars($st['slug'] ?? '');
+                            $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
+                            echo "<option value=\"{$value}\">{$label}</option>";
+                        }
+                        echo '</optgroup>';
+                    }
+                    ?>
+                </select>
+            </div>
+            <div class="mb-4">
+                <!-- <label class="block text-sm font-bold mb-2">Notes</label>
+                <textarea id="bulkStatusNotes" name="notes" class="border rounded px-3 py-2 w-full" rows="3"></textarea> -->
+                <!--list selected item image-->
+                <div id="bulkStatusSelectedItems" class="flex flex-wrap gap-2 max-h-40 overflow-y-auto border p-2">
+                    <!-- Selected item images will be displayed here -->
+                </div>
+            </div>
+            <div id="bulkStatusError" class="text-red-500 text-sm hidden mb-2"></div>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeBulkStatusPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Update Status</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk Assign To Modal -->
+<div id="bulkAssignPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAssignPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-md w-full relative" onclick="event.stopPropagation();">
+        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <h2 class="text-xl font-bold mb-4">Assign Orders To Agent</h2>
+        <form id="bulkAssignForm" method="post" action="?page=orders&action=bulk_assign_agent">
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-2">Assign To</label>
+                <select id="bulkAssignAgent" name="agent_id" class="border rounded px-3 py-2 w-full">
+                    <option value="">-- Select Agent --</option>
+                    <?php foreach ($staff_list as $id => $name): ?>
+                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div id="bulkAssignError" class="text-red-500 text-sm hidden mb-2"></div>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeBulkAssignPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Assign</button>
+            </div>
+        </form>
+    </div>
+</div>
+<!-- ...existing code... -->
  <script>
     function closeImagePopup(event) {
         document.getElementById('imagePopup').classList.add('hidden');
@@ -1966,4 +2075,214 @@
 
     });
     
+</script>
+
+<script>
+    // Helper to get selected order IDs (visible checked + persisted selections)
+    function getSelectedOrderIds() {
+        const visibleChecked = Array.from(document.querySelectorAll('input[name="poitem[]"]:checked')).map(cb => cb.value);
+        const stored = JSON.parse(localStorage.getItem('selected_po_orders') || '[]');
+        // merge and deduplicate
+        const merged = Array.from(new Set([...stored, ...visibleChecked]));
+        return merged;
+    }
+
+    // Toggle bulk actions menu
+    document.getElementById('bulk-action-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        const menu = document.getElementById('bulk-action-menu');
+        menu.classList.toggle('hidden');
+    });
+    // close menu on outside click
+    document.addEventListener('click', function() {
+        document.getElementById('bulk-action-menu').classList.add('hidden');
+    });
+
+    // Create PO action: submit the purchase_orders form after validation
+    document.getElementById('action-create-po').addEventListener('click', function(e) {
+        e.preventDefault();
+        // reuse checkPoItmes validation
+        const ids = getSelectedOrderIds();
+        if (ids.length === 0) {
+            alert('Please select at least one order to create a Purchase Order.');
+            return;
+        }
+        // submit the enclosing form (the one with action create purchase_orders)
+        const form = document.querySelector('form[action*="purchase_orders&action=create"]');
+        if (!form) {
+            alert('Create PO form not found.');
+            return;
+        }
+        // ensure hidden inputs are added (like existing submit handler expects)
+        // remove previous hidden inputs
+        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+        // append hidden inputs for ids that are not visible checked (server will receive duplicates but it's okay)
+        ids.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'poitem[]';
+            input.value = id;
+            input.className = 'poitem_hidden';
+            form.appendChild(input);
+        });
+        // clear persisted selection after submit (optional), but we'll let server handle
+        form.submit();
+    });
+
+    // Bulk Update Status handlers
+    document.getElementById('action-update-status').addEventListener('click', function(e){
+        e.preventDefault();
+        const ids = getSelectedOrderIds();
+        if (ids.length === 0) {
+            alert('Please select at least one order to update.');
+            return;
+        }
+        // prepare form: remove previous hidden inputs
+        const form = document.getElementById('bulkStatusForm');
+        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+        ids.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'poitem[]';
+            input.value = id;
+            input.className = 'poitem_hidden';
+            form.appendChild(input);
+        });
+        
+        // populate selected items list
+        const selectedItemsContainer = document.getElementById('bulkStatusSelectedItems');
+        selectedItemsContainer.innerHTML = '';
+        ids.forEach(id => {
+            const orderData = JSON.parse(document.querySelector('#order-id-' + id).getAttribute('data-order'));
+            const itemText = 'Order No:' + (orderData.order_number || ' ID ' + id);
+            const image = orderData.image || 'default-image.png';
+            const div = document.createElement('div');
+            div.textContent = itemText;
+            
+            // Optionally, add image preview
+            const img = document.createElement('img');            
+            img.src = image;
+            img.style.width = '145px';
+            img.style.height = '145px';
+            //selectedItemsContainer.appendChild(img);
+            div.prepend(img);
+            //append hidden order_id
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'order_ids[]';
+            hiddenInput.value = id;
+            div.appendChild(hiddenInput);
+            selectedItemsContainer.appendChild(div);
+        });
+        document.getElementById('bulkStatusError').classList.add('hidden');
+        document.getElementById('bulkStatusPopup').classList.remove('hidden');
+    });
+    function closeBulkStatusPopup(e){
+        document.getElementById('bulkStatusPopup').classList.add('hidden');
+    }
+    // Bulk Assign handlers
+    document.getElementById('action-assign-to').addEventListener('click', function(e){
+        e.preventDefault();
+        const ids = getSelectedOrderIds();
+        if (ids.length === 0) {
+            alert('Please select at least one order to assign.');
+            return;
+        }
+        const form = document.getElementById('bulkAssignForm');
+        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+        ids.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'poitem[]';
+            input.value = id;
+            input.className = 'poitem_hidden';
+            form.appendChild(input);
+        });
+        document.getElementById('bulkAssignError').classList.add('hidden');
+        document.getElementById('bulkAssignPopup').classList.remove('hidden');
+    });
+    function closeBulkAssignPopup(e){
+        document.getElementById('bulkAssignPopup').classList.add('hidden');
+    }
+
+    // simple validation for bulk forms
+    document.getElementById('bulkStatusForm').addEventListener('submit', function(e){
+        const status = document.getElementById('bulkOrderStatus').value;
+        if (!status) {
+            e.preventDefault();
+            document.getElementById('bulkStatusError').textContent = 'Please select a status.';
+            document.getElementById('bulkStatusError').classList.remove('hidden');
+            return;
+        }
+        //ajax submit
+        document.getElementById('bulkStatusError').textContent = 'Processing..'
+        document.getElementById('bulkStatusError').classList.remove('hidden');
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch('index.php?action=bulk_update_status', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                //alert(data.message);
+                document.getElementById('bulkStatusError').classList.remove('text-red-500');
+                document.getElementById('bulkStatusError').classList.add('text-green-500');
+                document.getElementById('bulkStatusError').textContent = 'Order statuses updated successfully.';
+                //poitem clear from localStorage
+                localStorage.removeItem('selected_po_orders');
+
+                //timeout to close popup and reload
+                setTimeout(() => {
+                    closeBulkStatusPopup();
+                    location.reload();
+                }, 3000);
+                //bulkStatusError.classList.remove('hidden');
+                //location.reload();
+            } else {
+                alert(data.message);
+            }
+        });
+
+    });
+    document.getElementById('bulkAssignForm').addEventListener('submit', function(e){
+        const agent = document.getElementById('bulkAssignAgent').value;
+        if (!agent) {
+            e.preventDefault();
+            document.getElementById('bulkAssignError').textContent = 'Please select an agent.';
+            document.getElementById('bulkAssignError').classList.remove('hidden');
+            return;
+        }
+        //ajax submit
+        document.getElementById('bulkAssignError').textContent = 'Processing..'
+        document.getElementById('bulkAssignError').classList.remove('hidden');
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch('index.php?action=bulk_assign_order', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                //alert(data.message);
+                document.getElementById('bulkAssignError').classList.remove('text-red-500');
+                document.getElementById('bulkAssignError').classList.add('text-green-500');
+                document.getElementById('bulkAssignError').textContent = 'Agent Assigned successfully.';
+                //poitem clear from localStorage
+                localStorage.removeItem('selected_po_orders');
+
+                //timeout to close popup and reload
+                setTimeout(() => {
+                    closeBulkStatusPopup();
+                    location.reload();
+                }, 3000);
+                //bulkStatusError.classList.remove('hidden');
+                //location.reload();
+            } else {
+                alert(data.message);
+            }
+        });
+    });
 </script>

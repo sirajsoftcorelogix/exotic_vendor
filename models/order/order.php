@@ -859,5 +859,65 @@ class Order{
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+    public function updateStatusBulk($order_ids, $status) {
+        if (empty($order_ids) || !is_array($order_ids) || empty($status)) {
+            return ['success' => false, 'message' => 'Order IDs or status is missing or invalid.'];
+        }
+
+        // Prepare placeholders for the IN clause
+        $placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+        $sql = "UPDATE vp_orders SET status = ? WHERE id IN ($placeholders)";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $types = str_repeat('i', count($order_ids));
+        $params = array_merge([$status], $order_ids);
+        $stmt->bind_param('s' . $types, ...$params);
+        
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Status updated successfully for ' . $affectedRows . ' orders.'];
+    }
+    public function updateAgentBulk($order_ids, $agent_id){
+        if (empty($order_ids) || !is_array($order_ids) || empty($agent_id)) {
+            return ['success' => false, 'message' => 'Order IDs or agent_id is missing or invalid.'];
+        }
+
+        // Prepare placeholders for the IN clause
+        $placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+        $sql = "UPDATE vp_orders SET agent_id = ? WHERE id IN ($placeholders)";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $types = str_repeat('i', count($order_ids));
+        $params = array_merge([$agent_id], $order_ids);
+        $stmt->bind_param('s' . $types, ...$params);
+        
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Agent updated successfully for ' . $affectedRows . ' orders.'];
+    }
 }
 ?>

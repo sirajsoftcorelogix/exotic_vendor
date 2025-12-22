@@ -455,7 +455,8 @@ class OrdersController {
                     ];
                     $commanModel->add_order_status_log($agentLogData);
                     //set notification to agent
-                    insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', '');
+                    $link = base_url('index.php?page=orders&action=list&'.$order_id);
+                    insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', $link);
                 }
                 if($esd != $previous_esd){
                     //log esd change
@@ -950,6 +951,62 @@ class OrdersController {
             'total' => $totalorder,
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
+    }
+    public function bulkUpdateStatus() {
+        is_login();
+        global $ordersModel; 
+        global $commanModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $order_ids = isset($_POST['order_ids']) ? $_POST['order_ids'] : [];
+            $new_status = isset($_POST['orderStatus']) ? $_POST['orderStatus'] : '';
+            //print_array($order_ids);
+            //print_array($_POST);
+            //exit;
+            if (!empty($order_ids) && !empty($new_status)) { 
+               $result = $ordersModel->updateStatusBulk($order_ids, $new_status);    
+                if ($result) {
+                    //session poitem array clean
+
+                    echo json_encode($result);
+                    //echo json_encode(['success' => true, 'message' => 'Order statuses updated successfully.']);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update order statuses.']);
+                }       
+                
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
+            }
+        }
+
+        exit;
+    }
+    public function bulkAssignOrder(){
+        is_login();
+        global $ordersModel; 
+        global $commanModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $order_ids = isset($_POST['poitem']) ? $_POST['poitem'] : [];
+            $agent_id = isset($_POST['agent_id']) ? $_POST['agent_id'] : '';
+            //print_array($order_ids);
+            //print_array($_POST);
+            //exit;
+            if (!empty($order_ids) && !empty($agent_id)) { 
+               $result = $ordersModel->updateAgentBulk($order_ids, $agent_id);    
+                if ($result) {
+                    //session poitem array clean
+
+                    echo json_encode($result);
+                    //echo json_encode(['success' => true, 'message' => 'Order statuses updated successfully.']);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update order statuses.']);
+                }       
+                
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
+            }
+        }
     }
 }
 ?>

@@ -148,6 +148,12 @@ switch ($page) {
             case 'update_import_bulk':
                 $controller->ordersStatusImportBulk();
                 break;
+            case 'bulk_update_status':
+                $controller->bulkUpdateStatus();
+                break;
+            case 'bulk_assign_order':
+                $controller->bulkAssignOrder();
+                break;
             default:
                 $controller->index();
                 break;

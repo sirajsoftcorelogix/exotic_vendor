@@ -183,6 +183,15 @@ class PurchaseOrdersController {
         if(!empty($itemIds)){
             $_SESSION['poitem'] = $itemIds;
         }
+        //check if any of the selected orders is already in a purchase order
+        foreach ($itemIds as $id) {
+            $order = $ordersModel->getOrderById($id);
+            //print_array($order);
+            if ($order && $order['po_id'] > 0) {
+                renderTemplate('views/errors/error.php', ['message' => ['type'=>'error','text'=>'One or more selected orders are already included in a Purchase Order.']], 'Error');
+                exit;
+            }
+        }
         $data = [];
         foreach ($itemIds as $id) {
             $data['data'][] = $ordersModel->getOrderById($id);            
