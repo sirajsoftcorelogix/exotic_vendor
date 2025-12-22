@@ -21,6 +21,7 @@ if($env === 'local') {
     $API_BASE = $config['LIVE_API_BASE'];
     $WS_URL   = $config['LIVE_WS_URL'];
 }
+$WS_PORT = $config['WS_PORT'];
 
 global $domain, $root_path, $page, $action, $conn;
 require_once 'models/user/user.php';
@@ -159,7 +160,7 @@ window.API_TOKEN = <?php echo json_encode($apiToken); ?>;
 
 window.API_BASE = "<?php echo $API_BASE ?>";
 
-window.WS_URL = "<?php echo $WS_URL ?>/" + encodeURIComponent(window.API_TOKEN);
+window.WS_URL = "<?php echo $WS_URL ?>";
 console.log("URL: " + window.WS_URL + " Current User: " + window.CURRENT_USER);
 </script>
 <script src="assets/chat.js"></script>
