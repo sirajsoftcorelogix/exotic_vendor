@@ -1171,62 +1171,60 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. PHP Data
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
     const groupMap = <?php echo json_encode($groupMap); ?>; 
     
-    // Parse PHP data into Sets for easy checking
+    // 2. Pre-selection Data
     const rawCatId = "<?php echo $selected_cat_id; ?>"; 
-    
     const preSelected = {
         groupVal: "<?php echo $selected_group_val; ?>",
-        // Convert "1,2,3" string to a Set of strings ["1", "2", "3"]
-        cat:      new Set(rawCatId ? rawCatId.split(',') : []), 
-        sub:      new Set(<?php echo json_encode($selected_sub); ?>.map(String)), 
-        subsub:   new Set(<?php echo json_encode($selected_sub_sub); ?>.map(String))
+        cat:    new Set(rawCatId ? rawCatId.split(',') : []), 
+        sub:    new Set(<?php echo json_encode($selected_sub); ?>.map(String)), 
+        subsub: new Set(<?php echo json_encode($selected_sub_sub); ?>.map(String))
     };
 
-    // DOM Elements
+    // 3. DOM Elements
     const categoryContainer = document.getElementById('category_container');
     const subCatContainer = document.getElementById('sub_category_container');
     const subSubCatContainer = document.getElementById('sub_sub_category_container');
     
-    // TomSelect Config
+    // 4. TomSelect Config
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     new TomSelect("#material_select", config);
     const groupTs = new TomSelect("#group_select", config);
 
-    // --- GENERIC RENDER FUNCTION ---
-    function renderCheckboxList(container, items, selectedSet, inputName, onChangeCallback) {
-        container.innerHTML = ''; 
+    // --- HELPER: Create Single Checkbox HTML ---
+    function createCheckboxItem(item, inputName, selectedSet, onChangeCallback) {
+        const div = document.createElement('div');
+        div.className = 'checkbox-item pl-2'; // Added padding-left for hierarchy look
+        const isChecked = selectedSet.has(String(item.id)) ? 'checked' : '';
         
+        div.innerHTML = `
+            <input type="checkbox" id="${inputName}_${item.id}" name="${inputName}[]" value="${item.id}" ${isChecked}>
+            <label for="${inputName}_${item.id}">${item.name}</label>
+        `;
+        
+        const checkbox = div.querySelector('input');
+        checkbox.addEventListener('change', () => { if(onChangeCallback) onChangeCallback(); });
+        return div;
+    }
+
+    // --- HELPER: Render Simple List (For Main Categories) ---
+    function renderSimpleList(container, items, selectedSet, inputName, onChangeCallback) {
+        container.innerHTML = ''; 
         if (!items || items.length === 0) {
             container.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No options available</div>';
             return;
         }
         
-        // Deduplicate items just in case
-        const uniqueItems = [];
+        // Deduplicate
         const seenIds = new Set();
         items.forEach(item => {
             if(!seenIds.has(item.id)){
                 seenIds.add(item.id);
-                uniqueItems.push(item);
+                container.appendChild(createCheckboxItem(item, inputName, selectedSet, onChangeCallback));
             }
-        });
-
-        uniqueItems.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'checkbox-item';
-            const isChecked = selectedSet.has(String(item.id)) ? 'checked' : '';
-            
-            // Note: inputName is e.g., "category_code" -> name="category_code[]"
-            div.innerHTML = `
-                <input type="checkbox" id="${inputName}_${item.id}" name="${inputName}[]" value="${item.id}" ${isChecked}>
-                <label for="${inputName}_${item.id}">${item.name}</label>
-            `;
-            const checkbox = div.querySelector('input');
-            checkbox.addEventListener('change', () => { if(onChangeCallback) onChangeCallback(); });
-            container.appendChild(div);
         });
     }
 
@@ -1240,63 +1238,100 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        renderCheckboxList(categoryContainer, categoriesByParent[groupId], preSelected.cat, 'category_code', handleCategoryChange);
+        renderSimpleList(categoryContainer, categoriesByParent[groupId], preSelected.cat, 'category_code', handleCategoryChange);
         
-        // Trigger next level if we have pre-selected categories
         if(preSelected.cat.size > 0) handleCategoryChange();
     }
 
-    // --- 2. UPDATE SUB CATEGORY LIST (Based on Checked Categories) ---
+    // --- 2. UPDATE SUB CATEGORY LIST (Grouped by Parent Category) ---
     function handleCategoryChange() {
-        const checkedCats = Array.from(categoryContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        // Get all checked category checkboxes
+        const checkedInputs = Array.from(categoryContainer.querySelectorAll('input[type="checkbox"]:checked'));
         
-        if(checkedCats.length === 0) {
+        subCatContainer.innerHTML = ''; // Clear container
+        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(checkedInputs.length === 0) {
             subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
-            subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
             return;
         }
 
-        let allSubOptions = [];
-        checkedCats.forEach(catId => {
-            if(categoriesByParent[catId]) {
-                allSubOptions = allSubOptions.concat(categoriesByParent[catId]);
+        let hasAnyOptions = false;
+
+        // Loop through selected parents to create groups
+        checkedInputs.forEach(input => {
+            const parentId = input.value;
+            const parentName = input.nextElementSibling.innerText; // Get name from Label
+            const children = categoriesByParent[parentId];
+
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+
+                // Create Group Header
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10";
+                header.innerText = parentName; // e.g. "Hindi"
+                subCatContainer.appendChild(header);
+
+                // Render Children for this parent
+                children.forEach(item => {
+                    subCatContainer.appendChild(createCheckboxItem(item, 'sub_category_code', preSelected.sub, handleSubCategoryChange));
+                });
             }
         });
 
-        if(allSubOptions.length === 0) {
+        if(!hasAnyOptions) {
              subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
-             return;
+        } else {
+             // If we had pre-selected sub-cats, trigger next level
+             if(preSelected.sub.size > 0) handleSubCategoryChange();
         }
-
-        renderCheckboxList(subCatContainer, allSubOptions, preSelected.sub, 'sub_category_code', handleSubCategoryChange);
-        
-        if(preSelected.sub.size > 0) handleSubCategoryChange();
     }
 
-    // --- 3. UPDATE SUB SUB CATEGORY LIST (Based on Checked Sub Cats) ---
+    // --- 3. UPDATE SUB SUB CATEGORY LIST (Grouped by Sub Category) ---
     function handleSubCategoryChange() {
-        const checkedSubCats = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        const checkedInputs = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
         
-        if(checkedSubCats.length === 0) {
+        subSubCatContainer.innerHTML = ''; // Clear container
+
+        if(checkedInputs.length === 0) {
             subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
             return;
         }
 
-        let allSubSubOptions = [];
-        checkedSubCats.forEach(subId => {
-            if(categoriesByParent[subId]) allSubSubOptions = allSubSubOptions.concat(categoriesByParent[subId]);
+        let hasAnyOptions = false;
+
+        checkedInputs.forEach(input => {
+            const parentId = input.value;
+            const parentName = input.nextElementSibling.innerText;
+            const children = categoriesByParent[parentId];
+
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+                
+                // Create Group Header
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10";
+                header.innerText = parentName;
+                subSubCatContainer.appendChild(header);
+
+                // Render Children
+                children.forEach(item => {
+                    subSubCatContainer.appendChild(createCheckboxItem(item, 'sub_sub_category_code', preSelected.subsub, null));
+                });
+            }
         });
 
-        renderCheckboxList(subSubCatContainer, allSubSubOptions, preSelected.subsub, 'sub_sub_category_code', null);
+        if(!hasAnyOptions) {
+             subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
+        }
     }
     
     // --- EVENTS ---
     groupTs.on('change', function(groupValue) {
-        // Clear pre-selections on manual change
         preSelected.cat.clear(); 
         preSelected.sub.clear(); 
         preSelected.subsub.clear();        
-        
         const groupId = groupMap[groupValue]; 
         updateCategoryList(groupId);
     });
