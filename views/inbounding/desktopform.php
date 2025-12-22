@@ -580,12 +580,19 @@ $record_id = $_GET['id'] ?? '';
                     </div>
                 </div>
 
-                <div class="flex justify-end border-t border-dashed border-[#ddd] pt-3 mt-2">
-                    <div class="text-right bg-gray-50 p-2 rounded border border-gray-200">
-                        <span class="text-xs font-bold text-gray-500 block">Est. international Courier Price (₹700/kg)</span>
+                <div class="flex justify-end items-stretch border-t border-dashed border-[#ddd] pt-3 mt-2 gap-3">
+                    
+                    <div class="text-right bg-gray-50 p-2 rounded border border-gray-200 min-w-[120px]">
+                        <span class="text-xs font-bold text-gray-500 block">Volumetric Weight</span>
+                        <div class="text-lg font-bold text-[#555]" id="volumetric_weight_display">0.000 kg</div>
+                    </div>
+
+                    <div class="text-right bg-gray-50 p-2 rounded border border-gray-200 min-w-[180px]">
+                        <span class="text-xs font-bold text-gray-500 block">Est. Courier Price (₹700/kg)</span>
                         <div class="text-lg font-bold text-[#d97824]" id="courier_price_display">₹ 0.00</div>
                         <div class="text-[10px] text-gray-400" id="courier_calc_details">Enter dimensions to calculate</div>
                     </div>
+
                 </div>
 
             </fieldset>
@@ -720,10 +727,13 @@ $record_id = $_GET['id'] ?? '';
     </form>
 </div>
 
-<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
-    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup(event)">
+    <div class="bg-white p-2 rounded-md w-auto max-w-[95vw] max-h-[95vh] relative flex flex-col items-center shadow-2xl" onclick="event.stopPropagation();">
+        
+        <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-md border-2 border-white">✕</button>
+        
+        <img id="popupImage" class="max-w-full max-h-[90vh] rounded object-contain" src="" alt="Image Preview">
+        
     </div>
 </div>
 
@@ -1313,6 +1323,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display Elements
     const displayElement = document.getElementById('courier_price_display');
     const detailsElement = document.getElementById('courier_calc_details');
+    // New Element for Volumetric Weight
+    const volDisplayElement = document.getElementById('volumetric_weight_display');
 
     function calculateCourierPrice() {
         if (!heightInput || !widthInput || !depthInput || !weightInput) return;
@@ -1326,15 +1338,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
-        // If user entered Inch, keep as is.
-        let h_in = h;
-        let w_in = w;
-        let d_in = d;
+        if (dimUnit === 'cm') {
+            h = h / 2.54;
+            w = w / 2.54;
+            d = d / 2.54;
+        }
 
         // --- STEP B: ADD BUFFER (4 inches) ---
-        h_in += 4;
-        w_in += 4;
-        d_in += 4;
+        let h_in = h + 4;
+        let w_in = w + 4;
+        let d_in = d + 4;
 
         // --- STEP C: CALCULATE VOLUMETRIC WEIGHT ---
         // Formula: (L x W x H in inches) / 5000
@@ -1350,14 +1363,22 @@ document.addEventListener('DOMContentLoaded', function() {
         // Price: ₹700 per KG
         const price = chargeableWt * 700;
 
-        // Update Display
+        // --- UPDATE UI ---
+        
+        // 1. Update Volumetric Weight (Compulsory)
+        if (volDisplayElement) {
+            volDisplayElement.innerText = volWt.toFixed(3) + " kg";
+        }
+
+        // 2. Update Price
         if (displayElement) {
             displayElement.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         
+        // 3. Update Details text
         if (detailsElement) {
             const usedType = (volWt > adjustedActualWt) ? "Volumetric" : "Actual Weight";
-            detailsElement.innerText = `Using ${usedType}: ${chargeableWt.toFixed(3)} kg`;
+            detailsElement.innerText = `Chargeable: ${chargeableWt.toFixed(3)} kg (${usedType})`;
         }
     }
 
