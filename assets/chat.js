@@ -42,7 +42,7 @@
   const openConvParam = urlParams.get("conversation_id");
 
   ws.onopen = () => {
-    console.log('WebSocket connected');
+    console.log('\r\nWebSocket connected: '+ window.API_BASE);
     loadUsers();
     loadConversations();
   };
@@ -60,7 +60,7 @@
   ws.onclose = () => {
     console.warn('WebSocket closed');
     // try reconnect once after short delay
-    setTimeout(()=>{ window.location.reload(); }, 2000);
+    setTimeout(()=>{ window.location.reload(); }, 2000000);
   };
 
   sendBtn.addEventListener('click', sendMessage);
@@ -211,6 +211,7 @@
       notificationSound.play().catch(() => {});
   }
   function loadUsers() {
+    console.log("Loading users...");
     fetch(window.API_BASE + '/fetch_users.php', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
