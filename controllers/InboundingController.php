@@ -1084,8 +1084,7 @@ class InboundingController {
     public function addMaterialAjax() {
         global $inboundingModel;
         header('Content-Type: application/json');
-        
-        if (!isset($_SESSION['user_id'])) {
+        if (!isset($_SESSION['user']['id'])) {
             echo json_encode(['success' => false, 'message' => 'Unauthorized']);
             exit;
         }
@@ -1094,7 +1093,7 @@ class InboundingController {
         $slug   = trim($_POST['material_slug'] ?? '');
         $active = (int)($_POST['is_active'] ?? 1);
         $order  = (int)($_POST['display_order'] ?? 0);
-        $userId = !empty($_POST['user_id']) ? $_POST['user_id'] : $_SESSION['user_id'];
+        $userId = !empty($_POST['user_id']) ? $_POST['user_id'] : $_SESSION['user']['id'];
 
         if (empty($name)) {
             echo json_encode(['success' => false, 'message' => 'Material Name is required']);
