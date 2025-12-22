@@ -10,36 +10,47 @@ class InboundingController {
     public function index() {
         is_login();
         global $inboundingModel;
-        $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
-        $status_filter = isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '';
         
+        // 1. Capture Filter Inputs
+        $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+        
+        $filters = [
+            'vendor_code'         => $_GET['vendor_code'] ?? '',
+            'received_by_user_id' => $_GET['agent_id'] ?? '',
+            'group_name'          => $_GET['group_name'] ?? '',
+            'status_step'         => $_GET['status_step'] ?? ''
+        ];
+
+        // 2. Pagination Logic
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10; // Default to 10
-
-        // Update this array to match your HTML dropdown values (10, 25, 50, 100)
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
         $valid_limits = [10, 25, 50, 100]; 
+        if (!in_array($limit, $valid_limits)) $limit = 10;
 
-        if (in_array($limit, $valid_limits)) {
-            $limit = $limit;
-        } else {
-            $limit = 10; // Fallback to 10 if invalid value passed
-        }
+        // 3. Fetch Main Data
+        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters); 
+        
+        // 4. Fetch Dynamic Dropdown Data (The function we just updated)
+        $dropdowns = $inboundingModel->getFilterDropdowns();
 
-        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $status_filter); 
-        // echo"<pre>";print_r($pt_data);exit;
         $data = [
             'inbounding_data' => $pt_data["inbounding"],
-            'page_no' => $page_no,
-            'total_pages' => $pt_data["totalPages"],
-            'search' => $search,
-            'totalPages'   => $pt_data["totalPages"],
-            'currentPage'  => $pt_data["currentPage"],
-            'limit'        => $limit,
-            'totalRecords' => $pt_data["totalRecords"],
-            'status_filter'=> $status_filter,
+            'page_no'         => $page_no,
+            'total_pages'     => $pt_data["totalPages"],
+            'search'          => $search,
+            'totalPages'      => $pt_data["totalPages"],
+            'currentPage'     => $pt_data["currentPage"],
+            'limit'           => $limit,
+            'totalRecords'    => $pt_data["totalRecords"],
+            
+            // Pass the filter data to the View
+            'filters'         => $filters,
+            'vendor_list'     => $dropdowns['vendors'],
+            'user_list'       => $dropdowns['users'],
+            'group_list'      => $dropdowns['groups']
         ];
         
-        renderTemplateClean('views/inbounding/index.php', $data, 'Manage Inbounding');
+        renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
     // In your Inbounding Controller
 
@@ -204,7 +215,7 @@ class InboundingController {
         global $inboundingModel;
         $id = $_GET['id'] ?? 0;
         $data = array();
-        $data = $inboundingModel->getform2data($id);
+        $data = $inboundingModel->getlabeldata($id);
         renderTemplateClean('views/inbounding/label.php', $data, 'label');
     }
     public function getform1() {
@@ -289,7 +300,7 @@ class InboundingController {
         }
 
         // 2. Validate Size (50KB Limit)
-        if ($_FILES['photo']['size'] > 51200) { // 50 * 1024
+        if ($_FILES['photo']['size'] > 5242880) { // 50 * 1024
             echo "File is too large. Maximum allowed size is 50KB.";
             exit;
         }
@@ -298,7 +309,6 @@ class InboundingController {
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
-
         // 3. Process & Resize Image
         // We generate a unique name, resize it, and save it.
         $fileName = $_FILES['photo']['name'];
@@ -325,6 +335,12 @@ class InboundingController {
             ];
             $insertId = $inboundingModel->saveform1($saveData);
             if ($insertId) {
+                $logData = [
+                        'userid_log' => $_POST['userid_log'] ?? '',
+                        'i_id' => $insertId,
+                        'stat' => 'inbound'
+                    ];
+                $log_res =  $inboundingModel->stat_logs($logData);
                 header("location: " . base_url('?page=inbounding&action=form2&id='.$insertId));
                 exit;
             } else {
@@ -353,7 +369,7 @@ class InboundingController {
         if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
             
             // 1. Validate Size
-            if ($_FILES['photo']['size'] > 51200) {
+            if ($_FILES['photo']['size'] > 5242880) {
                 echo "File is too large. Maximum allowed size is 50KB.";
                 exit;
             }
@@ -389,7 +405,12 @@ class InboundingController {
             'category' => $category,
             'photo'    => $photoPath
         ];
-
+        $logData = [
+                'userid_log' => $_POST['userid_log'] ?? '',
+                'i_id' => $id,
+                'stat' => 'inbound'
+            ];
+        $log_res =  $inboundingModel->stat_logs($logData);
         $updated = $inboundingModel->updateform1($data);
 
         if ($updated) {
@@ -519,7 +540,7 @@ class InboundingController {
         $data['item'] = $inboundingModel->getItemDetails($id);
         $data['record_id'] = $id;
 
-        renderTemplateClean('views/inbounding/i_photos.php', $data, 'Item Photos');
+        renderTemplate('views/inbounding/i_photos.php', $data, 'Item Photos');
     }
 
     // ACTION: Save (Uploads, Deletions, AND Updates)
@@ -536,11 +557,17 @@ class InboundingController {
                 }
             }
 
-            // 2. Handle Metadata Updates (Caption & Order)
-            if (!empty($_POST['captions']) && is_array($_POST['captions'])) {
-                foreach ($_POST['captions'] as $img_id => $caption) {
-                    $order = $_POST['orders'][$img_id] ?? 0;
-                    $inboundingModel->update_image_meta($img_id, $caption, $order);
+            // 2. Handle Updates (Captions AND Order)
+            // We use image_ids_ordered because it arrives in the exact order they are on screen
+            if (!empty($_POST['image_ids_ordered'])) {
+                $counter = 1; 
+                foreach ($_POST['image_ids_ordered'] as $img_id) {
+                    $caption = $_POST['captions'][$img_id] ?? '';
+                    
+                    // The loop index ($counter) IS the new sort order
+                    $inboundingModel->update_image_meta($img_id, $caption, $counter);
+                    
+                    $counter++;
                 }
             }
 
@@ -549,6 +576,9 @@ class InboundingController {
                 $uploadDir = __DIR__ . '/../uploads/itm_img/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
+                // Get current max order to append new ones at the end
+                $currentMaxOrder = isset($counter) ? $counter : 1;
+
                 foreach ($_FILES['new_photos']['name'] as $key => $name) {
                     if ($_FILES['new_photos']['error'][$key] === 0) {
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
@@ -556,12 +586,26 @@ class InboundingController {
                         $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
                         
                         if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
+                            // Add image, potentially passing order if your model supports it
+                            // Assuming add_image just inserts:
                             $inboundingModel->add_image($id, $newName);
+                            
+                            // Optional: Immediately update its order to be last
+                            // $lastId = $inboundingModel->last_insert_id(); 
+                            // $inboundingModel->update_image_meta($lastId, '', $currentMaxOrder++);
                         }
                     }
                 }
             }
-
+            
+            // Logging
+            $logData = [
+                    'userid_log' => $_POST['userid_log'] ?? '',
+                    'i_id' => $id,
+                    'stat' => 'Editing'
+                ];
+            $log_res =  $inboundingModel->stat_logs($logData);
+            
             header("Location: " . base_url("?page=inbounding&action=list"));
             exit;
         }
@@ -574,7 +618,7 @@ class InboundingController {
         
         // 1. Get images from DB
         $images = $inboundingModel->get_raw_item_imgs($id);
-        
+        $item_code = $inboundingModel->get_temp_code($id);
         if(empty($images)) {
             echo "<script>alert('No images found for this item.'); history.back();</script>";
             exit;
@@ -582,7 +626,7 @@ class InboundingController {
 
         // 2. Setup Zip
         $zip = new ZipArchive();
-        $zipName = "Item_{$id}_Photos_" . date('Ymd_His') . ".zip";
+        $zipName = "Item_{$item_code['temp_code']}_Photos_" . date('Ymd_His') . ".zip";
         $tmp_file = sys_get_temp_dir() . '/' . $zipName;
 
         if ($zip->open($tmp_file, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
@@ -651,7 +695,7 @@ class InboundingController {
         $data['record_id'] = $id;
 
         // Load the new view file
-        renderTemplateClean('views/inbounding/i_raw_photos.php', $data, 'Raw Photos');
+        renderTemplate('views/inbounding/i_raw_photos.php', $data, 'Raw Photos');
     }
 
     public function itmrawimgsave() {
@@ -688,7 +732,12 @@ class InboundingController {
                     }
                 }
             }
-
+            $logData = [
+                    'userid_log' => $_POST['userid_log'] ?? '',
+                    'i_id' => $id,
+                    'stat' => 'Photoshoot'
+                ];
+            $log_res =  $inboundingModel->stat_logs($logData);
             header("Location: " . base_url("?page=inbounding&action=list"));
             exit;
         }
@@ -720,6 +769,9 @@ class InboundingController {
         $is_variant = $_POST['is_variant'] ?? '';
         $item_code  = $_POST['Item_code'] ?? '';
         $old_is_variant = $oldData['form2']['is_variant'] ?? '';
+        $cat_input = $_POST['category_code'] ?? '';
+        // Convert array to comma-separated string (e.g., "1,5,8")
+        $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
 
         // --- Auto-Generate Item Code Logic (For Non-Variants) ---
         // --- Auto-Generate Item Code Logic ---
@@ -754,9 +806,12 @@ class InboundingController {
             // Rule: If Variant is No, SKU is exactly the Item Code
             $generated_sku = $item_code;
         } elseif ($is_variant === 'Y') {
-            // Rule: If Variant is Yes, SKU is ItemCode-Size-Color
-            // Note: We use the POSTed Item_code here, which comes from the selection
-            $generated_sku = $item_code . '-' . $size . '-' . $color;
+            // Safety check: ensure item_code isn't empty (though JS validation handles this)
+            if(!empty($item_code)) {
+                $generated_sku = $item_code . '-' . $size . '-' . $color;
+            } else {
+                echo "Error: Parent Item Code is missing."; exit;
+            }
         }
 
         // --- Handle Array Inputs ---
@@ -777,7 +832,7 @@ class InboundingController {
             'Item_code'           => $item_code,
             'sku'                 => $generated_sku, // <--- ADDED SKU HERE
             'group_name'          => $_POST['group_name'] ?? '', 
-            'category_code'       => $_POST['category_code'] ?? '',
+            'category_code'       => $category_val,
             'sub_category_code'   => $sub_cat_val, 
             'sub_sub_category_code' => $sub_sub_val,
             'stock_added_date'    => $_POST['stock_added_date'] ?? '',
@@ -805,7 +860,7 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
-            'local_stock'         => $_POST['local_stock'] ?? '',
+            'back_order'          => $_POST['back_order'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
             'description_icons'   => $icons_val, 
@@ -823,57 +878,16 @@ class InboundingController {
             }
         }
         if ($result['success']) {
+            $logData = [
+                    'userid_log' => $_POST['userid_log'] ?? '',
+                    'i_id' => $id,
+                    'stat' => 'Data Entry'
+                ];
+            $log_res =  $inboundingModel->stat_logs($logData);
             header("location: " . base_url('?page=inbounding&action=list'));
             exit;
         } else {
             echo "Update failed: " . $result['message'];
-        }
-    }
-    public function updateform3()
-    {
-        global $inboundingModel;
-
-        // Read record ID
-        $record_id = $_POST['record_id'] ?? '';
-        if (empty($record_id)) {
-            echo "Record ID missing.";
-            exit;
-        }
-
-        // Read form fields
-        $gate_entry_date_time = $_POST['gate_entry_date_time'] ?? '';
-        $material_code        = $_POST['material_code'] ?? '';
-        $height               = $_POST['height'] ?? '';
-        $width                = $_POST['width'] ?? '';
-        $depth                = $_POST['depth'] ?? '';
-        $weight               = $_POST['weight'] ?? '';
-        $color                = $_POST['color'] ?? '';
-        $quantity_received    = $_POST['quantity_received'] ?? '';
-        $received_by_user_id  = $_POST['received_by_user_id'] ?? '';
-
-        // Prepare data array for update
-        $updateData = [
-            'gate_entry_date_time' => $gate_entry_date_time,
-            'material_code'        => $material_code,
-            'height'               => $height,
-            'width'                => $width,
-            'depth'                => $depth,
-            'weight'               => $weight,
-            'color'                => $color,
-            'quantity_received'    => $quantity_received,
-            'received_by_user_id'  => $received_by_user_id,
-        ];
-
-        // Call model update
-        $updated = $inboundingModel->updateForm3($record_id, $updateData);
-
-        if ($updated['success']) {
-            // redirect to label
-            header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
-            exit;
-        } else {
-            echo "Update failed: " . $updated['message'];
-            exit;
         }
     }
     public function saveform2() {
@@ -918,22 +932,64 @@ class InboundingController {
             echo "Upload failed.";
         }        
     }
-    public function saveform3(){
+    public function saveform3() {
         global $inboundingModel;
         $record_id = $_POST['record_id'] ?? '';
+        
+        // 1. Fetch Existing Data for Logic (We need Category & Material IDs)
+        // Assuming getById returns the row from vp_inbound
+        $existingData = $inboundingModel->getById($record_id); 
+        
+        // 2. Fetch Names for Initials
+        // A. Get Category Name (First Char)
+        $categoryName = '';
+        if (!empty($existingData['group_name'])) {
+            // Fetch from 'vp_categories' table using group_name (which is category ID)
+            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
+            $categoryName = $catData['display_name'] ?? ''; // Assuming column is 'category' or 'name'
+        }
+
+        // B. Get Material Name (First Char)
+        $materialId = $_POST['material_code'] ?? '';
+        $materialName = '';
+        if (!empty($materialId)) {
+            $matData = $inboundingModel->getMaterialById($materialId);
+            $materialName = $matData['material_name'] ?? '';
+        }
+
+        // C. Get Color (First Char)
+        $colorName = $_POST['color'] ?? '';
+
+        // 3. Generate Prefix (e.g., "BSB")
+        $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
+        $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
+        $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
+        $prefix = $char1 . $char2 . $char3;
+
+        // 4. Generate Full Temp Code (e.g., "BSB001")
+        // This function checks the DB for the last code starting with this prefix
+        $temp_code = $inboundingModel->generateNextTempCode($prefix);
+
+        // 5. Prepare Save Data
         $gate_entry_date_time = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
+        
         $saveData = [
-            'gate_entry_date_time' => $gate_entry_date_time ?? '',
-            'material_code'        => $_POST['material_code'] ?? '',
+            'gate_entry_date_time' => $gate_entry_date_time,
+            'material_code'        => $materialId,
             'height'               => $_POST['height'] ?? '',
             'width'                => $_POST['width'] ?? '',
             'depth'                => $_POST['depth'] ?? '',
             'weight'               => $_POST['weight'] ?? '',
-            'color'                => $_POST['color'] ?? '',
+            'color'                => $colorName,
             'Quantity'             => $_POST['quantity_received'] ?? '',
-            'received_by_user_id'            => $_POST['received_by_user_id'] ?? '',
+            'size'                 => $_POST['size'] ?? '',
+            'cp'                   => $_POST['cp'] ?? '',
+            'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
+            'temp_code'            => $temp_code // Add generated code
         ];
-        $insertId = $inboundingModel->saveform3($record_id,$saveData);
+
+        $insertId = $inboundingModel->saveform3($record_id, $saveData);
+        
         if ($insertId) {
             header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
             exit;
@@ -941,30 +997,124 @@ class InboundingController {
             echo "Database error.";
         }
     }
-    public function editRecord() {
+
+    public function updateform3() {
         global $inboundingModel;
-        $inboundingId = isset($_GET['id']) ? $_GET['id'] : 0;
-        if (!$inboundingId) {
-            echo json_encode(['success' => false, 'message' => 'Invalid Request.']);
+        $record_id = $_POST['record_id'] ?? '';
+        
+        if (empty($record_id)) {
+            echo "Record ID missing.";
             exit;
         }
-        $data = $inboundingModel->getRecord($inboundingId);
-        $data = [
-            'inbounding' => $data["inbounding"],
+
+        // --- 1. TEMP CODE GENERATION LOGIC ---
+        
+        // A. Fetch existing inbound data to get the Group ID (which maps to Category)
+        $existingData = $inboundingModel->getById($record_id); 
+        
+        // B. Get Category Name (First Char)
+        $categoryName = '';
+        if (!empty($existingData['group_name'])) {
+            // Fetch from 'vp_categories' table using group_name (which is category ID)
+            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
+            $categoryName = $catData['display_name'] ?? ''; // Assuming column is 'category' or 'name'
+        }
+
+        // C. Get Material Name (First Char)
+        $materialId = $_POST['material_code'] ?? '';
+        $materialName = '';
+        if (!empty($materialId)) {
+            $matData = $inboundingModel->getMaterialById($materialId);
+            $materialName = $matData['material_name'] ?? '';
+        }
+
+        // D. Get Color (First Char)
+        $colorName = $_POST['color'] ?? '';
+
+        // E. Construct Prefix (e.g., "BSB")
+        $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
+        $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
+        $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
+        $prefix = $char1 . $char2 . $char3;
+
+        // F. Generate Full Temp Code (e.g., "BSB001")
+        $temp_code = $inboundingModel->generateNextTempCode($prefix);
+        // --- 2. PREPARE UPDATE DATA ---
+
+        $gate_entry_date_time = $_POST['gate_entry_date_time'] ?? '';
+        
+        $updateData = [
+            'gate_entry_date_time' => $gate_entry_date_time,
+            'material_code'        => $materialId,
+            'height'               => $_POST['height'] ?? '',
+            'width'                => $_POST['width'] ?? '',
+            'depth'                => $_POST['depth'] ?? '',
+            'weight'               => $_POST['weight'] ?? '',
+            'color'                => $colorName,
+            'quantity_received'    => $_POST['quantity_received'] ?? '',
+            'size'                 => $_POST['size'] ?? '',
+            'cp'                   => $_POST['cp'] ?? '',
+            'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
+            'temp_code'            => $temp_code // Add Generated Code here
         ];
-        renderTemplateClean('views/inbounding/edit.php', $data, 'Edit inbounding');
-    }
-    public function updateRecord() {
-        global $inboundingModel;
-        $Id = isset($_POST['id']) ? $_POST['id'] : 0;
-        if (!$Id) {
-            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+
+        // Call model update
+        $updated = $inboundingModel->updateForm3($record_id, $updateData);
+
+        if ($updated['success']) {
+            // Redirect to label page
+            header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
+            exit;
+        } else {
+            echo "Update failed: " . $updated['message'];
             exit;
         }
-        $data = $_POST;
-        $result = $inboundingModel->updateRecord($Id, $data);
-        $_SESSION["role_message"] = $result['message'];
-        header("location: " . base_url('?page=inbounding&action=list'));
+    }
+    public function getNextMaterialOrderAjax() {
+        global $inboundingModel;
+        header('Content-Type: application/json');
+        
+        $nextOrder = $inboundingModel->getNextMaterialOrder();
+        
+        // Ensure we send a valid integer, defaulting to 1 on error
+        echo json_encode(['next_order' => $nextOrder ? $nextOrder : 1]);
+        exit;
+    }
+
+    public function addMaterialAjax() {
+        global $inboundingModel;
+        header('Content-Type: application/json');
+        if (!isset($_SESSION['user']['id'])) {
+            echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+            exit;
+        }
+
+        $name   = trim($_POST['material_name'] ?? '');
+        $slug   = trim($_POST['material_slug'] ?? '');
+        $active = (int)($_POST['is_active'] ?? 1);
+        $order  = (int)($_POST['display_order'] ?? 0);
+        $userId = !empty($_POST['user_id']) ? $_POST['user_id'] : $_SESSION['user']['id'];
+
+        if (empty($name)) {
+            echo json_encode(['success' => false, 'message' => 'Material Name is required']);
+            exit;
+        }
+
+        // Call Model
+        $result = $inboundingModel->insertMaterial($name, $slug, $active, $order, $userId);
+
+        if ($result === "DUPLICATE") {
+            echo json_encode(['success' => false, 'message' => 'Material name already exists!']);
+        } elseif ($result) {
+            echo json_encode([
+                'success' => true, 
+                'id'      => $result, 
+                'name'    => $name,
+                'message' => 'Material added successfully'
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Database error. Check table structure.']);
+        }
         exit;
     }
 }

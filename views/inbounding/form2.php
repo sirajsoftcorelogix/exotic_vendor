@@ -196,7 +196,7 @@ $formAction = $isEdit
 
             <div class="p-5 bg-white border-t border-gray-100 mt-auto z-20">
                 <button type="submit" form="invoiceForm" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3.5 rounded-xl shadow-lg transform transition active:scale-[0.99] flex justify-center items-center gap-2">
-                    <?php echo $isEdit ? "Update & Next" : "Update & Next >"; ?><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                    <?php echo $isEdit ? "Update & Next" : "Update & Next"; ?><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                 </button>
             </div>
@@ -275,14 +275,6 @@ $formAction = $isEdit
              errorBox.textContent = "Please upload an invoice photo.";
              e.preventDefault();
              return false;
-        }
-
-        // Validate Vendor Selection
-        const vendorSelect = document.getElementById("vendor_id");
-        if(vendorSelect.value === "") {
-            alert("Please select a vendor.");
-            e.preventDefault();
-            return false;
         }
     });
 </script>

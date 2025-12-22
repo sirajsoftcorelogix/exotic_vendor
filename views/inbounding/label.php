@@ -87,11 +87,11 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         </div>
                         <div class="flex items-center">
                             <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Category:</span>
-                            <span class="text-gray-600 font-semibold truncate"><?php echo safe($category_display_name ?? '-'); ?></span>
+                            <span class="text-gray-600 font-semibold truncate"><?php echo safe($label_data['category'] ?? '-'); ?></span>
                         </div>
                         <div class="flex items-center">
                             <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Material:</span>
-                            <span class="text-gray-600 font-semibold truncate"><?php echo safe($label_data['material_code'] ?? '-'); ?></span>
+                            <span class="text-gray-600 font-semibold truncate"><?php echo safe($label_data['material_name'] ?? '-'); ?></span>
                         </div>
                          <div class="flex items-center">
                             <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Quantity:</span>
@@ -133,15 +133,18 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         <span class="font-extrabold text-gray-900">Color:</span> 
                         <span class="text-gray-600 font-bold"><?php echo safe($label_data['color'] ?? '0'); ?></span>
                     </div>
-                
+                    <div class="flex justify-between">
+                        <span class="font-extrabold text-gray-900">CP:</span> 
+                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['cp'] ?? '0'); ?></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-extrabold text-gray-900">Temp Code:</span> 
+                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['temp_code'] ?? '0'); ?></span>
+                    </div>
                 </div>
 
                 <div class="mt-1 pt-2">
                     <div class="text-[15px] space-y-1">
-                        <div class="flex items-center">
-                            <span class="font-extrabold text-gray-900 mr-2">Temp Code:</span>
-                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['temp_code'] ?? 'N/A'); ?></span>
-                        </div>
                         <div class="flex items-center">
                             <span class="font-extrabold text-gray-900 mr-2">Vendor :</span>
                             <span class="text-gray-600 font-bold"><?php echo safe($label_data['vendor_name'] ?? 'N/A'); ?></span>

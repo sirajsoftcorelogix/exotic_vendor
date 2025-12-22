@@ -7,3 +7,6 @@ tmp/*
 settings/database/database.php
 bootstrap/*
 .vscode/*
+config.php
+api/auth.php
+chat_start.php

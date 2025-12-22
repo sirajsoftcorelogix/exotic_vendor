@@ -5,8 +5,23 @@ $item = $data['item'] ?? [];
 $record_id = $data['record_id'] ?? 0;
 ?>
 
-<div class="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6 font-['Segoe_UI']">
+<style>
+    /* Initialize counter */
+    #sortable-list { counter-reset: img-order; }
+    
+    /* Increment counter for every draggable item */
+    .draggable-item { counter-increment: img-order; }
 
+    /* Inject the number into the badge */
+    .order-badge::after { content: "#" counter(img-order); }
+    
+    /* Dragging Styles */
+    .draggable-item.dragging { opacity: 0.5; border: 2px dashed #999; }
+</style>
+
+<div class="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6 font-['Segoe_UI']">
+    
+    <h2 class="text-xl font-bold text-gray-900 mb-5 ml-[5px]">Edited Photo</h2>
     <div class="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-200 mb-6">
         <div class="shrink-0 w-32 h-32 bg-gray-100 rounded-lg border border-gray-200 p-1">
             <img src="<?php echo base_url($item['product_photo'] ?? 'assets/no-img.png'); ?>" class="w-full h-full object-contain rounded">
@@ -65,8 +80,8 @@ $record_id = $data['record_id'] ?? 0;
         </div>
     </div>
 
-    <form action="<?php echo base_url('?page=inbounding&action=itmimgsave&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
-        
+    <form action="<?php echo base_url('?page=inbounding&action=itmimgsave&id='.$record_id); ?>" method="POST" enctype="multipart/form-data" id="photoForm">
+        <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
         <div id="deletedInputsContainer"></div>
 
         <div class="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-6 items-center border border-gray-300 rounded-lg p-6 mb-8">
@@ -87,32 +102,31 @@ $record_id = $data['record_id'] ?? 0;
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="previewContainer">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="sortable-list">
             
             <?php if(!empty($images)): ?>
                 <?php foreach($images as $img): ?>
-                <div class="flex border border-gray-400 rounded-md p-2 gap-3 bg-white existing-photo relative shadow-sm">
-                    <div class="absolute top-2 left-1 cursor-move text-gray-400">
+                <div class="draggable-item flex border border-gray-400 rounded-md p-2 gap-3 bg-white existing-photo relative shadow-sm cursor-move" draggable="true">
+                    
+                    <input type="hidden" name="image_ids_ordered[]" value="<?php echo $img['id']; ?>">
+                    <input type="hidden" name="is_new[]" value="0"> 
+
+                    <div class="absolute top-2 left-1 text-gray-400 handle">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M7 2a2 2 0 10-.001 4.001A2 2 0 007 2zm0 6a2 2 0 10-.001 4.001A2 2 0 007 8zm0 6a2 2 0 10-.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z" /></svg>
                     </div>
 
-                    <div class="w-32 h-32 bg-[#e6e2dd] rounded ml-4 flex items-center justify-center shrink-0 border border-gray-300">
+                    <div class="w-32 h-32 bg-[#e6e2dd] rounded ml-4 flex items-center justify-center shrink-0 border border-gray-300 pointer-events-none">
                         <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain">
                     </div>
 
                     <div class="flex-grow flex flex-col justify-center space-y-3 relative pr-8">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-700 mb-1">Image Caption:</label>
-                            <input type="text" name="captions[<?php echo $img['id']; ?>]" 
-                                   value="<?php echo htmlspecialchars($img['image_caption'] ?? ''); ?>"
-                                   class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-gray-500">
+                        <div class="flex justify-between items-end">
+                            <label class="text-xs font-bold text-gray-700">Image Caption:</label>
+                            <span class="order-badge text-[10px] font-mono font-bold text-gray-400 bg-gray-100 border border-gray-200 px-1.5 rounded"></span>
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-700 mb-1">Display Order:</label>
-                            <input type="number" name="orders[<?php echo $img['id']; ?>]" 
-                                   value="<?php echo $img['display_order']; ?>"
-                                   class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-gray-500">
-                        </div>
+                        <input type="text" name="captions[<?php echo $img['id']; ?>]" 
+                               value="<?php echo htmlspecialchars($img['image_caption'] ?? ''); ?>"
+                               class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-gray-500">
 
                         <button type="button" onclick="markForDeletion(this, <?php echo $img['id']; ?>)" 
                                 class="absolute bottom-0 right-0 text-gray-800 hover:text-red-600 transition">
@@ -122,102 +136,191 @@ $record_id = $data['record_id'] ?? 0;
                 </div>
                 <?php endforeach; ?>
             <?php endif; ?>
-            
+
             </div>
 
         <div class="mt-8 flex justify-end gap-3">
-             <a href="<?php echo base_url('?page=inbounding'); ?>" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                Cancel
-            </a>
-            <button type="submit" class="bg-black hover:bg-gray-800 text-white font-bold py-2.5 px-6 rounded text-sm shadow-md transition">
-                Save & Update
-            </button>
+             <a href="<?php echo base_url('?page=inbounding'); ?>" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</a>
+            <button type="submit" class="bg-black hover:bg-gray-800 text-white font-bold py-2.5 px-6 rounded text-sm shadow-md transition">Save & Update</button>
         </div>
-
     </form>
 </div>
 
 <script>
     const fileInput = document.getElementById('fileInput');
-    const previewContainer = document.getElementById('previewContainer');
+    const sortableList = document.getElementById('sortable-list');
     const deletedContainer = document.getElementById('deletedInputsContainer');
-    let dt = new DataTransfer();
+    
+    // Store all files in a Map for easy retrieval by name
+    let globalFiles = new Map();
 
-    // 1. Handle File Selection
+    // 1. HANDLE FILE SELECTION
     fileInput.addEventListener('change', function() {
-        for(let i = 0; i < this.files.length; i++){
+        for (let i = 0; i < this.files.length; i++) {
             let file = this.files[i];
-            dt.items.add(file);
-            createPreview(file);
+            // Avoid duplicates based on name+size
+            let uniqueKey = file.name + '-' + file.size;
+            if(!globalFiles.has(uniqueKey)){
+                globalFiles.set(uniqueKey, file);
+                createPreview(file, uniqueKey);
+            }
         }
-        this.files = dt.files; 
+        updateFileInput(); // Sync the input with the map
     });
 
-    // 2. Create Preview (Designed to look like the Screenshot cards)
-    function createPreview(file) {
+    // 2. CREATE PREVIEW (For New Files)
+    function createPreview(file, uniqueKey) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onloadend = function() {
             const div = document.createElement('div');
-            const tempId = 'new-' + Math.random().toString(36).substr(2, 9);
             
-            // New card HTML structure
-            div.id = tempId;
-            div.className = "flex border border-gray-400 rounded-md p-2 gap-3 bg-gray-50 relative shadow-sm opacity-90";
+            // IMPORTANT: 'draggable-item' class enables the drag logic
+            // 'data-key' helps us find the actual file object later
+            div.className = "draggable-item flex border border-gray-400 rounded-md p-2 gap-3 bg-gray-50 relative shadow-sm cursor-move";
+            div.setAttribute('draggable', 'true');
+            div.setAttribute('data-key', uniqueKey); 
+            div.setAttribute('data-is-new', 'true');
 
             div.innerHTML = `
-                <div class="absolute top-2 left-1 text-gray-400">
+                 <input type="hidden" name="is_new_ordered[]" value="1">
+
+                <div class="absolute top-2 left-1 text-gray-400 handle">
                     <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 10-.001 4.001A2 2 0 007 2zm0 6a2 2 0 10-.001 4.001A2 2 0 007 8zm0 6a2 2 0 10-.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z" /></svg>
                 </div>
 
-                <div class="w-32 h-32 bg-[#e6e2dd] rounded ml-4 flex items-center justify-center shrink-0 border border-gray-300 relative">
-                    <img src="${reader.result}" class="max-w-full max-h-full object-contain opacity-80">
+                <div class="w-32 h-32 bg-[#e6e2dd] rounded ml-4 flex items-center justify-center shrink-0 border border-gray-300 relative pointer-events-none">
+                    <img src="${reader.result}" class="max-w-full max-h-full object-contain opacity-90">
                     <span class="absolute top-1 left-1 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">NEW</span>
                 </div>
 
                 <div class="flex-grow flex flex-col justify-center space-y-3 relative pr-8">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 mb-1">Image Caption:</label>
-                        <input type="text" disabled placeholder="Save first to edit" class="w-full border border-gray-300 bg-gray-100 rounded px-2 py-1 text-sm">
+                    <div class="flex justify-between items-end">
+                        <label class="block text-xs font-bold text-gray-700">Image Caption:</label>
+                        <span class="order-badge text-[10px] font-mono font-bold text-gray-400 bg-gray-100 border border-gray-200 px-1.5 rounded"></span>
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 mb-1">Display Order:</label>
-                        <input type="number" disabled placeholder="0" class="w-full border border-gray-300 bg-gray-100 rounded px-2 py-1 text-sm">
-                    </div>
+                    
+                    <input type="text" name="new_captions[]" placeholder="Enter caption..." class="w-full border border-gray-300 bg-white rounded px-2 py-1 text-sm focus:outline-none focus:border-gray-500">
 
-                    <button type="button" onclick="removeNewFile('${file.name}', '${tempId}')" 
+                    <button type="button" onclick="removeNewFile(this, '${uniqueKey}')" 
                             class="absolute bottom-0 right-0 text-red-500 hover:text-red-700 transition">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                 </div>
             `;
-            previewContainer.appendChild(div);
+            
+            // Add Drag Events to the new element
+            addDragEvents(div);
+            sortableList.appendChild(div);
+            
+            // Important: Re-sync file input order after adding
+            updateFileInput();
         }
     }
 
-    // 3. Remove New File
-    window.removeNewFile = function(fileName, domId) {
-        document.getElementById(domId).remove();
+    // 3. REMOVE NEW FILE
+    window.removeNewFile = function(btn, key) {
+        btn.closest('.draggable-item').remove();
+        globalFiles.delete(key);
+        updateFileInput();
+    }
+
+    // 4. SYNC DOM ORDER TO FILE INPUT
+    // This is the magic part: It rebuilds the <input type="file"> 
+    // based on the visual order of the cards in the grid.
+    function updateFileInput() {
         const newDt = new DataTransfer();
-        for(let i = 0; i < dt.files.length; i++) {
-            if(dt.files[i].name !== fileName) newDt.items.add(dt.files[i]);
-        }
-        dt = newDt;
-        fileInput.files = dt.files;
+        
+        // Loop through DOM elements to get the current visual order
+        const items = sortableList.querySelectorAll('.draggable-item');
+        
+        items.forEach(item => {
+            // Only care about new items (which have data-key)
+            const key = item.getAttribute('data-key');
+            if (key && globalFiles.has(key)) {
+                newDt.items.add(globalFiles.get(key));
+            }
+        });
+        
+        fileInput.files = newDt.files;
     }
 
-    // 4. Mark Existing for Deletion
+    // 5. EXISTING DELETE LOGIC
     window.markForDeletion = function(btn, dbId) {
         if(!confirm("Are you sure you want to delete this image?")) return;
+        const parent = btn.closest('.draggable-item');
+        parent.style.display = 'none'; 
         
-        const parent = btn.closest('.existing-photo');
-        parent.style.opacity = '0.3';
-        parent.style.pointerEvents = 'none';
-
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'delete_ids[]';
         input.value = dbId;
         deletedContainer.appendChild(input);
+        
+        // Remove ordering input so it doesn't count
+        const orderInput = parent.querySelector('input[name="image_ids_ordered[]"]');
+        if(orderInput) orderInput.remove();
+    }
+
+    // 6. DRAG AND DROP LOGIC (Unified)
+    // Apply to existing items
+    document.querySelectorAll('.draggable-item').forEach(item => {
+        addDragEvents(item);
+    });
+
+    function addDragEvents(item) {
+        item.addEventListener('dragstart', () => {
+            item.classList.add('dragging');
+            item.style.opacity = '0.5';
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            item.style.opacity = '1';
+            // CRITICAL: Update the file input order every time a drag finishes
+            updateFileInput();
+        });
+    }
+
+    sortableList.addEventListener('dragover', e => {
+        e.preventDefault();
+        const afterElement = getDragAfterElement(sortableList, e.clientY, e.clientX);
+        const draggable = document.querySelector('.dragging');
+        if (afterElement == null) {
+            sortableList.appendChild(draggable);
+        } else {
+            sortableList.insertBefore(draggable, afterElement);
+        }
+    });
+
+    function getDragAfterElement(container, y, x) {
+        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.dragging)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            // Use a combination of X and Y to find the closest element in the Grid
+            const offsetX = x - box.left - box.width / 2;
+            const offsetY = y - box.top - box.height / 2;
+            
+            // Simple logic: We calculate distance to center of box
+            const dist = Math.hypot(offsetX, offsetY);
+            
+            // Check if we are roughly "before" this element visually
+            // In a grid, if we are to the left or above, we are "before"
+            
+            // Simplified "Insert Before" logic for Grid:
+            // If the mouse is to the left of the center (offsetX < 0) 
+            // AND within the vertical band of the item
+            
+            // Standard reducer logic: find the element with closest negative offset
+            // But for grid, we often just want the closest element generally.
+            
+            // Let's stick to the standard vertical-list style logic adapted slightly:
+            if (y < box.bottom && x < box.right) {
+                 if(closest.element === null) return { element: child, dist: dist };
+                 if(dist < closest.dist) return { element: child, dist: dist };
+            }
+            return closest;
+        }, { element: null, dist: Number.POSITIVE_INFINITY }).element;
     }
 </script>

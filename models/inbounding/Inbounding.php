@@ -6,7 +6,7 @@ class Inbounding {
     }
     // models/inbounding/InboundingModel.php (or wherever your getAll is defined)
 
-    public function getAll($page = 1, $limit = 10, $search = '', $status_filter = '') {
+    public function getAll($page = 1, $limit = 10, $search = '', $filters = []) {
         $page = (int)$page;
         if ($page < 1) $page = 1;
 
@@ -16,17 +16,36 @@ class Inbounding {
         $offset = ($page - 1) * $limit;
         $where = [];
 
-        // 1. Search Logic (Item Code, Title, Keywords)
+        // 1. Text Search
         if (!empty($search)) {
             $search = $this->conn->real_escape_string($search);
-            // Using OR logic for broad search
             $where[] = "(Item_code LIKE '%$search%' OR product_title LIKE '%$search%' OR key_words LIKE '%$search%')";
         }
 
-        // 2. Status Filter
-        if (!empty($status_filter)) {
-            $status_filter = $this->conn->real_escape_string($status_filter);
-            $where[] = "is_active = '$status_filter'";
+        // 2. Vendor Filter
+        if (!empty($filters['vendor_code'])) {
+            $v_code = $this->conn->real_escape_string($filters['vendor_code']);
+            $where[] = "vendor_code = '$v_code'";
+        }
+
+        // 3. Agent (Received By) Filter
+        if (!empty($filters['received_by_user_id'])) {
+            $u_id = (int)$filters['received_by_user_id'];
+            $where[] = "received_by_user_id = $u_id";
+        }
+
+        // 4. Group Filter
+        if (!empty($filters['group_name'])) {
+            $g_name = $this->conn->real_escape_string($filters['group_name']);
+            $where[] = "group_name = '$g_name'";
+        }
+
+        // 5. Status Filter (PENDING Logic)
+        // "If select photoshoot that means there is NO entry of photo shoot"
+        if (!empty($filters['status_step'])) {
+            $step = $this->conn->real_escape_string($filters['status_step']);
+            // Query: Show items where this ID does NOT exist in logs with this status
+            $where[] = "id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
         }
 
         // Combine WHERE clauses
@@ -47,6 +66,19 @@ class Inbounding {
 
         $data = [];
         while ($row = $result->fetch_assoc()) {
+            $current_id = (int)$row['id'];
+            
+            // Fetch logs
+            $log_sql = "SELECT il.*, u.name FROM inbound_logs as il LEFT JOIN vp_users as u on il.userid_log=u.id WHERE il.i_id = $current_id";
+            $log_result = $this->conn->query($log_sql);
+            
+            $logs = [];
+            if ($log_result) {
+                while ($log_row = $log_result->fetch_assoc()) {
+                    $logs[] = $log_row;
+                }
+            }
+            $row['stat_logs'] = $logs;
             $data[] = $row;
         }
 
@@ -58,6 +90,53 @@ class Inbounding {
             'totalRecords' => $totalRecords,
             'search'       => $search
         ];
+    }
+
+    // --- NEW HELPER FOR DROPDOWNS ---
+    // --- HELPER FOR FILTERS ---
+    public function getFilterDropdowns() {
+        $data = ['vendors' => [], 'users' => [], 'groups' => []];
+
+        // 1. Get Vendors (Only those present in vp_inbound)
+        $v_sql = "SELECT DISTINCT v.id, v.vendor_name 
+                  FROM vp_vendors v 
+                  INNER JOIN vp_inbound i ON i.vendor_code = v.id 
+                  ORDER BY v.vendor_name ASC";
+        $v_res = $this->conn->query($v_sql);
+        if($v_res) {
+            while($r = $v_res->fetch_assoc()) { 
+                $data['vendors'][] = $r; 
+            }
+        }
+
+        // 2. Get Agents / Users (Only those present in vp_inbound)
+        $u_sql = "SELECT DISTINCT u.id, u.name 
+                  FROM vp_users u 
+                  INNER JOIN vp_inbound i ON i.received_by_user_id = u.id 
+                  ORDER BY u.name ASC";
+        $u_res = $this->conn->query($u_sql);
+        if($u_res) {
+            while($r = $u_res->fetch_assoc()) { 
+                $data['users'][] = $r; 
+            }
+        }
+
+        // 3. Get Groups (Joined with Category Table)
+        // Logic: vp_inbound.group_name stores the ID -> matches vp_categories.category
+        $g_sql = "SELECT DISTINCT c.category as id, c.display_name as name 
+                  FROM category c 
+                  INNER JOIN vp_inbound i ON i.group_name = c.category 
+                  WHERE i.group_name != '' 
+                  ORDER BY c.display_name ASC";
+                  
+        $g_res = $this->conn->query($g_sql);
+        if($g_res) {
+            while($r = $g_res->fetch_assoc()) { 
+                $data['groups'][] = $r; 
+            }
+        }
+
+        return $data;
     }
    
     public function getItamcode(){
@@ -207,6 +286,16 @@ class Inbounding {
 
         // Execute and return result
         return $stmt->execute();
+    }
+    public function get_temp_code($item_id){
+        $result = $this->conn->query("SELECT temp_code FROM `vp_inbound` WHERE id = $item_id");
+        $id = intval($item_id);
+        $sql = "SELECT temp_code FROM vp_inbound WHERE id = $id";
+        $result = $this->conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return false;
     }
     public function get_raw_item_imgs($item_id) {
         $item_id = intval($item_id);
@@ -448,6 +537,57 @@ class Inbounding {
             return false;
         }
     }
+    public function stat_logs($value = []) {
+        // echo "<pre>";print_r($value);exit;
+        // 1. Extract variables safely
+        $stat       = $value['stat'] ?? '';
+        $userid_log = $value['userid_log'] ?? 0;
+        $i_id       = $value['i_id'] ?? 0;
+
+        // 2. CHECK: Does this specific log entry already exist?
+        // We check for a match on ALL 3 fields (i_id, stat, userid_log)
+        $checkSql = "SELECT id FROM `inbound_logs` WHERE `i_id` = ? AND `stat` = ? AND `userid_log` = ?";
+        $checkStmt = $this->conn->prepare($checkSql);
+        
+        if (!$checkStmt) {
+            return false;
+        }
+
+        $checkStmt->bind_param("isi", $i_id, $stat, $userid_log);
+        $checkStmt->execute();
+        $checkStmt->store_result();
+        
+        $exists = $checkStmt->num_rows > 0; // True if match found
+        $checkStmt->close();
+
+        // 3. ACTION: Update or Insert based on check
+        $stmt = null;
+
+        if ($exists) {
+            // --- UPDATE Existing Row ---
+            $sql = "UPDATE `inbound_logs` 
+                    SET `modified_at` = NOW() 
+                    WHERE `i_id` = ? AND `stat` = ? AND `userid_log` = ?";
+            
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) return false;
+            
+            $stmt->bind_param("isi", $i_id, $stat, $userid_log);
+
+        } else {
+            // --- INSERT New Row ---
+            $sql = "INSERT INTO `inbound_logs` (`id`, `i_id`, `stat`, `userid_log`, `created_at`, `modified_at`) 
+                    VALUES (NULL, ?, ?, ?, NOW(), NULL)";
+            
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) return false;
+            
+            $stmt->bind_param("isi", $i_id, $stat, $userid_log);
+        }
+
+        // 4. Execute final query
+        return $stmt->execute();
+    }
     public function updateform1($data) {
         global $conn;
 
@@ -492,56 +632,6 @@ class Inbounding {
 
         // 5. Execute and return result
         return $stmt->execute();
-    }
-    public function updateForm3($id, $data) {
-        // 1. The SQL has 11 placeholders (?)
-        $sql = "UPDATE vp_inbound 
-                SET gate_entry_date_time = ?, 
-                    material_code = ?, 
-                    height = ?, 
-                    width = ?, 
-                    depth = ?, 
-                    weight = ?, 
-                    color = ?, 
-                    received_by_user_id = ?,
-                WHERE id = ?";
-                
-        $stmt = $this->conn->prepare($sql);
-        
-        if (!$stmt) {
-            return [
-                'success' => false,
-                'message' => "Prepare failed: " . $this->conn->error
-            ];
-        }
-
-        // 2. Corrected bind_param
-        // The type string "sssssssissi" corresponds to the 11 variables below:
-        // s (string), s (string), s (string), s (string), s (string), s (string), s (string), i (int), s (string), s (string), i (int)
-        $stmt->bind_param(
-            "sssssssii", 
-            $data['gate_entry_date_time'], // 1. Matches gate_entry_date_time
-            $data['material_code'],        // 2. Matches material_code
-            $data['height'],               // 3. Matches height
-            $data['width'],                // 4. Matches width
-            $data['depth'],                // 5. Matches depth
-            $data['weight'],               // 6. Matches weight
-            $data['color'],                // 7. Matches color
-            $data['received_by_user_id'],  // 8. Matches received_by_user_id (int)
-            $id                            // 11. Matches WHERE id (int)
-        );
-
-        if ($stmt->execute()) {
-            return [
-                'success' => true,
-                'message' => "Record updated successfully."
-            ];
-        }
-        
-        return [
-            'success' => false,
-            'message' => "Update failed: " . $stmt->error
-        ];
     }
     public function updatedesktopform($id, $data) {
         if (isset($data['id'])) unset($data['id']);
@@ -664,72 +754,236 @@ class Inbounding {
             'message' => 'Update failed: ' . $stmt->error
         ];
     }
-    public function saveform3($id, $data) {
-        $sql = "UPDATE vp_inbound SET 
-            gate_entry_date_time = ?,
-            material_code = ?,
-            height = ?,
-            width = ?,
-            depth = ?,
-            weight = ?,
-            color = ?,
-            quantity_received = ?,
-            received_by_user_id = ?
-        WHERE id = ?";
+    public function updateForm3($id, $data) {
+        // Added temp_code to the query
+        $sql = "UPDATE vp_inbound 
+                SET gate_entry_date_time = ?, 
+                    material_code = ?, 
+                    height = ?, 
+                    width = ?, 
+                    depth = ?, 
+                    weight = ?, 
+                    color = ?, 
+                    size = ?, 
+                    cp = ?, 
+                    received_by_user_id = ?,
+                    dimention_unit = ?,
+                    weight_unit = ?,
+                    temp_code = ? 
+                WHERE id = ?";
         
         $stmt = $this->conn->prepare($sql);
         
         if (!$stmt) {
             return [
                 'success' => false,
-                'message' => 'Prepare failed: ' . $this->conn->error
+                'message' => "Prepare failed: " . $this->conn->error
             ];
         }
 
+        // UPDATED bind_param
+        // Added 's' for temp_code at the end before the ID
+        // New Type String: ssssssssdisssi (14 params total)
+        // 1. gate (s) 2. mat (s) 3. h (s) 4. w (s) 5. d (s) 6. wt (s) 7. col (s) 
+        // 8. size (s) 9. cp (d) 10. user (i) 11. dim_u (s) 12. wt_u (s) 
+        // 13. temp_code (s) 14. id (i)
+
         $stmt->bind_param(
-            'ssdddssiii',
-            $data['gate_entry_date_time'], // s
-            $data['material_code'],        // s
-            $data['height'],               // d
-            $data['width'],                // d
-            $data['depth'],                // d
-            $data['weight'],               // d
-            $data['color'],                // s
-            $data['Quantity'],             // i
-            $data['received_by_user_id'],  // i
-            $id                            // i
+            "ssssssssdisssi", 
+            $data['gate_entry_date_time'], 
+            $data['material_code'],        
+            $data['height'],               
+            $data['width'],                
+            $data['depth'],                
+            $data['weight'],               
+            $data['color'],    
+            $data['size'],                 
+            $data['cp'],                   
+            $data['received_by_user_id'],   
+            $data['dimention_unit'],        
+            $data['weight_unit'],          
+            $data['temp_code'], // Added temp_code here
+            $id
         );
 
         if ($stmt->execute()) {
             return [
                 'success' => true,
-                'message' => 'Record updated successfully.'
+                'message' => "Record updated successfully."
             ];
         }
         
         return [
             'success' => false,
-            'message' => 'Update failed: ' . $stmt->error
+            'message' => "Update failed: " . $stmt->error
         ];
+    }
+    // --- Add this to your Inbounding.php Model ---
+    public function getById($id) {
+        $id = (int)$id;
+        $sql = "SELECT * FROM vp_inbound WHERE id = $id";
+        $result = $this->conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return false;
+    }
+    public function getlabeldata($id){
+        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name  FROM vp_inbound as v 
+        LEFT JOIN category as c on v.category_code=c.category
+        LEFT JOIN material as m on v.material_code=m.id
+        LEFT JOIN vp_vendors as vv on v.vendor_code=vv.id
+        WHERE v.id = $id";
+        $result = $this->conn->query($sql);
+        $inbounding = [];
+        if ($result) {
+            $labeldata = $result->fetch_assoc();
+            $result->free();
+        }
+        return [
+            'form2' => $labeldata
+        ];
+    }
+    // 1. Fetch Category Name
+    public function getCategoryById($id) {
+        $sql = "SELECT * FROM category WHERE category = '$id'"; // Check your actual column name
+        $result = $this->conn->query($sql);
+        return $result->fetch_assoc();
+    }
+
+    // 2. Fetch Material Name
+    public function getMaterialById($id) {
+        $sql = "SELECT * FROM material WHERE id = '$id'"; // Check your actual table name
+        $result = $this->conn->query($sql);
+        return $result->fetch_assoc();
+    }
+
+    // 3. Generate Incremental Temp Code
+    public function generateNextTempCode($prefix) {
+        // Search for codes like 'BSB%'
+        // Order by length first (to sort 10 after 9), then value DESC
+        $sql = "SELECT temp_code FROM vp_inbound 
+                WHERE temp_code LIKE '$prefix%' 
+                AND temp_code REGEXP '^{$prefix}[0-9]+$' 
+                ORDER BY LENGTH(temp_code) DESC, temp_code DESC LIMIT 1";
+                
+        $result = $this->conn->query($sql);
+        
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $lastCode = $row['temp_code'];
+            
+            // Extract number (Remove prefix)
+            $numberStr = substr($lastCode, 3); 
+            $number = (int)$numberStr;
+            $nextNumber = $number + 1;
+        } else {
+            // No existing code found, start at 1
+            $nextNumber = 1;
+        }
+
+        // Pad with zeros (e.g., 1 -> 001)
+        return $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+    }
+
+    // 4. Updated saveform3 (Includes temp_code)
+    public function saveform3($id, $data) {
+        // Ensure temp_code isn't overwritten if it exists already (Optional check)
+        // Here we update it every time saveform3 is called.
+        
+        $sql = "UPDATE vp_inbound SET 
+                gate_entry_date_time = ?,
+                material_code = ?,
+                height = ?,
+                width = ?,
+                depth = ?,
+                weight = ?,
+                color = ?,
+                size = ?,
+                cp = ?,
+                quantity_received = ?,
+                received_by_user_id = ?,
+                temp_code = ? 
+                WHERE id = ?";
+        
+        $stmt = $this->conn->prepare($sql);
+        
+        if (!$stmt) {
+            return false;
+        }
+
+        // Types: s s d d d d s s d i i s i
+        $stmt->bind_param(
+            'ssddddssdisis', // Updated type string
+            $data['gate_entry_date_time'], // s (String)
+            $data['material_code'],        // s (String)
+            $data['height'],               // d (Double)
+            $data['width'],                // d (Double)
+            $data['depth'],                // d (Double)
+            $data['weight'],               // d (Double) - previously 's' in your string, 'd' is safer for numbers
+            $data['color'],                // s (String)
+            $data['size'],                 // s (String)
+            $data['cp'],                   // d (Double)
+            $data['Quantity'],             // i (Integer)
+            $data['received_by_user_id'],  // s (String - based on your previous string)
+            $data['temp_code'],            // i (Integer) OR s (String) - Check this!
+            $id                            // i (Integer) - THIS WAS LIKELY MISSING OR MISALIGNED
+        );
+
+        return $stmt->execute();
     }
 
 
-    public function updateRecord($id, $data) {
-        $sql = "UPDATE vp_inbound SET name = ? WHERE id = ?";
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('si',
-            $data['name'],
-            $id
-        );
+    // Get the next available display order
+    public function getNextMaterialOrder() {
+        // FIX 1: Table name changed to 'material'
+        // FIX 2: Added backticks around `display order` because it has a space
+        $sql = "SELECT MAX(`display order`) as max_val FROM material";
+        $result = $this->conn->query($sql);
+        
+        if ($result && $row = $result->fetch_assoc()) {
+            return (int)$row['max_val'] + 1;
+        }
+        return 1;
+    }
 
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Record updated successfully.'];
+    // Updated Insert Function with Duplicate Check
+    public function insertMaterial($name, $slug, $isActive, $displayOrder, $userId) {
+        
+        // --- 1. Check for Duplicate Name ---
+        $checkSql = "SELECT id FROM material WHERE material_name = ?";
+        $checkStmt = $this->conn->prepare($checkSql);
+        $checkStmt->bind_param("s", $name);
+        $checkStmt->execute();
+        $checkStmt->store_result();
+        
+        if ($checkStmt->num_rows > 0) {
+            // Return a specific string to identify duplicate error
+            return "DUPLICATE"; 
+        }
+        $checkStmt->close();
+
+        // --- 2. Insert New Record ---
+        // FIX: Table 'material' and backticks for `display order`
+        $sql = "INSERT INTO material 
+                (material_name, material_slug, is_active, `display order`, user_id, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
+        
+        $stmt = $this->conn->prepare($sql);
+        
+        if (!$stmt) {
+            // Log error for debugging: error_log($this->conn->error);
+            return false;
         }
 
-        return [
-            'success' => false,
-            'message' => 'Update failed: ' . $stmt->error . '. Please check your input and try again.'
-        ];
+        // types: s (string), s (string), i (int), i (int), i (int)
+        $stmt->bind_param("ssiii", $name, $slug, $isActive, $displayOrder, $userId);
+
+        if ($stmt->execute()) {
+            return $stmt->insert_id;
+        }
+        
+        return false;
     }
 }
 ?>
