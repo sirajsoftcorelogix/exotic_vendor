@@ -861,9 +861,10 @@ $record_id = $_GET['id'] ?? '';
         formData.append('display_order', orderVal);
         formData.append('user_id', userId);
 
-        fetch('?page=inbounding&action=addMaterialAjax', {
+        fetch('<?php echo base_url("?page=inbounding&action=addMaterialAjax"); ?>', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'include'
         })
         .then(response => response.json())
         .then(data => {
