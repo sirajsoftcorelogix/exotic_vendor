@@ -914,20 +914,20 @@ class Inbounding {
 
         // Types: s s d d d d s s d i i s i
         $stmt->bind_param(
-            'ssdddsssdisi', // Added 's' for temp_code
-            $data['gate_entry_date_time'],
-            $data['material_code'],
-            $data['height'],
-            $data['width'],
-            $data['depth'],
-            $data['weight'],
-            $data['color'],
-            $data['size'],
-            $data['cp'],
-            $data['Quantity'],
-            $data['received_by_user_id'],
-            $data['temp_code'], // New Field
-            $id
+            'ssddddssdisis', // Updated type string
+            $data['gate_entry_date_time'], // s (String)
+            $data['material_code'],        // s (String)
+            $data['height'],               // d (Double)
+            $data['width'],                // d (Double)
+            $data['depth'],                // d (Double)
+            $data['weight'],               // d (Double) - previously 's' in your string, 'd' is safer for numbers
+            $data['color'],                // s (String)
+            $data['size'],                 // s (String)
+            $data['cp'],                   // d (Double)
+            $data['Quantity'],             // i (Integer)
+            $data['received_by_user_id'],  // s (String - based on your previous string)
+            $data['temp_code'],            // i (Integer) OR s (String) - Check this!
+            $id                            // i (Integer) - THIS WAS LIKELY MISSING OR MISALIGNED
         );
 
         return $stmt->execute();
