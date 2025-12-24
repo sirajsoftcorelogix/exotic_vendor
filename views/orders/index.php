@@ -1417,7 +1417,7 @@
                 <!-- <label class="block text-sm font-bold mb-2">Notes</label>
                 <textarea id="bulkStatusNotes" name="notes" class="border rounded px-3 py-2 w-full" rows="3"></textarea> -->
                 <!--list selected item image-->
-                <div id="bulkStatusSelectedItems" class="flex flex-wrap gap-2 max-h-58 overflow-y-auto border p-2">
+                <div id="bulkStatusSelectedItems" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto border p-2">
                     <!-- Selected item images will be displayed here -->
                 </div>
             </div>
@@ -1449,7 +1449,7 @@
                 <!-- <label class="block text-sm font-bold mb-2">Notes</label>
                 <textarea id="bulkStatusNotes" name="notes" class="border rounded px-3 py-2 w-full" rows="3"></textarea> -->
                 <!--list selected item image-->
-                <div id="bulkAssignSelectedItems" class="flex flex-wrap gap-2 max-h-58 overflow-y-auto border p-2">
+                <div id="bulkAssignSelectedItems" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto border p-2">
                     <!-- Selected item images will be displayed here -->
                 </div>
             </div>
@@ -2162,15 +2162,20 @@
         selectedItemsContainer.innerHTML = '';
         ids.forEach(id => {
             const orderData = JSON.parse(document.querySelector('#order-id-' + id).getAttribute('data-order'));
-            const itemText = 'Order No:' + (orderData.order_number || ' ID ' + id);
+            const itemText = 'Order:' + (orderData.order_number || ' ID ' + id);
             const image = orderData.image || 'default-image.png';
             const div = document.createElement('div');
+            div.classList.add('rounded-md', 'flex-shrink-0',  'flex', 'flex-col', 'items-center', 'justify-start', 'bg-gray-50', 'overflow-hidden', 'w-32','h-32', 'm-2','mb-2', 'text-center');
             div.textContent = itemText;
-            
+            // const label = document.createElement('p');
+            // label.classList.add('text-sm', 'font-medium', 'mt-2', 'px-1', 'break-words');
+            // label.textContent = itemText;
+            // div.appendChild(label);
+
             // Optionally, add image preview
             const img = document.createElement('img');            
             img.src = image;
-            img.style.width = '145px';
+            img.classList.add('max-w-full', 'h-24', 'object-contain');
             //img.style.height = '145px';
             //selectedItemsContainer.appendChild(img);
             div.prepend(img);
@@ -2211,15 +2216,17 @@
         selectedItemsContainer.innerHTML = '';
         ids.forEach(id => {
             const orderData = JSON.parse(document.querySelector('#order-id-' + id).getAttribute('data-order'));
-            const itemText = 'Order No:' + (orderData.order_number || ' ID ' + id);
+            const itemText = 'Order' + (orderData.order_number || ' ID ' + id);
             const image = orderData.image || 'default-image.png';
             const div = document.createElement('div');
+            div.classList.add('rounded-md', 'flex-shrink-0',  'flex', 'flex-col', 'items-center', 'justify-start', 'bg-gray-50', 'overflow-hidden', 'w-32','h-32', 'm-2','mb-2', 'text-center');
             div.textContent = itemText;
             
             // Optionally, add image preview
             const img = document.createElement('img');            
             img.src = image;
-            img.style.width = '145px';
+            img.classList.add('max-w-full', 'h-24', 'object-contain');
+            //img.style.width = '145px';
             //img.style.height = '145px';
             //selectedItemsContainer.appendChild(img);
             div.prepend(img);
