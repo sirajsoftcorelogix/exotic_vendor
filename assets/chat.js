@@ -742,6 +742,7 @@
       const user = users.find(u => u.id == data.user_id);
       if (user) {
           user.is_online = data.is_online;
+          renderUserList();
           //renderUserList(userSearchEl.value.trim());
       }
   }
