@@ -2161,7 +2161,9 @@
         const selectedItemsContainer = document.getElementById('bulkStatusSelectedItems');
         selectedItemsContainer.innerHTML = '';
         ids.forEach(id => {
-            const orderData = JSON.parse(document.querySelector('#order-id-' + id).getAttribute('data-order'));
+            const element = document.querySelector('#order-id-' + id);
+            if (!element) return; // Skip if element not found on current page
+            const orderData = JSON.parse(element.getAttribute('data-order'));
             const itemText = 'Order:' + (orderData.order_number || ' ID ' + id);
             const image = orderData.image || 'default-image.png';
             const div = document.createElement('div');
@@ -2215,7 +2217,9 @@
         const selectedItemsContainer = document.getElementById('bulkAssignSelectedItems');
         selectedItemsContainer.innerHTML = '';
         ids.forEach(id => {
-            const orderData = JSON.parse(document.querySelector('#order-id-' + id).getAttribute('data-order'));
+            const element = document.querySelector('#order-id-' + id);
+            if (!element) return; // Skip if element not found on current page
+            const orderData = JSON.parse(element.getAttribute('data-order'));
             const itemText = 'Order' + (orderData.order_number || ' ID ' + id);
             const image = orderData.image || 'default-image.png';
             const div = document.createElement('div');
