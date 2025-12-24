@@ -260,12 +260,6 @@ class ChatServer implements MessageComponentInterface
 
         $sessionData = $this->decodeSessionData($data);
 
-        file_put_contents(
-            '/tmp/ws_debug.log',
-            "Cookies: " . print_r($cookies, true) . "\nSession file: $sessionFile\n",
-            FILE_APPEND
-        );
-
         // Adjust to your app's session shape: here we expect $_SESSION['user']['id']
         return $sessionData['user']['id'] ?? false;
     }

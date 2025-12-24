@@ -597,8 +597,8 @@
         handleTypingIndicator(data);
         break;
       case 'presence':
-        updateGroupMemberPresence(data);
         handlePresence(data);
+        updateGroupMemberPresence(data);
         break;
       case 'read_receipt':
         console.log('read_receipt', data);
