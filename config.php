@@ -14,10 +14,10 @@ return [
   'LOCAL_WS_URL'   => 'ws://localhost:8888',
 
   'TEST_API_BASE'  => 'https://sellertest.exoticindia.com/api',
-  'TEST_WS_URL'    => 'wss://sellertest.exoticindia.com/ws/',
+  'TEST_WS_URL'    => 'wss://sellertest.exoticindia.com:8888',
 
   'LIVE_API_BASE'  => 'https://seller.exoticindia.com/api',
-  'LIVE_WS_URL'    => 'wss://seller.exoticindia.com/ws/',
+  'LIVE_WS_URL'    => 'wss://seller.exoticindia.com:8888',
 
   'WS_PORT' => 8888
 ];
