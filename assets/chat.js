@@ -60,7 +60,7 @@
   ws.onclose = () => {
     console.warn('WebSocket closed');
     // try reconnect once after short delay
-    setTimeout(()=>{ window.location.reload(); }, 150000); // 2.5 minutes
+    setTimeout(()=>{ window.location.reload(); }, 5000);
   };
 
   sendBtn.addEventListener('click', sendMessage);
