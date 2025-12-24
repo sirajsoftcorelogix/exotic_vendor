@@ -349,5 +349,62 @@ class ProductsController {
         }
         exit;
     }
+    public function addVendorMap() {
+        is_login();
+        global $productModel;
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!$payload) $payload = $_POST;
+        $item_code = isset($payload['item_code']) ? trim($payload['item_code']) : '';
+        $vendor_id = isset($payload['vendor_id']) ? (int)$payload['vendor_id'] : 0;
+        $vendor_code = isset($payload['vendor_code']) ? trim($payload['vendor_code']) : '';
+        if ($item_code == '' || $vendor_id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters.']);
+            exit;
+        }
+        $ok = $productModel->saveProductVendor($item_code, $vendor_id, $vendor_code);
+        if ($ok) {
+            echo json_encode(['success' => true, 'message' => 'Vendor mapping saved.']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to save vendor mapping.']);
+        }
+        exit;
+    }
+    public function getVendorEditForm() {
+        is_login();
+        global $productModel;
+        //print_array($_GET);
+        $item_code = isset($_GET['item_code']) ? $_GET['item_code'] : 0;
+        $current_vendor = isset($_GET['current_vendor']) ? $_GET['current_vendor'] : '';
+        if ($item_code != 0) {
+            $vendors = $productModel->getVendorByItemCode($item_code);
+            renderTemplateClean('views/products/partial_vendor_edit_form.php', ['vendors' => $vendors, 'current_vendor' => $current_vendor, 'item_code' => $item_code], 'Edit Vendor');
+            
+        } else {
+            echo '<p>Invalid Item Code.</p>';
+        }
+        exit;
+    }
+    public function removeVendorMapping() {
+        is_login();
+        global $productModel;
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!$payload) $payload = $_POST;
+        $item_code = isset($payload['item_code']) ? trim($payload['item_code']) : '';
+        $vendor_id = isset($payload['vendor_id']) ? (int)$payload['vendor_id'] : 0;
+        $id = isset($payload['id']) ? (int)$payload['id'] : 0;
+        // if ($item_code == '' || $vendor_id <= 0) {
+        //     echo json_encode(['success' => false, 'message' => 'Invalid parameters.']);
+        //     exit;
+        // }
+        $ok = $productModel->deleteProductVendor($id);
+        if ($ok) {
+            echo json_encode(['success' => true, 'message' => 'Vendor mapping removed.']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to remove vendor mapping.']);
+        }
+        exit;
+    }
     
 }
