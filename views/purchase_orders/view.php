@@ -362,9 +362,11 @@
   <div class="space-y-1.5">    
     <h3 class="payment-details-title mb-4">Delivery Challan Details:</h3>    
     <?php //foreach($challan as $challanDetails) { 
-    if (!empty($challan)) {
-      
-    ?>     
+    if (empty($challan)) {?>   
+      <p class="text-gray-600 text-sm">No Delivery Challan found for this purchase order.</p>  
+         
+    <?php } else { ?>
+      <p class="text-gray-600 text-sm">No Delivery Challan found for this purchase order.</p>
     <div class="flex items-stretch mb-4">
       <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-10 gap-x-8 gap-y-2 flex-grow">
         <div class="col-span-2">
@@ -398,6 +400,45 @@
     <?php } ?>
   </div>
 </div>
+<!-- grn section -->
+ <div class="container mx-auto p-6 bg-white rounded-lg shadow-md mt-8">
+  <div class="space-y-1.5">
+    <div class="flex items-center justify-between mb-4">
+    <h3 class="payment-details-title mb-4">Goods Receipt Notes (GRN):</h3>
+    <a href="?page=grns&action=create&po_id=<?= htmlspecialchars($purchaseOrder['id'] ?? '') ?>"><button class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md mb-4 float-right">+ Add GRN</button></a>
+    </div>
+    <?php
+    if (empty($grns)) { ?>
+      <p class="text-gray-600 text-sm">No GRNs found for this purchase order.</p>
+    <?php } else {
+      foreach ($grns as $grn) { ?>
+        <div class="bg-[rgba(245,245,245,1)] p-6 rounded-lg grid grid-cols-8 gap-x-8 gap-y-2 mb-4">
+          <div class="col-span-2">
+            <h4 class="payment-details-header">Quantity Received</h4>
+            <p class="payment-details-text mt-2"><?php echo $grn['qty_received']; ?></p>
+          </div>
+          <div class="col-span-2">
+            <h4 class="payment-details-header">Quantity Acceptable</h4>
+            <p class="payment-details-text mt-2"><?php echo $grn['qty_acceptable'] ? 'Yes' : 'No'; ?></p>
+          </div>
+          <div class="col-span-2">
+            <h4 class="payment-details-header">GRN Date</h4>
+            <p class="payment-details-text mt-2"><?php echo date('d M Y', strtotime($grn['received_date'])); ?></p>
+          </div>          
+          <div class="col-span-2">
+            <h4 class="payment-details-header">Received By</h4>
+            <p class="payment-details-text mt-2"><?php echo $users[$grn['received_by']] ?? 'N/A'; ?></p>
+          </div>          
+          <div class="col-span-2">
+            <h4 class="payment-details-header">Remarks</h4>
+            <p class="payment-details-text mt-2"><?php echo $grn['remarks']; ?></p>
+          </div>          
+        </div>
+      <?php }
+    } ?>
+  </div>
+</div>
+
 <hr class="my-8 border-gray-200">
 
 

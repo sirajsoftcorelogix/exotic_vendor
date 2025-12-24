@@ -455,7 +455,8 @@ class OrdersController {
                     ];
                     $commanModel->add_order_status_log($agentLogData);
                     //set notification to agent
-                    insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', '');
+                    $link = base_url('index.php?page=orders&action=list&'.$order_id);
+                    insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', $link);
                 }
                 if($esd != $previous_esd){
                     //log esd change
@@ -950,6 +951,108 @@ class OrdersController {
             'total' => $totalorder,
             //'products' => json_encode($pdata)
         ], 'Import Orders Result');
+    }
+    public function bulkUpdateStatus() {
+        is_login();
+        global $ordersModel; 
+        global $commanModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $order_ids = isset($_POST['order_ids']) ? $_POST['order_ids'] : [];
+            $new_status = isset($_POST['orderStatus']) ? $_POST['orderStatus'] : '';
+            //print_array($order_ids);
+            //print_array($_POST);
+            //exit;
+            if (!empty($order_ids) && !empty($new_status)) { 
+               $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
+               //log status change for each order
+               foreach($order_ids as $oid){
+                    $logData = [
+                        'order_id' => $oid,
+                        'status' => 'Status: '.$new_status,
+                        'changed_by' => $_SESSION['user']['id'],
+                        'api_response' => NULL,
+                        'change_date' => date('Y-m-d H:i:s')
+                    ];
+                    $commanModel->add_order_status_log($logData);
+                    //call exotic india API to update order status
+                    $orderval = $ordersModel->getOrderById($oid);
+                    $apidata = [
+                        'orderid' => $orderval['order_number'],
+                        'level' => 'item',
+                        'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
+                        'size' => trim($orderval['size']),
+                        'color' => trim($orderval['color']),
+                        'itemcode' => trim($orderval['item_code'])
+                    ];
+                    //run update if admin id not 0
+                    if ($apidata['order_status'] > 0) {
+                        $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
+                    }
+                    //notify agent if assigned
+                    $orderval = $ordersModel->getOrderById($oid);
+                    if(!empty($orderval['agent_id']) && $orderval['agent_id'] > 0){
+                        $link = base_url('index.php?page=orders&action=list&'.$oid);
+                        insertNotification($orderval['agent_id'], 'Order Status Updated', 'The status of an order assigned to you has been updated. Please check the order details.', $link);
+                    }
+                }    
+                if ($result) {
+                    //session poitem array clean
+
+                    echo json_encode($result);
+                    //echo json_encode(['success' => true, 'message' => 'Order statuses updated successfully.']);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update order statuses.']);
+                }       
+                
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
+            }
+        }
+
+        exit;
+    }
+    public function bulkAssignOrder(){
+        is_login();
+        global $ordersModel; 
+        global $commanModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $order_ids = isset($_POST['poitem']) ? $_POST['poitem'] : [];
+            $agent_id = isset($_POST['agent_id']) ? $_POST['agent_id'] : '';
+            //print_array($order_ids);
+            //print_array($_POST);
+            //exit;
+            if (!empty($order_ids) && !empty($agent_id)) { 
+               $result = $ordersModel->updateAgentBulk($order_ids, $agent_id); 
+               //log agent assignment for each order
+               $agent_name = $commanModel->getUserNameById($agent_id);
+               foreach($order_ids as $oid){
+                    $logData = [
+                        'order_id' => $oid,
+                        'status' => 'Agent: '.$agent_name,
+                        'changed_by' => $_SESSION['user']['id'],
+                        'api_response' => NULL,
+                        'change_date' => date('Y-m-d H:i:s')
+                    ];
+                    $commanModel->add_order_status_log($logData);
+                    //set notification to agent
+                    $link = base_url('index.php?page=orders&action=list&'.$oid);
+                    insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', $link);
+                }   
+                if ($result) {
+                    //session poitem array clean
+
+                    echo json_encode($result);
+                    //echo json_encode(['success' => true, 'message' => 'Order statuses updated successfully.']);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Failed to update order statuses.']);
+                }       
+                
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
+            }
+        }
     }
 }
 ?>

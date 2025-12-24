@@ -148,6 +148,12 @@ switch ($page) {
             case 'update_import_bulk':
                 $controller->ordersStatusImportBulk();
                 break;
+            case 'bulk_update_status':
+                $controller->bulkUpdateStatus();
+                break;
+            case 'bulk_assign_order':
+                $controller->bulkAssignOrder();
+                break;
             default:
                 $controller->index();
                 break;
@@ -316,7 +322,16 @@ switch ($page) {
                 break;
             case 'get_product_details_html';
                 $controller->getProductDetailsHTML();         
-                break;            
+                break;  
+            case 'get_vendor_edit_form':
+                $controller->getVendorEditForm();         
+                break;
+            case 'add_vendor_map':
+                $controller->addVendorMap();
+                break;
+            case 'remove_vendor_mapping':
+                $controller->removeVendorMapping();
+                break;
             /*case 'view':
                 $controller->product_view();
                 break;
@@ -443,7 +458,13 @@ switch ($page) {
             case 'itmimgsave':
                 $controller->itmimgsave();
                 break;
+            case 'getNextMaterialOrderAjax':
+                $controller->getNextMaterialOrderAjax();
+                break;
 
+            case 'addMaterialAjax':
+                $controller->addMaterialAjax();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
@@ -534,6 +555,9 @@ switch ($page) {
                 break;
             case 'create_post':
                 $controller->createGrnPost();   
+                break;
+            case 'qrcode':
+                $controller->downloadQrCode();
                 break;
             case 'delete':
                 $controller->deleteGrn();   

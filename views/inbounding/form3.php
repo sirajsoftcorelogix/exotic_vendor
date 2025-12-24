@@ -1,6 +1,5 @@
 <?php
 // PHP Logic (Unchanged)
-if (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code']) {
     is_login();
     require_once 'settings/database/database.php';
     $conn = Database::getConnection();
@@ -8,7 +7,6 @@ if (isset($data['form2']['vendor_code']) && $data['form2']['vendor_code']) {
     $usersModel = new User($conn);
     $currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
     unset($usersModel);
-}
 
 $record_id = $_GET['id'] ?? '';
 $form2 = $data['form2'] ?? [];
@@ -42,9 +40,11 @@ $color = $form2['color'] ?? '';
 $weight_unit = $form2['weight_unit'] ?? '';
 $dimention_unit = $form2['dimention_unit'] ?? '';
 $quantity_received = $form2['quantity_received'] ?? '';
+$size = $form2['size'] ?? '';
+$cp = $form2['cp'] ?? '';
 $Item_code = $form2['Item_code'] ?? '';
 
-$isEdit = (!empty($gate_entry_date_time) || !empty($material_code) || !empty($height) || !empty($width) || !empty($depth) || !empty($weight) || !empty($color) || !empty($quantity_received) || !empty($Item_code));
+$isEdit = (!empty($gate_entry_date_time) || !empty($material_code) || !empty($height) || !empty($width) || !empty($depth) || !empty($weight) || !empty($color) || !empty($quantity_received) || !empty($Item_code) || !empty($size) || !empty($cp));
 
 $formAction = $isEdit
     ? base_url('?page=inbounding&action=updateform3&id=' . $record_id)
@@ -124,13 +124,11 @@ $formAction = $isEdit
                                 <div class="relative">
                                     <select name="material_code" class="w-full appearance-none bg-white border border-gray-300 text-gray-700 py-3 px-4 pr-8 rounded-lg focus:ring-2 focus:ring-[#d9822b] outline-none font-medium cursor-pointer shadow-sm">
                                         <option value="">Select Material</option>
-                                        <?php
-                                        $materials = ["Brass","Copper","Bronze","Marble","Wood","Stone","Other"];
-                                        foreach ($materials as $m) {
-                                            $sel = ($material_code == $m) ? "selected" : "";
-                                            echo "<option value='$m' $sel>$m</option>";
-                                        }
-                                        ?>
+                                        <?php foreach ($data['material'] as $value2) { 
+                                            $isSelected = ($selected_material == $value2['id']) ? 'selected' : '';
+                                        ?> 
+                                            <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
+                                        <?php } ?>
                                     </select>
                                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                                         <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -147,41 +145,47 @@ $formAction = $isEdit
 
                         <div class="grid grid-cols-3 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Height (cm)</label>
-                                <input type="text" name="height" value="<?php echo $height; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Height (inch)</label>
+                                <input type="number" step="any" min="0" name="height" value="<?php echo $height; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Width (cm)</label>
-                                <input type="text" name="width" value="<?php echo $width; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Width (inch)</label>
+                                <input type="number" step="any" min="0" name="width" value="<?php echo $width; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Depth (cm)</label>
-                                <input type="text" name="depth" value="<?php echo $depth; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Depth (inch)</label>
+                                <input type="number" step="any" min="0" name="depth" value="<?php echo $depth; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
                             </div>
                         </div>
+
                         <div class="grid grid-cols-2 gap-4">
-                             <div>
+                            <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">Weight (kg)</label>
-                                <input type="text" name="weight" value="<?php echo $weight; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                                <input type="number" step="any" min="0" name="weight" value="<?php echo $weight; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
-                                <input 
-                                    type="text" 
-                                    name="color" 
-                                    value="<?php echo !empty($color) ? $color : 'Black'; ?>" 
-                                    class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm"
-                                >
+                                <input type="text" name="color" value="<?php echo !empty($color) ? $color : 'Black'; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
-                             <div>
+                            <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">Quantity</label>
-                                <input type="text" name="quantity_received" value="<?php echo $quantity_received; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                                <input type="number" min="0" name="quantity_received" value="<?php echo $quantity_received; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Size</label>
+                                <input type="text" name="size" value="<?php echo $size; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
                             </div>
                         </div>
 
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">CP</label>
+                                <input type="number" step="any" min="0" name="cp" value="<?php echo $cp; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
+                            </div>
+                        </div>
                     </div>
 
                 </div>

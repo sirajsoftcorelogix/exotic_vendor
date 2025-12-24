@@ -7,3 +7,10 @@ tmp/*
 settings/database/database.php
 bootstrap/*
 .vscode/*
+config.php
+api/auth.php
+chat_start.php
+vendor/autoload.php
+vendor/composer/autoload_classmap.php
+vendor/composer/installed.json
+vendor/composer/*
