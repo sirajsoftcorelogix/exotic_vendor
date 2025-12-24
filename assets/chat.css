@@ -186,13 +186,11 @@ body {
   border: none;
   padding: 0 12px;
   cursor: pointer;
+  background: #ffa500;
+  color: #fff; 
 }
 #attach-btn {
   background: #e5e7eb;
-}
-#send-btn {
-  background: #2563eb;
-  color: #fff;
 }
 #chat-popup-container {
   position: fixed;

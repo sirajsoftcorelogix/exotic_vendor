@@ -60,7 +60,7 @@
   ws.onclose = () => {
     console.warn('WebSocket closed');
     // try reconnect once after short delay
-    //setTimeout(()=>{ window.location.reload(); }, 2000000);
+    setTimeout(()=>{ window.location.reload(); }, 5000);
   };
 
   sendBtn.addEventListener('click', sendMessage);
@@ -597,8 +597,8 @@
         handleTypingIndicator(data);
         break;
       case 'presence':
-        updateGroupMemberPresence(data);
         handlePresence(data);
+        updateGroupMemberPresence(data);
         break;
       case 'read_receipt':
         console.log('read_receipt', data);
@@ -612,7 +612,16 @@
       case 'conversation_deleted':
         handleConversationDeleted(data.conversation_id);
         break;
+      case 'online_users':
+          handleOnlineUsers(data.users);
+          break;
     }
+  }
+  function handleOnlineUsers(userIds) {
+      users.forEach(u => {
+          u.is_online = userIds.includes(u.id) ? 1 : 0;
+      });
+      renderUserList();
   }
   function handleConversationDeleted(convId) {
       // Remove from memory
@@ -733,6 +742,7 @@
       const user = users.find(u => u.id == data.user_id);
       if (user) {
           user.is_online = data.is_online;
+          renderUserList();
           //renderUserList(userSearchEl.value.trim());
       }
   }

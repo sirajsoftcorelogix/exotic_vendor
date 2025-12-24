@@ -231,7 +231,7 @@ class ChatServer implements MessageComponentInterface
         }
 
         // Use configured session name or default
-        $sessionName = session_name() ?: 'PHPSESSID';
+        $sessionName = "PHPSESSID"; //session_name() ?: 'PHPSESSID';
         if (!isset($cookies[$sessionName])) {
             return false;
         }
@@ -239,7 +239,7 @@ class ChatServer implements MessageComponentInterface
         $sessionId = $cookies[$sessionName];
 
         // Resolve session.save_path (may contain prefix like "N;MODE;path")
-        $sessionPath = ini_get('session.save_path');
+        $sessionPath = "/var/lib/php/sessions"; //ini_get('session.save_path');
         if (!$sessionPath) {
             $sessionPath = sys_get_temp_dir();
         } elseif (strpos($sessionPath, ';') !== false) {
