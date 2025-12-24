@@ -612,7 +612,16 @@
       case 'conversation_deleted':
         handleConversationDeleted(data.conversation_id);
         break;
+      case 'online_users':
+          handleOnlineUsers(data.users);
+          break;
     }
+  }
+  function handleOnlineUsers(userIds) {
+      users.forEach(u => {
+          u.is_online = userIds.includes(u.id) ? 1 : 0;
+      });
+      renderUserList();
   }
   function handleConversationDeleted(convId) {
       // Remove from memory
