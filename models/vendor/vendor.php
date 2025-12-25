@@ -153,10 +153,11 @@ class vendor {
             }
             $checkPanStmt->close();
         }
-
-        $sql = "INSERT INTO vp_vendors (vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $vendorCode = generateVendorCode($this->conn);
+        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('sssssssssssssssiiis',
+            $vendorCode,
             $data['addVendorName'],
             $data['addContactPerson'],
             $data['addEmail'],
@@ -482,6 +483,46 @@ class vendor {
         $stmt->store_result();
         $response = ['exists' => $stmt->num_rows > 0];
         return $response;
+    }
+    public function getProductsByVendorId($vendor_id) {
+        $sql = "SELECT vp.id, vp.item_code, vp.title, vp.sku FROM vp_products AS vp INNER JOIN vp_vendor_products_mapping AS vvpm ON vp.id = vvpm.product_id WHERE vvpm.vendor_id = ? AND vp.is_active = 1 ORDER BY vp.title ASC";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('i', $vendor_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $products = [];
+        while ($row = $result->fetch_assoc()) {
+            $products[] = $row;
+        }
+        return $products;
+    }
+    public function getProductByCode($item_code) {
+        $item_code = $this->conn->real_escape_string($item_code);
+        $sql = "SELECT id, item_code, title, sku FROM vp_products WHERE item_code = ? AND is_active = 1";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('s', $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_assoc();
+    }
+    public function saveVendorProductsMapping($vendor_id, $product_ids) {
+        // Delete existing mappings
+        $deleteSql = "DELETE FROM vp_vendor_products_mapping WHERE vendor_id = ?";
+        $deleteStmt = $this->conn->prepare($deleteSql);
+        $deleteStmt->bind_param('i', $vendor_id);
+        $deleteStmt->execute();
+        $deleteStmt->close();
+
+        // Insert new mappings
+        $insertSql = "INSERT INTO vp_vendor_products_mapping (vendor_id, product_id) VALUES (?, ?)";
+        $insertStmt = $this->conn->prepare($insertSql);
+        foreach ($product_ids as $product_id) {
+            $insertStmt->bind_param('ii', $vendor_id, $product_id);
+            $insertStmt->execute();
+        }
+        $insertStmt->close();
+
+        return ['success' => true, 'message' => 'Vendor products mapping updated successfully.'];
     }
 }
 ?>

@@ -150,6 +150,9 @@
                                             <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'delete')) { ?>
                                                 <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
                                             <?php } ?>
+
+                                            <li onclick="location.href='?page=vendors&action=products_map&v_id=<?php echo htmlspecialchars($vendor['id']); ?>'"><i class="fa-brands fa-product-hunt"></i> Products</li>
+
                                             <li style="color: lightgray;"><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
@@ -618,7 +621,6 @@
   </div>
 </div>
 <!-- End Edit Model Popup -->
-
 
 <!-- Bank Detail Modal -->
 <div class="modal fade hidden" id="bankDetailModal" tabindex="-1" aria-hidden="true">

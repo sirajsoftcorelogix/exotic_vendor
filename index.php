@@ -112,6 +112,15 @@ switch ($page) {
             case 'sales_analytics':
                 $controller->importSalesAnalyticsData();
                 break;
+            case 'products_map':
+                $controller->vendorProductsMap();
+                break;
+            case 'generateBlock':
+                $controller->generateProductBlock();
+                break;
+            case 'saveProductsMap':
+                $controller->saveVendorProductsMap();
+                break;
             default:
                 $controller->index();
                 break;
