@@ -291,134 +291,45 @@ class InboundingController {
     }
     public function saveform1() {
         global $inboundingModel;
-        $category = $_POST['category'] ?? '';
-
-        // 1. Check if file uploaded
-        if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== 0) {
-            echo "Photo upload error.";
+        $vendor_id = $_POST['vendor_id'] ?? '';
+        $record_id = $_POST['record_id'] ?? '';
+        $invoice_no = $_POST['invoice_no'] ?? '';
+        if (!isset($_FILES['invoice']) || $_FILES['invoice']['error'] !== 0) {
+            echo "invoice upload error.";
             exit;
         }
-
-        // 2. Validate Size (50KB Limit)
-        if ($_FILES['photo']['size'] > 5242880) { // 50 * 1024
-            echo "File is too large. Maximum allowed size is 50KB.";
-            exit;
-        }
-
-        $uploadDir = __DIR__ . '/../uploads/products/';
+        $uploadDir = __DIR__ . '/../uploads/invoice/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
-        // 3. Process & Resize Image
-        // We generate a unique name, resize it, and save it.
-        $fileName = $_FILES['photo']['name'];
+        $fileTmp  = $_FILES['invoice']['tmp_name'];
+        $fileName = $_FILES['invoice']['name'];
         $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-        $allowed  = ['jpg','jpeg','png','webp'];
-
+        $allowed = ['jpg','jpeg','png','webp'];
         if (!in_array($fileExt, $allowed)) {
             echo "Only JPG, PNG, WEBP allowed.";
             exit;
         }
-
-        // Define new filename (Saving as JPG is usually best for size optimization)
-        $newFile = "IMG_" . time() . ".jpg";
+        $newFile = "IMG_" . time() . "." . $fileExt;
         $dest    = $uploadDir . $newFile;
-
-        // CALL THE RESIZE FUNCTION
-        $processed = $this->processAndResizeImage($_FILES['photo']['tmp_name'], $dest, 500, 500);
-
-        if ($processed) {
-            $photoPath = "uploads/products/" . $newFile;
+        if (move_uploaded_file($fileTmp, $dest)) {
+            $invoicePath = "uploads/invoice/" . $newFile;
+            
             $saveData = [
-                'category' => $category,
-                'photo'    => $photoPath
+                'vendor_id' => $vendor_id,
+                'invoice'    => $invoicePath,
+                'invoice_no' => $invoice_no
             ];
-            $insertId = $inboundingModel->saveform1($saveData);
+            $insertId = $inboundingModel->saveform1($record_id,$saveData);
             if ($insertId) {
-                $logData = [
-                        'userid_log' => $_POST['userid_log'] ?? '',
-                        'i_id' => $insertId,
-                        'stat' => 'inbound'
-                    ];
-                $log_res =  $inboundingModel->stat_logs($logData);
                 header("location: " . base_url('?page=inbounding&action=form2&id='.$insertId));
                 exit;
             } else {
                 echo "Database error.";
             }
         } else {
-            echo "Image processing failed.";
-        }        
-    }
-
-    public function updateform1() {
-        global $inboundingModel;
-
-        $id       = $_GET['id'] ?? 0;
-        $category = $_POST['category'] ?? '';
-
-        $oldData = $inboundingModel->getform1data($id);
-        if (!$oldData) {
-            echo "Record not found.";
-            exit;
-        }
-
-        $photoPath = $oldData['form1']['product_photo'];
-
-        // If new photo uploaded
-        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
-            
-            // 1. Validate Size
-            if ($_FILES['photo']['size'] > 5242880) {
-                echo "File is too large. Maximum allowed size is 50KB.";
-                exit;
-            }
-
-            $uploadDir = __DIR__ . '/../uploads/products/';
-            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-
-            $fileName = $_FILES['photo']['name'];
-            $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            $allowed  = ['jpg','jpeg','png','webp'];
-
-            if (!in_array($fileExt, $allowed)) {
-                echo "Only JPG, PNG, WEBP allowed.";
-                exit;
-            }
-
-            $newFile = "IMG_" . time() . ".jpg";
-            $dest    = $uploadDir . $newFile;
-
-            // 2. Process & Resize
-            $processed = $this->processAndResizeImage($_FILES['photo']['tmp_name'], $dest, 500, 500);
-
-            if ($processed) {
-                $photoPath = "uploads/products/" . $newFile;
-                
-                // Optional: Unlink (delete) old file here if needed
-                // if(file_exists(__DIR__ . '/../' . $oldData['form1']['product_photo'])) { ... }
-            }
-        }
-
-        $data = [
-            'id'       => $id,
-            'category' => $category,
-            'photo'    => $photoPath
-        ];
-        $logData = [
-                'userid_log' => $_POST['userid_log'] ?? '',
-                'i_id' => $id,
-                'stat' => 'inbound'
-            ];
-        $log_res =  $inboundingModel->stat_logs($logData);
-        $updated = $inboundingModel->updateform1($data);
-
-        if ($updated) {
-            header("location: " . base_url('?page=inbounding&action=form2&id='.$id));
-            exit;
-        } else {
-            echo "Update failed.";
-        }
+            echo "Upload failed.";
+        }    
     }
 
     /**
@@ -462,7 +373,7 @@ class InboundingController {
 
         return $result;
     }
-    public function updateform2() {
+    public function updateform1() {
         global $inboundingModel;
 
         $id       = $_GET['id'] ?? 0;
@@ -515,10 +426,10 @@ class InboundingController {
             'invoice_no' => $invoice_no
         ];
 
-        $updated = $inboundingModel->updateform2($data);
+        $updated = $inboundingModel->updateform1($data);
 
         if ($updated) {
-            header("location: " . base_url('?page=inbounding&action=form3&id='.$id));
+            header("location: " . base_url('?page=inbounding&action=form2&id='.$id));
             exit;
         } else {
             echo "Update failed.";
@@ -890,184 +801,188 @@ class InboundingController {
             echo "Update failed: " . $result['message'];
         }
     }
-    public function saveform2() {
-         global $inboundingModel;
-        $vendor_id = $_POST['vendor_id'] ?? '';
-        $record_id = $_POST['record_id'] ?? '';
-        $invoice_no = $_POST['invoice_no'] ?? '';
-        if (!isset($_FILES['invoice']) || $_FILES['invoice']['error'] !== 0) {
-            echo "invoice upload error.";
+    public function submitStep2() {
+        global $inboundingModel;
+
+        // 1. Get Inputs
+        $id = $_POST['record_id'] ?? $_GET['id'] ?? '';
+        $category = $_POST['category'] ?? '';
+        
+        // [ADDED] Capture User ID for logs
+        $userid_log = $_POST['userid_log'] ?? 0; 
+
+        if (empty($id)) {
+            echo "Error: Record ID is missing.";
             exit;
         }
-        $uploadDir = __DIR__ . '/../uploads/invoice/';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-        $fileTmp  = $_FILES['invoice']['tmp_name'];
-        $fileName = $_FILES['invoice']['name'];
-        $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-        $allowed = ['jpg','jpeg','png','webp'];
-        if (!in_array($fileExt, $allowed)) {
-            echo "Only JPG, PNG, WEBP allowed.";
-            exit;
-        }
-        $newFile = "IMG_" . time() . "." . $fileExt;
-        $dest    = $uploadDir . $newFile;
-        if (move_uploaded_file($fileTmp, $dest)) {
-            $invoicePath = "uploads/invoice/" . $newFile;
-            
-            $saveData = [
-                'vendor_id' => $vendor_id,
-                'invoice'    => $invoicePath,
-                'invoice_no' => $invoice_no
-            ];
-            $insertId = $inboundingModel->saveform2($record_id,$saveData);
-            if ($insertId) {
-                header("location: " . base_url('?page=inbounding&action=form3&id='.$record_id));
-                exit;
+
+        // 2. Image Logic
+        $finalPhotoPath = '';
+
+        // A. Check if user uploaded a NEW file
+        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
+            $uploadDir = __DIR__ . '/../uploads/products/';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+            $fileName = $_FILES['photo']['name'];
+            $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            $allowed  = ['jpg', 'jpeg', 'png', 'webp'];
+
+            if (in_array($fileExt, $allowed)) {
+                $newFile = "PROD_" . time() . "." . $fileExt;
+                
+                // Note: If you want to use your resizing function, replace move_uploaded_file 
+                // with: $this->processAndResizeImage(...)
+                if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $newFile)) {
+                    $finalPhotoPath = "uploads/products/" . $newFile;
+                }
             } else {
-                echo "Database error.";
+                echo "Error: Only JPG, PNG, WEBP allowed.";
+                exit;
             }
+        } 
+        // B. No new file? Retrieve the EXISTING file from DB
+        else {
+            // Ensure getProductPhoto exists in your model
+            $existingPhoto = $inboundingModel->getProductPhoto($id); 
+            
+            if (!empty($existingPhoto)) {
+                $finalPhotoPath = $existingPhoto; // Keep the old one
+            } else {
+                echo "Error: Product photo is required.";
+                exit;
+            }
+        }
+
+        // 3. Prepare Data
+        $data = [
+            'category' => $category,
+            'photo'    => $finalPhotoPath
+        ];
+
+        // 4. Save to DB
+        $result = $inboundingModel->updateStep2Data($id, $data);
+
+        if ($result) {
+            // --- [ADDED] LOGGING START ---
+            $logData = [
+                'stat'       => 'inbound', // Status string
+                'userid_log' => $userid_log,     // User ID from form
+                'i_id'       => $id              // Record ID
+            ];
+            
+            // Call the log function
+            $inboundingModel->stat_logs($logData);
+            // --- [ADDED] LOGGING END ---
+
+            // Success -> Go to Step 3
+            header("location: " . base_url('?page=inbounding&action=form3&id=' . $id));
+            exit;
         } else {
-            echo "Upload failed.";
-        }        
+            echo "Database Error: Could not save data.";
+        }
     }
-    public function saveform3() {
+    
+    public function submitStep3() {
         global $inboundingModel;
+
+        // 1. Basic Setup
         $record_id = $_POST['record_id'] ?? '';
-        
-        // 1. Fetch Existing Data for Logic (We need Category & Material IDs)
-        // Assuming getById returns the row from vp_inbound
+        if (empty($record_id)) { echo "Record ID missing"; exit; }
+
+        // 2. Process Variations & Images
+        $allVariations = array_values($_POST['variations'] ?? []);
+
+        foreach ($allVariations as $index => &$variant) {
+            $variant['id'] = $_POST['variations'][$index]['id'] ?? '';
+            $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
+            if ($uploadError === UPLOAD_ERR_OK) {
+                $tmpName = $_FILES['variations']['tmp_name'][$index]['photo'];
+                $name    = $_FILES['variations']['name'][$index]['photo'];
+                $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                    $uploadDir = __DIR__ . '/../uploads/products/';
+                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                    $newFileName = "VAR_" . $record_id . "_" . $index . "_" . time() . "." . $ext;
+                    if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                        $variant['photo'] = "uploads/products/" . $newFileName;
+                    }
+                }
+            } else {
+                $variant['photo'] = $variant['old_photo'] ?? '';
+            }
+        }
+        unset($variant); 
+
+        // 3. Split Data
+        $mainVariant   = $allVariations[0] ?? []; 
+        $extraVariants = array_slice($allVariations, 1); 
+
+        // --- 4. TEMP CODE GENERATION (Your Original Logic) ---
+        // A. Fetch existing data to get Group ID
         $existingData = $inboundingModel->getById($record_id); 
         
-        // 2. Fetch Names for Initials
-        // A. Get Category Name (First Char)
-        $categoryName = '';
+        // B. Get Category Name First Char
+        $char1 = 'X';
         if (!empty($existingData['group_name'])) {
-            // Fetch from 'vp_categories' table using group_name (which is category ID)
             $catData = $inboundingModel->getCategoryById($existingData['group_name']);
-            $categoryName = $catData['display_name'] ?? ''; // Assuming column is 'category' or 'name'
+            if (!empty($catData['display_name'])) {
+                $char1 = strtoupper(substr($catData['display_name'], 0, 1));
+            }
         }
 
-        // B. Get Material Name (First Char)
+        // C. Get Material Name First Char
         $materialId = $_POST['material_code'] ?? '';
-        $materialName = '';
+        $char2 = 'X';
         if (!empty($materialId)) {
             $matData = $inboundingModel->getMaterialById($materialId);
-            $materialName = $matData['material_name'] ?? '';
+            if (!empty($matData['material_name'])) {
+                $char2 = strtoupper(substr($matData['material_name'], 0, 1));
+            }
         }
 
-        // C. Get Color (First Char)
-        $colorName = $_POST['color'] ?? '';
+        // D. Get Color First Char (From Main Variation)
+        $colorName = $mainVariant['color'] ?? '';
+        $char3 = !empty($colorName) ? strtoupper(substr($colorName, 0, 1)) : 'X';
 
-        // 3. Generate Prefix (e.g., "BSB")
-        $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
-        $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
-        $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
-        $prefix = $char1 . $char2 . $char3;
+        // E. Generate Code (Only if not already set, or you can force regenerate)
+        // Checking if it exists prevents overwriting "BSB001" with "BSB002" on every save.
+        if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
+             $temp_code = $existingData['temp_code'];
+        } else {
+             $prefix = $char1 . $char2 . $char3;
+             $temp_code = $inboundingModel->generateNextTempCode($prefix);
+        }
+        // 5. Prepare Main Update Data
+        $gate_entry = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
 
-        // 4. Generate Full Temp Code (e.g., "BSB001")
-        // This function checks the DB for the last code starting with this prefix
-        $temp_code = $inboundingModel->generateNextTempCode($prefix);
-
-        // 5. Prepare Save Data
-        $gate_entry_date_time = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
-        
-        $saveData = [
-            'gate_entry_date_time' => $gate_entry_date_time,
+        $mainUpdateData = [
+            'gate_entry_date_time' => $gate_entry,
             'material_code'        => $materialId,
             'height'               => $_POST['height'] ?? '',
             'width'                => $_POST['width'] ?? '',
             'depth'                => $_POST['depth'] ?? '',
             'weight'               => $_POST['weight'] ?? '',
-            'color'                => $colorName,
-            'Quantity'             => $_POST['quantity_received'] ?? '',
-            'size'                 => $_POST['size'] ?? '',
-            'cp'                   => $_POST['cp'] ?? '',
             'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
-            'temp_code'            => $temp_code // Add generated code
+            'temp_code'            => $temp_code,
+            // Variant 1 Data
+            'color'             => $mainVariant['color'] ?? '',
+            'size'              => $mainVariant['size'] ?? '',
+            'quantity_received' => $mainVariant['quantity'] ?? '',
+            'cp'                => $mainVariant['cp'] ?? '',
+            'product_photo'     => $mainVariant['photo'] ?? '' 
         ];
+        // 6. Update Database
+        $res = $inboundingModel->updateMainInbound($record_id, $mainUpdateData);
 
-        $insertId = $inboundingModel->saveform3($record_id, $saveData);
-        
-        if ($insertId) {
+        if ($res['success']) {
+            // Save extra variations
+            $inboundingModel->saveVariations($record_id, $extraVariants, $temp_code);
+            
             header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
             exit;
         } else {
-            echo "Database error.";
-        }
-    }
-
-    public function updateform3() {
-        global $inboundingModel;
-        $record_id = $_POST['record_id'] ?? '';
-        
-        if (empty($record_id)) {
-            echo "Record ID missing.";
-            exit;
-        }
-
-        // --- 1. TEMP CODE GENERATION LOGIC ---
-        
-        // A. Fetch existing inbound data to get the Group ID (which maps to Category)
-        $existingData = $inboundingModel->getById($record_id); 
-        
-        // B. Get Category Name (First Char)
-        $categoryName = '';
-        if (!empty($existingData['group_name'])) {
-            // Fetch from 'vp_categories' table using group_name (which is category ID)
-            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
-            $categoryName = $catData['display_name'] ?? ''; // Assuming column is 'category' or 'name'
-        }
-
-        // C. Get Material Name (First Char)
-        $materialId = $_POST['material_code'] ?? '';
-        $materialName = '';
-        if (!empty($materialId)) {
-            $matData = $inboundingModel->getMaterialById($materialId);
-            $materialName = $matData['material_name'] ?? '';
-        }
-
-        // D. Get Color (First Char)
-        $colorName = $_POST['color'] ?? '';
-
-        // E. Construct Prefix (e.g., "BSB")
-        $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
-        $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
-        $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
-        $prefix = $char1 . $char2 . $char3;
-
-        // F. Generate Full Temp Code (e.g., "BSB001")
-        $temp_code = $inboundingModel->generateNextTempCode($prefix);
-        // --- 2. PREPARE UPDATE DATA ---
-
-        $gate_entry_date_time = $_POST['gate_entry_date_time'] ?? '';
-        
-        $updateData = [
-            'gate_entry_date_time' => $gate_entry_date_time,
-            'material_code'        => $materialId,
-            'height'               => $_POST['height'] ?? '',
-            'width'                => $_POST['width'] ?? '',
-            'depth'                => $_POST['depth'] ?? '',
-            'weight'               => $_POST['weight'] ?? '',
-            'color'                => $colorName,
-            'quantity_received'    => $_POST['quantity_received'] ?? '',
-            'size'                 => $_POST['size'] ?? '',
-            'cp'                   => $_POST['cp'] ?? '',
-            'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
-            'temp_code'            => $temp_code // Add Generated Code here
-        ];
-
-        // Call model update
-        $updated = $inboundingModel->updateForm3($record_id, $updateData);
-
-        if ($updated['success']) {
-            // Redirect to label page
-            header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
-            exit;
-        } else {
-            echo "Update failed: " . $updated['message'];
-            exit;
+            echo "Database Error: " . $res['message'];
         }
     }
     public function getNextMaterialOrderAjax() {

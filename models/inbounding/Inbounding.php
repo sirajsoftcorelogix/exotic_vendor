@@ -399,8 +399,6 @@ class Inbounding {
     }
 	public function getform1data($id) {
         $id = intval($id);
-        
-        // Initialize variables
         $inbounding = null;
         $vendors = null;
         $category = null;
@@ -524,18 +522,28 @@ class Inbounding {
         }
         return $inbounding;
     }
-    public function saveform1($data) {
-        global $conn; // DB connection
-        $category = $data['category'];
-        $photo    = $data['photo'];
-        $sql = "INSERT INTO vp_inbound (group_name, product_photo)
-                VALUES ('$category', '$photo')";
-        $result = mysqli_query($conn, $sql);
-        if ($result) {
-            return mysqli_insert_id($conn);
-        } else {
+    public function saveform1($record_id, $data) {
+        $vendor_code = $data['vendor_id'] ?? '';
+        $invoice_img = $data['invoice'] ?? '';
+        $invoice_no  = $data['invoice_no'] ?? '';
+        // Prepare statement
+        $sql = "INSERT INTO vp_inbound (vendor_code, invoice_image, invoice_no) VALUES (?, ?, ?)";
+        $stmt = $this->conn->prepare($sql);
+
+        if (!$stmt) {
+            // Debugging: echo "Prepare failed: (" . $this->conn->errno . ") " . $this->conn->error;
             return false;
         }
+
+        // Bind parameters: 's' = string. 
+        // Assuming vendor_code, invoice_image, and invoice_no are strings.
+        $stmt->bind_param("isi", $vendor_code, $invoice_img, $invoice_no);
+
+        if ($stmt->execute()) {
+            return $stmt->insert_id; // Return the new ID
+        }
+
+        return false;
     }
     public function stat_logs($value = []) {
         // echo "<pre>";print_r($value);exit;
@@ -588,22 +596,8 @@ class Inbounding {
         // 4. Execute final query
         return $stmt->execute();
     }
+
     public function updateform1($data) {
-        global $conn;
-
-        $id       = intval($data['id']);
-        $category = mysqli_real_escape_string($conn, $data['category']);
-        $photo    = mysqli_real_escape_string($conn, $data['photo']);
-
-        $sql = "UPDATE vp_inbound 
-                SET group_name='$category', 
-                    product_photo='$photo'
-                WHERE id=$id";
-
-        return mysqli_query($conn, $sql);
-    }
-
-    public function updateform2($data) {
         // 1. Prepare the query with placeholders (?)
         $sql = "UPDATE vp_inbound 
                 SET vendor_code = ?, 
@@ -713,111 +707,41 @@ class Inbounding {
         }
         return 1; // Default to 1 if table is empty
     }
-    public function saveform2($id, $data) {
-        // global $conn; // Not typically needed if using $this->conn in a class method
-
-        // 1. SQL Update (Removed temp_code)
-        $sql = "UPDATE vp_inbound 
-                SET vendor_code = ?, 
-                    invoice_image = ?, 
-                    invoice_no = ? 
-                WHERE id = ?";
-
-        $stmt = $this->conn->prepare($sql);
-
-        if (!$stmt) {
-            return [
-                'success' => false,
-                'message' => 'Prepare failed: ' . $this->conn->error
-            ];
+    // 1. HELPER: Get existing photo (used in controller)
+    public function getProductPhoto($id) {
+        if (empty($id)) return '';
+        
+        $stmt = $this->conn->prepare("SELECT product_photo FROM vp_inbound WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($row = $result->fetch_assoc()) {
+            return $row['product_photo'];
         }
-
-        // 2. Bind Parameters
-        // "sssi" means: String, String, String, Integer
-        $stmt->bind_param('sssi',
-            $data['vendor_id'],   
-            $data['invoice'],  
-            $data['invoice_no'],  
-            $id              
-        );
-
-        // 3. Execute
-        if ($stmt->execute()) {
-            return [
-                'success' => true,
-                'message' => 'Record updated successfully.'
-            ];
-        }
-
-        return [
-            'success' => false,
-            'message' => 'Update failed: ' . $stmt->error
-        ];
+        return '';
     }
-    public function updateForm3($id, $data) {
-        // Added temp_code to the query
-        $sql = "UPDATE vp_inbound 
-                SET gate_entry_date_time = ?, 
-                    material_code = ?, 
-                    height = ?, 
-                    width = ?, 
-                    depth = ?, 
-                    weight = ?, 
-                    color = ?, 
-                    size = ?, 
-                    cp = ?, 
-                    received_by_user_id = ?,
-                    dimention_unit = ?,
-                    weight_unit = ?,
-                    temp_code = ? 
-                WHERE id = ?";
+
+    // 2. UNIFIED SAVE/UPDATE FUNCTION
+    public function updateStep2Data($id, $data) {
+        if (empty($id)) return false;
+
+        $category = $data['category'] ?? '';
+        $photo    = $data['photo'] ?? '';
+
+        // We simply update the fields. 
+        // This works for "First Save" AND "Edit" because the row already exists from Step 1.
+        $sql = "UPDATE vp_inbound SET group_name = ?, product_photo = ? WHERE id = ?";
         
         $stmt = $this->conn->prepare($sql);
-        
-        if (!$stmt) {
-            return [
-                'success' => false,
-                'message' => "Prepare failed: " . $this->conn->error
-            ];
-        }
+        if (!$stmt) return false;
 
-        // UPDATED bind_param
-        // Added 's' for temp_code at the end before the ID
-        // New Type String: ssssssssdisssi (14 params total)
-        // 1. gate (s) 2. mat (s) 3. h (s) 4. w (s) 5. d (s) 6. wt (s) 7. col (s) 
-        // 8. size (s) 9. cp (d) 10. user (i) 11. dim_u (s) 12. wt_u (s) 
-        // 13. temp_code (s) 14. id (i)
+        // 'ssi' = string, string, integer
+        $stmt->bind_param("ssi", $category, $photo, $id);
 
-        $stmt->bind_param(
-            "ssssssssdisssi", 
-            $data['gate_entry_date_time'], 
-            $data['material_code'],        
-            $data['height'],               
-            $data['width'],                
-            $data['depth'],                
-            $data['weight'],               
-            $data['color'],    
-            $data['size'],                 
-            $data['cp'],                   
-            $data['received_by_user_id'],   
-            $data['dimention_unit'],        
-            $data['weight_unit'],          
-            $data['temp_code'], // Added temp_code here
-            $id
-        );
-
-        if ($stmt->execute()) {
-            return [
-                'success' => true,
-                'message' => "Record updated successfully."
-            ];
-        }
-        
-        return [
-            'success' => false,
-            'message' => "Update failed: " . $stmt->error
-        ];
+        return $stmt->execute();
     }
+   
     // --- Add this to your Inbounding.php Model ---
     public function getById($id) {
         $id = (int)$id;
@@ -886,54 +810,109 @@ class Inbounding {
         return $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
     }
 
-    // 4. Updated saveform3 (Includes temp_code)
-    public function saveform3($id, $data) {
-        // Ensure temp_code isn't overwritten if it exists already (Optional check)
-        // Here we update it every time saveform3 is called.
-        
-        $sql = "UPDATE vp_inbound SET 
-                gate_entry_date_time = ?,
-                material_code = ?,
-                height = ?,
-                width = ?,
-                depth = ?,
-                weight = ?,
-                color = ?,
-                size = ?,
-                cp = ?,
-                quantity_received = ?,
-                received_by_user_id = ?,
-                temp_code = ? 
+    // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
+    public function updateMainInbound($id, $data) {
+        $sql = "UPDATE vp_inbound 
+                SET gate_entry_date_time = ?, material_code = ?, height = ?, width = ?, 
+                    depth = ?, weight = ?, color = ?, size = ?, cp = ?, quantity_received = ?, 
+                    received_by_user_id = ?, temp_code = ?, product_photo = ? 
                 WHERE id = ?";
         
         $stmt = $this->conn->prepare($sql);
-        
-        if (!$stmt) {
-            return false;
-        }
+        if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
 
-        // Types: s s d d d d s s d i i s i
         $stmt->bind_param(
-            'ssddddssdisis', // Updated type string
-            $data['gate_entry_date_time'], // s (String)
-            $data['material_code'],        // s (String)
-            $data['height'],               // d (Double)
-            $data['width'],                // d (Double)
-            $data['depth'],                // d (Double)
-            $data['weight'],               // d (Double) - previously 's' in your string, 'd' is safer for numbers
-            $data['color'],                // s (String)
-            $data['size'],                 // s (String)
-            $data['cp'],                   // d (Double)
-            $data['Quantity'],             // i (Integer)
-            $data['received_by_user_id'],  // s (String - based on your previous string)
-            $data['temp_code'],            // i (Integer) OR s (String) - Check this!
-            $id                            // i (Integer) - THIS WAS LIKELY MISSING OR MISALIGNED
+            'ssddddssdisssi', 
+            $data['gate_entry_date_time'], 
+            $data['material_code'], 
+            $data['height'], 
+            $data['width'],
+            $data['depth'], 
+            $data['weight'], 
+            $data['color'], 
+            $data['size'], 
+            $data['cp'], 
+            $data['quantity_received'], 
+            $data['received_by_user_id'], 
+            $data['temp_code'],     
+            $data['product_photo'], 
+            $id
         );
 
-        return $stmt->execute();
+        if ($stmt->execute()) return ['success' => true];
+        return ['success' => false, 'message' => $stmt->error];
     }
 
+    // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
+    // models/inbounding/Inbounding.php
 
+    public function saveVariations($it_id, $variations, $temp_code) {
+        // 1. Get List of Submitted IDs (to know what to keep)
+        $submittedIds = [];
+        foreach ($variations as $var) {
+            if (!empty($var['id'])) {
+                $submittedIds[] = (int)$var['id'];
+            }
+        }
+
+        // 2. DELETE variations that are NOT in the submitted list
+        // (This handles the "Remove" button)
+        if (!empty($submittedIds)) {
+            // Delete rows where it_id matches BUT id is NOT in our list
+            $idsStr = implode(',', $submittedIds);
+            $sql = "DELETE FROM vp_variations WHERE it_id = $it_id AND id NOT IN ($idsStr)";
+            $this->conn->query($sql);
+        } else {
+            // If no IDs submitted, it means all were deleted (or they are all new)
+            // Only delete if we are inserting new ones, to be safe let's check
+            // Ideally, if $variations is NOT empty but $submittedIds IS empty, 
+            // it means they are all new, so we delete old ones to prevent duplicates? 
+            // OR we just keep old ones?
+            // Let's stick to safe logic: 
+            // If we are saving, we assume the form state is the "truth".
+            // So if $submittedIds is empty, we delete all old ones for this item.
+            if (!empty($variations)) {
+                 // We have new items, but no old IDs. Delete all old variants.
+                 $this->conn->query("DELETE FROM vp_variations WHERE it_id = $it_id");
+            }
+        }
+
+        // 3. LOOP TO INSERT OR UPDATE
+        $insertSql = "INSERT INTO vp_variations (it_id, temp_code, color, size, quantity, cp, variation_image) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $updateSql = "UPDATE vp_variations SET temp_code=?, color=?, size=?, quantity=?, cp=?, variation_image=? WHERE id=?";
+
+        $stmtInsert = $this->conn->prepare($insertSql);
+        $stmtUpdate = $this->conn->prepare($updateSql);
+
+        foreach ($variations as $var) {
+            $id   = $var['id'] ?? '';
+            $img  = $var['photo'] ?? '';
+            
+            if (!empty($id)) {
+                // --- UPDATE EXISTING ---
+                // 'sssidss' -> string, string, string, int, double, string, int
+                $stmtUpdate->bind_param("sssidsi", $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $id);
+                $stmtUpdate->execute();
+            } else {
+                // --- INSERT NEW ---
+                // 'isssids' -> int, string, string, string, int, double, string
+                $stmtInsert->bind_param("isssids", $it_id, $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img);
+                $stmtInsert->execute();
+            }
+        }
+        
+        return true;
+    }
+
+    // 3. GET VARIATIONS (For View)
+    public function getVariations($it_id) {
+        // Make sure we select 'id'
+        $sql = "SELECT id, color, size, quantity, cp, variation_image FROM vp_variations WHERE it_id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("i", $it_id);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
     // Get the next available display order
     public function getNextMaterialOrder() {
         // FIX 1: Table name changed to 'material'

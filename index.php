@@ -481,20 +481,14 @@ switch ($page) {
             case 'form2':
                 $controller->getform2();
                 break;
-            case 'saveform2':
-                $controller->saveform2();
-                break;
-            case 'updateform2':
-                $controller->updateform2();
+            case 'submitStep2':
+                $controller->submitStep2();
                 break;
             case 'form3':
                 $controller->getform3();
                 break;
-            case 'saveform3':
-                $controller->saveform3();
-                break;
-            case 'updateform3':
-                $controller->updateform3();
+            case 'submitStep3':
+                $controller->submitStep3();
                 break;
             case 'label':
                 $controller->label();
