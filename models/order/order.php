@@ -127,7 +127,7 @@ class Order{
                     $params[] = $agent;
                 }
             }else{
-                $sql .= " AND vp_orders.agent_id = ?";
+                $sql .= " AND vp_orders.status NOT IN ('shipped','cancelled') AND vp_orders.agent_id = ?";
                 $params[] = $filters['agent'];   
             }         
         }
