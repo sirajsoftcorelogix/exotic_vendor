@@ -60,6 +60,37 @@
             <!-- Product Grid -->
             <!-- Responsive: 1 col on mobile, 2 on tablet, 3 on desktop -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10" id="productGrid">
+                <!-- Existing Product Cards -->
+                <?php
+                if (!empty($mappingProducts)) {
+                    foreach ($mappingProducts as $product) {
+                    ?>
+                        <div class="product-card group relative border border-gray-300 rounded-md p-3 flex items-start bg-white hover:border-gray-400 transition-colors" data-item-code="<?php echo ($product['item_code']); ?>">
+                            <input type="hidden" name="product_codes[]" value="<?php echo ($product['id']); ?>" />
+                            <input type="hidden" name="item_codes[]" value="<?php echo ($product['item_code']); ?>" />
+                            <!-- Floating Delete Button -->
+                            <button onclick="deleteCard(this); return false;"
+                                    class="absolute -top-3 -right-3 w-8 h-8 bg-brand-red text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-colors z-10 cursor-pointer">
+                                &times;
+                            </button>
+
+                            <!-- Product Image -->
+                            <div class="w-24 h-32 flex-shrink-0 border border-gray-200 mr-4 product-placeholder rounded-sm">
+                                <img src="<?php echo ($product['image']) ?? ""; ?>" />
+                                <i class="fas fa-image text-2xl"></i>
+                            </div>
+
+                            <!-- Product Details -->
+                            <div class="flex-1">
+                                <h3 class="text-md font-semibold text-gray-800 group-hover:text-gray-900 transition-colors">
+                                    <?php echo ($product['title']) ?? ""; ?>
+                                </h3>
+                            </div>
+                        </div>
+                    <?php
+                    }
+                }
+                ?>
 
                 <!-- Add New Product Card -->
                 <div class="border border-gray-300 bg-gray-50 rounded-md p-6 flex flex-col justify-center h-full min-h-[150px]" id="addProductBox">
@@ -81,23 +112,39 @@
 
         <!-- Footer Actions -->
         <div class="border-t border-gray-200 p-6 md:px-8 flex justify-end items-center gap-4 bg-white mt-auto">
-            <button class="px-6 py-2.5 bg-gray-500 text-white text-base md:text-lg font-bold rounded hover:bg-gray-600 transition-colors shadow-sm">
+            <button type="button" onclick="javascript:window.history.back();" class="px-6 py-2.5 bg-gray-500 text-white text-base md:text-lg font-bold rounded hover:bg-gray-600 transition-colors shadow-sm">
                 Cancel
             </button>
-            <button class="px-6 py-2.5 bg-brand-orange text-white text-base md:text-lg font-bold rounded hover:bg-orange-600 transition-colors shadow-sm">
+            <button type="button" onclick="submitFrm();" class="px-6 py-2.5 bg-brand-orange text-white text-base md:text-lg font-bold rounded hover:bg-orange-600 transition-colors shadow-sm">
                 Save Mapping
             </button>
         </div>
     </form>
 </div>
 <script>
-    // Interaction Logic
+    function isDuplicateItemCode(code) {
+        const cards = document.querySelectorAll('.product-card[data-item-code]');
+        code = code.trim().toUpperCase();
+
+        for (let card of cards) {
+            if (card.dataset.itemCode.toUpperCase() === code) {
+                return true;
+            }
+        }
+        return false;
+    }
     function addProduct(e) {
         e.preventDefault();
-        document.getElementById('errMsg').innerHTML = "";
+        errBox = document.getElementById('errMsg');
+        errBox.innerHTML = "";
 
         let code = document.getElementById('productId').value;
-        if (!code) { document.getElementById('errMsg').innerHTML = "Enter item code"; return false; }
+        if (!code) { errBox.innerHTML = "Enter item code"; return false; }
+
+        if (isDuplicateItemCode(code)) {
+            errBox.innerHTML = "This product is already added";
+            return false;
+        }
 
         fetch("?page=vendors&action=generateBlock", {
             method: "POST",
@@ -134,5 +181,16 @@
             }, 300);
             // }
         }
+    }
+
+    function submitFrm() {
+        errBox = document.getElementById('errMsg');
+        errBox.innerHTML = "";
+        if (document.querySelectorAll('.product-card').length === 0) {
+            errBox.innerHTML = ("Please add at least one product to map.");
+            return false;
+        }
+        document.getElementById('vendorProductsForm').submit();
+        return true;
     }
 </script>

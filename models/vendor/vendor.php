@@ -505,7 +505,19 @@ class vendor {
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
-    public function saveVendorProductsMapping($vendor_id, $product_ids) {
+    public function getmappingProductsByVendorId($vendor_id) {
+        $sql = "SELECT p.id, p.item_code, p.title, p.sku, vpm.item_code AS mapped_item_code FROM vp_products AS p INNER JOIN vp_vendor_products_mapping AS vpm ON p.id = vpm.product_id WHERE vpm.vendor_id = ? AND p.is_active = 1 ORDER BY p.title ASC";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('i', $vendor_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $products = [];
+        while ($row = $result->fetch_assoc()) {
+            $products[] = $row;
+        }
+        return $products;
+    }
+    public function saveVendorProductsMapping($vendor_id, $product_ids, $item_codes = []) {
         // Delete existing mappings
         $deleteSql = "DELETE FROM vp_vendor_products_mapping WHERE vendor_id = ?";
         $deleteStmt = $this->conn->prepare($deleteSql);
@@ -514,11 +526,13 @@ class vendor {
         $deleteStmt->close();
 
         // Insert new mappings
-        $insertSql = "INSERT INTO vp_vendor_products_mapping (vendor_id, product_id) VALUES (?, ?)";
+        $insertSql = "INSERT INTO vp_vendor_products_mapping (vendor_id, product_id, item_code) VALUES (?, ?, ?)";
         $insertStmt = $this->conn->prepare($insertSql);
+        $i=0;
         foreach ($product_ids as $product_id) {
-            $insertStmt->bind_param('ii', $vendor_id, $product_id);
+            $insertStmt->bind_param('iis', $vendor_id, $product_id, $item_codes[$i]);
             $insertStmt->execute();
+            $i++;
         }
         $insertStmt->close();
 

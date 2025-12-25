@@ -407,9 +407,11 @@ class VendorsController {
         if ($v_id > 0) {
             $products = $vendorsModel->getProductsByVendorId($v_id);
             $vendor = $vendorsModel->getVendorById($v_id);
+            $mappingProducts = $vendorsModel->getmappingProductsByVendorId($v_id);
             $data = [
                 'products' => $products,
-                'vendor' => $vendor
+                'vendor' => $vendor,
+                'mappingProducts' => $mappingProducts
             ];
             renderTemplate('views/vendors/vendor_products_map.php', $data, 'Vendor Products Mapping');
         } else {
@@ -427,9 +429,9 @@ class VendorsController {
                 if ($product) {
                     ob_start();
                     ?>
-                    <div class="product-card group relative border border-gray-300 rounded-md p-3 flex items-start bg-white hover:border-gray-400 transition-colors">
+                    <div class="product-card group relative border border-gray-300 rounded-md p-3 flex items-start bg-white hover:border-gray-400 transition-colors" data-item-code="<?php echo ($product['item_code']); ?>">
                         <input type="hidden" name="product_codes[]" value="<?php echo ($product['id']); ?>" />
-                        <input type="hidden" name="item_codes[]" value="<?php echo ($item_code); ?>" />
+                        <input type="hidden" name="item_codes[]" value="<?php echo ($product['item_code']); ?>" />
                         <!-- Floating Delete Button -->
                         <button onclick="deleteCard(this)"
                                 class="absolute -top-3 -right-3 w-8 h-8 bg-brand-red text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-colors z-10 cursor-pointer">
@@ -467,9 +469,12 @@ class VendorsController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $vendor_id = isset($_POST['vendor_id']) ? (int)$_POST['vendor_id'] : 0;
             $product_codes = isset($_POST['product_codes']) ? $_POST['product_codes'] : [];
+            $item_codes = isset($_POST['item_codes']) ? $_POST['item_codes'] : [];
             if ($vendor_id > 0 && is_array($product_codes)) {
-                $result = $vendorsModel->saveVendorProductsMapping($vendor_id, $product_codes);
-                echo json_encode($result);
+                $result = $vendorsModel->saveVendorProductsMapping($vendor_id, $product_codes, $item_codes);
+                $_SESSION["mapping_message"] = $result['message'];
+                header("location: " . base_url('?page=vendors&action=list'));
+                exit;
             } else {
                 echo json_encode(['success' => false, 'message' => 'Invalid input data.']);
             }
