@@ -439,6 +439,8 @@ document.getElementById("create_po").addEventListener("submit", function(event) 
     .then(data => {
         if (data.success) {
             alert("Purchase Order created successfully!");
+            //poitem clear from localStorage
+            localStorage.removeItem('selected_po_orders');
             window.location.href = "<?php echo base_url('?page=purchase_orders&action=list&viewpo=true'); ?>"; // Redirect to the list page
         } else {
             alert("Error: " + data.message);

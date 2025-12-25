@@ -194,7 +194,7 @@
                                 <div class="flex items-center mt-auto">
                                     
                                     <span class="typo-vendor">Vendor : <?php echo $product['vendor']; ?></span>
-                                    <!-- <a href="#" class="ml-2 text-details-link hover:text-amber-700">
+                                    <!-- <a href="javascript:void(0);" class="ml-2 text-details-link hover:text-amber-700" title="Edit Vendor" onclick="openEditVendorModal('<?php echo $product['item_code']; ?>', '<?php echo htmlspecialchars(addslashes($product['vendor'])); ?>')">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
@@ -349,6 +349,83 @@
             <button id="importConfirmBtn" class="bg-amber-600 text-white px-3 py-1 rounded">Import</button>
         </div>
         <div id="importMsg" class="text-sm mt-3"></div>
+    </div>
+</div>
+<!-- vendor update Modal -->
+<div id="vendor-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden">
+    <div id="vendor-modal-slider" class="fixed top-0 right-0 h-full flex transform translate-x-full" style="width: calc(45% + 61px); min-width: 950px;">
+
+        <!-- Close Button -->
+        <div class="flex-shrink-0 flex items-start pt-5">
+            <button id="close-vendor-modal"
+                    class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center -ml-[61px]"
+                    style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="h-full bg-white shadow-xl px-8 overflow-y-auto flex flex-col w-full">
+            <!-- Modal Content -->
+            <div class="px-6 py-5 md:px-8">
+                <div class="flex items-center gap-4">
+                    <!-- Circular Icon -->
+                    <div class="w-12 h-12 md:w-14 md:h-14 bg-brand-orange rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
+                        <i class="fas fa-link text-white text-xl md:text-2xl transform -rotate-45"></i>
+                    </div>
+                    <!-- Title -->
+                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Product Mapping ⇌ Vendor</h1>
+                </div>
+            </div>
+
+            <!-- Purple Separator Line -->
+            <div class="h-1 bg-brand-purple w-full"></div>
+
+            <div class="p-6 md:p-8 flex-grow">
+
+                <!-- ================= PRODUCT INFO CARD (ORANGE ROUNDED BOX) ================= -->
+                <div class="bg-brand-orange rounded-xl p-6 mb-8 flex flex-col md:flex-row items-center gap-6 shadow-md text-white">
+                    <!-- Product Icon/Image Placeholder -->
+                    <div class="w-20 h-20 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 border border-white border-opacity-30">
+                        <i class="fas fa-box-open text-3xl text-white opacity-90"></i>
+                    </div>
+
+                    <!-- Product Details -->
+                    <div class="flex-grow">
+                        <!-- Item Code: Reduced font size as requested -->
+                        <div class="text-xl md:text-2xl font-bold mb-2" id="item_code_mapped">Item Code : </div>
+                        <!-- Description in regular font -->
+                        <p class="text-white text-lg font-normal opacity-95 leading-snug" id="current_vendor_mapped">                          
+                           
+                        </p>
+                    </div>
+                </div>
+
+
+                <!-- ================= VENDOR SEARCH SECTION (GRAY CARD) ================= -->
+                <div class="bg-brand-light-gray rounded-lg p-6 mb-6 border border-gray-200 shadow-sm relative">
+                    <label for="vendorSearch" class="block font-bold text-gray-800 mb-2 text-lg">Vendor :</label>
+                    <div class="flex gap-0 shadow-sm w-full">
+                        <input type="text" id="vendorSearch" placeholder="Search Vendor Name or Code..."
+                            class="flex-grow border border-gray-300 rounded-l px-4 py-3 focus:outline-none focus:border-brand-orange focus:ring-1 focus:ring-brand-orange w-full">
+                        <input type="hidden" name="vendor_id" id="vendorId" value="">
+                            
+                        <!-- Changed button text to + Add -->
+                        <button id="addVendorButton" class="bg-black text-white px-8 py-3 rounded-r font-bold hover:bg-gray-800 transition-colors uppercase tracking-wide whitespace-nowrap">
+                            + Add
+                        </button>
+                    </div>
+                    <div id="vendorSuggestionsList" class="" style="display:none; position:absolute; left:0; right:0; z-index:50; max-height:240px; overflow:auto;"></div>
+                        
+                </div>
+                <div class="flex-grow space-y-4" id="vendor-modal-content">
+                    <!-- Dynamic content will be loaded here -->
+                    
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 <script>
@@ -735,5 +812,245 @@ document.getElementById('vendor_autocomplete').addEventListener('input', functio
             }
     });
 });
+function openEditVendorModal(itemCode, currentVendor) {
+    //const newVendor = prompt(`Edit Vendor for Item Code: ${itemCode}`, currentVendor);
+    //if (newVendor === null) return; // User cancelled
+    //use vendor-modal-content to show loading
+    const modalContent = document.getElementById('vendor-modal-content');
+    const vendorModal = document.getElementById('vendor-modal');
+    const vendorModalSlider = document.getElementById('vendor-modal-slider');
+    document.getElementById('item_code_mapped').innerText = `Item Code : ${itemCode}`;
+    document.getElementById('current_vendor_mapped').innerText = `${currentVendor}`;
+    modalContent.innerHTML = '<p>Updating vendor. Please wait...</p>';
+    vendorModal.classList.remove('hidden');
+    setTimeout(() => {
+        vendorModalSlider.classList.remove('translate-x-full');
+    }, 300);
 
+    //fetch form
+    fetch(`?page=products&action=get_vendor_edit_form&item_code=${encodeURIComponent(itemCode)}&current_vendor=${encodeURIComponent(currentVendor)}`)
+        .then(response => response.text())
+        .then(html => {
+            modalContent.innerHTML = html; // Insert the fetched HTML
+            
+        })
+        .catch(error => {
+            console.error('Error loading vendor edit form:', error);
+            modalContent.innerHTML = '<p>Error loading vendor edit form.</p>';
+        });
+
+    // fetch(`index.php?page=products&action=update_vendor`, {
+    //     method: 'POST',
+    //     headers: {'Content-Type': 'application/json'},
+    //     body: JSON.stringify({ item_code: itemCode, vendor: newVendor })
+    // })
+    // .then(response => response.json())
+    // .then(data => {
+    //     if (data.success) {
+    //         alert('Vendor updated successfully.');
+    //         window.location.reload(); // Reload to reflect changes
+    //     } else {
+    //         alert('Error updating vendor: ' + data.message);
+    //     }
+    // })
+    // .catch(error => {
+    //     console.error('Error:', error);
+    //     alert('An error occurred while updating the vendor.');
+    // });
+}
+// Close vendor modal
+document.getElementById('close-vendor-modal').addEventListener('click', function() {
+    const vendorModal = document.getElementById('vendor-modal');
+    const vendorModalSlider = document.getElementById('vendor-modal-slider');
+    vendorModalSlider.classList.add('translate-x-full');
+    setTimeout(() => {
+        vendorModal.classList.add('hidden');
+    }, 300);
+});
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                'brand-orange': 'rgba(208, 103, 6, 1)',
+                'brand-purple': '#A855F7',
+                'brand-red': 'rgba(204, 0, 0, 1)',
+                'brand-gray': '#E5E7EB',
+                'brand-light-gray': '#F3F4F6',
+            },
+            boxShadow: {
+                'card': '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+            }
+        }
+    }
+}
+function removeVendor(button, id) {
+    // Confirm and delete vendor mapping via AJAX
+    const itemCode = button.getAttribute('data-item-code');
+    if (!itemCode) return;
+    if (!confirm('Are you sure you want to remove the vendor mapping for Item Code: ' + itemCode + '?')) {
+        return;
+    }
+    fetch(`index.php?page=products&action=remove_vendor_mapping`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Vendor mapping removed successfully.');
+            window.location.reload(); // Reload to reflect changes
+        } else {
+            alert('Error removing vendor mapping: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while removing the vendor mapping.');
+    });
+
+    //remove vendor mapping visually    
+    const item = button.closest('.vendor-item');
+    if(item) {
+        // if(confirm('Remove this vendor from the product?')) {
+        item.style.transition = 'all 0.3s ease';
+        item.style.opacity = '0';
+        item.style.transform = 'translateX(10px)';
+        setTimeout(() => {
+            item.remove();
+        }, 300);
+        // }
+    }
+}
+//vendorSearch suggession list autocomplete and add new vendor 
+// Vendor Autocomplete
+document.getElementById('vendorSearch').addEventListener('input', function() {
+    const query = this.value;
+    const suggestionsBox = document.getElementById('vendorSuggestionsList');
+    const vendorIdInput = document.getElementById('vendorId');
+
+    if (query.length < 2) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {            
+            suggestionsBox.innerHTML = '';
+            renderSuggestions(data.data);
+            // if (Array.isArray(data.data) && data.data.length > 0) {
+            //     data.data.forEach(vendor => {
+            //         const div = document.createElement('div');
+            //         div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+            //         div.textContent = vendor.vendor_name;
+            //         div.addEventListener('click', function() {
+            //             document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
+            //             vendorIdInput.value = vendor.id;
+            //             suggestionsBox.style.display = 'none';
+            //         });
+            //         suggestionsBox.appendChild(div);
+            //     });
+            //     suggestionsBox.style.display = 'block';
+            // } else {
+            //     suggestionsBox.style.display = 'none';
+            // }
+        });
+});
+function renderSuggestions(list) {
+    const suggBox = document.getElementById('vendorSuggestionsList');
+    if (!suggBox) return;
+    if (!Array.isArray(list) || list.length === 0) {
+        suggBox.innerHTML = '';
+        suggBox.style.display = 'none';
+        return;
+    }
+    suggBox.innerHTML = list.map((v, i) => {
+        return `<div class="sugg-item position-relative z-10 w-full p-2 cursor-pointer hover:bg-gray-300 bg-white" data-index="${i}" data-id="${escapeHtml(v.id)}" data-json='${escapeHtml(JSON.stringify(v))}' style="padding:8px 10px;">
+                    <div style="font-weight:600;">${escapeHtml(v.vendor_name || '')} — ${escapeHtml(v.vendor_email || '')}</div>
+                    <div style="font-size:11px;color:#6b7280;">Phone: ${escapeHtml(v.vendor_phone || '')} • Postal code: ${escapeHtml(v.postal_code || '-')}</div>
+                </div>`;
+    }).join('');
+    suggBox.style.display = 'block';
+    activeIndex = -1;
+}
+function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, function (s) {
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[s];
+    });
+}
+
+function unescapeHtml(str) {
+    if (!str) return str;
+    return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+// Click on suggestion -> select vendor
+const vendorSuggestionsContainer = document.getElementById('vendorSuggestionsList');
+let selectedVendorData = null;
+if (vendorSuggestionsContainer) {
+    vendorSuggestionsContainer.addEventListener('click', function (event) {
+        const item = event.target.closest('.sugg-item');
+        if (!item) return;
+        const json = item.getAttribute('data-json') || item.dataset.json;
+        let v = {};
+        try {
+            v = JSON.parse(unescapeHtml(json));
+        } catch (e) {
+            try { v = JSON.parse(json); } catch (err) { console.error('Failed parse vendor json', err); }
+        }
+        if (!v) return;
+        document.getElementById('vendorId').value = v.id || '';
+        document.getElementById('vendorSearch').value = v.vendor_name || '';
+        document.getElementById('vendorSearch').dataset.vendorCode = v.vendor_code || v.vendor_code || v.code || '';
+        selectedVendorData = v;
+        // hide suggestions
+        vendorSuggestionsContainer.style.display = 'none';
+    });
+}
+
+// Add vendor button -> save mapping via AJAX
+const addVendorButton = document.getElementById('addVendorButton');
+if (addVendorButton) {
+    addVendorButton.addEventListener('click', function (e) {
+        e.preventDefault();
+        const itemText = document.getElementById('item_code_mapped').innerText || '';
+        const item_code = itemText.split(':').slice(1).join(':').trim();
+        const vendor_id = document.getElementById('vendorId').value;
+        const vendor_code = document.getElementById('vendorSearch').dataset.vendorCode || '';
+        if (!vendor_id || vendor_id === '') {
+            alert('Please select a vendor from the suggestions list.');
+            return;
+        }
+        const btn = this;
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = 'Saving...';
+
+        fetch('?page=products&action=add_vendor_map', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_code: item_code, vendor_id: vendor_id, vendor_code: vendor_code })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) {
+                // refresh vendor list in modal
+                const modalContent = document.getElementById('vendor-modal-content');
+                fetch(`?page=products&action=get_vendor_edit_form&item_code=${encodeURIComponent(item_code)}&current_vendor=${encodeURIComponent(document.getElementById('current_vendor_mapped').innerText)}`)
+                    .then(r => r.text()).then(html => { modalContent.innerHTML = html; });
+            } else {
+                alert((data && data.message) ? data.message : 'Failed to save vendor mapping.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error saving vendor mapping.');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = originalText || '+ Add';
+        });
+    });
+}
 </script>

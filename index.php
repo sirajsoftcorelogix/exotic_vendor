@@ -331,7 +331,16 @@ switch ($page) {
                 break;
             case 'get_product_details_html';
                 $controller->getProductDetailsHTML();         
-                break;            
+                break;  
+            case 'get_vendor_edit_form':
+                $controller->getVendorEditForm();         
+                break;
+            case 'add_vendor_map':
+                $controller->addVendorMap();
+                break;
+            case 'remove_vendor_mapping':
+                $controller->removeVendorMapping();
+                break;
             /*case 'view':
                 $controller->product_view();
                 break;

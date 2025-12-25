@@ -1417,7 +1417,7 @@
                 <!-- <label class="block text-sm font-bold mb-2">Notes</label>
                 <textarea id="bulkStatusNotes" name="notes" class="border rounded px-3 py-2 w-full" rows="3"></textarea> -->
                 <!--list selected item image-->
-                <div id="bulkStatusSelectedItems" class="flex flex-wrap gap-2 max-h-40 overflow-y-auto border p-2">
+                <div id="bulkStatusSelectedItems" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto border p-2">
                     <!-- Selected item images will be displayed here -->
                 </div>
             </div>
@@ -1432,7 +1432,7 @@
 
 <!-- Bulk Assign To Modal -->
 <div id="bulkAssignPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAssignPopup(event)">
-    <div class="bg-white p-4 rounded-md max-w-md w-full relative" onclick="event.stopPropagation();">
+    <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
         <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <h2 class="text-xl font-bold mb-4">Assign Orders To Agent</h2>
         <form id="bulkAssignForm" method="post" action="?page=orders&action=bulk_assign_agent">
@@ -1444,6 +1444,14 @@
                         <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+            <div class="mb-4">
+                <!-- <label class="block text-sm font-bold mb-2">Notes</label>
+                <textarea id="bulkStatusNotes" name="notes" class="border rounded px-3 py-2 w-full" rows="3"></textarea> -->
+                <!--list selected item image-->
+                <div id="bulkAssignSelectedItems" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto border p-2">
+                    <!-- Selected item images will be displayed here -->
+                </div>
             </div>
             <div id="bulkAssignError" class="text-red-500 text-sm hidden mb-2"></div>
             <div class="flex justify-end space-x-2">
@@ -2115,16 +2123,16 @@
         }
         // ensure hidden inputs are added (like existing submit handler expects)
         // remove previous hidden inputs
-        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+        //form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
         // append hidden inputs for ids that are not visible checked (server will receive duplicates but it's okay)
-        ids.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'poitem[]';
-            input.value = id;
-            input.className = 'poitem_hidden';
-            form.appendChild(input);
-        });
+        // ids.forEach(id => {
+        //     const input = document.createElement('input');
+        //     input.type = 'hidden';
+        //     input.name = 'poitem[]';
+        //     input.value = id;
+        //     input.className = 'poitem_hidden';
+        //     form.appendChild(input);
+        // });
         // clear persisted selection after submit (optional), but we'll let server handle
         form.submit();
     });
@@ -2138,31 +2146,38 @@
             return;
         }
         // prepare form: remove previous hidden inputs
-        const form = document.getElementById('bulkStatusForm');
-        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
-        ids.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'poitem[]';
-            input.value = id;
-            input.className = 'poitem_hidden';
-            form.appendChild(input);
-        });
+        // const form = document.getElementById('bulkStatusForm');
+        // form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+        // ids.forEach(id => {
+        //     const input = document.createElement('input');
+        //     input.type = 'hidden';
+        //     input.name = 'poitem[]';
+        //     input.value = id;
+        //     input.className = 'poitem_hidden';
+        //     form.appendChild(input);
+        // });
         
         // populate selected items list
         const selectedItemsContainer = document.getElementById('bulkStatusSelectedItems');
         selectedItemsContainer.innerHTML = '';
         ids.forEach(id => {
-            const orderData = JSON.parse(document.querySelector('#order-id-' + id).getAttribute('data-order'));
-            const itemText = 'Order No:' + (orderData.order_number || ' ID ' + id);
+            const element = document.querySelector('#order-id-' + id);
+            if (!element) return; // Skip if element not found on current page
+            const orderData = JSON.parse(element.getAttribute('data-order'));
+            const itemText = 'Order:' + (orderData.order_number || ' ID ' + id);
             const image = orderData.image || 'default-image.png';
             const div = document.createElement('div');
+            div.classList.add('rounded-md', 'flex-shrink-0',  'flex', 'flex-col', 'items-center', 'justify-start', 'bg-gray-50', 'overflow-hidden', 'w-32','h-32', 'm-2','mb-2', 'text-center');
             div.textContent = itemText;
-            
+            // const label = document.createElement('p');
+            // label.classList.add('text-sm', 'font-medium', 'mt-2', 'px-1', 'break-words');
+            // label.textContent = itemText;
+            // div.appendChild(label);
+
             // Optionally, add image preview
             const img = document.createElement('img');            
             img.src = image;
-            img.style.width = '145px';
+            img.classList.add('max-w-full', 'h-24', 'object-contain');
             //img.style.height = '145px';
             //selectedItemsContainer.appendChild(img);
             div.prepend(img);
@@ -2197,6 +2212,35 @@
             input.value = id;
             input.className = 'poitem_hidden';
             form.appendChild(input);
+        });
+        // populate selected items list
+        const selectedItemsContainer = document.getElementById('bulkAssignSelectedItems');
+        selectedItemsContainer.innerHTML = '';
+        ids.forEach(id => {
+            const element = document.querySelector('#order-id-' + id);
+            if (!element) return; // Skip if element not found on current page
+            const orderData = JSON.parse(element.getAttribute('data-order'));
+            const itemText = 'Order' + (orderData.order_number || ' ID ' + id);
+            const image = orderData.image || 'default-image.png';
+            const div = document.createElement('div');
+            div.classList.add('rounded-md', 'flex-shrink-0',  'flex', 'flex-col', 'items-center', 'justify-start', 'bg-gray-50', 'overflow-hidden', 'w-32','h-32', 'm-2','mb-2', 'text-center');
+            div.textContent = itemText;
+            
+            // Optionally, add image preview
+            const img = document.createElement('img');            
+            img.src = image;
+            img.classList.add('max-w-full', 'h-24', 'object-contain');
+            //img.style.width = '145px';
+            //img.style.height = '145px';
+            //selectedItemsContainer.appendChild(img);
+            div.prepend(img);
+            //append hidden order_id
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'order_ids[]';
+            hiddenInput.value = id;
+            div.appendChild(hiddenInput);
+            selectedItemsContainer.appendChild(div);
         });
         document.getElementById('bulkAssignError').classList.add('hidden');
         document.getElementById('bulkAssignPopup').classList.remove('hidden');

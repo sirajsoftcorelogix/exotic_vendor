@@ -431,4 +431,59 @@ class product{
         }
         return null;
     }
+    public function getVendorByItemCode($item_code) {
+        $sql = "SELECT pvm.*, vv.* FROM product_vendor_map pvm 
+            JOIN vp_vendors vv ON pvm.vendor_id = vv.id 
+            WHERE pvm.item_code = ? ";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('s', $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);           
+        }
+        return null;
+    }
+
+    /**
+     * Save or update product vendor mapping
+     * @param string $item_code
+     * @param int $vendor_id
+     * @param string $vendor_code
+     * @return bool
+     */
+    public function saveProductVendor($item_code, $vendor_id, $vendor_code = '') {
+        $now = date('Y-m-d H:i:s');
+        // check existing
+        $sql = "SELECT id FROM product_vendor_map WHERE item_code = ? AND vendor_id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+        $stmt->bind_param('si', $item_code, $vendor_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && $res->num_rows > 0) {
+            /*$row = $res->fetch_assoc();
+            $id = (int)$row['id'];
+            $sql = "UPDATE product_vendor_map SET vendor_id = ?, vendor_code = ?, updated_at = ? WHERE id = ?";
+            $stmt2 = $this->db->prepare($sql);
+            if (!$stmt2) return false;
+            $stmt2->bind_param('issi', $vendor_id, $vendor_code, $now, $id);
+            return $stmt2->execute();*/
+            return true; // already exists
+        } else {
+            $sql = "INSERT INTO product_vendor_map (item_code, vendor_id, vendor_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?)";
+            $stmt2 = $this->db->prepare($sql);
+            if (!$stmt2) return false;
+            $stmt2->bind_param('sisss', $item_code, $vendor_id, $vendor_code, $now, $now);
+            return $stmt2->execute();
+       }
+    }
+    public function deleteProductVendor($id) {
+        
+        $sql = "DELETE FROM product_vendor_map WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+        $stmt->bind_param('i', $id);
+        return $stmt->execute();
+    }
 }

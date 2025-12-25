@@ -201,6 +201,18 @@ class Tables {
         }
         return $data;
     }
+    public function getUserNameById($user_id) {
+        $sql = "SELECT name FROM vp_users WHERE id = ? LIMIT 1";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('i', $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return $row['name'];
+        }
+        return null;
+    }
 
 }
 ?>
