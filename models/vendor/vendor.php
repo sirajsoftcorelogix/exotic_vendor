@@ -498,7 +498,7 @@ class vendor {
     }
     public function getProductByCode($item_code) {
         $item_code = $this->conn->real_escape_string($item_code);
-        $sql = "SELECT id, item_code, title, sku FROM vp_products WHERE item_code = ? AND is_active = 1";
+        $sql = "SELECT id, item_code, title, sku, `image` FROM vp_products WHERE item_code = ? AND is_active = 1";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('s', $item_code);
         $stmt->execute();
@@ -506,7 +506,7 @@ class vendor {
         return $result->fetch_assoc();
     }
     public function getmappingProductsByVendorId($vendor_id) {
-        $sql = "SELECT p.id, p.item_code, p.title, p.sku, vpm.item_code AS mapped_item_code FROM vp_products AS p INNER JOIN vp_vendor_products_mapping AS vpm ON p.id = vpm.product_id WHERE vpm.vendor_id = ? AND p.is_active = 1 ORDER BY p.title ASC";
+        $sql = "SELECT p.id, p.item_code, p.title, p.sku, p.image, vpm.item_code AS mapped_item_code FROM vp_products AS p INNER JOIN vp_vendor_products_mapping AS vpm ON p.id = vpm.product_id WHERE vpm.vendor_id = ? AND p.is_active = 1 ORDER BY p.title ASC";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $vendor_id);
         $stmt->execute();

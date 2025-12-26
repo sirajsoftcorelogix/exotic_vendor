@@ -83,8 +83,9 @@
                             <!-- Product Details -->
                             <div class="flex-1">
                                 <h3 class="text-md font-semibold text-gray-800 group-hover:text-gray-900 transition-colors">
-                                    <?php echo ($product['title']) ?? ""; ?>
+                                    <?php echo ($product['item_code']) ?? ""; ?>
                                 </h3>
+                                <?php echo ($product['title']) ?? ""; ?>
                             </div>
                         </div>
                     <?php
