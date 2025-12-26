@@ -22,7 +22,8 @@ $server = IoServer::factory(
             $chat
         )
     ),
-    $config['WS_PORT']
+    $config['WS_PORT'],
+    '127.0.0.1'
 );
 
 echo "Starting Ratchet WebSocket server on port ".$config['WS_PORT'];
