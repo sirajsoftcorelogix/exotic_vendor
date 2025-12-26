@@ -601,7 +601,7 @@
 	}
 	function generateVendorCode(mysqli $conn): string
 	{
-		$prefix = 'VND';
+		$prefix = '';
 		$characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 		$length = 10; // Length of the random part
 		do {
