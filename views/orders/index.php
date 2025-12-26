@@ -103,7 +103,7 @@
     
    
 </style>
-<div class="container mx-auto p-4">
+<div class="container mx-auto pr-4 pt-2">
     <?php
 		
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -129,7 +129,7 @@
     ?>
     <!-- Header Section -->
     <!-- Stats Section -->
-    <div class="mt-6 sm:mt-8">
+    <div class="mt-0 sm:mt-2">
         <div class="bg-white rounded-xl shadow-sm p-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
 
@@ -257,7 +257,7 @@
         </div>
     </div>
     <!-- Advance Search Accordion -->
-    <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
+    <div class="mt-2 mb-8 bg-white rounded-xl p-4 ">
         <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
             <h2 class="text-xl font-bold text-gray-900">Advance Search</h2>
             <svg id="accordion-icon-search" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -265,7 +265,7 @@
             </svg>
         </button>
 
-        <div id="accordion-content-search" class="accordion-content  overflow-visible">
+        <div id="accordion-content-search" class="accordion-content  overflow-visible hidden ">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
@@ -356,7 +356,7 @@
                     </select>
                 </div>
                 <div class="">
-                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">Staff Name</label>
+                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">PO Created By</label>
                     <select id="staff_name" name="staff_name[]" multiple class="advanced-multiselect w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <!-- <option value="" >All Staff</option> -->
 						<?php foreach ($staff_list as $key => $value): ?>
@@ -414,8 +414,17 @@
                         <?php endforeach; ?>                    
                     </select>
                 </div>
-                
-                
+                <!-- Author filter -->
+                <div>
+                    <label for="author" class="block text-sm font-medium text-gray-600 mb-1">Author</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['author'] ?? '') ?>" name="author" id="author" placeholder="Author Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
+                </div>
+                <!-- Publisher filter -->
+                <div>
+                    <label for="publisher" class="block text-sm font-medium text-gray-600 mb-1">Publisher</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['publisher'] ?? '') ?>" name="publisher" id="publisher" placeholder="Publisher Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
+                </div>
+
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
                     <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Cancel</button>
@@ -447,7 +456,7 @@
 
     <!-- Orders Table Section -->
     <div class="mt-5">
-        <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
+        <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post" id="orders-form">
             <div class="flex  ">
             <div class="w-1/2">
             <!-- <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button> -->
@@ -481,7 +490,7 @@
             <!-- button refresh-->
             <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
                 <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
-            <i class="fas fa-sync-alt p-1 bg-white border border-orange-500"></i>
+            <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
             </span>
             <!-- update imported orders -->
             <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
@@ -743,8 +752,13 @@
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
+                                            <?php if (!empty($order['author'])){ ?>
+                                            <span class="heading-typography">Author</span>
+                                            <p>: <span class="data-typography"><?= $order['author'] ?? 'N/A' ?></span></p>                                            
+                                            <?php }else{?>
                                             <span class="heading-typography">Color</span>
-                                            <p>: <span class="data-typography"><?= $order['color'] ?? 'N/A' ?></span></p>
+                                            <p>: <span class="data-typography"><?= $order['color'] ?? 'N/A' ?></span></p>                                            
+                                            <?php }?>
                                             
                                         </div>
                                         <div class="w-1/2 pl-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
@@ -754,8 +768,13 @@
                                             <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
                                             <span class="heading-typography">Agent</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
+                                            <?php if (!empty($order['publisher'])){ ?>
+                                            <span class="heading-typography">Publisher</span>
+                                            <p>: <span class="data-typography"><?= $order['publisher'] ?? 'N/A' ?></span></p>                                            
+                                            <?php }else{?>
                                             <span class="heading-typography">Size</span>
                                             <p>: <span class="data-typography"><?= $order['size'] ?? 'N/A' ?></span></p>
+                                            <?php }?>
                                         </div>
                                     </div>
                                 </div>
@@ -833,7 +852,7 @@
                                                 <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
                                                     <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Order</a>
                                                     <hr class="my-1 mx-2"></hr>
-                                                    <!-- <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
+                                                    <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
                                                 </div>
                                             </span>
                                         </div>
@@ -1487,7 +1506,11 @@
         const accordionButton = document.getElementById('accordion-button-search');
         const accordionContent = document.getElementById('accordion-content-search');
         const accordionIcon = document.getElementById('accordion-icon-search');
-
+        //accordionContent fade in effect on load for 3 seconds
+        
+        setTimeout(() => {
+            accordionContent.classList.remove('hidden');
+        }, 300);
         accordionButton.addEventListener('click', () => { 
             const isExpanded = accordionButton.getAttribute('aria-expanded') === 'true';
             accordionButton.setAttribute('aria-expanded', !isExpanded);
@@ -2329,4 +2352,13 @@
             }
         });
     });
+function SubmitCreatePo(id) {
+   const form = document.getElementById('orders-form');
+   const orderIdInput = document.createElement('input');
+   orderIdInput.type = 'hidden';
+   orderIdInput.name = 'poitem[]';
+   orderIdInput.value = id;
+   form.appendChild(orderIdInput);
+   form.submit();
+}
 </script>
