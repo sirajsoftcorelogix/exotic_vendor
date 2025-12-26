@@ -77,7 +77,6 @@
                             <!-- Product Image -->
                             <div class="w-24 h-32 flex-shrink-0 border border-gray-200 mr-4 product-placeholder rounded-sm">
                                 <img src="<?php echo ($product['image']) ?? ""; ?>" />
-                                
                             </div>
 
                             <!-- Product Details -->
