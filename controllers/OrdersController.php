@@ -80,6 +80,12 @@ class OrdersController {
         if(!empty($_GET['agent'])){
             $filters['agent'] = $_GET['agent'];  
         }
+        if (!empty($_GET['publisher'])) {
+            $filters['publisher'] = $_GET['publisher'];            
+        }
+        if (!empty($_GET['author'])) {
+            $filters['author'] = $_GET['author'];            
+        }
         
         //order status list
         $statusList = $commanModel->get_order_status_list();
@@ -301,6 +307,10 @@ class OrdersController {
                     'vendor' => $item['vendor'] ?? '',
                     'country' => $order['country'] ?? '',
                     'material' => $item['material'] ?? '',
+                    'publisher' => $item['publisher'] ?? '',
+                    'author' => $item['author'] ?? '',
+                    'shippingfee' => $item['shippingfee'] ?? '',
+                    'sourcingfee' => $item['sourcingfee'] ?? '',
                     //$orderStatus = productionOrderStatusList()[$item['status']] ?? 'pending',
                     'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
                         ? 'shipped'

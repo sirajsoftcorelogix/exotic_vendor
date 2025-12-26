@@ -131,6 +131,14 @@ class Order{
                 $params[] = $filters['agent'];   
             }         
         }
+        if (!empty($filters['publisher'])) {
+            $sql .= " AND vp_orders.publisher LIKE ?";
+            $params[] = '%' . $filters['publisher'] . '%';            
+        }
+        if (!empty($filters['author'])) {
+            $sql .= " AND vp_orders.author LIKE ?";
+            $params[] = '%' . $filters['author'] . '%';            
+        }
         //echo $sql;
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
@@ -276,6 +284,14 @@ class Order{
             $params[] = $filters['agent'];     
             }       
         }
+        if (!empty($filters['publisher'])) {
+            $sql .= " AND vp_orders.publisher LIKE ?";
+            $params[] = '%' . $filters['publisher'] . '%';            
+        }
+        if (!empty($filters['author'])) {
+            $sql .= " AND vp_orders.author LIKE ?";
+            $params[] = '%' . $filters['author'] . '%';            
+        }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
@@ -353,9 +369,9 @@ class Order{
         }
 
         // ✅ Check for duplicate combination
-        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1";
+        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1";
         $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
+        $checkStmt->bind_param('sss', $data['order_number'], $data['item_code'], $data['sku']);
         $checkStmt->execute();
         $checkStmt->bind_result($count);
         $checkStmt->fetch();
@@ -390,7 +406,11 @@ class Order{
             'material',
             'status',
             'esd',
-            'agent_id'
+            'agent_id',
+            'publisher',
+            'author',
+            'shippingfee',
+            'sourcingfee'
         ];
 
         // Build SQL query
@@ -576,9 +596,9 @@ class Order{
         }
                
         if(!empty($data)) {
-        $sql = "INSERT INTO vp_products (sku, item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_products (sku, item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price,publisher,author,shippingfee,sourcingfee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssssssssiissdisiiisi', 
+        $stmt->bind_param('ssssssssiissdisiiisissii', 
             $data['sku'],
             $data['item_code'], 
             $data['title'],
@@ -598,7 +618,11 @@ class Order{
             $data['prod_width'],
             $data['prod_length'],
             $data['length_unit'],   
-            $data['cost_price']
+            $data['cost_price'],
+            $data['publisher'],
+            $data['author'],
+            $data['shippingfee'],
+            $data['sourcingfee']
         );
         $stmt->execute();
         if ($stmt->error) {
