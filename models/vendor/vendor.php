@@ -538,5 +538,23 @@ class vendor {
 
         return ['success' => true, 'message' => 'Vendor products mapping updated successfully.'];
     }
+    public function updateVendorCode() {
+        $sql = "SELECT id, vendor_code FROM vp_vendors WHERE vendor_code IS NULL OR vendor_code = ''";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        while ($row = $result->fetch_assoc()) {
+            if(empty($row['vendor_code'])) {
+                $newCode = generateVendorCode($this->conn);
+                $sql = "UPDATE vp_vendors SET vendor_code = ? WHERE id = ?";
+                $stmt = $this->conn->prepare($sql);
+                $vendorId = $row['id'];
+                $stmt->bind_param('si', $newCode, $vendorId);
+                $stmt->execute();                
+            }
+        }
+        return ['success' => true, 'message' => 'Vendor codes updated successfully.'];
+    }
 }
 ?>

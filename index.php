@@ -121,6 +121,9 @@ switch ($page) {
             case 'saveProductsMap':
                 $controller->saveVendorProductsMap();
                 break;
+            case 'UpdateVendorCode':
+                $controller->UpdateVendorCode();
+                break;
             default:
                 $controller->index();
                 break;

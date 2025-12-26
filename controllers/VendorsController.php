@@ -481,5 +481,16 @@ class VendorsController {
         }
         exit;
     }
+    public function UpdateVendorCode() {
+        is_login();
+        global $vendorsModel;
+        if($_SESSION["user"]["role_id"] != 1) {
+            echo json_encode(['success' => false, 'message' => 'Unauthorized access.']);
+            exit;
+        }
+        $result = $vendorsModel->updateVendorCode();
+        echo json_encode($result);
+        exit;
+    }
 }
 ?>
