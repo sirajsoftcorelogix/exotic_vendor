@@ -139,49 +139,96 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Drag to Reorder):</legend>
-                
-                <?php 
-                // Assuming $data['images'] contains the processed photos from 'item_images' table
-                // If the array key is different, please update $data['images'] below
-                $item_photos = $data['images'] ?? []; 
-                ?>
+        <?php 
+        $item_photos = $data['images'] ?? [];
+        // Ensure variations exist. If not fetched in getform2data, fetch them here:
+        if (!isset($data['form2']['variations'])) {
+            global $inboundingModel;
+            $variations = $inboundingModel->getVariations($record_id);
+        } else {
+            $variations = $data['form2']['variations'];
+        }
 
-                <?php if (empty($item_photos)): ?>
-                    <div class="text-center text-gray-400 py-8 text-sm border border-dashed border-gray-300 rounded">
-                        No processed photos found in itm_img.
+        // Initialize Groups
+        $grouped_images = ['-1' => []]; // -1 is Base
+        foreach ($variations as $var) { $grouped_images[$var['id']] = []; }
+
+        // Sort images into groups
+        foreach ($item_photos as $img) {
+            $v_id = $img['variation_id'] ?? '-1';
+            // Handle null/0 or deleted variations by defaulting to Base (-1)
+            if (empty($v_id) || !isset($grouped_images[$v_id])) $v_id = '-1';
+            $grouped_images[$v_id][] = $img;
+        }
+    ?>
+
+    <div class="mt-[15px] md:mx-5">
+        <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
+            <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Grouped by Variation)</legend>
+
+            <div class="mb-6">
+                <h4 class="text-xs font-bold text-gray-500 uppercase border-b border-gray-200 pb-1 mb-3">
+                    Base / Default Photos
+                </h4>
+                <div class="photo-group-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 min-h-[80px] p-2 border border-dashed border-gray-200 rounded bg-gray-50/50" 
+                     data-var-id="-1">
+                    <?php 
+                    if (!empty($grouped_images['-1'])) {
+                        foreach($grouped_images['-1'] as $img) { renderPhotoCard($img, '-1'); }
+                    }
+                    ?>
+                </div>
+            </div>
+
+            <?php foreach ($variations as $var): ?>
+                <div class="mb-6">
+                    <div class="flex items-center gap-2 border-b border-gray-200 pb-1 mb-3">
+                        <?php if(!empty($var['variation_image'])): ?>
+                            <img src="<?= base_url($var['variation_image']) ?>" class="w-6 h-6 rounded object-cover border border-gray-300">
+                        <?php endif; ?>
+                        <h4 class="text-xs font-bold text-[#d97824] uppercase">
+                            <?= htmlspecialchars($var['color'] ?? '') ?> - <?= htmlspecialchars($var['size'] ?? '') ?>
+                        </h4>
                     </div>
-                <?php else: ?>
-                    <div id="photo-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                        <?php foreach($item_photos as $img): ?>
-                        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-gray-50 flex flex-col items-center group" 
-                             draggable="true" 
-                             data-id="<?php echo $img['id']; ?>">
-                            
-                            <div class="absolute top-1 right-1 text-gray-400 cursor-grab active:cursor-grabbing p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                            </div>
-
-                            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" onclick="openImagePopup('uploads/itm_img/<?php echo $img['file_name']; ?>')">
-                                <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain cursor-pointer">
-                            </div>
-
-                            <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
-                                <?php echo $img['file_name']; ?>
-                            </span>
-
-                            <input type="hidden" 
-                                   name="photo_order[<?php echo $img['id']; ?>]" 
-                                   value="<?php echo $img['display_order']; ?>" 
-                                   class="order-input">
-                        </div>
-                        <?php endforeach; ?>
+                    
+                    <div class="photo-group-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 min-h-[80px] p-2 border border-dashed border-gray-200 rounded bg-gray-50/50" 
+                         data-var-id="<?= $var['id'] ?>">
+                        <?php 
+                        if (!empty($grouped_images[$var['id']])) {
+                            foreach($grouped_images[$var['id']] as $img) { renderPhotoCard($img, $var['id']); }
+                        }
+                        ?>
                     </div>
-                <?php endif; ?>
-            </fieldset>
+                </div>
+            <?php endforeach; ?>
+
+        </fieldset>
+    </div>
+
+    <?php 
+    // Helper Function for Cards
+    function renderPhotoCard($img, $varId) {
+    ?>
+        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group cursor-grab active:cursor-grabbing shadow-sm" 
+             draggable="true" 
+             data-id="<?php echo $img['id']; ?>">
+            
+            <div class="absolute top-1 right-1 text-gray-400 p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+            </div>
+
+            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" onclick="openImagePopup('uploads/itm_img/<?php echo $img['file_name']; ?>')">
+                <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain cursor-pointer">
+            </div>
+
+            <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
+                <?php echo $img['file_name']; ?>
+            </span>
+
+            <input type="hidden" name="photo_order[<?php echo $img['id']; ?>]" value="<?php echo $img['display_order']; ?>" class="order-input">
+            <input type="hidden" name="photo_variation[<?php echo $img['id']; ?>]" value="<?php echo $varId; ?>" class="variation-input">
         </div>
+    <?php } ?>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2 pb-3 bg-white w-full">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Receipt:</legend>
@@ -652,14 +699,35 @@ $record_id = $_GET['id'] ?? '';
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px] mt-[10px]">
-                    
+    
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
-                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="back_order">
-                            <?php $backOrder = $data['form2']['back_order'] ?? '0'; // Default to No (0) ?>
+                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                                name="back_order" id="back_order_select" onchange="toggleBackOrderFields()">
+                            <?php $backOrder = $data['form2']['back_order'] ?? '0'; ?>
                             <option value="0" <?= ($backOrder == '0') ? 'selected' : '' ?>>No</option>
                             <option value="1" <?= ($backOrder == '1') ? 'selected' : '' ?>>Yes</option>
                         </select>
+                    </div>
+
+                    <div class="flex-1 backorder-field" style="display: none;">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Advance %:</label>
+                        <div class="relative w-full">
+                            <input type="number" name="backorder_percent" min="1" max="100" placeholder="0"
+                                   value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[30px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">%</span>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 backorder-field" style="display: none;">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Days:</label>
+                        <div class="relative w-full">
+                            <input type="number" name="backorder_day" min="0" placeholder="0"
+                                   value="<?= htmlspecialchars($data['form2']['backorder_day'] ?? '') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
+                        </div>
                     </div>
 
                     <div class="flex-1">
@@ -682,35 +750,40 @@ $record_id = $_GET['id'] ?? '';
                         </div>
                     </div>
 
-                    <div class="flex-1 flex"> <div class="pr-4 border-r border-[#ccc]"> <label class="block text-xs font-bold text-[#222] mb-[5px]">US Stock:</label>
-                            <div class="flex items-center h-[32px] gap-4">
+                    <div class="flex-1 lg:col-span-2 flex items-start border border-[#eee] rounded bg-gray-50 p-1"> 
+                        
+                        <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
+                            <label class="block text-xs font-bold text-[#222] mb-[3px]">US Stock:</label>
+                            <div class="flex items-center gap-4">
                                 <?php $us_val = $data['form2']['us_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="us_block" value="Y" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($us_val == 'Y') ? 'checked' : '' ?>>
-                                    <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
+                                    <input type="radio" name="us_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($us_val == 'Y') ? 'checked' : '' ?>>
+                                    <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
                                 </label>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="us_block" value="N" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($us_val == 'N') ? 'checked' : '' ?>>
-                                    <span class="ml-1.5 text-[13px] text-[#333]">No</span>
+                                    <input type="radio" name="us_block" value="N" class="w-3.5 h-3.5 accent-[#666]" <?= ($us_val == 'N') ? 'checked' : '' ?>>
+                                    <span class="ml-1.5 text-[12px] text-[#333]">No</span>
                                 </label>
                             </div>
                         </div>
 
-                        <div class="pl-4"> <label class="block text-xs font-bold text-[#222] mb-[5px]">India Stock:</label>
-                            <div class="flex items-center h-[32px] gap-4">
+                        <div class="flex-1 pl-4 flex flex-col justify-center h-[52px]"> 
+                            <label class="block text-xs font-bold text-[#222] mb-[3px]">India Stock:</label>
+                            <div class="flex items-center gap-4">
                                 <?php $in_val = $data['form2']['india_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="india_block" value="Y" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($in_val == 'Y') ? 'checked' : '' ?>>
-                                    <span class="ml-1.5 text-[13px] text-[#333]">Yes</span>
+                                    <input type="radio" name="india_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'Y') ? 'checked' : '' ?>>
+                                    <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
                                 </label>
                                 <label class="flex items-center cursor-pointer">
-                                    <input type="radio" name="india_block" value="N" class="w-4 h-4 accent-[#666] cursor-pointer" <?= ($in_val == 'N') ? 'checked' : '' ?>>
-                                    <span class="ml-1.5 text-[13px] text-[#333]">No</span>
+                                    <input type="radio" name="india_block" value="N" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'N') ? 'checked' : '' ?>>
+                                    <span class="ml-1.5 text-[12px] text-[#333]">No</span>
                                 </label>
                             </div>
                         </div>
 
                     </div>
+
                 </div>
             </fieldset>
         </div>
@@ -894,98 +967,109 @@ $record_id = $_GET['id'] ?? '';
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const grid = document.getElementById('photo-grid');
-    if (!grid) return;
-
+    // Select ALL variation grids
+    const grids = document.querySelectorAll('.photo-group-grid');
     let draggedItem = null;
+    let sourceGrid = null;
 
-    // 1. Select all draggable items
-    const items = grid.querySelectorAll('.draggable-item');
-    
-    items.forEach(item => {
-        item.addEventListener('dragstart', handleDragStart);
-        item.addEventListener('dragenter', handleDragEnter);
-        item.addEventListener('dragover', handleDragOver);
-        item.addEventListener('dragleave', handleDragLeave);
-        item.addEventListener('drop', handleDrop);
-        item.addEventListener('dragend', handleDragEnd);
+    if (grids.length === 0) return;
+
+    // Apply logic to every grid
+    grids.forEach(grid => {
+        // Init existing items
+        const items = grid.querySelectorAll('.draggable-item');
+        items.forEach(setupDragEvents);
+
+        // Grid-level events (Drop Zone)
+        grid.addEventListener('dragover', handleDragOver);
+        grid.addEventListener('drop', handleDrop);
     });
+
+    function setupDragEvents(item) {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+    }
 
     function handleDragStart(e) {
         draggedItem = this;
+        sourceGrid = this.parentNode;
         this.style.opacity = '0.4';
-        
-        // This is required for Firefox
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/html', this.innerHTML);
     }
 
     function handleDragOver(e) {
-        // Essential: Prevent default to allow dropping
-        e.preventDefault(); 
+        e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         return false;
     }
 
-    function handleDragEnter(e) {
-        // Visual cue: Add a blue border when hovering
-        this.classList.add('border-blue-500', 'border-2');
-    }
-
-    function handleDragLeave(e) {
-        // Remove visual cue
-        this.classList.remove('border-blue-500', 'border-2');
-    }
-
     function handleDrop(e) {
-        e.stopPropagation(); // Stops browser from redirecting
+        e.stopPropagation();
         e.preventDefault();
 
-        // Remove visual cue
-        this.classList.remove('border-blue-500', 'border-2');
+        // Find which grid we dropped into
+        const targetGrid = e.target.closest('.photo-group-grid');
 
-        // Don't do anything if dropping on the same item
-        if (draggedItem !== this) {
+        if (draggedItem && targetGrid) {
             
-            // Logic to swap elements in the DOM
-            // We convert the NodeList to an Array to find indexes
-            const allItems = Array.from(grid.querySelectorAll('.draggable-item'));
-            const draggedIdx = allItems.indexOf(draggedItem);
-            const droppedIdx = allItems.indexOf(this);
-
-            if (draggedIdx < droppedIdx) {
-                // Dragging from left to right -> Insert after drop target
-                this.parentNode.insertBefore(draggedItem, this.nextSibling);
+            // 1. Move the Element
+            const afterElement = getDragAfterElement(targetGrid, e.clientY, e.clientX);
+            if (afterElement == null) {
+                targetGrid.appendChild(draggedItem);
             } else {
-                // Dragging from right to left -> Insert before drop target
-                this.parentNode.insertBefore(draggedItem, this);
+                targetGrid.insertBefore(draggedItem, afterElement);
             }
-            
-            // Re-calculate the numbers immediately
-            updateOrderInputs();
+
+            // 2. UPDATE VARIATION ID (CRITICAL FIX)
+            // Get the ID of the grid we dropped into (-1, 101, 102, etc.)
+            const newVarId = targetGrid.getAttribute('data-var-id');
+            const varInput = draggedItem.querySelector('.variation-input');
+            if(varInput) {
+                varInput.value = newVarId; // Update hidden input value
+            }
+
+            // 3. Recalculate Orders
+            updateOrderInputs(sourceGrid);
+            if (sourceGrid !== targetGrid) {
+                updateOrderInputs(targetGrid);
+            }
         }
         return false;
     }
 
     function handleDragEnd(e) {
         this.style.opacity = '1';
-        
-        // Safety cleanup: remove borders from everyone
-        items.forEach(item => {
-            item.classList.remove('border-blue-500', 'border-2');
-        });
+        draggedItem = null;
+        sourceGrid = null;
     }
 
-    // Update the hidden input values (1, 2, 3...) based on new visual order
-    function updateOrderInputs() {
-        const currentItems = grid.querySelectorAll('.draggable-item');
+    function getDragAfterElement(container, y, x) {
+        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.dragging)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            // Logic for grid layout: approximate based on center point
+            const boxCenterY = box.top + box.height / 2;
+            const boxCenterX = box.left + box.width / 2;
+            
+            // Simple distance check usually works best for flexible grids
+            const offset = y - boxCenterY; // Primary check on Y
+            
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    function updateOrderInputs(gridContainer) {
+        if(!gridContainer) return;
+        const currentItems = gridContainer.querySelectorAll('.draggable-item');
         currentItems.forEach((item, index) => {
             const input = item.querySelector('.order-input');
-            if(input) {
-                input.value = index + 1; 
-                // Optional: Visually show the order number for debugging
-                // console.log(`Photo ID ${item.dataset.id} is now order ${index + 1}`);
-            }
+            if(input) input.value = index + 1;
         });
     }
 });
@@ -1465,4 +1549,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+</script>
+<script>
+    function toggleBackOrderFields() {
+        const select = document.getElementById('back_order_select');
+        const fields = document.querySelectorAll('.backorder-field');
+        const inputs = document.querySelectorAll('.backorder-field input'); // Select the input fields
+
+        if (select && select.value === '1') {
+            fields.forEach(el => el.style.display = 'block');
+        } else {
+            fields.forEach(el => el.style.display = 'none');
+            
+            // NEW: Clear values immediately when switching to "No"
+            inputs.forEach(input => input.value = ''); 
+        }
+    }
+    // Run on load
+    document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
 </script>

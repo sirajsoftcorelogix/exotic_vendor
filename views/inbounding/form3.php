@@ -1,226 +1,376 @@
 <?php
-// PHP Logic (Unchanged)
-    is_login();
-    require_once 'settings/database/database.php';
-    $conn = Database::getConnection();
-    require_once 'models/user/user.php';
-    $usersModel = new User($conn);
-    $currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
-    unset($usersModel);
-
+// 1. PHP Logic & Auth
+is_login();
+require_once 'settings/database/database.php';
+$conn = Database::getConnection();
+require_once 'models/user/user.php';
+$usersModel = new User($conn);
+$currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
+unset($usersModel);
 $record_id = $_GET['id'] ?? '';
-$form2 = $data['form2'] ?? [];
-$raw_categories = $data['category'] ?? []; // FETCH CATEGORY LIST
+$form2 = $data['form2'] ?? []; 
+$saved_category_code = $form2['group_name'] ?? ''; 
 
-// --- NEW LOGIC START: Resolve Category Name ---
-$cat_id = $form2['group_name'] ?? ''; 
-$category_display_name = 'Unknown'; // Default value
+$raw_categories = $data['category'] ?? []; 
+$icon_map = [
+    'sculptures'    => 'fa-solid fa-monument',
+    'book'          => 'fa-solid fa-book',
+    'jewelry'       => 'fa-solid fa-gem',
+    'textiles'      => 'fa-solid fa-shirt',
+    'paintings'     => 'fa-solid fa-palette',
+    'homeandliving' => 'fa-solid fa-couch',
+    'default'       => 'fa-solid fa-box-open'
+];
 
-if (!empty($raw_categories) && !empty($cat_id)) {
-    foreach ($raw_categories as $cat_item) {
-        if (isset($cat_item['category']) && $cat_item['category'] == $cat_id) {
-            $category_display_name = $cat_item['display_name'];
-            break;
+// PROCESS CATEGORIES
+$display_categories = [];
+if (!empty($raw_categories)) {
+    foreach ($raw_categories as $cat) {
+        if (isset($cat['parent_id']) && $cat['parent_id'] == 0) {
+            $iconClass = $icon_map[$cat['name']] ?? $icon_map['default'];
+            $display_categories[] = [
+                'value' => $cat['category'],    
+                'label' => $cat['display_name'], 
+                'icon'  => $iconClass
+            ];
         }
     }
 }
-// --- NEW LOGIC END ---
 
-$photo    = $form2['product_photo'] ?? '';
+// Prepare Data
+$mainVar = [
+    'color'    => $form2['color'] ?? '',
+    'size'     => $form2['size'] ?? '',
+    'quantity' => $form2['quantity_received'] ?? '',
+    'cp'       => $form2['cp'] ?? '',
+    'photo'    => $form2['product_photo'] ?? '',
+    'invoice'  => $form2['invoice_image'] ?? '',
+    'height'   => $form2['height'] ?? '',
+    'width'    => $form2['width'] ?? '',
+    'depth'    => $form2['depth'] ?? '',
+    'weight'   => $form2['weight'] ?? ''
+];
+
+global $inboundingModel;
+$extraVars = $inboundingModel->getVariations($record_id);
+
+$viewVariations = [];
+$viewVariations[] = $mainVar; 
+
+foreach ($extraVars as $ex) {
+    $viewVariations[] = [
+        'id'       => $ex['id'],
+        'color'    => $ex['color'],
+        'size'     => $ex['size'],
+        'quantity' => $ex['quantity'],
+        'cp'       => $ex['cp'],
+        'photo'    => $ex['variation_image'] ?? '',
+        'height'   => $ex['height'] ?? '',
+        'width'    => $ex['width'] ?? '',
+        'depth'    => $ex['depth'] ?? '',
+        'weight'   => $ex['weight'] ?? ''
+    ];
+}
+
 $temp_code      = $form2['temp_code'] ?? '';
 $vendor_name    = $form2['vendor_name'] ?? '';
-
 $gate_entry_date_time = $form2['gate_entry_date_time'] ?? '';
-$material_code = $form2['material_code'] ?? '';
-$height = $form2['height'] ?? '';
-$width = $form2['width'] ?? '';
-$depth = $form2['depth'] ?? '';
-$weight = $form2['weight'] ?? '';
-$color = $form2['color'] ?? '';
-$weight_unit = $form2['weight_unit'] ?? '';
-$dimention_unit = $form2['dimention_unit'] ?? '';
-$quantity_received = $form2['quantity_received'] ?? '';
-$size = $form2['size'] ?? '';
-$cp = $form2['cp'] ?? '';
-$Item_code = $form2['Item_code'] ?? '';
+$material_code        = $form2['material_code'] ?? '';
 
-$isEdit = (!empty($gate_entry_date_time) || !empty($material_code) || !empty($height) || !empty($width) || !empty($depth) || !empty($weight) || !empty($color) || !empty($quantity_received) || !empty($Item_code) || !empty($size) || !empty($cp));
-
-$formAction = $isEdit
-    ? base_url('?page=inbounding&action=updateform3&id=' . $record_id)
-    : base_url('?page=inbounding&action=saveform3');
+$formAction = base_url('?page=inbounding&action=submitStep3');
 ?>
 
-<div class="w-full flex items-center justify-center p-0 md:p-6 bg-gray-100 min-h-screen">
+<div class="w-full min-h-screen bg-white p-2 md:p-6 font-sans">
+    <div class="max-w-[1400px] mx-auto border border-gray-400 rounded-lg overflow-hidden">
 
-    <div class="w-full h-screen md:h-auto md:min-h-[700px] md:max-w-5xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200">
-        
-        <div class="bg-[#d9822b] px-4 py-4 flex items-center justify-between text-white shadow-md z-20 flex-shrink-0">
-            <button type="button" id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                </svg>
+        <div class="bg-[#ea8c1e] px-4 py-3 flex items-center justify-between text-white relative">
+            <button type="button" id="back-btn" class="p-1 hover:bg-white/20 rounded-full transition">
+                <i class="fa-solid fa-arrow-left text-xl"></i>
             </button>
-            <h1 class="font-semibold text-lg tracking-wide">Item Details - Step: 3/4</h1>
-            <button type="button" id="cancel-btn" class="p-2 hover:bg-white/20 rounded-full transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+            <h1 class="font-bold text-lg md:text-xl tracking-wide mx-auto">Item Details - Step 3/4</h1>
+            <button type="button" id="cancel-btn" class="p-1 hover:bg-white/20 rounded-full transition">
+                <i class="fa-solid fa-xmark text-xl"></i>
             </button> 
         </div>
 
-        <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" class="flex flex-col flex-1 overflow-hidden">
+        <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="mainForm" class="p-4 space-y-6">
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
+            <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
 
-            <div class="flex-1 overflow-y-auto p-5 md:p-8 bg-gray-50/50">
+            <div class="flex flex-col lg:flex-row gap-6 items-start">
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+                <div class="flex flex-row bg-gray-100 border border-gray-300 rounded p-2 gap-3 min-w-[350px] lg:w-1/3">
+                    <div class="w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-pointer overflow-hidden" onclick="openImagePopup('<?= !empty($mainVar['invoice']) ? base_url($mainVar['invoice']) : '' ?>')">
+                        <?php if(!empty($mainVar['invoice'])): ?>
+                            <img src="<?php echo base_url($mainVar['invoice']); ?>" class="w-full h-full object-cover hover:opacity-90">
+                        <?php else: ?>
+                            <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">No Inv</div>
+                        <?php endif; ?>
+                    </div>
                     
-                    <div class="flex flex-col gap-6">
-                        
-                        <div class="bg-white border border-gray-200 rounded-xl p-4 flex gap-4 shadow-sm">
-                            <div class="w-20 h-20 bg-gray-50 border border-gray-100 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
-                                <?php if(!empty($photo)): ?>
-                                    <img src="<?php echo base_url($photo); ?>" class="w-full h-full object-cover" onclick="openImagePopup('<?= $photo ?>')">
-                                <?php else: ?>
-                                    <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                <?php endif; ?>
-                            </div>
-                            <div class="flex flex-col justify-center gap-1">
-                                <div><span class="text-xs text-gray-400 font-bold uppercase">Temp Code:</span> <span class="font-semibold text-gray-800"><?php echo htmlspecialchars($temp_code); ?></span></div>
-                                
-                                <div><span class="text-xs text-gray-400 font-bold uppercase">Category:</span> <span class="font-semibold text-gray-800"><?php echo htmlspecialchars($category_display_name); ?></span></div>
-                                
-                                <div><span class="text-xs text-gray-400 font-bold uppercase">Vendor:</span> <span class="font-semibold text-gray-800"><?php echo htmlspecialchars($vendor_name); ?></span></div>
-                            </div>
-                        </div>
+                    <div class="flex flex-col justify-center text-sm text-black space-y-1.5 w-full">
+                        <div class="font-bold">Vendor: <span class="font-normal"><?php echo htmlspecialchars($vendor_name); ?></span></div>
+                         <div class="font-bold">Entry: <span class="font-normal"><?php echo date('d M Y', strtotime($gate_entry_date_time ?: 'now')); ?></span></div>
+                        <div class="font-bold">Received By: <span class="font-normal"><?php echo htmlspecialchars($currentuserDetails['name']); ?></span></div>
+                    </div>
+                </div>
 
-                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-5">
-                            
-                            <div>
-                                <label class="block text-gray-700 font-bold text-sm mb-2">Gate Entry Date & Time</label>
+                <div class="flex-1 flex flex-wrap gap-2">
+                    <?php if(!empty($display_categories)): ?>
+                        <?php foreach ($display_categories as $item) { ?>
+                            <label class="cursor-pointer group relative">
+                                <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
                                 
-                                <?php 
-                                    // Cleaner Date Logic
-                                    $inputValue = (!empty($gate_entry_date_time) && $gate_entry_date_time != "0000-00-00 00:00:00") 
-                                        ? date('Y-m-d\TH:i', strtotime($gate_entry_date_time)) 
-                                        : date('Y-m-d\TH:i');
-                                ?>
-                                <input 
-                                    type="datetime-local" 
-                                    name="gate_entry_date_time" 
-                                    value="<?php echo $inputValue; ?>" 
-                                    class="w-full bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-lg focus:ring-2 focus:ring-[#d9822b] outline-none shadow-sm">
-                            </div>
-
-                            <div>
-                                <label class="block text-gray-700 font-bold text-sm mb-2">Received By</label>
-                                <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
-                                <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>" readonly class="w-full bg-gray-100 border border-gray-300 text-gray-500 py-3 px-4 rounded-lg cursor-not-allowed font-medium">
-                            </div>
-
-                             <div>
-                                <label class="block text-gray-700 font-bold text-sm mb-2">Material</label>
-                                <div class="relative">
-                                    <select name="material_code" class="w-full appearance-none bg-white border border-gray-300 text-gray-700 py-3 px-4 pr-8 rounded-lg focus:ring-2 focus:ring-[#d9822b] outline-none font-medium cursor-pointer shadow-sm">
-                                        <option value="">Select Material</option>
-                                        <?php foreach ($data['material'] as $value2) { 
-                                            $isSelected = ($selected_material == $value2['id']) ? 'selected' : '';
-                                        ?> 
-                                            <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
-                                        <?php } ?>
-                                    </select>
-                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                <div class="w-24 h-28 bg-black text-white flex flex-col items-center justify-center p-2 rounded transition-all
+                                            peer-checked:bg-gray-300 peer-checked:text-black border border-black shadow-sm">
+                                    <div class="absolute top-2 left-2 w-3.5 h-3.5 rounded-full border-2 border-white peer-checked:border-black flex items-center justify-center">
+                                         <div class="w-1.5 h-1.5 rounded-full bg-white peer-checked:bg-black opacity-0 peer-checked:opacity-100"></div>
                                     </div>
+                                    
+                                    <i class="<?= $item['icon'] ?> text-3xl mb-2"></i>
+                                    <span class="text-[10px] font-bold uppercase text-center"><?= $item['label'] ?></span>
                                 </div>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div class="flex flex-col h-full bg-white p-5 rounded-xl border border-gray-200 shadow-sm gap-5">
-                        
-                        <h3 class="font-bold text-gray-800 text-lg border-b border-gray-100 pb-2">Item Specifications</h3>
-
-                        <div class="grid grid-cols-3 gap-3">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Height (inch)</label>
-                                <input type="number" step="any" min="0" name="height" value="<?php echo $height; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Width (inch)</label>
-                                <input type="number" step="any" min="0" name="width" value="<?php echo $width; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Depth (inch)</label>
-                                <input type="number" step="any" min="0" name="depth" value="<?php echo $depth; ?>" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#d9822b] outline-none text-center font-semibold shadow-sm">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1">Weight (kg)</label>
-                                <input type="number" step="any" min="0" name="weight" value="<?php echo $weight; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1">Color</label>
-                                <input type="text" name="color" value="<?php echo !empty($color) ? $color : 'Black'; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1">Quantity</label>
-                                <input type="number" min="0" name="quantity_received" value="<?php echo $quantity_received; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1">Size</label>
-                                <input type="text" name="size" value="<?php echo $size; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1">CP</label>
-                                <input type="number" step="any" min="0" name="cp" value="<?php echo $cp; ?>" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] outline-none font-medium shadow-sm">
-                            </div>
-                        </div>
-                    </div>
-
+                            </label>
+                        <?php } ?>
+                    <?php endif; ?>
                 </div>
             </div>
 
-            <div class="p-5 bg-white border-t border-gray-100 mt-auto z-20">
-                <button type="submit" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3.5 rounded-xl shadow-lg transform transition active:scale-[0.99] flex justify-center items-center gap-2">
-                    <?php echo $isEdit ? "Update & Next" : "Save & Next"; ?>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                    </svg>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-gray-200 py-4">
+                <div>
+                    <label class="block text-gray-800 font-bold text-xs mb-1">Gate Entry Date</label>
+                    <?php 
+                    $inputValue = (!empty($gate_entry_date_time) && $gate_entry_date_time != "0000-00-00 00:00:00") 
+                    ? date('Y-m-d\TH:i', strtotime($gate_entry_date_time)) 
+                    : date('Y-m-d\TH:i');
+                    ?>
+                    <input type="datetime-local" name="gate_entry_date_time" value="<?php echo $inputValue; ?>" class="w-full border border-gray-400 rounded px-2 py-1 text-sm focus:border-[#ea8c1e] outline-none">
+                </div>
+                <div>
+                    <label class="block text-gray-800 font-bold text-xs mb-1">Material</label>
+                    <select name="material_code" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-[#ea8c1e] outline-none bg-white">
+                        <option value="">Select Material</option>
+                        <?php foreach ($data['material'] as $value2) { 
+                            $isSelected = ($material_code == $value2['id']) ? 'selected' : '';
+                        ?> 
+                        <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
+                        <?php } ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-gray-800 font-bold text-xs mb-1">Received By</label>
+                    <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
+                    <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>" readonly class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
+                </div>
+            </div>
+
+            <div id="variations-container" class="space-y-6">
+                <?php foreach($viewVariations as $index => $var): ?>
+                    <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50" data-index="<?php echo $index; ?>">
+                        
+                        <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
+                            <h3 class="font-bold text-black text-sm">
+                                <?php echo ($index === 0) ? 'Base Variant' : 'Variant ' . ($index + 1); ?>
+                            </h3>
+                            <button type="button" class="remove-variation-btn <?php echo ($index === 0) ? 'hidden' : ''; ?> text-red-500 hover:text-red-700 font-bold text-xs uppercase">
+                                Remove ✕
+                            </button>
+                        </div>
+
+                        <div class="flex flex-col md:flex-row gap-6">
+                            <div class="w-32 md:w-40 flex-shrink-0">
+                                <label class="cursor-pointer group relative block w-full aspect-square bg-white border border-gray-400 rounded flex items-center justify-center hover:border-black overflow-hidden">
+                                    <?php $hasPhoto = !empty($var['photo']); ?>
+                                    <img src="<?php echo $hasPhoto ? base_url($var['photo']) : '#'; ?>" class="preview-img <?php echo $hasPhoto ? '' : 'hidden'; ?> w-full h-full object-cover absolute inset-0 z-10">
+                                    
+                                    <div class="placeholder-icon <?php echo $hasPhoto ? 'hidden' : ''; ?> flex flex-col items-center justify-center text-gray-500">
+                                        <i class="fa-solid fa-camera text-2xl mb-1"></i>
+                                    </div>
+                                    <input type="file" name="variations[<?php echo $index; ?>][photo]" accept="image/*" class="hidden variation-file-input">
+                                    <input type="hidden" name="variations[<?php echo $index; ?>][old_photo]" value="<?php echo $var['photo']; ?>">
+                                    <input type="hidden" name="variations[<?php echo $index; ?>][id]" value="<?php echo $var['id'] ?? ''; ?>">
+                                </label>
+                                <?php if($index === 0): ?>
+                                    <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
+                                <?php else: ?>
+                                    <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 items-start">
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Color:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][color]" value="<?php echo $var['color']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
+                                    <input type="number" min="0" name="variations[<?php echo $index; ?>][quantity]" value="<?php echo $var['quantity']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Height (cm):</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Depth (cm):</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Size:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][size]" value="<?php echo $var['size']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Cost Price:</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Width (cm):</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][weight]" value="<?php echo $var['weight'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4">
+                 <button type="button" id="add-variation-btn" class="bg-[#ea8c1e] hover:bg-orange-600 text-white font-bold py-2 px-6 rounded shadow text-xs uppercase">
+                    Add Variant
+                </button>
+                <button type="submit" class="bg-[#ea8c1e] hover:bg-orange-600 text-white font-bold py-2 px-6 rounded shadow text-xs uppercase">
+                    Save Item
                 </button>
             </div>
-            
         </form>
     </div>
 </div>
-<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
-    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
-    </div>
-</div>
+
 <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const container = document.getElementById('variations-container');
+        const addBtn = document.getElementById('add-variation-btn');
+        let variationCount = <?php echo count($viewVariations); ?>;
+
+        // ADD VARIATION JS TEMPLATE (Matches PHP structure)
+        addBtn.addEventListener('click', function() {
+            variationCount++;
+            const index = variationCount - 1; 
+
+            const html = `
+                <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50 animate-fade-in" data-index="${index}">
+                    <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
+                        <h3 class="font-bold text-black text-sm">Variant ${variationCount}</h3>
+                        <button type="button" class="remove-variation-btn text-red-500 hover:text-red-700 font-bold text-xs uppercase">
+                            Remove ✕
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col md:flex-row gap-6">
+                        <div class="w-32 md:w-40 flex-shrink-0">
+                            <label class="cursor-pointer group relative block w-full aspect-square bg-white border border-gray-400 rounded flex items-center justify-center hover:border-black overflow-hidden">
+                                <img src="#" class="preview-img hidden w-full h-full object-cover absolute inset-0 z-10">
+                                <div class="placeholder-icon flex flex-col items-center justify-center text-gray-500">
+                                    <i class="fa-solid fa-camera text-2xl mb-1"></i>
+                                </div>
+                                <input type="file" name="variations[${index}][photo]" accept="image/*" class="hidden variation-file-input">
+                            </label>
+                            <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
+                        </div>
+
+                        <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 items-start">
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Color:</label>
+                                <input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
+                                <input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Height (cm):</label>
+                                <input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Depth (cm):</label>
+                                <input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Size:</label>
+                                <input type="text" name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Cost Price:</label>
+                                <input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Width (cm):</label>
+                                <input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
+                                <input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+        });
+
+        // 2. REMOVE VARIATION
+        container.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-variation-btn')) {
+                const card = e.target.closest('.variation-card');
+                if(card) card.remove();
+            }
+        });
+
+        // 3. IMAGE PREVIEW
+        container.addEventListener('change', function(e) {
+            if (e.target.classList.contains('variation-file-input')) {
+                const file = e.target.files[0];
+                const label = e.target.closest('label');
+                const preview = label.querySelector('.preview-img');
+                const placeholder = label.querySelector('.placeholder-icon');
+
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(evt) {
+                        preview.src = evt.target.result;
+                        preview.classList.remove('hidden');
+                        placeholder.classList.add('hidden');
+                    }
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+    });
+
+    // Navigation Scripts
     var id = <?php echo json_encode($record_id); ?>;
     document.getElementById("back-btn").addEventListener("click", function () {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=form2&id=" + id;
     });
     document.getElementById("cancel-btn").addEventListener("click", function () {
-        window.location.href = window.location.origin + "/index.php?page=inbounding&action=lsit";
+        window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
 </script>
+
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-2 rounded-md max-w-4xl max-h-[90vh] relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[85vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
 <script>
     function openImagePopup(imageUrl) {
-        popupImage.src = imageUrl;
+        if(!imageUrl) return;
+        document.getElementById('popupImage').src = imageUrl;
         document.getElementById('imagePopup').classList.remove('hidden');
     }
     function closeImagePopup(event) {
