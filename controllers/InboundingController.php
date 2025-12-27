@@ -267,17 +267,6 @@ class InboundingController {
         }
         return json_decode($response, true);
     }
-    public function getform2() {
-        is_login();
-        global $inboundingModel;
-        $id = $_GET['id'] ?? 0;
-        if (isset($id) && $id != 0) {
-            $data = $inboundingModel->getform1data($id);
-            renderTemplateClean('views/inbounding/form2.php', $data, 'form2 inbounding');
-        }else{
-            header("location: " . base_url('?page=inbounding&action=list'));
-        }
-    }
     public function getform3() {
         is_login();
         global $inboundingModel;
@@ -322,7 +311,7 @@ class InboundingController {
             ];
             $insertId = $inboundingModel->saveform1($record_id,$saveData);
             if ($insertId) {
-                header("location: " . base_url('?page=inbounding&action=form2&id='.$insertId));
+                header("location: " . base_url('?page=inbounding&action=form3&id='.$insertId));
                 exit;
             } else {
                 echo "Database error.";
@@ -429,7 +418,7 @@ class InboundingController {
         $updated = $inboundingModel->updateform1($data);
 
         if ($updated) {
-            header("location: " . base_url('?page=inbounding&action=form2&id='.$id));
+            header("location: " . base_url('?page=inbounding&action=form3&id='.$id));
             exit;
         } else {
             echo "Update failed.";

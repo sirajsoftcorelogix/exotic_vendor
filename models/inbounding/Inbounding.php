@@ -16,36 +16,35 @@ class Inbounding {
         $offset = ($page - 1) * $limit;
         $where = [];
 
-        // 1. Text Search
+        // 1. Text Search (using vi alias for vp_inbound)
         if (!empty($search)) {
             $search = $this->conn->real_escape_string($search);
-            $where[] = "(Item_code LIKE '%$search%' OR product_title LIKE '%$search%' OR key_words LIKE '%$search%')";
+            // Note: Added 'vi.' prefix to fields to prevent ambiguity
+            $where[] = "(vi.Item_code LIKE '%$search%' OR vi.product_title LIKE '%$search%' OR vi.key_words LIKE '%$search%')";
         }
 
         // 2. Vendor Filter
         if (!empty($filters['vendor_code'])) {
             $v_code = $this->conn->real_escape_string($filters['vendor_code']);
-            $where[] = "vendor_code = '$v_code'";
+            $where[] = "vi.vendor_code = '$v_code'";
         }
 
         // 3. Agent (Received By) Filter
         if (!empty($filters['received_by_user_id'])) {
             $u_id = (int)$filters['received_by_user_id'];
-            $where[] = "received_by_user_id = $u_id";
+            $where[] = "vi.received_by_user_id = $u_id";
         }
 
         // 4. Group Filter
         if (!empty($filters['group_name'])) {
             $g_name = $this->conn->real_escape_string($filters['group_name']);
-            $where[] = "group_name = '$g_name'";
+            $where[] = "vi.group_name = '$g_name'";
         }
 
         // 5. Status Filter (PENDING Logic)
-        // "If select photoshoot that means there is NO entry of photo shoot"
         if (!empty($filters['status_step'])) {
             $step = $this->conn->real_escape_string($filters['status_step']);
-            // Query: Show items where this ID does NOT exist in logs with this status
-            $where[] = "id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
+            $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
         }
 
         // Combine WHERE clauses
@@ -54,20 +53,31 @@ class Inbounding {
             $whereSql = "WHERE " . implode(' AND ', $where);
         }
 
-        // Total Count
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound $whereSql");
+        // Total Count (using alias vi)
+        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound as vi $whereSql");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
         $totalPages = ceil($totalRecords / $limit);
 
-        // Fetch Data
-        $sql = "SELECT * FROM vp_inbound $whereSql ORDER BY id DESC LIMIT $limit OFFSET $offset";
+        // Fetch Data (Added JOIN and specific SELECT)
+        // We select vi.* (all inbound data) AND c.display_name as 'group_name_display'
+        // (I used 'group_name_display' to avoid conflict, or you can overwrite 'group_name' if you prefer)
+        $sql = "SELECT vi.*, c.display_name as group_name_display 
+                FROM vp_inbound as vi
+                LEFT JOIN category as c ON vi.group_name = c.category
+                $whereSql 
+                ORDER BY vi.id DESC 
+                LIMIT $limit OFFSET $offset";
+                
         $result = $this->conn->query($sql);
 
         $data = [];
         while ($row = $result->fetch_assoc()) {
             $current_id = (int)$row['id'];
             
+            // If you want the main 'group_name' key to be the human readable name, uncomment this:
+            // $row['group_name'] = $row['group_name_display']; 
+
             // Fetch logs
             $log_sql = "SELECT il.*, u.name FROM inbound_logs as il LEFT JOIN vp_users as u on il.userid_log=u.id WHERE il.i_id = $current_id";
             $log_result = $this->conn->query($log_sql);
@@ -722,7 +732,7 @@ class Inbounding {
     }
     public function getlabeldata($id){
         $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name  FROM vp_inbound as v 
-        LEFT JOIN category as c on v.category_code=c.category
+        LEFT JOIN category as c on v.group_name=c.category
         LEFT JOIN material as m on v.material_code=m.id
         LEFT JOIN vp_vendors as vv on v.vendor_code=vv.id
         WHERE v.id = $id";

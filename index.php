@@ -478,12 +478,6 @@ switch ($page) {
             case 'updateform1':
                 $controller->updateform1();
                 break;
-            case 'form2':
-                $controller->getform2();
-                break;
-            case 'submitStep2':
-                $controller->submitStep2();
-                break;
             case 'form3':
                 $controller->getform3();
                 break;

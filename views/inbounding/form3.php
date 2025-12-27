@@ -110,7 +110,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     
                     <div class="flex flex-col justify-center text-sm text-black space-y-1.5 w-full">
                         <div class="font-bold">Vendor: <span class="font-normal"><?php echo htmlspecialchars($vendor_name); ?></span></div>
-                        <div class="font-bold">Invoice Date: <span class="font-normal">11 Dec 2025</span></div> <div class="font-bold">Entry: <span class="font-normal"><?php echo date('d M Y', strtotime($gate_entry_date_time ?: 'now')); ?></span></div>
+                         <div class="font-bold">Entry: <span class="font-normal"><?php echo date('d M Y', strtotime($gate_entry_date_time ?: 'now')); ?></span></div>
                         <div class="font-bold">Received By: <span class="font-normal"><?php echo htmlspecialchars($currentuserDetails['name']); ?></span></div>
                     </div>
                 </div>
