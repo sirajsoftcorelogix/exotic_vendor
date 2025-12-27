@@ -707,40 +707,8 @@ class Inbounding {
         }
         return 1; // Default to 1 if table is empty
     }
-    // 1. HELPER: Get existing photo (used in controller)
-    public function getProductPhoto($id) {
-        if (empty($id)) return '';
-        
-        $stmt = $this->conn->prepare("SELECT product_photo FROM vp_inbound WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($row = $result->fetch_assoc()) {
-            return $row['product_photo'];
-        }
-        return '';
-    }
-
     // 2. UNIFIED SAVE/UPDATE FUNCTION
-    public function updateStep2Data($id, $data) {
-        if (empty($id)) return false;
-
-        $category = $data['category'] ?? '';
-        $photo    = $data['photo'] ?? '';
-
-        // We simply update the fields. 
-        // This works for "First Save" AND "Edit" because the row already exists from Step 1.
-        $sql = "UPDATE vp_inbound SET group_name = ?, product_photo = ? WHERE id = ?";
-        
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) return false;
-
-        // 'ssi' = string, string, integer
-        $stmt->bind_param("ssi", $category, $photo, $id);
-
-        return $stmt->execute();
-    }
+    
    
     // --- Add this to your Inbounding.php Model ---
     public function getById($id) {
@@ -816,15 +784,19 @@ class Inbounding {
         // If not found there, fallback to direct keys just in case.
         $var0 = $data['variations'][0] ?? [];
         
-        $height = $var0['height'] ?? $data['height'] ?? 0;
-        $width  = $var0['width']  ?? $data['width']  ?? 0;
-        $depth  = $var0['depth']  ?? $data['depth']  ?? 0;
-        $weight = $var0['weight'] ?? $data['weight'] ?? 0;
+        // Explicitly cast to (float) to ensure they are decimals
+        $height = (float) ($var0['height'] ?? $data['height'] ?? 0);
+        $width  = (float) ($var0['width']  ?? $data['width']  ?? 0);
+        $depth  = (float) ($var0['depth']  ?? $data['depth']  ?? 0);
+        $weight = (float) ($var0['weight'] ?? $data['weight'] ?? 0);
+        
         // Also capture Main Color/Size/Qty/CP/Photo from Index 0
         $color  = $var0['color']  ?? $data['color'] ?? '';
         $size   = $var0['size']   ?? $data['size'] ?? '';
-        $qty    = $var0['quantity'] ?? $data['quantity_received'] ?? 0;
-        $cp     = $var0['cp']     ?? $data['cp'] ?? 0;
+        
+        // CP is also a float (money), Quantity is usually an integer
+        $qty    = (int)   ($var0['quantity'] ?? $data['quantity_received'] ?? 0);
+        $cp     = (float) ($var0['cp']       ?? $data['cp'] ?? 0);
         $photo  = $var0['photo']  ?? $data['product_photo'] ?? '';
 
         // 2. UPDATE SQL
@@ -838,13 +810,16 @@ class Inbounding {
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
 
+        // BIND PARAMETERS
+        // s = string, d = double (float), i = integer
+        // Position 4, 5, 6, 7 are 'd' for Height, Width, Depth, Weight
         $stmt->bind_param(
             'sssddddssdisssi', 
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
-            $height, $width, $depth, $weight, // Using extracted vars
-            $color, $size, $cp, $qty,         // Using extracted vars
+            $height, $width, $depth, $weight, // 'd' ensures these are stored as Floats
+            $color, $size, $cp, $qty,         // CP is 'd', Qty is 'i'
             $data['received_by_user_id'], 
             $data['temp_code'],      
             $photo, 
