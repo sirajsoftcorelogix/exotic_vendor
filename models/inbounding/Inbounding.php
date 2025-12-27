@@ -190,10 +190,14 @@ class Inbounding {
     }
 
     // 3. Insert new image record (KEPT EXISTING)
-    public function add_image($item_id, $filename) {
-        // Default order is 0, Caption is NULL
-        $stmt = $this->conn->prepare("INSERT INTO `item_images` (item_id, file_name, display_order, image_caption) VALUES (?, ?, 0, '')");
-        $stmt->bind_param("is", $item_id, $filename);
+    public function add_image($item_id, $filename, $caption = '', $order = 0, $variation_id = -1) {
+        // Added variation_id to query
+        $sql = "INSERT INTO `item_images` (item_id, file_name, display_order, image_caption, variation_id) VALUES (?, ?, ?, ?, ?)";
+        $stmt = $this->conn->prepare($sql);
+        
+        // types: integer, string, integer, string, integer
+        $stmt->bind_param("isisi", $item_id, $filename, $order, $caption, $variation_id);
+        
         return $stmt->execute();
     }
 
@@ -458,62 +462,52 @@ class Inbounding {
             'category' => $category
         ];
     }
+public function update_image_variation($img_id, $variation_id) {
+    // Updates the variation_id for a specific image
+    $sql = "UPDATE item_images SET variation_id = ? WHERE id = ?";
+    $stmt = $this->conn->prepare($sql);
+    
+    if (!$stmt) return false;
 
+    // "ii" = Integer, Integer
+    $stmt->bind_param("ii", $variation_id, $img_id);
+    
+    return $stmt->execute();
+}
 
     public function getform2data($id) {
-    // Always secure the ID
-    $id = (int)$id;
+        $id = (int)$id;
 
-    $sql = "SELECT vi.*,vv.vendor_name  FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
-    $result = $this->conn->query($sql);
-    $inbounding = [];
-    if ($result) {
-        $inbounding = $result->fetch_assoc();
-        $result->free();
-    }
-    $sql1 = "SELECT * FROM `vp_users`";
-    $result1 = $this->conn->query($sql1);
-    if ($result1) {
-        $user = $result1->fetch_all(MYSQLI_ASSOC);
-        $result1->free();
-    }
-    $sql2 = "SELECT * FROM `vp_vendors`";
-    $result2 = $this->conn->query($sql2);
+        // 1. Get Main Inbound Data
+        $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
+        $result = $this->conn->query($sql);
+        $inbounding = $result ? $result->fetch_assoc() : [];
 
-    if ($result2) {
-        $vendors = $result2->fetch_all(MYSQLI_ASSOC);
-        $result2->free();
-    }
-    $sql3 = "SELECT * FROM `material`";
-    $result3 = $this->conn->query($sql3);
+        // 2. Fetch Helper Tables (Users, Vendors, Materials, etc.)
+        $user = $this->conn->query("SELECT * FROM `vp_users`")->fetch_all(MYSQLI_ASSOC);
+        $vendors = $this->conn->query("SELECT * FROM `vp_vendors`")->fetch_all(MYSQLI_ASSOC);
+        $material = $this->conn->query("SELECT * FROM `material`")->fetch_all(MYSQLI_ASSOC);
+        $category = $this->conn->query("SELECT * FROM `category`")->fetch_all(MYSQLI_ASSOC);
+        $address = $this->conn->query("SELECT * FROM `exotic_address`")->fetch_all(MYSQLI_ASSOC);
 
-    if ($result3) {
-        $material = $result3->fetch_all(MYSQLI_ASSOC);
-        $result3->free();
-    }
-    $sql4 = "SELECT * FROM `category`";
-    $result4 = $this->conn->query($sql4);
+        // 3. NEW: Fetch Variations linked to this item
+        $variations = [];
+        $sqlVar = "SELECT * FROM `vp_variations` WHERE it_id = $id ORDER BY id ASC";
+        $resVar = $this->conn->query($sqlVar);
+        if($resVar) {
+            $variations = $resVar->fetch_all(MYSQLI_ASSOC);
+        }
 
-    if ($result4) {
-        $category = $result4->fetch_all(MYSQLI_ASSOC);
-        $result4->free();
+        return [
+            'form2'      => $inbounding,
+            'user'       => $user,
+            'vendors'    => $vendors,
+            'material'   => $material,
+            'category'   => $category,
+            'address'    => $address,
+            'variations' => $variations // <--- Added this
+        ];
     }
-    $sql5 = "SELECT * FROM `exotic_address`";
-    $result5 = $this->conn->query($sql5);
-
-    if ($result5) {
-        $address = $result5->fetch_all(MYSQLI_ASSOC);
-        $result5->free();
-    }
-    return [
-        'form2' => $inbounding,
-        'user'  => $user,
-        'vendors' => $vendors,
-        'material' => $material,
-        'category' => $category,
-        'address' => $address
-    ];
-}
     public function getform2($id) {
         $result = $this->conn->query("SELECT * FROM `vp_inbound` where id=$id");
         if ($result) {

@@ -191,7 +191,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <input type="hidden" name="variations[<?php echo $index; ?>][id]" value="<?php echo $var['id'] ?? ''; ?>">
                                 </label>
                                 <?php if($index === 0): ?>
-                                    <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Invoice</div>
+                                    <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                                 <?php else: ?>
                                     <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                                 <?php endif; ?>

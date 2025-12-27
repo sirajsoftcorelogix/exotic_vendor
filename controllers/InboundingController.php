@@ -450,62 +450,53 @@ class InboundingController {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
-            // 1. Handle Deletions
+            // 1. Deletions
             if (!empty($_POST['delete_ids'])) {
                 foreach ($_POST['delete_ids'] as $del_id) {
                     $inboundingModel->delete_image(intval($del_id));
                 }
             }
 
-            // 2. Handle Updates (Captions AND Order)
-            // We use image_ids_ordered because it arrives in the exact order they are on screen
+            // 2. Update Existing Images (Order & Caption)
             if (!empty($_POST['image_ids_ordered'])) {
                 $counter = 1; 
                 foreach ($_POST['image_ids_ordered'] as $img_id) {
-                    $caption = $_POST['captions'][$img_id] ?? '';
-                    
-                    // The loop index ($counter) IS the new sort order
-                    $inboundingModel->update_image_meta($img_id, $caption, $counter);
-                    
-                    $counter++;
+                    if(isset($_POST['captions'][$img_id])) {
+                        $caption = $_POST['captions'][$img_id] ?? '';
+                        $inboundingModel->update_image_meta($img_id, $caption, $counter);
+                        $counter++;
+                    }
                 }
             }
 
-            // 3. Handle New File Uploads
+            // 3. Handle NEW File Uploads with Variation ID
             if (!empty($_FILES['new_photos']['name'][0])) {
                 $uploadDir = __DIR__ . '/../uploads/itm_img/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
-                // Get current max order to append new ones at the end
-                $currentMaxOrder = isset($counter) ? $counter : 1;
-
+                // Iterate over uploaded files
                 foreach ($_FILES['new_photos']['name'] as $key => $name) {
                     if ($_FILES['new_photos']['error'][$key] === 0) {
+                        
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
                         $ext = pathinfo($name, PATHINFO_EXTENSION);
                         $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
                         
+                        // Retrieve Caption AND Variation ID for this specific file index
+                        $newCaption = $_POST['new_captions'][$key] ?? '';
+                        $varId = $_POST['new_image_variation_id'][$key] ?? -1; // Default to Base (-1)
+
                         if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
-                            // Add image, potentially passing order if your model supports it
-                            // Assuming add_image just inserts:
-                            $inboundingModel->add_image($id, $newName);
-                            
-                            // Optional: Immediately update its order to be last
-                            // $lastId = $inboundingModel->last_insert_id(); 
-                            // $inboundingModel->update_image_meta($lastId, '', $currentMaxOrder++);
+                            // Pass Variation ID to Model
+                            $inboundingModel->add_image($id, $newName, $newCaption, 0, $varId);
                         }
                     }
                 }
             }
             
-            // Logging
-            $logData = [
-                    'userid_log' => $_POST['userid_log'] ?? '',
-                    'i_id' => $id,
-                    'stat' => 'Editing'
-                ];
-            $log_res =  $inboundingModel->stat_logs($logData);
-            
+            // 4. Log and Redirect
+            $logData = ['userid_log' => $_POST['userid_log']??'', 'i_id' => $id, 'stat' => 'Editing'];
+            $inboundingModel->stat_logs($logData);
             header("Location: " . base_url("?page=inbounding&action=list"));
             exit;
         }
@@ -724,7 +715,17 @@ class InboundingController {
 
         $icons_raw = $_POST['description_icons'] ?? ''; 
         $icons_val = is_array($icons_raw) ? implode(',', $icons_raw) : $icons_raw;
+        $back_order_input = $_POST['back_order'] ?? '0'; // Defaults to '0' (No)
 
+        $percent_val = 0;
+        $day_val     = 0;
+
+        // Only capture values if "Yes" (1) is selected
+        if ($back_order_input == '1') {
+            // Use intval to force it to be a number (prevents empty strings)
+            $percent_val = !empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0;
+            $day_val     = !empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0;
+        }
         // 3. Data Array
         $data = [
             'invoice_image'       => $invoicePath,
@@ -760,10 +761,12 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
-            'back_order'          => $_POST['back_order'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
             'description_icons'   => $icons_val, 
+            'back_order'           => $back_order_input,
+            'backorder_percent'    => $percent_val,
+            'backorder_day'        => $day_val,
             'us_block'            => $_POST['us_block'] ?? '',
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
@@ -771,12 +774,20 @@ class InboundingController {
 
         // 4. Save
         $result = $inboundingModel->updatedesktopform($id, $data);
-        if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
-            foreach ($_POST['photo_order'] as $img_id => $order_num) {
-                // Call the new specific function
-                $inboundingModel->update_image_order($img_id, $order_num);
-            }
-        }
+        // 2. Update Display Order (Existing)
+                if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
+                    foreach ($_POST['photo_order'] as $img_id => $order_num) {
+                        $inboundingModel->update_image_order($img_id, $order_num);
+                    }
+                }
+
+                // 3. UPDATE VARIATIONS (Add This New Block)
+                // This saves which variation the photo belongs to
+                if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
+                    foreach ($_POST['photo_variation'] as $img_id => $var_id) {
+                        $inboundingModel->update_image_variation($img_id, $var_id);
+                    }
+                }
         if ($result['success']) {
             $logData = [
                     'userid_log' => $_POST['userid_log'] ?? '',
@@ -823,20 +834,48 @@ class InboundingController {
         }
         unset($variant); 
 
-        // 3. Extract Base Variant (Index 0)
+        // 3. Extract Base Variant (Index 0) for Main Data
         $mainVariant = $allVariations[0] ?? []; 
 
-        // 4. TEMP CODE LOGIC (Kept as is)
+        // --- 4. TEMP CODE LOGIC (Updated to match saveform3) ---
+        
+        // A. Fetch Existing Data
         $existingData = $inboundingModel->getById($record_id); 
-        $temp_code = $existingData['temp_code'] ?? '';
-        if (empty($temp_code) || $temp_code === '0') {
-             // ... (Your temp code generation logic here) ...
-             // For brevity, assuming simple generation or existing logic
-             $temp_code = "TEMP" . rand(100,999); 
+        
+        // Only generate if Temp Code doesn't exist or is invalid
+        if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
+            $temp_code = $existingData['temp_code'];
+        } else {
+            // B. Get Category Name (First Char)
+            $categoryName = '';
+            // Use group_name from existing data as Category ID
+            if (!empty($existingData['group_name'])) {
+                $catData = $inboundingModel->getCategoryById($existingData['group_name']);
+                $categoryName = $catData['display_name'] ?? ''; 
+            }
+
+            // C. Get Material Name (First Char)
+            $materialId = $_POST['material_code'] ?? '';
+            $materialName = '';
+            if (!empty($materialId)) {
+                $matData = $inboundingModel->getMaterialById($materialId);
+                $materialName = $matData['material_name'] ?? '';
+            }
+
+            // D. Get Color (First Char) - From Main Variation
+            $colorName = $mainVariant['color'] ?? '';
+
+            // E. Generate Prefix (e.g., "BSB")
+            $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
+            $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
+            $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
+            $prefix = $char1 . $char2 . $char3;
+
+            // F. Generate Full Temp Code
+            $temp_code = $inboundingModel->generateNextTempCode($prefix);
         }
 
-        // 5. PREPARE MAIN UPDATE DATA (FIXED HERE)
-        // We now grab height/width/etc from $mainVariant, NOT $_POST direct keys
+        // 5. PREPARE MAIN UPDATE DATA
         $gate_entry = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
 
         $mainUpdateData = [
@@ -846,7 +885,7 @@ class InboundingController {
             'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
             'temp_code'            => $temp_code,
             
-            // --- FIXED: Pull from $mainVariant array ---
+            // Data from Main Variant
             'height'               => $mainVariant['height'] ?? 0,
             'width'                => $mainVariant['width'] ?? 0,
             'depth'                => $mainVariant['depth'] ?? 0,
@@ -862,13 +901,19 @@ class InboundingController {
         $res = $inboundingModel->updateMainInbound($record_id, $mainUpdateData);
 
         if ($res['success']) {
+            // Log the action
             $userid_log = $_POST['userid_log'] ?? 0;
             $logData = [
                 'stat'       => 'inbound',
                 'userid_log' => $userid_log,
                 'i_id'       => $record_id
             ];
-            // Save extra variations (Pass the full list)
+            // Assuming stat_logs is available in the model
+            if(method_exists($inboundingModel, 'stat_logs')) {
+                 $inboundingModel->stat_logs($logData);
+            }
+
+            // Save extra variations
             $inboundingModel->saveVariations($record_id, $allVariations, $temp_code);
             
             header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
