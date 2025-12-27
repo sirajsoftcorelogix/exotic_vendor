@@ -26,7 +26,11 @@ foreach ($images as $img) {
     .scrollbar-thin::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
     
     /* Active Variation Card Style */
-    .var-card.active { border-color: #000; background-color: #f0f0f0; ring: 2px solid #000; }
+    .var-card.active { 
+        border-color: #f97316; 
+        background-color: #fff7ed; /* Optional: Very light orange background */
+        box-shadow: 0 0 0 1px #f97316; /* Simulates a ring/thicker border */
+    }
     
     /* Hide non-active containers */
     .image-container { display: none; }
@@ -70,7 +74,8 @@ foreach ($images as $img) {
             </div>
             <div class="text-xs text-gray-600">
                 <div class="font-bold text-black uppercase mb-1">Base Variation</div>
-                <div>Default Item Photos</div>
+            <div><span class="font-bold text-gray-800">Color:</span> <?php echo $item['color'] ?? '-'; ?></div>
+            <div><span class="font-bold text-gray-800">Size:</span> <?php echo $item['size'] ?? '-'; ?></div>
             </div>
         </div>
 
@@ -169,8 +174,8 @@ function renderImageGrid($imgs) {
     // 1. SWITCH VARIATION LOGIC
     window.switchVariation = function(varId, cardElement) {
         // Update Active Card Style
-        document.querySelectorAll('.var-card').forEach(el => el.classList.remove('active', 'border-black', 'bg-gray-50'));
-        cardElement.classList.add('active', 'border-black', 'bg-gray-50');
+        document.querySelectorAll('.var-card').forEach(el => el.classList.remove('active', 'border-orange-500', 'bg-orange-50'));
+        cardElement.classList.add('active', 'border-orange-500', 'bg-orange-50');
 
         // Update Hidden Input
         currentVarInput.value = varId;
