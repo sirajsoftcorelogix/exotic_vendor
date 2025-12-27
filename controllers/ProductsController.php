@@ -335,12 +335,17 @@ class ProductsController {
         global $productModel, $commanModel;
         //print_array($_GET);
         $item_code = isset($_GET['item_code']) ? $_GET['item_code'] : 0;
+        $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
         if ($item_code != 0) {
             $order = $productModel->getProductByItemCode($item_code);
             
             if ($order) {
+                if ($type === 'inner')
+                    renderPartial('views/products/partial_product_details.php', ['products' => $order]);
+                else
+                    renderTemplateClean('views/products/other_partial_product_details.php', ['products' => $order], 'Product Details');
                 //renderPartial('views/products/partial_product_details.php', ['products' => $order]);
-                renderTemplateClean('views/products/partial_product_details.php', ['products' => $order], 'Product Details');
+                //renderTemplateClean('views/products/partial_product_details.php', ['products' => $order], 'Product Details');
             } else {
                 echo '<p>Order details not found.</p>';
             }

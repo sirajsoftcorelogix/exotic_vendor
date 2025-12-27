@@ -344,7 +344,7 @@
                 </div>
                 <div class="">
                     <label for="country" class="block text-sm font-medium text-gray-600 mb-1">Country</label>
-                    <select id="country" name="country" class="max-w-48 px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="country" name="country" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected >All Country</option>
 						<optgroup label="Easy">
 							<option value="overseas">Overseas</option>
@@ -356,7 +356,7 @@
                     </select>
                 </div>
                 <div class="">
-                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">PO Created By</label>
+                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">PO Issued By</label>
                     <select id="staff_name" name="staff_name[]" multiple class="advanced-multiselect w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <!-- <option value="" >All Staff</option> -->
 						<?php foreach ($staff_list as $key => $value): ?>
@@ -432,6 +432,30 @@
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
                 </div>
                 </form>
+
+            <!-- Save Search Controls -->
+            <div class="mt-4">
+                <?php if (!empty($query_string) && trim($query_string, '&') != ''): ?>
+                    <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-700 transition">Save Search</button>
+                <?php else: ?>
+                    <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm" disabled>Save Search</button>
+                <?php endif; ?>
+            </div>
+
+            <div id="saved-searches" class="mt-4 w-[350px]">
+                <?php if (!empty($saved_searches)): ?>
+                    <h3 class="text-sm font-semibold mb-2">Saved Searches</h3>
+                    <ul class="space-y-2 text-sm">
+                        <?php foreach ($saved_searches as $s): ?>
+                            <li id="saved-search-<?= $s['id'] ?>" class="flex items-center gap-2">
+                                <a class="text-indigo-600 hover:underline" href="<?= base_url('?page=orders&action=list') . '&' . htmlspecialchars($s['query']) ?>"><?= htmlspecialchars($s['name']) ?></a>
+                                <button onclick="deleteSavedSearch(<?= $s['id'] ?>)" class="text-red-600 hover:underline text-xs">Delete</button>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+
             <!-- clear filter -->
              <script>
                 // function clearFilters() {
@@ -446,6 +470,71 @@
                     url.search = ''; // Clear all query parameters
                     const page = 'page=orders&action=list';
                     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
+                }
+
+                function saveCurrentSearch() {
+                    const currentQuery = '<?= trim($query_string, '&') ?>';
+                    if (!currentQuery) { alert('No filters to save.'); return; }
+                    let defaultName = 'Search - ' + new Date().toLocaleString();
+                    let name = prompt('Enter a name for this search:', defaultName);
+                    if (name === null) return; // cancelled
+                    const formData = new URLSearchParams();
+                    formData.append('name', name.trim());
+                    formData.append('query', currentQuery);
+                    fetch('<?= base_url('?page=orders&action=saveSearch') ?>', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: formData.toString()
+                    }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                            // add to list
+                            const s = data.search;
+                            const ul = document.querySelector('#saved-searches ul') || (() => {
+                                const div = document.getElementById('saved-searches');
+                                div.innerHTML = '<h3 class="text-sm font-semibold mb-2">Saved Searches</h3><ul class="space-y-2"></ul>';
+                                return document.querySelector('#saved-searches ul');
+                            })();
+                            const li = document.createElement('li');
+                            li.id = 'saved-search-' + s.id;
+                            li.className = 'flex items-center gap-2';
+                            li.innerHTML = '<a class="text-indigo-600 hover:underline" href="<?= base_url('?page=orders&action=list') ?>&' + encodeURI(s.query) + '">' + escapeHtml(s.name) + '</a> <button onclick="deleteSavedSearch(' + s.id + ')" class="text-red-600 hover:underline text-xs">Delete</button>';
+                            ul.insertBefore(li, ul.firstChild);
+                            alert('Search saved.');
+                        } else {
+                            alert('Unable to save search: ' + (data.message || '')); 
+                        }
+                    }).catch(err => { alert('Network error'); });
+                }
+
+                function deleteSavedSearch(id) {
+                    if (!confirm('Delete this saved search?')) return;
+                    const formData = new URLSearchParams();
+                    formData.append('id', id);
+                    fetch('<?= base_url('?page=orders&action=deleteSearch') ?>', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData.toString()
+                    }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                            const el = document.getElementById('saved-search-' + id);
+                            if (el) el.remove();
+                        } else {
+                            alert('Unable to delete: ' + (data.message || ''));
+                        }
+                    }).catch(err => { alert('Network error'); });
+                }
+
+                function escapeHtml(text) {
+                    var map = {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;'
+                    };
+                    return text.replace(/[&<>\"]/g, function(m) { return map[m]; });
                 }
             </script>
             </div>
@@ -765,7 +854,7 @@
                                             <span class="heading-typography">Staff Name</span>
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
 											<span class="heading-typography">Payment Type</span>
-                                            <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
+                                            <p>: <span class="data-typography uppercase <?= strtolower($order['payment_type']) == 'cod' ? 'bg-yellow-200' : '' ?>"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
                                             <span class="heading-typography">Agent</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
                                             <?php if (!empty($order['publisher'])){ ?>
@@ -1368,7 +1457,7 @@
 
         <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
             <!-- Modal Content -->
-            <div class="flex-grow space-y-4" id="details-modal-content">
+            <div class="" id="details-modal-content">
                 <!-- Dynamic content will be loaded here -->
                 
             </div>
@@ -1480,7 +1569,7 @@
         </form>
     </div>
 </div>
-<!-- ...existing code... -->
+<!-- ...success popup... -->
  <script>
     function closeImagePopup(event) {
         document.getElementById('imagePopup').classList.add('hidden');
@@ -1941,7 +2030,7 @@
             //loadingImage.classList.remove('hidden');
             modalContentDiv.innerHTML = '<p>Loading...</p>'; // Show loading indicator
 
-            fetch(`?page=orders&action=get_order_details_html&order_number=${encodeURIComponent(orderData.order_number)}`)
+            fetch(`?page=orders&action=get_order_details_html&type=inner&order_number=${encodeURIComponent(orderData.order_number)}`)
                 .then(response => response.text())
                 .then(html => {
                     modalContentDiv.innerHTML = html; // Insert the fetched HTML
