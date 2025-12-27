@@ -3,7 +3,7 @@
 $countries = country_array();
 //print_array($countries);
 ?>
-<div class="">
+<div class="max-w-5xl mx-auto mb-6 mt-6 p-4 bg-white shadow-md rounded-lg overflow-hidden">
 
     <!-- Header Content -->
     <div id="product-details-content" class="space-y-6">
@@ -40,7 +40,7 @@ $countries = country_array();
 
                         <!-- Column 1 (Data) -->
                         <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
-                            <?php if (!empty($item['author'])): ?>
+                             <?php if (!empty($item['author'])): ?>
                                 <span class="grid-label">Author</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['author']; ?></span>
                             <?php endif; ?>
                             <?php if (!empty($item['publisher'])): ?>
@@ -52,6 +52,7 @@ $countries = country_array();
                             <?php if (!empty($item['size'])): ?>
                                 <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['size']; ?></span>
                             <?php endif; ?>
+
                             <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['cost_price'] ? "₹".$item['cost_price'] : 'N/A'; ?></span>
 
                             <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value"><?php echo $item['itemprice'] ? "₹".$item['itemprice'] : 'N/A'; ?></span>

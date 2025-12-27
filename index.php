@@ -166,6 +166,12 @@ switch ($page) {
             case 'bulk_assign_order':
                 $controller->bulkAssignOrder();
                 break;
+            case 'saveSearch':
+                $controller->saveSearch();
+                break;
+            case 'deleteSearch':
+                $controller->deleteSearch();
+                break;
             default:
                 $controller->index();
                 break;
