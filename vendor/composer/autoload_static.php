@@ -17,11 +17,11 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
     );
 
     public static $prefixLengthsPsr4 = array (
-        's' =>
+        's' => 
         array (
             'setasign\\Fpdi\\' => 14,
         ),
-        'S' =>
+        'S' => 
         array (
             'Symfony\\Polyfill\\Php83\\' => 23,
             'Symfony\\Polyfill\\Mbstring\\' => 26,
@@ -45,7 +45,7 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
             'Psr\\Http\\Message\\' => 17,
             'PHPMailer\\PHPMailer\\' => 20,
         ),
-        'M' =>
+        'M' => 
         array (
             'Mpdf\\PsrLogAwareTrait\\' => 22,
             'Mpdf\\PsrHttpMessageShim\\' => 24,
@@ -60,7 +60,7 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
             'Evenement\\' => 10,
             'Endroid\\QrCode\\' => 15,
         ),
-        'D' =>
+        'D' => 
         array (
             'DeepCopy\\' => 9,
             'DASPRiD\\Enum\\' => 13,
@@ -76,7 +76,7 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
     );
 
     public static $prefixDirsPsr4 = array (
-        'setasign\\Fpdi\\' =>
+        'setasign\\Fpdi\\' => 
         array (
             0 => __DIR__ . '/..' . '/setasign/fpdi/src',
         ),
@@ -132,24 +132,24 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
         array (
             0 => __DIR__ . '/..' . '/psr/log/src',
         ),
-        'Psr\\Http\\Message\\' =>
+        'Psr\\Http\\Message\\' => 
         array (
             0 => __DIR__ . '/..' . '/psr/http-factory/src',
             1 => __DIR__ . '/..' . '/psr/http-message/src',
         ),
-        'PHPMailer\\PHPMailer\\' =>
+        'PHPMailer\\PHPMailer\\' => 
         array (
             0 => __DIR__ . '/..' . '/phpmailer/phpmailer/src',
         ),
-        'Mpdf\\PsrLogAwareTrait\\' =>
+        'Mpdf\\PsrLogAwareTrait\\' => 
         array (
             0 => __DIR__ . '/..' . '/mpdf/psr-log-aware-trait/src',
         ),
-        'Mpdf\\PsrHttpMessageShim\\' =>
+        'Mpdf\\PsrHttpMessageShim\\' => 
         array (
             0 => __DIR__ . '/..' . '/mpdf/psr-http-message-shim/src',
         ),
-        'Mpdf\\' =>
+        'Mpdf\\' => 
         array (
             0 => __DIR__ . '/..' . '/mpdf/mpdf/src',
         ),
@@ -165,11 +165,11 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
         array (
             0 => __DIR__ . '/..' . '/endroid/qr-code/src',
         ),
-        'DeepCopy\\' =>
+        'DeepCopy\\' => 
         array (
             0 => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy',
         ),
-        'DASPRiD\\Enum\\' =>
+        'DASPRiD\\Enum\\' => 
         array (
             0 => __DIR__ . '/..' . '/dasprid/enum/src',
         ),
@@ -184,9 +184,9 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
     );
 
     public static $prefixesPsr0 = array (
-        'T' =>
+        'T' => 
         array (
-            'Text' =>
+            'Text' => 
             array (
                 0 => __DIR__ . '/..' . '/pear/text_languagedetect',
             ),
