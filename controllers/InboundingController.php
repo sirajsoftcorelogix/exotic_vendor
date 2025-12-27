@@ -914,15 +914,13 @@ class InboundingController {
         }
         unset($variant); 
 
-        // 3. Split Data
-        $mainVariant   = $allVariations[0] ?? []; 
-        $extraVariants = array_slice($allVariations, 1); 
+        // 3. Split Data (For Main Item)
+        $mainVariant    = $allVariations[0] ?? []; 
+        // REMOVED $extraVariants split here because it messes up the Keys for the Model
 
-        // --- 4. TEMP CODE GENERATION (Your Original Logic) ---
-        // A. Fetch existing data to get Group ID
+        // --- 4. TEMP CODE GENERATION ---
         $existingData = $inboundingModel->getById($record_id); 
         
-        // B. Get Category Name First Char
         $char1 = 'X';
         if (!empty($existingData['group_name'])) {
             $catData = $inboundingModel->getCategoryById($existingData['group_name']);
@@ -931,7 +929,6 @@ class InboundingController {
             }
         }
 
-        // C. Get Material Name First Char
         $materialId = $_POST['material_code'] ?? '';
         $char2 = 'X';
         if (!empty($materialId)) {
@@ -941,18 +938,16 @@ class InboundingController {
             }
         }
 
-        // D. Get Color First Char (From Main Variation)
         $colorName = $mainVariant['color'] ?? '';
         $char3 = !empty($colorName) ? strtoupper(substr($colorName, 0, 1)) : 'X';
 
-        // E. Generate Code (Only if not already set, or you can force regenerate)
-        // Checking if it exists prevents overwriting "BSB001" with "BSB002" on every save.
         if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
              $temp_code = $existingData['temp_code'];
         } else {
              $prefix = $char1 . $char2 . $char3;
              $temp_code = $inboundingModel->generateNextTempCode($prefix);
         }
+
         // 5. Prepare Main Update Data
         $gate_entry = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
 
@@ -964,6 +959,7 @@ class InboundingController {
             'depth'                => $_POST['depth'] ?? '',
             'weight'               => $_POST['weight'] ?? '',
             'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
+            'group_name'           => $_POST['category'] ?? '',
             'temp_code'            => $temp_code,
             // Variant 1 Data
             'color'             => $mainVariant['color'] ?? '',
@@ -972,12 +968,15 @@ class InboundingController {
             'cp'                => $mainVariant['cp'] ?? '',
             'product_photo'     => $mainVariant['photo'] ?? '' 
         ];
+
         // 6. Update Database
         $res = $inboundingModel->updateMainInbound($record_id, $mainUpdateData);
 
         if ($res['success']) {
-            // Save extra variations
-            $inboundingModel->saveVariations($record_id, $extraVariants, $temp_code);
+            // --- FIX IS HERE: Pass $allVariations instead of $extraVariants ---
+            // Your Model has "if ($key == 0) continue;", so we must pass the array 
+            // with the original keys (0, 1, 2) intact.
+            $inboundingModel->saveVariations($record_id, $allVariations, $temp_code);
             
             header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
             exit;

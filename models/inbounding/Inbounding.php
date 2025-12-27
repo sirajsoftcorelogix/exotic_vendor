@@ -812,9 +812,26 @@ class Inbounding {
 
     // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
     public function updateMainInbound($id, $data) {
+        // 1. EXTRACT DIMENSIONS FROM VARIATION [0]
+        // If not found there, fallback to direct keys just in case.
+        $var0 = $data['variations'][0] ?? [];
+        
+        $height = $var0['height'] ?? $data['height'] ?? 0;
+        $width  = $var0['width']  ?? $data['width']  ?? 0;
+        $depth  = $var0['depth']  ?? $data['depth']  ?? 0;
+        $weight = $var0['weight'] ?? $data['weight'] ?? 0;
+        // Also capture Main Color/Size/Qty/CP/Photo from Index 0
+        $color  = $var0['color']  ?? $data['color'] ?? '';
+        $size   = $var0['size']   ?? $data['size'] ?? '';
+        $qty    = $var0['quantity'] ?? $data['quantity_received'] ?? 0;
+        $cp     = $var0['cp']     ?? $data['cp'] ?? 0;
+        $photo  = $var0['photo']  ?? $data['product_photo'] ?? '';
+
+        // 2. UPDATE SQL
         $sql = "UPDATE vp_inbound 
-                SET gate_entry_date_time = ?, material_code = ?, height = ?, width = ?, 
-                    depth = ?, weight = ?, color = ?, size = ?, cp = ?, quantity_received = ?, 
+                SET gate_entry_date_time = ?, material_code = ?,  group_name = ?, 
+                    height = ?, width = ?, depth = ?, weight = ?, 
+                    color = ?, size = ?, cp = ?, quantity_received = ?, 
                     received_by_user_id = ?, temp_code = ?, product_photo = ? 
                 WHERE id = ?";
         
@@ -822,20 +839,15 @@ class Inbounding {
         if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
 
         $stmt->bind_param(
-            'ssddddssdisssi', 
+            'sssddddssdisssi', 
             $data['gate_entry_date_time'], 
             $data['material_code'], 
-            $data['height'], 
-            $data['width'],
-            $data['depth'], 
-            $data['weight'], 
-            $data['color'], 
-            $data['size'], 
-            $data['cp'], 
-            $data['quantity_received'], 
+            $data['group_name'], 
+            $height, $width, $depth, $weight, // Using extracted vars
+            $color, $size, $cp, $qty,         // Using extracted vars
             $data['received_by_user_id'], 
-            $data['temp_code'],     
-            $data['product_photo'], 
+            $data['temp_code'],      
+            $photo, 
             $id
         );
 
@@ -846,57 +858,61 @@ class Inbounding {
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     // models/inbounding/Inbounding.php
 
+    // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $temp_code) {
-        // 1. Get List of Submitted IDs (to know what to keep)
+    
+        // 1. Filter out IDs to Keep (Skipping Index 0)
         $submittedIds = [];
-        foreach ($variations as $var) {
+        foreach ($variations as $key => $var) {
+            // SKIP Index 0 (Main Item - stored in vp_inbound)
+            if ($key == 0) continue; 
+
             if (!empty($var['id'])) {
                 $submittedIds[] = (int)$var['id'];
             }
         }
 
-        // 2. DELETE variations that are NOT in the submitted list
-        // (This handles the "Remove" button)
+        // 2. DELETE old variations (that are not in the kept list)
         if (!empty($submittedIds)) {
-            // Delete rows where it_id matches BUT id is NOT in our list
             $idsStr = implode(',', $submittedIds);
             $sql = "DELETE FROM vp_variations WHERE it_id = $it_id AND id NOT IN ($idsStr)";
             $this->conn->query($sql);
         } else {
-            // If no IDs submitted, it means all were deleted (or they are all new)
-            // Only delete if we are inserting new ones, to be safe let's check
-            // Ideally, if $variations is NOT empty but $submittedIds IS empty, 
-            // it means they are all new, so we delete old ones to prevent duplicates? 
-            // OR we just keep old ones?
-            // Let's stick to safe logic: 
-            // If we are saving, we assume the form state is the "truth".
-            // So if $submittedIds is empty, we delete all old ones for this item.
-            if (!empty($variations)) {
-                 // We have new items, but no old IDs. Delete all old variants.
+            // If we have variations but no IDs, delete all old ones (except main item logic which isn't here)
+            // Note: Be careful not to delete logic if you have other checks, but this is standard.
+            // We only clear variations if we are submitting new ones.
+            if (count($variations) > 1) { 
                  $this->conn->query("DELETE FROM vp_variations WHERE it_id = $it_id");
             }
         }
 
         // 3. LOOP TO INSERT OR UPDATE
-        $insertSql = "INSERT INTO vp_variations (it_id, temp_code, color, size, quantity, cp, variation_image) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        $updateSql = "UPDATE vp_variations SET temp_code=?, color=?, size=?, quantity=?, cp=?, variation_image=? WHERE id=?";
+        $insertSql = "INSERT INTO vp_variations (it_id, temp_code, color, size, quantity, cp, variation_image, height, width, depth, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $updateSql = "UPDATE vp_variations SET temp_code=?, color=?, size=?, quantity=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=? WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
         $stmtUpdate = $this->conn->prepare($updateSql);
 
-        foreach ($variations as $var) {
-            $id   = $var['id'] ?? '';
-            $img  = $var['photo'] ?? '';
+        foreach ($variations as $key => $var) {
+            // CRITICAL: SKIP Index 0 (Main Item)
+            if ($key == 0) continue;
+
+            $id     = $var['id'] ?? '';
+            $img    = $var['photo'] ?? '';
+            
+            // Use 0.00 if empty
+            $h = !empty($var['height']) ? $var['height'] : 0.00;
+            $w = !empty($var['width']) ? $var['width'] : 0.00;
+            $d = !empty($var['depth']) ? $var['depth'] : 0.00;
+            $wt = !empty($var['weight']) ? $var['weight'] : 0.00;
             
             if (!empty($id)) {
-                // --- UPDATE EXISTING ---
-                // 'sssidss' -> string, string, string, int, double, string, int
-                $stmtUpdate->bind_param("sssidsi", $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $id);
+                // Update
+                $stmtUpdate->bind_param("sssidsddddi", $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt, $id);
                 $stmtUpdate->execute();
             } else {
-                // --- INSERT NEW ---
-                // 'isssids' -> int, string, string, string, int, double, string
-                $stmtInsert->bind_param("isssids", $it_id, $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img);
+                // Insert
+                $stmtInsert->bind_param("isssidsdddd", $it_id, $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt);
                 $stmtInsert->execute();
             }
         }
@@ -906,8 +922,8 @@ class Inbounding {
 
     // 3. GET VARIATIONS (For View)
     public function getVariations($it_id) {
-        // Make sure we select 'id'
-        $sql = "SELECT id, color, size, quantity, cp, variation_image FROM vp_variations WHERE it_id = ?";
+        // Added height, width, depth, weight to SELECT
+        $sql = "SELECT id, color, size, quantity, cp, variation_image, height, width, depth, weight FROM vp_variations WHERE it_id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $it_id);
         $stmt->execute();
