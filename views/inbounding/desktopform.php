@@ -168,7 +168,7 @@ $record_id = $_GET['id'] ?? '';
 
             <div class="mb-6">
                 <h4 class="text-xs font-bold text-[#d97824] uppercase">
-                    Base Variant(<?= htmlspecialchars($data['form2']['color'] ?? '') ?>-<?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
+                    Main Variant(<?= htmlspecialchars($data['form2']['color'] ?? '') ?>-<?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
                 <div class="photo-group-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 min-h-[80px] p-2 border border-dashed border-gray-200 rounded bg-gray-50/50" 
                      data-var-id="-1">
@@ -417,12 +417,27 @@ $record_id = $_GET['id'] ?? '';
                         <div class="checkbox-list-container overflow-y-auto p-1 h-full">
                             <?php 
                                 $icon_options = $data['form2']['icon_data']['description_icons'] ?? [];
-                                $saved_raw = $data['form2']['description_icons'] ?? ''; 
-                                $saved_values = is_array($saved_raw) ? $saved_raw : explode(',', $saved_raw);
+                                
+                                // 1. Changed default from '' to null so we can detect it
+                                $saved_raw = $data['form2']['description_icons'] ?? null; 
+
+                                $checkAll = false;
+                                $saved_values = [];
+
+                                // 2. Logic: If null, check everything. If not, parse the values.
+                                if (is_null($saved_raw)) {
+                                    $checkAll = true;
+                                } elseif (is_array($saved_raw)) {
+                                    $saved_values = $saved_raw;
+                                } else {
+                                    // Explode string to array (added trim to handle spaces like "a, b")
+                                    $saved_values = array_map('trim', explode(',', (string)$saved_raw));
+                                }
 
                                 if (!empty($icon_options)) {
                                     foreach ($icon_options as $key => $label) {
-                                        $isChecked = in_array($key, $saved_values) ? 'checked' : '';
+                                        // 3. Check if we should Check All OR if the specific key is in the saved values
+                                        $isChecked = ($checkAll || in_array((string)$key, $saved_values)) ? 'checked' : '';
                                         $uniqueId = 'icon_' . $key; 
                             ?>
                                     <div class="checkbox-item">
@@ -431,7 +446,7 @@ $record_id = $_GET['id'] ?? '';
                                                name="description_icons[]" 
                                                value="<?= $key ?>" 
                                                <?= $isChecked ?>>
-                                            
+                                        
                                         <label for="<?= $uniqueId ?>"><?= $label ?></label>
                                     </div>
                             <?php 

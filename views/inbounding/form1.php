@@ -12,22 +12,17 @@ $record_id = $_GET['id'] ?? '';
 
 // Fetch Data
 $form1 = $data['form1'] ?? [];
-$raw_categories = $data['category'] ?? []; // This contains your list of categories
+$raw_categories = $data['category'] ?? [];
 
 // --- NEW LOGIC START ---
-// 1. Get the raw ID (e.g., "-2")
 $cat_id = $form1['group_name'] ?? ''; 
-
-// 2. Default display name
 $category_display_name = 'Unknown'; 
 
-// 3. Search for the ID in the array to find the display name
 if (!empty($raw_categories) && !empty($cat_id)) {
     foreach ($raw_categories as $cat_item) {
-        // Compare loosely (==) to handle string/int differences
         if (isset($cat_item['category']) && $cat_item['category'] == $cat_id) {
             $category_display_name = $cat_item['display_name'];
-            break; // Stop loop once found
+            break; 
         }
     }
 }
@@ -38,11 +33,22 @@ $vendor = $form1['vendor_code'] ?? '';
 $invoiceImg = $form1['invoice_image'] ?? '';
 $invoice_no = $form1['invoice_no'] ?? '';
 
-// Determine Edit Mode & Action URL
+// Determine Edit Mode
 $isEdit  = (!empty($vendor) || !empty($invoiceImg));
 $formAction = $isEdit
     ? base_url('?page=inbounding&action=updateform1&id=' . $record_id)
     : base_url('?page=inbounding&action=saveform1');
+
+// --- PDF CHECK LOGIC ---
+$showPreview = ($isEdit && !empty($invoiceImg));
+$fileExt = pathinfo($invoiceImg, PATHINFO_EXTENSION);
+$isPdf = (strtolower($fileExt) === 'pdf');
+$src = $showPreview ? base_url($invoiceImg) : '#'; 
+
+// Determine visibility classes based on file type
+$placeholderClass = $showPreview ? 'hidden' : '';
+$imgPreviewClass  = ($showPreview && !$isPdf) ? '' : 'hidden';
+$pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
 ?>
 
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
@@ -78,20 +84,20 @@ $formAction = $isEdit
     <div class="w-full h-screen md:h-auto md:min-h-[700px] md:max-w-5xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200">
         
         <div class="bg-[#d9822b] px-4 py-4 flex items-center justify-between text-white shadow-md z-20 flex-shrink-0">
-    <button type="button" id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-        </svg>
-    </button>
+            <button type="button" id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+            </button>
 
-    <h1 class="font-semibold text-lg tracking-wide">Invoice Upload - Step: 1/4</h1>
+            <h1 class="font-semibold text-lg tracking-wide">Invoice Upload - Step: 1/4</h1>
 
-    <button type="button" id="cancel-btn" class="p-2 hover:bg-white/20 rounded-full transition">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-    </button>
-</div>
+            <button type="button" id="cancel-btn" class="p-2 hover:bg-white/20 rounded-full transition">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
 
         <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="invoiceForm" class="flex flex-col flex-1 overflow-hidden">
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
@@ -102,41 +108,29 @@ $formAction = $isEdit
                     
                     <div class="flex flex-col gap-6">
                         
-                        <!-- <div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4 shadow-sm">
-                            <div class="w-20 h-20 bg-gray-50 border border-gray-100 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center">
-                                <?php if(!empty($photo)): ?>
-                                    <img src="<?php echo base_url($photo); ?>" class="w-full h-full object-cover" onclick="openImagePopup('<?= $photo ?>')">
-                                <?php else: ?>
-                                    <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                <?php endif; ?>
-                            </div>
-                            <div class="flex flex-col">
-                                <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Selected Category</span>
-                                <span class="text-gray-800 font-bold text-xl leading-tight"><?php echo htmlspecialchars($category_display_name); ?></span>
-                            </div>
-                        </div> -->
                         <div class="relative border-2 border-dashed border-gray-300 rounded-xl p-6 text-center bg-white group hover:border-[#d9822b] hover:bg-orange-50/10 transition-all duration-300">
                             <span class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-white px-3 font-bold text-gray-700 text-sm flex items-center gap-2 border border-gray-100 rounded-full shadow-sm">
                                 <svg class="w-4 h-4 text-[#d9822b]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                                 Upload Invoice
                             </span>
                             
-                            <p class="text-xs text-gray-500 mb-5 mt-3">Drag file here or use buttons below</p>
+                            <p class="text-xs text-gray-500 mb-5 mt-3">Upload Image (JPG, PNG) or PDF</p>
 
                             <div class="flex gap-3 justify-center flex-wrap">
                                 <label class="cursor-pointer bg-gray-50 hover:bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition border border-gray-200 shadow-sm">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                                     Choose File
-                                    <input type="file" id="invoice" name="invoice" accept="image/*" class="hidden">
+                                    <input type="file" id="invoice" name="invoice" accept="image/*,application/pdf" class="hidden">
                                 </label>
                                 <label class="cursor-pointer bg-[#d9822b] hover:bg-[#bf7326] text-white px-5 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition shadow-md shadow-orange-100">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
                                     Take Photo
-                                    <input type="file" name="invoice_capture" accept="image/*" capture="camera" class="hidden" onchange="document.getElementById('invoice').files = this.files; document.getElementById('invoice').dispatchEvent(new Event('change'));">
+                                    <input type="file" name="invoice_capture" accept="image/*,application/pdf" capture="camera" class="hidden" onchange="document.getElementById('invoice').files = this.files; document.getElementById('invoice').dispatchEvent(new Event('change'));">
                                 </label>
                             </div>
                             <div id="photo-error" class="text-red-500 text-xs mt-2 font-bold min-h-[20px]"></div>
                         </div>
+
                         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative z-30">
                             <label class="block text-gray-700 font-bold text-sm mb-2 ml-1">Select Vendor</label>
                             
@@ -169,20 +163,17 @@ $formAction = $isEdit
                     <div class="flex flex-col gap-4 h-full">
 
                         <div class="flex-grow bg-white rounded-xl border border-gray-200 relative overflow-hidden flex items-center justify-center min-h-[300px] shadow-inner">
-                             <?php 
-                                $showPreview = ($isEdit && !empty($invoiceImg));
-                                $src = $showPreview ? base_url($invoiceImg) : '#'; 
-                                $hiddenClass = $showPreview ? '' : 'hidden';
-                             ?>
                              
-                             <div id="placeholder-box" class="absolute inset-0 flex flex-col items-center justify-center text-gray-300 <?php echo $showPreview ? 'hidden' : ''; ?>">
+                             <div id="placeholder-box" class="absolute inset-0 flex flex-col items-center justify-center text-gray-300 <?php echo $placeholderClass; ?>">
                                  <svg class="w-16 h-16 mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                  <span class="text-xs font-medium opacity-60">Preview will appear here</span>
                              </div>
 
-                             <img id="preview" src="<?php echo $src; ?>" class="<?php echo $hiddenClass; ?> w-full h-full object-contain p-2">
+                             <img id="preview" src="<?php echo (!$isPdf) ? $src : '#'; ?>" class="<?php echo $imgPreviewClass; ?> w-full h-full object-contain p-2">
 
-                             <button type="button" id="delete-preview-btn" class="<?php echo $hiddenClass; ?> absolute top-4 right-4 bg-white/90 backdrop-blur text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm border border-red-100 flex items-center gap-1 hover:bg-red-50 transition z-10">
+                             <iframe id="pdf-preview" src="<?php echo ($isPdf) ? $src : ''; ?>" class="<?php echo $pdfPreviewClass; ?> w-full h-full p-2 border-0"></iframe>
+
+                             <button type="button" id="delete-preview-btn" class="<?php echo ($showPreview) ? '' : 'hidden'; ?> absolute top-4 right-4 bg-white/90 backdrop-blur text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm border border-red-100 flex items-center gap-1 hover:bg-red-50 transition z-10">
                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                  Delete
                              </button>
@@ -201,12 +192,14 @@ $formAction = $isEdit
         </form>
     </div>
 </div>
+
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
         <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
+
 <script>
     // 1. Initialize Tom Select (Searchable Dropdown)
     new TomSelect("#vendor_id",{
@@ -219,6 +212,7 @@ $formAction = $isEdit
 
     const invoiceInput = document.getElementById('invoice');
     const previewImg = document.getElementById('preview');
+    const pdfPreview = document.getElementById('pdf-preview'); // New Element
     const deleteBtn = document.getElementById('delete-preview-btn');
     const placeholder = document.getElementById('placeholder-box');
     const errorBox = document.getElementById("photo-error");
@@ -229,8 +223,19 @@ $formAction = $isEdit
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
-                previewImg.src = e.target.result;
-                previewImg.classList.remove('hidden');
+                // Check file Type
+                if (file.type === 'application/pdf') {
+                    // Show PDF
+                    previewImg.classList.add('hidden');
+                    pdfPreview.src = e.target.result;
+                    pdfPreview.classList.remove('hidden');
+                } else {
+                    // Show Image
+                    pdfPreview.classList.add('hidden');
+                    previewImg.src = e.target.result;
+                    previewImg.classList.remove('hidden');
+                }
+
                 deleteBtn.classList.remove('hidden');
                 placeholder.classList.add('hidden');
                 errorBox.textContent = ""; 
@@ -244,6 +249,8 @@ $formAction = $isEdit
         invoiceInput.value = ''; // Clear input
         previewImg.src = '#';
         previewImg.classList.add('hidden');
+        pdfPreview.src = ''; // Clear PDF src
+        pdfPreview.classList.add('hidden');
         deleteBtn.classList.add('hidden');
         placeholder.classList.remove('hidden');
     });
@@ -254,32 +261,36 @@ $formAction = $isEdit
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
     document.getElementById("cancel-btn").addEventListener("click", function () {
-        window.location.href = window.location.origin + "/index.php?page=inbounding&action=lsit";
+        window.location.href = window.location.origin + "/index.php?page=inbounding&action=list"; // Fixed typo 'lsit'
     });
 
     // 5. Validation
     document.getElementById("invoiceForm").addEventListener("submit", function(e) {
         const isEditMode = "<?php echo $isEdit ? '1' : '0'; ?>";
         const hasFile = invoiceInput.files.length > 0;
-        const previewVisible = !previewImg.classList.contains('hidden');
+        // Check if either preview is visible
+        const previewVisible = (!previewImg.classList.contains('hidden')) || (!pdfPreview.classList.contains('hidden'));
 
         // Validate File Upload
         if (isEditMode === '0' && !hasFile) {
-            errorBox.textContent = "Please upload an invoice photo.";
+            errorBox.textContent = "Please upload an invoice photo or PDF.";
             e.preventDefault();
             return false;
         }
         if (isEditMode === '1' && !previewVisible) {
-             errorBox.textContent = "Please upload an invoice photo.";
+             errorBox.textContent = "Please upload an invoice photo or PDF.";
              e.preventDefault();
              return false;
         }
     });
-</script>
-<script>
+
+    // Popup Logic for Images
     function openImagePopup(imageUrl) {
-        popupImage.src = imageUrl;
-        document.getElementById('imagePopup').classList.remove('hidden');
+        // Only open popup if it's not a PDF (simple check)
+        if(!imageUrl.toLowerCase().endsWith('.pdf')) {
+            document.getElementById('popupImage').src = imageUrl;
+            document.getElementById('imagePopup').classList.remove('hidden');
+        }
     }
     function closeImagePopup(event) {
         document.getElementById('imagePopup').classList.add('hidden');
