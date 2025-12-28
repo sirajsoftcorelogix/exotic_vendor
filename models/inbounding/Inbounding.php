@@ -818,7 +818,7 @@ public function update_image_variation($img_id, $variation_id) {
         // s = string, d = double (float), i = integer
         // Position 4, 5, 6, 7 are 'd' for Height, Width, Depth, Weight
         $stmt->bind_param(
-            'sssddddssdisssi', 
+            'sssddddssdiissi', 
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
@@ -958,6 +958,58 @@ public function update_image_variation($img_id, $variation_id) {
         }
         
         return false;
+    }
+    public function getpublishdata($id) {
+        $id = (int)$id;
+
+        // 1. Get Main Inbound Data
+        $sql = "SELECT vi.*, vv.vendor_name, c.display_name as category, c.category as category_id, c.display_name as groupname, m.material_name 
+                FROM vp_inbound AS vi 
+                LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id
+                LEFT JOIN category as c on vi.group_name = c.category
+                LEFT JOIN material as m on vi.material_code = m.id
+                WHERE vi.id = $id";
+
+        $result = $this->conn->query($sql);
+        
+        // Check if data was found
+        $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
+        
+        $category_rows = []; // Renamed to avoid confusion with the final string
+
+        // 2. Only run the second query if we have data and category_code is not empty
+        if (!empty($inbounding) && !empty($inbounding['category_code'])) {
+            
+            $cat_ids_input = $inbounding['category_code']; 
+            
+            $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($cat_ids_input)");
+            
+            if ($cat_result) {
+                $category_rows = $cat_result->fetch_all(MYSQLI_ASSOC);
+            }
+        }
+
+        // 3. Process the loop to create the string
+        $cat_id_string = ''; // Initialize variable to avoid "Undefined variable" error
+        
+        foreach ($category_rows as $key => $value) {
+            $cat_id_string .= $value['category'];
+            $cat_id_string .= ',';
+        }
+        
+        // Trim the trailing comma
+        $final_cat_ids = rtrim($cat_id_string, ',');
+        $inbounding['final_cat_ids'] = $final_cat_ids;
+        // Add to main array
+        $inbounding['cat_ids'] = $final_cat_ids; // Added missing semicolon here
+        $var_result = $this->conn->query("SELECT * FROM `vp_variations` WHERE it_id = $id");
+        $var_rows = $var_result->fetch_all(MYSQLI_ASSOC);
+        if (isset($var_rows) && !empty($var_rows)) {
+            $inbounding['var_rows'] = $var_rows;
+        }
+        return [
+            'data' => $inbounding
+        ];
     }
 }
 ?>
