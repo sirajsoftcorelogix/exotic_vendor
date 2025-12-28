@@ -167,8 +167,8 @@ $record_id = $_GET['id'] ?? '';
             <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Grouped by Variation)</legend>
 
             <div class="mb-6">
-                <h4 class="text-xs font-bold text-gray-500 uppercase border-b border-gray-200 pb-1 mb-3">
-                    Base / Default Photos
+                <h4 class="text-xs font-bold text-[#d97824] uppercase">
+                    Base Variant(<?= htmlspecialchars($data['form2']['color'] ?? '') ?>-<?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
                 <div class="photo-group-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 min-h-[80px] p-2 border border-dashed border-gray-200 rounded bg-gray-50/50" 
                      data-var-id="-1">
@@ -259,19 +259,20 @@ $record_id = $_GET['id'] ?? '';
                         <select id="updated_by_select" name="updated_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
                             <?php 
-                                $dbValue = isset($data['form2']['updated_by_user_id']) ? $data['form2']['updated_by_user_id'] : '';
-                                $sessionValue = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : '';  
+                                // 1. Get the values safely (force to integer to handle string "0")
+                                $dbValue = isset($data['form2']['updated_by_user_id']) ? (int)$data['form2']['updated_by_user_id'] : 0;
+                                $sessionValue = isset($_SESSION['user']['id']) ? (int)$_SESSION['user']['id'] : 0;
+
+                                // 2. LOGIC: If DB has a valid ID (> 0), use it. Otherwise, default to Session ID.
+                                $selectedId = ($dbValue > 0) ? $dbValue : $sessionValue;
+
                                 foreach ($data['user'] as $value1) { 
-                                    $isSelected = '';
-                                    if (!empty($dbValue)) {
-                                        if ($dbValue == $value1['id']) $isSelected = 'selected';
-                                    } elseif (!empty($sessionValue)) {
-                                        if ($sessionValue == $value1['id']) $isSelected = 'selected';
-                                    }
-                            ?> 
-                            <option value="<?php echo $value1['id']; ?>" <?php echo $isSelected; ?>>
-                                <?php echo $value1['name']; ?>
-                            </option>
+                                    // 3. Simple comparison
+                                    $isSelected = ($value1['id'] == $selectedId) ? 'selected' : '';
+                                ?> 
+                                <option value="<?php echo $value1['id']; ?>" <?php echo $isSelected; ?>>
+                                    <?php echo $value1['name']; ?>
+                                </option>
                             <?php } ?>
                         </select>
                     </div>
@@ -711,7 +712,7 @@ $record_id = $_GET['id'] ?? '';
                     </div>
 
                     <div class="flex-1 backorder-field" style="display: none;">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Advance %:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Percentage:</label>
                         <div class="relative w-full">
                             <input type="number" name="backorder_percent" min="1" max="100" placeholder="0"
                                    value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '') ?>" 
