@@ -805,6 +805,11 @@ $record_id = $_GET['id'] ?? '';
         </div>
         
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
+            <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                Publish Product
+            </button>
+
             <button class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save and Draft
             </button>
@@ -815,7 +820,29 @@ $record_id = $_GET['id'] ?? '';
         </div>
     </form>
 </div>
+<div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[9999]">
+    <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
+        
+        <div class="mb-4 flex justify-center text-[#28a745]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+        </div>
 
+        <h3 class="text-lg font-bold mb-2 text-gray-800">Publish Product?</h3>
+        <p class="text-sm text-gray-600 mb-6">
+            Are you sure you want to publish this product?<br>
+            <span class="text-xs text-red-500">(Unsaved changes on this screen will be lost)</span>
+        </p>
+        
+        <div class="flex gap-3 justify-center">
+            <button type="button" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">
+                Cancel
+            </button>
+            <button type="button" onclick="triggerPublishController()" class="bg-[#28a745] text-white px-6 py-2 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">
+                Yes, Publish
+            </button>
+        </div>
+    </div>
+</div>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup(event)">
     <div class="bg-white p-2 rounded-md w-auto max-w-[95vw] max-h-[95vh] relative flex flex-col items-center shadow-2xl" onclick="event.stopPropagation();">
         
@@ -1583,4 +1610,46 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // Run on load
     document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
+</script>
+<script>
+    // 1. Open Popup
+    function openPublishPopup() {
+        const popup = document.getElementById('publishConfirmPopup');
+        if(popup) {
+            popup.classList.remove('hidden');
+        } else {
+            console.error("Popup element 'publishConfirmPopup' not found!");
+        }
+    }
+
+    // 2. Close Popup
+    function closePublishPopup() {
+        const popup = document.getElementById('publishConfirmPopup');
+        if(popup) {
+            popup.classList.add('hidden');
+        }
+    }
+
+    // 3. Trigger Controller Function (No Form Submit)
+    function triggerPublishController() {
+        // Get the current ID from the URL (e.g. &id=123)
+        const urlParams = new URLSearchParams(window.location.search);
+        const recordId = urlParams.get('id');
+
+        if (recordId) {
+            // Redirect directly to the controller action
+            // This is a GET request, NOT a form submission
+            const targetUrl = `index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`;
+            
+            // Visual feedback
+            const btn = event.target;
+            btn.innerText = "Processing...";
+            btn.disabled = true;
+
+            window.location.href = targetUrl;
+        } else {
+            alert("Error: Record ID not found in URL.");
+            closePublishPopup();
+        }
+    }
 </script>
