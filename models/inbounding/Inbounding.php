@@ -818,7 +818,7 @@ public function update_image_variation($img_id, $variation_id) {
         // s = string, d = double (float), i = integer
         // Position 4, 5, 6, 7 are 'd' for Height, Width, Depth, Weight
         $stmt->bind_param(
-            'sssddddssdisssi', 
+            'sssddddssdiissi', 
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
