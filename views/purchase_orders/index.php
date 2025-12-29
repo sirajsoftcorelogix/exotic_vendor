@@ -178,6 +178,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Delivery Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Order No</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Invoice</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Grand Total</th>
                         <th scope="col" class="relative px-6 py-3"> <span class="table-header-text">Status</span></th>
@@ -202,6 +203,13 @@
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <?php if (!empty($order['order_number'])): ?>
+                                <a href="<?= base_url('?page=orders&action=view&id=' . htmlspecialchars($order['order_id'])) ?>" class="text-blue-600 hover:underline"><?= htmlspecialchars($order['order_number']) ?></a>
+                            <?php else: ?>
+                                <span class="text-gray-400">N/A</span>
+                            <?php endif; ?>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?php if (!empty($order['vendor_invoice'])): ?>

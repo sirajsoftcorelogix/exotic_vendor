@@ -62,7 +62,7 @@
                                     </div>
                                     <div class="flex space-x-3 justify-end">  
                                         <?php if($item['po_number']): ?>
-                                        <span class="po-button"><?php echo $item['po_number']; ?></span>
+                                        <span class="po-button"><a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $item['po_id']); ?>"><?php echo $item['po_number']; ?></a></span>
                                         <?php else: ?>
                                         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
                                         <input type="hidden" name="poitem[]" id="poitem_order_id" value="<?php echo $item['id']?>">                                    
