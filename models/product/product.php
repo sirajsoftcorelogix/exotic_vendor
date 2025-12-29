@@ -432,7 +432,7 @@ class product{
         return null;
     }
     public function getVendorByItemCode($item_code) {
-        $sql = "SELECT pvm.*, vv.* FROM product_vendor_map pvm 
+        $sql = "SELECT pvm.id as pvm_id, pvm.*, vv.* FROM product_vendor_map pvm 
             JOIN vp_vendors vv ON pvm.vendor_id = vv.id 
             WHERE pvm.item_code = ? ";
         $stmt = $this->db->prepare($sql);   
@@ -485,5 +485,51 @@ class product{
         if (!$stmt) return false;
         $stmt->bind_param('i', $id);
         return $stmt->execute();
+    }
+     /**
+     * Update only vendor priority
+     * @param int $id
+     * @param int $priority
+     * @return array
+     */
+    public function updatePriority($id, $priority) {
+        //select existing priority
+        $sql = "SELECT * FROM product_vendor_map WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $sql2 = "SELECT * FROM product_vendor_map WHERE item_code = ? AND priority = ?";
+            $stmt2 = $this->db->prepare($sql2);
+            $stmt2->bind_param('si', $row['item_code'], $priority);
+            $stmt2->execute();
+            $result2 = $stmt2->get_result();
+            if ($result2 && $result2->num_rows > 0) {
+                //another vendor has same priority, reset that vendor priority to 0
+                $row2 = $result2->fetch_assoc();
+                $sql3 = "UPDATE product_vendor_map SET priority = 0 WHERE id = ?";
+                $stmt3 = $this->db->prepare($sql3);
+                if ($stmt3 === false) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
+                $vid = (int)$row2['id'];
+                $stmt3->bind_param('i', $vid);
+                $stmt3->execute();
+            }
+            
+        }
+
+        // Update the current vendor's priority
+        $sql = "UPDATE product_vendor_map SET priority = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
+        $p = (int)$priority;
+        $i = (int)$id;
+        $stmt->bind_param('ii', $p, $i);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Priority updated successfully.'];
+        }
+        return ['success' => false, 'message' => 'Update failed: '.$stmt->error];
     }
 }

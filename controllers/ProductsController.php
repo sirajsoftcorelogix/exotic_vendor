@@ -1,10 +1,13 @@
 <?php
 require_once 'models/product/product.php';
+require_once 'models/user/user.php';
 $productModel = new product($conn);
+$usersModel = new User($conn);
 class ProductsController {
     public function product_list() {
         is_login();
         global $productModel;
+        global $usersModel;
         //$search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Users per page, default 50
@@ -25,6 +28,7 @@ class ProductsController {
         // Assuming a method countAllProducts exists to get total count
         $total_records = $productModel->countAllProducts($filters);
         $data = [
+            'user' => $usersModel->getAllUsers(),
             'products' => $products_data,
             'page_no' => $page_no,
             'total_pages' => ceil($total_records / $limit),
@@ -378,12 +382,15 @@ class ProductsController {
     public function getVendorEditForm() {
         is_login();
         global $productModel;
+        global $usersModel;
         //print_array($_GET);
         $item_code = isset($_GET['item_code']) ? $_GET['item_code'] : 0;
         $current_vendor = isset($_GET['current_vendor']) ? $_GET['current_vendor'] : '';
+        $users = $usersModel->getAllUsers();
+        //print_array($users);
         if ($item_code != 0) {
             $vendors = $productModel->getVendorByItemCode($item_code);
-            renderTemplateClean('views/products/partial_vendor_edit_form.php', ['vendors' => $vendors, 'current_vendor' => $current_vendor, 'item_code' => $item_code], 'Edit Vendor');
+            renderTemplateClean('views/products/partial_vendor_edit_form.php', ['vendors' => $vendors, 'current_vendor' => $current_vendor, 'item_code' => $item_code, 'users' => $users], 'Edit Vendor');
             
         } else {
             echo '<p>Invalid Item Code.</p>';
@@ -412,4 +419,23 @@ class ProductsController {
         exit;
     }
     
+    public function updatePriority() {
+        // Update vendor priority (AJAX)
+        is_login();
+        global $productModel;
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+        $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        $priority = isset($_POST['priority']) ? (int)$_POST['priority'] : 0;
+        if ($id <= 0 || $priority < 1 || $priority > 5) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
+            exit;
+        }
+        //print_r($_POST);
+        $res = $productModel->updatePriority($id, $priority);
+        echo json_encode($res);
+        exit;
+    }
 }

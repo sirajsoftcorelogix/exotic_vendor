@@ -1007,6 +1007,11 @@ public function update_image_variation($img_id, $variation_id) {
         if (isset($var_rows) && !empty($var_rows)) {
             $inbounding['var_rows'] = $var_rows;
         }
+        $images_sql = $this->conn->query("SELECT file_name FROM `item_images` WHERE item_id = $id");
+        $img_result = $images_sql->fetch_all(MYSQLI_ASSOC);
+        if ($img_result) {
+            $inbounding['img'] = $img_result;
+        }
         return [
             'data' => $inbounding
         ];

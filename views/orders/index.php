@@ -427,7 +427,7 @@
 
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
-                    <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Cancel</button>
+                    <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
                     <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
                 </div>
@@ -442,20 +442,23 @@
                 <?php endif; ?>
             </div>
 
-            <div id="saved-searches" class="mt-4 w-[350px]">
+            <div id="saved-searches" class="mt-4 w-7xl">
                 <?php if (!empty($saved_searches)): ?>
-                    <h3 class="text-sm font-semibold mb-2">Saved Searches</h3>
-                    <ul class="space-y-2 text-sm">
+                    <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-semibold mb-2">Saved Searches</h3> <div class="ml-2 hover:text-orange-700 cursor-pointer" onclick="openSearchSetting();"> <i class="fas fa-cog"></i></div>
+                    </div>
+                    <div class="text-sm flex">
                         <?php foreach ($saved_searches as $s): ?>
-                            <li id="saved-search-<?= $s['id'] ?>" class="flex items-center gap-2">
+                            <div id="saved-search-<?= $s['id'] ?>" class="items-center gap-2 bg-gray-200 px-4 rounded-md mr-4">
                                 <a class="text-indigo-600 hover:underline" href="<?= base_url('?page=orders&action=list') . '&' . htmlspecialchars($s['query']) ?>"><?= htmlspecialchars($s['name']) ?></a>
-                                <button onclick="deleteSavedSearch(<?= $s['id'] ?>)" class="text-red-600 hover:underline text-xs">Delete</button>
-                            </li>
+                                <!-- <button onclick="deleteSavedSearch(<?= $s['id'] ?>)" class="text-red-600 hover:underline text-xs">Delete</button> -->
+                            </div>
                         <?php endforeach; ?>
-                    </ul>
+                    </div>
+                    
                 <?php endif; ?>
             </div>
-
+           
             <!-- clear filter -->
              <script>
                 // function clearFilters() {
@@ -794,7 +797,8 @@
                                     if (strpos($opt_text, 'Express') !== false) {
                                         $display = 'Express Shipping';
                                         $addon_css = 'bg-green-200 text-green-900';
-                                        $bordercolor = 'border-4 border-green-300';
+                                        $bordercolor = strtolower($order['payment_type']) == 'cod' ? 'border-4 border-yellow-300' : 'border-4 border-green-300';
+                                        
                                     } else {
                                         $display = $opt_text;
                                         $addon_css = 'bg-gray-100 text-gray-800';
@@ -854,7 +858,7 @@
                                             <span class="heading-typography">Staff Name</span>
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
 											<span class="heading-typography">Payment Type</span>
-                                            <p>: <span class="data-typography uppercase <?= strtolower($order['payment_type']) == 'cod' ? 'bg-yellow-200' : '' ?>"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
+                                            <p>: <span class="data-typography uppercase "><?= $order['payment_type'] ?? 'N/A' ?></span></p>
                                             <span class="heading-typography">Agent</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
                                             <?php if (!empty($order['publisher'])){ ?>
@@ -1260,6 +1264,33 @@
                 </div>
             </div>
         </div> -->
+    </div>
+</div>
+<!--popup for search settings-->
+<div id="searchSettingsPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
+    <div class="bg-white p-4 rounded-md max-w-6xl w-5/12 max-h-3xl relative flex flex-col items-center" >
+        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="p-6 w-full overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">Search Settings</h2>
+            <form id="searchSettingsForm" method="post" action="?page=orders&action=save_search_settings">
+                <div class="mb-4 w-full">
+                    <label class="block text-gray-700 font-bold mb-2">Saved Search List:</label>
+                    <ul class="space-y-2">
+                        <?php if (isset($saved_searches)): ?>
+                        <?php foreach ($saved_searches as $s): ?>
+                            <li class="flex items-center justify-between bg-gray-50 p-3 rounded">
+                                <p><?= htmlspecialchars($s['name']) ?></p>
+                                <div class="flex gap-3">
+                                    <a class="text-indigo-600 hover:underline text-sm" href="<?= base_url('?page=orders&action=list') . '&' . htmlspecialchars($s['query']) ?>">Load</a>
+                                    <button onclick="deleteSavedSearch(<?= $s['id'] ?>)" class="text-red-600 hover:underline text-sm">Delete</button>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 <!-- Image Popup -->
@@ -2449,5 +2480,16 @@ function SubmitCreatePo(id) {
    orderIdInput.value = id;
    form.appendChild(orderIdInput);
    form.submit();
+}
+
+function openSearchSetting() {
+    //open popup or modal for search settings
+    document.getElementById('searchSettingsPopup').classList.remove('hidden');
+}
+
+function closesearch(){
+    //if (event && event.target === event.currentTarget) {
+        document.getElementById('searchSettingsPopup').classList.add('hidden');
+    //}
 }
 </script>

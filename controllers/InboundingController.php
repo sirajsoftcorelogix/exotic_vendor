@@ -1058,8 +1058,59 @@ class InboundingController {
         // Because this is the last assignment, it will appear at the bottom of the JSON
         $API_data['item_stock_price'] = $stock_price_temp;
 
+        // 1. Initialize the array and keys to defaults to avoid "Undefined Index" errors
+        $images_payload = array();
+        $images_payload['image_directory'] = '';
+        $images_payload['images'] = '';
+
+        // 2. Check if image data exists
+        if (!empty($data['data']['img'])) {
+            
+            // Create directory name (sanitize title to be safe for folders)
+            $clean_title = preg_replace('/[^A-Za-z0-9\-]/', '-', $data['data']['product_title']);
+            $images_payload['image_directory'] = $clean_title . '-2025';
+
+            // 3. Use array_column and implode (Cleaner & Faster than foreach)
+            // This extracts all 'file_name' values and joins them with commas automatically
+            $images_payload['images'] = implode(',', array_column($data['data']['img'], 'file_name'));
+        }
+
+        // 4. Assign to the specific key in your main API array (Do not use $API_data = ...)
+        $API_data['images'] = $images_payload;
         $jsonString = json_encode($API_data);
-        echo "<pre>"; print_r($jsonString); exit;
+
+        $url = 'https://wp.exoticindia.com/vendor-api/product/create';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json'
+        ];
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_POST => true,              // <--- Changed from HTTPGET to POST
+            CURLOPT_POSTFIELDS => $jsonString,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
+        ]);
+        $response = curl_exec($ch);
+        if (curl_errno($ch)) {
+            error_log("cURL Error: " . curl_error($ch));
+            curl_close($ch);
+            return false;
+        }
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode != 200) {
+            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
+            return false;
+        }
+        echo "<pre>"; print_r($response); exit;
+        return json_decode($response, true);
     }
+
 }
 ?>
