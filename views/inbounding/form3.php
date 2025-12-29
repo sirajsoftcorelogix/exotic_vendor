@@ -82,87 +82,16 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 
 <div class="w-full min-h-screen bg-white p-2 md:p-6 font-sans">
     <div class="max-w-[1400px] mx-auto border border-gray-400 rounded-lg overflow-hidden">
-
+        
         <div class="bg-[#ea8c1e] px-4 py-3 flex items-center justify-between text-white relative">
-            <button type="button" id="back-btn" class="p-1 hover:bg-white/20 rounded-full transition">
-                <i class="fa-solid fa-arrow-left text-xl"></i>
-            </button>
+            <button type="button" id="back-btn" class="p-1 hover:bg-white/20 rounded-full transition"><i class="fa-solid fa-arrow-left text-xl"></i></button>
             <h1 class="font-bold text-lg md:text-xl tracking-wide mx-auto">Item Details - Step 3/4</h1>
-            <button type="button" id="cancel-btn" class="p-1 hover:bg-white/20 rounded-full transition">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button> 
+            <button type="button" id="cancel-btn" class="p-1 hover:bg-white/20 rounded-full transition"><i class="fa-solid fa-xmark text-xl"></i></button> 
         </div>
 
         <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="mainForm" class="p-4 space-y-6">
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
             <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
-
-            <div class="flex flex-col lg:flex-row gap-6 items-start">
-                
-                <div class="flex flex-row bg-gray-100 border border-gray-300 rounded p-2 gap-3 min-w-[350px] lg:w-1/3">
-                    <div class="w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-pointer overflow-hidden" onclick="openImagePopup('<?= !empty($mainVar['invoice']) ? base_url($mainVar['invoice']) : '' ?>')">
-                        <?php if(!empty($mainVar['invoice'])): ?>
-                            <img src="<?php echo base_url($mainVar['invoice']); ?>" class="w-full h-full object-cover hover:opacity-90">
-                        <?php else: ?>
-                            <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">No Inv</div>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="flex flex-col justify-center text-sm text-black space-y-1.5 w-full">
-                        <div class="font-bold">Vendor: <span class="font-normal"><?php echo htmlspecialchars($vendor_name); ?></span></div>
-                         <div class="font-bold">Entry: <span class="font-normal"><?php echo date('d M Y', strtotime($gate_entry_date_time ?: 'now')); ?></span></div>
-                        <div class="font-bold">Received By: <span class="font-normal"><?php echo htmlspecialchars($currentuserDetails['name']); ?></span></div>
-                    </div>
-                </div>
-
-                <div class="flex-1 flex flex-wrap gap-2">
-                    <?php if(!empty($display_categories)): ?>
-                        <?php foreach ($display_categories as $item) { ?>
-                            <label class="cursor-pointer group relative">
-                                <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
-                                
-                                <div class="w-24 h-28 bg-black text-white flex flex-col items-center justify-center p-2 rounded transition-all
-                                            peer-checked:bg-gray-300 peer-checked:text-black border border-black shadow-sm">
-                                    <div class="absolute top-2 left-2 w-3.5 h-3.5 rounded-full border-2 border-white peer-checked:border-black flex items-center justify-center">
-                                         <div class="w-1.5 h-1.5 rounded-full bg-white peer-checked:bg-black opacity-0 peer-checked:opacity-100"></div>
-                                    </div>
-                                    
-                                    <i class="<?= $item['icon'] ?> text-3xl mb-2"></i>
-                                    <span class="text-[10px] font-bold uppercase text-center"><?= $item['label'] ?></span>
-                                </div>
-                            </label>
-                        <?php } ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-gray-200 py-4">
-                <div>
-                    <label class="block text-gray-800 font-bold text-xs mb-1">Gate Entry Date</label>
-                    <?php 
-                    $inputValue = (!empty($gate_entry_date_time) && $gate_entry_date_time != "0000-00-00 00:00:00") 
-                    ? date('Y-m-d\TH:i', strtotime($gate_entry_date_time)) 
-                    : date('Y-m-d\TH:i');
-                    ?>
-                    <input type="datetime-local" name="gate_entry_date_time" value="<?php echo $inputValue; ?>" class="w-full border border-gray-400 rounded px-2 py-1 text-sm focus:border-[#ea8c1e] outline-none">
-                </div>
-                <div>
-                    <label class="block text-gray-800 font-bold text-xs mb-1">Material</label>
-                    <select name="material_code" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-[#ea8c1e] outline-none bg-white">
-                        <option value="">Select Material</option>
-                        <?php foreach ($data['material'] as $value2) { 
-                            $isSelected = ($material_code == $value2['id']) ? 'selected' : '';
-                        ?> 
-                        <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
-                        <?php } ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-gray-800 font-bold text-xs mb-1">Received By</label>
-                    <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
-                    <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>" readonly class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
-                </div>
-            </div>
 
             <div id="variations-container" class="space-y-6">
                 <?php foreach($viewVariations as $index => $var): ?>
@@ -170,11 +99,17 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                         
                         <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
                             <h3 class="font-bold text-black text-sm">
-                                <?php echo ($index === 0) ? 'Base Variant' : 'Variant ' . ($index + 1); ?>
+                                <?php echo ($index === 0) ? 'Main Variant' : 'Variant ' . ($index + 1); ?>
                             </h3>
-                            <button type="button" class="remove-variation-btn <?php echo ($index === 0) ? 'hidden' : ''; ?> text-red-500 hover:text-red-700 font-bold text-xs uppercase">
-                                Remove ✕
-                            </button>
+                            <div class="flex gap-3">
+                                <button type="button" class="clone-variation-btn text-blue-600 hover:text-blue-800 font-bold text-xs uppercase flex items-center gap-1">
+                                    <i class="fa-regular fa-copy"></i> Clone
+                                </button>
+                                
+                                <button type="button" class="remove-variation-btn <?php echo ($index === 0) ? 'hidden' : ''; ?> text-red-500 hover:text-red-700 font-bold text-xs uppercase">
+                                    Remove ✕
+                                </button>
+                            </div>
                         </div>
 
                         <div class="flex flex-col md:flex-row gap-6">
@@ -186,15 +121,11 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <div class="placeholder-icon <?php echo $hasPhoto ? 'hidden' : ''; ?> flex flex-col items-center justify-center text-gray-500">
                                         <i class="fa-solid fa-camera text-2xl mb-1"></i>
                                     </div>
-                                    <input type="file" name="variations[<?php echo $index; ?>][photo]" accept="image/*" class="hidden variation-file-input">
+                                    <input type="file" name="variations[<?php echo $index; ?>][photo]" accept="image/*" class="hidden variation-file-input" capture="camera">
                                     <input type="hidden" name="variations[<?php echo $index; ?>][old_photo]" value="<?php echo $var['photo']; ?>">
                                     <input type="hidden" name="variations[<?php echo $index; ?>][id]" value="<?php echo $var['id'] ?? ''; ?>">
                                 </label>
-                                <?php if($index === 0): ?>
-                                    <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
-                                <?php else: ?>
-                                    <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
-                                <?php endif; ?>
+                                <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                             </div>
 
                             <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 items-start">
@@ -207,15 +138,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <input type="number" min="0" name="variations[<?php echo $index; ?>][quantity]" value="<?php echo $var['quantity']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Height (cm):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Depth (cm):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-
-                                <div>
                                     <label class="block text-xs font-bold text-black mb-1">Size:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][size]" value="<?php echo $var['size']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
@@ -224,7 +146,15 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Width (cm):</label>
+                                    <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Width (inch):</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
@@ -249,24 +179,33 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
     </div>
 </div>
 
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-2 rounded-md max-w-4xl max-h-[90vh] relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[85vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('variations-container');
         const addBtn = document.getElementById('add-variation-btn');
         let variationCount = <?php echo count($viewVariations); ?>;
 
-        // ADD VARIATION JS TEMPLATE (Matches PHP structure)
-        addBtn.addEventListener('click', function() {
-            variationCount++;
-            const index = variationCount - 1; 
-
-            const html = `
+        // 1. ADD NEW VARIATION (Function to generate HTML)
+        function createVariationCardHTML(index, count) {
+            return `
                 <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50 animate-fade-in" data-index="${index}">
                     <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
-                        <h3 class="font-bold text-black text-sm">Variant ${variationCount}</h3>
-                        <button type="button" class="remove-variation-btn text-red-500 hover:text-red-700 font-bold text-xs uppercase">
-                            Remove ✕
-                        </button>
+                        <h3 class="font-bold text-black text-sm">Variant ${count}</h3>
+                        <div class="flex gap-3">
+                            <button type="button" class="clone-variation-btn text-blue-600 hover:text-blue-800 font-bold text-xs uppercase flex items-center gap-1">
+                                <i class="fa-regular fa-copy"></i> Clone
+                            </button>
+                            <button type="button" class="remove-variation-btn text-red-500 hover:text-red-700 font-bold text-xs uppercase">
+                                Remove ✕
+                            </button>
+                        </div>
                     </div>
 
                     <div class="flex flex-col md:flex-row gap-6">
@@ -276,57 +215,104 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <div class="placeholder-icon flex flex-col items-center justify-center text-gray-500">
                                     <i class="fa-solid fa-camera text-2xl mb-1"></i>
                                 </div>
-                                <input type="file" name="variations[${index}][photo]" accept="image/*" class="hidden variation-file-input">
+                                <input type="file" name="variations[${index}][photo]" accept="image/*" class="hidden variation-file-input" capture="camera">
+                                <input type="hidden" name="variations[${index}][old_photo]" value="">
                             </label>
                             <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                         </div>
 
                         <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 items-start">
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Color:</label>
-                                <input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
-                                <input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Height (cm):</label>
-                                <input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Depth (cm):</label>
-                                <input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Size:</label>
-                                <input type="text" name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Cost Price:</label>
-                                <input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Width (cm):</label>
-                                <input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
-                                <input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                            </div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Color:</label><input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Quantity:</label><input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Size:</label><input type="text" name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Cost Price:</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                         </div>
                     </div>
                 </div>
             `;
+        }
+
+        addBtn.addEventListener('click', function() {
+            variationCount++;
+            const html = createVariationCardHTML(variationCount - 1, variationCount);
             container.insertAdjacentHTML('beforeend', html);
         });
 
-        // 2. REMOVE VARIATION
+        // 2. EVENT DELEGATION (Remove & Clone)
         container.addEventListener('click', function(e) {
+            
+            // REMOVE Logic
             if (e.target.closest('.remove-variation-btn')) {
                 const card = e.target.closest('.variation-card');
                 if(card) card.remove();
+            }
+
+            // CLONE Logic
+            if (e.target.closest('.clone-variation-btn')) {
+                const sourceCard = e.target.closest('.variation-card');
+                
+                // Extract values from Source Card
+                // using "contains" selector to find inputs ending with specific names
+                const getData = (name) => {
+                    const el = sourceCard.querySelector(`[name*="[${name}]"]`);
+                    return el ? el.value : '';
+                };
+
+                const data = {
+                    color: getData('color'),
+                    quantity: getData('quantity'),
+                    size: getData('size'),
+                    cp: getData('cp'),
+                    height: getData('height'),
+                    width: getData('width'),
+                    depth: getData('depth'),
+                    weight: getData('weight'),
+                    old_photo: getData('old_photo') // Clone the reference to the saved image
+                };
+
+                // Create New Card
+                variationCount++;
+                const html = createVariationCardHTML(variationCount - 1, variationCount);
+                container.insertAdjacentHTML('beforeend', html);
+
+                // Populate New Card with Source Data
+                const newCard = container.lastElementChild;
+                const setData = (name, value) => {
+                    const el = newCard.querySelector(`[name*="[${name}]"]`);
+                    if(el) el.value = value;
+                };
+
+                setData('color', data.color);
+                setData('quantity', data.quantity);
+                setData('size', data.size);
+                setData('cp', data.cp);
+                setData('height', data.height);
+                setData('width', data.width);
+                setData('depth', data.depth);
+                setData('weight', data.weight);
+                setData('old_photo', data.old_photo); // Set hidden old_photo input
+
+                // Handle Image Preview for Cloned Item
+                // If source had a saved image (old_photo), show it in preview
+                if(data.old_photo) {
+                    const preview = newCard.querySelector('.preview-img');
+                    const placeholder = newCard.querySelector('.placeholder-icon');
+                    // We assume base_url logic works via PHP rendering, but in JS we need the path
+                    // If you have a specific path prefix (like 'uploads/'), add it here. 
+                    // Since we can't easily get the PHP base_url() in JS without passing it, 
+                    // we will just grab the src from the source image tag if it's visible.
+                    
+                    const sourceImg = sourceCard.querySelector('.preview-img');
+                    if(sourceImg && !sourceImg.classList.contains('hidden')) {
+                         preview.src = sourceImg.src;
+                         preview.classList.remove('hidden');
+                         placeholder.classList.add('hidden');
+                    }
+                }
             }
         });
 
@@ -351,7 +337,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         });
     });
 
-    // Navigation Scripts
+    // Navigation Scripts (Unchanged)
     var id = <?php echo json_encode($record_id); ?>;
     document.getElementById("back-btn").addEventListener("click", function () {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=form2&id=" + id;
@@ -359,6 +345,17 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
     document.getElementById("cancel-btn").addEventListener("click", function () {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
+    
+    // Popup Scripts (Unchanged)
+    function openImagePopup(imageUrl) {
+        if(!imageUrl) return;
+        document.getElementById('popupImage').src = imageUrl;
+        document.getElementById('imagePopup').classList.remove('hidden');
+    }
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    } 
 </script>
 
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">

@@ -969,5 +969,148 @@ class InboundingController {
         }
         exit;
     }
+    public function inbound_product_publish(){
+        global $inboundingModel;
+        $API_data = array();
+        
+        // top level data
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $data = $inboundingModel->getpublishdata($id);
+
+        // 1. Add all other fields FIRST
+        $API_data['itemcode'] = $data['data']['Item_code'];
+        $API_data['groupname'] = $data['data']['groupname'];
+        $API_data['category'] = $data['data']['Item_code'];
+        $API_data['itemtype'] ='product';
+        $API_data['title'] = $data['data']['product_title'];
+        // REMOVED item_stock_price from here
+        $API_data['status'] = 1;
+        $API_data['snippet_description'] = $data['data']['snippet_description'];
+        $API_data['description_icons'] = $data['data']['description_icons'];
+        $API_data['india_net_qty'] = $data['data']['quantity_received'];
+        $API_data['keywords'] = $data['data']['key_words'];
+        $API_data['usblock'] = $data['data']['us_block'];
+        $API_data['indiablock'] = $data['data']['india_block'];
+        $API_data['hscode'] = $data['data']['hsn_code'];
+        $API_data['vendor'] = $data['data']['Item_code'];
+        $API_data['date_first_added'] = $data['data']['vendor_code'];
+        $API_data['material'] = $data['data']['material_name'];
+        $API_data['images'] = $data['data']['product_photo'];
+
+        // 2. Build stock price array separately in a TEMP variable
+        $stock_price_temp = array();
+
+        // Parent Record [0]
+        $stock_price_temp[0]['price'] = $data['data']['inr_pricing'];
+        $stock_price_temp[0]['size'] = $data['data']['size'];
+        $stock_price_temp[0]['color'] = $data['data']['color'];
+        $stock_price_temp[0]['product_weight'] = $data['data']['weight'];
+        $stock_price_temp[0]['prod_height'] = $data['data']['height'];
+        $stock_price_temp[0]['prod_width'] = $data['data']['width'];
+        $stock_price_temp[0]['prod_length'] = $data['data']['depth'];
+        $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
+        $stock_price_temp[0]['date_added'] = time();
+        $stock_price_temp[0]['stock_date_added'] = $data['data']['stock_added_date']; // Fixed mapping (was photo)
+        $stock_price_temp[0]['gst'] = $data['data']['gst_rate'];
+        $stock_price_temp[0]['price_india'] = $data['data']['inr_pricing'];
+        $stock_price_temp[0]['item_level'] = 'parent';
+        $stock_price_temp[0]['product_weight_unit'] = 'kg';
+        $stock_price_temp[0]['length_unit'] = 'inch';
+        $stock_price_temp[0]['location'] = $data['data']['store_location'];
+        $stock_price_temp[0]['backorder_percent'] = $data['data']['backorder_percent'];
+        $stock_price_temp[0]['backorder_weeks'] = $data['data']['backorder_day'];
+        $stock_price_temp[0]['leadtime'] = $data['data']['lead_time_days'];
+        $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
+        $stock_price_temp[0]['cp'] = $data['data']['cp'];
+        $stock_price_temp[0]['permanently_available'] = $data['data']['permanently_available'];
+
+        // Variation Records [1..n]
+        if (!empty($data['data']['var_rows'])) {
+            $i = 0;
+            foreach ($data['data']['var_rows'] as $key => $value) {
+                $i++;
+                $stock_price_temp[$i]['price'] = $data['data']['inr_pricing'];
+                $stock_price_temp[$i]['size'] = $value['size'];
+                $stock_price_temp[$i]['color'] = $value['color'];
+                $stock_price_temp[$i]['product_weight'] = $value['weight'];
+                $stock_price_temp[$i]['prod_height'] = $value['height'];
+                $stock_price_temp[$i]['prod_width'] = $value['width'];
+                $stock_price_temp[$i]['prod_length'] = $value['depth'];
+                $stock_price_temp[$i]['local_stock'] = $value['quantity'];
+                $stock_price_temp[$i]['date_added'] = time();
+                $stock_price_temp[$i]['stock_date_added'] = $data['data']['stock_added_date'];
+                $stock_price_temp[$i]['gst'] = $data['data']['gst_rate'];
+                $stock_price_temp[$i]['price_india'] = $data['data']['inr_pricing'];
+                $stock_price_temp[$i]['item_level'] = 'variation';
+                $stock_price_temp[$i]['product_weight_unit'] = 'kg';
+                $stock_price_temp[$i]['length_unit'] = 'inch';
+                $stock_price_temp[$i]['location'] = $data['data']['store_location'];
+                $stock_price_temp[$i]['backorder_percent'] = $data['data']['backorder_percent'];
+                $stock_price_temp[$i]['backorder_weeks'] = $data['data']['backorder_day'];
+                $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
+                $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
+                $stock_price_temp[$i]['cp'] = $value['cp'];
+                $stock_price_temp[$i]['permanently_available'] = $data['data']['permanently_available'];
+            }
+        }
+
+        // 3. Assign it to main array LAST
+        // Because this is the last assignment, it will appear at the bottom of the JSON
+        $API_data['item_stock_price'] = $stock_price_temp;
+
+        // 1. Initialize the array and keys to defaults to avoid "Undefined Index" errors
+        $images_payload = array();
+        $images_payload['image_directory'] = '';
+        $images_payload['images'] = '';
+
+        // 2. Check if image data exists
+        if (!empty($data['data']['img'])) {
+            
+            // Create directory name (sanitize title to be safe for folders)
+            $clean_title = preg_replace('/[^A-Za-z0-9\-]/', '-', $data['data']['product_title']);
+            $images_payload['image_directory'] = $clean_title . '-2025';
+
+            // 3. Use array_column and implode (Cleaner & Faster than foreach)
+            // This extracts all 'file_name' values and joins them with commas automatically
+            $images_payload['images'] = implode(',', array_column($data['data']['img'], 'file_name'));
+        }
+
+        // 4. Assign to the specific key in your main API array (Do not use $API_data = ...)
+        $API_data['images'] = $images_payload;
+        $jsonString = json_encode($API_data);
+
+        $url = 'https://wp.exoticindia.com/vendor-api/product/create';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json'
+        ];
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_POST => true,              // <--- Changed from HTTPGET to POST
+            CURLOPT_POSTFIELDS => $jsonString,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
+        ]);
+        $response = curl_exec($ch);
+        if (curl_errno($ch)) {
+            error_log("cURL Error: " . curl_error($ch));
+            curl_close($ch);
+            return false;
+        }
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode != 200) {
+            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
+            return false;
+        }
+        echo "<pre>"; print_r($response); exit;
+        return json_decode($response, true);
+    }
+
 }
 ?>

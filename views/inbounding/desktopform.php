@@ -167,8 +167,8 @@ $record_id = $_GET['id'] ?? '';
             <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Photos (Grouped by Variation)</legend>
 
             <div class="mb-6">
-                <h4 class="text-xs font-bold text-gray-500 uppercase border-b border-gray-200 pb-1 mb-3">
-                    Base / Default Photos
+                <h4 class="text-xs font-bold text-[#d97824] uppercase">
+                    Main Variant(<?= htmlspecialchars($data['form2']['color'] ?? '') ?>-<?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
                 <div class="photo-group-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 min-h-[80px] p-2 border border-dashed border-gray-200 rounded bg-gray-50/50" 
                      data-var-id="-1">
@@ -259,19 +259,20 @@ $record_id = $_GET['id'] ?? '';
                         <select id="updated_by_select" name="updated_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
                             <?php 
-                                $dbValue = isset($data['form2']['updated_by_user_id']) ? $data['form2']['updated_by_user_id'] : '';
-                                $sessionValue = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : '';  
+                                // 1. Get the values safely (force to integer to handle string "0")
+                                $dbValue = isset($data['form2']['updated_by_user_id']) ? (int)$data['form2']['updated_by_user_id'] : 0;
+                                $sessionValue = isset($_SESSION['user']['id']) ? (int)$_SESSION['user']['id'] : 0;
+
+                                // 2. LOGIC: If DB has a valid ID (> 0), use it. Otherwise, default to Session ID.
+                                $selectedId = ($dbValue > 0) ? $dbValue : $sessionValue;
+
                                 foreach ($data['user'] as $value1) { 
-                                    $isSelected = '';
-                                    if (!empty($dbValue)) {
-                                        if ($dbValue == $value1['id']) $isSelected = 'selected';
-                                    } elseif (!empty($sessionValue)) {
-                                        if ($sessionValue == $value1['id']) $isSelected = 'selected';
-                                    }
-                            ?> 
-                            <option value="<?php echo $value1['id']; ?>" <?php echo $isSelected; ?>>
-                                <?php echo $value1['name']; ?>
-                            </option>
+                                    // 3. Simple comparison
+                                    $isSelected = ($value1['id'] == $selectedId) ? 'selected' : '';
+                                ?> 
+                                <option value="<?php echo $value1['id']; ?>" <?php echo $isSelected; ?>>
+                                    <?php echo $value1['name']; ?>
+                                </option>
                             <?php } ?>
                         </select>
                     </div>
@@ -416,12 +417,27 @@ $record_id = $_GET['id'] ?? '';
                         <div class="checkbox-list-container overflow-y-auto p-1 h-full">
                             <?php 
                                 $icon_options = $data['form2']['icon_data']['description_icons'] ?? [];
-                                $saved_raw = $data['form2']['description_icons'] ?? ''; 
-                                $saved_values = is_array($saved_raw) ? $saved_raw : explode(',', $saved_raw);
+                                
+                                // 1. Changed default from '' to null so we can detect it
+                                $saved_raw = $data['form2']['description_icons'] ?? null; 
+
+                                $checkAll = false;
+                                $saved_values = [];
+
+                                // 2. Logic: If null, check everything. If not, parse the values.
+                                if (is_null($saved_raw)) {
+                                    $checkAll = true;
+                                } elseif (is_array($saved_raw)) {
+                                    $saved_values = $saved_raw;
+                                } else {
+                                    // Explode string to array (added trim to handle spaces like "a, b")
+                                    $saved_values = array_map('trim', explode(',', (string)$saved_raw));
+                                }
 
                                 if (!empty($icon_options)) {
                                     foreach ($icon_options as $key => $label) {
-                                        $isChecked = in_array($key, $saved_values) ? 'checked' : '';
+                                        // 3. Check if we should Check All OR if the specific key is in the saved values
+                                        $isChecked = ($checkAll || in_array((string)$key, $saved_values)) ? 'checked' : '';
                                         $uniqueId = 'icon_' . $key; 
                             ?>
                                     <div class="checkbox-item">
@@ -430,7 +446,7 @@ $record_id = $_GET['id'] ?? '';
                                                name="description_icons[]" 
                                                value="<?= $key ?>" 
                                                <?= $isChecked ?>>
-                                            
+                                        
                                         <label for="<?= $uniqueId ?>"><?= $label ?></label>
                                     </div>
                             <?php 
@@ -711,7 +727,7 @@ $record_id = $_GET['id'] ?? '';
                     </div>
 
                     <div class="flex-1 backorder-field" style="display: none;">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Advance %:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Percentage:</label>
                         <div class="relative w-full">
                             <input type="number" name="backorder_percent" min="1" max="100" placeholder="0"
                                    value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '') ?>" 
@@ -789,6 +805,11 @@ $record_id = $_GET['id'] ?? '';
         </div>
         
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
+            <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                Publish Product
+            </button>
+
             <button class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save and Draft
             </button>
@@ -799,7 +820,29 @@ $record_id = $_GET['id'] ?? '';
         </div>
     </form>
 </div>
+<div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[9999]">
+    <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
+        
+        <div class="mb-4 flex justify-center text-[#28a745]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+        </div>
 
+        <h3 class="text-lg font-bold mb-2 text-gray-800">Publish Product?</h3>
+        <p class="text-sm text-gray-600 mb-6">
+            Are you sure you want to publish this product?<br>
+            <span class="text-xs text-red-500">(Unsaved changes on this screen will be lost)</span>
+        </p>
+        
+        <div class="flex gap-3 justify-center">
+            <button type="button" onclick="closePublishPopup()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">
+                Cancel
+            </button>
+            <button type="button" onclick="triggerPublishController()" class="bg-[#28a745] text-white px-6 py-2 rounded text-sm font-semibold hover:bg-[#218838] transition shadow-md">
+                Yes, Publish
+            </button>
+        </div>
+    </div>
+</div>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup(event)">
     <div class="bg-white p-2 rounded-md w-auto max-w-[95vw] max-h-[95vh] relative flex flex-col items-center shadow-2xl" onclick="event.stopPropagation();">
         
@@ -1567,4 +1610,46 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // Run on load
     document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
+</script>
+<script>
+    // 1. Open Popup
+    function openPublishPopup() {
+        const popup = document.getElementById('publishConfirmPopup');
+        if(popup) {
+            popup.classList.remove('hidden');
+        } else {
+            console.error("Popup element 'publishConfirmPopup' not found!");
+        }
+    }
+
+    // 2. Close Popup
+    function closePublishPopup() {
+        const popup = document.getElementById('publishConfirmPopup');
+        if(popup) {
+            popup.classList.add('hidden');
+        }
+    }
+
+    // 3. Trigger Controller Function (No Form Submit)
+    function triggerPublishController() {
+        // Get the current ID from the URL (e.g. &id=123)
+        const urlParams = new URLSearchParams(window.location.search);
+        const recordId = urlParams.get('id');
+
+        if (recordId) {
+            // Redirect directly to the controller action
+            // This is a GET request, NOT a form submission
+            const targetUrl = `index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`;
+            
+            // Visual feedback
+            const btn = event.target;
+            btn.innerText = "Processing...";
+            btn.disabled = true;
+
+            window.location.href = targetUrl;
+        } else {
+            alert("Error: Record ID not found in URL.");
+            closePublishPopup();
+        }
+    }
 </script>

@@ -455,6 +455,9 @@ switch ($page) {
             case 'desktopform':
                 $controller->getdesktopform();
                 break;
+            case 'inbound_product_publish':
+                $controller->inbound_product_publish();
+                break;
             case 'i_photos':
                 $controller->i_photos();
                 break;
