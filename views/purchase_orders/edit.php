@@ -116,10 +116,10 @@
                         <span >Total GST:</span>
                         <span class="total-gst"><?php echo number_format(($data['purchaseOrder']['total_gst'] ?? 0), 2); ?></span>
                     </div>
-                    <!-- <div class="flex justify-between">
+                    <div class="flex justify-between">
                         <span class="font-bold">Shipping Cost:</span>
-                        <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php //echo number_format(($data['purchaseOrder']['shipping_cost'] ?? 0), 2); ?>" class="form-input w-[80px] " /></span>
-                    </div> -->
+                        <span class="shipping-cost"><input type="text" name="shipping_cost" value="<?php echo number_format(($data['purchaseOrder']['shipping_cost'] ?? 0), 2); ?>" class="form-input w-[80px] " /></span>
+                    </div>
                 </div>
                 <div class="mt-1 border-t border-gray-300 pt-1">
                     <div class="flex justify-between final-total-text">
@@ -257,7 +257,7 @@
                 totalGst += (lineSubtotal * gst) / 100;
             });
 
-            const grandTotal = subtotal + totalGst; //+ (parseFloat(shippingCostElement.value) || 0);
+            const grandTotal = subtotal + totalGst + (parseFloat(shippingCostElement.value) || 0);
 
             subtotalElement.textContent = `${subtotal.toFixed(2)}`;
             totalGstElement.textContent = `${totalGst.toFixed(2)}`;
@@ -265,7 +265,7 @@
             document.querySelector('input[name="subtotal"]').value = subtotal.toFixed(2);
             document.querySelector('input[name="total_gst"]').value = totalGst.toFixed(2);
             document.querySelector('input[name="grand_total"]').value = grandTotal.toFixed(2);
-            //document.querySelector('input[name="shipping_cost"]').value = (parseFloat(shippingCostElement.textContent.replace('₹', '')) || 0).toFixed(2);
+            document.querySelector('input[name="shipping_cost"]').value = (parseFloat(shippingCostElement.textContent.replace('₹', '')) || 0).toFixed(2);
         }
 
         itemTable.addEventListener('input', updateTotals);

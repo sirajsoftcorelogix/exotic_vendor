@@ -338,6 +338,9 @@ switch ($page) {
             case 'remove_vendor_mapping':
                 $controller->removeVendorMapping();
                 break;
+            case 'updatePriority':
+                $controller->updatePriority();
+                break;
             /*case 'view':
                 $controller->product_view();
                 break;
