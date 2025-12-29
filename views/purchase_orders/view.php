@@ -50,7 +50,7 @@
       <div class="grid grid-cols-12 gap-4 px-4 py-2 table-header bg-[rgba(245,245,245,1)] rounded-md">
         <div class="col-span-1">S.No</div>
         <div class="col-span-3">Item Summary</div>
-        <div class="col-span-1">HSN</div>
+        <div class="col-span-1">Order No</div>
         <div class="col-span-1">Image</div>
         <div class="col-span-1">GST&</div>
         <div class="col-span-1">Quantity</div>
@@ -64,7 +64,7 @@
         <div class="bg-white rounded-lg p-4 grid grid-cols-12 gap-4 items-center table-row-text">
           <div class="col-span-1"><?= $index + 1 ?></div>
           <div class="col-span-3"><?= htmlspecialchars($item['title'] ?? '') ?> - <?= htmlspecialchars($item['order_number'] ?? '') ?></div>
-          <div class="col-span-1"><?= htmlspecialchars($item['hsn'] ?? '') ?></div>
+          <div class="col-span-1"><?= htmlspecialchars($item['order_number'] ?? '') ?></div>
           <div class="col-span-1"><img src="<?= isset($item['image']) ? $item['image'] : '' ?>" class="rounded-lg" onerror="this.onerror=null;this.src='https://placehold.co/56x88/cccccc/ffffff?text=Image';"></div>
           <div class="col-span-1"><?= htmlspecialchars($item['gst'] ?? '') ?>%</div>
           <div class="col-span-1">
