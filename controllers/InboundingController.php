@@ -642,7 +642,7 @@ class InboundingController {
 
         if (!$oldData) { echo "Record not found."; exit; }
 
-        // --- File Upload Logic ---
+        // --- Main Invoice File Upload Logic ---
         $invoicePath = $oldData['form1']['invoice_image'] ?? '';
         if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
             $uploadDir = __DIR__ . '/../uploads/invoice/';
@@ -661,26 +661,18 @@ class InboundingController {
         $item_code  = $_POST['Item_code'] ?? '';
         $old_is_variant = $oldData['form2']['is_variant'] ?? '';
         $cat_input = $_POST['category_code'] ?? '';
-        // Convert array to comma-separated string (e.g., "1,5,8")
         $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
 
-        // --- Auto-Generate Item Code Logic (For Non-Variants) ---
-        // --- Auto-Generate Item Code Logic ---
         // --- Auto-Generate Item Code Logic ---
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
-
-            // 1. Get Group Name (Use the NEW function to search by 'category' column)
             $group_val = $_POST['group_name'] ?? ''; 
             $group_real_name = $inboundingModel->getGroupNameByCode($group_val); 
 
-            // 2. Get Category Name (Use the EXISTING function to search by 'id' column)
             $category_id = $_POST['category_code'] ?? 0;
             $cat_real_name = $inboundingModel->getCategoryName($category_id);
             
             $next_count = $inboundingModel->getNextProductCount();
 
-            // 3. Generate Chars
-            // If name is found, take 1st letter. If not found (empty), default to 'X'
             $char1  = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
             $char23 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 2)) : 'XX';
             $increment_str = str_pad($next_count, 3, '0', STR_PAD_LEFT);
@@ -694,10 +686,8 @@ class InboundingController {
         $generated_sku = '';
 
         if ($is_variant === 'N') {
-            // Rule: If Variant is No, SKU is exactly the Item Code
             $generated_sku = $item_code;
         } elseif ($is_variant === 'Y') {
-            // Safety check: ensure item_code isn't empty (though JS validation handles this)
             if(!empty($item_code)) {
                 $generated_sku = $item_code . '-' . $size . '-' . $color;
             } else {
@@ -712,26 +702,19 @@ class InboundingController {
         $sub_sub_input = $_POST['sub_sub_category_code'] ?? '';
         $sub_sub_val   = is_array($sub_sub_input) ? implode(',', $sub_sub_input) : $sub_sub_input;
 
-
         $icons_raw = $_POST['description_icons'] ?? ''; 
         $icons_val = is_array($icons_raw) ? implode(',', $icons_raw) : $icons_raw;
-        $back_order_input = $_POST['back_order'] ?? '0'; // Defaults to '0' (No)
+        
+        $back_order_input = $_POST['back_order'] ?? '0'; 
+        $percent_val = ($back_order_input == '1') ? (!empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0) : 0;
+        $day_val     = ($back_order_input == '1') ? (!empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0) : 0;
 
-        $percent_val = 0;
-        $day_val     = 0;
-
-        // Only capture values if "Yes" (1) is selected
-        if ($back_order_input == '1') {
-            // Use intval to force it to be a number (prevents empty strings)
-            $percent_val = !empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0;
-            $day_val     = !empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0;
-        }
-        // 3. Data Array
+        // 3. Prepare Main Data Array
         $data = [
             'invoice_image'       => $invoicePath,
             'is_variant'          => $is_variant,
             'Item_code'           => $item_code,
-            'sku'                 => $generated_sku, // <--- ADDED SKU HERE
+            'sku'                 => $generated_sku,
             'group_name'          => $_POST['group_name'] ?? '', 
             'category_code'       => $category_val,
             'sub_category_code'   => $sub_cat_val, 
@@ -764,43 +747,89 @@ class InboundingController {
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
             'description_icons'   => $icons_val, 
-            'back_order'           => $back_order_input,
-            'backorder_percent'    => $percent_val,
-            'backorder_day'        => $day_val,
+            'back_order'          => $back_order_input,
+            'backorder_percent'   => $percent_val,
+            'backorder_day'       => $day_val,
             'us_block'            => $_POST['us_block'] ?? '',
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
         ];
 
-        // 4. Save
+        // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);
-        // 2. Update Display Order (Existing)
-                if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
-                    foreach ($_POST['photo_order'] as $img_id => $order_num) {
-                        $inboundingModel->update_image_order($img_id, $order_num);
-                    }
-                }
 
-                // 3. UPDATE VARIATIONS (Add This New Block)
-                // This saves which variation the photo belongs to
-                if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
-                    foreach ($_POST['photo_variation'] as $img_id => $var_id) {
-                        $inboundingModel->update_image_variation($img_id, $var_id);
-                    }
-                }
+        // =========================================================================
+        // START NEW CODE: Handle Variations Logic
+        // =========================================================================
+        
+        // Capture variations array from POST
+        $allVariations = $_POST['variations'] ?? [];
+
+        foreach ($allVariations as $key => &$variant) {
+            // Ensure ID is passed correctly
+            $variant['id'] = $variant['id'] ?? '';
+
+            // Handle File Uploads for each variation
+            // PHP structures multi-files as $_FILES['variations']['error'][$key]['photo']
+            $uploadError = $_FILES['variations']['error'][$key]['photo'] ?? UPLOAD_ERR_NO_FILE;
+
+            if ($uploadError === UPLOAD_ERR_OK) {
+                 $tmpName = $_FILES['variations']['tmp_name'][$key]['photo'];
+                 $name    = $_FILES['variations']['name'][$key]['photo'];
+                 $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+                 if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                     $uploadDir = __DIR__ . '/../uploads/products/';
+                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                     // Generate unique name to prevent conflicts
+                     $newFileName = "VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                     if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                         $variant['photo'] = "uploads/products/" . $newFileName;
+                     }
+                 }
+            } else {
+                 // Keep the old photo if no new one was uploaded
+                 $variant['photo'] = $variant['old_photo'] ?? '';
+            }
+        }
+        unset($variant); // Break reference
+
+        // Call Model to Save Variations
+        // We pass $item_code as the temp_code/parent identifier
+        if (!empty($allVariations)) {
+            $inboundingModel->saveVariations($id, $allVariations, $item_code);
+        }
+        // =========================================================================
+        // END NEW CODE
+        // =========================================================================
+
+        // 5. Update Image Order
+        if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
+            foreach ($_POST['photo_order'] as $img_id => $order_num) {
+                $inboundingModel->update_image_order($img_id, $order_num);
+            }
+        }
+
+        // 6. Update Image Variation Assignment
+        if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
+            foreach ($_POST['photo_variation'] as $img_id => $var_id) {
+                $inboundingModel->update_image_variation($img_id, $var_id);
+            }
+        }
+
         if ($result['success']) {
             $logData = [
-                    'userid_log' => $_POST['userid_log'] ?? '',
-                    'i_id' => $id,
-                    'stat' => 'Data Entry'
-                ];
-            $log_res =  $inboundingModel->stat_logs($logData);
+                'userid_log' => $_POST['userid_log'] ?? '',
+                'i_id' => $id,
+                'stat' => 'Data Entry'
+            ];
+            $inboundingModel->stat_logs($logData);
             header("location: " . base_url('?page=inbounding&action=list'));
             exit;
         } else {
             echo "Update failed: " . $result['message'];
         }
-    }    
+    } 
     public function submitStep3() {
         global $inboundingModel;
 
@@ -892,7 +921,7 @@ class InboundingController {
             'weight'               => $mainVariant['weight'] ?? 0,
             'color'                => $mainVariant['color'] ?? '',
             'size'                 => $mainVariant['size'] ?? '',
-            'quantity_received'    => $mainVariant['quantity'] ?? 0,
+            'quantity'    => $mainVariant['quantity'] ?? 0,
             'cp'                   => $mainVariant['cp'] ?? 0,
             'product_photo'        => $mainVariant['photo'] ?? '' 
         ];
@@ -1078,12 +1107,12 @@ class InboundingController {
         // 4. Assign to the specific key in your main API array (Do not use $API_data = ...)
         $API_data['images'] = $images_payload;
         $jsonString = json_encode($API_data);
-
-        $url = 'https://wp.exoticindia.com/vendor-api/product/create';
+       // echo "<pre>"; print_r($jsonString);exit;
+        $url = 'https://www.exoticindia.com/vendor-api/product/create';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
-            'Accept: application/json'
+            'Accept: application/json' 
         ];
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -1097,6 +1126,7 @@ class InboundingController {
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
         ]);
         $response = curl_exec($ch);
+        echo "<pre>"; print_r($response); exit;
         if (curl_errno($ch)) {
             error_log("cURL Error: " . curl_error($ch));
             curl_close($ch);
@@ -1108,9 +1138,7 @@ class InboundingController {
             error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
             return false;
         }
-        echo "<pre>"; print_r($response); exit;
         return json_decode($response, true);
     }
-
 }
 ?>
