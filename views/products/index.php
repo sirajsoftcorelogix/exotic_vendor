@@ -369,24 +369,24 @@
 
         <div class="h-full bg-white shadow-xl px-8 overflow-y-auto flex flex-col w-full">
             <!-- Modal Content -->
-            <div class="px-6 py-5 md:px-8">
+            <div class="px-6 py-4 md:px-8">
                 <div class="flex items-center gap-4">
                     <!-- Circular Icon -->
-                    <div class="w-12 h-12 md:w-14 md:h-14 bg-brand-orange rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
+                    <div class="w-10 h-10 md:w-12 md:h-12 bg-brand-orange rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
                         <i class="fas fa-link text-white text-xl md:text-2xl transform -rotate-45"></i>
                     </div>
                     <!-- Title -->
-                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Product Mapping ⇌ Vendor</h1>
+                    <h1 class="text-xl md:text-xl font-bold text-gray-900">Product Mapping ⇌ Vendor</h1>
                 </div>
             </div>
 
             <!-- Purple Separator Line -->
             <div class="h-1 bg-brand-purple w-full"></div>
 
-            <div class="p-6 md:p-8 flex-grow">
+            <div class="p-5 md:p-7 flex-grow">
 
                 <!-- ================= PRODUCT INFO CARD (ORANGE ROUNDED BOX) ================= -->
-                <div class="bg-brand-orange rounded-xl p-6 mb-8 flex flex-col md:flex-row items-center gap-6 shadow-md text-white">
+                <div class="bg-brand-orange rounded-xl p-6 mb-8 flex flex-col md:flex-row items-center gap-6 shadow-md text-white sticky top-0 z-10">
                     <!-- Product Icon/Image Placeholder -->
                     <div class="w-20 h-20 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 border border-white border-opacity-30">
                         <!-- <i class="fas fa-box-open text-3xl text-white opacity-90"></i> -->
@@ -396,9 +396,9 @@
                     <!-- Product Details -->
                     <div class="flex-grow">
                         <!-- Item Code: Reduced font size as requested -->
-                        <div class="text-xl md:text-2xl font-bold mb-2" id="item_code_mapped">Item Code : </div>
+                        <div class="text-xl md:text-lg font-bold mb-2" id="item_code_mapped">Item Code : </div>
                         <!-- Description in regular font -->
-                        <p class="text-white text-lg font-normal opacity-95 leading-snug" id="current_vendor_mapped">                          
+                        <p class="text-white text-md font-normal opacity-95 leading-snug" id="current_vendor_mapped">                          
                            
                         </p>
                     </div>
@@ -913,7 +913,7 @@ function removeVendor(button, id) {
     .then(data => {
         if (data.success) {
             alert('Vendor mapping removed successfully.');
-            window.location.reload(); // Reload to reflect changes
+            //window.location.reload(); // Reload to reflect changes
         } else {
             alert('Error removing vendor mapping: ' + data.message);
         }

@@ -64,7 +64,7 @@
         <div class="bg-white rounded-lg p-4 grid grid-cols-12 gap-4 items-center table-row-text">
           <div class="col-span-1"><?= $index + 1 ?></div>
           <div class="col-span-3"><?= htmlspecialchars($item['title'] ?? '') ?> - <?= htmlspecialchars($item['order_number'] ?? '') ?></div>
-          <div class="col-span-1"><a class="text-blue-600 hover:underline" href="<?= base_url('?page=orders&action=get_order_details_html&type=outer&order_number=') . $item['order_number'] ?>"><?= htmlspecialchars($item['order_number'] ?? '') ?></a></div>
+          <div class="col-span-1"><a class="text-blue-600 hover:underline" target="_blank" href="<?= base_url('?page=orders&action=get_order_details_html&type=outer&order_number=') . $item['order_number'] ?>"><?= htmlspecialchars($item['order_number'] ?? '') ?></a></div>
           <div class="col-span-1"><img src="<?= isset($item['image']) ? $item['image'] : '' ?>" class="rounded-lg" onerror="this.onerror=null;this.src='https://placehold.co/56x88/cccccc/ffffff?text=Image';"></div>
           <div class="col-span-1"><?= htmlspecialchars($item['gst'] ?? '') ?>%</div>
           <div class="col-span-1">
@@ -640,11 +640,11 @@
                             <input type="date" id="delivery_challan_date" name="delivery_challan_date" class="form-input w-full mt-1" max="<?= date('Y-m-d') ?>">
                         </div>
                         <div>
-                            <label for="mode_of_transport" class="text-sm font-medium text-gray-700">Mode of Transport:<i class="text-red-500">*</i></label>
+                            <label for="mode_of_transport" class="text-sm font-medium text-gray-700">Mode of Transport:</label>
                             <input type="text" id="mode_of_transport" name="mode_of_transport" class="form-input w-full mt-1" placeholder="Enter Mode of Transport">
                         </div>
                         <div>
-                            <label for="vehicle_no" class="text-sm font-medium text-gray-700">Vehicle No:<i class="text-red-500">*</i></label>
+                            <label for="vehicle_no" class="text-sm font-medium text-gray-700">Vehicle No:</label>
                             <input type="text" id="vehicle_no" name="vehicle_no" class="form-input w-full mt-1" placeholder="Enter Vehicle No">
                         </div>                        
                       </div>

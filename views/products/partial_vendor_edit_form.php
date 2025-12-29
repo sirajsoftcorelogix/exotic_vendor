@@ -9,10 +9,10 @@
             foreach ($vendors as $vendor): ?>
             <!-- Vendor Item 1 -->
             <!-- Changed items-start to items-center to center the cross button vertically -->
-            <div class="vendor-item bg-brand-light-gray border border-gray-200 rounded-lg p-5 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
+            <div class="vendor-item bg-brand-light-gray border border-gray-200 rounded-lg p-3 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex-grow">
                     <!-- Vendor Name (Orange) -->
-                    <div class="text-brand-orange font-bold text-xl mb-3">
+                    <div class="text-brand-orange font-bold text-md mb-1">
                         <?php echo htmlspecialchars($vendor['vendor_name']); ?>
                     </div>
                     <!-- Vendor Details Grid -->

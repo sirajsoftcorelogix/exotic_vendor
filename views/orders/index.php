@@ -449,8 +449,8 @@
                     </div>
                     <div class="text-sm flex">
                         <?php foreach ($saved_searches as $s): ?>
-                            <div id="saved-search-<?= $s['id'] ?>" class="items-center gap-2 bg-gray-200 px-4 rounded-md mr-4">
-                                <a class="text-indigo-600 hover:underline" href="<?= base_url('?page=orders&action=list') . '&' . htmlspecialchars($s['query']) ?>"><?= htmlspecialchars($s['name']) ?></a>
+                            <div id="saved-search-<?= $s['id'] ?>" class="items-center gap-2 bg-gray-200 px-4 rounded-md mr-4 min-w-max py-1 hover:bg-orange-300">
+                                <a class="" href="<?= base_url('?page=orders&action=list') . '&' . htmlspecialchars($s['query']) ?>"><?= htmlspecialchars($s['name']) ?></a>
                                 <!-- <button onclick="deleteSavedSearch(<?= $s['id'] ?>)" class="text-red-600 hover:underline text-xs">Delete</button> -->
                             </div>
                         <?php endforeach; ?>
@@ -793,11 +793,14 @@
                                     if ($opt_text === '') {
                                         continue;
                                     }
+                                    if(strtolower($order['payment_type']) == 'cod'){
+                                        $bordercolor = 'border-4 border-yellow-300';
+                                    }
                                     // Highlight Express Shipping specially, otherwise show default style
                                     if (strpos($opt_text, 'Express') !== false) {
                                         $display = 'Express Shipping';
                                         $addon_css = 'bg-green-200 text-green-900';
-                                        $bordercolor = strtolower($order['payment_type']) == 'cod' ? 'border-4 border-yellow-300' : 'border-4 border-green-300';
+                                        $bordercolor = 'border-4 border-green-300';
                                         
                                     } else {
                                         $display = $opt_text;

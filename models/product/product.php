@@ -434,7 +434,7 @@ class product{
     public function getVendorByItemCode($item_code) {
         $sql = "SELECT pvm.id as pvm_id, pvm.*, vv.* FROM product_vendor_map pvm 
             JOIN vp_vendors vv ON pvm.vendor_id = vv.id 
-            WHERE pvm.item_code = ? ";
+            WHERE pvm.item_code = ?  order by pvm.priority ASC";
         $stmt = $this->db->prepare($sql);   
         $stmt->bind_param('s', $item_code);
         $stmt->execute();
