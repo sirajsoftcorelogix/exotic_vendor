@@ -1,12 +1,25 @@
-<div class="flex-grow space-y-4">
-<?php 
+<div class="flex-grow space-4 bg-white p-6">
+<div class="max-w-4xl mx-auto text-white rounded-lg grid grid-cols-2 p-4 mt-6" style="background-color: rgba(208, 103, 6, 1);">
+    <div>
+        <p><span class="font-bold">Order number : </span><span class=""><?php echo $order[0]['order_number']; ?></span></p>
+        <p><span class="font-bold">Order Date : </span><span class=""><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
+        </p>
+    </div>
+    <div>
+        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo $order[0]['total_price']; ?></span></p>
+        <p><span class="font-bold">Payment Mode : </span><span class=""><?php echo $order[0]['payment_type']; ?></span></p>
+    </div>
+</div>
+</div>
+<div class="flex-grow space-4 p-4 bg-white">
+<?php
     //print_array($order);
 	$countries = country_array();
 	//print_array($countries);
     foreach ($order as $items => $item):?>
             <!-- Accordion Item 1 -->
-                <div>
-                    <div class="accordion-trigger cursor-pointer border-b pb-4">
+                <div class="max-w-4xl mx-auto mb-6 mb-6 bg-white shadow-md rounded-lg overflow-hidden">
+                    <div class="accordion-trigger cursor-pointer border-b p-4">
                         <div class="flex items-start space-x-4">
                             <div class="flex-shrink-0 w-36 h-36">
                                 <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image"
@@ -235,3 +248,32 @@
                 </div>
 <?php endforeach; ?>  
 </div>  
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const accordionTriggers = document.querySelectorAll('.accordion-trigger');
+            accordionTriggers.forEach(trigger => {
+                // Remove previous handler if stored to avoid duplicate handlers
+                if (trigger.__accordionClick__) {
+                    trigger.removeEventListener('click', trigger.__accordionClick__);
+                }
+
+                const handler = function () {
+                    const content = this.nextElementSibling;
+                    const isOpening = !content.classList.contains('open');
+
+                    // Open or close the clicked one
+                    if (isOpening) {
+                        content.classList.add('open');
+                        this.classList.add('active');
+                    } else {
+                        content.classList.remove('open');
+                        this.classList.remove('active');
+                    }
+                };
+
+                // store the handler reference so it can be removed later
+                trigger.__accordionClick__ = handler;
+                trigger.addEventListener('click', handler);
+            });
+    });
+</script>

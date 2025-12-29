@@ -292,7 +292,8 @@
 			'sculptures' => 'Sculptures',
 			'textiles' => 'Textiles',
 			'jewelry' => 'Jewelry',
-			'homeandliving' => 'Home and Living'
+			'homeandliving' => 'Home and Living',
+			'book' => 'Book',
 		];
 	}
 	function getVendorCategory(){

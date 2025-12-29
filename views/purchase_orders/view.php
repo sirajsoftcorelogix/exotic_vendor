@@ -50,7 +50,7 @@
       <div class="grid grid-cols-12 gap-4 px-4 py-2 table-header bg-[rgba(245,245,245,1)] rounded-md">
         <div class="col-span-1">S.No</div>
         <div class="col-span-3">Item Summary</div>
-        <div class="col-span-1">HSN</div>
+        <div class="col-span-1">Order No</div>
         <div class="col-span-1">Image</div>
         <div class="col-span-1">GST&</div>
         <div class="col-span-1">Quantity</div>
@@ -59,12 +59,12 @@
         <div class="col-span-1">Amount</div>
       </div>
       <!-- Table Rows -->
-      <?php     
+      <?php    
       foreach ($items as $index => $item): ?>
         <div class="bg-white rounded-lg p-4 grid grid-cols-12 gap-4 items-center table-row-text">
           <div class="col-span-1"><?= $index + 1 ?></div>
           <div class="col-span-3"><?= htmlspecialchars($item['title'] ?? '') ?> - <?= htmlspecialchars($item['order_number'] ?? '') ?></div>
-          <div class="col-span-1"><?= htmlspecialchars($item['hsn'] ?? '') ?></div>
+          <div class="col-span-1"><a class="text-blue-600 hover:underline" target="_blank" href="<?= base_url('?page=orders&action=get_order_details_html&type=outer&order_number=') . $item['order_number'] ?>"><?= htmlspecialchars($item['order_number'] ?? '') ?></a></div>
           <div class="col-span-1"><img src="<?= isset($item['image']) ? $item['image'] : '' ?>" class="rounded-lg" onerror="this.onerror=null;this.src='https://placehold.co/56x88/cccccc/ffffff?text=Image';"></div>
           <div class="col-span-1"><?= htmlspecialchars($item['gst'] ?? '') ?>%</div>
           <div class="col-span-1">
@@ -640,11 +640,11 @@
                             <input type="date" id="delivery_challan_date" name="delivery_challan_date" class="form-input w-full mt-1" max="<?= date('Y-m-d') ?>">
                         </div>
                         <div>
-                            <label for="mode_of_transport" class="text-sm font-medium text-gray-700">Mode of Transport:<i class="text-red-500">*</i></label>
+                            <label for="mode_of_transport" class="text-sm font-medium text-gray-700">Mode of Transport:</label>
                             <input type="text" id="mode_of_transport" name="mode_of_transport" class="form-input w-full mt-1" placeholder="Enter Mode of Transport">
                         </div>
                         <div>
-                            <label for="vehicle_no" class="text-sm font-medium text-gray-700">Vehicle No:<i class="text-red-500">*</i></label>
+                            <label for="vehicle_no" class="text-sm font-medium text-gray-700">Vehicle No:</label>
                             <input type="text" id="vehicle_no" name="vehicle_no" class="form-input w-full mt-1" placeholder="Enter Vehicle No">
                         </div>                        
                       </div>

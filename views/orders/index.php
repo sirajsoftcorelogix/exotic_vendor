@@ -103,7 +103,7 @@
     
    
 </style>
-<div class="container mx-auto p-4">
+<div class="container mx-auto pr-4 pt-2">
     <?php
 		
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -129,7 +129,7 @@
     ?>
     <!-- Header Section -->
     <!-- Stats Section -->
-    <div class="mt-6 sm:mt-8">
+    <div class="mt-0 sm:mt-2">
         <div class="bg-white rounded-xl shadow-sm p-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
 
@@ -257,7 +257,7 @@
         </div>
     </div>
     <!-- Advance Search Accordion -->
-    <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
+    <div class="mt-2 mb-8 bg-white rounded-xl p-4 ">
         <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
             <h2 class="text-xl font-bold text-gray-900">Advance Search</h2>
             <svg id="accordion-icon-search" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -265,7 +265,7 @@
             </svg>
         </button>
 
-        <div id="accordion-content-search" class="accordion-content  overflow-visible">
+        <div id="accordion-content-search" class="accordion-content  overflow-visible hidden ">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
@@ -344,7 +344,7 @@
                 </div>
                 <div class="">
                     <label for="country" class="block text-sm font-medium text-gray-600 mb-1">Country</label>
-                    <select id="country" name="country" class="max-w-48 px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                    <select id="country" name="country" class="w-full px-3 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <option value="" selected >All Country</option>
 						<optgroup label="Easy">
 							<option value="overseas">Overseas</option>
@@ -356,7 +356,7 @@
                     </select>
                 </div>
                 <div class="">
-                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">Staff Name</label>
+                    <label for="staff_name" class="block text-sm font-medium text-gray-600 mb-1">PO Issued By</label>
                     <select id="staff_name" name="staff_name[]" multiple class="advanced-multiselect w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                         <!-- <option value="" >All Staff</option> -->
 						<?php foreach ($staff_list as $key => $value): ?>
@@ -414,15 +414,51 @@
                         <?php endforeach; ?>                    
                     </select>
                 </div>
-                
-                
+                <!-- Author filter -->
+                <div>
+                    <label for="author" class="block text-sm font-medium text-gray-600 mb-1">Author</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['author'] ?? '') ?>" name="author" id="author" placeholder="Author Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
+                </div>
+                <!-- Publisher filter -->
+                <div>
+                    <label for="publisher" class="block text-sm font-medium text-gray-600 mb-1">Publisher</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['publisher'] ?? '') ?>" name="publisher" id="publisher" placeholder="Publisher Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
+                </div>
+
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
-                    <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Cancel</button>
+                    <button type="button" onclick="cancelSearch()" class="w-full bg-gray-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button>
                     <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
                     <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
                 </div>
                 </form>
+
+            <!-- Save Search Controls -->
+            <div class="mt-4">
+                <?php if (!empty($query_string) && trim($query_string, '&') != ''): ?>
+                    <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-700 transition">Save Search</button>
+                <?php else: ?>
+                    <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm" disabled>Save Search</button>
+                <?php endif; ?>
+            </div>
+
+            <div id="saved-searches" class="mt-4 w-7xl">
+                <?php if (!empty($saved_searches)): ?>
+                    <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-semibold mb-2">Saved Searches</h3> <div class="ml-2 hover:text-orange-700 cursor-pointer" onclick="openSearchSetting();"> <i class="fas fa-cog"></i></div>
+                    </div>
+                    <div class="text-sm flex">
+                        <?php foreach ($saved_searches as $s): ?>
+                            <div id="saved-search-<?= $s['id'] ?>" class="items-center gap-2 bg-gray-200 px-4 rounded-md mr-4 min-w-max py-1 hover:bg-orange-300">
+                                <a class="" href="<?= base_url('?page=orders&action=list') . '&' . htmlspecialchars($s['query']) ?>"><?= htmlspecialchars($s['name']) ?></a>
+                                <!-- <button onclick="deleteSavedSearch(<?= $s['id'] ?>)" class="text-red-600 hover:underline text-xs">Delete</button> -->
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    
+                <?php endif; ?>
+            </div>
+           
             <!-- clear filter -->
              <script>
                 // function clearFilters() {
@@ -438,6 +474,71 @@
                     const page = 'page=orders&action=list';
                     window.location.href = url.toString() + '?' + page; // Redirect to the updated URL
                 }
+
+                function saveCurrentSearch() {
+                    const currentQuery = '<?= trim($query_string, '&') ?>';
+                    if (!currentQuery) { alert('No filters to save.'); return; }
+                    let defaultName = 'Search - ' + new Date().toLocaleString();
+                    let name = prompt('Enter a name for this search:', defaultName);
+                    if (name === null) return; // cancelled
+                    const formData = new URLSearchParams();
+                    formData.append('name', name.trim());
+                    formData.append('query', currentQuery);
+                    fetch('<?= base_url('?page=orders&action=saveSearch') ?>', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: formData.toString()
+                    }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                            // add to list
+                            const s = data.search;
+                            const ul = document.querySelector('#saved-searches ul') || (() => {
+                                const div = document.getElementById('saved-searches');
+                                div.innerHTML = '<h3 class="text-sm font-semibold mb-2">Saved Searches</h3><ul class="space-y-2"></ul>';
+                                return document.querySelector('#saved-searches ul');
+                            })();
+                            const li = document.createElement('li');
+                            li.id = 'saved-search-' + s.id;
+                            li.className = 'flex items-center gap-2';
+                            li.innerHTML = '<a class="text-indigo-600 hover:underline" href="<?= base_url('?page=orders&action=list') ?>&' + encodeURI(s.query) + '">' + escapeHtml(s.name) + '</a> <button onclick="deleteSavedSearch(' + s.id + ')" class="text-red-600 hover:underline text-xs">Delete</button>';
+                            ul.insertBefore(li, ul.firstChild);
+                            alert('Search saved.');
+                        } else {
+                            alert('Unable to save search: ' + (data.message || '')); 
+                        }
+                    }).catch(err => { alert('Network error'); });
+                }
+
+                function deleteSavedSearch(id) {
+                    if (!confirm('Delete this saved search?')) return;
+                    const formData = new URLSearchParams();
+                    formData.append('id', id);
+                    fetch('<?= base_url('?page=orders&action=deleteSearch') ?>', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData.toString()
+                    }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                            const el = document.getElementById('saved-search-' + id);
+                            if (el) el.remove();
+                        } else {
+                            alert('Unable to delete: ' + (data.message || ''));
+                        }
+                    }).catch(err => { alert('Network error'); });
+                }
+
+                function escapeHtml(text) {
+                    var map = {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;'
+                    };
+                    return text.replace(/[&<>\"]/g, function(m) { return map[m]; });
+                }
             </script>
             </div>
         </div>
@@ -447,7 +548,7 @@
 
     <!-- Orders Table Section -->
     <div class="mt-5">
-        <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
+        <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post" id="orders-form">
             <div class="flex  ">
             <div class="w-1/2">
             <!-- <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button> -->
@@ -481,7 +582,7 @@
             <!-- button refresh-->
             <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
                 <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
-            <i class="fas fa-sync-alt p-1 bg-white border border-orange-500"></i>
+            <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
             </span>
             <!-- update imported orders -->
             <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
@@ -692,11 +793,15 @@
                                     if ($opt_text === '') {
                                         continue;
                                     }
+                                    if(strtolower($order['payment_type']) == 'cod'){
+                                        $bordercolor = 'border-4 border-yellow-300';
+                                    }
                                     // Highlight Express Shipping specially, otherwise show default style
                                     if (strpos($opt_text, 'Express') !== false) {
                                         $display = 'Express Shipping';
                                         $addon_css = 'bg-green-200 text-green-900';
                                         $bordercolor = 'border-4 border-green-300';
+                                        
                                     } else {
                                         $display = $opt_text;
                                         $addon_css = 'bg-gray-100 text-gray-800';
@@ -743,19 +848,29 @@
                                             <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
                                             <span class="heading-typography">Vendor Name</span>
                                             <p>: <span class="data-typography"><?= $order['vendor'] ?></span></p>
+                                            <?php if (!empty($order['author'])){ ?>
+                                            <span class="heading-typography">Author</span>
+                                            <p>: <span class="data-typography"><?= $order['author'] ?? 'N/A' ?></span></p>                                            
+                                            <?php }else{?>
                                             <span class="heading-typography">Color</span>
-                                            <p>: <span class="data-typography"><?= $order['color'] ?? 'N/A' ?></span></p>
+                                            <p>: <span class="data-typography"><?= $order['color'] ?? 'N/A' ?></span></p>                                            
+                                            <?php }?>
                                             
                                         </div>
                                         <div class="w-1/2 pl-4 grid grid-cols-[max-content,1fr] items-center gap-x-2 pt-1">
                                             <span class="heading-typography">Staff Name</span>
                                             <p>: <span class="data-typography"><?= $order['staff_name'] ?? 'N/A' ?></span></p>
 											<span class="heading-typography">Payment Type</span>
-                                            <p>: <span class="data-typography uppercase"><?= $order['payment_type'] ?? 'N/A' ?></span></p>
+                                            <p>: <span class="data-typography uppercase "><?= $order['payment_type'] ?? 'N/A' ?></span></p>
                                             <span class="heading-typography">Agent</span>
                                             <p>: <span class="data-typography uppercase"><?= $order['agent_id'] ? $staff_list[$order['agent_id']] : 'N/A' ?></span></p>                                        
+                                            <?php if (!empty($order['publisher'])){ ?>
+                                            <span class="heading-typography">Publisher</span>
+                                            <p>: <span class="data-typography"><?= $order['publisher'] ?? 'N/A' ?></span></p>                                            
+                                            <?php }else{?>
                                             <span class="heading-typography">Size</span>
                                             <p>: <span class="data-typography"><?= $order['size'] ?? 'N/A' ?></span></p>
+                                            <?php }?>
                                         </div>
                                     </div>
                                 </div>
@@ -833,7 +948,7 @@
                                                 <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
                                                     <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Order</a>
                                                     <hr class="my-1 mx-2"></hr>
-                                                    <!-- <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a> -->
+                                                    <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
                                                 </div>
                                             </span>
                                         </div>
@@ -1154,6 +1269,33 @@
         </div> -->
     </div>
 </div>
+<!--popup for search settings-->
+<div id="searchSettingsPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
+    <div class="bg-white p-4 rounded-md max-w-6xl w-5/12 max-h-3xl relative flex flex-col items-center" >
+        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="p-6 w-full overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">Search Settings</h2>
+            <form id="searchSettingsForm" method="post" action="?page=orders&action=save_search_settings">
+                <div class="mb-4 w-full">
+                    <label class="block text-gray-700 font-bold mb-2">Saved Search List:</label>
+                    <ul class="space-y-2">
+                        <?php if (isset($saved_searches)): ?>
+                        <?php foreach ($saved_searches as $s): ?>
+                            <li class="flex items-center justify-between bg-gray-50 p-3 rounded">
+                                <p><?= htmlspecialchars($s['name']) ?></p>
+                                <div class="flex gap-3">
+                                    <a class="text-indigo-600 hover:underline text-sm" href="<?= base_url('?page=orders&action=list') . '&' . htmlspecialchars($s['query']) ?>">Load</a>
+                                    <button onclick="deleteSavedSearch(<?= $s['id'] ?>)" class="text-red-600 hover:underline text-sm">Delete</button>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <!-- Image Popup -->
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
@@ -1349,7 +1491,7 @@
 
         <div class="h-full bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
             <!-- Modal Content -->
-            <div class="flex-grow space-y-4" id="details-modal-content">
+            <div class="" id="details-modal-content">
                 <!-- Dynamic content will be loaded here -->
                 
             </div>
@@ -1461,7 +1603,7 @@
         </form>
     </div>
 </div>
-<!-- ...existing code... -->
+<!-- ...success popup... -->
  <script>
     function closeImagePopup(event) {
         document.getElementById('imagePopup').classList.add('hidden');
@@ -1487,7 +1629,11 @@
         const accordionButton = document.getElementById('accordion-button-search');
         const accordionContent = document.getElementById('accordion-content-search');
         const accordionIcon = document.getElementById('accordion-icon-search');
-
+        //accordionContent fade in effect on load for 3 seconds
+        
+        setTimeout(() => {
+            accordionContent.classList.remove('hidden');
+        }, 300);
         accordionButton.addEventListener('click', () => { 
             const isExpanded = accordionButton.getAttribute('aria-expanded') === 'true';
             accordionButton.setAttribute('aria-expanded', !isExpanded);
@@ -1918,7 +2064,7 @@
             //loadingImage.classList.remove('hidden');
             modalContentDiv.innerHTML = '<p>Loading...</p>'; // Show loading indicator
 
-            fetch(`?page=orders&action=get_order_details_html&order_number=${encodeURIComponent(orderData.order_number)}`)
+            fetch(`?page=orders&action=get_order_details_html&type=inner&order_number=${encodeURIComponent(orderData.order_number)}`)
                 .then(response => response.text())
                 .then(html => {
                     modalContentDiv.innerHTML = html; // Insert the fetched HTML
@@ -2329,4 +2475,24 @@
             }
         });
     });
+function SubmitCreatePo(id) {
+   const form = document.getElementById('orders-form');
+   const orderIdInput = document.createElement('input');
+   orderIdInput.type = 'hidden';
+   orderIdInput.name = 'poitem[]';
+   orderIdInput.value = id;
+   form.appendChild(orderIdInput);
+   form.submit();
+}
+
+function openSearchSetting() {
+    //open popup or modal for search settings
+    document.getElementById('searchSettingsPopup').classList.remove('hidden');
+}
+
+function closesearch(){
+    //if (event && event.target === event.currentTarget) {
+        document.getElementById('searchSettingsPopup').classList.add('hidden');
+    //}
+}
 </script>
