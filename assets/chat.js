@@ -77,26 +77,41 @@
   ws.onclose = () => {
     console.warn('WebSocket closed');
     // try reconnect once after short delay
-    setTimeout(()=>{ window.location.reload(); }, 5000);
+    setTimeout(()=>{ window.location.reload(); }, 5000000);
   };
 
   sendBtn.addEventListener('click', sendMessage);
 
   inputEl.addEventListener("keydown", function (e) {
-  // SEND on Enter
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-    return;
-  }
 
-  // Allow multiline
-  if (e.key === "Enter" && e.shiftKey) {
-    return;
-  }
+    const cursorPos = inputEl.selectionStart;
+    const value = inputEl.value;
 
-  handleTyping();
-});
+    const beforeCursor = value.slice(0, cursorPos);
+    const match = beforeCursor.match(/(?:^|\s)@([A-Za-z0-9_]*)$/);
+
+    if (match) {
+        mentionActive = true;
+        mentionStartPos = cursorPos - match[1].length - 1;
+        showMentionDropdown(match[1]);   // ✅ CALLED HERE
+    } else {
+        hideMentionDropdown();
+    }
+    
+    // SEND on Enter
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+      return;
+    }
+
+    // Allow multiline
+    if (e.key === "Enter" && e.shiftKey) {
+      return;
+    }
+
+    handleTyping();
+  });
   function updateMentionHighlight() {
       mentionItems.forEach((item, idx) => {
           if (idx === mentionIndex) {
@@ -108,6 +123,14 @@
       });
   }
   function showMentionDropdown(filterText) {
+
+    if (!mentionDropdown) {
+      console.error("mention-dropdown element missing");
+      return;
+    }
+    if (!users || users.length === 0) return;
+
+    console.log("filterText: " + filterText)
     const query = (filterText || "").toLowerCase();
 
     const filtered = users.filter(u =>
@@ -149,7 +172,16 @@
       const newPos = before.length + name.length + 2;
       inputEl.setSelectionRange(newPos, newPos);
 
-      hideMentionDropdown();
+      const beforeCursor = value.slice(0, cursorPos);
+      const match = beforeCursor.match(/(?:^|\s)@([A-Za-z0-9_]*)$/);
+
+      if (match) {
+          mentionActive = true;
+          mentionStartPos = cursorPos - match[1].length - 1;
+          showMentionDropdown(match[1]);
+      } else {
+          hideMentionDropdown();
+      }
   }
   document.addEventListener("click", function (e) {
       if (!mentionDropdown.contains(e.target)) {
@@ -169,14 +201,8 @@
   messagesEl.addEventListener('scroll', () => { if (isAtBottom()) sendReadReceipt(); });
   window.addEventListener('focus', sendReadReceipt);
 
-  /*userSearchEl.addEventListener('input', (e) => {
-    renderUserList(userSearchEl.value.trim());
-  });*/
   function handleGlobalSearch(query) {
-    // USERS
     renderUserList(query);
-
-    // CONVERSATIONS (groups + direct)
     renderConversationList(query);
   }
 
@@ -194,31 +220,7 @@
       })
       .catch(err => console.error('fetch_users error', err));
   }
-  /*function renderUserList(filter = '') {
-    userListEl.innerHTML = '';
-
-    const q = filter.toLowerCase();
-
-    users
-        .filter(u => !q || u.name.toLowerCase().includes(q))
-        .forEach(u => {
-            const item = document.createElement('div');
-            item.className = 'conversation-item';
-            item.dataset.userId = u.id;
-
-            item.innerHTML = `
-                <div class="conv-avatar ${u.is_online ? 'online' : 'offline'}">U</div>
-                <div class="conv-main">
-                    <div class="conv-title">${escapeHtml(u.name)}</div>
-                    <div class="conv-sub">${u.is_online ? 'Online' : 'Offline'}</div>
-                </div>
-            `;
-
-            item.addEventListener('click', () => openChatWithUser(u.id));
-            userListEl.appendChild(item);
-        });
-  }*/
- function renderUserList(filter = '') {
+  function renderUserList(filter = '') {
     const list = document.getElementById('user-list');
     if (!list) return;
 
@@ -450,7 +452,6 @@
                   titleEl.textContent = "Select a conversation";
                   subtitleEl.textContent = "";
               }
-
               // Re-render list
               renderConversationList();
           }else if(res.error == "only_owner_can_delete") {
@@ -466,8 +467,6 @@
 
     const conv = conversations.find(c => c.id === convId);
     if (conv) {
-      //titleEl.textContent = conv.display_name;
-      //subtitleEl.textContent = conv.type === 'group' ? 'Group chat' : 'Direct chat';
       if (headerNameEl) headerNameEl.innerText = conv.display_name;
       if (headerRoleEl) {
           headerRoleEl.innerText = conv.type === 'group'
@@ -569,63 +568,6 @@
       })
       .catch(err => console.error('fetch_messages error', err));
   }
-  /*function renderMessages(convId) {
-      messagesEl.innerHTML = '';
-
-      (messages[convId] || []).forEach(msg => {
-          const row = document.createElement('div');
-          row.className = 'message-row' + (msg.sender_id == window.CURRENT_USER ? ' own' : '');
-
-          const bubble = document.createElement('div');
-          bubble.className = 'message-bubble';
-
-          // If message is deleted
-          if (msg.is_deleted == 1) {
-              bubble.innerHTML = "<i>Message deleted</i>";
-          } 
-          else {
-              // Normal text message
-              if (msg.message) {
-                  const text = document.createElement('div');
-                  text.className = "message-text";
-                  text.innerHTML = formatMessageText(msg.message);
-                  bubble.appendChild(text);
-              }
-
-              // File attachment
-              if (msg.file_path) {
-                  const fileDiv = document.createElement('div');
-                  fileDiv.className = 'message-file';
-
-                  const link = document.createElement('a');
-                  link.href = msg.file_path;
-                  link.target = '_blank';
-                  link.textContent = msg.original_name || "Attachment";
-
-                  fileDiv.appendChild(link);
-                  bubble.appendChild(fileDiv);
-              }
-
-              // DELETE BUTTON — only for your own messages
-              if (msg.sender_id == window.CURRENT_USER) {
-                  const delBtn = document.createElement("button");
-                  delBtn.className = "delete-btn";
-                  delBtn.innerHTML = "🗑";
-                  delBtn.onclick = () => deleteMessage(msg.id);
-                  bubble.appendChild(delBtn);
-              }
-          }
-
-          // Timestamp
-          const meta = document.createElement('div');
-          meta.className = 'message-meta';
-          meta.textContent = msg.created_at;
-          bubble.appendChild(meta);
-
-          row.appendChild(bubble);
-          messagesEl.appendChild(row);
-      });
-  }*/
   function renderMessages(convId) {
     messagesEl.innerHTML = '';
 
@@ -865,15 +807,7 @@
     // Show popup and browser notification for messages not from me
     if (msg.sender_id != window.CURRENT_USER) {
       playSound();
-      //showPopupNotification(msg);
-      //showBottomBarNotification(msg);
-      //showDesktopToast(msg); // Desktop-like toast notification
       showUiPopup(msg);
-      /*if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        const body = msg.message ? msg.message : "📎 Attachment received";
-        const n = new Notification("New message", { body: body });
-        n.onclick = function () { window.focus(); setActiveConversation(convId); this.close(); };
-      }*/
     }
 
     renderConversationList();
@@ -946,12 +880,6 @@
     formData.append('file', file);
     fetch(window.API_BASE + '/upload_file.php', { method: 'POST', body: formData, credentials: 'include' })
       .then(r => r.json())
-      /*.then(res => {
-        if (res.error) { alert('Upload error: ' + res.error); fileInput.value = ''; return; }
-        fileInput.dataset.uploadedPath = res.path;
-        fileInput.dataset.uploadedOriginalName = res.original_name;
-        sendMessage();
-      })*/
       .then(res => {
         if (res.error) return alert(res.error);
 
@@ -967,14 +895,14 @@
       })
       .catch(err => console.error('upload error', err));
   }
-function clearAttachment() {
-  delete fileInput.dataset.uploadedPath;
-  delete fileInput.dataset.uploadedOriginalName;
-  fileInput.value = "";
+  function clearAttachment() {
+    delete fileInput.dataset.uploadedPath;
+    delete fileInput.dataset.uploadedOriginalName;
+    fileInput.value = "";
 
-  const preview = document.getElementById("attachment-preview");
-  if (preview) preview.classList.add("hidden");
-}
+    const preview = document.getElementById("attachment-preview");
+    if (preview) preview.classList.add("hidden");
+  }
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
   function isAtBottom() { return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 50; }
   function sendReadReceipt() {
@@ -989,16 +917,6 @@ function clearAttachment() {
     const conv = conversations.find(c => c.id == activeConversationId);
     if (conv) { conv.unread_count = 0; renderConversationList(); }
   }
-  /*function showPopupNotification(msg) {
-    if (!popupContainer) return;
-    const div = document.createElement('div');
-    div.className = 'chat-popup';
-    const preview = msg.message ? msg.message.substring(0, 80) : "📎 File received";
-    div.innerHTML = "<strong>New message</strong>" + escapeHtml(preview);
-    div.addEventListener('click', () => { window.focus(); setActiveConversation(msg.conversation_id); div.remove(); });
-    popupContainer.appendChild(div);
-    setTimeout(() => { div.remove(); }, 4000);
-  }*/
   function showUiPopup(message) {
     const container = document.getElementById("ui-popup-container");
     if (!container) return;
@@ -1107,11 +1025,17 @@ function clearAttachment() {
       })
       .then(r => r.json())
       .then(res => {
+          if (res.error) {
+              alert(res.error);
+              return;
+          }
+
           if (res.conversation_id) {
               loadConversations().then(() => {
                   setActiveConversation(res.conversation_id);
               });
           }
+
           document.getElementById("group-modal").classList.add("hidden");
       });
   }
@@ -1168,5 +1092,5 @@ function clearAttachment() {
 
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
-
+  
 })();
