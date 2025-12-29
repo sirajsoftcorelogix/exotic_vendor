@@ -65,10 +65,13 @@ if (!move_uploaded_file($file['tmp_name'], $dest)) {
     echo json_encode(['error' => 'move_failed']);
     exit;
 }
+$env = $config['ENV'];
 
-// Public path - adjust if needed
-$publicPath = '/exotic_vendor/uploads/' . $safeName;
-
+if($env === 'local') {
+    $publicPath = '/exotic_vendor/uploads/' . $safeName;
+} else{
+    $publicPath = '/uploads/' . $safeName;
+}
 header('Content-Type: application/json');
 echo json_encode([
     'path' => $publicPath,

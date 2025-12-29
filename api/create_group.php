@@ -11,6 +11,22 @@ if (!$name || empty($members)) {
     exit;
 }
 
+// Check if group already exists
+$stmt = $pdo->prepare("
+    SELECT id 
+    FROM conversations 
+    WHERE type = 'group' AND `name` = ?
+    LIMIT 1
+");
+$stmt->execute([$name]);
+
+if ($stmt->fetch()) {
+    echo json_encode([
+        'error' => 'Group name already exists'
+    ]);
+    exit;
+}
+
 $pdo->beginTransaction();
 
 // Create conversation

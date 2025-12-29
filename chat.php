@@ -250,12 +250,12 @@ $msgCnt = $notificationController->getUnreadCount();
                   <input type="file" id="file-input" style="display:none;">
                   <button id="attach-btn" title="Attach file" class="text-inputIcon hover:text-white transition relative"><i class="ph ph-paperclip text-2xl"></i></button>
               </div>
-              <div class="flex-1 bg-inputFieldBg rounded-full flex items-center px-4 py-2 border border-transparent focus-within:ring-1 focus-within:ring-white/20 transition-all">
+              <div class="flex-1 bg-inputFieldBg rounded-full flex items-center px-4 py-2 border border-transparent focus-within:ring-1 focus-within:ring-white/20 transition-all mention-wrapper relative">
                 <input id="message-input" placeholder="Type a message" autocomplete="off"
                     class="flex-1 bg-inputFieldBg text-white rounded-full px-4 py-2 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all">
+                    <div id="mention-dropdown" class="mention-dropdown hidden"></div>
               </div>
                     <button id="send-btn" class="text-inputIcon hover:text-white transition flex items-center justify-center"><i class="ph-fill ph-paper-plane-right text-2xl"></i></button>
-              <div id="mention-dropdown" class="mention-dropdown hidden"></div>
           </div>
       </footer>
        </div>
