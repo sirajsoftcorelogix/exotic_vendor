@@ -441,7 +441,6 @@ class VendorsController {
                         <!-- Product Image -->
                          <div class="w-24 h-32 flex-shrink-0 border border-gray-200 mr-4 product-placeholder rounded-sm">
                             <img src="<?php echo ($product['image']) ?? ""; ?>" />
-                            <i class="fas fa-image text-2xl"></i>
                         </div>
 
                         <!-- Product Details -->
