@@ -1,20 +1,7 @@
 <?php
 // 1. PHP Logic & Data Fetching
 $label_data = $data['form2'] ?? [];
-$raw_categories = $data['category'] ?? []; // FETCH CATEGORY LIST from Controller
 
-// --- NEW LOGIC: Resolve Category Name ---
-$cat_id = $label_data['category_code'] ?? ''; 
-$category_display_name = $cat_id; // Default to ID if name not found
-
-if (!empty($raw_categories) && !empty($cat_id)) {
-    foreach ($raw_categories as $cat_item) {
-        if (isset($cat_item['category']) && $cat_item['category'] == $cat_id) {
-            $category_display_name = $cat_item['display_name'];
-            break;
-        }
-    }
-}
 // --- END NEW LOGIC ---
 
 if(empty($label_data) && isset($_GET['id'])) {

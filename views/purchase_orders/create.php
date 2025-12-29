@@ -186,10 +186,10 @@
                         <span>Subtotal :</span>
                         <span id="subtotal_view"></span>
                     </div>
-                    <!-- <div class="flex justify-between subtotal-text">
+                    <div class="flex justify-between subtotal-text">
                         <span>Shipping :</span> 
                         <input type="text" name="shipping_cost" id="shipping_cost" class="w-[100px] h-[25px] text-right border rounded-md focus:ring-0 form-input" value="0" oninput="calculateTotals()" required>
-                    </div> -->
+                    </div>
                     <div class="flex justify-between subtotal-text">
                         <span>GST :</span>
                         <span id="total_gst_view"></span>
@@ -391,8 +391,8 @@ function calculateTotals() {
         grandTotal += rowTotal;
     });
 
-    // const shipping_cost = parseFloat(document.getElementById("shipping_cost").value) || 0;
-    // grandTotal += shipping_cost;
+    const shipping_cost = parseFloat(document.getElementById("shipping_cost").value) || 0;
+    grandTotal += shipping_cost;
 
     document.getElementById("subtotal").value = subtotal.toFixed(2);
     document.getElementById("total_gst").value = totalGST.toFixed(2);

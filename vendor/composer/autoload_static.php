@@ -21,7 +21,7 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
         array (
             'setasign\\Fpdi\\' => 14,
         ),
-        'S' =>
+        'S' => 
         array (
             'Symfony\\Polyfill\\Php83\\' => 23,
             'Symfony\\Polyfill\\Mbstring\\' => 26,
@@ -184,9 +184,9 @@ class ComposerStaticInit8a0672f3f87447cccdef87e5ae7940a8
     );
 
     public static $prefixesPsr0 = array (
-        'T' =>
+        'T' => 
         array (
-            'Text' =>
+            'Text' => 
             array (
                 0 => __DIR__ . '/..' . '/pear/text_languagedetect',
             ),

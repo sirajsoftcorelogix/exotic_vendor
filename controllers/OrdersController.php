@@ -1,8 +1,10 @@
 <?php 
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
+require_once 'models/searches/saved_search.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
+$savedSearchModel = new SavedSearch($conn);
 global $root_path;
 global $domain;
 class OrdersController { 
@@ -11,6 +13,7 @@ class OrdersController {
         is_login();
         global $ordersModel;
         global $commanModel;
+        global $savedSearchModel;
         //sanitize and validate input parameters
         $_GET = sanitizeGet($_GET);
         // Fetch all orders
@@ -80,6 +83,12 @@ class OrdersController {
         if(!empty($_GET['agent'])){
             $filters['agent'] = $_GET['agent'];  
         }
+        if (!empty($_GET['publisher'])) {
+            $filters['publisher'] = $_GET['publisher'];            
+        }
+        if (!empty($_GET['author'])) {
+            $filters['author'] = $_GET['author'];            
+        }
         
         //order status list
         $statusList = $commanModel->get_order_status_list();
@@ -96,6 +105,13 @@ class OrdersController {
         //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
+        // Prepare saved searches for current user
+        $user_id = $_SESSION['user']['id'] ?? 0;
+        $saved_searches = [];
+        if ($user_id) {
+            $saved_searches = $savedSearchModel->getByUser($user_id, 'orders');
+        }
+
         // Render the orders view
         renderTemplate('views/orders/index.php', [
             'orders' => $orders,
@@ -107,7 +123,8 @@ class OrdersController {
             'country_list' => $countryList,
             'payment_types'=> $ordersModel->getPaymentTypes(),
             'staff_list' => $commanModel->get_staff_list(),
-            'filters' => $filters
+            'filters' => $filters,
+            'saved_searches' => $saved_searches
         ], 'Manage Orders');
     }
         
@@ -301,6 +318,10 @@ class OrdersController {
                     'vendor' => $item['vendor'] ?? '',
                     'country' => $order['country'] ?? '',
                     'material' => $item['material'] ?? '',
+                    'publisher' => $item['publisher'] ?? '',
+                    'author' => $item['author'] ?? '',
+                    'shippingfee' => $item['shippingfee'] ?? '',
+                    'sourcingfee' => $item['sourcingfee'] ?? '',
                     //$orderStatus = productionOrderStatusList()[$item['status']] ?? 'pending',
                     'status' => (strtoupper($order['payment_type'] ?? '') === 'AMAZONFBA')
                         ? 'shipped'
@@ -384,6 +405,58 @@ class OrdersController {
         }
         exit;
     }
+
+    public function saveSearch() {
+        // Save a named search (AJAX)
+        is_login();
+        header('Content-Type: application/json');
+        $user_id = $_SESSION['user']['id'] ?? 0;
+        $name = trim($_POST['name'] ?? '');
+        $query = trim($_POST['query'] ?? ($_SERVER['QUERY_STRING'] ?? ''));
+        if (!$user_id || empty($query)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters.']);
+            exit;
+        }
+        if (empty($name)) {
+            $name = 'Saved Search - ' . date('Y-m-d H:i');
+        }
+        global $savedSearchModel;
+        $data = [
+            'user_id' => $user_id,
+            'page' => 'orders',
+            'name' => $name,
+            'query' => $query
+        ];
+        $res = $savedSearchModel->add($data);
+        if (!empty($res['insert_id'])) {
+            $record = $savedSearchModel->get($res['insert_id'], $user_id);
+            echo json_encode(['success' => true, 'search' => $record]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Unable to save search.']);
+        }
+        exit;
+    }
+
+    public function deleteSearch() {
+        // Delete saved search (AJAX)
+        is_login();
+        header('Content-Type: application/json');
+        $user_id = $_SESSION['user']['id'] ?? 0;
+        $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        if (!$user_id || !$id) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters.']);
+            exit;
+        }
+        global $savedSearchModel;
+        $ok = $savedSearchModel->delete($id, $user_id);
+        if ($ok) {
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Unable to delete.']);
+        }
+        exit;
+    }
+
     public function updateStatus() {
         is_login();
         global $ordersModel; 
@@ -508,12 +581,15 @@ class OrdersController {
         is_login();
         global $ordersModel, $commanModel;
         $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
         if ($order_number > 0) {
             $order = $ordersModel->getOrderByOrderNumber($order_number);
             $statusList = $commanModel->get_order_status_list();
             if ($order) {
-                renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
-                //renderTemplateClean('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList], 'Order Details');
+                if ($type === 'inner')
+                    renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
+                else
+                    renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList], 'Order Details');
             } else {
                 echo '<p>Order details not found.</p>';
             }

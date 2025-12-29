@@ -112,6 +112,18 @@ switch ($page) {
             case 'sales_analytics':
                 $controller->importSalesAnalyticsData();
                 break;
+            case 'products_map':
+                $controller->vendorProductsMap();
+                break;
+            case 'generateBlock':
+                $controller->generateProductBlock();
+                break;
+            case 'saveProductsMap':
+                $controller->saveVendorProductsMap();
+                break;
+            case 'UpdateVendorCode':
+                $controller->UpdateVendorCode();
+                break;
             default:
                 $controller->index();
                 break;
@@ -153,6 +165,12 @@ switch ($page) {
                 break;
             case 'bulk_assign_order':
                 $controller->bulkAssignOrder();
+                break;
+            case 'saveSearch':
+                $controller->saveSearch();
+                break;
+            case 'deleteSearch':
+                $controller->deleteSearch();
                 break;
             default:
                 $controller->index();
@@ -332,6 +350,9 @@ switch ($page) {
             case 'remove_vendor_mapping':
                 $controller->removeVendorMapping();
                 break;
+            case 'updatePriority':
+                $controller->updatePriority();
+                break;
             /*case 'view':
                 $controller->product_view();
                 break;
@@ -446,6 +467,9 @@ switch ($page) {
             case 'desktopform':
                 $controller->getdesktopform();
                 break;
+            case 'inbound_product_publish':
+                $controller->inbound_product_publish();
+                break;
             case 'i_photos':
                 $controller->i_photos();
                 break;
@@ -478,23 +502,11 @@ switch ($page) {
             case 'updateform1':
                 $controller->updateform1();
                 break;
-            case 'form2':
-                $controller->getform2();
-                break;
-            case 'saveform2':
-                $controller->saveform2();
-                break;
-            case 'updateform2':
-                $controller->updateform2();
-                break;
             case 'form3':
                 $controller->getform3();
                 break;
-            case 'saveform3':
-                $controller->saveform3();
-                break;
-            case 'updateform3':
-                $controller->updateform3();
+            case 'submitStep3':
+                $controller->submitStep3();
                 break;
             case 'label':
                 $controller->label();

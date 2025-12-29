@@ -400,5 +400,96 @@ class VendorsController {
 
         renderTemplate('views/vendors/sales_analytics.php', $data, 'Sales Analytics');
     }
+    public function vendorProductsMap() {
+        is_login();
+        global $vendorsModel;
+        $v_id = isset($_GET['v_id']) ? (int)$_GET['v_id'] : 0;
+        if ($v_id > 0) {
+            $products = $vendorsModel->getProductsByVendorId($v_id);
+            $vendor = $vendorsModel->getVendorById($v_id);
+            $mappingProducts = $vendorsModel->getmappingProductsByVendorId($v_id);
+            $data = [
+                'products' => $products,
+                'vendor' => $vendor,
+                'mappingProducts' => $mappingProducts
+            ];
+            renderTemplate('views/vendors/vendor_products_map.php', $data, 'Vendor Products Mapping');
+        } else {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'error','text'=>'Invalid Vendor ID.']], 'Error');
+        }
+    }
+    public function generateProductBlock() {
+        is_login();
+        global $vendorsModel;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $vendor_id = isset($_POST['vendor_id']) ? (int)$_POST['vendor_id'] : 0;
+            $item_code = isset($_POST['item_code']) ? trim($_POST['item_code']) : '';
+            if ($vendor_id > 0 && !empty($item_code)) {
+                $product = $vendorsModel->getProductByCode($item_code);
+                if ($product) {
+                    ob_start();
+                    ?>
+                    <div class="product-card group relative border border-gray-300 rounded-md p-3 flex items-start bg-white hover:border-gray-400 transition-colors" data-item-code="<?php echo ($product['item_code']); ?>">
+                        <input type="hidden" name="product_codes[]" value="<?php echo ($product['id']); ?>" />
+                        <input type="hidden" name="item_codes[]" value="<?php echo ($product['item_code']); ?>" />
+                        <!-- Floating Delete Button -->
+                        <button onclick="deleteCard(this)"
+                                class="absolute -top-3 -right-3 w-8 h-8 bg-brand-red text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-colors z-10 cursor-pointer">
+                            &times;
+                        </button>
+
+                        <!-- Product Image -->
+                         <div class="w-24 h-32 flex-shrink-0 border border-gray-200 mr-4 product-placeholder rounded-sm">
+                            <img src="<?php echo ($product['image']) ?? ""; ?>" />
+                        </div>
+
+                        <!-- Product Details -->
+                        <div class="flex-1">
+                            <h3 class="text-md font-semibold text-gray-800 group-hover:text-gray-900 transition-colors">
+                                <?php echo ($product['title']) ?? ""; ?>
+                            </h3>
+                        </div>
+                    </div>
+                    <?php
+                    $html = ob_get_clean();
+                    echo json_encode(['success' => true, 'html' => $html]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'No product found with the given item code.']);
+                }
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid input data.']);
+            }
+        }
+        exit;
+    }
+    public function saveVendorProductsMap() {
+        is_login();
+        global $vendorsModel;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $vendor_id = isset($_POST['vendor_id']) ? (int)$_POST['vendor_id'] : 0;
+            $product_codes = isset($_POST['product_codes']) ? $_POST['product_codes'] : [];
+            $item_codes = isset($_POST['item_codes']) ? $_POST['item_codes'] : [];
+            if ($vendor_id > 0 && is_array($product_codes)) {
+                $result = $vendorsModel->saveVendorProductsMapping($vendor_id, $product_codes, $item_codes);
+                $_SESSION["mapping_message"] = $result['message'];
+                header("location: " . base_url('?page=vendors&action=list'));
+                exit;
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid input data.']);
+            }
+        }
+        exit;
+    }
+    public function UpdateVendorCode() {
+        is_login();
+        global $vendorsModel;
+        if($_SESSION["user"]["role_id"] != 1) {
+            echo json_encode(['success' => false, 'message' => 'Unauthorized access.']);
+            exit;
+        }
+        $result = $vendorsModel->updateVendorCode();
+        echo json_encode($result);
+        exit;
+    }
 }
 ?>

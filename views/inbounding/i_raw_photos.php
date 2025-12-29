@@ -112,7 +112,7 @@ $record_id = $data['record_id'] ?? 0;
             const tempId = 'new-' + Math.random().toString(36).substr(2, 9);
             
             div.id = tempId;
-            div.className = "relative bg-gray-50 border border-blue-200 border-dashed rounded-lg p-2 shadow-sm animate-pulse";
+            div.className = "relative bg-gray-50 border border-blue-200 border-dashed rounded-lg p-2 shadow-sm ";
 
             div.innerHTML = `
                 <div class="aspect-square bg-gray-200 rounded flex items-center justify-center overflow-hidden relative">
