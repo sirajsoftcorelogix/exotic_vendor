@@ -11,6 +11,8 @@
   const popupContainer = document.getElementById('chat-popup-container');
   const userSearchEl = document.getElementById('user-search');
   const PAGE_STARTED_AT = Date.now();
+  const headerNameEl = document.getElementById('header-name');
+  const headerRoleEl = document.getElementById('header-role');
 
   const inputEl = document.getElementById('message-input');
   const sendBtn = document.getElementById('send-btn');
@@ -29,18 +31,33 @@
   let typingTimeout = null;
   let lastTypingSentAt = 0;
   let notificationSound = new Audio("assets/message.mp3");
-
+  let pendingDeleteConversationId = null;
+  let onlineUserIds = [];
+  window.__onlineUserIds = onlineUserIds;
+  
+  // -- User mention variables
   let mentionActive = false;
   let mentionStartPos = -1;
   let mentionItems = [];
   let mentionIndex = -1;
 
   const mentionDropdown = document.getElementById("mention-dropdown");
-
+  const placeholderAvatar =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTIiIGZpbGw9IiNFNUU3RUIiLz48cGF0aCBkPSJNMTIgMTJhNSA1IDAgMSAwLTUtNSA1IDUgMCAwIDAgNSA1em0wIDJjLTUuMzMgMC04IDIuNjctOCA1djFoMTZ2LTFjMC0yLjMzLTIuNjctNS04LTV6IiBmaWxsPSIjOUNBM0FGIi8+PC9zdmc+";
 
   const urlParams = new URLSearchParams(window.location.search);
   const openConvParam = urlParams.get("conversation_id");
 
+  // Search functionality
+  const globalSearchEl = document.getElementById("global-search");
+
+  if (globalSearchEl) {
+      globalSearchEl.addEventListener("input", (e) => {
+          const query = e.target.value.trim().toLowerCase();
+          handleGlobalSearch(query);
+      });
+  }
+  //----------------------------------
   ws.onopen = () => {
     console.log('\r\nWebSocket connected: '+ window.API_BASE);
     loadUsers();
@@ -60,75 +77,40 @@
   ws.onclose = () => {
     console.warn('WebSocket closed');
     // try reconnect once after short delay
-    setTimeout(()=>{ window.location.reload(); }, 5000);
+    setTimeout(()=>{ window.location.reload(); }, 5000000);
   };
 
   sendBtn.addEventListener('click', sendMessage);
 
   inputEl.addEventListener("keydown", function (e) {
 
-      const cursorPos = inputEl.selectionStart;
-      const value = inputEl.value;
+    const cursorPos = inputEl.selectionStart;
+    const value = inputEl.value;
 
-      /* =========================
-        DETECT MENTION CONTEXT
-      ========================= */
-      const beforeCursor = value.slice(0, cursorPos);
-      const match = beforeCursor.match(/(?:^|\s)@([A-Za-z0-9_]*)$/);
+    const beforeCursor = value.slice(0, cursorPos);
+    const match = beforeCursor.match(/(?:^|\s)@([A-Za-z0-9_]*)$/);
 
-      if (match) {
-          mentionActive = true;
-          mentionStartPos = cursorPos - match[1].length - 1;
-          showMentionDropdown(match[1]);
-      } else {
-          hideMentionDropdown();
-      }
+    if (match) {
+        mentionActive = true;
+        mentionStartPos = cursorPos - match[1].length - 1;
+        showMentionDropdown(match[1]);   // ✅ CALLED HERE
+    } else {
+        hideMentionDropdown();
+    }
+    
+    // SEND on Enter
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+      return;
+    }
 
-      /* =========================
-        MENTION NAVIGATION
-      ========================= */
-      if (mentionActive) {
+    // Allow multiline
+    if (e.key === "Enter" && e.shiftKey) {
+      return;
+    }
 
-          if (e.key === "ArrowDown") {
-              e.preventDefault();
-              mentionIndex = (mentionIndex + 1) % mentionItems.length;
-              updateMentionHighlight();
-              return;
-          }
-
-          if (e.key === "ArrowUp") {
-              e.preventDefault();
-              mentionIndex =
-                  (mentionIndex - 1 + mentionItems.length) % mentionItems.length;
-              updateMentionHighlight();
-              return;
-          }
-
-          if (e.key === "Enter" && mentionIndex >= 0) {
-              e.preventDefault();
-              const name = mentionItems[mentionIndex].textContent;
-              insertMention(name);
-              return;
-          }
-
-          if (e.key === "Escape") {
-              hideMentionDropdown();
-              return;
-          }
-      }
-
-      /* =========================
-        SEND MESSAGE
-      ========================= */
-      if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-          return;
-      }
-
-      if (e.key !== "Enter") {
-          handleTyping();
-      }
+    handleTyping();
   });
   function updateMentionHighlight() {
       mentionItems.forEach((item, idx) => {
@@ -141,6 +123,14 @@
       });
   }
   function showMentionDropdown(filterText) {
+
+    if (!mentionDropdown) {
+      console.error("mention-dropdown element missing");
+      return;
+    }
+    if (!users || users.length === 0) return;
+
+    console.log("filterText: " + filterText)
     const query = (filterText || "").toLowerCase();
 
     const filtered = users.filter(u =>
@@ -169,8 +159,7 @@
 
     updateMentionHighlight();
     mentionDropdown.classList.remove("hidden");
-}
-
+  }
   function insertMention(name) {
       const value = inputEl.value;
       const cursorPos = inputEl.selectionStart;
@@ -183,7 +172,16 @@
       const newPos = before.length + name.length + 2;
       inputEl.setSelectionRange(newPos, newPos);
 
-      hideMentionDropdown();
+      const beforeCursor = value.slice(0, cursorPos);
+      const match = beforeCursor.match(/(?:^|\s)@([A-Za-z0-9_]*)$/);
+
+      if (match) {
+          mentionActive = true;
+          mentionStartPos = cursorPos - match[1].length - 1;
+          showMentionDropdown(match[1]);
+      } else {
+          hideMentionDropdown();
+      }
   }
   document.addEventListener("click", function (e) {
       if (!mentionDropdown.contains(e.target)) {
@@ -198,15 +196,16 @@
       mentionDropdown.classList.add("hidden");
   }
   // -- End User mentioned
-
   attachBtn.addEventListener('click', () => { fileInput.click(); });
   fileInput.addEventListener('change', handleFileUpload);
   messagesEl.addEventListener('scroll', () => { if (isAtBottom()) sendReadReceipt(); });
   window.addEventListener('focus', sendReadReceipt);
 
-  /*userSearchEl.addEventListener('input', (e) => {
-    renderUserList(userSearchEl.value.trim());
-  });*/
+  function handleGlobalSearch(query) {
+    renderUserList(query);
+    renderConversationList(query);
+  }
+
   function playSound() {
       notificationSound.play().catch(() => {});
   }
@@ -216,28 +215,76 @@
       .then(r => r.json())
       .then(data => {
         users = data;
-        renderUserList('');
+        //renderUserList('');
+        applyOnlineStatus();
       })
       .catch(err => console.error('fetch_users error', err));
   }
-  function renderUserList(filter) {
-    userListEl.innerHTML = '';
-    const q = (filter || '').toLowerCase();
-    users.filter(u => !q || u.name.toLowerCase().includes(q)).forEach(u => {
-      const item = document.createElement('div');
-      item.className = 'conversation-item';
-      item.dataset.userId = u.id;
-      item.innerHTML = `
-          <div class="conv-avatar ${u.is_online ? 'online' : 'offline'}">U</div>
-          <div class="conv-main">
-              <div class="conv-title">${escapeHtml(u.name)}</div>
-              <div class="conv-sub">${u.is_online ? 'Online' : 'Offline'}</div>
-          </div>
-      `;
-      item.addEventListener('click', () => { openChatWithUser(u.id); });
-      userListEl.appendChild(item);
-    });
+  function renderUserList(filter = '') {
+    const list = document.getElementById('user-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    const q = filter.toLowerCase();
+
+    users
+        .filter(u => !q || u.name.toLowerCase().includes(q))
+        .forEach(u => {
+
+            const item = document.createElement('div');
+            item.className = `
+                flex items-center gap-3 px-4 py-3
+                cursor-pointer transition
+                hover:bg-gray-100
+            `;
+
+            item.onclick = () => openChatWithUser(u.id);
+
+            item.innerHTML = `
+                <div class="relative flex-shrink-0">
+                    <div class="w-11 h-11 rounded-full bg-gray-300
+                                flex items-center justify-center
+                                text-sm font-semibold text-gray-700">
+                        U
+                    </div>
+
+                    <span class="
+                        absolute bottom-0 right-0
+                        w-3 h-3 rounded-full
+                        border-2 border-white
+                        ${u.is_online ? 'bg-green-500' : 'bg-gray-400'}
+                    "></span>
+                </div>
+
+                <div class="flex-1 min-w-0">
+                    <div class="font-medium text-gray-900 truncate">
+                        ${escapeHtml(u.name)}
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        ${u.is_online ? 'Online' : 'Offline'}
+                    </div>
+                </div>
+            `;
+
+            list.appendChild(item);
+        });
   }
+  function handleOnlineUsers(userIds) {
+      onlineUserIds = userIds.map(id => parseInt(id, 10));
+      window.__onlineUserIds = onlineUserIds; // 👈 add
+      applyOnlineStatus();
+  }
+  function applyOnlineStatus() {
+      if (!users || users.length === 0) return;
+
+      users.forEach(u => {
+          u.is_online = onlineUserIds.includes(parseInt(u.id, 10)) ? 1 : 0;
+      });
+
+      renderUserList();
+  }
+
   function openChatWithUser(userId) {
     // create or fetch single conversation via existing API
     fetch(window.API_BASE + '/create_conversation.php', {
@@ -272,67 +319,116 @@
         return Promise.resolve();
       })
       .catch(err => { console.error('fetch_conversations error', err); return Promise.reject(err); });
-  }
-  function renderConversationList() {
-    convListEl.innerHTML = '';
-    conversations.forEach(conv => {
-      const item = document.createElement('div');
-      item.className = 'conversation-item' + (conv.id === activeConversationId ? ' active' : '');
-      item.dataset.id = conv.id;
+    }
+    function renderConversationList(filter = '') {
+      convListEl.innerHTML = '';
 
-      const ava = document.createElement('div');
-      ava.className = 'conv-avatar';
-      ava.textContent = (conv.type === 'group' ? '#' : 'U');
+      const q = filter.toLowerCase();
 
-      const main = document.createElement('div');
-      main.className = 'conv-main';
+      conversations
+        .filter(conv =>
+            !q || conv.display_name.toLowerCase().includes(q)
+        )
+        .forEach(conv => {
+            const item = document.createElement('div');
+            item.className =
+                'conversation-item' +
+                (conv.id === activeConversationId ? ' active' : '');
 
-      const title = document.createElement('div');
-      title.className = 'conv-title';
-      title.textContent = conv.display_name;
+            // avatar
+            const ava = document.createElement('div');
+            ava.className = 'conv-avatar';
+            ava.textContent = conv.type === 'group' ? '#' : 'U';
 
-      const sub = document.createElement('div');
-      sub.className = 'conv-sub';
-      sub.textContent = conv.last_message || '';
+            // main
+            const main = document.createElement('div');
+            main.className = 'conv-main';
 
-      main.appendChild(title);
-      main.appendChild(sub);
+            const title = document.createElement('div');
+            title.className = 'conv-title';
+            title.textContent = conv.display_name;
 
-      const meta = document.createElement('div');
-      meta.className = 'conv-meta';
+            const sub = document.createElement('div');
+            sub.className = 'conv-sub';
+            sub.textContent = conv.last_message || '';
 
-      const time = document.createElement('div');
-      time.className = 'conv-time';
-      time.textContent = conv.last_message_at || '';
+            main.appendChild(title);
+            main.appendChild(sub);
 
-      meta.appendChild(time);
+            // meta
+            const meta = document.createElement('div');
+            meta.className = 'conv-meta';
 
-      if (conv.unread_count && parseInt(conv.unread_count, 10) > 0) {
-        const badge = document.createElement('div');
-        badge.className = 'conv-unread';
-        badge.textContent = conv.unread_count;
-        meta.appendChild(badge);
+            if (conv.unread_count > 0) {
+                const badge = document.createElement('div');
+                badge.className = 'conv-unread';
+                badge.textContent = conv.unread_count;
+                meta.appendChild(badge);
+            }
+
+            // delete button (unchanged)
+            const del = document.createElement('button');
+            del.className = 'conv-delete-btn';
+            del.innerHTML = '×';
+            del.addEventListener('click', (e) => {
+                e.stopPropagation();
+                requestDeleteConversation(conv);
+            });
+
+            item.appendChild(ava);
+            item.appendChild(main);
+            item.appendChild(meta);
+            item.appendChild(del);
+
+            item.addEventListener('click', () => {
+                setActiveConversation(conv.id);
+            });
+
+            convListEl.appendChild(item);
+        });
+    }
+    function requestDeleteConversation(conv) {
+      pendingDeleteConversationId = conv.id;
+
+      const modal = document.getElementById("delete-modal");
+      const msg = document.getElementById("delete-modal-msg");
+
+      if (conv.type === 'group' && conv.owner_id !== window.CURRENT_USER) {
+          msg.textContent = "Only the group owner can delete this group.";
+          document.getElementById("delete-confirm-btn").classList.add("hidden");
+      } else {
+          msg.textContent = "Are you sure you want to delete this conversation?";
+          document.getElementById("delete-confirm-btn").classList.remove("hidden");
       }
 
-      const del = document.createElement('button');
-      del.textContent = "×";
-      del.className = "conv-delete-btn";
-      del.addEventListener('click', (e) => {
-          e.stopPropagation();
-          deleteConversation(conv.id);
+      modal.classList.remove("hidden");
+    }
+
+    document.getElementById("delete-cancel-btn").onclick = closeDeleteModal;
+    document.getElementById("delete-confirm-btn").onclick = confirmDeleteConversation;
+
+    function closeDeleteModal() {
+        document.getElementById("delete-modal").classList.add("hidden");
+        pendingDeleteConversationId = null;
+    }
+    function confirmDeleteConversation() {
+      if (!pendingDeleteConversationId) return;
+
+      fetch(window.API_BASE + '/delete_conversation.php', {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation_id: pendingDeleteConversationId })
+      })
+      .then(r => r.json())
+      .then(res => {
+          if (res.success) {
+              handleConversationDeleted(pendingDeleteConversationId);
+          } else if (res.error === "only_owner_can_delete") {
+              alert("Permission denied. Only group owner can delete.");
+          }
+          closeDeleteModal();
       });
-
-      item.appendChild(ava);
-      item.appendChild(main);
-      item.appendChild(meta);
-      item.appendChild(del);
-
-      item.addEventListener('click', () => {
-        setActiveConversation(conv.id);
-      });
-
-      convListEl.appendChild(item);
-    });
   }
   function deleteConversation(convId) {
       if (!confirm("Delete this chat from your list?")) return;
@@ -356,7 +452,6 @@
                   titleEl.textContent = "Select a conversation";
                   subtitleEl.textContent = "";
               }
-
               // Re-render list
               renderConversationList();
           }else if(res.error == "only_owner_can_delete") {
@@ -372,8 +467,12 @@
 
     const conv = conversations.find(c => c.id === convId);
     if (conv) {
-      titleEl.textContent = conv.display_name;
-      subtitleEl.textContent = conv.type === 'group' ? 'Group chat' : 'Direct chat';
+      if (headerNameEl) headerNameEl.innerText = conv.display_name;
+      if (headerRoleEl) {
+          headerRoleEl.innerText = conv.type === 'group'
+              ? 'Group chat'
+              : 'Direct message';
+      }
     } else {
       titleEl.textContent = 'Conversation #' + convId;
       subtitleEl.textContent = '';
@@ -396,6 +495,7 @@
       sendReadReceipt();
     });
   }
+  window.setActiveConversation = setActiveConversation;
   function loadGroupMembers(conversationId) {
       fetch(
           window.API_BASE + '/fetch_group_members.php?conversation_id=' + conversationId,
@@ -408,28 +508,40 @@
       .catch(err => console.error(err));
   }
   function renderGroupMembers(members) {
-      const panel = document.getElementById("group-members-panel");
-      const list = document.getElementById("group-members-list");
+    const panel = document.getElementById("group-members-panel");
+    const list = document.getElementById("chat-group-members-list");
 
-      list.innerHTML = '';
+    if (!panel || !list) {
+        console.error("Group members panel/list not found");
+        return;
+    }
 
-      members.forEach(m => {
-          const div = document.createElement("div");
-          div.className = 'group-member';
-          div.dataset.userId = m.id; // 👈 store user_id
+    list.innerHTML = '';
 
-          const dot = document.createElement("span");
-          dot.className = 'status-dot ' + (m.is_online ? 'status-online' : 'status-offline');
+    if (!members || members.length === 0) {
+        list.innerHTML = '<div class="text-gray-500 text-sm p-2">No members</div>';
+        panel.classList.remove("hidden");
+        return;
+    }
 
-          const name = document.createElement("span");
-          name.textContent = m.name;
+    members.forEach(m => {
+        const div = document.createElement("div");
+        div.className = "flex items-center gap-2 px-3 py-2 text-sm";
 
-          div.appendChild(dot);
-          div.appendChild(name);
-          list.appendChild(div);
-      });
+        const dot = document.createElement("span");
+        dot.className =
+            "w-2 h-2 rounded-full " +
+            (m.is_online ? "bg-green-500" : "bg-gray-400");
 
-      panel.classList.remove("hidden");
+        const name = document.createElement("span");
+        name.textContent = m.name;
+
+        div.appendChild(dot);
+        div.appendChild(name);
+        list.appendChild(div);
+    });
+
+    panel.classList.remove("hidden");
   }
   function updateGroupMemberPresence(data) {
       const el = document.querySelector(
@@ -457,62 +569,73 @@
       .catch(err => console.error('fetch_messages error', err));
   }
   function renderMessages(convId) {
-      messagesEl.innerHTML = '';
+    messagesEl.innerHTML = '';
 
-      (messages[convId] || []).forEach(msg => {
-          const row = document.createElement('div');
-          row.className = 'message-row' + (msg.sender_id == window.CURRENT_USER ? ' own' : '');
+    (messages[convId] || []).forEach(msg => {
+      const row = document.createElement('div');
+      row.className =
+        'message-row ' +
+        (msg.sender_id == CURRENT_USER ? 'sent' : 'received');
 
-          const bubble = document.createElement('div');
-          bubble.className = 'message-bubble';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
 
-          // If message is deleted
-          if (msg.is_deleted == 1) {
-              bubble.innerHTML = "<i>Message deleted</i>";
-          } 
-          else {
-              // Normal text message
-              if (msg.message) {
-                  const text = document.createElement('div');
-                  text.className = "message-text";
-                  text.innerHTML = formatMessageText(msg.message);
-                  bubble.appendChild(text);
-              }
+      // Group sender name
+      if (msg.sender_id != CURRENT_USER && msg.sender_name) {
+        const sender = document.createElement('div');
+        sender.className = 'sender-name';
+        sender.textContent = msg.sender_name;
+        bubble.appendChild(sender);
+      }
 
-              // File attachment
-              if (msg.file_path) {
-                  const fileDiv = document.createElement('div');
-                  fileDiv.className = 'message-file';
+      // Deleted message
+      if (msg.is_deleted) {
+        bubble.innerHTML += `<i>Message deleted</i>`;
+      } else {
+        bubble.innerHTML += `
+          <div class="message-text">${formatMessageText(msg.message || '')}</div>
+        `;
+      }
 
-                  const link = document.createElement('a');
-                  link.href = msg.file_path;
-                  link.target = '_blank';
-                  link.textContent = msg.original_name || "Attachment";
+      if (msg.sender_id == CURRENT_USER && !msg.is_deleted) {
+        const del = document.createElement('button');
+        del.className = 'delete-btn';
+        del.innerHTML = '🗑';
+        del.onclick = () => deleteMessage(msg.id);
+        bubble.appendChild(del);
+      }
 
-                  fileDiv.appendChild(link);
-                  bubble.appendChild(fileDiv);
-              }
+      if (msg.file_path) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "message-file";
 
-              // DELETE BUTTON — only for your own messages
-              if (msg.sender_id == window.CURRENT_USER) {
-                  const delBtn = document.createElement("button");
-                  delBtn.className = "delete-btn";
-                  delBtn.innerHTML = "🗑";
-                  delBtn.onclick = () => deleteMessage(msg.id);
-                  bubble.appendChild(delBtn);
-              }
-          }
+        const link = document.createElement("a");
+        link.href = msg.file_path;
+        link.target = "_blank";
+        link.textContent = msg.original_name || "Attachment";
 
-          // Timestamp
-          const meta = document.createElement('div');
-          meta.className = 'message-meta';
-          meta.textContent = msg.created_at;
-          bubble.appendChild(meta);
+        fileDiv.appendChild(link);
+        bubble.appendChild(fileDiv);
+      }
 
-          row.appendChild(bubble);
-          messagesEl.appendChild(row);
-      });
+      const meta = document.createElement('div');
+      meta.className = 'message-meta';
+      meta.textContent = msg.created_at;
+
+      if (msg.sender_id == CURRENT_USER) {
+        meta.innerHTML += `
+          <span class="read ${msg.is_read ? 'read' : ''}">
+            ${msg.is_read ? '✔✔' : '✔'}
+          </span>
+        `;
+      }
+
+      bubble.appendChild(meta);
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
+    });
   }
+
   function formatMessageText(text) {
       if (!text) return '';
 
@@ -549,39 +672,40 @@
       return safe;
   }
   function sendMessage() {
-    const txt = inputEl.value.trim();
-    if (!txt && !fileInput.dataset.uploadedPath) return;
-    if (!activeConversationId) {
-      alert('Select a conversation first');
-      return;
-    }
-
-    const payload = {
-      type: 'send_message',
-      conversation_id: activeConversationId,
-      message: txt
-    };
-
-    if (fileInput.dataset.uploadedPath) {
-      payload.file_path = fileInput.dataset.uploadedPath;
-    }
-    
-    if (fileInput.dataset.uploadedOriginalName) {
-      payload.original_name = fileInput.dataset.uploadedOriginalName;
-    }else{
-      payload.original_name = null;
-    }
-
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(payload));
-    } else {
-      console.warn('WS not open, cannot send message');
-    }
-    inputEl.value = '';
-    fileInput.value = '';
-    delete fileInput.dataset.uploadedPath;
-    delete fileInput.dataset.uploadedOriginalName;
+  if (!activeConversationId) {
+    alert("Select a conversation first");
+    return;
   }
+
+  const text = inputEl.value.trim();
+  const filePath = fileInput.dataset.uploadedPath || null;
+  const originalName = fileInput.dataset.uploadedOriginalName || null;
+
+  // Prevent empty send
+  if (!text && !filePath) return;
+
+  const payload = {
+    type: "send_message",
+    conversation_id: activeConversationId,
+    message: text || null
+  };
+
+  if (filePath) {
+    payload.file_path = filePath;
+    payload.original_name = originalName;
+  }
+
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  } else {
+    console.warn("WS not open");
+    return;
+  }
+
+  // Reset UI
+  inputEl.value = "";
+  clearAttachment();
+}
   function handleWsMessage(data) {
     switch (data.type) {
       case 'system':
@@ -639,10 +763,17 @@
       renderConversationList();
   }
   function handleMentionNotification(data) {
-      const sender = users.find(u => u.id == data.sender_id);
+      let name = "Someone";
 
-      const name = sender ? sender.name : "Someone";
-
+      if (data.sender_name) {
+        name = data.sender_name;
+      } else if (Array.isArray(users)) {
+          const sender = users.find(u => u.id == data.sender_id);
+          if (sender && sender.name) {
+              name = sender.name;
+          }
+      }
+      console.log("Name: " + name);
       showUiPopup({
           sender_name: name,
           message: "mentioned you in a chat",
@@ -672,19 +803,11 @@
       scrollToBottom();
       sendReadReceipt();
     }
-
+    console.log("Mag : " + Object.values(msg));
     // Show popup and browser notification for messages not from me
     if (msg.sender_id != window.CURRENT_USER) {
       playSound();
-      //showPopupNotification(msg);
-      //showBottomBarNotification(msg);
-      //showDesktopToast(msg); // Desktop-like toast notification
       showUiPopup(msg);
-      /*if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        const body = msg.message ? msg.message : "📎 Attachment received";
-        const n = new Notification("New message", { body: body });
-        n.onclick = function () { window.focus(); setActiveConversation(convId); this.close(); };
-      }*/
     }
 
     renderConversationList();
@@ -726,25 +849,28 @@
     }
   }
   function handleTypingIndicator(data) {
-    if (data.conversation_id != activeConversationId) return;
-    typingIndicatorEl.style.display = 'block';
+    if (data.conversation_id !== activeConversationId) return;
 
-    if (typingTimeout) clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => { typingIndicatorEl.style.display = 'none'; }, 1500);
+    typingIndicatorEl.classList.remove("hidden");
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      typingIndicatorEl.classList.add("hidden");
+    }, 1500);
   }
   function handlePresence(data) {
-      // update my presence text
-      if (data.user_id === window.CURRENT_USER) {
-          presenceEl.textContent = data.is_online ? 'You are online' : 'You are offline';
-      }
-
       // update other users in the list
-      const user = users.find(u => u.id == data.user_id);
-      if (user) {
-          user.is_online = data.is_online;
-          renderUserList();
-          //renderUserList(userSearchEl.value.trim());
+      const uid = parseInt(data.user_id, 10);
+
+      if (data.is_online) {
+          if (!onlineUserIds.includes(uid)) {
+              onlineUserIds.push(uid);
+          }
+      } else {
+          onlineUserIds = onlineUserIds.filter(id => id !== uid);
       }
+      window.__onlineUserIds = onlineUserIds;
+      applyOnlineStatus();
   }
   function handleFileUpload() {
     if (!fileInput.files.length) return;
@@ -755,12 +881,27 @@
     fetch(window.API_BASE + '/upload_file.php', { method: 'POST', body: formData, credentials: 'include' })
       .then(r => r.json())
       .then(res => {
-        if (res.error) { alert('Upload error: ' + res.error); fileInput.value = ''; return; }
+        if (res.error) return alert(res.error);
+
         fileInput.dataset.uploadedPath = res.path;
         fileInput.dataset.uploadedOriginalName = res.original_name;
-        sendMessage();
+
+        const preview = document.getElementById("attachment-preview");
+        preview.innerHTML = `
+          <i class="ph ph-paperclip text-2xl"></i> ${escapeHtml(res.original_name)}
+          <button onclick="clearAttachment()">✕</button>
+        `;
+        preview.classList.remove("hidden");
       })
       .catch(err => console.error('upload error', err));
+  }
+  function clearAttachment() {
+    delete fileInput.dataset.uploadedPath;
+    delete fileInput.dataset.uploadedOriginalName;
+    fileInput.value = "";
+
+    const preview = document.getElementById("attachment-preview");
+    if (preview) preview.classList.add("hidden");
   }
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
   function isAtBottom() { return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 50; }
@@ -776,39 +917,38 @@
     const conv = conversations.find(c => c.id == activeConversationId);
     if (conv) { conv.unread_count = 0; renderConversationList(); }
   }
-  function showPopupNotification(msg) {
-    if (!popupContainer) return;
-    const div = document.createElement('div');
-    div.className = 'chat-popup';
-    const preview = msg.message ? msg.message.substring(0, 80) : "📎 File received";
-    div.innerHTML = "<strong>New message</strong>" + escapeHtml(preview);
-    div.addEventListener('click', () => { window.focus(); setActiveConversation(msg.conversation_id); div.remove(); });
-    popupContainer.appendChild(div);
-    setTimeout(() => { div.remove(); }, 4000);
-  }
   function showUiPopup(message) {
-      const container = document.getElementById("ui-popup-container");
-      const div = document.createElement("div");
-      div.className = "ui-popup";
+    const container = document.getElementById("ui-popup-container");
+    if (!container) return;
 
-      const preview = message.message 
-          ? message.message.substring(0, 70) 
-          : "📎 Attachment received";
+    const div = document.createElement("div");
+    div.className = "ui-popup";
 
-      div.innerHTML = `
-          <strong>${escapeHtml(message.sender_name || "New Message")}</strong>
-          <small>${escapeHtml(preview)}</small>
-      `;
+    let senderName = message.sender_name;
 
-      div.addEventListener("click", () => {
-          setActiveConversation(message.conversation_id);
-          div.remove();
-      });
+    // Fallback: resolve from users list
+    if (!senderName && message.sender_id) {
+        const user = users.find(u => u.id == message.sender_id);
+        senderName = user ? user.name : "New Message";
+    }
 
-      container.appendChild(div);
+    const preview = message.message
+        ? message.message.substring(0, 70)
+        : "📎 Attachment received";
 
-      // Auto-remove after 5 seconds
-      setTimeout(() => div.remove(), 5000);
+    div.innerHTML = `
+        <strong>${escapeHtml(senderName || "New Message")}</strong>
+        <small>${escapeHtml(preview)}</small>
+    `;
+
+    div.addEventListener("click", () => {
+        setActiveConversation(message.conversation_id);
+        div.remove();
+    });
+
+    container.appendChild(div);
+
+    setTimeout(() => div.remove(), 5000);
   }
   function showBottomBarNotification(msg) {
       // Remove old bar if exists
@@ -839,9 +979,6 @@
   function renderGroupMemberSelector() {
     const list = document.getElementById("group-members-list");
 
-    console.log("RENDER GROUP MEMBERS");
-    console.log("USERS:", users);
-
     if (!list) {
         console.error("group-members-list not found");
         return;
@@ -850,16 +987,21 @@
     list.innerHTML = '';
 
     if (!users || users.length === 0) {
-        list.innerHTML = '<div style="padding:8px;color:#999;">No users found</div>';
+        list.innerHTML = '<div class="text-gray-400 p-2">No users found</div>';
         return;
     }
 
     users.forEach(u => {
         const label = document.createElement("label");
+        label.className = "flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-100 cursor-pointer";
 
         label.innerHTML = `
-            <input type="checkbox" class="group-member" value="${u.id}">
-            <span>${escapeHtml(u.name)}</span>
+            <input 
+                type="checkbox" 
+                class="group-member w-4 h-4" 
+                value="${u.id}"
+            />
+            <span class="text-sm text-gray-800">${escapeHtml(u.name)}</span>
         `;
 
         list.appendChild(label);
@@ -883,11 +1025,17 @@
       })
       .then(r => r.json())
       .then(res => {
+          if (res.error) {
+              alert(res.error);
+              return;
+          }
+
           if (res.conversation_id) {
               loadConversations().then(() => {
                   setActiveConversation(res.conversation_id);
               });
           }
+
           document.getElementById("group-modal").classList.add("hidden");
       });
   }
@@ -944,5 +1092,5 @@
 
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
-
+  
 })();

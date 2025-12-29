@@ -178,6 +178,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Delivery Date</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Vendor</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Order No</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Invoice</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Grand Total</th>
                         <th scope="col" class="relative px-6 py-3"> <span class="table-header-text">Status</span></th>
@@ -202,6 +203,22 @@
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <?php
+                                foreach ($order['items'] as $item):
+                                    if (!empty($item['order_number'])): 
+                                    $order_link = base_url('?page=orders&action=view&id=' . htmlspecialchars($item['id']));
+                                    $order_number = htmlspecialchars($item['order_number'] ?? 'N/A');
+                                    echo "<a class=\"text-blue-600 hover:underline\" target=\"_blank\" href=\"" . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=') . $item['order_number'] . "\">{$order_number}</a><br>";
+                                    
+                                    else:
+                                        echo "<span class=\"text-gray-400\">N/A</span>";
+                                    endif;
+                                endforeach;
+                                ?>                               
+                            
+                                
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?php if (!empty($order['vendor_invoice'])): ?>

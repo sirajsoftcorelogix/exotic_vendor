@@ -292,7 +292,8 @@
 			'sculptures' => 'Sculptures',
 			'textiles' => 'Textiles',
 			'jewelry' => 'Jewelry',
-			'homeandliving' => 'Home and Living'
+			'homeandliving' => 'Home and Living',
+			'book' => 'Book',
 		];
 	}
 	function getVendorCategory(){
@@ -599,5 +600,25 @@
 
 		return $sanitized;
 	}
+	function generateVendorCode(mysqli $conn): string
+	{
+		$prefix = '';
+		$characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+		$length = 10; // Length of the random part
+		do {
+			$randomPart = '';
+			for ($i = 0; $i < $length; $i++) {
+				$randomPart .= $characters[random_int(0, strlen($characters) - 1)];
+			}
 
+			$vendorCode = $prefix . $randomPart;
+
+			$check = $conn->query(
+				"SELECT id FROM vp_vendors WHERE vendor_code = '$vendorCode' LIMIT 1"
+			);
+
+		} while ($check->num_rows > 0);
+
+		return $vendorCode;
+	}
 ?>

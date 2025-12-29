@@ -89,6 +89,7 @@
                     </div>
                 </div>
             </div>
+            <div class="text-sm font-bold text-green-600 mb-4" id="messageDiv"><?php echo $_SESSION["mapping_message"] ?? ""; unset($_SESSION["mapping_message"]); ?></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
@@ -150,6 +151,8 @@
                                             <?php if (hasPermission($_SESSION["user"]["id"], 'Vendors', 'delete')) { ?>
                                                 <li class="delete-btn" data-id="<?php echo $vendor['id']; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
                                             <?php } ?>
+                                            <li onclick="location.href='?page=vendors&action=products_map&v_id=<?php echo htmlspecialchars($vendor['id']); ?>'"><i class="fa-brands fa-product-hunt"></i> Products</li>
+
                                             <li style="color: lightgray;"><i class="fa-solid fa-cart-shopping"></i> Purchase Order</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</li>
                                             <li style="color: lightgray;"><i class="fa-solid fa-indian-rupee-sign"></i> Payments</li>
@@ -619,7 +622,6 @@
 </div>
 <!-- End Edit Model Popup -->
 
-
 <!-- Bank Detail Modal -->
 <div class="modal fade hidden" id="bankDetailModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -697,6 +699,15 @@
 
 <!-- JavaScript to handle popup and form submission -->
 <script>
+    const myDiv = document.getElementById('messageDiv');
+    // Clear the div after 5000 milliseconds (5 seconds)
+    if (myDiv) {
+        setTimeout(() => {
+            if (myDiv.innerHTML.trim() !== '') {
+                myDiv.innerHTML = '';
+            }
+        }, 3000);
+    }
 
     // Function to limit input to six digits
     window.limitToTenDigits = function (input) {

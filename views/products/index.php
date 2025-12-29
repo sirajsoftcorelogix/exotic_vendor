@@ -152,10 +152,10 @@
                 <?php if (!empty($data['products'])): ?>
                 <?php foreach ($data['products'] as $product): ?>
                     <!-- Table Row 1 -->
-                <tr class="bg-white rounded-md shadow-sm" data-product='<?=  htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8') ?>'>
+                <tr class="bg-white rounded-md shadow-sm" id="product-item-code<?php echo $product['item_code']; ?>" data-product='<?=  htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8') ?>'>
                     <!-- Checkbox -->
                     <td class="p-4 whitespace-nowrap rounded-l-md align-top pt-6">
-                        <input type="checkbox" name="product_select[]" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500" value="<?php echo $product['item_code']; ?>">
+                        <input type="checkbox" id="product_<?php echo $product['item_code']; ?>" name="product_select[]" class="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500" value="<?php echo $product['item_code']; ?>">
                     
                     </td>
 
@@ -369,35 +369,36 @@
 
         <div class="h-full bg-white shadow-xl px-8 overflow-y-auto flex flex-col w-full">
             <!-- Modal Content -->
-            <div class="px-6 py-5 md:px-8">
+            <div class="px-6 py-4 md:px-8">
                 <div class="flex items-center gap-4">
                     <!-- Circular Icon -->
-                    <div class="w-12 h-12 md:w-14 md:h-14 bg-brand-orange rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
+                    <div class="w-10 h-10 md:w-12 md:h-12 bg-brand-orange rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
                         <i class="fas fa-link text-white text-xl md:text-2xl transform -rotate-45"></i>
                     </div>
                     <!-- Title -->
-                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Product Mapping ⇌ Vendor</h1>
+                    <h1 class="text-xl md:text-xl font-bold text-gray-900">Product Mapping ⇌ Vendor</h1>
                 </div>
             </div>
 
             <!-- Purple Separator Line -->
             <div class="h-1 bg-brand-purple w-full"></div>
 
-            <div class="p-6 md:p-8 flex-grow">
+            <div class="p-5 md:p-7 flex-grow">
 
                 <!-- ================= PRODUCT INFO CARD (ORANGE ROUNDED BOX) ================= -->
-                <div class="bg-brand-orange rounded-xl p-6 mb-8 flex flex-col md:flex-row items-center gap-6 shadow-md text-white">
+                <div class="bg-brand-orange rounded-xl p-6 mb-8 flex flex-col md:flex-row items-center gap-6 shadow-md text-white sticky top-0 z-10">
                     <!-- Product Icon/Image Placeholder -->
                     <div class="w-20 h-20 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 border border-white border-opacity-30">
-                        <i class="fas fa-box-open text-3xl text-white opacity-90"></i>
+                        <!-- <i class="fas fa-box-open text-3xl text-white opacity-90"></i> -->
+                         <img id="product_image_mapped" src="" alt="Product Image" class="max-w-full max-h-full rounded-lg">
                     </div>
 
                     <!-- Product Details -->
                     <div class="flex-grow">
                         <!-- Item Code: Reduced font size as requested -->
-                        <div class="text-xl md:text-2xl font-bold mb-2" id="item_code_mapped">Item Code : </div>
+                        <div class="text-xl md:text-lg font-bold mb-2" id="item_code_mapped">Item Code : </div>
                         <!-- Description in regular font -->
-                        <p class="text-white text-lg font-normal opacity-95 leading-snug" id="current_vendor_mapped">                          
+                        <p class="text-white text-md font-normal opacity-95 leading-snug" id="current_vendor_mapped">                          
                            
                         </p>
                     </div>
@@ -417,7 +418,7 @@
                             + Add
                         </button>
                     </div>
-                    <div id="vendorSuggestionsList" class="" style="display:none; position:absolute; left:0; right:0; z-index:50; max-height:240px; overflow:auto;"></div>
+                    <div id="vendorSuggestionsList" class="px-6 " style="display:none; position:absolute; left:0; right:0; z-index:50; max-height:240px; overflow:auto;"></div>
                         
                 </div>
                 <div class="flex-grow space-y-4" id="vendor-modal-content">
@@ -819,8 +820,21 @@ function openEditVendorModal(itemCode, currentVendor) {
     const modalContent = document.getElementById('vendor-modal-content');
     const vendorModal = document.getElementById('vendor-modal');
     const vendorModalSlider = document.getElementById('vendor-modal-slider');
+    const productImage = document.getElementById('product_image_mapped');
     document.getElementById('item_code_mapped').innerText = `Item Code : ${itemCode}`;
     document.getElementById('current_vendor_mapped').innerText = `${currentVendor}`;
+
+    productImage.src = 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; // set default image
+    //get product image from the row product-item-code attribute
+    //const row = document.getElementById(`product-item-code${itemCode}`);
+    const productData = JSON.parse(document.getElementById(`product-item-code${itemCode}`).getAttribute('data-product'));
+    if (productData) {        
+        const productImageSrc = productData.image;
+        if (productImageSrc) {
+            productImage.src = productImageSrc;
+        }
+    }
+
     modalContent.innerHTML = '<p>Updating vendor. Please wait...</p>';
     vendorModal.classList.remove('hidden');
     setTimeout(() => {
@@ -899,7 +913,7 @@ function removeVendor(button, id) {
     .then(data => {
         if (data.success) {
             alert('Vendor mapping removed successfully.');
-            window.location.reload(); // Reload to reflect changes
+            //window.location.reload(); // Reload to reflect changes
         } else {
             alert('Error removing vendor mapping: ' + data.message);
         }
@@ -966,9 +980,9 @@ function renderSuggestions(list) {
         return;
     }
     suggBox.innerHTML = list.map((v, i) => {
-        return `<div class="sugg-item position-relative z-10 w-full p-2 cursor-pointer hover:bg-gray-300 bg-white" data-index="${i}" data-id="${escapeHtml(v.id)}" data-json='${escapeHtml(JSON.stringify(v))}' style="padding:8px 10px;">
-                    <div style="font-weight:600;">${escapeHtml(v.vendor_name || '')} — ${escapeHtml(v.vendor_email || '')}</div>
-                    <div style="font-size:11px;color:#6b7280;">Phone: ${escapeHtml(v.vendor_phone || '')} • Postal code: ${escapeHtml(v.postal_code || '-')}</div>
+        return `<div class="sugg-item position-relative z-10 w-full p-2 cursor-pointer hover:bg-gray-300 bg-white px-6 border border-gray-300 rounded-b" data-index="${i}" data-id="${escapeHtml(v.id)}" data-json='${escapeHtml(JSON.stringify(v))}' style="padding:8px 10px;">
+                    <div style="font-weight:600;">${escapeHtml(v.vendor_name || '')} — ${escapeHtml(v.city || '')} — ${escapeHtml(v.state || '')}</div>
+                    <div style="font-size:11px;color:#6b7280;">Phone: ${escapeHtml(v.vendor_phone || '')} • Agent name: ${escapeHtml(v.agent_name || '-')}</div>
                 </div>`;
     }).join('');
     suggBox.style.display = 'block';
@@ -1008,6 +1022,51 @@ if (vendorSuggestionsContainer) {
         vendorSuggestionsContainer.style.display = 'none';
     });
 }
+// Keyboard navigation for suggestions
+let activeIndex = -1;
+document.getElementById('vendorSearch').addEventListener('keydown', function (e) {
+    const suggBox = document.getElementById('vendorSuggestionsList');
+    const items = suggBox.querySelectorAll('.sugg-item');
+    if (suggBox.style.display === 'none' || items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % items.length;
+        updateActiveSuggestion(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = (activeIndex - 1 + items.length) % items.length;
+        updateActiveSuggestion(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeIndex >= 0 && activeIndex < items.length) {
+            items[activeIndex].click();
+        }
+    }
+});
+function updateActiveSuggestion(items) {
+    items.forEach((item, index) => {
+        if (index === activeIndex) {
+            item.classList.add('bg-gray-300');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('bg-gray-300');
+        }
+    });
+}
+//clear suggestions when clicking outside
+document.addEventListener('click', function(event) {
+    const suggBox = document.getElementById('vendorSuggestionsList');
+    const vendorSearchInput = document.getElementById('vendorSearch');
+    if (!suggBox.contains(event.target) && event.target !== vendorSearchInput) {
+        suggBox.style.display = 'none';
+    }
+    if (event.target === vendorSearchInput) {
+        if (suggBox.children.length > 0) {
+            suggBox.style.display = 'block';
+        }
+    }
+});
 
 // Add vendor button -> save mapping via AJAX
 const addVendorButton = document.getElementById('addVendorButton');
@@ -1053,4 +1112,41 @@ if (addVendorButton) {
         });
     });
 }
+</script>
+<script>
+// Global function to update vendor priority via AJAX
+window.updateVendorPriority = function(id,item_code, priority, el) {
+    // try {
+    //     el = el || document.querySelector('[data-vendor-id="' + id + '"] select');
+    // } catch (e) {}
+    // if (!el) {
+    //     // fallback: find select by vendor id attribute
+    //     el = document.querySelector('[data-vendor-id="' + id + '"] select');
+    // }
+    // if (el) el.disabled = true;
+    var params = new URLSearchParams();
+    params.append('id', id);
+    params.append('priority', priority);
+    fetch('<?php echo base_url('?page=products&action=updatePriority') ?>', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    }).then(function(r){ return r.json(); }).then(function(data){
+        if (el) {
+            el.disabled = false;
+            if (data && data.success) {
+                el.classList.add('ring-4','ring-green-300');
+                setTimeout(function(){ el.classList.remove('ring-4','ring-green-300'); }, 1200);
+                const modalContent = document.getElementById('vendor-modal-content');
+                fetch(`?page=products&action=get_vendor_edit_form&item_code=${encodeURIComponent(item_code)}&current_vendor=${encodeURIComponent(document.getElementById('current_vendor_mapped').innerText)}`)
+                    .then(r => r.text()).then(html => { modalContent.innerHTML = html; });
+            } else {
+                alert('Unable to update priority: ' + (data && data.message ? data.message : '')); 
+            }
+        }
+    }).catch(function(err){
+        if (el) { el.disabled = false; }
+        alert('Network error');
+    });
+};
 </script>
