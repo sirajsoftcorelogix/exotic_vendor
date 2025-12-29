@@ -33,6 +33,7 @@ class PurchaseOrdersController {
     public function index() {
         is_login();
         global $purchaseOrdersModel;
+        global $purchaseOrderItemsModel;
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page
@@ -79,12 +80,17 @@ class PurchaseOrdersController {
         }
         // Fetch all purchase orders
         $purchaseOrders = $purchaseOrdersModel->getAllPurchaseOrders($filters);
+       
         // Calculate total pages
         $total_orders = count($purchaseOrders);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         // Paginate orders
         $orders = array_slice($purchaseOrders, $offset, $limit);
-
+        //get order items for each purchase order
+        foreach ($orders as &$order) {
+            $order['items'] = $purchaseOrderItemsModel->getPurchaseOrderItemById($order['id']);
+        }
+        //print_array($orders);
         renderTemplate('views/purchase_orders/index.php', [
             'purchaseOrders' => $orders,
             'total_orders' => $total_orders,

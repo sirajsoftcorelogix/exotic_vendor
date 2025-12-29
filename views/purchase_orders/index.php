@@ -205,11 +205,20 @@
                             <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <?php if (!empty($order['order_number'])): ?>
-                                <a href="<?= base_url('?page=orders&action=view&id=' . htmlspecialchars($order['order_id'])) ?>" class="text-blue-600 hover:underline"><?= htmlspecialchars($order['order_number']) ?></a>
-                            <?php else: ?>
-                                <span class="text-gray-400">N/A</span>
-                            <?php endif; ?>
+                            <?php
+                                foreach ($order['items'] as $item):
+                                    if (!empty($item['order_number'])): 
+                                    $order_link = base_url('?page=orders&action=view&id=' . htmlspecialchars($item['id']));
+                                    $order_number = htmlspecialchars($item['order_number'] ?? 'N/A');
+                                    echo "<a class=\"text-blue-600 hover:underline\" target=\"_blank\" href=\"" . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=') . $item['order_number'] . "\">{$order_number}</a><br>";
+                                    
+                                    else:
+                                        echo "<span class=\"text-gray-400\">N/A</span>";
+                                    endif;
+                                endforeach;
+                                ?>                               
+                            
+                                
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?php if (!empty($order['vendor_invoice'])): ?>
