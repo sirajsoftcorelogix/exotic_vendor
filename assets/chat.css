@@ -671,8 +671,8 @@ span.mention {
 }
 
 .message-row.received .bubble {
-  background: #051321;
-  color: #e9edef;
+  background: #fff;
+  color: #000;
   border-top-left-radius: 4px;
 }
 
@@ -694,7 +694,7 @@ span.mention {
   opacity: 0.7;
   margin-top: 4px;
   text-align: right;
-  color: #fff;
+  color: #000;
 }
 .message-file {
   margin-top: 6px;
