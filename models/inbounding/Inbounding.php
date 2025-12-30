@@ -839,33 +839,28 @@ public function update_image_variation($img_id, $variation_id) {
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $temp_code) {
-    
         // 1. Filter out IDs to Keep (Skipping Index 0)
         $submittedIds = [];
         foreach ($variations as $key => $var) {
-            // SKIP Index 0 (Main Item - stored in vp_inbound)
-            if ($key == 0) continue; 
-
+            if ($key == 0) continue; // SKIP Index 0 (Main Item)
             if (!empty($var['id'])) {
                 $submittedIds[] = (int)$var['id'];
             }
         }
 
-        // 2. DELETE old variations (that are not in the kept list)
+        // 2. DELETE old variations logic (FIXED)
         if (!empty($submittedIds)) {
             $idsStr = implode(',', $submittedIds);
             $sql = "DELETE FROM vp_variations WHERE it_id = $it_id AND id NOT IN ($idsStr)";
             $this->conn->query($sql);
         } else {
-            // If we have variations but no IDs, delete all old ones (except main item logic which isn't here)
-            // Note: Be careful not to delete logic if you have other checks, but this is standard.
-            // We only clear variations if we are submitting new ones.
-            if (count($variations) > 1) { 
-                 $this->conn->query("DELETE FROM vp_variations WHERE it_id = $it_id");
-            }
+            // If no IDs submitted, but we have variations in the array (meaning we deleted them all in UI),
+            // we must delete all from DB (excluding main if logic separates it).
+            // Since Step 3 logic implies resetting variations, this is safer:
+            $this->conn->query("DELETE FROM vp_variations WHERE it_id = $it_id");
         }
 
-        // 3. LOOP TO INSERT OR UPDATE
+        // 3. LOOP TO INSERT OR UPDATE (Standard logic)
         $insertSql = "INSERT INTO vp_variations (it_id, temp_code, color, size, quantity, cp, variation_image, height, width, depth, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $updateSql = "UPDATE vp_variations SET temp_code=?, color=?, size=?, quantity=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=? WHERE id=?";
 
@@ -873,29 +868,25 @@ public function update_image_variation($img_id, $variation_id) {
         $stmtUpdate = $this->conn->prepare($updateSql);
 
         foreach ($variations as $key => $var) {
-            // CRITICAL: SKIP Index 0 (Main Item)
-            if ($key == 0) continue;
+            if ($key == 0) continue; // Skip Main Item
 
-            $id     = $var['id'] ?? '';
-            $img    = $var['photo'] ?? '';
+            $id = $var['id'] ?? '';
+            $img = $var['photo'] ?? '';
             
-            // Use 0.00 if empty
+            // Ensure defaults
             $h = !empty($var['height']) ? $var['height'] : 0.00;
             $w = !empty($var['width']) ? $var['width'] : 0.00;
             $d = !empty($var['depth']) ? $var['depth'] : 0.00;
             $wt = !empty($var['weight']) ? $var['weight'] : 0.00;
             
             if (!empty($id)) {
-                // Update
                 $stmtUpdate->bind_param("sssidsddddi", $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt, $id);
                 $stmtUpdate->execute();
             } else {
-                // Insert
                 $stmtInsert->bind_param("isssidsdddd", $it_id, $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt);
                 $stmtInsert->execute();
             }
         }
-        
         return true;
     }
 

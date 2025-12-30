@@ -92,7 +92,72 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="mainForm" class="p-4 space-y-6">
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
             <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
+            <div class="flex flex-col lg:flex-row gap-6 items-start">
+                
+                <div class="flex flex-row bg-gray-100 border border-gray-300 rounded p-2 gap-3 min-w-[350px] lg:w-1/3">
+                    <div class="w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-pointer overflow-hidden" onclick="openImagePopup('<?= !empty($mainVar['invoice']) ? base_url($mainVar['invoice']) : '' ?>')">
+                        <?php if(!empty($mainVar['invoice'])): ?>
+                            <img src="<?php echo base_url($mainVar['invoice']); ?>" class="w-full h-full object-cover hover:opacity-90">
+                        <?php else: ?>
+                            <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">No Inv</div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="flex flex-col justify-center text-sm text-black space-y-1.5 w-full">
+                        <div class="font-bold">Vendor: <span class="font-normal"><?php echo htmlspecialchars($vendor_name); ?></span></div>
+                        <div class="font-bold">Invoice Date: <span class="font-normal">11 Dec 2025</span></div> <div class="font-bold">Entry: <span class="font-normal"><?php echo date('d M Y', strtotime($gate_entry_date_time ?: 'now')); ?></span></div>
+                        <div class="font-bold">Received By: <span class="font-normal"><?php echo htmlspecialchars($currentuserDetails['name']); ?></span></div>
+                    </div>
+                </div>
 
+                <div class="flex-1 flex flex-wrap gap-2">
+                    <?php if(!empty($display_categories)): ?>
+                        <?php foreach ($display_categories as $item) { ?>
+                            <label class="cursor-pointer group relative">
+                                <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
+                                
+                                <div class="w-24 h-28 bg-black text-white flex flex-col items-center justify-center p-2 rounded transition-all
+                                            peer-checked:bg-gray-300 peer-checked:text-black border border-black shadow-sm">
+                                    <div class="absolute top-2 left-2 w-3.5 h-3.5 rounded-full border-2 border-white peer-checked:border-black flex items-center justify-center">
+                                         <div class="w-1.5 h-1.5 rounded-full bg-white peer-checked:bg-black opacity-0 peer-checked:opacity-100"></div>
+                                    </div>
+                                    
+                                    <i class="<?= $item['icon'] ?> text-3xl mb-2"></i>
+                                    <span class="text-[10px] font-bold uppercase text-center"><?= $item['label'] ?></span>
+                                </div>
+                            </label>
+                        <?php } ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-gray-200 py-4">
+                <div>
+                    <label class="block text-gray-800 font-bold text-xs mb-1">Gate Entry Date</label>
+                    <?php 
+                    $inputValue = (!empty($gate_entry_date_time) && $gate_entry_date_time != "0000-00-00 00:00:00") 
+                    ? date('Y-m-d\TH:i', strtotime($gate_entry_date_time)) 
+                    : date('Y-m-d\TH:i');
+                    ?>
+                    <input type="datetime-local" name="gate_entry_date_time" value="<?php echo $inputValue; ?>" class="w-full border border-gray-400 rounded px-2 py-1 text-sm focus:border-[#ea8c1e] outline-none">
+                </div>
+                <div>
+                    <label class="block text-gray-800 font-bold text-xs mb-1">Material</label>
+                    <select name="material_code" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-[#ea8c1e] outline-none bg-white">
+                        <option value="">Select Material</option>
+                        <?php foreach ($data['material'] as $value2) { 
+                            $isSelected = ($material_code == $value2['id']) ? 'selected' : '';
+                        ?> 
+                        <option <?php echo $isSelected; ?> value="<?php echo $value2['id']; ?>"> <?php echo $value2['material_name']; ?></option>
+                        <?php } ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-gray-800 font-bold text-xs mb-1">Received By</label>
+                    <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
+                    <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>" readonly class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
+                </div>
+            </div>
             <div id="variations-container" class="space-y-6">
                 <?php foreach($viewVariations as $index => $var): ?>
                     <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50" data-index="<?php echo $index; ?>">
