@@ -426,11 +426,13 @@ class Order{
         $types = '';
         $values = [];
         foreach ($InsertFields as $field) {
-			if (strlen($data[$field]) > 255) {
-				// Truncate the string to the specified length
-				$data[$field] = substr($data[$field], 0, 255);
-				// Optionally, append an ellipsis
-				$data[$field] .= '...';
+			if(is_string($data[$field])){
+				if (strlen($data[$field]) > 255) {
+					// Truncate the string to the specified length
+					$data[$field] = substr($data[$field], 0, 255);
+					// Optionally, append an ellipsis
+					$data[$field] .= '...';
+				}
 			}
             $value = isset($data[$field]) ? $data[$field] : null;
             // If the incoming value is an array, encode it to JSON to avoid "Array to string conversion"
