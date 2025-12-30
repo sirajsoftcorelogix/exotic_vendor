@@ -602,6 +602,12 @@ class Order{
 				// Optionally, append an ellipsis
 				$data['author'] .= '...';
 			}
+			if (strlen($data['publisher']) > 255) {
+				// Truncate the string to the specified length
+				$text = substr($data['publisher'], 0, 255);
+				// Optionally, append an ellipsis
+				$data['publisher'] .= '...';
+			}
         $sql = "INSERT INTO vp_products (sku, item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price,publisher,author,shippingfee,sourcingfee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ssssssssiissdisiiisissii', 
