@@ -75,7 +75,7 @@ class ChatServer implements MessageComponentInterface
         } catch (Throwable $e) {
             // If anything goes wrong here, close the connection safely
             error_log("onOpen error: " . $e->getMessage());
-            try { $conn->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
+            try { $conn->send(json_encode(['type'=>'error','msg'=>'Server error 1'])); } catch (\Throwable $_) {}
             $conn->close();
         }
     }
@@ -119,7 +119,7 @@ class ChatServer implements MessageComponentInterface
             }
         } catch (Throwable $e) {
             error_log("onMessage error: " . $e->getMessage());
-            try { $from->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
+            try { $from->send(json_encode(['type'=>'error','msg'=>'Server error 2'])); } catch (\Throwable $_) {}
         }
     }
 
