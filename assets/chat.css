@@ -488,28 +488,29 @@ body {
 .mention { color: #0b5ed7; font-weight: bold; }
 .mention-dropdown {
     position: absolute;
-    background: white;
-    border: 1px solid #ccc;
-    padding: 5px;
+    bottom: 60px;               /* above input */
+    left: 16px;
+    width: 240px;
     max-height: 200px;
     overflow-y: auto;
-    width: 220px;
-    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
     z-index: 9999;
 }
+
 .mention-dropdown.hidden {
     display: none;
 }
 .mention-item {
-    padding: 6px 8px;
+    padding: 8px 10px;
     cursor: pointer;
 }
-.mention-item:hover {
-    background: #f2f2f2;
-}
+
+.mention-item:hover,
 .mention-item.active {
-    background: #0b5ed7;
-    color: white;
+    background: #f1f1f1;
 }
 span.mention {
     color: #0b5ed7;
@@ -670,8 +671,8 @@ span.mention {
 }
 
 .message-row.received .bubble {
-  background: #051321;
-  color: #e9edef;
+  background: #fff;
+  color: #000;
   border-top-left-radius: 4px;
 }
 
@@ -693,7 +694,7 @@ span.mention {
   opacity: 0.7;
   margin-top: 4px;
   text-align: right;
-  color: #fff;
+  color: #000;
 }
 .message-file {
   margin-top: 6px;
@@ -714,7 +715,7 @@ span.mention {
 }
 
 .read.read {
-  color: #53bdeb;
+  color: #fff;
 }
 .mention {
   color: #ffd166;
