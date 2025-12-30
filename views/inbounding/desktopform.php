@@ -70,9 +70,42 @@ $record_id = $_GET['id'] ?? '';
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
         <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
             
-            <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-auto">
-                <img src="<?php echo base_url($data['form2']['product_photo']); ?>" class="w-full h-full object-contain md:object-cover rounded-[3px] block bg-[#ddd]" onclick="openImagePopup('<?= $data['form2']['product_photo'] ?>')">
-            </div>
+            <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
+    
+    <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
+        <?php 
+            $mainPhoto = $data['form2']['product_photo'] ?? ''; 
+            $hasMainPhoto = !empty($mainPhoto);
+        ?>
+        
+        <img id="main_photo_preview" 
+             src="<?= $hasMainPhoto ? base_url($mainPhoto) : '' ?>" 
+             onclick="openImagePopup(this.src)"
+             class="w-full h-full object-contain cursor-zoom-in absolute inset-0 z-10"
+             style="<?= $hasMainPhoto ? '' : 'display: none;' ?>">
+             
+        <div id="main_photo_placeholder"
+             class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-full h-full absolute inset-0 z-20 bg-gray-50 hover:bg-gray-100 transition-colors"
+             onclick="document.getElementById('product_photo_main_input').click()"
+             style="<?= $hasMainPhoto ? 'display: none;' : '' ?>">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            <span class="text-xs font-bold mt-1">Add Photo</span>
+        </div>
+
+        <button type="button"
+                id="main_photo_change_btn"
+                onclick="document.getElementById('product_photo_main_input').click()"
+                class="absolute bottom-0 right-0 bg-black bg-opacity-60 text-white p-2 rounded-tl-md z-30 hover:bg-[#d97824] transition-colors"
+                style="<?= $hasMainPhoto ? '' : 'display: none;' ?>"
+                title="Change Photo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+
+        <input type="file" name="product_photo_main" id="product_photo_main_input" class="hidden" accept="image/*">
+        <input type="hidden" name="old_product_photo_main" value="<?= htmlspecialchars($mainPhoto) ?>">
+    </div>
+    
+</div>
 
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-3 md:px-5 pt-[15px] pb-5 bg-white md:ml-2.5 md:mr-5">
                 <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
@@ -1984,4 +2017,49 @@ document.addEventListener('DOMContentLoaded', function() {
     const allCards = document.querySelectorAll('.calculation-card, .bg-gray-50');
     allCards.forEach(card => updateCardPrice(card));
 });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const mainInput = document.getElementById('product_photo_input');
+        const mainPreview = document.getElementById('main_photo_preview');
+
+        if(mainInput) {
+            mainInput.addEventListener('change', function(e) {
+                if (this.files && this.files[0]) {
+                    var reader = new FileReader();
+                    reader.onload = function(evt) {
+                        mainPreview.src = evt.target.result;
+                        mainPreview.classList.remove('hidden');
+                    }
+                    reader.readAsDataURL(this.files[0]);
+                }
+            });
+        }
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const mainInput = document.getElementById('product_photo_main_input');
+        const mainPreview = document.getElementById('main_photo_preview');
+        const mainPlaceholder = document.getElementById('main_photo_placeholder');
+        const mainChangeBtn = document.getElementById('main_photo_change_btn');
+
+        if(mainInput) {
+            mainInput.addEventListener('change', function(e) {
+                if (this.files && this.files[0]) {
+                    var reader = new FileReader();
+                    reader.onload = function(evt) {
+                        // Update Source
+                        mainPreview.src = evt.target.result;
+                        
+                        // Show Image, Hide Placeholder, Show Button
+                        mainPreview.style.display = 'block';
+                        mainPlaceholder.style.display = 'none';
+                        mainChangeBtn.style.display = 'block';
+                    }
+                    reader.readAsDataURL(this.files[0]);
+                }
+            });
+        }
+    });
 </script>

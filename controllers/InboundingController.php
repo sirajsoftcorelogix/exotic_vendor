@@ -709,8 +709,36 @@ class InboundingController {
         $percent_val = ($back_order_input == '1') ? (!empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0) : 0;
         $day_val     = ($back_order_input == '1') ? (!empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0) : 0;
 
+        // =========================================================
+        // START NEW CODE: Handle Main Product Photo Upload
+        // =========================================================
+        // Default to old photo if no new one is uploaded
+        $mainProductPhoto = $_POST['old_product_photo_main'] ?? ($oldData['form2']['product_photo'] ?? ''); 
+
+        if (isset($_FILES['product_photo_main']) && $_FILES['product_photo_main']['error'] === UPLOAD_ERR_OK) {
+            $tmpName = $_FILES['product_photo_main']['tmp_name'];
+            $name    = $_FILES['product_photo_main']['name'];
+            $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $uploadDir = __DIR__ . '/../uploads/products/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                
+                // Unique Name: MAIN_ID_TIMESTAMP_RANDOM
+                $newFileName = "MAIN_" . $id . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                
+                if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                    $mainProductPhoto = "uploads/products/" . $newFileName;
+                }
+            }
+        }
+        // =========================================================
+        // END NEW CODE
+        // =========================================================
+
         // 3. Prepare Main Data Array
         $data = [
+            'product_photo'       => $mainProductPhoto, // <--- ADDED THIS LINE
             'invoice_image'       => $invoicePath,
             'is_variant'          => $is_variant,
             'Item_code'           => $item_code,
@@ -759,7 +787,7 @@ class InboundingController {
         $result = $inboundingModel->updatedesktopform($id, $data);
 
         // =========================================================================
-        // START NEW CODE: Handle Variations Logic
+        // START VARIATIONS LOGIC (Already present in your code)
         // =========================================================================
         
         // Capture variations array from POST
@@ -770,7 +798,6 @@ class InboundingController {
             $variant['id'] = $variant['id'] ?? '';
 
             // Handle File Uploads for each variation
-            // PHP structures multi-files as $_FILES['variations']['error'][$key]['photo']
             $uploadError = $_FILES['variations']['error'][$key]['photo'] ?? UPLOAD_ERR_NO_FILE;
 
             if ($uploadError === UPLOAD_ERR_OK) {
@@ -795,12 +822,11 @@ class InboundingController {
         unset($variant); // Break reference
 
         // Call Model to Save Variations
-        // We pass $item_code as the temp_code/parent identifier
         if (!empty($allVariations)) {
             $inboundingModel->saveVariations($id, $allVariations, $item_code);
         }
         // =========================================================================
-        // END NEW CODE
+        // END VARIATIONS LOGIC
         // =========================================================================
 
         // 5. Update Image Order
@@ -829,7 +855,7 @@ class InboundingController {
         } else {
             echo "Update failed: " . $result['message'];
         }
-    } 
+    }
     public function submitStep3() {
         global $inboundingModel;
 
