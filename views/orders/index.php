@@ -101,8 +101,28 @@
         color: rgba(7, 7, 7, 1);
     }
     
-   
+   .date-field {
+      position: relative;
+      display: inline-block;
+    }
+    .date-field input {
+      padding-right: 35px; /* space for icon */
+      width: 375px;
+      padding: 8px;
+    }
+    .date-field i {
+      position: absolute;
+      right: 10px;
+      top: 70%;
+      transform: translateY(-50%);
+      color: #d06706;
+      pointer-events: none; /* icon won't block clicks */
+    }
+
 </style>
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <div class="container mx-auto pr-4 pt-2">
     <?php
 		
@@ -271,7 +291,21 @@
                 <form method="GET" class="contents">
                 <!-- Orders From/Till -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-0">
-                    <div class="w-1/2">
+                
+                    <div class="w-full date-field">
+                        <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order Date Range</label>
+                        <input type="text" value="<?= htmlspecialchars($_GET['daterange'] ?? '') ?>" name="daterange" id="daterange" placeholder="Select date range" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                        <i class="fa fa-calendar"></i>
+                    </div>
+                     <script>
+                        $(function() {
+                        $('#daterange').daterangepicker({
+                            opens: 'right',
+                            locale: { format: 'YYYY-MM-DD' }
+                        });
+                        });
+                    </script>
+                    <!-- <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
@@ -279,7 +313,7 @@
                     <div class="w-1/2">
                         <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Order To</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
-                    </div>
+                    </div> -->
                 </div>
                 
                 <div >

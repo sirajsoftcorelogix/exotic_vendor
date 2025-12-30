@@ -13,7 +13,7 @@
         <div class="h-16 flex items-center justify-between px-4 flex-shrink-0 border-b border-gray-100">
             <!-- Logo -->
             <div class="flex items-center space-x-2">
-                <img src="images/logo2.png"/>
+                <img src="images/EI_Logo_130x27_SVG_1.svg" width="170"/>
             </div>
             <!-- Menu Toggle Button (to close) -->
             <button id="menu-toggle" class="text-gray-600 focus:outline-none">
