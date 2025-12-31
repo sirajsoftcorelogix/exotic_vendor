@@ -725,10 +725,11 @@ public function update_image_variation($img_id, $variation_id) {
         return false;
     }
     public function getlabeldata($id){
-        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name  FROM vp_inbound as v 
+        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,ea.address_title as location  FROM vp_inbound as v 
         LEFT JOIN category as c on v.group_name=c.category
         LEFT JOIN material as m on v.material_code=m.id
         LEFT JOIN vp_vendors as vv on v.vendor_code=vv.id
+        LEFT JOIN exotic_address as ea on v.ware_house_code = ea.id
         WHERE v.id = $id";
         $result = $this->conn->query($sql);
         $inbounding = [];
@@ -784,58 +785,58 @@ public function update_image_variation($img_id, $variation_id) {
 
     // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
     public function updateMainInbound($id, $data) {
-        // 1. EXTRACT DIMENSIONS FROM VARIATION [0]
-        // If not found there, fallback to direct keys just in case.
-        $var0 = $data['variations'][0] ?? [];
+        // 1. EXTRACT DATA DIRECTLY FROM ARGUMENT
+        // The Controller now passes exact keys, so we just use them.
         
-        // Explicitly cast to (float) to ensure they are decimals
-        $height = (float) ($var0['height'] ?? $data['height'] ?? 0);
-        $width  = (float) ($var0['width']  ?? $data['width']  ?? 0);
-        $depth  = (float) ($var0['depth']  ?? $data['depth']  ?? 0);
-        $weight = (float) ($var0['weight'] ?? $data['weight'] ?? 0);
+        $height = (float) ($data['height'] ?? 0);
+        $width  = (float) ($data['width']  ?? 0);
+        $depth  = (float) ($data['depth']  ?? 0);
+        $weight = (float) ($data['weight'] ?? 0);
         
-        // Also capture Main Color/Size/Qty/CP/Photo from Index 0
-        $color  = $var0['color']  ?? $data['color'] ?? '';
-        $size   = $var0['size']   ?? $data['size'] ?? '';
+        $color  = $data['color'] ?? '';
+        $size   = $data['size'] ?? '';
         
-        // CP is also a float (money), Quantity is usually an integer
-        $qty    = (int)   ($var0['quantity'] ?? $data['quantity_received'] ?? 0);
-        $cp     = (float) ($var0['cp']       ?? $data['cp'] ?? 0);
-        $photo  = $var0['photo']  ?? $data['product_photo'] ?? '';
+        // FIX: Read 'quantity_received' directly
+        $qty    = (int)   ($data['quantity_received'] ?? 0);
+        $cp     = (float) ($data['cp'] ?? 0);
+        $photo  = $data['product_photo'] ?? '';
+
+        // NEW FIELDS
+        $wh     = (int)   ($data['ware_house_code'] ?? 0);
+        $p_ind  = (float) ($data['price_india'] ?? 0);
+        $p_mrp  = (float) ($data['price_india_mrp'] ?? 0);
 
         // 2. UPDATE SQL
         $sql = "UPDATE vp_inbound 
                 SET gate_entry_date_time = ?, material_code = ?,  group_name = ?, 
                     height = ?, width = ?, depth = ?, weight = ?, 
                     color = ?, size = ?, cp = ?, quantity_received = ?, 
-                    received_by_user_id = ?, temp_code = ?, product_photo = ? 
+                    received_by_user_id = ?, temp_code = ?, product_photo = ?,
+                    ware_house_code = ?, price_india = ?, price_india_mrp = ?
                 WHERE id = ?";
         
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
 
         // BIND PARAMETERS
-        // s = string, d = double (float), i = integer
-        // Position 4, 5, 6, 7 are 'd' for Height, Width, Depth, Weight
+        // sssddddssdiissiidd
         $stmt->bind_param(
-            'sssddddssdiissi', 
+            'sssddddssdiissiidd', 
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
-            $height, $width, $depth, $weight, // 'd' ensures these are stored as Floats
-            $color, $size, $cp, $qty,         // CP is 'd', Qty is 'i'
+            $height, $width, $depth, $weight, 
+            $color, $size, $cp, $qty, 
             $data['received_by_user_id'], 
-            $data['temp_code'],      
-            $photo, 
+            $data['temp_code'],       
+            $photo,
+            $wh, $p_ind, $p_mrp,
             $id
         );
 
         if ($stmt->execute()) return ['success' => true];
         return ['success' => false, 'message' => $stmt->error];
     }
-
-    // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
-    // models/inbounding/Inbounding.php
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $temp_code) {
@@ -848,21 +849,25 @@ public function update_image_variation($img_id, $variation_id) {
             }
         }
 
-        // 2. DELETE old variations logic (FIXED)
+        // 2. DELETE old variations
         if (!empty($submittedIds)) {
             $idsStr = implode(',', $submittedIds);
             $sql = "DELETE FROM vp_variations WHERE it_id = $it_id AND id NOT IN ($idsStr)";
             $this->conn->query($sql);
         } else {
-            // If no IDs submitted, but we have variations in the array (meaning we deleted them all in UI),
-            // we must delete all from DB (excluding main if logic separates it).
-            // Since Step 3 logic implies resetting variations, this is safer:
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $it_id");
         }
 
-        // 3. LOOP TO INSERT OR UPDATE (Standard logic)
-        $insertSql = "INSERT INTO vp_variations (it_id, temp_code, color, size, quantity, cp, variation_image, height, width, depth, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $updateSql = "UPDATE vp_variations SET temp_code=?, color=?, size=?, quantity=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=? WHERE id=?";
+        // 3. LOOP TO INSERT OR UPDATE
+        // CHANGED: 'quantity' -> 'quantity_received' in both queries below
+
+        $insertSql = "INSERT INTO vp_variations 
+                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $updateSql = "UPDATE vp_variations 
+                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, ware_house_code=?, price_india=?, price_india_mrp=? 
+                      WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
         $stmtUpdate = $this->conn->prepare($updateSql);
@@ -879,11 +884,21 @@ public function update_image_variation($img_id, $variation_id) {
             $d = !empty($var['depth']) ? $var['depth'] : 0.00;
             $wt = !empty($var['weight']) ? $var['weight'] : 0.00;
             
+            // New fields defaults
+            $wh = !empty($var['ware_house_code']) ? (int)$var['ware_house_code'] : 0;
+            $pi = !empty($var['price_india']) ? (float)$var['price_india'] : 0.00;
+            $pm = !empty($var['price_india_mrp']) ? (float)$var['price_india_mrp'] : 0.00;
+            
+            // Note: We use $var['quantity'] from the HTML input, but save it to quantity_received column
+            $qty = !empty($var['quantity']) ? (int)$var['quantity'] : 0;
+
             if (!empty($id)) {
-                $stmtUpdate->bind_param("sssidsddddi", $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt, $id);
+                // UPDATE
+                $stmtUpdate->bind_param("sssidsddddiddi", $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, $h, $w, $d, $wt, $wh, $pi, $pm, $id);
                 $stmtUpdate->execute();
             } else {
-                $stmtInsert->bind_param("isssidsdddd", $it_id, $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt);
+                // INSERT
+                $stmtInsert->bind_param("isssidsddddidd", $it_id, $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, $h, $w, $d, $wt, $wh, $pi, $pm);
                 $stmtInsert->execute();
             }
         }
@@ -892,8 +907,9 @@ public function update_image_variation($img_id, $variation_id) {
 
     // 3. GET VARIATIONS (For View)
     public function getVariations($it_id) {
-        // Added height, width, depth, weight to SELECT
-        $sql = "SELECT id, color, size, quantity, cp, variation_image, height, width, depth, weight FROM vp_variations WHERE it_id = ?";
+        // CHANGED: 'quantity' -> 'quantity_received'
+        $sql = "SELECT id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp 
+                FROM vp_variations WHERE it_id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $it_id);
         $stmt->execute();

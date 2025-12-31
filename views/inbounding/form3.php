@@ -37,18 +37,30 @@ if (!empty($raw_categories)) {
     }
 }
 
+// Prepare Warehouse Options for PHP Loop AND JS Variable
+$warehouseOptions = "";
+if (!empty($data['address'])) {
+    foreach ($data['address'] as $va) {
+        $warehouseOptions .= '<option value="'.$va['id'].'">'.htmlspecialchars($va['address_title']).'</option>';
+    }
+}
+
 // Prepare Data
 $mainVar = [
-    'color'    => $form2['color'] ?? '',
-    'size'     => $form2['size'] ?? '',
-    'quantity' => $form2['quantity_received'] ?? '',
-    'cp'       => $form2['cp'] ?? '',
-    'photo'    => $form2['product_photo'] ?? '',
-    'invoice'  => $form2['invoice_image'] ?? '',
-    'height'   => $form2['height'] ?? '',
-    'width'    => $form2['width'] ?? '',
-    'depth'    => $form2['depth'] ?? '',
-    'weight'   => $form2['weight'] ?? ''
+    'color'           => $form2['color'] ?? '',
+    'size'            => $form2['size'] ?? '',
+    'quantity'        => $form2['quantity_received'] ?? '',
+    'cp'              => $form2['cp'] ?? '',
+    'photo'           => $form2['product_photo'] ?? '',
+    'invoice'         => $form2['invoice_image'] ?? '',
+    'height'          => $form2['height'] ?? '',
+    'width'           => $form2['width'] ?? '',
+    'depth'           => $form2['depth'] ?? '',
+    'weight'          => $form2['weight'] ?? '',
+    // Add default empty values for new fields if not in form2 yet
+    'ware_house_code' => $form2['ware_house_code'] ?? '',
+    'price_india'     => $form2['price_india'] ?? '',
+    'price_india_mrp' => $form2['price_india_mrp'] ?? '',
 ];
 
 global $inboundingModel;
@@ -59,16 +71,19 @@ $viewVariations[] = $mainVar;
 
 foreach ($extraVars as $ex) {
     $viewVariations[] = [
-        'id'       => $ex['id'],
-        'color'    => $ex['color'],
-        'size'     => $ex['size'],
-        'quantity' => $ex['quantity'],
-        'cp'       => $ex['cp'],
-        'photo'    => $ex['variation_image'] ?? '',
-        'height'   => $ex['height'] ?? '',
-        'width'    => $ex['width'] ?? '',
-        'depth'    => $ex['depth'] ?? '',
-        'weight'   => $ex['weight'] ?? ''
+        'id'              => $ex['id'],
+        'color'           => $ex['color'],
+        'size'            => $ex['size'],
+        'quantity'        => $ex['quantity_received'],
+        'cp'              => $ex['cp'],
+        'photo'           => $ex['variation_image'] ?? '',
+        'height'          => $ex['height'] ?? '',
+        'width'           => $ex['width'] ?? '',
+        'depth'           => $ex['depth'] ?? '',
+        'weight'          => $ex['weight'] ?? '',
+        'ware_house_code' => $ex['ware_house_code'] ?? '',
+        'price_india'     => $ex['price_india'] ?? '',
+        'price_india_mrp' => $ex['price_india_mrp'] ?? ''
     ];
 }
 
@@ -117,7 +132,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
                                 
                                 <div class="w-24 h-28 bg-black text-white flex flex-col items-center justify-center p-2 rounded transition-all
-                                            peer-checked:bg-gray-300 peer-checked:text-black border border-black shadow-sm">
+                                              peer-checked:bg-gray-300 peer-checked:text-black border border-black shadow-sm">
                                     <div class="absolute top-2 left-2 w-3.5 h-3.5 rounded-full border-2 border-white peer-checked:border-black flex items-center justify-center">
                                          <div class="w-1.5 h-1.5 rounded-full bg-white peer-checked:bg-black opacity-0 peer-checked:opacity-100"></div>
                                     </div>
@@ -193,7 +208,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                             </div>
 
-                            <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 items-start">
+                            <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Color:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][color]" value="<?php echo $var['color']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
@@ -226,6 +241,33 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][weight]" value="<?php echo $var['weight'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Location :</label>
+                                    <select class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" name="variations[<?php echo $index; ?>][ware_house_code]">
+                                    <option value="">Select Warehouse</option>
+                                    <?php 
+                                        $selectedWH = $var['ware_house_code'] ?? ''; 
+                                        if (!empty($data['address'])) {
+                                            foreach ($data['address'] as $va) {
+                                                $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
+                                    ?>
+                                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                                    <?php echo htmlspecialchars($va['address_title']); ?>
+                                                </option>
+                                    <?php 
+                                            }
+                                        } 
+                                    ?>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Price India:</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][price_india]" value="<?php echo $var['price_india'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Price India MRP:</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][price_india_mrp]" value="<?php echo $var['price_india_mrp'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -256,6 +298,9 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         const container = document.getElementById('variations-container');
         const addBtn = document.getElementById('add-variation-btn');
         let variationCount = <?php echo count($viewVariations); ?>;
+        
+        // Inject PHP calculated options into JS variable
+        const warehouseOptionsHTML = `<?php echo $warehouseOptions; ?>`;
 
         // 1. ADD NEW VARIATION (Function to generate HTML)
         function createVariationCardHTML(index, count) {
@@ -286,7 +331,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                         </div>
 
-                        <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 items-start">
+                        <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
                             <div><label class="block text-xs font-bold text-black mb-1">Color:</label><input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Quantity:</label><input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Size:</label><input type="text" name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
@@ -295,6 +340,16 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Location :</label>
+                                <select class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" name="variations[${index}][ware_house_code]">
+                                    <option value="">Select Warehouse</option>
+                                    ${warehouseOptionsHTML}
+                                </select>
+                            </div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Price India:</label><input type="number" step="any" min="0" name="variations[${index}][price_india]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Price India MRP:</label><input type="number" step="any" min="0" name="variations[${index}][price_india_mrp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                         </div>
                     </div>
                 </div>
@@ -321,7 +376,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 const sourceCard = e.target.closest('.variation-card');
                 
                 // Extract values from Source Card
-                // using "contains" selector to find inputs ending with specific names
                 const getData = (name) => {
                     const el = sourceCard.querySelector(`[name*="[${name}]"]`);
                     return el ? el.value : '';
@@ -336,7 +390,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     width: getData('width'),
                     depth: getData('depth'),
                     weight: getData('weight'),
-                    old_photo: getData('old_photo') // Clone the reference to the saved image
+                    ware_house_code: getData('ware_house_code'), // Added
+                    price_india: getData('price_india'),         // Added
+                    price_india_mrp: getData('price_india_mrp'), // Added
+                    old_photo: getData('old_photo') 
                 };
 
                 // Create New Card
@@ -359,17 +416,15 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 setData('width', data.width);
                 setData('depth', data.depth);
                 setData('weight', data.weight);
-                setData('old_photo', data.old_photo); // Set hidden old_photo input
+                setData('ware_house_code', data.ware_house_code); // Added
+                setData('price_india', data.price_india);         // Added
+                setData('price_india_mrp', data.price_india_mrp); // Added
+                setData('old_photo', data.old_photo); 
 
                 // Handle Image Preview for Cloned Item
-                // If source had a saved image (old_photo), show it in preview
                 if(data.old_photo) {
                     const preview = newCard.querySelector('.preview-img');
                     const placeholder = newCard.querySelector('.placeholder-icon');
-                    // We assume base_url logic works via PHP rendering, but in JS we need the path
-                    // If you have a specific path prefix (like 'uploads/'), add it here. 
-                    // Since we can't easily get the PHP base_url() in JS without passing it, 
-                    // we will just grab the src from the source image tag if it's visible.
                     
                     const sourceImg = sourceCard.querySelector('.preview-img');
                     if(sourceImg && !sourceImg.classList.contains('hidden')) {
@@ -412,24 +467,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
     });
     
     // Popup Scripts (Unchanged)
-    function openImagePopup(imageUrl) {
-        if(!imageUrl) return;
-        document.getElementById('popupImage').src = imageUrl;
-        document.getElementById('imagePopup').classList.remove('hidden');
-    }
-    function closeImagePopup(event) {
-        document.getElementById('imagePopup').classList.add('hidden');
-        document.getElementById('popupImage').src = '';
-    } 
-</script>
-
-<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-70 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
-    <div class="bg-white p-2 rounded-md max-w-4xl max-h-[90vh] relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold">✕</button>
-        <img id="popupImage" class="max-w-full max-h-[85vh] rounded" src="" alt="Image Preview">
-    </div>
-</div>
-<script>
     function openImagePopup(imageUrl) {
         if(!imageUrl) return;
         document.getElementById('popupImage').src = imageUrl;

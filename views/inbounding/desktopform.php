@@ -116,8 +116,8 @@ $record_id = $_GET['id'] ?? '';
                         <select id="variant_select" name="is_variant" 
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
                             <option value="" disabled <?php echo empty($data['form2']['is_variant']) ? 'selected' : ''; ?>>Select...</option>
-                            <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
                             <option value="N" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
+                            <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
                         </select>
                     </div>
                     <div class="flex flex-col">
@@ -629,7 +629,11 @@ $record_id = $_GET['id'] ?? '';
                     <div class="w-full md:w-1/3 flex flex-col">
                         <label class="block text-xs font-bold text-[#222] mb-1">Sub Category:</label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
-                            <div id="sub_category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="sub_cat_search" placeholder="Search Sub Category..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
                                 <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category to view options</div>
                             </div>
                         </div>
@@ -638,7 +642,11 @@ $record_id = $_GET['id'] ?? '';
                     <div class="w-full md:w-1/3 flex flex-col">
                         <label class="block text-xs font-bold text-[#222] mb-1">SubSubCategory:</label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
-                            <div id="sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="sub_sub_cat_search" placeholder="Search Sub Sub Category..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
                                 <div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category to view options</div>
                             </div>
                         </div>
@@ -925,7 +933,7 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Lead Time:</label>
                         <div class="relative w-full">
                             <input type="text" name="lead_time_days" 
-                                   value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '0') ?>" 
+                                   value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '10') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
                         </div>
@@ -961,11 +969,12 @@ $record_id = $_GET['id'] ?? '';
                         <div class="flex-1 pl-4 flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">India Stock:</label>
                             <div class="flex items-center gap-4">
-                                <?php $in_val = $data['form2']['india_block'] ?? 'Y'; ?>
+                                <?php $in_val = $data['form2']['india_block'] ?? 'N'; ?>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="india_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
                                 </label>
+
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="india_block" value="N" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'N') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">No</span>
@@ -1480,6 +1489,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const subCatContainer = document.getElementById('sub_category_container');
     const subSubCatContainer = document.getElementById('sub_sub_category_container');
     
+    // Search Inputs
+    const subCatSearch = document.getElementById('sub_cat_search');
+    const subSubCatSearch = document.getElementById('sub_sub_cat_search');
+    
     // 4. TomSelect Config
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     new TomSelect("#material_select", config);
@@ -1488,7 +1501,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- HELPER: Create Single Checkbox HTML ---
     function createCheckboxItem(item, inputName, selectedSet, onChangeCallback) {
         const div = document.createElement('div');
-        div.className = 'checkbox-item pl-2'; // Added padding-left for hierarchy look
+        div.className = 'checkbox-item pl-2'; 
         const isChecked = selectedSet.has(String(item.id)) ? 'checked' : '';
         
         div.innerHTML = `
@@ -1536,6 +1549,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- 2. UPDATE SUB CATEGORY LIST (Grouped by Parent Category) ---
     function handleCategoryChange() {
+        // Reset Search Input
+        subCatSearch.value = '';
+
         // Get all checked category checkboxes
         const checkedInputs = Array.from(categoryContainer.querySelectorAll('input[type="checkbox"]:checked'));
         
@@ -1560,8 +1576,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Create Group Header
                 const header = document.createElement('div');
-                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10";
-                header.innerText = parentName; // e.g. "Hindi"
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
+                header.innerText = parentName; 
                 subCatContainer.appendChild(header);
 
                 // Render Children for this parent
@@ -1574,13 +1590,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if(!hasAnyOptions) {
              subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
         } else {
-             // If we had pre-selected sub-cats, trigger next level
              if(preSelected.sub.size > 0) handleSubCategoryChange();
         }
     }
 
     // --- 3. UPDATE SUB SUB CATEGORY LIST (Grouped by Sub Category) ---
     function handleSubCategoryChange() {
+        // Reset Search Input
+        subSubCatSearch.value = '';
+
         const checkedInputs = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
         
         subSubCatContainer.innerHTML = ''; // Clear container
@@ -1602,7 +1620,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Create Group Header
                 const header = document.createElement('div');
-                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10";
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName;
                 subSubCatContainer.appendChild(header);
 
@@ -1618,6 +1636,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // --- SEARCH FILTER FUNCTION ---
+    function enableSearchFilter(inputId, containerId) {
+        const input = document.getElementById(inputId);
+        const container = document.getElementById(containerId);
+        
+        input.addEventListener('keyup', function() {
+            const filter = this.value.toLowerCase();
+            const items = container.querySelectorAll('.checkbox-item');
+            const headers = container.querySelectorAll('.group-header');
+            
+            // 1. Filter Items
+            items.forEach(item => {
+                const label = item.querySelector('label').innerText;
+                if(label.toLowerCase().includes(filter)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
+            // 2. Optional: Hide Headers if all children are hidden (Simple logic: if searching, hide all headers to reduce clutter)
+            if(filter.length > 0) {
+                headers.forEach(h => h.style.display = 'none');
+            } else {
+                headers.forEach(h => h.style.display = 'block');
+            }
+        });
+    }
+
     // --- EVENTS ---
     groupTs.on('change', function(groupValue) {
         preSelected.cat.clear(); 
@@ -1634,6 +1681,10 @@ document.addEventListener('DOMContentLoaded', function() {
             updateCategoryList(initialGroupId);
         }
     }
+
+    // --- ACTIVATE SEARCH ---
+    enableSearchFilter('sub_cat_search', 'sub_category_container');
+    enableSearchFilter('sub_sub_cat_search', 'sub_sub_category_container');
 });
 </script>
 
@@ -2058,6 +2109,30 @@ document.addEventListener('DOMContentLoaded', function() {
                         mainChangeBtn.style.display = 'block';
                     }
                     reader.readAsDataURL(this.files[0]);
+                }
+            });
+        }
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inrInput = document.querySelector('input[name="inr_pricing"]');
+        const amazonInput = document.querySelector('input[name="amazon_price"]');
+
+        if (inrInput && amazonInput) {
+            inrInput.addEventListener('input', function() {
+                const inrValue = parseFloat(this.value);
+
+                // Only calculate if the input is a valid number
+                if (!isNaN(inrValue)) {
+                    // Calculate 20% increase (Value * 1.10)
+                    const calculatedPrice = inrValue + (inrValue * 0.20);
+                    
+                    // Update Amazon field (rounded to 2 decimal places)
+                    amazonInput.value = calculatedPrice.toFixed(2);
+                } else {
+                    // If INR is cleared/invalid, clear Amazon price
+                    amazonInput.value = '';
                 }
             });
         }

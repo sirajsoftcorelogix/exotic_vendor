@@ -41,108 +41,109 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 </svg>
             </button>
             <h1 class="font-semibold text-lg tracking-wide">Print Label (3x2 inch)</h1>
-            <button type="button" id="cancel-btn" class="p-2 hover:bg-white/20 rounded-full transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+            
+            <button type="button" id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white text-sm font-bold py-1 px-4 rounded-full transition border border-white/30 shadow-sm uppercase tracking-wider">
+                Close
             </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-100 flex flex-col items-center justify-center">
+        <div class="flex-1 overflow-y-auto p-4 bg-gray-100 flex flex-col items-center justify-center w-full">
             
-            <div id="printArea" class="bg-white box-border relative flex flex-col justify-between" 
-                 style="width: 600px; height: 400px; padding: 20px; border: 4px solid #111827;">
+            <div id="previewWrapper" class="w-full flex justify-center items-center relative">
                 
-                <div class="flex justify-between items-start mb-2 h-[160px]">
+                <div id="printArea" class="bg-white box-border relative flex flex-col justify-between shadow-lg" 
+                     style="width: 600px; height: 400px; padding: 20px; border: 4px solid #111827; transform-origin: top center;">
                     
-                    <div class="w-[140px] h-[140px] border-2 border-gray-200 rounded-lg flex-shrink-0 overflow-hidden bg-white p-1 shadow-sm flex items-center justify-center">
-                         <img src="<?php echo $photoUrl; ?>" class="w-full h-full object-contain" crossorigin="anonymous">
-                    </div>
-
-                    <div class="flex-1 px-4 flex flex-col justify-center h-full space-y-1.5 text-[15px] font-sans">
+                    <div class="flex justify-between items-start mb-2 h-[160px]">
                         
-                        <div class="mb-1 leading-tight">
-                            <div class="font-extrabold text-gray-900 text-[16px]">Gate Entry Date & Time:</div>
-                            <div class="text-gray-500 font-semibold text-[15px] mt-0.5">
-                                <?php echo safe($label_data['gate_entry_date_time'] ?? '-'); ?>
+                        <div class="w-[140px] h-[140px] border-2 border-gray-200 rounded-lg flex-shrink-0 overflow-hidden bg-white p-1 shadow-sm flex items-center justify-center">
+                             <img src="<?php echo $photoUrl; ?>" class="w-full h-full object-contain" crossorigin="anonymous">
+                        </div>
+
+                        <div class="flex-1 px-4 flex flex-col justify-center h-full space-y-1.5 text-[15px] font-sans">
+                            
+                            <div class="mb-1 leading-tight">
+                                <div class="font-extrabold text-gray-900 text-[16px]">Gate Entry Date & Time:</div>
+                                <div class="text-gray-500 font-semibold text-[15px] mt-0.5">
+                                    <?php echo safe($label_data['gate_entry_date_time'] ?? '-'); ?>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center">
+                                <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Received By:</span>
+                                <span class="text-gray-600 font-semibold truncate"><?php echo safe($userDetails['name'] ?? 'Unknown'); ?></span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Location:</span>
+                                <span class="text-gray-600 font-semibold truncate"><?php echo safe($label_data['location'] ?? '-'); ?></span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Material:</span>
+                                <span class="text-gray-600 font-semibold truncate"><?php echo safe($label_data['material_name'] ?? '-'); ?></span>
+                            </div>
+                             <div class="flex items-center">
+                                <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Quantity:</span>
+                                <span class="text-gray-600 font-semibold"><?php echo safe($label_data['quantity_received'] ?? '0'); ?> Nos</span>
                             </div>
                         </div>
 
-                        <div class="flex items-center">
-                            <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Received By:</span>
-                            <span class="text-gray-600 font-semibold truncate"><?php echo safe($userDetails['name'] ?? 'Unknown'); ?></span>
+                        <div class="h-full flex flex-col justify-start pt-1">
+                             <div id="qrcode" class="border border-gray-200 p-1 bg-white rounded"></div>
                         </div>
-                        <div class="flex items-center">
-                            <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Category:</span>
-                            <span class="text-gray-600 font-semibold truncate"><?php echo safe($label_data['category'] ?? '-'); ?></span>
+
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-2 py-4 border-t border-b border-gray-200 text-[15px] my-1">
+                        
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">Height:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['height'] ?? '-'); ?> inch</span>
                         </div>
-                        <div class="flex items-center">
-                            <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Material:</span>
-                            <span class="text-gray-600 font-semibold truncate"><?php echo safe($label_data['material_name'] ?? '-'); ?></span>
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">Width:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['width'] ?? '-'); ?> inch</span>
                         </div>
-                         <div class="flex items-center">
-                            <span class="font-extrabold text-gray-900 w-24 flex-shrink-0">Quantity:</span>
-                            <span class="text-gray-600 font-semibold"><?php echo safe($label_data['quantity_received'] ?? '0'); ?> Nos</span>
+                        
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">Depth:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['depth'] ?? '-'); ?> inch</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">Weight:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['weight'] ?? '-'); ?> gm</span>
+                        </div>
+                        
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">Size:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['size'] ?? '-'); ?></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">Color:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['color'] ?? '0'); ?></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">CP:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['cp'] ?? '0'); ?></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="font-extrabold text-gray-900">Temp Code:</span> 
+                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['temp_code'] ?? '0'); ?></span>
                         </div>
                     </div>
 
-                    <div class="h-full flex flex-col justify-start pt-1">
-                         <div id="qrcode" class="border border-gray-200 p-1 bg-white rounded"></div>
+                    <div class="mt-1 pt-2">
+                        <div class="text-[15px] space-y-1">
+                            <div class="flex items-center">
+                                <span class="font-extrabold text-gray-900 mr-2">Vendor :</span>
+                                <span class="text-gray-600 font-bold"><?php echo safe($label_data['vendor_name'] ?? 'N/A'); ?></span>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
-
-                <div class="grid grid-cols-2 gap-x-8 gap-y-2 py-4 border-t border-b border-gray-200 text-[15px] my-1">
-                    
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">Height:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['height'] ?? '-'); ?> inch</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">Width:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['width'] ?? '-'); ?> inch</span>
-                    </div>
-                    
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">Depth:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['depth'] ?? '-'); ?> inch</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">Weight:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['weight'] ?? '-'); ?> gm</span>
-                    </div>
-                    
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">Size:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['size'] ?? '-'); ?></span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">Color:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['color'] ?? '0'); ?></span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">CP:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['cp'] ?? '0'); ?></span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="font-extrabold text-gray-900">Temp Code:</span> 
-                        <span class="text-gray-600 font-bold"><?php echo safe($label_data['temp_code'] ?? '0'); ?></span>
-                    </div>
-                </div>
-
-                <div class="mt-1 pt-2">
-                    <div class="text-[15px] space-y-1">
-                        <div class="flex items-center">
-                            <span class="font-extrabold text-gray-900 mr-2">Vendor :</span>
-                            <span class="text-gray-600 font-bold"><?php echo safe($label_data['vendor_name'] ?? 'N/A'); ?></span>
-                        </div>
-                    </div>
-                </div>
-
             </div>
             
-            <p class="text-xs text-gray-400 mt-4">Preview (High Quality for 3x2 inch Print)</p>
-
+            <p class="text-xs text-gray-400 mt-4 text-center">Preview (High Quality for 3x2 inch Print)</p>
         </div>
 
         <div class="p-5 bg-white border-t border-gray-100 mt-auto z-20">
@@ -162,7 +163,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         
         new QRCode(qrContainer, {
             text: "<?php echo $currentUrl; ?>",
-            width: 100,    // Bigger QR since it's in the top section now
+            width: 100, 
             height: 100,
             colorDark : "#111827", 
             colorLight : "#ffffff",
@@ -170,21 +171,66 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         });
     }, 100);
 
-    // 2. Back Button
+    // 2. Responsive Scaling for Mobile (Make it fit!)
+    function fitLabelToScreen() {
+        const wrapper = document.getElementById('previewWrapper');
+        const label = document.getElementById('printArea');
+        
+        // Label defaults
+        const baseWidth = 600;
+        const baseHeight = 400;
+        
+        // Get available screen width (minus padding)
+        const availableWidth = wrapper.offsetWidth;
+        
+        // Calculate Scale (if screen is smaller than 600px, shrink it)
+        let scale = 1;
+        if (availableWidth < baseWidth) {
+            scale = availableWidth / baseWidth;
+        }
+
+        // Apply Transform
+        label.style.transform = `scale(${scale})`;
+        
+        // Adjust wrapper height so content below doesn't overlap
+        wrapper.style.height = `${baseHeight * scale}px`;
+    }
+
+    // Run on load and resize
+    window.addEventListener('load', fitLabelToScreen);
+    window.addEventListener('resize', fitLabelToScreen);
+
+
+    // 3. Back Buttons
     const recordId = "<?php echo isset($_GET['id']) ? $_GET['id'] : ''; ?>";
     document.getElementById("back-btn").addEventListener("click", function () {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=form3&id=" + recordId;
     });
+    
+    // Redirects to list page
     document.getElementById("cancel-btn").addEventListener("click", function () {
-        window.location.href = window.location.origin + "/index.php?page=inbounding&action=lsit";
+        window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
 
-    // 3. PDF Generation Logic (3 inch x 2 inch)
+
+    // 4. PDF Generation (Smart Clone Method)
     function generatePDF() {
         const { jsPDF } = window.jspdf;
-        const element = document.querySelector("#printArea");
+        const originalElement = document.querySelector("#printArea");
 
-        html2canvas(element, { 
+        // Step A: Clone the element to capture it at FULL resolution (600px)
+        // We clone it, append it to body, but hide it from view
+        const clone = originalElement.cloneNode(true);
+        
+        // Reset transform on the clone so it captures at full size (600x400)
+        clone.style.transform = "none";
+        clone.style.position = "absolute";
+        clone.style.top = "-9999px";
+        clone.style.left = "-9999px";
+        document.body.appendChild(clone);
+
+        // Step B: Capture the CLONE, not the shrunk original
+        html2canvas(clone, { 
             scale: 2, 
             useCORS: true 
         }).then(canvas => {
@@ -200,6 +246,9 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             
             pdf.save("Label_3x2_<?php echo safe($label_data['temp_code'] ?? 'Item'); ?>.pdf");
             window.open(pdf.output('bloburl'), '_blank');
+            
+            // Cleanup: remove the clone
+            document.body.removeChild(clone);
         });
     }
 </script>
