@@ -1027,15 +1027,18 @@ class InboundingController {
     public function inbound_product_publish(){
         global $inboundingModel;
         $API_data = array();
-        
+
         // top level data
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         $data = $inboundingModel->getpublishdata($id);
 
+        // --- HELPER: Get Current Date in Y-m-d format ---
+        $current_date_formatted = date("Y-m-d"); 
+
         // 1. Add all other fields FIRST
         $API_data['itemcode'] = $data['data']['Item_code'];
         $API_data['groupname'] = $data['data']['groupname'];
-        $API_data['category'] = $data['data']['Item_code'];
+        $API_data['category'] = $data['data']['final_cat_ids'];
         $API_data['itemtype'] ='product';
         $API_data['title'] = $data['data']['product_title'];
         // REMOVED item_stock_price from here
@@ -1044,15 +1047,16 @@ class InboundingController {
         $API_data['description_icons'] = $data['data']['description_icons'];
         $API_data['india_net_qty'] = $data['data']['quantity_received'];
         $API_data['keywords'] = $data['data']['key_words'];
-        $API_data['usblock'] = $data['data']['us_block'];
-        $API_data['indiablock'] = $data['data']['india_block'];
+        // Convert 'Y' to 1, and 'N' (or anything else) to 0
+        $API_data['usblock']    = ($data['data']['us_block'] === 'Y') ? 1 : 0;
+        $API_data['indiablock'] = ($data['data']['india_block'] === 'Y') ? 1 : 0;
         $API_data['hscode'] = $data['data']['hsn_code'];
-        $API_data['vendor'] = $data['data']['Item_code'];
+        $API_data['vendor'] = $data['data']['vendor_code'];
         $API_data['date_first_added'] = $data['data']['vendor_code'];
         $API_data['material'] = $data['data']['material_name'];
         $API_data['images'] = $data['data']['product_photo'];
 
-        // 2. Build stock price array separately in a TEMP variable
+        // 2. Build stock price array separately
         $stock_price_temp = array();
 
         // Parent Record [0]
@@ -1064,7 +1068,7 @@ class InboundingController {
         $stock_price_temp[0]['prod_width'] = $data['data']['width'];
         $stock_price_temp[0]['prod_length'] = $data['data']['depth'];
         $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
-        $stock_price_temp[0]['date_added'] = time();
+        $stock_price_temp[0]['date_added'] = $current_date_formatted;
         $stock_price_temp[0]['stock_date_added'] = $data['data']['stock_added_date']; // Fixed mapping (was photo)
         $stock_price_temp[0]['gst'] = $data['data']['gst_rate'];
         $stock_price_temp[0]['price_india'] = $data['data']['inr_pricing'];
@@ -1077,7 +1081,9 @@ class InboundingController {
         $stock_price_temp[0]['leadtime'] = $data['data']['lead_time_days'];
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
-        $stock_price_temp[0]['permanently_available'] = $data['data']['permanently_available'];
+        $stock_price_temp[0]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+        // ... (rest of parent fields)
+
 
         // Variation Records [1..n]
         if (!empty($data['data']['var_rows'])) {
@@ -1092,7 +1098,7 @@ class InboundingController {
                 $stock_price_temp[$i]['prod_width'] = $value['width'];
                 $stock_price_temp[$i]['prod_length'] = $value['depth'];
                 $stock_price_temp[$i]['local_stock'] = $value['quantity'];
-                $stock_price_temp[$i]['date_added'] = time();
+                $stock_price_temp[$i]['date_added'] = $current_date_formatted;
                 $stock_price_temp[$i]['stock_date_added'] = $data['data']['stock_added_date'];
                 $stock_price_temp[$i]['gst'] = $data['data']['gst_rate'];
                 $stock_price_temp[$i]['price_india'] = $data['data']['inr_pricing'];
@@ -1105,35 +1111,46 @@ class InboundingController {
                 $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
-                $stock_price_temp[$i]['permanently_available'] = $data['data']['permanently_available'];
+                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+                // ... (rest of variation fields)
             }
         }
 
-        // 3. Assign it to main array LAST
-        // Because this is the last assignment, it will appear at the bottom of the JSON
-        $API_data['item_stock_price'] = $stock_price_temp;
+        // 3. Assign item_stock_price to main array
+        // array_values ensures JSON encodes this as a list [...] and not an object {"0":..}
+        $API_data['item_stock_price'] = array_values($stock_price_temp);
 
-        // 1. Initialize the array and keys to defaults to avoid "Undefined Index" errors
+
+        // 4. Handle Images (The major fix)
         $images_payload = array();
         $images_payload['image_directory'] = '';
-        $images_payload['images'] = '';
+        $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
-        // 2. Check if image data exists
         if (!empty($data['data']['img'])) {
             
-            // Create directory name (sanitize title to be safe for folders)
             $clean_title = preg_replace('/[^A-Za-z0-9\-]/', '-', $data['data']['product_title']);
             $images_payload['image_directory'] = $clean_title . '-2025';
 
-            // 3. Use array_column and implode (Cleaner & Faster than foreach)
-            // This extracts all 'file_name' values and joins them with commas automatically
-            $images_payload['images'] = implode(',', array_column($data['data']['img'], 'file_name'));
+            // FIX: Do NOT use implode. Use array_column to get an array of filenames.
+            // If you need full URLs (http...), you must prepend the domain here.
+            $raw_images = array_column($data['data']['img'], 'file_name');
+            
+            // OPTIONAL: If you need the full URL like your target output:
+            /*
+            $base_url = "https://domain.com/images/" . $images_payload['image_directory'] . "/";
+            $images_payload['images'] = array_map(function($img) use ($base_url) {
+                return $base_url . $img;
+            }, $raw_images);
+            */
+            
+            // If you just want filenames in an array:
+            $images_payload['images'] = $raw_images;
         }
 
-        // 4. Assign to the specific key in your main API array (Do not use $API_data = ...)
         $API_data['images'] = $images_payload;
-        $jsonString = json_encode($API_data);
-       // echo "<pre>"; print_r($jsonString);exit;
+
+        $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
+        // echo "<pre>"; print_r($jsonString); exit;
         $url = 'https://www.exoticindia.com/vendor-api/product/create';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
@@ -1152,7 +1169,7 @@ class InboundingController {
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
         ]);
         $response = curl_exec($ch);
-        echo "<pre>"; print_r($response); exit;
+        echo "<pre>123: "; print_r($response); exit;
         if (curl_errno($ch)) {
             error_log("cURL Error: " . curl_error($ch));
             curl_close($ch);
