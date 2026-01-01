@@ -758,6 +758,8 @@ class InboundingController {
             'vendor_code'         => $_POST['vendor_code'] ?? '',
             'inr_pricing'         => $_POST['inr_pricing'] ?? '',
             'cp'                  => $_POST['cp'] ?? '',
+            'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
+            'price_india'         => $_POST['price_india'] ?? '',
             'amazon_price'        => $_POST['amazon_price'] ?? '',
             'usd_price'           => $_POST['usd_price'] ?? '',
             'hsn_code'            => $_POST['hsn_code'] ?? '',

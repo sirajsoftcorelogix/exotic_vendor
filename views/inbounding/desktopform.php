@@ -218,7 +218,7 @@ $record_id = $_GET['id'] ?? '';
             </div>
 
             <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                     
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Height:</label>
@@ -253,6 +253,26 @@ $record_id = $_GET['id'] ?? '';
                     </div>
 
                     <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
+                        <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="ware_house_code">
+                            <option value="">Select Warehouse</option>
+                            <?php 
+                                $selectedWH = $data['form2']['ware_house_code'] ?? '';
+                                if (!empty($data['address'])) {
+                                    foreach ($data['address'] as $va) {
+                                        $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
+                            ?>
+                                        <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                            <?php echo htmlspecialchars($va['address_title']); ?>
+                                        </option>
+                            <?php 
+                                    }
+                                } 
+                            ?>
+                        </select>
+                    </div>
+
+                    <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['size'] ?? '') ?>" name="size">
                     </div>
@@ -274,6 +294,20 @@ $record_id = $_GET['id'] ?? '';
                         <label class="block text-xs font-bold text-[#555] mb-1">CP:</label>
                         <div class="relative w-full">
                             <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['cp'] ?? '') ?>" name="cp">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
+                        </div>
+                    </div>
+                    <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
+                        <div class="relative w-full">
+                            <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['price_india'] ?? '') ?>" name="price_india">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
+                        </div>
+                    </div>
+                    <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
+                        <div class="relative w-full">
+                            <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['price_india_mrp'] ?? '') ?>" name="price_india_mrp">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
@@ -334,8 +368,8 @@ $record_id = $_GET['id'] ?? '';
                                 
                                 <div class="placeholder-icon flex flex-col items-center justify-center text-gray-400"
                                      style="<?= $hasPhoto ? 'display: none;' : '' ?>">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                                        <span class="text-[9px] mt-1 font-semibold">Upload</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    <span class="text-[9px] mt-1 font-semibold">Upload</span>
                                 </div>
 
                                 <input type="file" name="variations[<?= $var['id'] ?>][photo]" accept="image/*" class="hidden variation-file-input">
@@ -356,16 +390,38 @@ $record_id = $_GET['id'] ?? '';
                     </div>
 
                     <div class="bg-white p-5 rounded border border-gray-200 w-full shadow-sm">
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Height:</label><div class="relative w-full"><input type="text" class="calc-h w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['height'] ?? '') ?>" name="variations[<?= $var['id'] ?>][height]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Width:</label><div class="relative w-full"><input type="text" class="calc-w w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['width'] ?? '') ?>" name="variations[<?= $var['id'] ?>][width]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['depth'] ?? '') ?>" name="variations[<?= $var['id'] ?>][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['weight'] ?? '') ?>" name="variations[<?= $var['id'] ?>][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
 
+                             <div class="w-full min-w-0">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
+                                <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[<?= $var['id'] ?>][ware_house_code]">
+                                    <option value="">Select Warehouse</option>
+                                    <?php 
+                                        $selectedWHVar = $var['ware_house_code'] ?? '';
+                                        if (!empty($data['address'])) {
+                                            foreach ($data['address'] as $va) {
+                                                $isSelected = ($selectedWHVar == $va['id']) ? 'selected' : '';
+                                    ?>
+                                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                                    <?php echo htmlspecialchars($va['address_title']); ?>
+                                                </option>
+                                    <?php 
+                                            }
+                                        } 
+                                    ?>
+                                </select>
+                            </div>
+
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Size:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['size'] ?? '') ?>" name="variations[<?= $var['id'] ?>][size]"></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india_mrp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                         </div>
 
@@ -431,16 +487,32 @@ $record_id = $_GET['id'] ?? '';
         </div>
 
         <div class="bg-white p-5 rounded border border-gray-200 w-full shadow-sm">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Height:</label><div class="relative w-full"><input type="text" class="calc-h w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][height]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Width:</label><div class="relative w-full"><input type="text" class="calc-w w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][width]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
+                
+                <div class="w-full min-w-0">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
+                    <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][ware_house_code]">
+                        <option value="">Select Warehouse</option>
+                        <?php 
+                            if (!empty($data['address'])) {
+                                foreach ($data['address'] as $va) {
+                                    echo '<option value="'.$va['id'].'">'.htmlspecialchars($va['address_title']).'</option>';
+                                }
+                            } 
+                        ?>
+                    </select>
+                </div>
 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Size:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]"></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
             </div>
 
             <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -485,7 +557,7 @@ $record_id = $_GET['id'] ?? '';
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-2 pb-3 bg-white w-full">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Receipt:</legend>
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-[50px]">       
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-[50px]">        
                     <div class="flex flex-col">
                         <span class="text-[11px] font-bold text-[#222] mb-[3px]">Gate Entry Date & Time:</span>
                         <span class="text-xs text-[#444]">
@@ -857,7 +929,7 @@ $record_id = $_GET['id'] ?? '';
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Stock:</legend>
-                
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px]">
 
                     <div class="flex-1">
@@ -870,35 +942,12 @@ $record_id = $_GET['id'] ?? '';
                     </div>
 
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Warehouse:</label>
-                        <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="ware_house_code">
-                            <option value="">Select Warehouse</option>
-                            <?php 
-                                $selectedWH = $data['form2']['ware_house_code'] ?? '';
-                                if (!empty($data['address'])) {
-                                    foreach ($data['address'] as $va) {
-                                        $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
-                            ?>
-                                        <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                            <?php echo htmlspecialchars($va['address_title']); ?>
-                                        </option>
-                            <?php 
-                                    }
-                                } 
-                            ?>
-                        </select>
-                    </div>
-
-                    <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
                         <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
                                value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" 
                                name="store_location">
                     </div>
-                </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px] mt-[10px]">
-    
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
@@ -949,7 +998,7 @@ $record_id = $_GET['id'] ?? '';
                         </div>
                     </div>
 
-                    <div class="flex-1 lg:col-span-2 flex items-start border border-[#eee] rounded bg-gray-50 p-1"> 
+                    <div class="flex-1 sm:col-span-2 lg:col-span-2 flex items-start border border-[#eee] rounded bg-gray-50 p-1"> 
                         
                         <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">US Stock:</label>
@@ -1471,6 +1520,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    
     // 1. PHP Data
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
     const groupMap = <?php echo json_encode($groupMap); ?>; 
@@ -1716,9 +1766,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
         // if (dimUnit === 'cm') {
-        //     h = h / 2.54;
-        //     w = w / 2.54;
-        //     d = d / 2.54;
+        //      h = h / 2.54;
+        //      w = w / 2.54;
+        //      d = d / 2.54;
         // }
 
         // --- STEP B: ADD BUFFER (4 inches) ---
@@ -1934,6 +1984,9 @@ document.addEventListener('DOMContentLoaded', function() {
             setVal('color', getValue('color'));
             setVal('quantity_received', getValue('quantity_received'));
             setVal('cp', getValue('cp'));
+            setVal('price_india', getValue('price_india'));
+            setVal('price_india_mrp', getValue('price_india_mrp'));
+            setVal('ware_house_code', getValue('ware_house_code')); // NEW: Clone Warehouse value
             setVal('old_photo', getValue('old_photo')); // Clone reference to old image
 
             // Handle Image Preview for Clone
@@ -1979,7 +2032,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Helper to update input names: variations[INDEX][field] -> variations[new_1][field]
     function updateNames(node, newId) {
-        const inputs = node.querySelectorAll ? node.querySelectorAll('input') : node.querySelectorAll('input'); // handle DocumentFragment vs Element
+        const inputs = node.querySelectorAll ? node.querySelectorAll('input, select') : node.querySelectorAll('input, select'); // handle DocumentFragment vs Element
         inputs.forEach(input => {
             const name = input.getAttribute('name');
             if(name) {
