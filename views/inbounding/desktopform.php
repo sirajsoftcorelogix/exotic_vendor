@@ -311,6 +311,40 @@ $record_id = $_GET['id'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">INR Price:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['inr_pricing'] ?? '') ?>" name = "inr_pricing">
+                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Amazon Price:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['amazon_price'] ?? '') ?>" name="amazon_price">
+                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['usd_price'] ?? '') ?>" name="usd_price">
+                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">HSN Code:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['hsn_code'] ?? '') ?>" name="hsn_code">
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>" name="gst_rate">
+                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -422,6 +456,18 @@ $record_id = $_GET['id'] ?? '';
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india_mrp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+
+
+
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">INR Price::</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['inr_pricing'] ?? '') ?>" name="variations[<?= $var['id'] ?>][inr_pricing]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Amazon Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['amazon_price'] ?? '') ?>" name="variations[<?= $var['id'] ?>][amazon_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['usd_price'] ?? '') ?>" name="variations[<?= $var['id'] ?>][usd_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span></div></div>
+
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['hsn_code'] ?? '') ?>" name="variations[<?= $var['id'] ?>][hsn_code]"></div></div>
+
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                         </div>
 
@@ -513,6 +559,17 @@ $record_id = $_GET['id'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+
+
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">INR Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][inr_pricing]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Amazon Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][amazon_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][usd_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span></div></div>
+
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
+
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
             </div>
 
             <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -854,48 +911,6 @@ $record_id = $_GET['id'] ?? '';
                         </div>
                     </div>
 
-                </div>
-            </fieldset>
-        </div>
-
-        <div class="mt-[15px] md:mx-5">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Pricing:</legend>
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-start mb-[15px]">
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">INR Price:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['inr_pricing'] ?? '') ?>" name = "inr_pricing">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
-                        </div>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Amazon Price:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['amazon_price'] ?? '') ?>" name="amazon_price">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
-                        </div>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['usd_price'] ?? '') ?>" name="usd_price">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
-                        </div>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">HSN Code:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['hsn_code'] ?? '') ?>" name="hsn_code">
-                        </div>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>" name="gst_rate">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
-                        </div>
-                    </div>
                 </div>
             </fieldset>
         </div>
@@ -1986,6 +2001,13 @@ document.addEventListener('DOMContentLoaded', function() {
             setVal('cp', getValue('cp'));
             setVal('price_india', getValue('price_india'));
             setVal('price_india_mrp', getValue('price_india_mrp'));
+
+            setVal('inr_pricing', getValue('inr_pricing'));
+            setVal('amazon_price', getValue('amazon_price'));
+            setVal('usd_price', getValue('usd_price'));
+            setVal('hsn_code', getValue('hsn_code'));
+            setVal('gst_rate', getValue('gst_rate'));
+
             setVal('ware_house_code', getValue('ware_house_code')); // NEW: Clone Warehouse value
             setVal('old_photo', getValue('old_photo')); // Clone reference to old image
 
@@ -2169,25 +2191,41 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const inrInput = document.querySelector('input[name="inr_pricing"]');
-        const amazonInput = document.querySelector('input[name="amazon_price"]');
+        // Use Event Delegation to handle Main Product, Existing Variations, and New Variations
+        document.body.addEventListener('input', function(e) {
+            
+            // 1. Check if the modified input is an "inr_pricing" field
+            // We check if the name contains 'inr_pricing' to cover both:
+            // Main: name="inr_pricing"
+            // Variations: name="variations[x][inr_pricing]"
+            if (e.target.name && e.target.name.includes('inr_pricing')) {
+                
+                const inrInput = e.target;
+                const inrValue = parseFloat(inrInput.value);
+                
+                // 2. Find the container that holds this specific group of inputs
+                // Both the main form and variation cards use a grid layout.
+                // We look for the closest parent with class 'grid' or 'calculation-card'
+                const container = inrInput.closest('.grid') || inrInput.closest('.calculation-card');
 
-        if (inrInput && amazonInput) {
-            inrInput.addEventListener('input', function() {
-                const inrValue = parseFloat(this.value);
+                if (container) {
+                    // 3. Find the Amazon Price input WITHIN this specific container
+                    // This ensures we only update the Amazon price for the specific variation being edited
+                    const amazonInput = container.querySelector('input[name*="amazon_price"]');
 
-                // Only calculate if the input is a valid number
-                if (!isNaN(inrValue)) {
-                    // Calculate 20% increase (Value * 1.10)
-                    const calculatedPrice = inrValue + (inrValue * 0.20);
-                    
-                    // Update Amazon field (rounded to 2 decimal places)
-                    amazonInput.value = calculatedPrice.toFixed(2);
-                } else {
-                    // If INR is cleared/invalid, clear Amazon price
-                    amazonInput.value = '';
+                    if (amazonInput) {
+                        if (!isNaN(inrValue)) {
+                            // Calculate 20% increase
+                            const calculatedPrice = inrValue + (inrValue * 0.20);
+                            // Update the Amazon field (rounded to 2 decimal places)
+                            amazonInput.value = calculatedPrice.toFixed(2);
+                        } else {
+                            // If INR is cleared/invalid, clear Amazon price
+                            amazonInput.value = '';
+                        }
+                    }
                 }
-            });
-        }
+            }
+        });
     });
 </script>

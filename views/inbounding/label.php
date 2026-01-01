@@ -30,7 +30,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-    /* Load DejaVu Sans Font */
+    /* 1. Load Thermal-Safe Font */
     @font-face {
         font-family: 'DejaVuSans';
         src: url('/fonts/DejaVuSans.ttf') format('truetype');
@@ -44,14 +44,23 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         font-style: normal;
     }
 
-    /* Apply Font Globally to the Print Area */
+    /* 2. Global Print Area Settings */
     #printArea {
         font-family: 'DejaVuSans', sans-serif !important;
+        background-color: #ffffff !important;
+        color: #000000 !important; /* Force Pure Black */
     }
     
-    /* Ensure no scrollbars inside the label */
+    /* 3. Force Black on all children to override Tailwind grays */
     #printArea * {
         box-sizing: border-box; 
+        color: #000000 !important; /* No Gray Text allowed */
+        border-color: #000000 !important; /* No Gray Borders allowed */
+    }
+
+    /* Helper to ensure images render sharply */
+    #printArea img {
+        image-rendering: pixelated; 
     }
 </style>
 
@@ -65,7 +74,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
                 </svg>
             </button>
-            <h1 class="font-semibold text-lg tracking-wide">Print Label (3x2 inch Landscape)</h1>
+            <h1 class="font-semibold text-lg tracking-wide">Print Label (3x2 inch)</h1>
             <button type="button" id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white text-sm font-bold py-1 px-4 rounded-full transition border border-white/30 shadow-sm uppercase tracking-wider">
                 Close
             </button>
@@ -75,103 +84,99 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             
             <div id="previewWrapper" class="w-full flex justify-center items-center relative">
                 
-                <div id="printArea" class="bg-white relative flex gap-4 shadow-xl text-gray-900 overflow-hidden" 
-     style="width: 600px; height: 400px; padding: 20px; border: 2px solid #333; transform-origin: top center;">
+                <div id="printArea" class="bg-white relative flex gap-4 overflow-hidden" 
+                     style="width: 600px; height: 400px; padding: 20px; border: 4px solid #000000; transform-origin: top center;">
     
-    <div class="w-[150px] flex flex-col justify-between h-full flex-shrink-0 border-r-2 border-gray-200 pr-3">
-        <div class="w-full h-[170px] border border-gray-300 rounded p-1 flex items-center justify-center bg-white mb-2">
-             <img src="<?php echo $photoUrl; ?>" class="max-w-full max-h-full object-contain" crossorigin="anonymous">
-        </div>
-        
-        <div class="flex flex-col items-center justify-center flex-grow">
-            <div id="qrcode" class="border border-gray-300 p-1 bg-white rounded"></div>
-            <div class="text-[13px] font-bold text-gray-600 mt-2 tracking-widest text-center break-all">
-                <?php echo safe($label_data['temp_code'] ?? '0'); ?>
-            </div>
-        </div>
-    </div>
+                    <div class="w-[150px] flex flex-col justify-between h-full flex-shrink-0 border-r-2 border-black pr-3">
+                        <div class="w-full h-[170px] border-2 border-black rounded p-1 flex items-center justify-center bg-white mb-2">
+                             <img src="<?php echo $photoUrl; ?>" class="max-w-full max-h-full object-contain filter grayscale contrast-125" crossorigin="anonymous">
+                        </div>
+                        
+                        <div class="flex flex-col items-center justify-center flex-grow">
+                            <div id="qrcode" class="border-2 border-black p-1 bg-white rounded"></div>
+                            <div class="text-[24px] font-bold mt-2 tracking-widest text-center break-all">
+                                <?php echo safe($label_data['Item_code'] ?? $label_data['temp_code']); ?>
+                            </div>
+                            <div class="text-[18px] font-bold mt-2 tracking-widest text-center break-all">
+                                <?php 
+                                            $dt = $label_data['gate_entry_date_time'] ?? '';
+                                            echo substr($dt, 0, 10); 
+                                        ?>
+                            </div>
+                        </div>
+                    </div>
 
-    <div class="flex-1 flex flex-col h-full pl-1">
-        
-        <div class="border-b-2 border-gray-800 pb-2 mb-2">
-             <div class="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-1">Material Name</div>
-             <div class="text-[20px] font-bold leading-snug text-gray-900 line-clamp-2 pb-1">
-                <?php echo safe($label_data['material_name'] ?? 'Material Name'); ?>
-             </div>
-        </div>
-
-        <div class="flex-1 flex flex-col justify-between">
+                    <div class="flex-1 flex flex-col h-full pl-1">
+                        
+                        <div class="border-b-2 border-black pb-2 mb-2 flex items-center gap-2">
+            <div class="text-[12px] font-bold uppercase tracking-wider whitespace-nowrap">Material : </div>
             
-            <div class="grid grid-cols-2 gap-4 border-b border-gray-200 pb-2">
-                <div class="flex flex-col justify-center">
-                    <span class="text-[16px] font-bold text-gray-500 uppercase">Size</span>
-                    <span class="text-[25px] font-bold text-gray-900 truncate leading-normal pb-1">
-                        <?php echo safe($label_data['size'] ?? '-'); ?>
-                    </span>
-                </div>
-                <div class="flex flex-col justify-center border-l border-gray-100 pl-4">
-                    <span class="text-[16px] font-bold text-gray-500 uppercase">Color</span>
-                    <span class="text-[25px] font-bold text-gray-900 truncate leading-normal pb-1">
-                        <?php echo safe($label_data['color'] ?? '-'); ?>
-                    </span>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4 border-b border-gray-200 pb-2 pt-2">
-                <div class="flex flex-col justify-center">
-                    <span class="text-[16px] font-bold text-gray-500 uppercase">Dimensions</span>
-                    <span class="text-[25px] font-bold text-gray-900 truncate leading-normal pb-1">
-                        <?php echo safe($label_data['width'] ?? '-'); ?> x <?php echo safe($label_data['height'] ?? '-'); ?> x <?php echo safe($label_data['depth'] ?? '-'); ?>
-                    </span>
-                </div>
-                <div class="flex flex-col justify-center border-l border-gray-100 pl-4">
-                    <span class="text-[16px] font-bold text-gray-500 uppercase">Weight</span>
-                    <span class="text-[25px] font-bold text-gray-900 truncate leading-normal pb-1">
-                        <?php echo safe($label_data['weight'] ?? '-'); ?> g
-                    </span>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4 pt-2">
-                <div class="flex flex-col justify-center">
-                    <span class="text-[16px] font-bold text-gray-500 uppercase">Quantity</span>
-                    <span class="text-[25px] font-bold text-gray-900 truncate leading-normal pb-1">
-                        <?php echo safe($label_data['quantity_received'] ?? '0'); ?>
-                    </span>
-                </div>
-                <div class="flex flex-col justify-center border-l border-gray-100 pl-4">
-                    <span class="text-[16px] font-bold text-gray-500 uppercase">Location</span>
-                    <span class="text-[25px] font-bold text-gray-900 truncate leading-normal pb-1">
-                        <?php echo safe($label_data['location'] ?? '-'); ?>
-                    </span>
-                </div>
-            </div>
-
-        </div>
-        
-        <div class="mt-2 pt-2 border-t-2 border-gray-800">
-            <div class="flex justify-between items-end">
-                <div class="w-2/3 pr-2">
-                    <div class="text-[14px] text-gray-400 font-bold uppercase">Vendor</div>
-                    <div class="font-bold text-[18px] truncate leading-normal text-gray-700 pb-1">
-                        <?php echo safe($label_data['vendor_name'] ?? 'N/A'); ?>
-                    </div>
-                </div>
-                <div class="text-right w-1/3 flex-shrink-0">
-                    <div class="text-[14px] text-gray-400 font-bold uppercase">Date</div>
-                    <div class="font-bold text-[18px] whitespace-nowrap text-gray-700 leading-normal pb-1">
-                        <?php 
-                            $dt = $label_data['gate_entry_date_time'] ?? '';
-                            echo substr($dt, 0, 10); 
-                        ?>
-                    </div>
-                </div>
+            <div class="text-[18px] font-bold leading-none truncate flex-1">
+                <?php echo safe($label_data['material_name'] ?? 'Material Name'); ?>
             </div>
         </div>
 
-    </div>
-</div>
-            </div>
+                        <div class="flex-1 flex flex-col justify-between">
+                            
+                            <div class="grid grid-cols-2 gap-4 border-b-2 border-black pb-2">
+                                <div class="flex flex-col justify-center">
+                                    <span class="text-[16px] font-bold uppercase">Size</span>
+                                    <span class="text-[25px] font-bold truncate leading-normal pb-1">
+                                        <?php echo safe($label_data['size'] ?? '-'); ?>
+                                    </span>
+                                </div>
+                                <div class="flex flex-col justify-center border-l-2 border-black pl-4">
+                                    <span class="text-[16px] font-bold uppercase">Color</span>
+                                    <span class="text-[25px] font-bold truncate leading-normal pb-1">
+                                        <?php echo safe($label_data['color'] ?? '-'); ?>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 border-b-2 border-black pb-2 pt-2">
+                                <div class="flex flex-col justify-center">
+                                    <span class="text-[16px] font-bold uppercase">Dim(WxHxD)</span>
+                                    <span class="text-[25px] font-bold truncate leading-normal pb-1">
+                                        <?php echo safe($label_data['width'] ?? '-'); ?>x<?php echo safe($label_data['height'] ?? '-'); ?>x<?php echo safe($label_data['depth'] ?? '-'); ?>
+                                    </span>
+                                </div>
+                                <div class="flex flex-col justify-center border-l-2 border-black pl-4">
+                                    <span class="text-[16px] font-bold uppercase">Weight</span>
+                                    <span class="text-[25px] font-bold truncate leading-normal pb-1">
+                                        <?php echo safe($label_data['weight'] ?? '-'); ?> kg
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 pt-2">
+                                <div class="flex flex-col justify-center">
+                                    <span class="text-[16px] font-bold uppercase">Qty</span>
+                                    <span class="text-[25px] font-bold truncate leading-normal pb-1">
+                                        <?php echo safe($label_data['quantity_received'] ?? '0'); ?>
+                                    </span>
+                                </div>
+                                <div class="flex flex-col justify-center border-l-2 border-black pl-4">
+                                    <span class="text-[16px] font-bold uppercase">Loc</span>
+                                    <span class="text-[25px] font-bold truncate leading-normal pb-1">
+                                        <?php echo safe($label_data['location'] ?? '-'); ?>
+                                    </span>
+                                </div>
+                            </div>
+
+                        </div>
+                        
+                        <div class="mt-2 pt-2 border-t-2 border-black">
+                            <div class="w-full">
+                                <div class="text-[12px] font-bold uppercase mb-1">Vendor</div>
+                                <div class="font-bold text-[16px] leading-snug w-full truncate pb-1">
+                                    <?php echo safe($label_data['vendor_name'] ?? 'N/A'); ?>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                </div>
             
             <p class="text-xs text-gray-400 mt-4 text-center">Preview (3x2 inch Landscape)</p>
         </div>
@@ -195,7 +200,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             text: "<?php echo $currentUrl; ?>",
             width: 80,  
             height: 80,
-            colorDark : "#000000", 
+            colorDark : "#000000", // Pure Black
             colorLight : "#ffffff",
             correctLevel : QRCode.CorrectLevel.L
         });
@@ -205,15 +210,11 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
     function fitLabelToScreen() {
         const wrapper = document.getElementById('previewWrapper');
         const label = document.getElementById('printArea');
-        
-        // Landscape Base Dimensions
         const baseWidth = 600;
         const baseHeight = 400;
-        
         const availableWidth = wrapper.offsetWidth;
         
         let scale = 1;
-        
         if (availableWidth < baseWidth) {
             scale = availableWidth / baseWidth;
         }
@@ -253,7 +254,8 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         html2canvas(clone, { 
             scale: 2, 
             useCORS: true,
-            backgroundColor: "#ffffff"
+            backgroundColor: "#ffffff",
+            logging: false
         }).then(canvas => {
             const imgData = canvas.toDataURL("image/png");
             
@@ -261,7 +263,6 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             const pdfWidth = 76.2; 
             const pdfHeight = 50.8; 
             
-            // "l" for Landscape
             const pdf = new jsPDF("l", "mm", [pdfWidth, pdfHeight]);
 
             pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);

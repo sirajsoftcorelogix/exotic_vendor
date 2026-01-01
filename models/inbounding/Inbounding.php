@@ -843,7 +843,7 @@ public function update_image_variation($img_id, $variation_id) {
         // 1. Filter out IDs to Keep (Skipping Index 0)
         $submittedIds = [];
         foreach ($variations as $key => $var) {
-            if ($key == 0) continue; // SKIP Index 0 (Main Item)
+            if ($key == 0) continue; 
             if (!empty($var['id'])) {
                 $submittedIds[] = (int)$var['id'];
             }
@@ -858,58 +858,77 @@ public function update_image_variation($img_id, $variation_id) {
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $it_id");
         }
 
-        // 3. LOOP TO INSERT OR UPDATE
-        // CHANGED: 'quantity' -> 'quantity_received' in both queries below
-
+        // 3. INSERT & UPDATE QUERIES
+        // Count: 19 Placeholders (?)
         $insertSql = "INSERT INTO vp_variations 
-                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
+        // Count: 18 Sets + 1 Where = 19 Placeholders (?)
         $updateSql = "UPDATE vp_variations 
-                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, ware_house_code=?, price_india=?, price_india_mrp=? 
+                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, ware_house_code=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=? 
                       WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
         $stmtUpdate = $this->conn->prepare($updateSql);
 
         foreach ($variations as $key => $var) {
-            if ($key == 0) continue; // Skip Main Item
+            if ($key == 0) continue; 
 
             $id = $var['id'] ?? '';
             $img = $var['photo'] ?? '';
             
-            // Ensure defaults
+            // Defaults
             $h = !empty($var['height']) ? $var['height'] : 0.00;
             $w = !empty($var['width']) ? $var['width'] : 0.00;
             $d = !empty($var['depth']) ? $var['depth'] : 0.00;
             $wt = !empty($var['weight']) ? $var['weight'] : 0.00;
-            
-            // New fields defaults
             $wh = !empty($var['ware_house_code']) ? (int)$var['ware_house_code'] : 0;
+            $qty = !empty($var['quantity']) ? (int)$var['quantity'] : 0;
+            
+            // Pricing defaults
             $pi = !empty($var['price_india']) ? (float)$var['price_india'] : 0.00;
             $pm = !empty($var['price_india_mrp']) ? (float)$var['price_india_mrp'] : 0.00;
+            $inr = !empty($var['inr_pricing']) ? (float)$var['inr_pricing'] : 0.00;
+            $amz = !empty($var['amazon_price']) ? (float)$var['amazon_price'] : 0.00;
+            $usd = !empty($var['usd_price']) ? (float)$var['usd_price'] : 0.00;
             
-            // Note: We use $var['quantity'] from the HTML input, but save it to quantity_received column
-            $qty = !empty($var['quantity']) ? (int)$var['quantity'] : 0;
+            // String/Int defaults
+            $hsn = !empty($var['hsn_code']) ? $var['hsn_code'] : '';
+            $gst = !empty($var['gst_rate']) ? (int)$var['gst_rate'] : 0;
 
             if (!empty($id)) {
-                // UPDATE
-                $stmtUpdate->bind_param("sssidsddddiddi", $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, $h, $w, $d, $wt, $wh, $pi, $pm, $id);
+                // UPDATE: 19 Variables -> 19 Characters in string
+                // String: sssidsddddidddddsii (added missing 'd')
+                $stmtUpdate->bind_param("sssidsddddidddddsii", 
+                    $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
+                    $h, $w, $d, $wt, $wh, $pi, $pm, 
+                    $inr, $amz, $usd, // 5 Doubles here
+                    $hsn, $gst, 
+                    $id
+                );
                 $stmtUpdate->execute();
             } else {
-                // INSERT
-                $stmtInsert->bind_param("isssidsddddidd", $it_id, $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, $h, $w, $d, $wt, $wh, $pi, $pm);
+                // INSERT: 19 Variables -> 19 Characters in string
+                // String: isssidsddddidddddsi (added missing 'd')
+                $stmtInsert->bind_param("isssidsddddidddddsi", 
+                    $it_id, $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
+                    $h, $w, $d, $wt, $wh, $pi, $pm, 
+                    $inr, $amz, $usd, // 5 Doubles here
+                    $hsn, $gst
+                );
                 $stmtInsert->execute();
             }
         }
         return true;
     }
 
-    // 3. GET VARIATIONS (For View)
     public function getVariations($it_id) {
-        // CHANGED: 'quantity' -> 'quantity_received'
-        $sql = "SELECT id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp 
+        // Added 'quantity_received as quantity' for HTML compatibility
+        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp, 
+                inr_pricing, amazon_price, usd_price, hsn_code, gst_rate
                 FROM vp_variations WHERE it_id = ?";
+                
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $it_id);
         $stmt->execute();
