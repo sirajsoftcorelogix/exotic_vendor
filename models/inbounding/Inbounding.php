@@ -530,21 +530,19 @@ public function update_image_variation($img_id, $variation_id) {
         $vendor_code = $data['vendor_id'] ?? '';
         $invoice_img = $data['invoice'] ?? '';
         $invoice_no  = $data['invoice_no'] ?? '';
-        // Prepare statement
+
         $sql = "INSERT INTO vp_inbound (vendor_code, invoice_image, invoice_no) VALUES (?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
 
         if (!$stmt) {
-            // Debugging: echo "Prepare failed: (" . $this->conn->errno . ") " . $this->conn->error;
             return false;
         }
 
-        // Bind parameters: 's' = string. 
-        // Assuming vendor_code, invoice_image, and invoice_no are strings.
-        $stmt->bind_param("isi", $vendor_code, $invoice_img, $invoice_no);
+        // Changed 'isi' to 'sss' to prevent errors if invoice_no or vendor_code contain letters
+        $stmt->bind_param("sss", $vendor_code, $invoice_img, $invoice_no);
 
         if ($stmt->execute()) {
-            return $stmt->insert_id; // Return the new ID
+            return $stmt->insert_id;
         }
 
         return false;
@@ -1007,8 +1005,10 @@ public function update_image_variation($img_id, $variation_id) {
         if (!empty($inbounding) && !empty($inbounding['category_code'])) {
             
             $cat_ids_input = $inbounding['category_code']; 
-            
-            $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($cat_ids_input)");
+            $sub_cat_ids_input = $inbounding['sub_category_code'];
+            $sub_sub_cat_ids_input = $inbounding['sub_sub_category_code'];
+            $all_cat_ids = $cat_ids_input.','.$sub_cat_ids_input.','.$sub_sub_cat_ids_input;
+            $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($all_cat_ids)");
             
             if ($cat_result) {
                 $category_rows = $cat_result->fetch_all(MYSQLI_ASSOC);

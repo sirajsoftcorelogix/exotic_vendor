@@ -63,6 +63,20 @@
 
 <?php
 $record_id = $_GET['id'] ?? '';
+
+// Define the specific options: 'Database Value' => 'Display Label'
+$sizeOptions = [
+    'XS'   => 'Extra Small (XS)(34)',
+    'S'    => 'Small (S)(36)',
+    'M'    => 'Medium (M)(38)',
+    'L'    => 'Large (L)(40)',
+    'XL'   => 'Extra Large (XL)(42)',
+    'XXL'  => 'Extra Extra Large (XXL)(44)',
+    'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
+];
+
+// Get the current saved value safely
+$currentSize = $data['form2']['size'] ?? '';
 ?>
 
 <div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
@@ -273,13 +287,21 @@ $record_id = $_GET['id'] ?? '';
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['size'] ?? '') ?>" name="size">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
-                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
+                        <select name="size" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">
+                            <option value="">Select a Size</option>
+                            
+                            <?php foreach ($sizeOptions as $dbValue => $displayLabel): ?>
+                                <option value="<?= $dbValue ?>" <?= ($currentSize === $dbValue) ? 'selected' : '' ?>>
+                                    <?= $displayLabel ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div class="w-full min-w-0">
@@ -449,9 +471,21 @@ $record_id = $_GET['id'] ?? '';
                                     ?>
                                 </select>
                             </div>
-
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Size:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['size'] ?? '') ?>" name="variations[<?= $var['id'] ?>][size]"></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
+                            <div class="w-full min-w-0">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
+                                
+                                <select name="variations[<?= $var['id'] ?>][size]" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">
+                                    <option value="">Select Size</option>
+                                    
+                                    <?php foreach ($sizeOptions as $dbValue => $displayLabel): ?>
+                                        <option value="<?= $dbValue ?>" <?= ($var['size'] === $dbValue) ? 'selected' : '' ?>>
+                                            <?= $displayLabel ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                    
+                                </select>
+                            </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
@@ -552,9 +586,22 @@ $record_id = $_GET['id'] ?? '';
                         ?>
                     </select>
                 </div>
-
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Size:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]"></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
+                <div class="w-full min-w-0">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
+                    
+                    <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]">
+                        <option value="">Select Size</option>
+                        
+                        <?php 
+                        // We use $dbValue (XS) and $displayLabel (Extra Small...) based on your previous array
+                        foreach ($sizeOptions as $dbValue => $displayLabel) {
+                            echo '<option value="' . htmlspecialchars($dbValue) . '">' . htmlspecialchars($displayLabel) . '</option>';
+                        }
+                        ?>
+                        
+                    </select>
+                </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
@@ -950,7 +997,7 @@ $record_id = $_GET['id'] ?? '';
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
-                            <?php $perm = $data['form2']['permanently_available'] ?? 'Y'; ?>
+                            <?php $perm = $data['form2']['permanently_available'] ?? 'N'; ?>
                             <option value="N" <?= ($perm == 'N') ? 'selected' : '' ?>>No</option>
                             <option value="Y" <?= ($perm == 'Y') ? 'selected' : '' ?>>Yes</option>
                         </select>
@@ -1016,7 +1063,7 @@ $record_id = $_GET['id'] ?? '';
                     <div class="flex-1 sm:col-span-2 lg:col-span-2 flex items-start border border-[#eee] rounded bg-gray-50 p-1"> 
                         
                         <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
-                            <label class="block text-xs font-bold text-[#222] mb-[3px]">US Stock:</label>
+                            <label class="block text-xs font-bold text-[#222] mb-[3px]">US Block:</label>
                             <div class="flex items-center gap-4">
                                 <?php $us_val = $data['form2']['us_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
@@ -1031,7 +1078,7 @@ $record_id = $_GET['id'] ?? '';
                         </div>
 
                         <div class="flex-1 pl-4 flex flex-col justify-center h-[52px]"> 
-                            <label class="block text-xs font-bold text-[#222] mb-[3px]">India Stock:</label>
+                            <label class="block text-xs font-bold text-[#222] mb-[3px]">India Block:</label>
                             <div class="flex items-center gap-4">
                                 <?php $in_val = $data['form2']['india_block'] ?? 'N'; ?>
                                 <label class="flex items-center cursor-pointer">

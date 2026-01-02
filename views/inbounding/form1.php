@@ -265,23 +265,11 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
     });
 
     // 5. Validation
+    // 5. Validation
     document.getElementById("invoiceForm").addEventListener("submit", function(e) {
         const isEditMode = "<?php echo $isEdit ? '1' : '0'; ?>";
         const hasFile = invoiceInput.files.length > 0;
-        // Check if either preview is visible
         const previewVisible = (!previewImg.classList.contains('hidden')) || (!pdfPreview.classList.contains('hidden'));
-
-        // Validate File Upload
-        if (isEditMode === '0' && !hasFile) {
-            errorBox.textContent = "Please upload an invoice photo or PDF.";
-            e.preventDefault();
-            return false;
-        }
-        if (isEditMode === '1' && !previewVisible) {
-             errorBox.textContent = "Please upload an invoice photo or PDF.";
-             e.preventDefault();
-             return false;
-        }
     });
 
     // Popup Logic for Images
