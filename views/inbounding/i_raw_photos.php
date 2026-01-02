@@ -9,7 +9,7 @@ $record_id = $data['record_id'] ?? 0;
     <h2 class="text-xl font-bold text-gray-900 mb-5 ml-[5px]">Raw Photo</h2>
     <div class="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-200 mb-6">
         <div class="shrink-0 w-32 h-32 bg-gray-100 rounded-lg border border-gray-200 p-1">
-            <img src="<?php echo base_url($item['product_photo'] ?? 'assets/no-img.png'); ?>" class="w-full h-full object-contain rounded">
+            <img src="<?php echo base_url($item['product_photo'] ?? 'assets/no-img.png'); ?>" class="w-full h-full object-contain rounded" onclick="openImagePopup('<?= !empty($item['product_photo']) ? base_url($item['product_photo']) : '' ?>')">
         </div>
 
         <div class="flex-grow grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-[13px] text-gray-700">
@@ -86,24 +86,54 @@ $record_id = $data['record_id'] ?? 0;
 
     </form>
 </div>
-
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-80 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup(event)">
+    <div class="bg-white p-2 rounded-md w-auto max-w-[95vw] max-h-[95vh] relative flex flex-col items-center shadow-2xl" onclick="event.stopPropagation();">
+        
+        <button onclick="closeImagePopup()" class="absolute -top-3 -right-3 bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-md border-2 border-white">✕</button>
+        
+        <img id="popupImage" class="max-w-full max-h-[90vh] rounded object-contain" src="" alt="Image Preview">
+        
+    </div>
+</div>
 <script>
     const fileInput = document.getElementById('fileInput');
     const previewContainer = document.getElementById('previewContainer');
     const deletedContainer = document.getElementById('deletedInputsContainer');
     let dt = new DataTransfer();
 
-    // 1. Handle File Selection
+    // --- CONFIGURATION ---
+    const MAX_LIMIT_MB = 100;
+    const MAX_BYTES = MAX_LIMIT_MB * 1024 * 1024; // 100 MB in Bytes
+
+    // 1. Handle File Selection (With Validation)
     fileInput.addEventListener('change', function() {
+        
+        // Calculate the size of files ALREADY in the queue
+        let currentTotalSize = 0;
+        for(let i = 0; i < dt.files.length; i++) {
+            currentTotalSize += dt.files[i].size;
+        }
+
+        // Loop through NEW files selected
         for(let i = 0; i < this.files.length; i++){
             let file = this.files[i];
+            
+            // PREDICT: Will adding this file exceed the limit?
+            if (currentTotalSize + file.size > MAX_BYTES) {
+                alert(`Error: Adding "${file.name}" would exceed the ${MAX_LIMIT_MB}MB total limit.`);
+                continue; // Skip this file, but allow others if they fit
+            }
+
+            // If it fits, add it
+            currentTotalSize += file.size; // Update running total
             dt.items.add(file);
             createPreview(file);
         }
+
         this.files = dt.files; 
     });
 
-    // 2. Create Preview (Simplified: No captions/order)
+    // 2. Create Preview (No changes needed)
     function createPreview(file) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -129,7 +159,7 @@ $record_id = $data['record_id'] ?? 0;
         }
     }
 
-    // 3. Remove New File
+    // 3. Remove New File (No changes needed)
     window.removeNewFile = function(fileName, domId) {
         document.getElementById(domId).remove();
         const newDt = new DataTransfer();
@@ -140,16 +170,15 @@ $record_id = $data['record_id'] ?? 0;
         fileInput.files = dt.files;
     }
 
-    // 4. Mark Existing for Deletion
+    // 4. Mark Existing for Deletion (No changes needed)
     window.markForDeletion = function(btn, dbId) {
         if(!confirm("Delete this raw photo?")) return;
         
         const parent = btn.closest('.existing-photo');
         
-        // Visual feedback: hide the image or turn it red
         parent.style.opacity = '0.4';
         parent.style.borderColor = 'red';
-        parent.style.pointerEvents = 'none'; // Prevent clicking again
+        parent.style.pointerEvents = 'none';
 
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -157,4 +186,14 @@ $record_id = $data['record_id'] ?? 0;
         input.value = dbId;
         deletedContainer.appendChild(input);
     }
+</script>
+<script>
+    function openImagePopup(imageUrl) {
+        popupImage.src = imageUrl;
+        document.getElementById('imagePopup').classList.remove('hidden');
+    }
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    } 
 </script>
