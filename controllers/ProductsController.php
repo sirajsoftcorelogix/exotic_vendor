@@ -217,7 +217,7 @@ class ProductsController {
             $item['color'] = $apiItem['color'] ?? '';
             $item['size'] =  isset($apiItem['size']) ? $apiItem['size'] : '';
             $item['material'] = isset($apiItem['material']) ? $apiItem['material'] : '';
-            $item['cost_price'] = isset($apiItem['cost_price']) ? (float)$apiItem['cost_price'] : 0.0;           
+            $item['cost_price'] = isset($apiItem['cp']) ? (float)$apiItem['cp'] : 0.0;           
             $item['gst'] = isset($apiItem['gst']) ? (float)$apiItem['gst'] : 0.0;
             $item['hsn'] = isset($apiItem['hscode']) ? $apiItem['hscode'] : '';
             $item['description'] = isset($apiItem['snippet_description']) ? $apiItem['snippet_description'] : '';
@@ -284,7 +284,7 @@ class ProductsController {
                     $variantItem['local_stock'] = isset($variant['local_stock']) ? (int)$variant['local_stock'] : 0;
                     $variantItem['itemprice'] = isset($variant['price']) ? floatval($variant['price']) : 0.0;
                     $variantItem['finalprice'] = isset($variant['finalprice']) ? floatval($variant['finalprice']) : $variantItem['itemprice'];
-                    $variantItem['cost_price'] = isset($variant['cost_price']) ? (float)$variant['cost_price'] : 0.0;
+                    $variantItem['cost_price'] = isset($variant['cp']) ? (float)$variant['cp'] : 0.0;
                     $variantItem['gst'] = isset($variant['gst']) ? (float)$variant['gst'] : 0.0;
                     $variantItem['hsn'] = isset($variant['hsn']) ? $variant['hsn'] : '';
                     $variantItem['description'] = isset($variant['snippet_description']) ? $variant['snippet_description'] : '';

@@ -1261,11 +1261,21 @@ class PurchaseOrdersController {
     function uploadInvoice() {
         global $purchaseOrdersModel;
         global $poInvoiceModel;
-        $poId = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
+        $poIdRaw = isset($_POST['po_id']) ? $_POST['po_id'] : 0;
         $id = isset($_POST['id']) ? $_POST['id'] : 0; // for update
 
-        if (!$poId) {
-            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID.']);
+        // Support comma-separated or array of PO IDs
+        if (is_array($poIdRaw)) {
+            $poIds = $poIdRaw;
+        } elseif (is_string($poIdRaw) && strpos($poIdRaw, ',') !== false) {
+            $poIds = array_map('trim', explode(',', $poIdRaw));
+        } else {
+            $poIds = [$poIdRaw];
+        }
+        // Normalize to int and filter empty
+        $poIds = array_values(array_filter(array_map('intval', $poIds)));
+        if (empty($poIds)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Purchase Order ID(s).']);
             exit;
         }
         
@@ -1274,7 +1284,7 @@ class PurchaseOrdersController {
             if(isset($id) && $id){
                 //update without file
                 $poInvoiceData = [
-                    'po_id' => $poId,
+                    //'po_id' => $poId,
                     'invoice_type' => $_POST['invoice_type'] ?? NULL,
                     'invoice_no' => $_POST['invoice_no'] ?? '',
                     'invoice_date' => $_POST['invoice_date'] ?? '',
@@ -1313,7 +1323,7 @@ class PurchaseOrdersController {
         $fileExtension = strtolower(end($fileNameCmps));
 
         // Sanitize file name
-        $newFileName = 'PO_' . $poId . '_' . time() . '.' . $fileExtension;
+        $newFileName = 'PO_' . $poIds[0] . '_' . time() . '.' . $fileExtension;
 
         // Check if file type is allowed (e.g., pdf, jpg, png)
         $allowedfileExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
@@ -1327,7 +1337,7 @@ class PurchaseOrdersController {
         if (move_uploaded_file($fileTmpPath, $dest_path)) {
             $invoice = 'uploads/invoices/' . $newFileName;
             $poInvoiceData = [
-                'po_id' => $poId,
+                //'po_id' => $poId,
                 'invoice_type' => $_POST['invoice_type'] ?? NULL,
                 'invoice_no' => $_POST['invoice_no'] ?? '',
                 'invoice_date' => $_POST['invoice_date'] ?? '',
@@ -1338,33 +1348,53 @@ class PurchaseOrdersController {
                 'grand_total' => $_POST['grand_total'] ?? 0,
                 'invoice' => $invoice
             ];
-            if(isset($_POST['invoice_type']) && $_POST['invoice_type'] == 'invoice'){                
-                //update purchase order invoice path
-                $isUpdatedInv = $purchaseOrdersModel->updateInvoicePath($poId, 'uploads/invoices/' . $newFileName);
-                if (!$isUpdatedInv) {
-                    echo json_encode(['success' => false, 'message' => 'Failed to update purchase order invoice path.']);
-                    exit;
-                }
-            }
-            
-            if(isset($id) && $id){
-                //update
+            // If update of existing invoice (single invoice record)
+            if (isset($id) && $id) {
                 $isUpdated = $poInvoiceModel->updateInvoice($id, $poInvoiceData);
                 if (!$isUpdated) {
                     echo json_encode(['success' => false, 'message' => 'Failed to update invoice details in database.']);
                     exit;
                 }
+                // Update invoice path on related POs (if invoice type is 'invoice')
+                if (isset($_POST['invoice_type']) && $_POST['invoice_type'] == 'invoice') {
+                    foreach ($poIds as $mp) {
+                        $isUpdatedInv = $purchaseOrdersModel->updateInvoicePath($mp, 'uploads/invoices/' . $newFileName);
+                        if (!$isUpdatedInv) {
+                            echo json_encode(['success' => false, 'message' => 'Failed to update purchase order invoice path for PO: ' . $mp]);
+                            exit;
+                        }
+                    }
+                }
+
                 echo json_encode(['success' => true, 'message' => 'Invoice updated successfully.', 'invoice_path' => 'uploads/invoices/' . $newFileName]);
                 exit;
             }
-            // Save invoice details to database
-            $isSaved = $poInvoiceModel->addPoInvoice($poInvoiceData);
-            if (!$isSaved) {
-                echo json_encode(['success' => false, 'message' => 'Failed to save invoice details to database.']);
+
+            // Save invoice details to database and map to one or multiple POs
+            $poInvoiceData['po_ids'] = $poIds;
+            $result = $poInvoiceModel->addPoInvoice($poInvoiceData);
+            if (!$result || (is_array($result) && isset($result['success']) && !$result['success'])) {
+                $msg = is_array($result) && isset($result['message']) ? $result['message'] : 'Failed to save invoice details to database.';
+                echo json_encode(['success' => false, 'message' => $msg]);
                 exit;
             }
-            
-            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully', 'invoice_path' => 'uploads/invoices/' . $newFileName]);
+
+            // Determine mapped and skipped lists
+            $mapped = is_array($result) && isset($result['mapped']) ? $result['mapped'] : $poIds;
+            $skipped = is_array($result) && isset($result['skipped']) ? $result['skipped'] : [];
+
+            // Update purchase_orders.vendor_invoice for each mapped PO if this is an actual invoice
+            if (isset($_POST['invoice_type']) && $_POST['invoice_type'] == 'invoice') {
+                foreach ($mapped as $mp) {
+                    $isUpdatedInv = $purchaseOrdersModel->updateInvoicePath($mp, 'uploads/invoices/' . $newFileName);
+                    if (!$isUpdatedInv) {
+                        echo json_encode(['success' => false, 'message' => 'Failed to update purchase order invoice path for PO: ' . $mp]);
+                        exit;
+                    }
+                }
+            }
+
+            echo json_encode(['success' => true, 'message' => 'Invoice uploaded successfully', 'invoice_path' => 'uploads/invoices/' . $newFileName, 'mapped' => $mapped, 'skipped' => $skipped]);
         } else {
             echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
         }

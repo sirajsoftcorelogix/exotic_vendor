@@ -151,11 +151,25 @@
     <!-- </div> -->
     <!-- custom po button -->
     <div class="flex items-center justify-between mb-4">
-        <div class=" justify-left">
-            <a href="<?php echo base_url('?page=purchase_orders&action=custom_po'); ?>" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm flex items-center gap-2">
+        <!-- <div class=" justify-left">
+            <a href="<?php //echo base_url('?page=purchase_orders&action=custom_po'); ?>" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm flex items-center gap-2">
                 <i class="fa fa-plus"></i>
                 <span> Custom PO</span>
             </a>
+        </div> -->
+         <div class="relative inline-block text-left">
+            <button id="bulk-action-toggle" type="button" class="btn btn-success inline-flex items-center px-4 py-2" aria-haspopup="true" aria-expanded="false">
+                Actions
+                <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
+                <a href="<?php echo base_url('?page=purchase_orders&action=custom_po'); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fa fa-plus"></i>
+                    <span> Custom PO</span>
+                </a>
+                <a href="#" id="group-upload-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-file-invoice"></i> Upload invoice</a>
+                
+            </div>
         </div>
         <!-- <div class="justify-end">
             <select id="po_type" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=purchase_orders&action=list&po_type=' + this.value ;">                    
@@ -172,6 +186,7 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                     <tr>
+                        <th> </th>
                         <th><i class="fa fa-star"></i></th>
                         
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">PO Number</th>
@@ -187,9 +202,10 @@
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                     <!-- User Row 1 -->
-                     <?php if (!empty($purchaseOrders)): ?>
+                    <?php if (!empty($purchaseOrders)): ?>
                         <?php foreach ($purchaseOrders as $order): ?>
-                    <tr class="table-content-text">
+                    <tr class="table-content-text" data-vendor-id="<?= htmlspecialchars($order['vendor_id'] ?? '') ?>">
+                        <td ><input type="checkbox" class="custom-checkbox mr-2 po-checkbox" value="<?= $order['id'] ?>" id="po<?= $order['id'] ?>" > </td>
                         <td class="whitespace-nowrap cursor-pointer text-lg text-yellow-400" title="<?= $order['flag_star'] ? 'Unmark as Important' : 'Mark as Important' ?>">
                             <?= $order['flag_star'] 
                                 ? '<i class="fa fa-star cursor-pointer" onclick="toggleStar(' . $order['id'] . ')" title=\'Unmark as Important\'></i>' 
@@ -202,7 +218,7 @@
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['po_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap"><?= date('d M Y', strtotime($order['expected_delivery_date'] ?? '')) ?></td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>
+                            <?= htmlspecialchars($order['vendor_name'] ?? 'N/A') ?>                            
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <?php
@@ -377,7 +393,7 @@
 <!-- Right Side Popup Wrapper -->
 <div id="popup-wrapper" class="hidden">
     <!-- Background Overlay -->
-    <!-- <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div> -->
+    <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div>
 
     <!-- Sliding Container -->
     <div id="modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: calc(45% + 61px); min-width: 661px;">
@@ -396,18 +412,28 @@
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-8">
                     <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b" id="invoice-title">Vendor Invoice</h2>
-
-                    <div class="flex items-start mb-6 pb-6 border-b">
-                        <!-- <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md w-24 h-20 object-cover"> -->
-                        <div class="ml-6 text-sm text-gray-600 space-y-1">
-                            <p><strong>PO Number:</strong> </p>
-                            <p><strong>PO Date:</strong> </p>
-                            <!-- <p><strong>Item:</strong> </p>                             -->
-                            <p><strong>Vendor Name:</strong> </p>
-                            <p><strong>Vendor Phone:</strong>  <a href="https://wa.me/"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a> <span class="text-blue-600"><a href="mailto:info@vendor1.com">info@vendor1.com</a></span></p>
+                    <!--vendor details-->
+                    <div class="bg-orange-500 text-white p-4 rounded-md mb-6" id="vendor-details-section">
+                        <h3 class="text-lg font-semibold mb-2">Vendor Details</h3>
+                        <div class="text-sm space-y-1">
+                            <p><strong>Name:</strong> </p>
+                            <p><span><strong>Contact:</strong> </span> 
+                            <span><strong>Phone:</strong> <a href="https://wa.me/"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a></span> 
+                            <span class="text-blue-600"><a href="mailto:info@vendor1.com">info@vendor1.com</a></span>
+                            <span><strong>Agent:</strong> </span> 
+                            </p>
                         </div>
                     </div>
-
+                    <div class="flex items-start mb-6 pb-6 border-b max-w-1xl overflow-x-auto" id="po-details-section">
+                        <div class="text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4">
+                            <!--close button-->
+                            <a href="#" class="float-right text-gray-400 hover:text-orange-600" id="close-item-popup-btn">
+                                <i class="fas fa-times"></i>
+                            </a>
+                            <p><strong>PO Number:</strong> </p>
+                            <p><strong>PO Date:</strong> </p>                                
+                        </div>
+                    </div>
                     <form id="invoice-form" enctype="multipart/form-data">
                         <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6">
                              <div>
@@ -729,7 +755,7 @@ function handleAction(action, poId, el) {
        document.getElementById('invoice-pdf-label').textContent = action === 'UploadInvoice' ? 'Invoice PDF: ' : 'Performa PDF: ';
        document.getElementById('file-drop-area-text').textContent = action === 'UploadInvoice' ? 'Drag & Drop your invoice file here or' : 'Drag & Drop your performa file here or';
        document.getElementById('uploaded-file-label').textContent = action === 'UploadInvoice' ? 'Uploaded Invoice:' : 'Uploaded Performa:';
-
+        
       // Open the invoice upload popup
       //alert('Feature coming soon!');
         const popupWrapper = document.getElementById('popup-wrapper');
@@ -755,8 +781,9 @@ function handleAction(action, poId, el) {
         openVendorPopup();
         cancelVendorBtn.addEventListener('click', closeVendorPopup);
         closeVendorPopupBtn.addEventListener('click', closeVendorPopup);
-        // Store the PO ID if needed for form submission
-        document.getElementById('invoice-upload-po-id').value = poId;
+        // Store the PO ID(s) (if array, join with comma) for group uploads
+        let poIdValue = Array.isArray(poId) ? poId.join(',') : poId;
+        document.getElementById('invoice-upload-po-id').value = poIdValue;
         // File upload handling
         const fileDropArea = document.getElementById('file-drop-area');
         const fileInput = document.getElementById('file-input');
@@ -764,18 +791,42 @@ function handleAction(action, poId, el) {
         const uploadedFileSection = document.getElementById('uploaded-file-section');
         const fileInfoDiv = document.getElementById('file-info');
         const invoiceType = document.getElementById('invoice-type').value;
-        // Fetch and populate invoice po details
-        fetchPoDetails(poId, invoiceType).then(data => {
+        // Fetch and populate invoice po details (use first PO if multiple selected)
+        const fetchId = Array.isArray(poId) ? poId[0] : poId;
+        fetchPoDetails(fetchId, invoiceType).then(data => {
             if (data.success) {
                 //console.log(data.data);
                 const purchaseOrder = data.data.purchaseOrder;
                 const invoiceData = data.data.invoiceData;
                 const invItem = Array.isArray(data.data.items) && data.data.items.length > 0 ? data.data.items[0] : {};
-                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(1)').innerHTML = `<strong>PO Number:</strong> ${purchaseOrder.po_number}`;
-                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(2)').innerHTML = `<strong>PO Date:</strong> ${new Date(purchaseOrder.po_date).toLocaleDateString()}`;
-                // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Item:</strong> ${invItem.title || 'N/A'}`;
-                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Vendor Name:</strong> ${purchaseOrder.vendor_name || 'N/A'}`;
-                document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(4)').innerHTML = `<strong>Vendor Phone:</strong> ${purchaseOrder.vendor_phone || 'N/A'} <a href="https://wa.me/${purchaseOrder.vendor_phone || 'N/A'}"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a> <span class="text-blue-600"><a href="mailto:${purchaseOrder.vendor_email || 'N/A'}">${purchaseOrder.vendor_email || 'N/A'}</a></span>`;
+                // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(1)').innerHTML = `<strong>PO Number:</strong> ${purchaseOrder.po_number}`;
+                // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(2)').innerHTML = `<strong>PO Date:</strong> ${new Date(purchaseOrder.po_date).toLocaleDateString()}`;
+                // // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Item:</strong> ${invItem.title || 'N/A'}`;
+                // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(3)').innerHTML = `<strong>Vendor Name:</strong> ${purchaseOrder.vendor_name || 'N/A'}`;
+                // document.querySelector('#vendor-popup-panel div.mb-6 p:nth-child(4)').innerHTML = `<strong>Vendor Phone:</strong> ${purchaseOrder.vendor_phone || 'N/A'} <a href="https://wa.me/${purchaseOrder.vendor_phone || 'N/A'}"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a> <span class="text-blue-600"><a href="mailto:${purchaseOrder.vendor_email || 'N/A'}">${purchaseOrder.vendor_email || 'N/A'}</a></span>`;
+                document.querySelector('#vendor-details-section').innerHTML = `
+                    <h3 class="text-lg font-semibold mb-2">Vendor Details</h3>
+                    <div class="text-sm space-y-1">
+                        <p><strong>Name:</strong> ${purchaseOrder.vendor_name || 'N/A'}</p>
+                        <p>
+                            <span><strong>Contact:</strong> ${purchaseOrder.contact_name || 'N/A'}</span>
+                            <span><strong>Phone:</strong> ${purchaseOrder.vendor_phone || 'N/A'} <a href="https://wa.me/${purchaseOrder.vendor_phone || 'N/A'}"><i class="fab fa-whatsapp text-green-500 ml-1"></i></a></span>
+                            <span class=""><a href="mailto:${purchaseOrder.vendor_email || 'N/A'}">${purchaseOrder.vendor_email || 'N/A'}</a></span>
+                            <span><strong> Agent:</strong> ${purchaseOrder.agent_name || 'N/A'}</span>
+                        </p>
+                    </div>
+                `;
+                //alert(el);
+                //console.debug(el);
+                if(el != undefined){
+                    document.querySelector('#po-details-section').innerHTML = `
+                        <div class="text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4">
+                            
+                            <p><strong>PO Number:</strong> ${purchaseOrder.po_number || 'N/A'}</p>
+                            <p><strong>PO Date:</strong> ${new Date(purchaseOrder.po_date).toLocaleDateString() || 'N/A'}</p>                                
+                        </div>
+                    `;
+                }
                 document.getElementById('sub_total').value = invoiceData.sub_total || 0.00;
                 document.getElementById('gst_total').value = invoiceData.gst_total || 0.00;
                 document.getElementById('shipping').value = invoiceData.shipping || 0.00;
@@ -818,7 +869,7 @@ function handleAction(action, poId, el) {
                             fetch('?page=purchase_orders&action=delete_invoice', {
                                 method: 'POST',
                                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                                body: 'invoice_id=' + encodeURIComponent(file.id) + '&po_id=' + encodeURIComponent(poId)
+                                body: 'invoice_id=' + encodeURIComponent(file.id) + '&po_id=' + encodeURIComponent(poIdValue)
                             })
                             .then(r => r.json())
                             .then(data => {
@@ -915,9 +966,15 @@ function handleAction(action, poId, el) {
             if (!invoiceDate || !subTotal || !grandTotal || (!file && !document.getElementById('invoice-id').value)) {
                 isValid = false;
             }
+            // validation if no po selected
+            const selected = getSelectedPoIds();
+            if (selected.length === 0) {
+                isValid = false;
+            }
+            
             //alert('Validation status: ' + isValid);
             if (!isValid) {
-                alert('Please fill in all required fields.');
+                alert('Please fill all required fields and upload the invoice file.');
                 return;
             }
             // Here we handle the form submission, e.g., via AJAX
@@ -1164,4 +1221,115 @@ function submitSearchForm() {
 function closeDownloadPopup() {
     document.getElementById('download-popup-overlay').classList.add('hidden');
 }   
+
+// Toggle bulk actions menu
+document.getElementById('bulk-action-toggle').addEventListener('click', function(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('bulk-action-menu');
+    menu.classList.toggle('hidden');
+});
+// close menu on outside click
+document.addEventListener('click', function() {
+    document.getElementById('bulk-action-menu').classList.add('hidden');
+});
+//helper to get selected PO IDs
+function getSelectedPoIds() {
+    const checkboxes = document.querySelectorAll('.po-checkbox:checked');
+    const poIds = Array.from(checkboxes).map(cb => cb.value);
+    return poIds;
+}
+
+// Escape HTML to avoid injection when rendering PO details
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text).replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]; });
+}
+
+// Update the PO details section with boxes for each selected PO
+function updatePoDetailsSection() {
+    const container = document.getElementById('po-details-section');
+    if (!container) return;
+    const selected = getSelectedPoIds();
+    // If no selection, show a placeholder
+    if (selected.length === 0) {
+        container.innerHTML = '<div class="text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4"><p>No POs selected</p></div>';
+        return;
+    }
+    // Clear existing contents
+    container.innerHTML = '';
+
+    selected.forEach(id => {
+        const checkbox = document.querySelector('.po-checkbox[value="' + id + '"]');
+        if (!checkbox) return;
+        const tr = checkbox.closest('tr');
+        const poNumberEl = tr ? tr.querySelector('a') : null;
+        const poNumber = poNumberEl ? poNumberEl.textContent.trim() : id;
+        const dateTd = poNumberEl ? poNumberEl.closest('td').nextElementSibling : null;
+        const poDate = dateTd ? dateTd.textContent.trim() : '';
+
+        const box = document.createElement('div');
+        box.className = 'text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4 relative bg-gray-50 rounded';
+        box.innerHTML = '<button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-600 po-remove-btn" data-po-id="' + escapeHtml(id) + '" aria-label="Remove PO">&times;</button>' +
+                        '<p><strong>PO Number:</strong> ' + escapeHtml(poNumber) + '</p>' +
+                        '<p><strong>PO Date:</strong> ' + escapeHtml(poDate) + '</p>';
+        container.appendChild(box);
+    });
+
+    // Attach remove handlers
+    container.querySelectorAll('.po-remove-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-po-id');
+            const cb = document.querySelector('.po-checkbox[value="' + id + '"]');
+            if (cb) {
+                cb.checked = false;
+                // fire change event so other listeners update
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            updatePoDetailsSection();
+        });
+    });
+}
+
+// Update po-details-section when any checkbox changes
+document.addEventListener('change', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('po-checkbox')) {
+        updatePoDetailsSection();
+    }
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updatePoDetailsSection();
+});
+
+// Handle group-upload-invoice
+document.getElementById('group-upload-invoice').addEventListener('click', function(e) {
+    e.preventDefault();
+    const poIds = getSelectedPoIds();
+    if (poIds.length === 0) {
+        alert("Please select at least one purchase order.");
+        return;
+    }
+    // Ensure all selected POs belong to the same vendor
+    const vendorIds = new Set();
+    poIds.forEach(id => {
+        const checkbox = document.querySelector('.po-checkbox[value="' + id + '"]');
+        if (checkbox) {
+            const tr = checkbox.closest('tr');
+            if (tr && tr.dataset && tr.dataset.vendorId) {
+                vendorIds.add(tr.dataset.vendorId.toString());
+            }
+        }
+    });
+    if (vendorIds.size > 1) {
+        alert("Please select purchase orders from the same vendor to upload a group invoice.");
+        return;
+    }
+    if (vendorIds.size === 0) {
+        alert("Unable to determine vendor for selected purchase orders.");
+        return;
+    }
+    // Open the invoice upload popup
+    handleAction('UploadInvoice', poIds);
+});
 </script>
