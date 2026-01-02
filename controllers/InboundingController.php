@@ -1196,7 +1196,7 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
-        echo "<pre>"; print_r($jsonString); exit;
+        // echo "<pre>"; print_r($jsonString); exit;
         $url = 'https://www.exoticindia.com/vendor-api/product/create';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
