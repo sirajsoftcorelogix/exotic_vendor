@@ -1008,7 +1008,13 @@ public function update_image_variation($img_id, $variation_id) {
             $sub_cat_ids_input = $inbounding['sub_category_code'];
             $sub_sub_cat_ids_input = $inbounding['sub_sub_category_code'];
             $all_cat_ids = $cat_ids_input.','.$sub_cat_ids_input.','.$sub_sub_cat_ids_input;
-            $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($all_cat_ids)");
+            $all_cat_ids = rtrim($all_cat_ids, ',');
+            if (!empty($all_cat_ids)) {
+                $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($all_cat_ids)");
+            } else {
+                // Handle the case where there are no IDs (e.g., return an empty array or skip)
+                $cat_result = false; 
+            }
             
             if ($cat_result) {
                 $category_rows = $cat_result->fetch_all(MYSQLI_ASSOC);
