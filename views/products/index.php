@@ -259,7 +259,8 @@
         <!-- Pagination -->
         <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 bottom-0 border border-[rgba(226,228,230,1)] py-4">
             <div>
-                <p class="text-sm text-gray-600">Showing <span class="font-medium">
+                <p class="text-sm text-gray-600">Showing <span class="font-medium"> <?php echo ($total_orders > 0) ? (($page - 1) * $limit + 1) : 0; ?></span> to <span class="font-medium"><?php echo min($page * $limit, $total_orders); ?></span> of <span class="font-medium"><?php echo $total_orders; ?></span> products</p>
+            </div>
              <?php            
             //echo '****************************************  '.$query_string;
             if ($total_pages > 1): ?>          

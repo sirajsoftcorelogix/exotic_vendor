@@ -27,7 +27,7 @@ class POInvoice
     {
         // Build SQL dynamically based on whether 'invoice' is set
         $fields = [
-            'po_id = ?',
+            //'po_id = ?',
             'invoice_type = ?',
             'invoice_no = ?',
             'invoice_date = ?',
@@ -38,7 +38,7 @@ class POInvoice
             'grand_total = ?'
         ];
         $params = [
-            $data['po_id'],
+            //$data['po_id'],
             $data['invoice_type'],
             $data['invoice_no'],
             $data['invoice_date'],
@@ -48,7 +48,7 @@ class POInvoice
             $data['shipping'],
             $data['grand_total']
         ];
-        $types = 'issssssss';
+        $types = 'ssssssss';
 
         if (isset($data['invoice'])) {
             $fields[] = 'invoice = ?';
@@ -76,33 +76,45 @@ class POInvoice
     }
     public function addPoInvoice($data)
     {
-        //check if po_id already exists
-        $existing = $this->getInvoiceByPoId($data['po_id'],$data['invoice_type']);
-        if ($existing) {
-            return false; // PO ID already has an invoice
+        // Support mapping one invoice to multiple PO IDs (po_ids as array or comma-separated string)
+        $poIds = [];
+        if (!empty($data['po_ids'])) {
+            if (is_string($data['po_ids'])) {
+                $poIds = array_map('trim', explode(',', $data['po_ids']));
+            } elseif (is_array($data['po_ids'])) {
+                $poIds = $data['po_ids'];
+            }
+        } else {
+            $poIds = [isset($data['po_id']) ? $data['po_id'] : 0];
         }
-        /*if ($data['invoice_type'] === 'performa') {
-            $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, performa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $this->db->prepare($sql);
-            $stmt->bind_param(
+        // Normalize to unique ints
+        $poIds = array_values(array_unique(array_map('intval', $poIds)));
+        if (empty($poIds)) {
+            return ['success' => false, 'message' => 'No Purchase Order IDs provided.'];
+        }
+
+        // Determine which PO IDs already have an invoice of this type
+        $skipped = [];
+        $toMap = [];
+        foreach ($poIds as $pid) {
+            $existing = $this->getInvoiceByPoId($pid, $data['invoice_type'] ?? null);
+            if ($existing) {
+                $skipped[] = $pid;
+            } else {
+                $toMap[] = $pid;
+            }
+        }
+        if (empty($toMap)) {
+            return ['success' => false, 'message' => 'All selected POs already have an invoice.', 'skipped' => $skipped];
+        }
+
+        // Insert invoice record (use the first mapped PO as representative in vp_po_invoice.po_id)
+        $representativePoId = $toMap[0];
+        $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param(
             'isssssssss',
-            $data['po_id'],
-            $data['invoice_type'],
-            $data['invoice_no'],
-            $data['invoice_date'],
-            $data['gst_reg'],
-            $data['sub_total'],
-            $data['gst_total'],
-            $data['shipping'],
-            $data['grand_total'],
-            $data['performa']
-            );
-        } else {*/
-            $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $this->db->prepare($sql);
-            $stmt->bind_param(
-            'isssssssss',
-            $data['po_id'],
+            $representativePoId,
             $data['invoice_type'],
             $data['invoice_no'],
             $data['invoice_date'],
@@ -112,30 +124,73 @@ class POInvoice
             $data['shipping'],
             $data['grand_total'],
             $data['invoice']
-            );
-        //}
-        $stmt->execute();
-        if ($stmt->error) {
-            return false;
+        );
+
+        try {
+            $this->db->autocommit(FALSE);
+            if (!$stmt->execute()) {
+                $this->db->rollback();
+                $this->db->autocommit(TRUE);
+                return ['success' => false, 'message' => 'Failed to insert invoice record.'];
+            }
+            $invoiceId = $stmt->insert_id;
+            $sqlMap = "INSERT INTO vp_po_invoice_map (po_id, invoice_id) VALUES (?, ?)";
+            $stmtMap = $this->db->prepare($sqlMap);
+            foreach ($toMap as $pid) {
+                $stmtMap->bind_param('ii', $pid, $invoiceId);
+                if (!$stmtMap->execute()) {
+                    $this->db->rollback();
+                    $this->db->autocommit(TRUE);
+                    return ['success' => false, 'message' => 'Failed to map invoice to PO: ' . $pid];
+                }
+            }
+            $this->db->commit();
+            $this->db->autocommit(TRUE);
+        } catch (Exception $e) {
+            $this->db->rollback();
+            $this->db->autocommit(TRUE);
+            return ['success' => false, 'message' => 'Exception: ' . $e->getMessage()];
         }
-        return true;
+
+        if ($stmt->error) {
+            return ['success' => false, 'message' => 'Database error saving invoice.'];
+        }
+        return ['success' => true, 'mapped' => $toMap, 'skipped' => $skipped, 'invoice_id' => $invoiceId];
+    
     }
     public function getInvoiceByPoId($poId, $invoiceType = null)
     {
-        $sql = "SELECT * FROM vp_po_invoice WHERE po_id = ? ";
+        // First, check mapping table to support invoices mapped to multiple POs
+        $sql = "SELECT p.* FROM vp_po_invoice p JOIN vp_po_invoice_map m ON p.id = m.invoice_id WHERE m.po_id = ? ";
         if ($invoiceType) {
-            $sql .= "AND invoice_type = ?";
+            $sql .= "AND p.invoice_type = ?";
         }
         $stmt = $this->db->prepare($sql);
-        
         if ($invoiceType) {
             $stmt->bind_param('is', $poId, $invoiceType);
-        }else{
+        } else {
             $stmt->bind_param('i', $poId);
         }
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        $row = $result->fetch_assoc();
+        if ($row) {
+            return $row;
+        }
+        // Fallback: check direct po_id column (legacy behavior)
+        $sql2 = "SELECT * FROM vp_po_invoice WHERE po_id = ? ";
+        if ($invoiceType) {
+            $sql2 .= "AND invoice_type = ?";
+        }
+        $stmt2 = $this->db->prepare($sql2);
+        if ($invoiceType) {
+            $stmt2->bind_param('is', $poId, $invoiceType);
+        } else {
+            $stmt2->bind_param('i', $poId);
+        }
+        $stmt2->execute();
+        $result2 = $stmt2->get_result();
+        return $result2->fetch_assoc();
     }
     public function deletePoInvoice($id)
     {

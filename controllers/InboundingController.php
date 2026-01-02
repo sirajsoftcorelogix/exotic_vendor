@@ -758,6 +758,8 @@ class InboundingController {
             'vendor_code'         => $_POST['vendor_code'] ?? '',
             'inr_pricing'         => $_POST['inr_pricing'] ?? '',
             'cp'                  => $_POST['cp'] ?? '',
+            'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
+            'price_india'         => $_POST['price_india'] ?? '',
             'amazon_price'        => $_POST['amazon_price'] ?? '',
             'usd_price'           => $_POST['usd_price'] ?? '',
             'hsn_code'            => $_POST['hsn_code'] ?? '',
@@ -863,13 +865,13 @@ class InboundingController {
         $record_id = $_POST['record_id'] ?? '';
         if (empty($record_id)) { echo "Record ID missing"; exit; }
 
-        // 2. Process Variations & Images (Capture all inputs)
+        // 2. Process Variations
         $allVariations = array_values($_POST['variations'] ?? []);
 
         foreach ($allVariations as $index => &$variant) {
             $variant['id'] = $_POST['variations'][$index]['id'] ?? '';
             
-            // Handle File Uploads
+            // Handle File Uploads (Same as before)
             $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
             if ($uploadError === UPLOAD_ERR_OK) {
                 $tmpName = $_FILES['variations']['tmp_name'][$index]['photo'];
@@ -889,48 +891,35 @@ class InboundingController {
         }
         unset($variant); 
 
-        // 3. Extract Base Variant (Index 0) for Main Data
+        // 3. Extract Base Variant (Index 0)
         $mainVariant = $allVariations[0] ?? []; 
 
-        // --- 4. TEMP CODE LOGIC (Updated to match saveform3) ---
-        
-        // A. Fetch Existing Data
+        // 4. TEMP CODE LOGIC (Same as before)
         $existingData = $inboundingModel->getById($record_id); 
-        
-        // Only generate if Temp Code doesn't exist or is invalid
         if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
             $temp_code = $existingData['temp_code'];
         } else {
-            // B. Get Category Name (First Char)
             $categoryName = '';
-            // Use group_name from existing data as Category ID
             if (!empty($existingData['group_name'])) {
                 $catData = $inboundingModel->getCategoryById($existingData['group_name']);
                 $categoryName = $catData['display_name'] ?? ''; 
             }
-
-            // C. Get Material Name (First Char)
             $materialId = $_POST['material_code'] ?? '';
             $materialName = '';
             if (!empty($materialId)) {
                 $matData = $inboundingModel->getMaterialById($materialId);
                 $materialName = $matData['material_name'] ?? '';
             }
-
-            // D. Get Color (First Char) - From Main Variation
             $colorName = $mainVariant['color'] ?? '';
-
-            // E. Generate Prefix (e.g., "BSB")
             $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
             $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
             $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
             $prefix = $char1 . $char2 . $char3;
-
-            // F. Generate Full Temp Code
             $temp_code = $inboundingModel->generateNextTempCode($prefix);
         }
 
         // 5. PREPARE MAIN UPDATE DATA
+        // FIX: Mapping HTML inputs to exact DB Column names here
         $gate_entry = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
 
         $mainUpdateData = [
@@ -940,32 +929,31 @@ class InboundingController {
             'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
             'temp_code'            => $temp_code,
             
-            // Data from Main Variant
+            // Map Index 0 Data to DB Columns
             'height'               => $mainVariant['height'] ?? 0,
             'width'                => $mainVariant['width'] ?? 0,
             'depth'                => $mainVariant['depth'] ?? 0,
             'weight'               => $mainVariant['weight'] ?? 0,
             'color'                => $mainVariant['color'] ?? '',
             'size'                 => $mainVariant['size'] ?? '',
-            'quantity'    => $mainVariant['quantity'] ?? 0,
             'cp'                   => $mainVariant['cp'] ?? 0,
-            'product_photo'        => $mainVariant['photo'] ?? '' 
+            'product_photo'        => $mainVariant['photo'] ?? '',
+            'ware_house_code'      => $mainVariant['ware_house_code'] ?? '',
+            'price_india'          => $mainVariant['price_india'] ?? '',
+            'price_india_mrp'      => $mainVariant['price_india_mrp'] ?? '',
+
+            // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
+            'quantity_received'    => $mainVariant['quantity'] ?? 0, 
         ];
 
         // 6. Update Database
         $res = $inboundingModel->updateMainInbound($record_id, $mainUpdateData);
 
         if ($res['success']) {
-            // Log the action
+            // Log logic...
             $userid_log = $_POST['userid_log'] ?? 0;
-            $logData = [
-                'stat'       => 'inbound',
-                'userid_log' => $userid_log,
-                'i_id'       => $record_id
-            ];
-            // Assuming stat_logs is available in the model
             if(method_exists($inboundingModel, 'stat_logs')) {
-                 $inboundingModel->stat_logs($logData);
+                 $inboundingModel->stat_logs(['stat'=>'inbound', 'userid_log'=>$userid_log, 'i_id'=>$record_id]);
             }
 
             // Save extra variations
