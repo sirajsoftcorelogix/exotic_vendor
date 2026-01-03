@@ -250,7 +250,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
-                                    <input type="number" min="0" name="variations[<?php echo $index; ?>][quantity]" value="<?php echo $var['quantity']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="number" min="0" 
+                                       name="variations[<?php echo $index; ?>][quantity]" 
+                                       value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '') ? $var['quantity'] : 1; ?>" 
+                                       class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 
                                 <div class="size-container">
@@ -259,7 +262,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 </div>
 
                                 <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Cost Price:</label>
+                                    <label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
@@ -267,12 +270,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
                                     <label class="block text-xs font-bold text-black mb-1">Width (inch):</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
+                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
@@ -453,10 +456,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 ${sizeFieldHTML}
                             </div>
 
-                            <div><label class="block text-xs font-bold text-black mb-1">Cost Price:</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Location:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                         </div>
@@ -491,7 +494,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 
                 const data = {
                     color: getData('color'),
-                    quantity: getData('quantity'),
+                    quantity: getData('quantity') || 1,
                     size: getData('size'),
                     cp: getData('cp'),
                     height: getData('height'),
@@ -513,7 +516,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 };
 
                 setData('color', data.color);
-                setData('quantity', data.quantity);
+                setData('quantity', data.quantity || 1); // Default to 1 if empty
                 setData('size', data.size);
                 setData('cp', data.cp);
                 setData('height', data.height);
@@ -521,7 +524,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 setData('depth', data.depth);
                 setData('weight', data.weight);
                 setData('store_location', data.store_location);
-                setData('old_photo', data.old_photo); 
+                setData('old_photo', data.old_photo);
 
                 // Handle Image Preview
                 if(data.old_photo) {

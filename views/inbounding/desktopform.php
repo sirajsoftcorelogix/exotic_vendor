@@ -292,7 +292,7 @@ $currentSize = $data['form2']['size'] ?? '';
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label>
                         <div class="relative w-full">
-                            <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['quantity_received'] ?? '0') ?>" name="quantity_received">
+                            <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['quantity_received'] ?? '1') ?>" name="quantity_received">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span>
                         </div>
                     </div>
