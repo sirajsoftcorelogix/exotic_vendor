@@ -544,7 +544,7 @@ public function update_image_variation($img_id, $variation_id) {
 
         // Bind parameters (s = string)
         // We only bind 3 values; NOW() is handled by MySQL directly
-        $stmt->bind_param("sss", $vendor_code, $invoice_img, $invoice_no);
+        $stmt->bind_param("iss", $vendor_code, $invoice_img, $invoice_no);
 
         if ($stmt->execute()) {
             return $stmt->insert_id;
