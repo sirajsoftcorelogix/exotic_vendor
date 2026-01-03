@@ -37,12 +37,51 @@ if (!empty($raw_categories)) {
     }
 }
 
-// Prepare Warehouse Options for PHP Loop AND JS Variable
+// Prepare Warehouse Options
 $warehouseOptions = "";
 if (!empty($data['address'])) {
     foreach ($data['address'] as $va) {
         $warehouseOptions .= '<option value="'.$va['id'].'">'.htmlspecialchars($va['address_title']).'</option>';
     }
+}
+
+// --- 1. DEFINE SIZE OPTIONS ---
+$sizeOptions = [
+    'XS'   => 'Extra Small (XS)(34)',
+    'S'    => 'Small (S)(36)',
+    'M'    => 'Medium (M)(38)',
+    'L'    => 'Large (L)(40)',
+    'XL'   => 'Extra Large (XL)(42)',
+    'XXL'  => 'Extra Extra Large (XXL)(44)',
+    'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
+];
+
+// --- 2. RENDERER FUNCTION (UPDATED) ---
+function renderSizeField($index, $value, $categoryCode, $sizeOptions) {
+    $fieldName = "variations[$index][size]";
+    
+    // Normalize: lowercase and trim
+    $check = strtolower(trim((string)$categoryCode));
+    
+    // CHECK: Does it contain 'textiles' OR 'clothing'?
+    $isClothing = (strpos($check, 'textiles') !== false || strpos($check, 'clothing') !== false);
+
+    if ($isClothing) {
+        // Render Dropdown
+        $html = '<select name="'.$fieldName.'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">';
+        $html .= '<option value="">Select Size</option>';
+        foreach ($sizeOptions as $optVal => $optLabel) {
+            // Strict comparison is safer, trim just in case
+            $isSelected = (trim((string)$value) === (string)$optVal) ? 'selected' : '';
+            $html .= '<option value="'.$optVal.'" '.$isSelected.'>'.$optLabel.'</option>';
+        }
+        $html .= '</select>';
+    } else {
+        // Render Disabled Input
+        // Note: We keep the value here so we don't lose data if they accidentally saved a size for non-clothing
+        $html = '<input type="text" name="'.$fieldName.'" value="'.htmlspecialchars($value).'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm bg-gray-100 text-gray-500 cursor-not-allowed size-input" readonly>';
+    }
+    return $html;
 }
 
 // Prepare Data
@@ -57,10 +96,7 @@ $mainVar = [
     'width'           => $form2['width'] ?? '',
     'depth'           => $form2['depth'] ?? '',
     'weight'          => $form2['weight'] ?? '',
-    // Add default empty values for new fields if not in form2 yet
-    'ware_house_code' => $form2['ware_house_code'] ?? '',
-    'price_india'     => $form2['price_india'] ?? '',
-    'price_india_mrp' => $form2['price_india_mrp'] ?? '',
+    'store_location'  => $form2['store_location'] ?? '',
 ];
 
 global $inboundingModel;
@@ -81,9 +117,7 @@ foreach ($extraVars as $ex) {
         'width'           => $ex['width'] ?? '',
         'depth'           => $ex['depth'] ?? '',
         'weight'          => $ex['weight'] ?? '',
-        'ware_house_code' => $ex['ware_house_code'] ?? '',
-        'price_india'     => $ex['price_india'] ?? '',
-        'price_india_mrp' => $ex['price_india_mrp'] ?? ''
+        'store_location'  => $ex['store_location'] ?? '',
     ];
 }
 
@@ -129,7 +163,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <?php if(!empty($display_categories)): ?>
                         <?php foreach ($display_categories as $item) { ?>
                             <label class="cursor-pointer group relative">
-                                <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
+                                <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only category-radio" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
                                 
                                 <div class="w-24 h-28 bg-black text-white flex flex-col items-center justify-center p-2 rounded transition-all
                                               peer-checked:bg-gray-300 peer-checked:text-black border border-black shadow-sm">
@@ -173,6 +207,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>" readonly class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
                 </div>
             </div>
+            
             <div id="variations-container" class="space-y-6">
                 <?php foreach($viewVariations as $index => $var): ?>
                     <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50" data-index="<?php echo $index; ?>">
@@ -217,10 +252,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
                                     <input type="number" min="0" name="variations[<?php echo $index; ?>][quantity]" value="<?php echo $var['quantity']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
-                                <div>
+                                
+                                <div class="size-container">
                                     <label class="block text-xs font-bold text-black mb-1">Size:</label>
-                                    <input type="text" name="variations[<?php echo $index; ?>][size]" value="<?php echo $var['size']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <?php echo renderSizeField($index, $var['size'], $saved_category_code, $sizeOptions); ?>
                                 </div>
+
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Cost Price:</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
@@ -242,31 +279,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][weight]" value="<?php echo $var['weight'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Location :</label>
-                                    <select class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" name="variations[<?php echo $index; ?>][ware_house_code]">
-                                    <option value="">Select Warehouse</option>
-                                    <?php 
-                                        $selectedWH = $var['ware_house_code'] ?? ''; 
-                                        if (!empty($data['address'])) {
-                                            foreach ($data['address'] as $va) {
-                                                $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
-                                    ?>
-                                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                                    <?php echo htmlspecialchars($va['address_title']); ?>
-                                                </option>
-                                    <?php 
-                                            }
-                                        } 
-                                    ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Price India:</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][price_india]" value="<?php echo $var['price_india'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Price India MRP:</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][price_india_mrp]" value="<?php echo $var['price_india_mrp'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <label class="block text-xs font-bold text-black mb-1">Location:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][store_location]" value="<?php echo $var['store_location'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                             </div>
                         </div>
@@ -297,13 +311,114 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
     document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('variations-container');
         const addBtn = document.getElementById('add-variation-btn');
+        const radioButtons = document.querySelectorAll('.category-radio');
         let variationCount = <?php echo count($viewVariations); ?>;
         
-        // Inject PHP calculated options into JS variable
         const warehouseOptionsHTML = `<?php echo $warehouseOptions; ?>`;
 
-        // 1. ADD NEW VARIATION (Function to generate HTML)
+        // 1. DYNAMIC SIZE OPTIONS FROM PHP
+        const sizeOptionsHTML = `
+            <option value="">Select Size</option>
+            <?php 
+                foreach ($sizeOptions as $k => $v) {
+                    echo '<option value="'.$k.'">'.$v.'</option>';
+                }
+            ?>
+        `;
+
+        // 2. TOGGLE SIZE FIELDS FUNCTION (FIXED)
+        function toggleSizeFields() {
+            // Determine if "Clothing/Textiles" is selected
+            const selectedRadio = document.querySelector('input[name="category"]:checked');
+            let isClothing = false;
+
+            if (selectedRadio) {
+                // Check value (e.g. "textiles") AND label (e.g. "Clothing & More")
+                const val = selectedRadio.value.toLowerCase().trim();
+                const parentLabel = selectedRadio.closest('label');
+                const labelText = parentLabel ? parentLabel.querySelector('span').innerText.toLowerCase().trim() : '';
+                
+                if (val.includes('textiles') || val.includes('clothing') || labelText.includes('clothing') || labelText.includes('textiles')) {
+                    isClothing = true;
+                }
+            }
+
+            const cards = document.querySelectorAll('.variation-card');
+            
+            cards.forEach(card => {
+                const index = card.getAttribute('data-index');
+                const sizeContainer = card.querySelector('.size-container');
+                const existingInput = sizeContainer.querySelector('.size-input');
+                
+                // --- CRITICAL FIX START ---
+                // If PHP already rendered the correct element type, DO NOT replace it.
+                // This preserves the "selected" value loaded from the database.
+                if (existingInput) {
+                    const currentTag = existingInput.tagName; // 'INPUT' or 'SELECT'
+                    
+                    // If we need a Dropdown (Clothing) and we already have a SELECT -> STOP.
+                    if (isClothing && currentTag === 'SELECT') return;
+
+                    // If we need a Textbox (Non-Clothing) and we already have an INPUT -> STOP.
+                    if (!isClothing && currentTag === 'INPUT') return;
+                }
+                // --- CRITICAL FIX END ---
+
+                // If types don't match (User changed category), proceed to swap.
+                const currentValue = existingInput ? existingInput.value : '';
+                if(existingInput) existingInput.remove();
+
+                let newField;
+
+                if (isClothing) {
+                    // Create SELECT
+                    newField = document.createElement('select');
+                    newField.innerHTML = sizeOptionsHTML;
+                    newField.value = currentValue; // Attempt to keep value if switching
+                } else {
+                    // Create Disabled INPUT
+                    newField = document.createElement('input');
+                    newField.type = 'text';
+                    newField.value = ''; // Clear value for non-clothing
+                    newField.readOnly = true;
+                    newField.classList.add('bg-gray-100', 'text-gray-500', 'cursor-not-allowed');
+                }
+
+                newField.name = `variations[${index}][size]`;
+                newField.classList.add('w-full', 'border', 'border-gray-400', 'rounded', 'px-2', 'py-1.5', 'text-sm', 'focus:border-black', 'outline-none', 'size-input');
+                
+                sizeContainer.appendChild(newField);
+            });
+        }
+
+        // Event Listeners for Category Change
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', toggleSizeFields);
+        });
+
+        // 3. ADD NEW VARIATION (HTML Generator)
         function createVariationCardHTML(index, count) {
+            // Re-run category check logic for new cards
+            const selectedRadio = document.querySelector('input[name="category"]:checked');
+            let isClothing = false;
+
+            if (selectedRadio) {
+                const val = selectedRadio.value.toLowerCase().trim();
+                const parentLabel = selectedRadio.closest('label');
+                const labelText = parentLabel ? parentLabel.querySelector('span').innerText.toLowerCase().trim() : '';
+                
+                if (val.includes('textiles') || val.includes('clothing') || labelText.includes('clothing') || labelText.includes('textiles')) {
+                    isClothing = true;
+                }
+            }
+
+            let sizeFieldHTML;
+            if (isClothing) {
+                sizeFieldHTML = `<select name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">${sizeOptionsHTML}</select>`;
+            } else {
+                sizeFieldHTML = `<input type="text" name="variations[${index}][size]" value="" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm bg-gray-100 text-gray-500 cursor-not-allowed size-input" readonly>`;
+            }
+
             return `
                 <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50 animate-fade-in" data-index="${index}">
                     <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
@@ -334,22 +449,18 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                         <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
                             <div><label class="block text-xs font-bold text-black mb-1">Color:</label><input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Quantity:</label><input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Size:</label><input type="text" name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            
+                            <div class="size-container">
+                                <label class="block text-xs font-bold text-black mb-1">Size:</label>
+                                ${sizeFieldHTML}
+                            </div>
+
                             <div><label class="block text-xs font-bold text-black mb-1">Cost Price:</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            
-                            <div>
-                                <label class="block text-xs font-bold text-black mb-1">Location :</label>
-                                <select class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" name="variations[${index}][ware_house_code]">
-                                    <option value="">Select Warehouse</option>
-                                    ${warehouseOptionsHTML}
-                                </select>
-                            </div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Price India:</label><input type="number" step="any" min="0" name="variations[${index}][price_india]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Price India MRP:</label><input type="number" step="any" min="0" name="variations[${index}][price_india_mrp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Location:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                         </div>
                     </div>
                 </div>
@@ -362,7 +473,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             container.insertAdjacentHTML('beforeend', html);
         });
 
-        // 2. EVENT DELEGATION (Remove & Clone)
+        // 4. EVENT DELEGATION
         container.addEventListener('click', function(e) {
             
             // REMOVE Logic
@@ -375,7 +486,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             if (e.target.closest('.clone-variation-btn')) {
                 const sourceCard = e.target.closest('.variation-card');
                 
-                // Extract values from Source Card
                 const getData = (name) => {
                     const el = sourceCard.querySelector(`[name*="[${name}]"]`);
                     return el ? el.value : '';
@@ -390,18 +500,14 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     width: getData('width'),
                     depth: getData('depth'),
                     weight: getData('weight'),
-                    ware_house_code: getData('ware_house_code'), // Added
-                    price_india: getData('price_india'),         // Added
-                    price_india_mrp: getData('price_india_mrp'), // Added
+                    store_location: getData('store_location'),
                     old_photo: getData('old_photo') 
                 };
 
-                // Create New Card
                 variationCount++;
                 const html = createVariationCardHTML(variationCount - 1, variationCount);
                 container.insertAdjacentHTML('beforeend', html);
 
-                // Populate New Card with Source Data
                 const newCard = container.lastElementChild;
                 const setData = (name, value) => {
                     const el = newCard.querySelector(`[name*="[${name}]"]`);
@@ -416,12 +522,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 setData('width', data.width);
                 setData('depth', data.depth);
                 setData('weight', data.weight);
-                setData('ware_house_code', data.ware_house_code); // Added
-                setData('price_india', data.price_india);         // Added
-                setData('price_india_mrp', data.price_india_mrp); // Added
+                setData('store_location', data.store_location);
                 setData('old_photo', data.old_photo); 
 
-                // Handle Image Preview for Cloned Item
+                // Handle Image Preview
                 if(data.old_photo) {
                     const preview = newCard.querySelector('.preview-img');
                     const placeholder = newCard.querySelector('.placeholder-icon');
@@ -436,7 +540,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             }
         });
 
-        // 3. IMAGE PREVIEW
+        // IMAGE PREVIEW
         container.addEventListener('change', function(e) {
             if (e.target.classList.contains('variation-file-input')) {
                 const file = e.target.files[0];
@@ -455,9 +559,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 }
             }
         });
+
+        // Initial Load Check
+        toggleSizeFields();
     });
 
-    // Navigation Scripts (Unchanged)
+    // Navigation
     var id = <?php echo json_encode($record_id); ?>;
     document.getElementById("back-btn").addEventListener("click", function () {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=form2&id=" + id;
@@ -466,7 +573,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
     
-    // Popup Scripts (Unchanged)
+    // Popup
     function openImagePopup(imageUrl) {
         if(!imageUrl) return;
         document.getElementById('popupImage').src = imageUrl;

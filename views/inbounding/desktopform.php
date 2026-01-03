@@ -265,27 +265,12 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
-
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
-                        <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="ware_house_code">
-                            <option value="">Select Warehouse</option>
-                            <?php 
-                                $selectedWH = $data['form2']['ware_house_code'] ?? '';
-                                if (!empty($data['address'])) {
-                                    foreach ($data['address'] as $va) {
-                                        $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
-                            ?>
-                                        <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                            <?php echo htmlspecialchars($va['address_title']); ?>
-                                        </option>
-                            <?php 
-                                    }
-                                } 
-                            ?>
-                        </select>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                               value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" 
+                               name="store_location">
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
@@ -452,25 +437,8 @@ $currentSize = $data['form2']['size'] ?? '';
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['depth'] ?? '') ?>" name="variations[<?= $var['id'] ?>][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['weight'] ?? '') ?>" name="variations[<?= $var['id'] ?>][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
 
-                             <div class="w-full min-w-0">
-                                <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
-                                <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[<?= $var['id'] ?>][ware_house_code]">
-                                    <option value="">Select Warehouse</option>
-                                    <?php 
-                                        $selectedWHVar = $var['ware_house_code'] ?? '';
-                                        if (!empty($data['address'])) {
-                                            foreach ($data['address'] as $va) {
-                                                $isSelected = ($selectedWHVar == $va['id']) ? 'selected' : '';
-                                    ?>
-                                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                                    <?php echo htmlspecialchars($va['address_title']); ?>
-                                                </option>
-                                    <?php 
-                                            }
-                                        } 
-                                    ?>
-                                </select>
-                            </div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['store_location'] ?? '') ?>" name="variations[<?= $var['id'] ?>][store_location]"></div>
+
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
@@ -573,19 +541,8 @@ $currentSize = $data['form2']['size'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
                 
-                <div class="w-full min-w-0">
-                    <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
-                    <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][ware_house_code]">
-                        <option value="">Select Warehouse</option>
-                        <?php 
-                            if (!empty($data['address'])) {
-                                foreach ($data['address'] as $va) {
-                                    echo '<option value="'.$va['id'].'">'.htmlspecialchars($va['address_title']).'</option>';
-                                }
-                            } 
-                        ?>
-                    </select>
-                </div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][store_location]"></div>
+
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
                 <div class="w-full min-w-0">
                     <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
@@ -684,7 +641,7 @@ $currentSize = $data['form2']['size'] ?? '';
                         </select>
                     </div>
                     <div class="flex flex-col">
-                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Updated by:</span>
+                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Feeded By:</span>
                         <select id="updated_by_select" name="updated_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
                             <?php 
@@ -846,50 +803,66 @@ $currentSize = $data['form2']['size'] ?? '';
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name= "snippet_description">
                 </div>
-                <div class="">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Description Icons:</label>
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
                     
                     <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
                         
                         <div class="checkbox-list-container overflow-y-auto p-1 h-full">
                             <?php 
-                                $icon_options = $data['form2']['icon_data']['description_icons'] ?? [];
-                                
-                                // 1. Changed default from '' to null so we can detect it
-                                $saved_raw = $data['form2']['description_icons'] ?? null; 
+                                // 1. Get the initial data
+                                $source_data = $data['form2']['optionals'] ?? [];
 
-                                $checkAll = false;
-                                $saved_values = [];
-
-                                // 2. Logic: If null, check everything. If not, parse the values.
-                                if (is_null($saved_raw)) {
-                                    $checkAll = true;
-                                } elseif (is_array($saved_raw)) {
-                                    $saved_values = $saved_raw;
+                                // 2. FIX: Check if the actual list is hidden inside an 'optionals' key
+                                if (isset($source_data['optionals']) && is_array($source_data['optionals'])) {
+                                    $available_options = $source_data['optionals'];
                                 } else {
-                                    // Explode string to array (added trim to handle spaces like "a, b")
-                                    $saved_values = array_map('trim', explode(',', (string)$saved_raw));
+                                    $available_options = $source_data;
                                 }
 
-                                if (!empty($icon_options)) {
-                                    foreach ($icon_options as $key => $label) {
-                                        // 3. Check if we should Check All OR if the specific key is in the saved values
-                                        $isChecked = ($checkAll || in_array((string)$key, $saved_values)) ? 'checked' : '';
-                                        $uniqueId = 'icon_' . $key; 
+                                // 3. Get Saved Values
+                                $saved_raw = $data['form2']['optionals'] ?? []; 
+                                $saved_values = [];
+                                
+                                if (is_array($saved_raw)) {
+                                    $saved_values = $saved_raw;
+                                } elseif (is_string($saved_raw)) {
+                                    $saved_values = array_map('trim', explode(',', $saved_raw));
+                                }
+
+                                if (!empty($available_options) && is_array($available_options)) {
+                                    foreach ($available_options as $key => $val_str) {
+                                        
+                                        // Ensure strictly string
+                                        if (is_array($val_str)) continue; // Skip bad data
+                                        $val_str = (string)$val_str; 
+
+                                        // Format Label
+                                        $label = str_replace(['OPTIONALS_', '_'], ['', ' '], $val_str); 
+                                        $label = ucwords(strtolower($label));               
+
+                                        // Check if checked
+                                        $isChecked = in_array($val_str, $saved_values) ? 'checked' : '';
+                                        $uniqueId = 'opt_' . md5($val_str); 
                             ?>
-                                    <div class="checkbox-item">
+                                    
+                                    <div class="checkbox-item flex items-center p-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
                                         <input type="checkbox" 
                                                id="<?= $uniqueId ?>" 
-                                               name="description_icons[]" 
-                                               value="<?= $key ?>" 
+                                               name="optionals[]" 
+                                               value="<?= htmlspecialchars($val_str) ?>" 
+                                               class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2"
                                                <?= $isChecked ?>>
                                         
-                                        <label for="<?= $uniqueId ?>"><?= $label ?></label>
+                                        <label for="<?= $uniqueId ?>" class="w-full text-sm font-medium text-gray-900 cursor-pointer select-none">
+                                            <?= $label ?>
+                                        </label>
                                     </div>
+
                             <?php 
                                     }
                                 } else {
-                                    echo '<div class="text-xs text-gray-400 p-2 text-center mt-5">No icons available</div>';
+                                    echo '<div class="text-xs text-gray-400 p-4 text-center">No options available</div>';
                                 }
                             ?>
                         </div>
@@ -1003,11 +976,24 @@ $currentSize = $data['form2']['size'] ?? '';
                         </select>
                     </div>
 
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                               value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" 
-                               name="store_location">
+                    <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
+                        <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="ware_house_code">
+                            <option value="">Select Warehouse</option>
+                            <?php 
+                                $selectedWH = $data['form2']['ware_house_code'] ?? '';
+                                if (!empty($data['address'])) {
+                                    foreach ($data['address'] as $va) {
+                                        $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
+                            ?>
+                                        <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                            <?php echo htmlspecialchars($va['address_title']); ?>
+                                        </option>
+                            <?php 
+                                    }
+                                } 
+                            ?>
+                        </select>
                     </div>
 
                     <div class="flex-1">
@@ -1057,6 +1043,22 @@ $currentSize = $data['form2']['size'] ?? '';
                                    value="<?= htmlspecialchars($data['form2']['in_stock_leadtime_days'] ?? '0') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Marketplace Vendor:</label>
+                        <div class="relative w-full">
+                            <input type="number" name="marketplace" 
+                                   value="<?= htmlspecialchars($data['form2']['marketplace'] ?? 'exoticindia') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Indian Net Qty.:</label>
+                        <div class="relative w-full">
+                            <input type="number" name="india_net_qty" 
+                                   value="<?= htmlspecialchars($data['form2']['india_net_qty '] ?? '0') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                         </div>
                     </div>
 
@@ -1987,7 +1989,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const template = document.getElementById('variation-template');
 
     // 1. ADD NEW VARIATION FUNCTION
-    window.addNewVariation = function() { // Made global to be called by button
+    window.addNewVariation = function() { 
         const newId = 'new_' + newVariationCounter;
         newVariationCounter++;
 
@@ -1996,18 +1998,14 @@ document.addEventListener('DOMContentLoaded', function() {
         container.appendChild(clone);
     };
 
-    // 2. EVENT DELEGATION (Remove, Clone, Image Preview)
+    // 2. EVENT DELEGATION
     container.addEventListener('click', function(e) {
         
         // --- REMOVE LOGIC ---
         if (e.target.closest('.remove-var-btn')) {
             const card = e.target.closest('.variation-card');
-            if(card) {
-                // If it's an existing item (has numeric ID), we might need to handle DB deletion logic
-                // But generally, removing from DOM and submitting form works if backend checks for missing IDs.
-                if(confirm('Remove this variation card?')) {
-                    card.remove();
-                }
+            if(card && confirm('Remove this variation card?')) {
+                card.remove();
             }
         }
 
@@ -2032,54 +2030,75 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update names in the new card first
             updateNames(newCard, newId);
 
-            // Set values in new card based on source
-            const setVal = (suffix, val) => {
-                const el = newCard.querySelector(`[name$="[${suffix}]"]`);
-                if(el) el.value = val;
-            };
+            // Set values
+            const fields = ['height', 'width', 'depth', 'weight', 'size', 'color', 
+                            'quantity_received', 'cp', 'price_india', 'price_india_mrp', 
+                            'inr_pricing', 'amazon_price', 'usd_price', 'hsn_code', 
+                            'gst_rate', 'ware_house_code', 'store_location'];
 
-            setVal('height', getValue('height'));
-            setVal('width', getValue('width'));
-            setVal('depth', getValue('depth'));
-            setVal('weight', getValue('weight'));
-            setVal('size', getValue('size'));
-            setVal('color', getValue('color'));
-            setVal('quantity_received', getValue('quantity_received'));
-            setVal('cp', getValue('cp'));
-            setVal('price_india', getValue('price_india'));
-            setVal('price_india_mrp', getValue('price_india_mrp'));
+            fields.forEach(field => {
+                const el = newCard.querySelector(`[name$="[${field}]"]`);
+                if(el) el.value = getValue(field);
+            });
 
-            setVal('inr_pricing', getValue('inr_pricing'));
-            setVal('amazon_price', getValue('amazon_price'));
-            setVal('usd_price', getValue('usd_price'));
-            setVal('hsn_code', getValue('hsn_code'));
-            setVal('gst_rate', getValue('gst_rate'));
+            // ---------------------------------------------------------
+            // FIX: IMAGE CLONING LOGIC
+            // ---------------------------------------------------------
+            
+            // 1. Get Source Elements
+            const sourceImg = sourceCard.querySelector('.preview-img');
+            const sourceHiddenOldPhoto = sourceCard.querySelector('input[name$="[old_photo]"]');
+            
+            // 2. Get Clone Elements
+            const cloneImg = newCard.querySelector('.preview-img');
+            const clonePlaceholder = newCard.querySelector('.placeholder-icon');
+            const cloneHiddenOldPhoto = newCard.querySelector('input[name$="[old_photo]"]');
 
-            setVal('ware_house_code', getValue('ware_house_code')); // NEW: Clone Warehouse value
-            setVal('old_photo', getValue('old_photo')); // Clone reference to old image
+            // 3. Check visibility (Check both class AND inline display style)
+            const isSourceVisible = sourceImg && 
+                                   !sourceImg.classList.contains('hidden') && 
+                                   sourceImg.style.display !== 'none';
 
-            // Handle Image Preview for Clone
-            const oldPhotoVal = getValue('old_photo');
-            if(oldPhotoVal) {
-                const preview = newCard.querySelector('.preview-img');
-                const placeholder = newCard.querySelector('.placeholder-icon');
-                // We use the source image src if available for immediate feedback
-                const sourceImg = sourceCard.querySelector('.preview-img');
-                if(sourceImg && !sourceImg.classList.contains('hidden')) {
-                    preview.src = sourceImg.src;
-                    preview.classList.remove('hidden');
-                    placeholder.classList.add('hidden');
+            if (isSourceVisible) {
+                // Copy the visual source (Base64 or URL)
+                cloneImg.src = sourceImg.src;
+                
+                // FORCE VISIBILITY: Remove inline style 'display: none'
+                cloneImg.style.display = 'block'; 
+                cloneImg.classList.remove('hidden');
+                
+                // Hide Placeholder
+                clonePlaceholder.style.display = 'none';
+                clonePlaceholder.classList.add('hidden');
+
+                // Copy database path if it exists
+                if (sourceHiddenOldPhoto && cloneHiddenOldPhoto) {
+                    cloneHiddenOldPhoto.value = sourceHiddenOldPhoto.value;
                 }
+            } else {
+                // Reset if source has no image
+                cloneImg.src = '#';
+                cloneImg.style.display = 'none'; // Re-apply hiding
+                clonePlaceholder.style.display = 'flex'; // Show placeholder
+                if (cloneHiddenOldPhoto) cloneHiddenOldPhoto.value = '';
             }
+            // ---------------------------------------------------------
+            // END FIX
+            // ---------------------------------------------------------
 
             container.appendChild(newCard);
             
             // Scroll to new item
             newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Trigger calculation update
+            if (typeof updateCardPrice === "function") {
+                setTimeout(() => updateCardPrice(newCard), 100);
+            }
         }
     });
 
-    // 3. IMAGE PREVIEW LOGIC
+    // 3. IMAGE PREVIEW LOGIC (For File Input Changes)
     container.addEventListener('change', function(e) {
         if(e.target.classList.contains('variation-file-input')) {
             const file = e.target.files[0];
@@ -2091,7 +2110,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const reader = new FileReader();
                 reader.onload = function(evt) {
                     preview.src = evt.target.result;
+                    
+                    // FORCE VISIBILITY here too
+                    preview.style.display = 'block';
                     preview.classList.remove('hidden');
+                    
+                    placeholder.style.display = 'none';
                     placeholder.classList.add('hidden');
                 }
                 reader.readAsDataURL(file);
@@ -2099,9 +2123,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Helper to update input names: variations[INDEX][field] -> variations[new_1][field]
     function updateNames(node, newId) {
-        const inputs = node.querySelectorAll ? node.querySelectorAll('input, select') : node.querySelectorAll('input, select'); // handle DocumentFragment vs Element
+        const inputs = node.querySelectorAll('input, select');
         inputs.forEach(input => {
             const name = input.getAttribute('name');
             if(name) {

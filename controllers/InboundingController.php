@@ -87,7 +87,7 @@ class InboundingController {
             $excel_headers = [
                 'itemcode', 'groupname', 'category', 'itemtype', 'title', 
                 'image', 'redirect', 'snippet_description', 'long_description', 'long_description_india', 
-                'important_info', 'description_icons', 'bundled_items', 'keywords', 'usblock', 
+                'important_info', 'optionals', 'bundled_items', 'keywords', 'usblock', 
                 'indiablock', 'numsold', 'lastsold', 'qty_step', 'related_items', 
                 'search_term', 'search_category', 'hscode', 'vendor', 'cp', 
                 'isbn', 'author', 'publisher', 'language', 'pages', 
@@ -128,7 +128,7 @@ class InboundingController {
                     '',                                     
                     
                     '',                                     
-                    $row['description_icons'] ?? '',        
+                    $row['optionals'] ?? '',        
                     '',                                     
                     $row['key_words'] ?? '',                
                     $us_block_val,                          
@@ -233,12 +233,44 @@ class InboundingController {
         $data = array();
         $data = $inboundingModel->getform2data($id);
         $data['form2']['icon_data'] = $this->geticonList();
+        $data['form2']['optionals'] = $this->getoptionals();
+        // echo "<pre>";print_r($data['form2']['optionals']);exit;
         $data['images'] = $inboundingModel->getitem_imgs($id);
         // echo "<pre>";print_r($data['icon_data']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
     function geticonList() {
         $url = 'https://www.exoticindia.com/vendor-api/product/descriptionicons';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json'
+        ];
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
+        ]);
+        $response = curl_exec($ch);
+        if (curl_errno($ch)) {
+            error_log("cURL Error: " . curl_error($ch));
+            curl_close($ch);
+            return false;
+        }
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode != 200) {
+            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
+            return false;
+        }
+        return json_decode($response, true);
+    }
+    function getoptionals() {
+        $url = 'https://www.exoticindia.com/vendor-api/product/optionals';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
@@ -717,7 +749,7 @@ class InboundingController {
         $sub_sub_input = $_POST['sub_sub_category_code'] ?? '';
         $sub_sub_val   = is_array($sub_sub_input) ? implode(',', $sub_sub_input) : $sub_sub_input;
 
-        $icons_raw = $_POST['description_icons'] ?? ''; 
+        $icons_raw = $_POST['optionals'] ?? ''; 
         $icons_val = is_array($icons_raw) ? implode(',', $icons_raw) : $icons_raw;
         
         $back_order_input = $_POST['back_order'] ?? '0'; 
@@ -789,9 +821,11 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
+            'marketplace'         => $_POST['marketplace'] ?? '',
+            'india_net_qty'       => $_POST['india_net_qty'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
-            'description_icons'   => $icons_val, 
+            'optionals'   => $icons_val, 
             'back_order'          => $back_order_input,
             'backorder_percent'   => $percent_val,
             'backorder_day'       => $day_val,
@@ -799,7 +833,6 @@ class InboundingController {
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
         ];
-
         // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);
 
@@ -882,7 +915,6 @@ class InboundingController {
 
         // 2. Process Variations
         $allVariations = array_values($_POST['variations'] ?? []);
-
         foreach ($allVariations as $index => &$variant) {
             $variant['id'] = $_POST['variations'][$index]['id'] ?? '';
             
@@ -953,14 +985,13 @@ class InboundingController {
             'size'                 => $mainVariant['size'] ?? '',
             'cp'                   => $mainVariant['cp'] ?? 0,
             'product_photo'        => $mainVariant['photo'] ?? '',
-            'ware_house_code'      => $mainVariant['ware_house_code'] ?? '',
+            'store_location'       => $mainVariant['store_location'] ?? '',
             'price_india'          => $mainVariant['price_india'] ?? '',
             'price_india_mrp'      => $mainVariant['price_india_mrp'] ?? '',
 
             // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
             'quantity_received'    => $mainVariant['quantity'] ?? 0, 
         ];
-
         // 6. Update Database
         $res = $inboundingModel->updateMainInbound($record_id, $mainUpdateData);
 
@@ -1047,8 +1078,8 @@ class InboundingController {
         $API_data['status'] = 1;
         $API_data['snippet_description'] = $data['data']['snippet_description'];
         $API_data['creator'] = $data['data']['received_by_user_id'];
-        // $API_data['description_icons'] = $data['data']['description_icons'];
-        $API_data['india_net_qty'] = $data['data']['quantity_received'];
+        // $API_data['optionals'] = $data['data']['optionals'];
+        $API_data['india_net_qty'] = (int)$data['data']['india_net_qty'];
         $API_data['keywords'] = $data['data']['key_words'];
         // Convert 'Y' to 1, and 'N' (or anything else) to 0
         $API_data['usblock']    = ($data['data']['us_block'] === 'Y') ? 1 : 0;

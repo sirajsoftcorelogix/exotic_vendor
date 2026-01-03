@@ -286,28 +286,6 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
         const tsControl = document.querySelector('.ts-control');
         if(tsControl) tsControl.style.borderColor = "#d1d5db"; // Reset TomSelect border
 
-        // --- 3. Validate Vendor ---
-        if (!vendorInput.value || vendorInput.value === "") {
-            vendorError.innerText = "Please select a Vendor.";
-            vendorError.classList.remove("hidden");
-            
-            // Highlight Tom Select Box
-            if(tsControl) tsControl.style.borderColor = "#ef4444"; 
-            
-            isValid = false;
-        }
-
-        // --- 4. Validate Invoice Number ---
-        const invoiceNo = invoiceNoInput.value.trim();
-        if (!invoiceNo || invoiceNo === "") {
-            invoiceError.innerText = "Please enter an Invoice Number.";
-            invoiceError.classList.remove("hidden");
-            
-            // Highlight Input
-            invoiceNoInput.classList.add("border-red-500", "ring-2", "ring-red-100");
-            
-            isValid = false;
-        }
 
         // --- 5. Stop Form if Invalid ---
         if (!isValid) {
