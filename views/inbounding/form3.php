@@ -79,7 +79,7 @@ function renderSizeField($index, $value, $categoryCode, $sizeOptions) {
     } else {
         // Render Disabled Input
         // Note: We keep the value here so we don't lose data if they accidentally saved a size for non-clothing
-        $html = '<input type="text" name="'.$fieldName.'" value="'.htmlspecialchars($value).'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm bg-gray-100 text-gray-500 cursor-not-allowed size-input" readonly>';
+        $html = '<input type="text" name="'.$fieldName.'" value="'.htmlspecialchars($value).'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm  cursor-not-allowed size-input" >';
     }
     return $html;
 }
@@ -204,7 +204,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 <div>
                     <label class="block text-gray-800 font-bold text-xs mb-1">Received By</label>
                     <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
-                    <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>" readonly class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
+                    <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>"  class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
                 </div>
             </div>
             
@@ -380,8 +380,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     newField = document.createElement('input');
                     newField.type = 'text';
                     newField.value = ''; // Clear value for non-clothing
-                    newField.readOnly = true;
-                    newField.classList.add('bg-gray-100', 'text-gray-500', 'cursor-not-allowed');
                 }
 
                 newField.name = `variations[${index}][size]`;
@@ -416,7 +414,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             if (isClothing) {
                 sizeFieldHTML = `<select name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">${sizeOptionsHTML}</select>`;
             } else {
-                sizeFieldHTML = `<input type="text" name="variations[${index}][size]" value="" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm bg-gray-100 text-gray-500 cursor-not-allowed size-input" readonly>`;
+                sizeFieldHTML = `<input type="text" name="variations[${index}][size]" value="" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm size-input" >`;
             }
 
             return `
