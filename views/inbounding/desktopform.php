@@ -130,7 +130,7 @@ $currentSize = $data['form2']['size'] ?? '';
                         <select id="variant_select" name="is_variant" 
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
                             <option value="" disabled <?php echo empty($data['form2']['is_variant']) ? 'selected' : ''; ?>>Select...</option>
-                            <option value="N" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
+                            <option value="N" <?php echo (empty($data['form2']['is_variant']) || $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
                             <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
                         </select>
                     </div>

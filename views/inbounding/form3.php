@@ -88,7 +88,7 @@ function renderSizeField($index, $value, $categoryCode, $sizeOptions) {
 $mainVar = [
     'color'           => $form2['color'] ?? '',
     'size'            => $form2['size'] ?? '',
-    'quantity'        => $form2['quantity_received'] ?? '',
+    'quantity'        => $form2['quantity_received'] ?? '1',
     'cp'              => $form2['cp'] ?? '',
     'photo'           => $form2['product_photo'] ?? '',
     'invoice'         => $form2['invoice_image'] ?? '',
@@ -110,7 +110,7 @@ foreach ($extraVars as $ex) {
         'id'              => $ex['id'],
         'color'           => $ex['color'],
         'size'            => $ex['size'],
-        'quantity'        => $ex['quantity_received'],
+        'quantity'        => $ex['quantity_received'] ?? '1',
         'cp'              => $ex['cp'],
         'photo'           => $ex['variation_image'] ?? '',
         'height'          => $ex['height'] ?? '',
@@ -487,11 +487,13 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             if (e.target.closest('.clone-variation-btn')) {
                 const sourceCard = e.target.closest('.variation-card');
                 
+                // Helper to get value
                 const getData = (name) => {
                     const el = sourceCard.querySelector(`[name*="[${name}]"]`);
                     return el ? el.value : '';
                 };
 
+                // Get Source Data
                 const data = {
                     color: getData('color'),
                     quantity: getData('quantity') || 1,
@@ -505,18 +507,23 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     old_photo: getData('old_photo') 
                 };
 
+                // Create New Card HTML
                 variationCount++;
                 const html = createVariationCardHTML(variationCount - 1, variationCount);
                 container.insertAdjacentHTML('beforeend', html);
 
+                // Get New Card Element
                 const newCard = container.lastElementChild;
+                
+                // Helper to set value
                 const setData = (name, value) => {
                     const el = newCard.querySelector(`[name*="[${name}]"]`);
                     if(el) el.value = value;
                 };
 
+                // Populate Fields
                 setData('color', data.color);
-                setData('quantity', data.quantity || 1); // Default to 1 if empty
+                setData('quantity', data.quantity || 1); 
                 setData('size', data.size);
                 setData('cp', data.cp);
                 setData('height', data.height);
@@ -524,20 +531,22 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 setData('depth', data.depth);
                 setData('weight', data.weight);
                 setData('store_location', data.store_location);
-                setData('old_photo', data.old_photo);
+                
+                // Set Hidden Old Photo Value (for Database)
+                setData('old_photo', data.old_photo); 
 
-                // Handle Image Preview
-                if(data.old_photo) {
-                    const preview = newCard.querySelector('.preview-img');
-                    const placeholder = newCard.querySelector('.placeholder-icon');
-                    
-                    const sourceImg = sourceCard.querySelector('.preview-img');
-                    if(sourceImg && !sourceImg.classList.contains('hidden')) {
-                         preview.src = sourceImg.src;
-                         preview.classList.remove('hidden');
-                         placeholder.classList.add('hidden');
-                    }
+                // --- CRITICAL FIX: CLONE IMAGE PREVIEW VISUALLY ---
+                const sourceImg = sourceCard.querySelector('.preview-img');
+                const newImg = newCard.querySelector('.preview-img');
+                const newPlaceholder = newCard.querySelector('.placeholder-icon');
+
+                // If source image is visible (has src and not hidden class)
+                if (sourceImg && !sourceImg.classList.contains('hidden') && sourceImg.getAttribute('src') !== '#') {
+                    newImg.src = sourceImg.src;           // Copy the actual image source (Base64 or URL)
+                    newImg.classList.remove('hidden');    // Show image
+                    newPlaceholder.classList.add('hidden'); // Hide camera icon
                 }
+                // --------------------------------------------------
             }
         });
 
