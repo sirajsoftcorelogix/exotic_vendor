@@ -25,23 +25,37 @@ if (!$stmt->fetchColumn()) {
 
 $limit = isset($_GET['limit']) ? max(1, min((int)$_GET['limit'], 200)) : 100;
 
-$sql = "SELECT id, conversation_id, sender_id, `message`, file_path, original_name, created_at
-        FROM messages
-        WHERE conversation_id = ?
-        ORDER BY created_at DESC
-        LIMIT ?";
+$sql = "SELECT
+    m.id,
+    m.conversation_id,
+    m.sender_id,
+    m.message,
+    m.file_path,
+    m.original_name,
+    DATE_FORMAT(m.created_at, '%d %m %Y %H %i %s') AS created_at,
+    CASE
+        WHEN r.last_read = 1 THEN 'read'
+        WHEN r.message_id IS NOT NULL THEN 'delivered'
+        ELSE 'sent'
+    END AS delivery_status
+FROM messages m
+LEFT JOIN message_read_status r
+    ON r.message_id = m.id
+    AND r.user_id = ?
+WHERE m.conversation_id = ?
+ORDER BY m.id ASC
+";
 $stmt = $pdo->prepare($sql);
-$stmt->bindValue(1, $convId, PDO::PARAM_INT);
-$stmt->bindValue(2, $limit, PDO::PARAM_INT);
-$stmt->execute();
-$rows = array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC));
+$stmt->execute([$currentUser, $convId]);
+$messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-foreach ($rows as &$r) {
-    $r['id'] = (int)$r['id'];
-    $r['conversation_id'] = (int)$r['conversation_id'];
-    $r['sender_id'] = (int)$r['sender_id'];
-    $r['message'] = $r['message'] ? htmlspecialchars($r['message'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : '';
-}
+$deliveredStmt = $pdo->prepare("
+    INSERT IGNORE INTO message_read_status (message_id, user_id, delivered_at)
+    SELECT m.id, ?, NOW()
+    FROM messages m
+    WHERE m.conversation_id = ?
+");
+$deliveredStmt->execute([$currentUser, $convId]);
 
 header('Content-Type: application/json');
-echo json_encode($rows);
+echo json_encode($messages);

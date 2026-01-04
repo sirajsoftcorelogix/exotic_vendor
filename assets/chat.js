@@ -199,7 +199,6 @@
   attachBtn.addEventListener('click', () => { fileInput.click(); });
   fileInput.addEventListener('change', handleFileUpload);
   messagesEl.addEventListener('scroll', () => { if (isAtBottom()) sendReadReceipt(); });
-  window.addEventListener('focus', sendReadReceipt);
 
   function handleGlobalSearch(query) {
     renderUserList(query);
@@ -387,22 +386,41 @@
             convListEl.appendChild(item);
         });
     }
-    function requestDeleteConversation(conv) {
+    function requestDeleteConversation(convOrId) {
+
+      // Normalize argument
+      const conv = (typeof convOrId === 'object')
+          ? convOrId
+          : conversations.find(c => c.id === convOrId);
+
+      if (!conv) {
+          console.error("Conversation not found:", convOrId);
+          return;
+      }
+
       pendingDeleteConversationId = conv.id;
 
       const modal = document.getElementById("delete-modal");
-      const msg = document.getElementById("delete-modal-msg");
+      const msg   = document.getElementById("delete-modal-msg");
+      const confirmBtn = document.getElementById("delete-confirm-btn");
 
-      if (conv.type === 'group' && conv.owner_id !== window.CURRENT_USER) {
+      console.log("Owner:", conv.owner_id);
+      console.log("Current user:", window.CURRENT_USER);
+
+      if (
+          conv.type === 'group' &&
+          Number(conv.owner_id) !== Number(window.CURRENT_USER)
+      ) {
           msg.textContent = "Only the group owner can delete this group.";
-          document.getElementById("delete-confirm-btn").classList.add("hidden");
+          confirmBtn.classList.add("hidden");
       } else {
           msg.textContent = "Are you sure you want to delete this conversation?";
-          document.getElementById("delete-confirm-btn").classList.remove("hidden");
+          confirmBtn.classList.remove("hidden");
       }
 
       modal.classList.remove("hidden");
     }
+
 
     document.getElementById("delete-cancel-btn").onclick = closeDeleteModal;
     document.getElementById("delete-confirm-btn").onclick = confirmDeleteConversation;
@@ -492,7 +510,11 @@
     renderMessages(convId);
     loadMessages(convId).then(() => {
       scrollToBottom();
-      sendReadReceipt();
+    });
+
+    // Only send read when user scrolls / focuses
+    messagesEl.addEventListener('scroll', () => {
+        if (isAtBottom()) sendReadReceipt();
     });
   }
   window.setActiveConversation = setActiveConversation;
@@ -561,7 +583,13 @@
     })
       .then(r => r.json())
       .then(data => {
-        messages[convId] = data;
+        messages[convId] = messages[convId] || [];
+
+        data.forEach(msg => {
+            if (!messages[convId].some(m => m.id === msg.id)) {
+                messages[convId].push(msg);
+            }
+        });
         if (convId === activeConversationId) {
           renderMessages(convId);
         }
@@ -623,10 +651,14 @@
       meta.textContent = msg.created_at;
 
       if (msg.sender_id == CURRENT_USER) {
-        meta.innerHTML += `
+        /*meta.innerHTML += `
           <span class="read ${msg.is_read ? 'read' : ''}">
             ${msg.is_read ? '✔✔' : '✔'}
           </span>
+        `;*/
+        meta.innerHTML = `
+          ${msg.created_at}
+          ${getTick(msg.delivery_status)}
         `;
       }
 
@@ -726,6 +758,12 @@
         break;
       case 'read_receipt':
         console.log('read_receipt', data);
+        messages[data.conversation_id].forEach(m => {
+          if (m.id <= data.last_read_message_id) {
+            m.delivery_status = 'read';
+          }
+        });
+        renderMessages(activeConversationId);
         break;
       case 'message_deleted':
         handleDeletedMessage(data);
@@ -906,16 +944,19 @@
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
   function isAtBottom() { return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 50; }
   function sendReadReceipt() {
-    if (!activeConversationId) return;
-    const list = messages[activeConversationId] || [];
-    if (!list.length) return;
-    const lastId = list[list.length - 1].id;
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'mark_read', conversation_id: activeConversationId, last_read_message_id: lastId }));
-    }
+      if (!activeConversationId) return;
+      if (!isAtBottom()) return;
 
-    const conv = conversations.find(c => c.id == activeConversationId);
-    if (conv) { conv.unread_count = 0; renderConversationList(); }
+      const list = messages[activeConversationId] || [];
+      if (!list.length) return;
+
+      const lastId = list[list.length - 1].id;
+
+      ws.send(JSON.stringify({
+          type: 'mark_read',
+          conversation_id: activeConversationId,
+          last_read_message_id: lastId
+      }));
   }
   function showUiPopup(message) {
     const container = document.getElementById("ui-popup-container");
@@ -1088,6 +1129,16 @@
   function closeGroupModal() {
       groupModal.classList.add("hidden");
       document.getElementById("group-name").value = "";
+  }
+
+  function getTick(status) {
+    if (status === 'read') {
+      return '<span class="tick read">✓✓</span>';
+    }
+    if (status === 'delivered') {
+      return '<span class="tick delivered">✓✓</span>';
+    }
+    return '<span class="tick sent">✓</span>';
   }
 
   // small util

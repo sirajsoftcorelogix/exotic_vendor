@@ -239,7 +239,7 @@ class ChatServer implements MessageComponentInterface
         $sessionId = $cookies[$sessionName];
 
         // Resolve session.save_path (may contain prefix like "N;MODE;path")
-        $sessionPath = "/var/lib/php/sessions"; //ini_get('session.save_path');
+        $sessionPath = ini_get('session.save_path');
         if (!$sessionPath) {
             $sessionPath = sys_get_temp_dir();
         } elseif (strpos($sessionPath, ';') !== false) {
@@ -412,8 +412,12 @@ class ChatServer implements MessageComponentInterface
         $conversationId = (int)($payload['conversation_id'] ?? 0);
         $text = trim($payload['message'] ?? '');
         $senderId = $from->userId ?? null;
-        $filePath = $payload['file_path'] ?? null;
-        $originalName = trim($payload['original_name']) ?? null;
+        $filePath = isset($payload['file_path']) && $payload['file_path'] !== ''
+            ? trim($payload['file_path'])
+            : null;
+        $originalName = isset($payload['original_name']) && $payload['original_name'] !== ''
+            ? trim($payload['original_name'])
+            : null;
 
         if (!$conversationId || !$senderId) {
             $from->send(json_encode(['type' => 'error', 'msg' => 'Invalid conversation or sender']));
@@ -435,7 +439,6 @@ class ChatServer implements MessageComponentInterface
 
         $createdAt = date('Y-m-d H:i:s');
         // Insert message
-        //$insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, message, file_path, created_at) VALUES (?, ?, ?, ?, NOW())");
         $insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, `message`, file_path, original_name, created_at) VALUES (?, ?, ?, ?, ?, ?)");
         $insert->execute([
             $conversationId,
@@ -505,6 +508,17 @@ class ChatServer implements MessageComponentInterface
                 ]);
             }
         }
+        // Delivery status even if user is offline.
+        foreach ($members as $uid) {
+            if ($uid != $senderId) {
+                $stmt = $this->conn->prepare("
+                    INSERT INTO message_read_status (message_id, user_id, last_read)
+                    VALUES (?, ?, 0)
+                    ON DUPLICATE KEY UPDATE last_read = last_read
+                ");
+                $stmt->execute([$msgId, $uid]);
+            }
+        }
 
         // Send only to members that are connected
         $this->sendToMembers($members, $msgRow);
@@ -545,33 +559,58 @@ class ChatServer implements MessageComponentInterface
      */
     private function handleMarkRead(ConnectionInterface $from, array $payload): void
     {
+        $userId = $from->userId ?? null;
         $conversationId = (int)($payload['conversation_id'] ?? 0);
         $lastReadId = (int)($payload['last_read_message_id'] ?? 0);
-        $userId = $from->userId ?? null;
 
         if (!$conversationId || !$userId || !$lastReadId) {
             return;
         }
 
-        // ensure membership
-        $stmt = $this->conn->prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1");
+        // Ensure membership
+        $stmt = $this->conn->prepare("
+            SELECT 1 FROM conversation_members 
+            WHERE conversation_id = ? AND user_id = ? 
+            LIMIT 1
+        ");
         $stmt->execute([$conversationId, $userId]);
         if (!$stmt->fetchColumn()) {
             return;
         }
 
-        // Mark read: insert missing read entries up to lastReadId
-        $sql = "
+        /**
+         * 1️⃣ INSERT missing rows (delivered → read)
+         */
+        $stmt = $this->conn->prepare("
             INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
             SELECT m.id, ?, 1, NOW()
             FROM messages m
-            LEFT JOIN message_read_status r ON r.message_id = m.id AND r.user_id = ?
-            WHERE m.conversation_id = ? AND m.id <= ? AND r.message_id IS NULL
-        ";
-        $stmt = $this->conn->prepare($sql);
+            LEFT JOIN message_read_status r 
+                ON r.message_id = m.id AND r.user_id = ?
+            WHERE m.conversation_id = ?
+            AND m.id = ?
+            AND r.message_id IS NULL
+        ");
         $stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
 
-        // Broadcast receipt to members
+        /**
+         * 2️⃣ UPDATE existing rows (important!)
+         */
+        $stmt = $this->conn->prepare("
+            UPDATE message_read_status r
+            JOIN messages m ON m.id = r.message_id
+            SET r.last_read = 1,
+                r.read_at = IFNULL(r.read_at, NOW())
+            WHERE r.user_id = ?
+            AND m.conversation_id = ?
+            AND m.id <= ?
+            AND r.last_read = 0
+        ");
+        $stmt->execute([$userId, $conversationId, $lastReadId]);
+
+        /**
+         * 3️⃣ Broadcast receipt
+         */
         $payloadOut = [
             'type' => 'read_receipt',
             'conversation_id' => $conversationId,
@@ -579,7 +618,10 @@ class ChatServer implements MessageComponentInterface
             'last_read_message_id' => $lastReadId,
         ];
 
-        $stmt = $this->conn->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
+        $stmt = $this->conn->prepare("
+            SELECT user_id FROM conversation_members 
+            WHERE conversation_id = ?
+        ");
         $stmt->execute([$conversationId]);
         $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 

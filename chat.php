@@ -35,10 +35,11 @@ $msgCnt = $notificationController->getUnreadCount();
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Internal Chat</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Internal Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/x-icon" href="images/EXOTIC_FAV_ICO.png">
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -163,7 +164,7 @@ $msgCnt = $notificationController->getUnreadCount();
 
   <div id="chat-app">
     <?php include 'views/layouts/left_menu.php'; ?>
-    <aside id="sidebar" class="w-full md:w-[380px] lg:w-[420px] bg-white border-r border-gray-200 flex flex-col h-full z-10">
+    <aside id="sidebar_div" class="w-full md:w-[380px] lg:w-[420px] bg-white border-r border-gray-200 flex flex-col h-full z-10">
 
       <!-- Header -->
       <div class="h-16 px-5 flex items-center justify-between bg-white flex-shrink-0 mt-2">
