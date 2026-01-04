@@ -794,7 +794,7 @@ class InboundingController {
             'category_code'       => $category_val,
             'sub_category_code'   => $sub_cat_val, 
             'sub_sub_category_code' => $sub_sub_val,
-            'stock_added_date'    => $_POST['stock_added_date'] ?? '',
+            'added_date'    => $_POST['added_date'] ?? '',
             'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
             'updated_by_user_id'  => $_POST['updated_by_user_id'] ?? '',
             'invoice_no'          => $_POST['invoice_no'] ?? '',

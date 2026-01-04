@@ -64,7 +64,7 @@
 <?php
 $record_id = $_GET['id'] ?? '';
 
-// Define the specific options: 'Database Value' => 'Display Label'
+// --- 1. DEFINE SIZE OPTIONS ---
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
     'S'    => 'Small (S)(36)',
@@ -74,6 +74,51 @@ $sizeOptions = [
     'XXL'  => 'Extra Extra Large (XXL)(44)',
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
+
+// --- 2. DETECT CLOTHING/TEXTILES (Corrected for ID lookup) ---
+$is_clothing_initial = false; 
+$saved_group_id = $data['form2']['group_name'] ?? '';
+
+if (!empty($data['category']) && !empty($saved_group_id)) {
+    foreach ($data['category'] as $cat) {
+        // Check if this category's ID matches the saved group ID
+        // We use loose comparison (==) to handle string "-5" vs integer -5
+        if (isset($cat['category']) && $cat['category'] == $saved_group_id) {
+            
+            // We found the matching group, now check its name
+            $catName = strtolower($cat['name'] ?? '');
+            $catDisplay = strtolower($cat['display_name'] ?? '');
+            
+            if (strpos($catName, 'clothing') !== false || strpos($catName, 'textiles') !== false || 
+                strpos($catDisplay, 'clothing') !== false || strpos($catDisplay, 'textiles') !== false) {
+                $is_clothing_initial = true;
+            }
+            break; // Stop looping once found
+        }
+    }
+}
+
+// --- 3. HELPER FUNCTION TO RENDER FIELD ---
+function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
+    $html = '';
+    
+    // Check if Clothing (TRUE) -> Render Dropdown
+    if ($isClothing) {
+        $html .= '<select name="' . $fieldName . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">';
+        $html .= '<option value="">Select Size</option>';
+        foreach ($options as $k => $v) {
+            // Strict string comparison for selected state
+            $selected = ((string)$currentValue === (string)$k) ? 'selected' : '';
+            $html .= '<option value="' . $k . '" ' . $selected . '>' . $v . '</option>';
+        }
+        $html .= '</select>';
+    } 
+    // Check if Not Clothing (FALSE) -> Render Text Input
+    else {
+        $html .= '<input type="text" name="' . $fieldName . '" value="' . htmlspecialchars($currentValue) . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">';
+    }
+    return $html;
+}
 
 // Get the current saved value safely
 $currentSize = $data['form2']['size'] ?? '';
@@ -168,7 +213,7 @@ $currentSize = $data['form2']['size'] ?? '';
                     </div>
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On</label>
-                        
+
                         <?php 
                             // 1. Determine the value in standard Y-m-d format first
                             if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00") {
@@ -178,10 +223,49 @@ $currentSize = $data['form2']['size'] ?? '';
                             }
                         ?>
 
-                        <input type="text" 
-                               class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white" 
-                               value="<?php echo $dateValue; ?>" 
-                               name="stock_added_date">
+                        <div class="relative w-full">
+                            <input type="text" 
+                                   class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 pr-10 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white cursor-pointer" 
+                                   value="<?php echo $dateValue; ?>" 
+                                   name="stock_added_date">
+                            
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-xs font-bold text-[#333] mb-1.5">Added On</label>
+
+                        <?php 
+                            // 1. Determine the value in standard Y-m-d format first
+                            if (!empty($data['form2']['added_date']) && $data['form2']['added_date'] != "0000-00-00") {
+                                $dateValue = date('Y-m-d', strtotime($data['form2']['added_date']));
+                            } else {
+                                $dateValue = date('Y-m-d');
+                            }
+                        ?>
+
+                        <div class="relative w-full">
+                            <input type="text" 
+                                   class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 pr-10 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white cursor-pointer" 
+                                   value="<?php echo $dateValue; ?>" 
+                                   name="added_date">
+                            
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </fieldset>
@@ -278,15 +362,7 @@ $currentSize = $data['form2']['size'] ?? '';
 
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                        <select name="size" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">
-                            <option value="">Select a Size</option>
-                            
-                            <?php foreach ($sizeOptions as $dbValue => $displayLabel): ?>
-                                <option value="<?= $dbValue ?>" <?= ($currentSize === $dbValue) ? 'selected' : '' ?>>
-                                    <?= $displayLabel ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
                     </div>
 
                     <div class="w-full min-w-0">
@@ -442,17 +518,7 @@ $currentSize = $data['form2']['size'] ?? '';
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                                
-                                <select name="variations[<?= $var['id'] ?>][size]" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">
-                                    <option value="">Select Size</option>
-                                    
-                                    <?php foreach ($sizeOptions as $dbValue => $displayLabel): ?>
-                                        <option value="<?= $dbValue ?>" <?= ($var['size'] === $dbValue) ? 'selected' : '' ?>>
-                                            <?= $displayLabel ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                    
-                                </select>
+                                <?php echo renderSizeField("variations[{$var['id']}][size]", $var['size'], $is_clothing_initial, $sizeOptions); ?>
                             </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
@@ -544,19 +610,15 @@ $currentSize = $data['form2']['size'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][store_location]"></div>
 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
-                <div class="w-full min-w-0">
+                <div class="w-full min-w-0 size-wrapper-js">
                     <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                    
-                    <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]">
+                    <select class="size-input-field w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]">
                         <option value="">Select Size</option>
-                        
                         <?php 
-                        // We use $dbValue (XS) and $displayLabel (Extra Small...) based on your previous array
                         foreach ($sizeOptions as $dbValue => $displayLabel) {
                             echo '<option value="' . htmlspecialchars($dbValue) . '">' . htmlspecialchars($displayLabel) . '</option>';
                         }
                         ?>
-                        
                     </select>
                 </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
@@ -977,7 +1039,7 @@ $currentSize = $data['form2']['size'] ?? '';
                     </div>
 
                     <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
+                        <label class="block text-xs font-bold text-[#555] mb-1">Warehouse:</label>
                         <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="ware_house_code">
                             <option value="">Select Warehouse</option>
                             <?php 
@@ -1830,9 +1892,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
         // if (dimUnit === 'cm') {
-        //      h = h / 2.54;
-        //      w = w / 2.54;
-        //      d = d / 2.54;
+             h = h / 2.54;
+             w = w / 2.54;
+             d = d / 2.54;
         // }
 
         // --- STEP B: ADD BUFFER (4 inches) ---
@@ -2174,6 +2236,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let actualWt = parseFloat(wtInput.value) || 0;
 
         // Logic: Add 4 inches buffer + Volumetric Divisor 5000
+
+         h = h / 2.54;
+         w = w / 2.54;
+         d = d / 2.54;
         let h_in = h + 4;
         let w_in = w + 4;
         let d_in = d + 4;
@@ -2298,4 +2364,111 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. DATA FROM PHP
+    const sizeOptionsObj = <?php echo json_encode($sizeOptions); ?>;
+    
+    // Generate Options HTML once
+    let sizeOptionsHTML = '<option value="">Select Size</option>';
+    for (const [key, value] of Object.entries(sizeOptionsObj)) {
+        sizeOptionsHTML += `<option value="${key}">${value}</option>`;
+    }
+
+    // 2. CHECK IF CATEGORY IS CLOTHING
+    function checkIsClothing() {
+        let isClothing = false;
+
+        // Check Group Dropdown Text
+        const groupSelect = document.getElementById('group_select');
+        if (groupSelect && groupSelect.selectedIndex > 0) {
+            const groupText = groupSelect.options[groupSelect.selectedIndex].text.toLowerCase();
+            if (groupText.includes('clothing') || groupText.includes('textile')) isClothing = true;
+        }
+
+        // Check Selected Checkboxes (Category, Sub, SubSub)
+        // We look for any checked box with "clothing" or "textile" in its label
+        const checkedBoxes = document.querySelectorAll('.checkbox-list-container input[type="checkbox"]:checked');
+        checkedBoxes.forEach(cb => {
+            const label = cb.nextElementSibling ? cb.nextElementSibling.innerText.toLowerCase() : '';
+            if (label.includes('clothing') || label.includes('textile')) isClothing = true;
+        });
+
+        return isClothing;
+    }
+
+    // 3. TOGGLE FUNCTION
+    function toggleAllSizeFields() {
+        const isClothing = checkIsClothing();
+        
+        // Find ALL size inputs (Main + Variations) using the class we added in PHP
+        const allSizeInputs = document.querySelectorAll('.size-input-field');
+
+        allSizeInputs.forEach(field => {
+            const parent = field.parentElement;
+            const currentTag = field.tagName; // 'SELECT' or 'INPUT'
+            const currentValue = field.value;
+            const currentName = field.name;
+
+            // Logic to prevent unnecessary swapping
+            if (isClothing && currentTag === 'SELECT') return;
+            if (!isClothing && currentTag === 'INPUT') return;
+
+            // Create New Element
+            let newEl;
+            if (isClothing) {
+                newEl = document.createElement('select');
+                newEl.innerHTML = sizeOptionsHTML;
+                // Try to set value if it exists in options
+                newEl.value = currentValue; 
+            } else {
+                newEl = document.createElement('input');
+                newEl.type = 'text';
+                newEl.value = currentValue; // Keep text value
+            }
+
+            // Copy Attributes & Classes
+            newEl.name = currentName;
+            newEl.className = field.className; // Keeps styling
+
+            // Swap
+            field.remove();
+            parent.appendChild(newEl);
+        });
+    }
+
+    // 4. LISTENERS
+    // Listen to Group Change
+    const groupSelect = document.getElementById('group_select');
+    if(groupSelect) {
+        groupSelect.addEventListener('change', toggleAllSizeFields); // Uses TomSelect change event if native
+    }
+    // Since you use TomSelect for group, we hook into it if accessible, 
+    // but the native select usually updates hiddenly. 
+    // If TomSelect hides the native select, we need to listen to TomSelect's event.
+    if(document.getElementById('group_select').tomselect) {
+        document.getElementById('group_select').tomselect.on('change', toggleAllSizeFields);
+    }
+
+    // Listen to Checkbox Changes (Delegation for dynamic lists)
+    document.body.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox' && e.target.closest('.checkbox-list-container')) {
+            toggleAllSizeFields();
+        }
+    });
+
+    // 5. HOOK INTO "ADD NEW VARIATION"
+    // We need to override or extend the existing addNewVariation function 
+    // to ensure new cards get the correct input type immediately.
+    const originalAddVar = window.addNewVariation;
+    window.addNewVariation = function() {
+        // Run original function
+        originalAddVar(); 
+        
+        // After adding, force a check to update the newly added field
+        toggleAllSizeFields();
+    };
+});
 </script>
