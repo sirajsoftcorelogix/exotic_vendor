@@ -779,8 +779,20 @@ class InboundingController {
                 }
             }
         }
+        $s_group   = $_POST['search_group'] ?? '';
+    
+        // Capture arrays and implode to comma-separated strings
+        $s_cat_arr = $_POST['search_cat'] ?? [];
+        $s_cat     = is_array($s_cat_arr) ? implode(',', $s_cat_arr) : $s_cat_arr;
 
+        $s_sub_arr = $_POST['search_sub'] ?? [];
+        $s_sub     = is_array($s_sub_arr) ? implode(',', $s_sub_arr) : $s_sub_arr;
 
+        $s_subsub_arr = $_POST['search_sub_sub'] ?? [];
+        $s_subsub     = is_array($s_subsub_arr) ? implode(',', $s_subsub_arr) : $s_subsub_arr;
+        $search_category_string = $s_subsub . '|' . $s_sub . '|' . $s_cat . '|' . $s_group;
+
+        $search_term = $_POST['search_term'] ?? '';
         // =========================================================
         // END NEW CODE
         // =========================================================
@@ -789,6 +801,8 @@ class InboundingController {
         $data = [
             'product_photo'       => $mainProductPhoto, // <--- ADDED THIS LINE
             'invoice_image'       => $invoicePath,
+            'search_term' => $search_term,
+            'search_category_string' => $search_category_string,
             'is_variant'          => $is_variant,
             'Item_code'           => $item_code,
             'sku'                 => $generated_sku,

@@ -868,8 +868,101 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             </fieldset>
         </div>
+        <?php 
+            // 1. PARSE SAVED DATA (If exists)
+            // Assuming you store this string in a column named 'search_category_string'
+            // Format: "1155,1145|1323,1450|124,132|-5" (SubSub | Sub | Cat | Group)
+            
+            $saved_search_string = $data['form2']['search_category_string'] ?? ''; 
+            $search_parts = explode('|', $saved_search_string);
 
+            // Map the exploded parts to variables (Default to empty if not found)
+            // Order: SubSub | Sub | Cat | Group
+            $search_sub_sub_raw = $search_parts[0] ?? '';
+            $search_sub_raw     = $search_parts[1] ?? '';
+            $search_cat_raw     = $search_parts[2] ?? '';
+            $search_group_val   = $search_parts[3] ?? '';
 
+            // Convert comma-strings to arrays for JS
+            $search_sel_sub_sub = array_filter(explode(',', $search_sub_sub_raw));
+            $search_sel_sub     = array_filter(explode(',', $search_sub_raw));
+            $search_sel_cat     = array_filter(explode(',', $search_cat_raw));
+        ?>
+
+        <div class="mt-[15px] md:mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category</legend>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                    <div>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search Group:</label>
+                        <select id="search_group_select" name="search_group" placeholder="Select Group..." autocomplete="off">
+                            <option value="">Select Group...</option>
+                            <?php foreach($rootCategories as $group): 
+                                $isSearchGroupSelected = ($search_group_val == $group['store_value']) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo $group['store_value']; ?>" <?php echo $isSearchGroupSelected; ?>>
+                                    <?php echo $group['name']; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-5 items-stretch">
+                    
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search Category:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div id="search_category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search Sub Category:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="search_sub_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="search_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search SubSubCategory:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="search_sub_sub_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="search_sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+        <div class="mt-[15px] md:mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Terms</legend>
+                <div>
+                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Keywords (Tags):</label>
+                    <input type="text" id="search_term_input" name="search_term" 
+                           value="<?= htmlspecialchars($data['form2']['search_term'] ?? '') ?>" 
+                           placeholder="Type a keyword and press Enter..." 
+                           autocomplete="off">
+                    <div class="text-[10px] text-gray-500 mt-1">
+                        Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
+                    </div>
+                </div>
+            </fieldset>
+        </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
@@ -2480,5 +2573,224 @@ document.addEventListener('DOMContentLoaded', function() {
         // After adding, force a check to update the newly added field
         toggleAllSizeFields();
     };
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // --- FIX: RE-INJECT DATA FROM PHP SO THIS SCRIPT CAN SEE IT ---
+    const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
+    
+    // 1. Pre-selection Data for Search Section
+    const searchPreSelected = {
+        groupVal: "<?php echo $search_group_val; ?>",
+        cat:    new Set(<?php echo json_encode(array_values($search_sel_cat)); ?>.map(String)), 
+        sub:    new Set(<?php echo json_encode(array_values($search_sel_sub)); ?>.map(String)), 
+        subsub: new Set(<?php echo json_encode(array_values($search_sel_sub_sub)); ?>.map(String))
+    };
+
+    // 2. DOM Elements
+    const sGroupSelectEl = document.getElementById("search_group_select");
+    const sCatContainer = document.getElementById('search_category_container');
+    const sSubCatContainer = document.getElementById('search_sub_category_container');
+    const sSubSubCatContainer = document.getElementById('search_sub_sub_category_container');
+
+    // 3. Init TomSelect for Search Group
+    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
+    let sGroupTs = null;
+    if(sGroupSelectEl) {
+        sGroupTs = new TomSelect(sGroupSelectEl, config);
+        
+        // --- EVENT LISTENER FOR TOM SELECT ---
+        sGroupTs.on('change', function(groupValue) {
+            searchPreSelected.cat.clear(); 
+            searchPreSelected.sub.clear(); 
+            searchPreSelected.subsub.clear();       
+            updateSearchCatList(groupValue);
+        });
+    }
+
+    // --- HELPER: Create Checkbox ---
+    function createSearchCheckbox(item, inputName, selectedSet, onChangeCallback) {
+        const div = document.createElement('div');
+        div.className = 'checkbox-item pl-2'; 
+        
+        const valToCheck = String(item.store_val);
+        const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
+        
+        div.innerHTML = `
+            <input type="checkbox" 
+                   id="${inputName}_${item.id}" 
+                   name="${inputName}[]" 
+                   value="${item.store_val}" 
+                   data-parent-path="" 
+                   ${isChecked}>
+            <label for="${inputName}_${item.id}">${item.name}</label>
+        `;
+        
+        const checkbox = div.querySelector('input');
+        checkbox.addEventListener('change', () => { if(onChangeCallback) onChangeCallback(); });
+        return div;
+    }
+
+    // --- 1. UPDATE SEARCH CATEGORY LIST ---
+    function updateSearchCatList(rawGroupValue) {
+        sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+        sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(!rawGroupValue) {
+             sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
+             return;
+        }
+
+        const lookupKey = String(rawGroupValue).trim(); 
+        
+        if(!categoriesByParent[lookupKey]) {
+            sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
+            return;
+        }
+
+        const items = categoriesByParent[lookupKey];
+        sCatContainer.innerHTML = '';
+        const seenIds = new Set();
+        items.forEach(item => {
+            if(!seenIds.has(item.id)){
+                seenIds.add(item.id);
+                sCatContainer.appendChild(createSearchCheckbox(item, 'search_cat', searchPreSelected.cat, handleSearchCatChange));
+            }
+        });
+        
+        if(searchPreSelected.cat.size > 0) handleSearchCatChange();
+    }
+
+    // --- 2. UPDATE SEARCH SUB CATEGORY LIST ---
+    function handleSearchCatChange() {
+        const checkedInputs = Array.from(sCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        sSubCatContainer.innerHTML = ''; 
+        sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(checkedInputs.length === 0) {
+            sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+            return;
+        }
+
+        const groupVal = sGroupTs ? sGroupTs.getValue() : sGroupSelectEl.value;
+        const groupKey = String(groupVal).trim(); 
+
+        let hasAnyOptions = false;
+
+        checkedInputs.forEach(input => {
+            const catStoreVal = input.value; 
+            const parentName = input.nextElementSibling.innerText;
+            const lookupKey = catStoreVal + "|" + groupKey;
+            
+            const children = categoriesByParent[lookupKey];
+
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
+                header.innerText = parentName; 
+                sSubCatContainer.appendChild(header);
+
+                children.forEach(item => {
+                    const el = createSearchCheckbox(item, 'search_sub', searchPreSelected.sub, handleSearchSubCatChange);
+                    el.querySelector('input').setAttribute('data-parent-path', lookupKey);
+                    sSubCatContainer.appendChild(el);
+                });
+            }
+        });
+
+        if(!hasAnyOptions) sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
+        else if(searchPreSelected.sub.size > 0) handleSearchSubCatChange();
+    }
+
+    // --- 3. UPDATE SEARCH SUB SUB CATEGORY LIST ---
+    function handleSearchSubCatChange() {
+        const checkedInputs = Array.from(sSubCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        sSubSubCatContainer.innerHTML = ''; 
+
+        if(checkedInputs.length === 0) {
+            sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
+            return;
+        }
+
+        let hasAnyOptions = false;
+
+        checkedInputs.forEach(input => {
+            const subCatStoreVal = input.value;
+            const parentPath = input.getAttribute('data-parent-path'); 
+            const parentName = input.nextElementSibling.innerText;
+            const lookupKey = subCatStoreVal + "|" + parentPath;
+            
+            const children = categoriesByParent[lookupKey];
+
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
+                header.innerText = parentName;
+                sSubSubCatContainer.appendChild(header);
+
+                children.forEach(item => {
+                    sSubSubCatContainer.appendChild(createSearchCheckbox(item, 'search_sub_sub', searchPreSelected.subsub, null));
+                });
+            }
+        });
+
+        if(!hasAnyOptions) sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
+    }
+
+    // --- SEARCH FILTER ---
+    function enableSearchFilter(inputId, containerId) {
+        const input = document.getElementById(inputId);
+        const container = document.getElementById(containerId);
+        if(input && container) {
+            input.addEventListener('keyup', function() {
+                const filter = this.value.toLowerCase();
+                const items = container.querySelectorAll('.checkbox-item');
+                const headers = container.querySelectorAll('.group-header');
+                items.forEach(item => {
+                    const label = item.querySelector('label').innerText;
+                    item.style.display = label.toLowerCase().includes(filter) ? 'flex' : 'none';
+                });
+                if(filter.length > 0) headers.forEach(h => h.style.display = 'none');
+                else headers.forEach(h => h.style.display = 'block');
+            });
+        }
+    }
+
+    // --- INITIAL LOAD ---
+    if (searchPreSelected.groupVal) {
+        updateSearchCatList(searchPreSelected.groupVal);
+    }
+
+    enableSearchFilter('search_sub_cat_search', 'search_sub_category_container');
+    enableSearchFilter('search_sub_sub_cat_search', 'search_sub_sub_category_container');
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Check if the input exists BEFORE initializing TomSelect
+    // This prevents the "White Screen" / Disappearing Form issue
+    const termInput = document.getElementById('search_term_input');
+
+    if (termInput) {
+        new TomSelect(termInput, {
+            create: true,               // Allow user to type new text
+            createOnBlur: true,         // Create tag if user clicks away
+            delimiter: ',',             // Store in DB separated by commas
+            persist: false,             // Don't save created tags to the dropdown
+            plugins: ['remove_button'], // Add 'x' button
+            onInitialize: function() {
+                this.wrapper.classList.add('w-full'); 
+                this.wrapper.querySelector('.ts-control').classList.add('border', 'border-[#ccc]', 'rounded-[3px]', 'text-[13px]');
+            }
+        });
+    } else {
+        console.warn("Search Term Input not found - skipping initialization");
+    }
+
 });
 </script>
