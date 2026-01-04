@@ -211,6 +211,8 @@ $currentSize = $data['form2']['size'] ?? '';
                             <input type="hidden" id="existing_item_code" value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : ''; ?>">
                         </div>
                     </div>
+                    <?php if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00"){
+                    ?>
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On</label>
 
@@ -239,6 +241,7 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
+                    <?php } ?>
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Added On</label>
 
@@ -749,24 +752,40 @@ $currentSize = $data['form2']['size'] ?? '';
             $selected_sub = is_array($sub_raw) ? $sub_raw : explode(',', $sub_raw);
             $sub_sub_raw = $data['form2']['sub_sub_category_code'] ?? '';
             $selected_sub_sub = is_array($sub_sub_raw) ? $sub_sub_raw : explode(',', $sub_sub_raw);
+
             $categoriesByParent1 = [];
             $rootCategories = [];
-            $groupMap = [];
+
             if (!empty($data['category'])) {
                 foreach ($data['category'] as $row) {
                     if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
-                    $categoriesByParent1[$row['parent_id']][] = [
-                        'id'    => $row['id'],
-                        'name' => $row['display_name']
+
+                    // 1. Get the Parent Key (Strict String)
+                    // This matches the 'parent' column in your DB (e.g. "clothing" or "mens_wear|clothing")
+                    $parentKey = isset($row['parent']) ? trim((string)$row['parent']) : '';
+
+                    // Skip orphans
+                    if ($parentKey === '') continue; 
+                    
+                    // 2. Identify the "Store Value" (The value used in the parent path)
+                    // Priority: 'category' column -> 'id' column
+                    // You mentioned "value should store of category field", so we use that.
+                    $storageValue = !empty($row['category']) ? $row['category'] : $row['id'];
+
+                    // 3. Build the Tree
+                    $categoriesByParent1[$parentKey][] = [
+                        'id'          => $row['id'],
+                        'name'        => $row['display_name'],
+                        'store_val'   => $storageValue // <--- We send this to JS to build paths
                     ];
-                    if ($row['parent_id'] == 0) {
-                        $storeValue = $row['category'] ?? $row['display_name'];
+
+                    // 4. Identify Root Groups (Parent is "0")
+                    if ($parentKey === '0') {
                         $rootCategories[] = [
                             'id'          => $row['id'],
                             'name'        => $row['display_name'],
-                            'store_value' => $storeValue 
+                            'store_value' => $storageValue // This becomes the root of the path
                         ];
-                        $groupMap[$storeValue] = $row['id'];
                     }
                 }
             }
@@ -849,6 +868,7 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             </fieldset>
         </div>
+
 
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
@@ -1647,11 +1667,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // 1. PHP Data
+    // 1. DATA FROM PHP
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
-    const groupMap = <?php echo json_encode($groupMap); ?>; 
     
     // 2. Pre-selection Data
+    // These sets now contain STRINGS (e.g., "mens_wear", "shirts") from your DB
     const rawCatId = "<?php echo $selected_cat_id; ?>"; 
     const preSelected = {
         groupVal: "<?php echo $selected_group_val; ?>",
@@ -1665,23 +1685,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const subCatContainer = document.getElementById('sub_category_container');
     const subSubCatContainer = document.getElementById('sub_sub_category_container');
     
-    // Search Inputs
-    const subCatSearch = document.getElementById('sub_cat_search');
-    const subSubCatSearch = document.getElementById('sub_sub_cat_search');
-    
-    // 4. TomSelect Config
+    // 4. Init TomSelect
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
-    new TomSelect("#material_select", config);
-    const groupTs = new TomSelect("#group_select", config);
+    if(document.getElementById("material_select")) new TomSelect("#material_select", config);
+    
+    const groupSelectEl = document.getElementById("group_select");
+    let groupTs = null;
+    if(groupSelectEl) {
+        groupTs = new TomSelect(groupSelectEl, config);
+    }
 
-    // --- HELPER: Create Single Checkbox HTML ---
+    // --- HELPER: Create Checkbox ---
     function createCheckboxItem(item, inputName, selectedSet, onChangeCallback) {
         const div = document.createElement('div');
         div.className = 'checkbox-item pl-2'; 
-        const isChecked = selectedSet.has(String(item.id)) ? 'checked' : '';
         
+        // CHANGE 1: Check if the STORE VALUE (String) is in the selected set
+        // This ensures pre-filled data works with strings like "mens_wear"
+        const valToCheck = String(item.store_val);
+        const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
+        
+        // CHANGE 2: Set 'value' to item.store_val
+        // This ensures "mens_wear" is sent to the DB on save
         div.innerHTML = `
-            <input type="checkbox" id="${inputName}_${item.id}" name="${inputName}[]" value="${item.id}" ${isChecked}>
+            <input type="checkbox" 
+                   id="${inputName}_${item.id}" 
+                   name="${inputName}[]" 
+                   value="${item.store_val}" 
+                   data-parent-path="" 
+                   ${isChecked}>
             <label for="${inputName}_${item.id}">${item.name}</label>
         `;
         
@@ -1690,48 +1722,40 @@ document.addEventListener('DOMContentLoaded', function() {
         return div;
     }
 
-    // --- HELPER: Render Simple List (For Main Categories) ---
-    function renderSimpleList(container, items, selectedSet, inputName, onChangeCallback) {
-        container.innerHTML = ''; 
-        if (!items || items.length === 0) {
-            container.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No options available</div>';
+    // --- 1. UPDATE CATEGORY LIST (Level 1) ---
+    function updateCategoryList(rawGroupValue) {
+        subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(!rawGroupValue) {
+             categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
+             return;
+        }
+
+        const lookupKey = String(rawGroupValue).trim(); 
+        
+        if(!categoriesByParent[lookupKey]) {
+            categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
             return;
         }
-        
-        // Deduplicate
+
+        const items = categoriesByParent[lookupKey];
+        categoryContainer.innerHTML = '';
         const seenIds = new Set();
         items.forEach(item => {
             if(!seenIds.has(item.id)){
                 seenIds.add(item.id);
-                container.appendChild(createCheckboxItem(item, inputName, selectedSet, onChangeCallback));
+                categoryContainer.appendChild(createCheckboxItem(item, 'category_code', preSelected.cat, handleCategoryChange));
             }
         });
-    }
-
-    // --- 1. UPDATE CATEGORY LIST (Based on Group) ---
-    function updateCategoryList(groupId) {
-        subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
-        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
-
-        if(!groupId || !categoriesByParent[groupId]) {
-            categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
-            return;
-        }
-
-        renderSimpleList(categoryContainer, categoriesByParent[groupId], preSelected.cat, 'category_code', handleCategoryChange);
         
         if(preSelected.cat.size > 0) handleCategoryChange();
     }
 
-    // --- 2. UPDATE SUB CATEGORY LIST (Grouped by Parent Category) ---
+    // --- 2. UPDATE SUB CATEGORY LIST (Level 2) ---
     function handleCategoryChange() {
-        // Reset Search Input
-        subCatSearch.value = '';
-
-        // Get all checked category checkboxes
         const checkedInputs = Array.from(categoryContainer.querySelectorAll('input[type="checkbox"]:checked'));
-        
-        subCatContainer.innerHTML = ''; // Clear container
+        subCatContainer.innerHTML = ''; 
         subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
 
         if(checkedInputs.length === 0) {
@@ -1739,45 +1763,45 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const groupVal = groupTs ? groupTs.getValue() : document.getElementById("group_select").value;
+        const groupKey = String(groupVal).trim(); 
+
         let hasAnyOptions = false;
 
-        // Loop through selected parents to create groups
         checkedInputs.forEach(input => {
-            const parentId = input.value;
-            const parentName = input.nextElementSibling.innerText; // Get name from Label
-            const children = categoriesByParent[parentId];
+            // CHANGE 3: Use input.value directly (which is now the string "mens_wear")
+            const catStoreVal = input.value; 
+            const parentName = input.nextElementSibling.innerText;
+            
+            // PATH LOGIC: "mens_wear|clothing"
+            const lookupKey = catStoreVal + "|" + groupKey;
+            
+            const children = categoriesByParent[lookupKey];
 
             if (children && children.length > 0) {
                 hasAnyOptions = true;
-
-                // Create Group Header
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName; 
                 subCatContainer.appendChild(header);
 
-                // Render Children for this parent
                 children.forEach(item => {
-                    subCatContainer.appendChild(createCheckboxItem(item, 'sub_category_code', preSelected.sub, handleSubCategoryChange));
+                    const el = createCheckboxItem(item, 'sub_category_code', preSelected.sub, handleSubCategoryChange);
+                    // Pass the path down to the next level
+                    el.querySelector('input').setAttribute('data-parent-path', lookupKey);
+                    subCatContainer.appendChild(el);
                 });
             }
         });
 
-        if(!hasAnyOptions) {
-             subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
-        } else {
-             if(preSelected.sub.size > 0) handleSubCategoryChange();
-        }
+        if(!hasAnyOptions) subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
+        else if(preSelected.sub.size > 0) handleSubCategoryChange();
     }
 
-    // --- 3. UPDATE SUB SUB CATEGORY LIST (Grouped by Sub Category) ---
+    // --- 3. UPDATE SUB SUB CATEGORY LIST (Level 3) ---
     function handleSubCategoryChange() {
-        // Reset Search Input
-        subSubCatSearch.value = '';
-
         const checkedInputs = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
-        
-        subSubCatContainer.innerHTML = ''; // Clear container
+        subSubCatContainer.innerHTML = ''; 
 
         if(checkedInputs.length === 0) {
             subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
@@ -1787,78 +1811,64 @@ document.addEventListener('DOMContentLoaded', function() {
         let hasAnyOptions = false;
 
         checkedInputs.forEach(input => {
-            const parentId = input.value;
+            // CHANGE 4: Use input.value (e.g. "shirts")
+            const subCatStoreVal = input.value;
+            const parentPath = input.getAttribute('data-parent-path'); 
             const parentName = input.nextElementSibling.innerText;
-            const children = categoriesByParent[parentId];
+            
+            // PATH LOGIC: "shirts|mens_wear|clothing"
+            const lookupKey = subCatStoreVal + "|" + parentPath;
+            
+            const children = categoriesByParent[lookupKey];
 
             if (children && children.length > 0) {
                 hasAnyOptions = true;
-                
-                // Create Group Header
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName;
                 subSubCatContainer.appendChild(header);
 
-                // Render Children
                 children.forEach(item => {
                     subSubCatContainer.appendChild(createCheckboxItem(item, 'sub_sub_category_code', preSelected.subsub, null));
                 });
             }
         });
 
-        if(!hasAnyOptions) {
-             subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
-        }
+        if(!hasAnyOptions) subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
     }
     
-    // --- SEARCH FILTER FUNCTION ---
+    // --- SEARCH FILTER ---
     function enableSearchFilter(inputId, containerId) {
         const input = document.getElementById(inputId);
         const container = document.getElementById(containerId);
-        
         input.addEventListener('keyup', function() {
             const filter = this.value.toLowerCase();
             const items = container.querySelectorAll('.checkbox-item');
             const headers = container.querySelectorAll('.group-header');
-            
-            // 1. Filter Items
             items.forEach(item => {
                 const label = item.querySelector('label').innerText;
-                if(label.toLowerCase().includes(filter)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
+                item.style.display = label.toLowerCase().includes(filter) ? 'flex' : 'none';
             });
-
-            // 2. Optional: Hide Headers if all children are hidden (Simple logic: if searching, hide all headers to reduce clutter)
-            if(filter.length > 0) {
-                headers.forEach(h => h.style.display = 'none');
-            } else {
-                headers.forEach(h => h.style.display = 'block');
-            }
+            if(filter.length > 0) headers.forEach(h => h.style.display = 'none');
+            else headers.forEach(h => h.style.display = 'block');
         });
     }
 
     // --- EVENTS ---
-    groupTs.on('change', function(groupValue) {
-        preSelected.cat.clear(); 
-        preSelected.sub.clear(); 
-        preSelected.subsub.clear();        
-        const groupId = groupMap[groupValue]; 
-        updateCategoryList(groupId);
-    });
+    if(groupTs) {
+        groupTs.on('change', function(groupValue) {
+            preSelected.cat.clear(); 
+            preSelected.sub.clear(); 
+            preSelected.subsub.clear();        
+            updateCategoryList(groupValue);
+        });
+    }
     
     // --- INITIAL LOAD ---
     if (preSelected.groupVal) {
-        const initialGroupId = groupMap[preSelected.groupVal];        
-        if(initialGroupId) {
-            updateCategoryList(initialGroupId);
-        }
+        updateCategoryList(preSelected.groupVal);
     }
-
-    // --- ACTIVATE SEARCH ---
+    
     enableSearchFilter('sub_cat_search', 'sub_category_container');
     enableSearchFilter('sub_sub_cat_search', 'sub_sub_category_container');
 });

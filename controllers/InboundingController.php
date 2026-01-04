@@ -779,6 +779,8 @@ class InboundingController {
                 }
             }
         }
+
+
         // =========================================================
         // END NEW CODE
         // =========================================================
@@ -1112,8 +1114,8 @@ class InboundingController {
         $stock_price_temp[0]['prod_width'] = $data['data']['width'];
         $stock_price_temp[0]['prod_height'] = $data['data']['height'];
         $stock_price_temp[0]['length_unit'] = 'inch';
-        $stock_price_temp[0]['date_added'] = date("Y-m-d", strtotime($current_date_formatted));;
-        $stock_price_temp[0]['stock_date_added'] = $data['data']['stock_added_date']; 
+        $stock_price_temp[0]['date_added'] =  $data['data']['added_date'];
+        $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
         $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
         $stock_price_temp[0]['flex_status'] = '0';
         $stock_price_temp[0]['fba_in'] = '0';
@@ -1162,8 +1164,8 @@ class InboundingController {
                 $stock_price_temp[$i]['prod_width'] = $value['width'];
                 $stock_price_temp[$i]['prod_height'] = $value['height'];
                 $stock_price_temp[$i]['length_unit'] = 'inch';
-                $stock_price_temp[$i]['date_added'] = date("Y-m-d", strtotime($current_date_formatted));;
-                $stock_price_temp[$i]['stock_date_added'] = $data['data']['stock_added_date']; 
+                $stock_price_temp[$i]['date_added'] = $data['data']['added_date']; 
+                $stock_price_temp[$i]['stock_date_added'] = date("Y-m-d", strtotime($current_date_formatted));
                 $stock_price_temp[$i]['local_stock'] = $value['quantity_received'];
                 $stock_price_temp[$i]['flex_status'] = '0';
                 $stock_price_temp[$i]['fba_in'] = '0';
