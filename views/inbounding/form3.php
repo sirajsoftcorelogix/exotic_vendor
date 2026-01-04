@@ -315,6 +315,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         const container = document.getElementById('variations-container');
         const addBtn = document.getElementById('add-variation-btn');
         const radioButtons = document.querySelectorAll('.category-radio');
+        const mainForm = document.getElementById('mainForm'); // Reference to Form
         let variationCount = <?php echo count($viewVariations); ?>;
         
         const warehouseOptionsHTML = `<?php echo $warehouseOptions; ?>`;
@@ -329,14 +330,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             ?>
         `;
 
-        // 2. TOGGLE SIZE FIELDS FUNCTION (FIXED)
+        // 2. TOGGLE SIZE FIELDS FUNCTION
         function toggleSizeFields() {
-            // Determine if "Clothing/Textiles" is selected
             const selectedRadio = document.querySelector('input[name="category"]:checked');
             let isClothing = false;
 
             if (selectedRadio) {
-                // Check value (e.g. "textiles") AND label (e.g. "Clothing & More")
                 const val = selectedRadio.value.toLowerCase().trim();
                 const parentLabel = selectedRadio.closest('label');
                 const labelText = parentLabel ? parentLabel.querySelector('span').innerText.toLowerCase().trim() : '';
@@ -353,36 +352,25 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 const sizeContainer = card.querySelector('.size-container');
                 const existingInput = sizeContainer.querySelector('.size-input');
                 
-                // --- CRITICAL FIX START ---
-                // If PHP already rendered the correct element type, DO NOT replace it.
-                // This preserves the "selected" value loaded from the database.
                 if (existingInput) {
-                    const currentTag = existingInput.tagName; // 'INPUT' or 'SELECT'
-                    
-                    // If we need a Dropdown (Clothing) and we already have a SELECT -> STOP.
+                    const currentTag = existingInput.tagName;
                     if (isClothing && currentTag === 'SELECT') return;
-
-                    // If we need a Textbox (Non-Clothing) and we already have an INPUT -> STOP.
                     if (!isClothing && currentTag === 'INPUT') return;
                 }
-                // --- CRITICAL FIX END ---
 
-                // If types don't match (User changed category), proceed to swap.
                 const currentValue = existingInput ? existingInput.value : '';
                 if(existingInput) existingInput.remove();
 
                 let newField;
 
                 if (isClothing) {
-                    // Create SELECT
                     newField = document.createElement('select');
                     newField.innerHTML = sizeOptionsHTML;
-                    newField.value = currentValue; // Attempt to keep value if switching
+                    newField.value = currentValue; 
                 } else {
-                    // Create Disabled INPUT
                     newField = document.createElement('input');
                     newField.type = 'text';
-                    newField.value = ''; // Clear value for non-clothing
+                    newField.value = ''; 
                 }
 
                 newField.name = `variations[${index}][size]`;
@@ -392,14 +380,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             });
         }
 
-        // Event Listeners for Category Change
         radioButtons.forEach(radio => {
             radio.addEventListener('change', toggleSizeFields);
         });
 
-        // 3. ADD NEW VARIATION (HTML Generator)
+        // 3. ADD NEW VARIATION
         function createVariationCardHTML(index, count) {
-            // Re-run category check logic for new cards
             const selectedRadio = document.querySelector('input[name="category"]:checked');
             let isClothing = false;
 
@@ -449,19 +435,31 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 
                         <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
                             <div><label class="block text-xs font-bold text-black mb-1">Color:</label><input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Quantity:</label><input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Quantity <span class="text-red-500">*</span>:</label>
+                                <input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field">
+                            </div>
                             
                             <div class="size-container">
                                 <label class="block text-xs font-bold text-black mb-1">Size:</label>
                                 ${sizeFieldHTML}
                             </div>
 
-                            <div><label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Cost Price(INR) <span class="text-red-500">*</span>:</label>
+                                <input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field">
+                            </div>
+
                             <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Location:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label>
+                                <input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -474,26 +472,21 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             container.insertAdjacentHTML('beforeend', html);
         });
 
-        // 4. EVENT DELEGATION
+        // 4. EVENT DELEGATION (Clone/Remove/Image)
         container.addEventListener('click', function(e) {
-            
-            // REMOVE Logic
             if (e.target.closest('.remove-variation-btn')) {
                 const card = e.target.closest('.variation-card');
                 if(card) card.remove();
             }
 
-            // CLONE Logic
             if (e.target.closest('.clone-variation-btn')) {
                 const sourceCard = e.target.closest('.variation-card');
                 
-                // Helper to get value
                 const getData = (name) => {
                     const el = sourceCard.querySelector(`[name*="[${name}]"]`);
                     return el ? el.value : '';
                 };
 
-                // Get Source Data
                 const data = {
                     color: getData('color'),
                     quantity: getData('quantity') || 1,
@@ -507,21 +500,16 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     old_photo: getData('old_photo') 
                 };
 
-                // Create New Card HTML
                 variationCount++;
                 const html = createVariationCardHTML(variationCount - 1, variationCount);
                 container.insertAdjacentHTML('beforeend', html);
 
-                // Get New Card Element
                 const newCard = container.lastElementChild;
-                
-                // Helper to set value
                 const setData = (name, value) => {
                     const el = newCard.querySelector(`[name*="[${name}]"]`);
                     if(el) el.value = value;
                 };
 
-                // Populate Fields
                 setData('color', data.color);
                 setData('quantity', data.quantity || 1); 
                 setData('size', data.size);
@@ -531,26 +519,20 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 setData('depth', data.depth);
                 setData('weight', data.weight);
                 setData('store_location', data.store_location);
-                
-                // Set Hidden Old Photo Value (for Database)
                 setData('old_photo', data.old_photo); 
 
-                // --- CRITICAL FIX: CLONE IMAGE PREVIEW VISUALLY ---
                 const sourceImg = sourceCard.querySelector('.preview-img');
                 const newImg = newCard.querySelector('.preview-img');
                 const newPlaceholder = newCard.querySelector('.placeholder-icon');
 
-                // If source image is visible (has src and not hidden class)
                 if (sourceImg && !sourceImg.classList.contains('hidden') && sourceImg.getAttribute('src') !== '#') {
-                    newImg.src = sourceImg.src;           // Copy the actual image source (Base64 or URL)
-                    newImg.classList.remove('hidden');    // Show image
-                    newPlaceholder.classList.add('hidden'); // Hide camera icon
+                    newImg.src = sourceImg.src;            
+                    newImg.classList.remove('hidden');    
+                    newPlaceholder.classList.add('hidden'); 
                 }
-                // --------------------------------------------------
             }
         });
 
-        // IMAGE PREVIEW
         container.addEventListener('change', function(e) {
             if (e.target.classList.contains('variation-file-input')) {
                 const file = e.target.files[0];
@@ -570,11 +552,93 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             }
         });
 
+        // ------------------------------------------
+        // 5. VALIDATION LOGIC START
+        // ------------------------------------------
+        
+        mainForm.addEventListener('submit', function(e) {
+            let isValid = true;
+            let firstErrorElement = null;
+
+            // A. Validate Category
+            const category = document.querySelector('input[name="category"]:checked');
+            if (!category) {
+                alert("Please select a Category from the top list.");
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+
+            // B. Validate Variations (Quantity, CP, Location)
+            const variationCards = document.querySelectorAll('.variation-card');
+            
+            variationCards.forEach((card, index) => {
+                // Helpers for this specific card
+                const qtyInput = card.querySelector('input[name*="[quantity]"]');
+                const cpInput = card.querySelector('input[name*="[cp]"]');
+                const locInput = card.querySelector('input[name*="[store_location]"]');
+
+                // Helper to set error
+                const setError = (input) => {
+                    input.classList.remove('border-gray-400');
+                    input.classList.add('border-red-500', 'bg-red-50'); // Tailwind Error Classes
+                    isValid = false;
+                    if(!firstErrorElement) firstErrorElement = input;
+                };
+
+                // Helper to clear error (handled in 'input' listener below, but good to have)
+                const clearError = (input) => {
+                    input.classList.remove('border-red-500', 'bg-red-50');
+                    input.classList.add('border-gray-400');
+                }
+
+                // Logic
+                if (!qtyInput.value || qtyInput.value <= 0) {
+                    setError(qtyInput);
+                } else {
+                    clearError(qtyInput);
+                }
+
+                if (!cpInput.value || cpInput.value < 0) {
+                    setError(cpInput);
+                } else {
+                    clearError(cpInput);
+                }
+
+                if (!locInput.value.trim()) {
+                    setError(locInput);
+                } else {
+                    clearError(locInput);
+                }
+            });
+
+            if (!isValid) {
+                e.preventDefault(); // Stop Form Submission
+                alert("Please fill in all required fields (Quantity, Cost Price, Location).");
+                if(firstErrorElement) {
+                    firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstErrorElement.focus();
+                }
+            }
+        });
+
+        // C. Clear Error Styling on User Input
+        mainForm.addEventListener('input', function(e) {
+            if (e.target.classList.contains('border-red-500')) {
+                e.target.classList.remove('border-red-500', 'bg-red-50');
+                e.target.classList.add('border-gray-400');
+            }
+        });
+        
+        // ------------------------------------------
+        // VALIDATION LOGIC END
+        // ------------------------------------------
+
         // Initial Load Check
         toggleSizeFields();
     });
 
-    // Navigation
+    // Navigation & Popups
     var id = <?php echo json_encode($record_id); ?>;
     document.getElementById("back-btn").addEventListener("click", function () {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=form2&id=" + id;
@@ -583,7 +647,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
     
-    // Popup
     function openImagePopup(imageUrl) {
         if(!imageUrl) return;
         document.getElementById('popupImage').src = imageUrl;

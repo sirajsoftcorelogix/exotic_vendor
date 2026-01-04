@@ -232,15 +232,15 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        $data['form2']['icon_data'] = $this->geticonList();
+        $data['form2']['gecolormaps'] = $this->gecolormaps();
+        echo "<pre>";print_r($data['form2']['gecolormaps']);exit;
         $data['form2']['optionals'] = $this->getoptionals();
-        // echo "<pre>";print_r($data['form2']['optionals']);exit;
         $data['images'] = $inboundingModel->getitem_imgs($id);
         // echo "<pre>";print_r($data['icon_data']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
-    function geticonList() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/descriptionicons';
+    function gecolormaps() {
+        $url = 'https://www.exoticindia.com/vendor-api/product/colormaps';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
