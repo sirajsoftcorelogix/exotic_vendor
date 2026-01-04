@@ -233,7 +233,7 @@ class InboundingController {
         $data = array();
         $data = $inboundingModel->getform2data($id);
         $data['form2']['gecolormaps'] = $this->gecolormaps();
-        echo "<pre>";print_r($data['form2']['gecolormaps']);exit;
+        // echo "<pre>";print_r($data['form2']['gecolormaps']);exit;
         $data['form2']['optionals'] = $this->getoptionals();
         $data['images'] = $inboundingModel->getitem_imgs($id);
         // echo "<pre>";print_r($data['icon_data']);exit;
@@ -305,6 +305,7 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         if (isset($id) && $id != 0) {
             $data = $inboundingModel->getform2data($id);
+            $data['form2']['gecolormaps'] = $this->gecolormaps();
             renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
         }else{
             header("location: " . base_url('?page=inbounding&action=list'));
@@ -793,6 +794,7 @@ class InboundingController {
         $search_category_string = $s_subsub . '|' . $s_sub . '|' . $s_cat . '|' . $s_group;
 
         $search_term = $_POST['search_term'] ?? '';
+
         // =========================================================
         // END NEW CODE
         // =========================================================
@@ -807,6 +809,7 @@ class InboundingController {
             'Item_code'           => $item_code,
             'sku'                 => $generated_sku,
             'group_name'          => $_POST['group_name'] ?? '', 
+            'colormaps'             => $_POST['colormaps'] ?? '',
             'category_code'       => $category_val,
             'sub_category_code'   => $sub_cat_val, 
             'sub_sub_category_code' => $sub_sub_val,

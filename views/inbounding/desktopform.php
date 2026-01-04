@@ -75,6 +75,23 @@ $sizeOptions = [
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
 
+$colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
+
+// 2. HELPER FUNCTION TO RENDER COLOR MAP
+function renderColorMapField($fieldName, $savedValue, $customClass = "") {
+    // We render an empty select initially. 
+    // JavaScript will populate it and show/hide it based on the Category.
+    return '
+    <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
+        <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
+        <select name="' . $fieldName . '" 
+                class="colormap-select ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]"
+                data-saved-value="' . htmlspecialchars($savedValue) . '">
+            <option value="">Select Color Map</option>
+        </select>
+    </div>';
+}
+
 // --- 2. DETECT CLOTHING/TEXTILES (Corrected for ID lookup) ---
 $is_clothing_initial = false; 
 $saved_group_id = $data['form2']['group_name'] ?? '';
@@ -431,6 +448,12 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
                         </div>
                     </div>
+                    <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
+                    </div>
+
+                    <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
                 </div>
 
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -540,6 +563,12 @@ $currentSize = $data['form2']['size'] ?? '';
 
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
+                            <div class="w-full min-w-0">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                                <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]">
+                            </div>
+
+                            <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
                         </div>
 
                         <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -639,6 +668,17 @@ $currentSize = $data['form2']['size'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                <div class="w-full min-w-0">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                    <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]">
+                </div>
+
+                <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
+                    <select name="variations[INDEX][colormaps]" class="colormap-select w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">
+                        <option value="">Select Color Map</option>
+                    </select>
+                </div>
             </div>
 
             <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -2792,5 +2832,101 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn("Search Term Input not found - skipping initialization");
     }
 
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. Get PHP Data into JS
+    const colorMapDB = <?php echo json_encode($colorMapData); ?>;
+    
+    // 2. Function to determine the key (jewelry/textiles) from the Group Name
+    function getColorMapKey() {
+        const groupSelect = document.getElementById('group_select');
+        let groupText = '';
+
+        // Handle TomSelect or Native Select
+        if (groupSelect) {
+            if (groupSelect.tomselect) {
+                // If TomSelect is initialized, get the text from the selected item
+                const val = groupSelect.tomselect.getValue();
+                const item = groupSelect.tomselect.getItem(val);
+                if(item) groupText = item.innerText.toLowerCase();
+            } else if (groupSelect.selectedIndex > -1) {
+                // Native fallback
+                groupText = groupSelect.options[groupSelect.selectedIndex].text.toLowerCase();
+            }
+        }
+
+        // Logic to match keys in your array
+        if (groupText.includes('textile') || groupText.includes('clothing')) return 'textiles';
+        if (groupText.includes('jewelry') || groupText.includes('jewellery')) return 'jewelry';
+        
+        return null; // Return null if neither
+    }
+
+    // 3. Main Function to Update All Fields
+    function updateAllColorMaps() {
+        const key = getColorMapKey(); // e.g., 'textiles' or 'jewelry'
+        const wrappers = document.querySelectorAll('.colormap-wrapper');
+
+        wrappers.forEach(wrapper => {
+            const select = wrapper.querySelector('.colormap-select');
+            
+            // A. If no matching category, Hide and Clear
+            if (!key || !colorMapDB[key]) {
+                wrapper.style.display = 'none';
+                select.innerHTML = '<option value="">Select Color Map</option>';
+                return;
+            }
+
+            // B. If matching category, Show and Populate
+            wrapper.style.display = 'block'; // Or 'flex' depending on your grid
+            
+            // Only repopulate if the options haven't been generated for this key yet
+            // (We check a custom attribute to avoid wiping user selection while typing elsewhere)
+            if (select.getAttribute('data-loaded-key') !== key) {
+                
+                // Get the Saved Value (from Database)
+                const savedVal = select.getAttribute('data-saved-value') || "";
+                
+                // Build Options
+                let html = '<option value="">Select Color Map</option>';
+                const options = colorMapDB[key]; // The array [black, gray, white...]
+                
+                options.forEach(colorName => {
+                    // Check if this option matches the saved database value
+                    // We trim and lowercase for loose comparison
+                    const isSelected = (String(colorName).trim().toLowerCase() === String(savedVal).trim().toLowerCase()) ? 'selected' : '';
+                    html += `<option value="${colorName}" ${isSelected}>${colorName}</option>`;
+                });
+
+                select.innerHTML = html;
+                select.setAttribute('data-loaded-key', key); // Mark as loaded
+            }
+        });
+    }
+
+    // 4. Listeners
+    // Hook into Group Change (TomSelect or Native)
+    const groupSelect = document.getElementById('group_select');
+    if (groupSelect) {
+        // Native Event
+        groupSelect.addEventListener('change', updateAllColorMaps);
+        // TomSelect Event
+        if (groupSelect.tomselect) {
+            groupSelect.tomselect.on('change', updateAllColorMaps);
+        }
+    }
+
+    // Hook into "Add New Variation" to populate the new card immediately
+    const originalAddVarForColor = window.addNewVariation;
+    window.addNewVariation = function() {
+        if(originalAddVarForColor) originalAddVarForColor();
+        setTimeout(updateAllColorMaps, 50); // Small delay to ensure DOM is ready
+    };
+
+    // 5. Initial Run
+    updateAllColorMaps();
 });
 </script>

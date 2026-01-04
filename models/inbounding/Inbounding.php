@@ -800,17 +800,18 @@ public function update_image_variation($img_id, $variation_id) {
         $wh     = ($data['store_location'] ?? '');
         $p_ind  = (float) ($data['price_india'] ?? 0);
         $p_mrp  = (float) ($data['price_india_mrp'] ?? 0);
+        $colormaps  = ($data['colormaps'] ?? 0);
         $sql = "UPDATE vp_inbound 
                 SET gate_entry_date_time = ?, material_code = ?,  group_name = ?, 
                     height = ?, width = ?, depth = ?, weight = ?, 
                     color = ?, size = ?, cp = ?, quantity_received = ?, 
                     received_by_user_id = ?, temp_code = ?, product_photo = ?,
-                    store_location = ?, price_india = ?, price_india_mrp = ?
+                    store_location = ?, price_india = ?, price_india_mrp = ?,colormaps =?
                 WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
         $stmt->bind_param(
-            'sssddddssdiisssidd', 
+            'sssddddssdiisssidsd', 
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
@@ -819,7 +820,7 @@ public function update_image_variation($img_id, $variation_id) {
             $data['received_by_user_id'], 
             $data['temp_code'],       
             $photo,
-            $wh, $p_ind, $p_mrp,
+            $wh, $p_ind, $p_mrp,$colormaps,
             $id
         );
         if ($stmt->execute()) return ['success' => true];
@@ -848,16 +849,15 @@ public function update_image_variation($img_id, $variation_id) {
 
         // 3. INSERT & UPDATE QUERIES
         $insertSql = "INSERT INTO vp_variations 
-                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $updateSql = "UPDATE vp_variations 
-                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=? 
+                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=? ,colormaps = ?
                       WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
         $stmtUpdate = $this->conn->prepare($updateSql);
-
         foreach ($variations as $key => $var) {
             if ($key == 0) continue; 
 
@@ -884,17 +884,18 @@ public function update_image_variation($img_id, $variation_id) {
             
             $hsn = !empty($var['hsn_code']) ? $var['hsn_code'] : '';
             $gst = !empty($var['gst_rate']) ? (int)$var['gst_rate'] : 0;
+            $colm = !empty($var['colormaps']) ? $var['colormaps'] : '';
 
             if (!empty($id)) {
                 // UPDATE: 
                 // Changed 11th char from 'i' to 's' (store_location)
                 // String: sssidsddddsdddddsii 
-                $stmtUpdate->bind_param("sssidsddddsdddddsii", 
+                $stmtUpdate->bind_param("sssidsddddsdddddsisi", 
                     $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
                     $h, $w, $d, $wt, 
                     $wh, // s (varchar)
                     $pi, $pm, $inr, $amz, $usd, 
-                    $hsn, $gst, 
+                    $hsn, $gst, $colm,
                     $id
                 );
                 $stmtUpdate->execute();
@@ -902,12 +903,12 @@ public function update_image_variation($img_id, $variation_id) {
                 // INSERT: 
                 // Changed 12th char from 'i' to 's' (store_location)
                 // String: isssidsddddsdddddsi
-                $stmtInsert->bind_param("isssidsddddsdddddsi", 
+                $stmtInsert->bind_param("isssidsddddsdddddsis", 
                     $it_id, $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
                     $h, $w, $d, $wt, 
                     $wh, // s (varchar)
                     $pi, $pm, $inr, $amz, $usd, 
-                    $hsn, $gst
+                    $hsn, $gst,$colm
                 );
                 $stmtInsert->execute();
             }
@@ -918,7 +919,7 @@ public function update_image_variation($img_id, $variation_id) {
     public function getVariations($it_id) {
         // Added 'quantity_received as quantity' for HTML compatibility
         $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, 
-                inr_pricing, amazon_price, usd_price, hsn_code, gst_rate
+                inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps
                 FROM vp_variations WHERE it_id = ?";
                 
         $stmt = $this->conn->prepare($sql);
