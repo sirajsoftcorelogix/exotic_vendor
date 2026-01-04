@@ -1263,7 +1263,7 @@ $currentSize = $data['form2']['size'] ?? '';
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Marketplace Vendor:</label>
                         <div class="relative w-full">
-                            <input type="number" name="marketplace" 
+                            <input type="text" name="marketplace" 
                                    value="<?= htmlspecialchars($data['form2']['marketplace'] ?? 'exoticindia') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                         </div>
