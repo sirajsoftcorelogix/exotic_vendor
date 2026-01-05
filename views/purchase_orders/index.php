@@ -424,8 +424,8 @@
                             </p>
                         </div>
                     </div>
-                    <div class="flex items-start mb-6 pb-6 border-b max-w-1xl overflow-x-auto" id="po-details-section">
-                        <div class="text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4">
+                    <div class="flex items-start mb-6 pb-6 border-b max-w-1xl overflow-x-auto overflow-y-auto flex-nowrap max-h-56" id="po-details-section">
+                        <div class="text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4 flex-shrink-0">
                             <!--close button-->
                             <a href="#" class="float-right text-gray-400 hover:text-orange-600" id="close-item-popup-btn">
                                 <i class="fas fa-times"></i>
@@ -641,14 +641,14 @@ function handleAction(action, poId, el) {
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    alert('Purchase order deleted successfully.');
-                    location.reload();
+                    showAlert('Purchase order deleted successfully.', 'success');
+                    setTimeout(() => { location.reload(); }, 900);
                 } else {
-                    alert(data.message || 'Failed to delete purchase order.');
+                    showAlert(data.message || 'Failed to delete purchase order.', 'error');
                 }
             })
             .catch(() => {
-                alert('Error deleting purchase order.');
+                showAlert('Error deleting purchase order.', 'error');
             });
       }
   } else if (action === 'Download') {
@@ -686,11 +686,11 @@ function handleAction(action, poId, el) {
                 document.getElementById('PO-numberToPo').textContent = data.data.po_number;
                 document.getElementById('contactToPo').textContent = data.data.vendor_phone;
             } else {
-                alert(data.message || 'Failed to retrieve purchase order details.');
+                showAlert(data.message || 'Failed to retrieve purchase order details.', 'error');
             }
         })
         .catch(() => {
-            alert('Error retrieving purchase order details.');
+            showAlert('Error retrieving purchase order details.', 'error');
         });
         document.getElementById('PO-numberToPo').textContent = poId;
         document.getElementById('vendorToPo').textContent = poId;
@@ -718,14 +718,14 @@ function handleAction(action, poId, el) {
                     document.getElementById('emailToPo-cancel-btn').disabled = false;
                     document.getElementById('emailToPo-msg').textContent = 'Email sent successfully.';
                     document.getElementById('emailToPo-submit-btn').textContent = 'Sent';                    
-                    alert('Purchase order emailed to vendor successfully.');
+                    showAlert('Purchase order emailed to vendor successfully.', 'success');
                     document.getElementById('email-popup').classList.add('hidden');
                 } else {
-                    alert(data.message || 'Failed to email purchase order.');
+                    showAlert(data.message || 'Failed to email purchase order.', 'error');
                 }
             })
             .catch(() => {
-                alert('Error emailing purchase order.');
+                showAlert('Error emailing purchase order.', 'error');
             });
         });
       // Redirect to email action
@@ -874,16 +874,16 @@ function handleAction(action, poId, el) {
                             .then(r => r.json())
                             .then(data => {
                                 if (data.success) {
-                                    alert('File deleted successfully.');
+                                    showAlert('File deleted successfully.', 'success');
                                     fileInput.value = '';
                                     uploadedFileSection.classList.add('hidden');
                                     fileInfoDiv.innerHTML = '';
                                 } else {
-                                    alert(data.message || 'Failed to delete file.');
+                                    showAlert(data.message || 'Failed to delete file.', 'error');
                                 }
                             })
                             .catch(() => {
-                                alert('Error deleting file.');
+                                showAlert('Error deleting file.', 'error');
                             });
                         }
                     });
@@ -895,11 +895,11 @@ function handleAction(action, poId, el) {
 
             } else {
                 console.debug('PO details fetch error:', data);
-                alert(data.message || 'Failed to fetch purchase order details.');
+                showAlert(data.message || 'Failed to fetch purchase order details.', 'error');
             }
         }).catch((err) => {            
             console.debug('Fetch error:', err);
-            alert('Error fetching purchase order details.' + err.message);
+            showAlert('Error fetching purchase order details.' + err.message, 'error');
         }); 
 
         chooseFileBtn.addEventListener('click', () => fileInput.click());
@@ -974,7 +974,7 @@ function handleAction(action, poId, el) {
             
             //alert('Validation status: ' + isValid);
             if (!isValid) {
-                alert('Please fill all required fields and upload the invoice file.');
+                showAlert('Please fill all required fields and upload the invoice file.', 'error');
                 return;
             }
             // Here we handle the form submission, e.g., via AJAX
@@ -987,18 +987,18 @@ function handleAction(action, poId, el) {
             .then(data => {
                 if (data.success) {                   
                     if (invoiceType === 'invoice') {
-                        alert('Invoice uploaded successfully!');
+                        showAlert('Invoice uploaded successfully!', 'success');
                     } else {
-                        alert('Performa invoice uploaded successfully!');
+                        showAlert('Performa invoice uploaded successfully!', 'success');
                     }
                     closeVendorPopup();
-                    location.reload();
+                    setTimeout(() => { location.reload(); }, 1200);
                 } else {
-                    alert(data.message || 'Failed to upload invoice.');
+                    showAlert(data.message || 'Failed to upload invoice.', 'error');
                 }
             })
             .catch(() => {
-                alert('Error uploading invoice.');
+                showAlert('Error uploading invoice.', 'error');
             });
             
         });
@@ -1268,7 +1268,7 @@ function updatePoDetailsSection() {
         const poDate = dateTd ? dateTd.textContent.trim() : '';
 
         const box = document.createElement('div');
-        box.className = 'text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4 relative bg-gray-50 rounded';
+        box.className = 'text-sm p-2 text-gray-600 space-y-1 w-60 border border-gray-300 mr-4 relative bg-gray-50 rounded flex-shrink-0';
         box.innerHTML = '<button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-600 po-remove-btn" data-po-id="' + escapeHtml(id) + '" aria-label="Remove PO">&times;</button>' +
                         '<p><strong>PO Number:</strong> ' + escapeHtml(poNumber) + '</p>' +
                         '<p><strong>PO Date:</strong> ' + escapeHtml(poDate) + '</p>';
@@ -1307,7 +1307,7 @@ document.getElementById('group-upload-invoice').addEventListener('click', functi
     e.preventDefault();
     const poIds = getSelectedPoIds();
     if (poIds.length === 0) {
-        alert("Please select at least one purchase order.");
+        showAlert('Please select at least one purchase order.', 'error');
         return;
     }
     // Ensure all selected POs belong to the same vendor
@@ -1322,14 +1322,16 @@ document.getElementById('group-upload-invoice').addEventListener('click', functi
         }
     });
     if (vendorIds.size > 1) {
-        alert("Please select purchase orders from the same vendor to upload a group invoice.");
+        showAlert('Please select purchase orders from the same vendor to upload a group invoice.', 'error');
         return;
     }
     if (vendorIds.size === 0) {
-        alert("Unable to determine vendor for selected purchase orders.");
+        showAlert("Unable to determine vendor for selected purchase orders.", 'error');
         return;
     }
     // Open the invoice upload popup
     handleAction('UploadInvoice', poIds);
 });
+
+
 </script>
