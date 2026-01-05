@@ -119,6 +119,8 @@ class ChatServer implements MessageComponentInterface
             }
         } catch (Throwable $e) {
             error_log("onMessage error: " . $e->getMessage());
+            error_log($e->getTraceAsString());
+
             try { $from->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
         }
     }
@@ -413,7 +415,9 @@ class ChatServer implements MessageComponentInterface
         $text = trim($payload['message'] ?? '');
         $senderId = $from->userId ?? null;
         $filePath = $payload['file_path'] ?? null;
-        $originalName = trim($payload['original_name']) ?? null;
+        $originalName = isset($payload['original_name']) && trim($payload['original_name']) !== ''
+            ? trim($payload['original_name'])
+            : null;
 
         if (!$conversationId || !$senderId) {
             $from->send(json_encode(['type' => 'error', 'msg' => 'Invalid conversation or sender']));

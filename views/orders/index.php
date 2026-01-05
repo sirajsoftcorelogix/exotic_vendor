@@ -276,6 +276,25 @@
             </div>
         </div>
     </div>
+    <?php 
+    // if (isset($_GET['order_from']) && !empty($_GET['order_from'])) {
+    //     $from_date = $_GET['order_from'];
+    // } else {
+    //     $from_date = date('Y-m-d');
+    // }
+    // if (isset($_GET['order_till']) && !empty($_GET['order_till'])) {
+    //     $till_date = $_GET['order_till'];
+    // } else {
+    //     $till_date = date('Y-m-d');
+    // }
+    $dtrange = '';
+    if (empty($_GET['order_till'])) {
+        $dtrange = htmlspecialchars($_GET['order_from'] ?? '');
+    } else {
+        $dtrange = htmlspecialchars($_GET['order_from'] ?? '') . ' - ' . htmlspecialchars($_GET['order_till'] ?? '');
+    }
+    
+   ?>
     <!-- Advance Search Accordion -->
     <div class="mt-2 mb-8 bg-white rounded-xl p-4 ">
         <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
@@ -294,16 +313,39 @@
                 
                     <div class="w-full date-field">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order Date Range</label>
-                        <input type="text" value="<?= htmlspecialchars($_GET['daterange'] ?? '') ?>" name="daterange" id="daterange" placeholder="Select date range" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                        <input type="text" autocomplete="off" value="<?= $dtrange ?>" name="daterange" id="daterange" placeholder="Select date range" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
                         <i class="fa fa-calendar"></i>
+                        <input type="hidden" name="order_from" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" id="from_date">
+                        <input type="hidden" name="order_till" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" id="to_date">
+
                     </div>
                      <script>
                         $(function() {
                         $('#daterange').daterangepicker({
-                            opens: 'right',
-                            locale: { format: 'YYYY-MM-DD' }
+                            autoUpdateInput: false,     // keep field blank until Apply
+                            showDropdowns: true,        // optional: month/year dropdowns
+                            locale: { format: 'YYYY-MM-DD' },
+                            alwaysShowCalendars: true,  // ensures only calendars show
+                            drops: 'down',              // position of calendar
+                            opens: 'right',             // alignment
+                            autoApply: false 
+                        }, function(start, end) {
+                            // Update hidden fields whenever a range is selected
+                            $('#from_date').val(start.format('YYYY-MM-DD'));
+                            $('#to_date').val(end.format('YYYY-MM-DD'));
                         });
+                        // When user selects a range, update the input
+                        $('#daterange').on('apply.daterangepicker', function(ev, picker) {
+                            $(this).val(picker.startDate.format('YYYY-MM-DD') + ' - ' + picker.endDate.format('YYYY-MM-DD'));
                         });
+
+                        // If user clears, reset to placeholder
+                        $('#daterange').on('cancel.daterangepicker', function(ev, picker) {
+                            $(this).val('');
+                        });
+
+                        });
+                        
                     </script>
                     <!-- <div class="w-1/2">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
