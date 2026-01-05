@@ -169,7 +169,7 @@ $msgCnt = $notificationController->getUnreadCount();
       <!-- Header -->
       <div class="h-16 px-5 flex items-center justify-between bg-white flex-shrink-0 mt-2">
           <!-- Title -->
-          <h1 class="font-sf-pro font-bold text-header text-headerText tracking-normal">Chats</h1>
+          <h1 class="font-sf-pro font-bold text-header text-headerText tracking-normal" id="sidebar-title">Chats</h1>
 
           <!-- Actions -->
           <!-- <div class="flex items-center gap-4">
@@ -363,13 +363,29 @@ $msgCnt = $notificationController->getUnreadCount();
     </div>
 </div>
 <script>
-window.CURRENT_USER = <?php echo (int)$currentUserId; ?>;
-window.API_TOKEN = <?php echo json_encode($apiToken); ?>;
+    document.addEventListener('DOMContentLoaded', function () {
+        const menuToggle = document.getElementById('menu-toggle');
+        const openMenuButton = document.getElementById('open-menu-button');
+        const sidebar = document.getElementById('sidebar-title');
+        if (menuToggle && sidebar && openMenuButton) {
+            // Event listener for the close button (inside the sidebar)
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.add("sidebar-title");
+            });
 
-window.API_BASE = "<?php echo $API_BASE ?>";
+            // Event listener for the open button (outside the sidebar)
+            openMenuButton.addEventListener('click', function() {
+                sidebar.classList.remove("sidebar-title");
+            });
+        }
+    });
+    window.CURRENT_USER = <?php echo (int)$currentUserId; ?>;
+    window.API_TOKEN = <?php echo json_encode($apiToken); ?>;
 
-window.WS_URL = "<?php echo $WS_URL ?>";
-console.log("URL: " + window.WS_URL + " Current User: " + window.CURRENT_USER);
+    window.API_BASE = "<?php echo $API_BASE ?>";
+
+    window.WS_URL = "<?php echo $WS_URL ?>";
+    console.log("URL: " + window.WS_URL + " Current User: " + window.CURRENT_USER);
 </script>
 <script src="assets/chat.js"></script>
 <div id="ui-popup-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 999999;"></div>

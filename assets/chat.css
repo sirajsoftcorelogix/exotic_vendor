@@ -20,12 +20,26 @@ body {
   flex-direction: column;
 }
 .sidebar_div-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  height: 56px;
+  padding: 0 8px;
   padding: 12px 16px;
   border-bottom: 1px solid #e5e7eb;
 }
 .sidebar_div-header h2 {
   margin: 0;
   font-size: 18px;
+}
+.sidebar-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 60px;
 }
 #conversation-list {
   flex: 1;
