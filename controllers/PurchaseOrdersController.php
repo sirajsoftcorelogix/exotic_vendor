@@ -373,6 +373,12 @@ class PurchaseOrdersController {
         //print_array($purchaseOrder);        
         $data['invoice'] = $poInvoiceModel->getInvoiceByPOId($poId,'invoice');
         $data['proforma'] = $poInvoiceModel->getInvoiceByPOId($poId,'performa');
+        // If invoice exists and is a group invoice (mapped to multiple POs), fetch mapped PO details
+        if (!empty($data['invoice'])) {
+            $data['group_invoice_items'] = $poInvoiceModel->getPOsByInvoiceId($data['invoice']['id']);
+        } else {
+            $data['group_invoice_items'] = [];
+        }
         $data['status_log'] = $purchaseOrdersModel->get_po_status_log($poId);
         $data['poId'] = $poId;
         $pmt = $poInvoiceModel->getPaymentsByPoId($poId);
