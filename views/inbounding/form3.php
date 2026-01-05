@@ -617,12 +617,31 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 }, 50);
             }
         });
+        container.addEventListener('change', function(e) {
+            if (e.target.classList.contains('variation-file-input')) {
+                const input = e.target;
+                const file = input.files[0];
+                const label = input.closest('label'); // The parent wrapper
+                const previewImg = label.querySelector('.preview-img');
+                const placeholder = label.querySelector('.placeholder-icon');
 
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImg.src = e.target.result;
+                        previewImg.classList.remove('hidden');
+                        placeholder.classList.add('hidden');
+                    }
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
         // 7. VALIDATION
         mainForm.addEventListener('submit', function(e) {
             let isValid = true;
             let firstErrorElement = null;
 
+            // Check Category Selection
             const category = document.querySelector('input[name="category"]:checked');
             if (!category) {
                 alert("Please select a Category from the top list.");
@@ -631,12 +650,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 return;
             }
 
+            // Check Variation Cards
             const variationCards = document.querySelectorAll('.variation-card');
             variationCards.forEach((card) => {
                 const qtyInput = card.querySelector('input[name*="[quantity]"]');
-                const cpInput = card.querySelector('input[name*="[cp]"]');
-                const locInput = card.querySelector('input[name*="[store_location]"]');
-
+                
+                // Helper functions
                 const setError = (input) => {
                     input.classList.remove('border-gray-400');
                     input.classList.add('border-red-500', 'bg-red-50');
@@ -648,14 +667,23 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     input.classList.add('border-gray-400');
                 }
 
-                if (!qtyInput.value || qtyInput.value <= 0) setError(qtyInput); else clearError(qtyInput);
-                if (!cpInput.value || cpInput.value < 0) setError(cpInput); else clearError(cpInput);
-                if (!locInput.value.trim()) setError(locInput); else clearError(locInput);
+                // 1. VALIDATE QUANTITY (Keep this)
+                if (!qtyInput.value || qtyInput.value <= 0) {
+                    setError(qtyInput); 
+                } else {
+                    clearError(qtyInput);
+                }
+
+                // 2. VALIDATE COST PRICE (Removed)
+                // if (!cpInput.value || cpInput.value < 0) setError(cpInput); else clearError(cpInput);
+
+                // 3. VALIDATE LOCATION (Removed)
+                // if (!locInput.value.trim()) setError(locInput); else clearError(locInput);
             });
 
             if (!isValid) {
                 e.preventDefault();
-                alert("Please fill in all required fields.");
+                alert("Please fill in the required Quantity.");
                 if(firstErrorElement) {
                     firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     firstErrorElement.focus();

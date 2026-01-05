@@ -102,8 +102,8 @@ $record_id = $data['record_id'] ?? 0;
     let dt = new DataTransfer();
 
     // --- CONFIGURATION ---
-    const MAX_LIMIT_MB = 100;
-    const MAX_BYTES = MAX_LIMIT_MB * 1024 * 1024; // 100 MB in Bytes
+    const MAX_LIMIT_MB = 500;
+    const MAX_BYTES = MAX_LIMIT_MB * 5120 * 5120; // 100 MB in Bytes
 
     // 1. Handle File Selection (With Validation)
     fileInput.addEventListener('change', function() {

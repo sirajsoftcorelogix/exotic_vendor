@@ -415,13 +415,6 @@ $currentSize = $data['form2']['size'] ?? '';
                         </div>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">INR Price:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['inr_pricing'] ?? '') ?>" name = "inr_pricing">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
-                        </div>
-                    </div>
-                    <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Amazon Price:</label>
                         <div class="relative flex items-center w-full">
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['amazon_price'] ?? '') ?>" name="amazon_price">
@@ -447,10 +440,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>" name="gst_rate">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
                         </div>
-                    </div>
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
-                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
                     </div>
 
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
@@ -550,11 +539,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india_mrp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-
-
-
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">INR Price::</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['inr_pricing'] ?? '') ?>" name="variations[<?= $var['id'] ?>][inr_pricing]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Amazon Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['amazon_price'] ?? '') ?>" name="variations[<?= $var['id'] ?>][amazon_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
 
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['usd_price'] ?? '') ?>" name="variations[<?= $var['id'] ?>][usd_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span></div></div>
@@ -657,10 +641,6 @@ $currentSize = $data['form2']['size'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-
-
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">INR Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][inr_pricing]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Amazon Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][amazon_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][usd_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span></div></div>
@@ -668,10 +648,6 @@ $currentSize = $data['form2']['size'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
-                <div class="w-full min-w-0">
-                    <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
-                    <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]">
-                </div>
 
                 <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
                     <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
@@ -1026,9 +1002,10 @@ $currentSize = $data['form2']['size'] ?? '';
                         <div class="checkbox-list-container overflow-y-auto p-1 h-full">
                             <?php 
                                 // 1. Get the initial data
-                                $source_data = $data['form2']['optionals'] ?? [];
+                                $source_data = $data['form2']['optionals_data'] ?? [];
 
-                                // 2. FIX: Check if the actual list is hidden inside an 'optionals' key
+                                // echo "<pre>source_data: "; print_r($source_data);
+                                // exit;
                                 if (isset($source_data['optionals']) && is_array($source_data['optionals'])) {
                                     $available_options = $source_data['optionals'];
                                 } else {
@@ -1263,7 +1240,7 @@ $currentSize = $data['form2']['size'] ?? '';
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Marketplace Vendor:</label>
                         <div class="relative w-full">
-                            <input type="number" name="marketplace" 
+                            <input type="text" name="marketplace" 
                                    value="<?= htmlspecialchars($data['form2']['marketplace'] ?? 'exoticindia') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                         </div>
@@ -1309,13 +1286,21 @@ $currentSize = $data['form2']['size'] ?? '';
                                 </label>
                             </div>
                         </div>
-
                     </div>
-
+                    
                 </div>
             </fieldset>
         </div>
-        
+        <div class="mt-[15px] md:mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Remarks</legend>
+                <div>
+                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Remarks:</label>
+                    <input type="text" id="feedback" name="feedback" 
+                           value="<?= htmlspecialchars($data['form2']['feedback'] ?? '') ?>" autocomplete="off" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                </div>
+            </fieldset>
+        </div>
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
             <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -2238,7 +2223,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Set values
             const fields = ['height', 'width', 'depth', 'weight', 'size', 'color', 
                             'quantity_received', 'cp', 'price_india', 'price_india_mrp', 
-                            'inr_pricing', 'amazon_price', 'usd_price', 'hsn_code', 
+                             'amazon_price', 'usd_price', 'hsn_code', 
                             'gst_rate', 'ware_house_code', 'store_location'];
 
             fields.forEach(field => {
@@ -2477,7 +2462,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // We check if the name contains 'inr_pricing' to cover both:
             // Main: name="inr_pricing"
             // Variations: name="variations[x][inr_pricing]"
-            if (e.target.name && e.target.name.includes('inr_pricing')) {
+            if (e.target.name && e.target.name.includes('price_india')) {
                 
                 const inrInput = e.target;
                 const inrValue = parseFloat(inrInput.value);
