@@ -530,21 +530,24 @@ public function update_image_variation($img_id, $variation_id) {
         $vendor_code = $data['vendor_id'] ?? '';
         $invoice_img = $data['invoice'] ?? '';
         $invoice_no  = $data['invoice_no'] ?? '';
-        // Prepare statement
-        $sql = "INSERT INTO vp_inbound (vendor_code, invoice_image, invoice_no) VALUES (?, ?, ?)";
+
+        // UPDATED SQL: Added 'gate_entry_date_time' with NOW()
+        $sql = "INSERT INTO vp_inbound 
+                (vendor_code, invoice_image, invoice_no, gate_entry_date_time) 
+                VALUES (?, ?, ?, NOW())";
+        
         $stmt = $this->conn->prepare($sql);
 
         if (!$stmt) {
-            // Debugging: echo "Prepare failed: (" . $this->conn->errno . ") " . $this->conn->error;
             return false;
         }
 
-        // Bind parameters: 's' = string. 
-        // Assuming vendor_code, invoice_image, and invoice_no are strings.
-        $stmt->bind_param("isi", $vendor_code, $invoice_img, $invoice_no);
+        // Bind parameters (s = string)
+        // We only bind 3 values; NOW() is handled by MySQL directly
+        $stmt->bind_param("iss", $vendor_code, $invoice_img, $invoice_no);
 
         if ($stmt->execute()) {
-            return $stmt->insert_id; // Return the new ID
+            return $stmt->insert_id;
         }
 
         return false;
@@ -725,11 +728,10 @@ public function update_image_variation($img_id, $variation_id) {
         return false;
     }
     public function getlabeldata($id){
-        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,ea.address_title as location  FROM vp_inbound as v 
+        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,v.store_location as location  FROM vp_inbound as v 
         LEFT JOIN category as c on v.group_name=c.category
         LEFT JOIN material as m on v.material_code=m.id
         LEFT JOIN vp_vendors as vv on v.vendor_code=vv.id
-        LEFT JOIN exotic_address as ea on v.ware_house_code = ea.id
         WHERE v.id = $id";
         $result = $this->conn->query($sql);
         $inbounding = [];
@@ -785,43 +787,31 @@ public function update_image_variation($img_id, $variation_id) {
 
     // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
     public function updateMainInbound($id, $data) {
-        // 1. EXTRACT DATA DIRECTLY FROM ARGUMENT
-        // The Controller now passes exact keys, so we just use them.
-        
         $height = (float) ($data['height'] ?? 0);
         $width  = (float) ($data['width']  ?? 0);
         $depth  = (float) ($data['depth']  ?? 0);
         $weight = (float) ($data['weight'] ?? 0);
-        
         $color  = $data['color'] ?? '';
         $size   = $data['size'] ?? '';
-        
         // FIX: Read 'quantity_received' directly
         $qty    = (int)   ($data['quantity_received'] ?? 0);
         $cp     = (float) ($data['cp'] ?? 0);
         $photo  = $data['product_photo'] ?? '';
-
-        // NEW FIELDS
-        $wh     = (int)   ($data['ware_house_code'] ?? 0);
+        $wh     = ($data['store_location'] ?? '');
         $p_ind  = (float) ($data['price_india'] ?? 0);
         $p_mrp  = (float) ($data['price_india_mrp'] ?? 0);
-
-        // 2. UPDATE SQL
+        $colormaps  = ($data['colormaps'] ?? 0);
         $sql = "UPDATE vp_inbound 
                 SET gate_entry_date_time = ?, material_code = ?,  group_name = ?, 
                     height = ?, width = ?, depth = ?, weight = ?, 
                     color = ?, size = ?, cp = ?, quantity_received = ?, 
                     received_by_user_id = ?, temp_code = ?, product_photo = ?,
-                    ware_house_code = ?, price_india = ?, price_india_mrp = ?
+                    store_location = ?, price_india = ?, price_india_mrp = ?,colormaps =?
                 WHERE id = ?";
-        
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
-
-        // BIND PARAMETERS
-        // sssddddssdiissiidd
         $stmt->bind_param(
-            'sssddddssdiissiidd', 
+            'sssddddssdiisssidsd', 
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
@@ -830,10 +820,9 @@ public function update_image_variation($img_id, $variation_id) {
             $data['received_by_user_id'], 
             $data['temp_code'],       
             $photo,
-            $wh, $p_ind, $p_mrp,
+            $wh, $p_ind, $p_mrp,$colormaps,
             $id
         );
-
         if ($stmt->execute()) return ['success' => true];
         return ['success' => false, 'message' => $stmt->error];
     }
@@ -859,19 +848,16 @@ public function update_image_variation($img_id, $variation_id) {
         }
 
         // 3. INSERT & UPDATE QUERIES
-        // Count: 19 Placeholders (?)
         $insertSql = "INSERT INTO vp_variations 
-                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
-        // Count: 18 Sets + 1 Where = 19 Placeholders (?)
         $updateSql = "UPDATE vp_variations 
-                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, ware_house_code=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=? 
+                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=? ,colormaps = ?
                       WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
         $stmtUpdate = $this->conn->prepare($updateSql);
-
         foreach ($variations as $key => $var) {
             if ($key == 0) continue; 
 
@@ -883,7 +869,10 @@ public function update_image_variation($img_id, $variation_id) {
             $w = !empty($var['width']) ? $var['width'] : 0.00;
             $d = !empty($var['depth']) ? $var['depth'] : 0.00;
             $wt = !empty($var['weight']) ? $var['weight'] : 0.00;
-            $wh = !empty($var['ware_house_code']) ? (int)$var['ware_house_code'] : 0;
+            
+            // Cast as string for VARCHAR
+            $wh = !empty($var['store_location']) ? (string)$var['store_location'] : '';
+            
             $qty = !empty($var['quantity']) ? (int)$var['quantity'] : 0;
             
             // Pricing defaults
@@ -893,29 +882,33 @@ public function update_image_variation($img_id, $variation_id) {
             $amz = !empty($var['amazon_price']) ? (float)$var['amazon_price'] : 0.00;
             $usd = !empty($var['usd_price']) ? (float)$var['usd_price'] : 0.00;
             
-            // String/Int defaults
             $hsn = !empty($var['hsn_code']) ? $var['hsn_code'] : '';
             $gst = !empty($var['gst_rate']) ? (int)$var['gst_rate'] : 0;
+            $colm = !empty($var['colormaps']) ? $var['colormaps'] : '';
 
             if (!empty($id)) {
-                // UPDATE: 19 Variables -> 19 Characters in string
-                // String: sssidsddddidddddsii (added missing 'd')
-                $stmtUpdate->bind_param("sssidsddddidddddsii", 
+                // UPDATE: 
+                // Changed 11th char from 'i' to 's' (store_location)
+                // String: sssidsddddsdddddsii 
+                $stmtUpdate->bind_param("sssidsddddsdddddsisi", 
                     $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
-                    $h, $w, $d, $wt, $wh, $pi, $pm, 
-                    $inr, $amz, $usd, // 5 Doubles here
-                    $hsn, $gst, 
+                    $h, $w, $d, $wt, 
+                    $wh, // s (varchar)
+                    $pi, $pm, $inr, $amz, $usd, 
+                    $hsn, $gst, $colm,
                     $id
                 );
                 $stmtUpdate->execute();
             } else {
-                // INSERT: 19 Variables -> 19 Characters in string
-                // String: isssidsddddidddddsi (added missing 'd')
-                $stmtInsert->bind_param("isssidsddddidddddsi", 
+                // INSERT: 
+                // Changed 12th char from 'i' to 's' (store_location)
+                // String: isssidsddddsdddddsi
+                $stmtInsert->bind_param("isssidsddddsdddddsis", 
                     $it_id, $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
-                    $h, $w, $d, $wt, $wh, $pi, $pm, 
-                    $inr, $amz, $usd, // 5 Doubles here
-                    $hsn, $gst
+                    $h, $w, $d, $wt, 
+                    $wh, // s (varchar)
+                    $pi, $pm, $inr, $amz, $usd, 
+                    $hsn, $gst,$colm
                 );
                 $stmtInsert->execute();
             }
@@ -925,8 +918,8 @@ public function update_image_variation($img_id, $variation_id) {
 
     public function getVariations($it_id) {
         // Added 'quantity_received as quantity' for HTML compatibility
-        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, ware_house_code, price_india, price_india_mrp, 
-                inr_pricing, amazon_price, usd_price, hsn_code, gst_rate
+        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, 
+                inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps
                 FROM vp_variations WHERE it_id = ?";
                 
         $stmt = $this->conn->prepare($sql);
@@ -1007,8 +1000,16 @@ public function update_image_variation($img_id, $variation_id) {
         if (!empty($inbounding) && !empty($inbounding['category_code'])) {
             
             $cat_ids_input = $inbounding['category_code']; 
-            
-            $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($cat_ids_input)");
+            $sub_cat_ids_input = $inbounding['sub_category_code'];
+            $sub_sub_cat_ids_input = $inbounding['sub_sub_category_code'];
+            $all_cat_ids = $cat_ids_input.','.$sub_cat_ids_input.','.$sub_sub_cat_ids_input;
+            $all_cat_ids = rtrim($all_cat_ids, ',');
+            if (!empty($all_cat_ids)) {
+                $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($all_cat_ids)");
+            } else {
+                // Handle the case where there are no IDs (e.g., return an empty array or skip)
+                $cat_result = false; 
+            }
             
             if ($cat_result) {
                 $category_rows = $cat_result->fetch_all(MYSQLI_ASSOC);

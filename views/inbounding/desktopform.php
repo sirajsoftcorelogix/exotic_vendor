@@ -63,6 +63,82 @@
 
 <?php
 $record_id = $_GET['id'] ?? '';
+
+// --- 1. DEFINE SIZE OPTIONS ---
+$sizeOptions = [
+    'XS'   => 'Extra Small (XS)(34)',
+    'S'    => 'Small (S)(36)',
+    'M'    => 'Medium (M)(38)',
+    'L'    => 'Large (L)(40)',
+    'XL'   => 'Extra Large (XL)(42)',
+    'XXL'  => 'Extra Extra Large (XXL)(44)',
+    'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
+];
+
+$colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
+
+// 2. HELPER FUNCTION TO RENDER COLOR MAP
+function renderColorMapField($fieldName, $savedValue, $customClass = "") {
+    // We render an empty select initially. 
+    // JavaScript will populate it and show/hide it based on the Category.
+    return '
+    <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
+        <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
+        <select name="' . $fieldName . '" 
+                class="colormap-select ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]"
+                data-saved-value="' . htmlspecialchars($savedValue) . '">
+            <option value="">Select Color Map</option>
+        </select>
+    </div>';
+}
+
+// --- 2. DETECT CLOTHING/TEXTILES (Corrected for ID lookup) ---
+$is_clothing_initial = false; 
+$saved_group_id = $data['form2']['group_name'] ?? '';
+
+if (!empty($data['category']) && !empty($saved_group_id)) {
+    foreach ($data['category'] as $cat) {
+        // Check if this category's ID matches the saved group ID
+        // We use loose comparison (==) to handle string "-5" vs integer -5
+        if (isset($cat['category']) && $cat['category'] == $saved_group_id) {
+            
+            // We found the matching group, now check its name
+            $catName = strtolower($cat['name'] ?? '');
+            $catDisplay = strtolower($cat['display_name'] ?? '');
+            
+            if (strpos($catName, 'clothing') !== false || strpos($catName, 'textiles') !== false || 
+                strpos($catDisplay, 'clothing') !== false || strpos($catDisplay, 'textiles') !== false) {
+                $is_clothing_initial = true;
+            }
+            break; // Stop looping once found
+        }
+    }
+}
+
+// --- 3. HELPER FUNCTION TO RENDER FIELD ---
+function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
+    $html = '';
+    
+    // Check if Clothing (TRUE) -> Render Dropdown
+    if ($isClothing) {
+        $html .= '<select name="' . $fieldName . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">';
+        $html .= '<option value="">Select Size</option>';
+        foreach ($options as $k => $v) {
+            // Strict string comparison for selected state
+            $selected = ((string)$currentValue === (string)$k) ? 'selected' : '';
+            $html .= '<option value="' . $k . '" ' . $selected . '>' . $v . '</option>';
+        }
+        $html .= '</select>';
+    } 
+    // Check if Not Clothing (FALSE) -> Render Text Input
+    else {
+        $html .= '<input type="text" name="' . $fieldName . '" value="' . htmlspecialchars($currentValue) . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">';
+    }
+    return $html;
+}
+
+// Get the current saved value safely
+$currentSize = $data['form2']['size'] ?? '';
 ?>
 
 <div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
@@ -116,7 +192,7 @@ $record_id = $_GET['id'] ?? '';
                         <select id="variant_select" name="is_variant" 
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
                             <option value="" disabled <?php echo empty($data['form2']['is_variant']) ? 'selected' : ''; ?>>Select...</option>
-                            <option value="N" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
+                            <option value="N" <?php echo (empty($data['form2']['is_variant']) || $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
                             <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
                         </select>
                     </div>
@@ -152,9 +228,11 @@ $record_id = $_GET['id'] ?? '';
                             <input type="hidden" id="existing_item_code" value="<?php echo isset($data['form2']['Item_code']) ? $data['form2']['Item_code'] : ''; ?>">
                         </div>
                     </div>
+                    <?php if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00"){
+                    ?>
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On</label>
-                        
+
                         <?php 
                             // 1. Determine the value in standard Y-m-d format first
                             if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00") {
@@ -164,10 +242,50 @@ $record_id = $_GET['id'] ?? '';
                             }
                         ?>
 
-                        <input type="text" 
-                               class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white" 
-                               value="<?php echo $dateValue; ?>" 
-                               name="stock_added_date">
+                        <div class="relative w-full">
+                            <input type="text" 
+                                   class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 pr-10 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white cursor-pointer" 
+                                   value="<?php echo $dateValue; ?>" 
+                                   name="stock_added_date">
+                            
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <?php } ?>
+                    <div class="flex flex-col">
+                        <label class="text-xs font-bold text-[#333] mb-1.5">Added On</label>
+
+                        <?php 
+                            // 1. Determine the value in standard Y-m-d format first
+                            if (!empty($data['form2']['added_date']) && $data['form2']['added_date'] != "0000-00-00") {
+                                $dateValue = date('Y-m-d', strtotime($data['form2']['added_date']));
+                            } else {
+                                $dateValue = date('Y-m-d');
+                            }
+                        ?>
+
+                        <div class="relative w-full">
+                            <input type="text" 
+                                   class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 pr-10 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white cursor-pointer" 
+                                   value="<?php echo $dateValue; ?>" 
+                                   name="added_date">
+                            
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </fieldset>
@@ -251,41 +369,26 @@ $record_id = $_GET['id'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
-
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
-                        <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="ware_house_code">
-                            <option value="">Select Warehouse</option>
-                            <?php 
-                                $selectedWH = $data['form2']['ware_house_code'] ?? '';
-                                if (!empty($data['address'])) {
-                                    foreach ($data['address'] as $va) {
-                                        $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
-                            ?>
-                                        <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                            <?php echo htmlspecialchars($va['address_title']); ?>
-                                        </option>
-                            <?php 
-                                    }
-                                } 
-                            ?>
-                        </select>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                               value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" 
+                               name="store_location">
                     </div>
-
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['size'] ?? '') ?>" name="size">
-                    </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
                     </div>
 
                     <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
+                        <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
+                    </div>
+
+                    <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label>
                         <div class="relative w-full">
-                            <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['quantity_received'] ?? '0') ?>" name="quantity_received">
+                            <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['quantity_received'] ?? '1') ?>" name="quantity_received">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span>
                         </div>
                     </div>
@@ -345,6 +448,12 @@ $record_id = $_GET['id'] ?? '';
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
                         </div>
                     </div>
+                    <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
+                    </div>
+
+                    <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
                 </div>
 
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -430,28 +539,13 @@ $record_id = $_GET['id'] ?? '';
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['depth'] ?? '') ?>" name="variations[<?= $var['id'] ?>][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['weight'] ?? '') ?>" name="variations[<?= $var['id'] ?>][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
 
-                             <div class="w-full min-w-0">
-                                <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
-                                <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[<?= $var['id'] ?>][ware_house_code]">
-                                    <option value="">Select Warehouse</option>
-                                    <?php 
-                                        $selectedWHVar = $var['ware_house_code'] ?? '';
-                                        if (!empty($data['address'])) {
-                                            foreach ($data['address'] as $va) {
-                                                $isSelected = ($selectedWHVar == $va['id']) ? 'selected' : '';
-                                    ?>
-                                                <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
-                                                    <?php echo htmlspecialchars($va['address_title']); ?>
-                                                </option>
-                                    <?php 
-                                            }
-                                        } 
-                                    ?>
-                                </select>
-                            </div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['store_location'] ?? '') ?>" name="variations[<?= $var['id'] ?>][store_location]"></div>
 
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Size:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['size'] ?? '') ?>" name="variations[<?= $var['id'] ?>][size]"></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
+                            <div class="w-full min-w-0">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
+                                <?php echo renderSizeField("variations[{$var['id']}][size]", $var['size'], $is_clothing_initial, $sizeOptions); ?>
+                            </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
@@ -469,6 +563,12 @@ $record_id = $_GET['id'] ?? '';
 
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
+                            <div class="w-full min-w-0">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                                <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]">
+                            </div>
+
+                            <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
                         </div>
 
                         <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -539,22 +639,20 @@ $record_id = $_GET['id'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
                 
-                <div class="w-full min-w-0">
-                    <label class="block text-xs font-bold text-[#555] mb-1">Location:</label>
-                    <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][ware_house_code]">
-                        <option value="">Select Warehouse</option>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][store_location]"></div>
+
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
+                <div class="w-full min-w-0 size-wrapper-js">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
+                    <select class="size-input-field w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]">
+                        <option value="">Select Size</option>
                         <?php 
-                            if (!empty($data['address'])) {
-                                foreach ($data['address'] as $va) {
-                                    echo '<option value="'.$va['id'].'">'.htmlspecialchars($va['address_title']).'</option>';
-                                }
-                            } 
+                        foreach ($sizeOptions as $dbValue => $displayLabel) {
+                            echo '<option value="' . htmlspecialchars($dbValue) . '">' . htmlspecialchars($displayLabel) . '</option>';
+                        }
                         ?>
                     </select>
                 </div>
-
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Size:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]"></div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
@@ -570,6 +668,17 @@ $record_id = $_GET['id'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                <div class="w-full min-w-0">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                    <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]">
+                </div>
+
+                <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
+                    <select name="variations[INDEX][colormaps]" class="colormap-select w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">
+                        <option value="">Select Color Map</option>
+                    </select>
+                </div>
             </div>
 
             <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
@@ -637,7 +746,7 @@ $record_id = $_GET['id'] ?? '';
                         </select>
                     </div>
                     <div class="flex flex-col">
-                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Updated by:</span>
+                        <span class="text-[11px] font-bold text-[#222] mb-[3px]">Feeded By:</span>
                         <select id="updated_by_select" name="updated_by_user_id" placeholder="Select User...">
                             <option value="">Select User</option>
                             <?php 
@@ -683,24 +792,40 @@ $record_id = $_GET['id'] ?? '';
             $selected_sub = is_array($sub_raw) ? $sub_raw : explode(',', $sub_raw);
             $sub_sub_raw = $data['form2']['sub_sub_category_code'] ?? '';
             $selected_sub_sub = is_array($sub_sub_raw) ? $sub_sub_raw : explode(',', $sub_sub_raw);
+
             $categoriesByParent1 = [];
             $rootCategories = [];
-            $groupMap = [];
+
             if (!empty($data['category'])) {
                 foreach ($data['category'] as $row) {
                     if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
-                    $categoriesByParent1[$row['parent_id']][] = [
-                        'id'    => $row['id'],
-                        'name' => $row['display_name']
+
+                    // 1. Get the Parent Key (Strict String)
+                    // This matches the 'parent' column in your DB (e.g. "clothing" or "mens_wear|clothing")
+                    $parentKey = isset($row['parent']) ? trim((string)$row['parent']) : '';
+
+                    // Skip orphans
+                    if ($parentKey === '') continue; 
+                    
+                    // 2. Identify the "Store Value" (The value used in the parent path)
+                    // Priority: 'category' column -> 'id' column
+                    // You mentioned "value should store of category field", so we use that.
+                    $storageValue = !empty($row['category']) ? $row['category'] : $row['id'];
+
+                    // 3. Build the Tree
+                    $categoriesByParent1[$parentKey][] = [
+                        'id'          => $row['id'],
+                        'name'        => $row['display_name'],
+                        'store_val'   => $storageValue // <--- We send this to JS to build paths
                     ];
-                    if ($row['parent_id'] == 0) {
-                        $storeValue = $row['category'] ?? $row['display_name'];
+
+                    // 4. Identify Root Groups (Parent is "0")
+                    if ($parentKey === '0') {
                         $rootCategories[] = [
                             'id'          => $row['id'],
                             'name'        => $row['display_name'],
-                            'store_value' => $storeValue 
+                            'store_value' => $storageValue // This becomes the root of the path
                         ];
-                        $groupMap[$storeValue] = $row['id'];
                     }
                 }
             }
@@ -783,7 +908,101 @@ $record_id = $_GET['id'] ?? '';
                 </div>
             </fieldset>
         </div>
+        <?php 
+            // 1. PARSE SAVED DATA (If exists)
+            // Assuming you store this string in a column named 'search_category_string'
+            // Format: "1155,1145|1323,1450|124,132|-5" (SubSub | Sub | Cat | Group)
+            
+            $saved_search_string = $data['form2']['search_category_string'] ?? ''; 
+            $search_parts = explode('|', $saved_search_string);
 
+            // Map the exploded parts to variables (Default to empty if not found)
+            // Order: SubSub | Sub | Cat | Group
+            $search_sub_sub_raw = $search_parts[0] ?? '';
+            $search_sub_raw     = $search_parts[1] ?? '';
+            $search_cat_raw     = $search_parts[2] ?? '';
+            $search_group_val   = $search_parts[3] ?? '';
+
+            // Convert comma-strings to arrays for JS
+            $search_sel_sub_sub = array_filter(explode(',', $search_sub_sub_raw));
+            $search_sel_sub     = array_filter(explode(',', $search_sub_raw));
+            $search_sel_cat     = array_filter(explode(',', $search_cat_raw));
+        ?>
+
+        <div class="mt-[15px] md:mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category</legend>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                    <div>
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search Group:</label>
+                        <select id="search_group_select" name="search_group" placeholder="Select Group..." autocomplete="off">
+                            <option value="">Select Group...</option>
+                            <?php foreach($rootCategories as $group): 
+                                $isSearchGroupSelected = ($search_group_val == $group['store_value']) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo $group['store_value']; ?>" <?php echo $isSearchGroupSelected; ?>>
+                                    <?php echo $group['name']; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-5 items-stretch">
+                    
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search Category:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div id="search_category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search Sub Category:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="search_sub_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="search_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full md:w-1/3 flex flex-col">
+                        <label class="block text-xs font-bold text-[#222] mb-1">Search SubSubCategory:</label>
+                        <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="search_sub_sub_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
+                            <div id="search_sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
+                                <div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+        <div class="mt-[15px] md:mx-5">
+            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Terms</legend>
+                <div>
+                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Keywords (Tags):</label>
+                    <input type="text" id="search_term_input" name="search_term" 
+                           value="<?= htmlspecialchars($data['form2']['search_term'] ?? '') ?>" 
+                           placeholder="Type a keyword and press Enter..." 
+                           autocomplete="off">
+                    <div class="text-[10px] text-gray-500 mt-1">
+                        Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
+                    </div>
+                </div>
+            </fieldset>
+        </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
@@ -799,50 +1018,66 @@ $record_id = $_GET['id'] ?? '';
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name= "snippet_description">
                 </div>
-                <div class="">
-                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Description Icons:</label>
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
                     
                     <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
                         
                         <div class="checkbox-list-container overflow-y-auto p-1 h-full">
                             <?php 
-                                $icon_options = $data['form2']['icon_data']['description_icons'] ?? [];
-                                
-                                // 1. Changed default from '' to null so we can detect it
-                                $saved_raw = $data['form2']['description_icons'] ?? null; 
+                                // 1. Get the initial data
+                                $source_data = $data['form2']['optionals'] ?? [];
 
-                                $checkAll = false;
-                                $saved_values = [];
-
-                                // 2. Logic: If null, check everything. If not, parse the values.
-                                if (is_null($saved_raw)) {
-                                    $checkAll = true;
-                                } elseif (is_array($saved_raw)) {
-                                    $saved_values = $saved_raw;
+                                // 2. FIX: Check if the actual list is hidden inside an 'optionals' key
+                                if (isset($source_data['optionals']) && is_array($source_data['optionals'])) {
+                                    $available_options = $source_data['optionals'];
                                 } else {
-                                    // Explode string to array (added trim to handle spaces like "a, b")
-                                    $saved_values = array_map('trim', explode(',', (string)$saved_raw));
+                                    $available_options = $source_data;
                                 }
 
-                                if (!empty($icon_options)) {
-                                    foreach ($icon_options as $key => $label) {
-                                        // 3. Check if we should Check All OR if the specific key is in the saved values
-                                        $isChecked = ($checkAll || in_array((string)$key, $saved_values)) ? 'checked' : '';
-                                        $uniqueId = 'icon_' . $key; 
+                                // 3. Get Saved Values
+                                $saved_raw = $data['form2']['optionals'] ?? []; 
+                                $saved_values = [];
+                                
+                                if (is_array($saved_raw)) {
+                                    $saved_values = $saved_raw;
+                                } elseif (is_string($saved_raw)) {
+                                    $saved_values = array_map('trim', explode(',', $saved_raw));
+                                }
+
+                                if (!empty($available_options) && is_array($available_options)) {
+                                    foreach ($available_options as $key => $val_str) {
+                                        
+                                        // Ensure strictly string
+                                        if (is_array($val_str)) continue; // Skip bad data
+                                        $val_str = (string)$val_str; 
+
+                                        // Format Label
+                                        $label = str_replace(['OPTIONALS_', '_'], ['', ' '], $val_str); 
+                                        $label = ucwords(strtolower($label));               
+
+                                        // Check if checked
+                                        $isChecked = in_array($val_str, $saved_values) ? 'checked' : '';
+                                        $uniqueId = 'opt_' . md5($val_str); 
                             ?>
-                                    <div class="checkbox-item">
+                                    
+                                    <div class="checkbox-item flex items-center p-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
                                         <input type="checkbox" 
                                                id="<?= $uniqueId ?>" 
-                                               name="description_icons[]" 
-                                               value="<?= $key ?>" 
+                                               name="optionals[]" 
+                                               value="<?= htmlspecialchars($val_str) ?>" 
+                                               class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2"
                                                <?= $isChecked ?>>
                                         
-                                        <label for="<?= $uniqueId ?>"><?= $label ?></label>
+                                        <label for="<?= $uniqueId ?>" class="w-full text-sm font-medium text-gray-900 cursor-pointer select-none">
+                                            <?= $label ?>
+                                        </label>
                                     </div>
+
                             <?php 
                                     }
                                 } else {
-                                    echo '<div class="text-xs text-gray-400 p-2 text-center mt-5">No icons available</div>';
+                                    echo '<div class="text-xs text-gray-400 p-4 text-center">No options available</div>';
                                 }
                             ?>
                         </div>
@@ -950,17 +1185,30 @@ $record_id = $_GET['id'] ?? '';
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
-                            <?php $perm = $data['form2']['permanently_available'] ?? 'Y'; ?>
+                            <?php $perm = $data['form2']['permanently_available'] ?? 'N'; ?>
                             <option value="N" <?= ($perm == 'N') ? 'selected' : '' ?>>No</option>
                             <option value="Y" <?= ($perm == 'Y') ? 'selected' : '' ?>>Yes</option>
                         </select>
                     </div>
 
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                               value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" 
-                               name="store_location">
+                    <div class="w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Warehouse:</label>
+                        <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="ware_house_code">
+                            <option value="">Select Warehouse</option>
+                            <?php 
+                                $selectedWH = $data['form2']['ware_house_code'] ?? '';
+                                if (!empty($data['address'])) {
+                                    foreach ($data['address'] as $va) {
+                                        $isSelected = ($selectedWH == $va['id']) ? 'selected' : '';
+                            ?>
+                                        <option value="<?php echo $va['id']; ?>" <?php echo $isSelected; ?>>
+                                            <?php echo htmlspecialchars($va['address_title']); ?>
+                                        </option>
+                            <?php 
+                                    }
+                                } 
+                            ?>
+                        </select>
                     </div>
 
                     <div class="flex-1">
@@ -1012,11 +1260,27 @@ $record_id = $_GET['id'] ?? '';
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
                         </div>
                     </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Marketplace Vendor:</label>
+                        <div class="relative w-full">
+                            <input type="text" name="marketplace" 
+                                   value="<?= htmlspecialchars($data['form2']['marketplace'] ?? 'exoticindia') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Indian Net Qty.:</label>
+                        <div class="relative w-full">
+                            <input type="number" name="india_net_qty" 
+                                   value="<?= htmlspecialchars($data['form2']['india_net_qty '] ?? '0') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                        </div>
+                    </div>
 
                     <div class="flex-1 sm:col-span-2 lg:col-span-2 flex items-start border border-[#eee] rounded bg-gray-50 p-1"> 
                         
                         <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
-                            <label class="block text-xs font-bold text-[#222] mb-[3px]">US Stock:</label>
+                            <label class="block text-xs font-bold text-[#222] mb-[3px]">US Block:</label>
                             <div class="flex items-center gap-4">
                                 <?php $us_val = $data['form2']['us_block'] ?? 'Y'; ?>
                                 <label class="flex items-center cursor-pointer">
@@ -1031,7 +1295,7 @@ $record_id = $_GET['id'] ?? '';
                         </div>
 
                         <div class="flex-1 pl-4 flex flex-col justify-center h-[52px]"> 
-                            <label class="block text-xs font-bold text-[#222] mb-[3px]">India Stock:</label>
+                            <label class="block text-xs font-bold text-[#222] mb-[3px]">India Block:</label>
                             <div class="flex items-center gap-4">
                                 <?php $in_val = $data['form2']['india_block'] ?? 'N'; ?>
                                 <label class="flex items-center cursor-pointer">
@@ -1536,11 +1800,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // 1. PHP Data
+    // 1. DATA FROM PHP
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
-    const groupMap = <?php echo json_encode($groupMap); ?>; 
     
     // 2. Pre-selection Data
+    // These sets now contain STRINGS (e.g., "mens_wear", "shirts") from your DB
     const rawCatId = "<?php echo $selected_cat_id; ?>"; 
     const preSelected = {
         groupVal: "<?php echo $selected_group_val; ?>",
@@ -1554,23 +1818,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const subCatContainer = document.getElementById('sub_category_container');
     const subSubCatContainer = document.getElementById('sub_sub_category_container');
     
-    // Search Inputs
-    const subCatSearch = document.getElementById('sub_cat_search');
-    const subSubCatSearch = document.getElementById('sub_sub_cat_search');
-    
-    // 4. TomSelect Config
+    // 4. Init TomSelect
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
-    new TomSelect("#material_select", config);
-    const groupTs = new TomSelect("#group_select", config);
+    if(document.getElementById("material_select")) new TomSelect("#material_select", config);
+    
+    const groupSelectEl = document.getElementById("group_select");
+    let groupTs = null;
+    if(groupSelectEl) {
+        groupTs = new TomSelect(groupSelectEl, config);
+    }
 
-    // --- HELPER: Create Single Checkbox HTML ---
+    // --- HELPER: Create Checkbox ---
     function createCheckboxItem(item, inputName, selectedSet, onChangeCallback) {
         const div = document.createElement('div');
         div.className = 'checkbox-item pl-2'; 
-        const isChecked = selectedSet.has(String(item.id)) ? 'checked' : '';
         
+        // CHANGE 1: Check if the STORE VALUE (String) is in the selected set
+        // This ensures pre-filled data works with strings like "mens_wear"
+        const valToCheck = String(item.store_val);
+        const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
+        
+        // CHANGE 2: Set 'value' to item.store_val
+        // This ensures "mens_wear" is sent to the DB on save
         div.innerHTML = `
-            <input type="checkbox" id="${inputName}_${item.id}" name="${inputName}[]" value="${item.id}" ${isChecked}>
+            <input type="checkbox" 
+                   id="${inputName}_${item.id}" 
+                   name="${inputName}[]" 
+                   value="${item.store_val}" 
+                   data-parent-path="" 
+                   ${isChecked}>
             <label for="${inputName}_${item.id}">${item.name}</label>
         `;
         
@@ -1579,48 +1855,40 @@ document.addEventListener('DOMContentLoaded', function() {
         return div;
     }
 
-    // --- HELPER: Render Simple List (For Main Categories) ---
-    function renderSimpleList(container, items, selectedSet, inputName, onChangeCallback) {
-        container.innerHTML = ''; 
-        if (!items || items.length === 0) {
-            container.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No options available</div>';
+    // --- 1. UPDATE CATEGORY LIST (Level 1) ---
+    function updateCategoryList(rawGroupValue) {
+        subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(!rawGroupValue) {
+             categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
+             return;
+        }
+
+        const lookupKey = String(rawGroupValue).trim(); 
+        
+        if(!categoriesByParent[lookupKey]) {
+            categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
             return;
         }
-        
-        // Deduplicate
+
+        const items = categoriesByParent[lookupKey];
+        categoryContainer.innerHTML = '';
         const seenIds = new Set();
         items.forEach(item => {
             if(!seenIds.has(item.id)){
                 seenIds.add(item.id);
-                container.appendChild(createCheckboxItem(item, inputName, selectedSet, onChangeCallback));
+                categoryContainer.appendChild(createCheckboxItem(item, 'category_code', preSelected.cat, handleCategoryChange));
             }
         });
-    }
-
-    // --- 1. UPDATE CATEGORY LIST (Based on Group) ---
-    function updateCategoryList(groupId) {
-        subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
-        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
-
-        if(!groupId || !categoriesByParent[groupId]) {
-            categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
-            return;
-        }
-
-        renderSimpleList(categoryContainer, categoriesByParent[groupId], preSelected.cat, 'category_code', handleCategoryChange);
         
         if(preSelected.cat.size > 0) handleCategoryChange();
     }
 
-    // --- 2. UPDATE SUB CATEGORY LIST (Grouped by Parent Category) ---
+    // --- 2. UPDATE SUB CATEGORY LIST (Level 2) ---
     function handleCategoryChange() {
-        // Reset Search Input
-        subCatSearch.value = '';
-
-        // Get all checked category checkboxes
         const checkedInputs = Array.from(categoryContainer.querySelectorAll('input[type="checkbox"]:checked'));
-        
-        subCatContainer.innerHTML = ''; // Clear container
+        subCatContainer.innerHTML = ''; 
         subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
 
         if(checkedInputs.length === 0) {
@@ -1628,45 +1896,45 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const groupVal = groupTs ? groupTs.getValue() : document.getElementById("group_select").value;
+        const groupKey = String(groupVal).trim(); 
+
         let hasAnyOptions = false;
 
-        // Loop through selected parents to create groups
         checkedInputs.forEach(input => {
-            const parentId = input.value;
-            const parentName = input.nextElementSibling.innerText; // Get name from Label
-            const children = categoriesByParent[parentId];
+            // CHANGE 3: Use input.value directly (which is now the string "mens_wear")
+            const catStoreVal = input.value; 
+            const parentName = input.nextElementSibling.innerText;
+            
+            // PATH LOGIC: "mens_wear|clothing"
+            const lookupKey = catStoreVal + "|" + groupKey;
+            
+            const children = categoriesByParent[lookupKey];
 
             if (children && children.length > 0) {
                 hasAnyOptions = true;
-
-                // Create Group Header
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName; 
                 subCatContainer.appendChild(header);
 
-                // Render Children for this parent
                 children.forEach(item => {
-                    subCatContainer.appendChild(createCheckboxItem(item, 'sub_category_code', preSelected.sub, handleSubCategoryChange));
+                    const el = createCheckboxItem(item, 'sub_category_code', preSelected.sub, handleSubCategoryChange);
+                    // Pass the path down to the next level
+                    el.querySelector('input').setAttribute('data-parent-path', lookupKey);
+                    subCatContainer.appendChild(el);
                 });
             }
         });
 
-        if(!hasAnyOptions) {
-             subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
-        } else {
-             if(preSelected.sub.size > 0) handleSubCategoryChange();
-        }
+        if(!hasAnyOptions) subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
+        else if(preSelected.sub.size > 0) handleSubCategoryChange();
     }
 
-    // --- 3. UPDATE SUB SUB CATEGORY LIST (Grouped by Sub Category) ---
+    // --- 3. UPDATE SUB SUB CATEGORY LIST (Level 3) ---
     function handleSubCategoryChange() {
-        // Reset Search Input
-        subSubCatSearch.value = '';
-
         const checkedInputs = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
-        
-        subSubCatContainer.innerHTML = ''; // Clear container
+        subSubCatContainer.innerHTML = ''; 
 
         if(checkedInputs.length === 0) {
             subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
@@ -1676,78 +1944,64 @@ document.addEventListener('DOMContentLoaded', function() {
         let hasAnyOptions = false;
 
         checkedInputs.forEach(input => {
-            const parentId = input.value;
+            // CHANGE 4: Use input.value (e.g. "shirts")
+            const subCatStoreVal = input.value;
+            const parentPath = input.getAttribute('data-parent-path'); 
             const parentName = input.nextElementSibling.innerText;
-            const children = categoriesByParent[parentId];
+            
+            // PATH LOGIC: "shirts|mens_wear|clothing"
+            const lookupKey = subCatStoreVal + "|" + parentPath;
+            
+            const children = categoriesByParent[lookupKey];
 
             if (children && children.length > 0) {
                 hasAnyOptions = true;
-                
-                // Create Group Header
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName;
                 subSubCatContainer.appendChild(header);
 
-                // Render Children
                 children.forEach(item => {
                     subSubCatContainer.appendChild(createCheckboxItem(item, 'sub_sub_category_code', preSelected.subsub, null));
                 });
             }
         });
 
-        if(!hasAnyOptions) {
-             subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
-        }
+        if(!hasAnyOptions) subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
     }
     
-    // --- SEARCH FILTER FUNCTION ---
+    // --- SEARCH FILTER ---
     function enableSearchFilter(inputId, containerId) {
         const input = document.getElementById(inputId);
         const container = document.getElementById(containerId);
-        
         input.addEventListener('keyup', function() {
             const filter = this.value.toLowerCase();
             const items = container.querySelectorAll('.checkbox-item');
             const headers = container.querySelectorAll('.group-header');
-            
-            // 1. Filter Items
             items.forEach(item => {
                 const label = item.querySelector('label').innerText;
-                if(label.toLowerCase().includes(filter)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
+                item.style.display = label.toLowerCase().includes(filter) ? 'flex' : 'none';
             });
-
-            // 2. Optional: Hide Headers if all children are hidden (Simple logic: if searching, hide all headers to reduce clutter)
-            if(filter.length > 0) {
-                headers.forEach(h => h.style.display = 'none');
-            } else {
-                headers.forEach(h => h.style.display = 'block');
-            }
+            if(filter.length > 0) headers.forEach(h => h.style.display = 'none');
+            else headers.forEach(h => h.style.display = 'block');
         });
     }
 
     // --- EVENTS ---
-    groupTs.on('change', function(groupValue) {
-        preSelected.cat.clear(); 
-        preSelected.sub.clear(); 
-        preSelected.subsub.clear();        
-        const groupId = groupMap[groupValue]; 
-        updateCategoryList(groupId);
-    });
+    if(groupTs) {
+        groupTs.on('change', function(groupValue) {
+            preSelected.cat.clear(); 
+            preSelected.sub.clear(); 
+            preSelected.subsub.clear();        
+            updateCategoryList(groupValue);
+        });
+    }
     
     // --- INITIAL LOAD ---
     if (preSelected.groupVal) {
-        const initialGroupId = groupMap[preSelected.groupVal];        
-        if(initialGroupId) {
-            updateCategoryList(initialGroupId);
-        }
+        updateCategoryList(preSelected.groupVal);
     }
-
-    // --- ACTIVATE SEARCH ---
+    
     enableSearchFilter('sub_cat_search', 'sub_category_container');
     enableSearchFilter('sub_sub_cat_search', 'sub_sub_category_container');
 });
@@ -1781,9 +2035,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
         // if (dimUnit === 'cm') {
-        //      h = h / 2.54;
-        //      w = w / 2.54;
-        //      d = d / 2.54;
+             h = h / 2.54;
+             w = w / 2.54;
+             d = d / 2.54;
         // }
 
         // --- STEP B: ADD BUFFER (4 inches) ---
@@ -1940,7 +2194,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const template = document.getElementById('variation-template');
 
     // 1. ADD NEW VARIATION FUNCTION
-    window.addNewVariation = function() { // Made global to be called by button
+    window.addNewVariation = function() { 
         const newId = 'new_' + newVariationCounter;
         newVariationCounter++;
 
@@ -1949,18 +2203,14 @@ document.addEventListener('DOMContentLoaded', function() {
         container.appendChild(clone);
     };
 
-    // 2. EVENT DELEGATION (Remove, Clone, Image Preview)
+    // 2. EVENT DELEGATION
     container.addEventListener('click', function(e) {
         
         // --- REMOVE LOGIC ---
         if (e.target.closest('.remove-var-btn')) {
             const card = e.target.closest('.variation-card');
-            if(card) {
-                // If it's an existing item (has numeric ID), we might need to handle DB deletion logic
-                // But generally, removing from DOM and submitting form works if backend checks for missing IDs.
-                if(confirm('Remove this variation card?')) {
-                    card.remove();
-                }
+            if(card && confirm('Remove this variation card?')) {
+                card.remove();
             }
         }
 
@@ -1985,54 +2235,75 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update names in the new card first
             updateNames(newCard, newId);
 
-            // Set values in new card based on source
-            const setVal = (suffix, val) => {
-                const el = newCard.querySelector(`[name$="[${suffix}]"]`);
-                if(el) el.value = val;
-            };
+            // Set values
+            const fields = ['height', 'width', 'depth', 'weight', 'size', 'color', 
+                            'quantity_received', 'cp', 'price_india', 'price_india_mrp', 
+                            'inr_pricing', 'amazon_price', 'usd_price', 'hsn_code', 
+                            'gst_rate', 'ware_house_code', 'store_location'];
 
-            setVal('height', getValue('height'));
-            setVal('width', getValue('width'));
-            setVal('depth', getValue('depth'));
-            setVal('weight', getValue('weight'));
-            setVal('size', getValue('size'));
-            setVal('color', getValue('color'));
-            setVal('quantity_received', getValue('quantity_received'));
-            setVal('cp', getValue('cp'));
-            setVal('price_india', getValue('price_india'));
-            setVal('price_india_mrp', getValue('price_india_mrp'));
+            fields.forEach(field => {
+                const el = newCard.querySelector(`[name$="[${field}]"]`);
+                if(el) el.value = getValue(field);
+            });
 
-            setVal('inr_pricing', getValue('inr_pricing'));
-            setVal('amazon_price', getValue('amazon_price'));
-            setVal('usd_price', getValue('usd_price'));
-            setVal('hsn_code', getValue('hsn_code'));
-            setVal('gst_rate', getValue('gst_rate'));
+            // ---------------------------------------------------------
+            // FIX: IMAGE CLONING LOGIC
+            // ---------------------------------------------------------
+            
+            // 1. Get Source Elements
+            const sourceImg = sourceCard.querySelector('.preview-img');
+            const sourceHiddenOldPhoto = sourceCard.querySelector('input[name$="[old_photo]"]');
+            
+            // 2. Get Clone Elements
+            const cloneImg = newCard.querySelector('.preview-img');
+            const clonePlaceholder = newCard.querySelector('.placeholder-icon');
+            const cloneHiddenOldPhoto = newCard.querySelector('input[name$="[old_photo]"]');
 
-            setVal('ware_house_code', getValue('ware_house_code')); // NEW: Clone Warehouse value
-            setVal('old_photo', getValue('old_photo')); // Clone reference to old image
+            // 3. Check visibility (Check both class AND inline display style)
+            const isSourceVisible = sourceImg && 
+                                   !sourceImg.classList.contains('hidden') && 
+                                   sourceImg.style.display !== 'none';
 
-            // Handle Image Preview for Clone
-            const oldPhotoVal = getValue('old_photo');
-            if(oldPhotoVal) {
-                const preview = newCard.querySelector('.preview-img');
-                const placeholder = newCard.querySelector('.placeholder-icon');
-                // We use the source image src if available for immediate feedback
-                const sourceImg = sourceCard.querySelector('.preview-img');
-                if(sourceImg && !sourceImg.classList.contains('hidden')) {
-                    preview.src = sourceImg.src;
-                    preview.classList.remove('hidden');
-                    placeholder.classList.add('hidden');
+            if (isSourceVisible) {
+                // Copy the visual source (Base64 or URL)
+                cloneImg.src = sourceImg.src;
+                
+                // FORCE VISIBILITY: Remove inline style 'display: none'
+                cloneImg.style.display = 'block'; 
+                cloneImg.classList.remove('hidden');
+                
+                // Hide Placeholder
+                clonePlaceholder.style.display = 'none';
+                clonePlaceholder.classList.add('hidden');
+
+                // Copy database path if it exists
+                if (sourceHiddenOldPhoto && cloneHiddenOldPhoto) {
+                    cloneHiddenOldPhoto.value = sourceHiddenOldPhoto.value;
                 }
+            } else {
+                // Reset if source has no image
+                cloneImg.src = '#';
+                cloneImg.style.display = 'none'; // Re-apply hiding
+                clonePlaceholder.style.display = 'flex'; // Show placeholder
+                if (cloneHiddenOldPhoto) cloneHiddenOldPhoto.value = '';
             }
+            // ---------------------------------------------------------
+            // END FIX
+            // ---------------------------------------------------------
 
             container.appendChild(newCard);
             
             // Scroll to new item
             newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Trigger calculation update
+            if (typeof updateCardPrice === "function") {
+                setTimeout(() => updateCardPrice(newCard), 100);
+            }
         }
     });
 
-    // 3. IMAGE PREVIEW LOGIC
+    // 3. IMAGE PREVIEW LOGIC (For File Input Changes)
     container.addEventListener('change', function(e) {
         if(e.target.classList.contains('variation-file-input')) {
             const file = e.target.files[0];
@@ -2044,7 +2315,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const reader = new FileReader();
                 reader.onload = function(evt) {
                     preview.src = evt.target.result;
+                    
+                    // FORCE VISIBILITY here too
+                    preview.style.display = 'block';
                     preview.classList.remove('hidden');
+                    
+                    placeholder.style.display = 'none';
                     placeholder.classList.add('hidden');
                 }
                 reader.readAsDataURL(file);
@@ -2052,9 +2328,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Helper to update input names: variations[INDEX][field] -> variations[new_1][field]
     function updateNames(node, newId) {
-        const inputs = node.querySelectorAll ? node.querySelectorAll('input, select') : node.querySelectorAll('input, select'); // handle DocumentFragment vs Element
+        const inputs = node.querySelectorAll('input, select');
         inputs.forEach(input => {
             const name = input.getAttribute('name');
             if(name) {
@@ -2104,6 +2379,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let actualWt = parseFloat(wtInput.value) || 0;
 
         // Logic: Add 4 inches buffer + Volumetric Divisor 5000
+
+         h = h / 2.54;
+         w = w / 2.54;
+         d = d / 2.54;
         let h_in = h + 4;
         let w_in = w + 4;
         let d_in = d + 4;
@@ -2228,4 +2507,426 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. DATA FROM PHP
+    const sizeOptionsObj = <?php echo json_encode($sizeOptions); ?>;
+    
+    // Generate Options HTML once
+    let sizeOptionsHTML = '<option value="">Select Size</option>';
+    for (const [key, value] of Object.entries(sizeOptionsObj)) {
+        sizeOptionsHTML += `<option value="${key}">${value}</option>`;
+    }
+
+    // 2. CHECK IF CATEGORY IS CLOTHING
+    function checkIsClothing() {
+        let isClothing = false;
+
+        // Check Group Dropdown Text
+        const groupSelect = document.getElementById('group_select');
+        if (groupSelect && groupSelect.selectedIndex > 0) {
+            const groupText = groupSelect.options[groupSelect.selectedIndex].text.toLowerCase();
+            if (groupText.includes('clothing') || groupText.includes('textile')) isClothing = true;
+        }
+
+        // Check Selected Checkboxes (Category, Sub, SubSub)
+        // We look for any checked box with "clothing" or "textile" in its label
+        const checkedBoxes = document.querySelectorAll('.checkbox-list-container input[type="checkbox"]:checked');
+        checkedBoxes.forEach(cb => {
+            const label = cb.nextElementSibling ? cb.nextElementSibling.innerText.toLowerCase() : '';
+            if (label.includes('clothing') || label.includes('textile')) isClothing = true;
+        });
+
+        return isClothing;
+    }
+
+    // 3. TOGGLE FUNCTION
+    function toggleAllSizeFields() {
+        const isClothing = checkIsClothing();
+        
+        // Find ALL size inputs (Main + Variations) using the class we added in PHP
+        const allSizeInputs = document.querySelectorAll('.size-input-field');
+
+        allSizeInputs.forEach(field => {
+            const parent = field.parentElement;
+            const currentTag = field.tagName; // 'SELECT' or 'INPUT'
+            const currentValue = field.value;
+            const currentName = field.name;
+
+            // Logic to prevent unnecessary swapping
+            if (isClothing && currentTag === 'SELECT') return;
+            if (!isClothing && currentTag === 'INPUT') return;
+
+            // Create New Element
+            let newEl;
+            if (isClothing) {
+                newEl = document.createElement('select');
+                newEl.innerHTML = sizeOptionsHTML;
+                // Try to set value if it exists in options
+                newEl.value = currentValue; 
+            } else {
+                newEl = document.createElement('input');
+                newEl.type = 'text';
+                newEl.value = currentValue; // Keep text value
+            }
+
+            // Copy Attributes & Classes
+            newEl.name = currentName;
+            newEl.className = field.className; // Keeps styling
+
+            // Swap
+            field.remove();
+            parent.appendChild(newEl);
+        });
+    }
+
+    // 4. LISTENERS
+    // Listen to Group Change
+    const groupSelect = document.getElementById('group_select');
+    if(groupSelect) {
+        groupSelect.addEventListener('change', toggleAllSizeFields); // Uses TomSelect change event if native
+    }
+    // Since you use TomSelect for group, we hook into it if accessible, 
+    // but the native select usually updates hiddenly. 
+    // If TomSelect hides the native select, we need to listen to TomSelect's event.
+    if(document.getElementById('group_select').tomselect) {
+        document.getElementById('group_select').tomselect.on('change', toggleAllSizeFields);
+    }
+
+    // Listen to Checkbox Changes (Delegation for dynamic lists)
+    document.body.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox' && e.target.closest('.checkbox-list-container')) {
+            toggleAllSizeFields();
+        }
+    });
+
+    // 5. HOOK INTO "ADD NEW VARIATION"
+    // We need to override or extend the existing addNewVariation function 
+    // to ensure new cards get the correct input type immediately.
+    const originalAddVar = window.addNewVariation;
+    window.addNewVariation = function() {
+        // Run original function
+        originalAddVar(); 
+        
+        // After adding, force a check to update the newly added field
+        toggleAllSizeFields();
+    };
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // --- FIX: RE-INJECT DATA FROM PHP SO THIS SCRIPT CAN SEE IT ---
+    const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
+    
+    // 1. Pre-selection Data for Search Section
+    const searchPreSelected = {
+        groupVal: "<?php echo $search_group_val; ?>",
+        cat:    new Set(<?php echo json_encode(array_values($search_sel_cat)); ?>.map(String)), 
+        sub:    new Set(<?php echo json_encode(array_values($search_sel_sub)); ?>.map(String)), 
+        subsub: new Set(<?php echo json_encode(array_values($search_sel_sub_sub)); ?>.map(String))
+    };
+
+    // 2. DOM Elements
+    const sGroupSelectEl = document.getElementById("search_group_select");
+    const sCatContainer = document.getElementById('search_category_container');
+    const sSubCatContainer = document.getElementById('search_sub_category_container');
+    const sSubSubCatContainer = document.getElementById('search_sub_sub_category_container');
+
+    // 3. Init TomSelect for Search Group
+    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
+    let sGroupTs = null;
+    if(sGroupSelectEl) {
+        sGroupTs = new TomSelect(sGroupSelectEl, config);
+        
+        // --- EVENT LISTENER FOR TOM SELECT ---
+        sGroupTs.on('change', function(groupValue) {
+            searchPreSelected.cat.clear(); 
+            searchPreSelected.sub.clear(); 
+            searchPreSelected.subsub.clear();       
+            updateSearchCatList(groupValue);
+        });
+    }
+
+    // --- HELPER: Create Checkbox ---
+    function createSearchCheckbox(item, inputName, selectedSet, onChangeCallback) {
+        const div = document.createElement('div');
+        div.className = 'checkbox-item pl-2'; 
+        
+        const valToCheck = String(item.store_val);
+        const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
+        
+        div.innerHTML = `
+            <input type="checkbox" 
+                   id="${inputName}_${item.id}" 
+                   name="${inputName}[]" 
+                   value="${item.store_val}" 
+                   data-parent-path="" 
+                   ${isChecked}>
+            <label for="${inputName}_${item.id}">${item.name}</label>
+        `;
+        
+        const checkbox = div.querySelector('input');
+        checkbox.addEventListener('change', () => { if(onChangeCallback) onChangeCallback(); });
+        return div;
+    }
+
+    // --- 1. UPDATE SEARCH CATEGORY LIST ---
+    function updateSearchCatList(rawGroupValue) {
+        sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+        sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(!rawGroupValue) {
+             sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
+             return;
+        }
+
+        const lookupKey = String(rawGroupValue).trim(); 
+        
+        if(!categoriesByParent[lookupKey]) {
+            sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
+            return;
+        }
+
+        const items = categoriesByParent[lookupKey];
+        sCatContainer.innerHTML = '';
+        const seenIds = new Set();
+        items.forEach(item => {
+            if(!seenIds.has(item.id)){
+                seenIds.add(item.id);
+                sCatContainer.appendChild(createSearchCheckbox(item, 'search_cat', searchPreSelected.cat, handleSearchCatChange));
+            }
+        });
+        
+        if(searchPreSelected.cat.size > 0) handleSearchCatChange();
+    }
+
+    // --- 2. UPDATE SEARCH SUB CATEGORY LIST ---
+    function handleSearchCatChange() {
+        const checkedInputs = Array.from(sCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        sSubCatContainer.innerHTML = ''; 
+        sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(checkedInputs.length === 0) {
+            sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+            return;
+        }
+
+        const groupVal = sGroupTs ? sGroupTs.getValue() : sGroupSelectEl.value;
+        const groupKey = String(groupVal).trim(); 
+
+        let hasAnyOptions = false;
+
+        checkedInputs.forEach(input => {
+            const catStoreVal = input.value; 
+            const parentName = input.nextElementSibling.innerText;
+            const lookupKey = catStoreVal + "|" + groupKey;
+            
+            const children = categoriesByParent[lookupKey];
+
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
+                header.innerText = parentName; 
+                sSubCatContainer.appendChild(header);
+
+                children.forEach(item => {
+                    const el = createSearchCheckbox(item, 'search_sub', searchPreSelected.sub, handleSearchSubCatChange);
+                    el.querySelector('input').setAttribute('data-parent-path', lookupKey);
+                    sSubCatContainer.appendChild(el);
+                });
+            }
+        });
+
+        if(!hasAnyOptions) sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
+        else if(searchPreSelected.sub.size > 0) handleSearchSubCatChange();
+    }
+
+    // --- 3. UPDATE SEARCH SUB SUB CATEGORY LIST ---
+    function handleSearchSubCatChange() {
+        const checkedInputs = Array.from(sSubCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        sSubSubCatContainer.innerHTML = ''; 
+
+        if(checkedInputs.length === 0) {
+            sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
+            return;
+        }
+
+        let hasAnyOptions = false;
+
+        checkedInputs.forEach(input => {
+            const subCatStoreVal = input.value;
+            const parentPath = input.getAttribute('data-parent-path'); 
+            const parentName = input.nextElementSibling.innerText;
+            const lookupKey = subCatStoreVal + "|" + parentPath;
+            
+            const children = categoriesByParent[lookupKey];
+
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
+                header.innerText = parentName;
+                sSubSubCatContainer.appendChild(header);
+
+                children.forEach(item => {
+                    sSubSubCatContainer.appendChild(createSearchCheckbox(item, 'search_sub_sub', searchPreSelected.subsub, null));
+                });
+            }
+        });
+
+        if(!hasAnyOptions) sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
+    }
+
+    // --- SEARCH FILTER ---
+    function enableSearchFilter(inputId, containerId) {
+        const input = document.getElementById(inputId);
+        const container = document.getElementById(containerId);
+        if(input && container) {
+            input.addEventListener('keyup', function() {
+                const filter = this.value.toLowerCase();
+                const items = container.querySelectorAll('.checkbox-item');
+                const headers = container.querySelectorAll('.group-header');
+                items.forEach(item => {
+                    const label = item.querySelector('label').innerText;
+                    item.style.display = label.toLowerCase().includes(filter) ? 'flex' : 'none';
+                });
+                if(filter.length > 0) headers.forEach(h => h.style.display = 'none');
+                else headers.forEach(h => h.style.display = 'block');
+            });
+        }
+    }
+
+    // --- INITIAL LOAD ---
+    if (searchPreSelected.groupVal) {
+        updateSearchCatList(searchPreSelected.groupVal);
+    }
+
+    enableSearchFilter('search_sub_cat_search', 'search_sub_category_container');
+    enableSearchFilter('search_sub_sub_cat_search', 'search_sub_sub_category_container');
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Check if the input exists BEFORE initializing TomSelect
+    // This prevents the "White Screen" / Disappearing Form issue
+    const termInput = document.getElementById('search_term_input');
+
+    if (termInput) {
+        new TomSelect(termInput, {
+            create: true,               // Allow user to type new text
+            createOnBlur: true,         // Create tag if user clicks away
+            delimiter: ',',             // Store in DB separated by commas
+            persist: false,             // Don't save created tags to the dropdown
+            plugins: ['remove_button'], // Add 'x' button
+            onInitialize: function() {
+                this.wrapper.classList.add('w-full'); 
+                this.wrapper.querySelector('.ts-control').classList.add('border', 'border-[#ccc]', 'rounded-[3px]', 'text-[13px]');
+            }
+        });
+    } else {
+        console.warn("Search Term Input not found - skipping initialization");
+    }
+
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. Get PHP Data into JS
+    const colorMapDB = <?php echo json_encode($colorMapData); ?>;
+    
+    // 2. Function to determine the key (jewelry/textiles) from the Group Name
+    function getColorMapKey() {
+        const groupSelect = document.getElementById('group_select');
+        let groupText = '';
+
+        // Handle TomSelect or Native Select
+        if (groupSelect) {
+            if (groupSelect.tomselect) {
+                // If TomSelect is initialized, get the text from the selected item
+                const val = groupSelect.tomselect.getValue();
+                const item = groupSelect.tomselect.getItem(val);
+                if(item) groupText = item.innerText.toLowerCase();
+            } else if (groupSelect.selectedIndex > -1) {
+                // Native fallback
+                groupText = groupSelect.options[groupSelect.selectedIndex].text.toLowerCase();
+            }
+        }
+
+        // Logic to match keys in your array
+        if (groupText.includes('textile') || groupText.includes('clothing')) return 'textiles';
+        if (groupText.includes('jewelry') || groupText.includes('jewellery')) return 'jewelry';
+        
+        return null; // Return null if neither
+    }
+
+    // 3. Main Function to Update All Fields
+    function updateAllColorMaps() {
+        const key = getColorMapKey(); // e.g., 'textiles' or 'jewelry'
+        const wrappers = document.querySelectorAll('.colormap-wrapper');
+
+        wrappers.forEach(wrapper => {
+            const select = wrapper.querySelector('.colormap-select');
+            
+            // A. If no matching category, Hide and Clear
+            if (!key || !colorMapDB[key]) {
+                wrapper.style.display = 'none';
+                select.innerHTML = '<option value="">Select Color Map</option>';
+                return;
+            }
+
+            // B. If matching category, Show and Populate
+            wrapper.style.display = 'block'; // Or 'flex' depending on your grid
+            
+            // Only repopulate if the options haven't been generated for this key yet
+            // (We check a custom attribute to avoid wiping user selection while typing elsewhere)
+            if (select.getAttribute('data-loaded-key') !== key) {
+                
+                // Get the Saved Value (from Database)
+                const savedVal = select.getAttribute('data-saved-value') || "";
+                
+                // Build Options
+                let html = '<option value="">Select Color Map</option>';
+                const options = colorMapDB[key]; // The array [black, gray, white...]
+                
+                options.forEach(colorName => {
+                    // Check if this option matches the saved database value
+                    // We trim and lowercase for loose comparison
+                    const isSelected = (String(colorName).trim().toLowerCase() === String(savedVal).trim().toLowerCase()) ? 'selected' : '';
+                    html += `<option value="${colorName}" ${isSelected}>${colorName}</option>`;
+                });
+
+                select.innerHTML = html;
+                select.setAttribute('data-loaded-key', key); // Mark as loaded
+            }
+        });
+    }
+
+    // 4. Listeners
+    // Hook into Group Change (TomSelect or Native)
+    const groupSelect = document.getElementById('group_select');
+    if (groupSelect) {
+        // Native Event
+        groupSelect.addEventListener('change', updateAllColorMaps);
+        // TomSelect Event
+        if (groupSelect.tomselect) {
+            groupSelect.tomselect.on('change', updateAllColorMaps);
+        }
+    }
+
+    // Hook into "Add New Variation" to populate the new card immediately
+    const originalAddVarForColor = window.addNewVariation;
+    window.addNewVariation = function() {
+        if(originalAddVarForColor) originalAddVarForColor();
+        setTimeout(updateAllColorMaps, 50); // Small delay to ensure DOM is ready
+    };
+
+    // 5. Initial Run
+    updateAllColorMaps();
+});
 </script>
