@@ -208,6 +208,20 @@ class POInvoice
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
+
+    /**
+     * Get POs mapped to a group invoice (returns array of ['po_id','po_number','total_cost'])
+     */
+    public function getPOsByInvoiceId($invoiceId)
+    {
+        $sql = "SELECT m.po_id, p.po_number, p.total_cost FROM vp_po_invoice_map m JOIN purchase_orders p ON p.id = m.po_id WHERE m.invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $invoiceId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
     public function addPayment($data)
     {
         global $secretKey;

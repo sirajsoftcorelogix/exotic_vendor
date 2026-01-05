@@ -421,4 +421,40 @@ $msgCnt = $notificationController->getUnreadCount();
     }
 
     setInterval(checkNewNotification, 5000);
+
+    
+// Global alert popup (toast)
+(function() {
+    // Create container
+    var alertContainer = document.createElement('div');
+    alertContainer.id = 'global-alert';
+    alertContainer.className = 'fixed top-5 right-5 z-50 hidden';
+    alertContainer.innerHTML = '<div id="global-alert-inner" class="max-w-sm rounded px-4 py-3 shadow-lg text-white flex items-start justify-between"><div id="global-alert-message" class="flex-1 pr-3"></div><button id="global-alert-close" class="ml-2 text-white text-xl font-bold leading-none focus:outline-none" aria-label="Close">&times;</button></div>';
+    document.body.appendChild(alertContainer);
+
+    window.showAlert = function(message, type = 'success', timeout = 6000) {
+        var container = document.getElementById('global-alert');
+        var inner = document.getElementById('global-alert-inner');
+        var msgEl = document.getElementById('global-alert-message');
+        var closeBtn = document.getElementById('global-alert-close');
+        msgEl.textContent = message;
+        inner.className = 'max-w-sm rounded px-4 py-3 shadow-lg text-white flex items-start justify-between ' + (type === 'success' ? 'bg-green-500' : 'bg-red-500');
+        container.classList.remove('hidden');
+        container.style.opacity = '1';
+        // clear previous timeout if any
+        if (window._alertTimeout) clearTimeout(window._alertTimeout);
+        // auto hide after timeout
+        window._alertTimeout = setTimeout(function() {
+            container.classList.add('hidden');
+        }, timeout);
+        // Attach close handler
+        closeBtn.onclick = function() {
+            container.classList.add('hidden');
+            if (window._alertTimeout) {
+                clearTimeout(window._alertTimeout);
+                window._alertTimeout = null;
+            }
+        };
+    };
+})();
 </script>

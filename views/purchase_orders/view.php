@@ -285,27 +285,97 @@
             } 
             ?>
             <div class="col-span-1 flex flex-col items-center justify-center">
-              <div class="menu-wrapper inline-block relative">
-                  <button class="menu-button text-gray-500 hover:text-gray-700 font-semibold" onclick="toggleMenu(this)">
-                  <i class="fas fa-ellipsis-v"></i> <!-- &#x22EE;  Vertical ellipsis -->
-                  </button>
-                  <ul class="menu-popup text-left" style="min-width: 220px;">
-                      <li><a href="<?php echo $invoice['invoice']; ?>" download ><i class="fas fa-download <?php //echo $iconClass ?> text-2xl text-gray-600"></i> Download Invoice</a></li>
-                      <li id="open-payment-popup-btn"><i class="fas fa-money-bill-wave text-2xl text-gray-600"></i> Add Payment</li>
-                      <li id="open-challan-popup-btn"><i class="fas fa-truck text-2xl text-gray-600"></i> Add Delivery Challan</li>
-                      <!-- <li ><a href="#" id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</a></li> -->
-                  </ul> 
+                <div class="menu-wrapper inline-block relative">
+                    <button class="menu-button text-gray-500 hover:text-gray-700 font-semibold" onclick="toggleMenu(this)">
+                    <i class="fas fa-ellipsis-v"></i> <!-- &#x22EE;  Vertical ellipsis -->
+                    </button>
+                    <ul class="menu-popup text-left" style="min-width: 220px;">
+                        <li><a href="<?php echo $invoice['invoice']; ?>" download ><i class="fas fa-download <?php //echo $iconClass ?> text-2xl text-gray-600"></i> Download Invoice</a></li>
+                        <li id="open-payment-popup-btn"><i class="fas fa-money-bill-wave text-2xl text-gray-600"></i> Add Payment</li>
+                        <li id="open-challan-popup-btn"><i class="fas fa-truck text-2xl text-gray-600"></i> Add Delivery Challan</li>
+                        <!-- <li ><a href="#" id="open-payment-popup-btn" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">+ Add Payment</a></li> -->
+                    </ul> 
+                </div>
               </div>
-            </div>
-            <div class="col-span-2">
-                <h4 class="payment-details-header">Shipping</h4>
-                <p class="payment-details-text mt-2"><?php echo $invoice['shipping']; ?></p>
+              <div class="col-span-2">
+                  <h4 class="payment-details-header">Shipping</h4>
+                  <p class="payment-details-text mt-2"><?php echo $invoice['shipping']; ?></p>
               </div>
               
               <div class="col-span-2">
                 <h4 class="payment-details-header">Grand Total</h4>
                 <p class="payment-details-text mt-2"><?php echo $invoice['grand_total']; ?></p>
               </div>
+
+              <!-- group-uploaded-invoice -->
+              <?php if (!empty($group_invoice_items) && count($group_invoice_items) > 1): ?>
+                <div class="col-span-2 mt-2">
+                  <a href="javascript:void(0)" id="open-group-invoice-btn" class="text-blue-600 hover:underline font-semibold">Group Invoice</a>
+                </div>
+
+                <!-- Group Invoice Modal -->
+                <div id="group-invoice-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+                  <div id="group-invoice-overlay" class="absolute inset-0 bg-black bg-opacity-40"></div>
+                  <div class="relative bg-white rounded-lg shadow-lg z-60 p-6 w-11/12 md:w-1/2 lg:w-1/3 max-h-[80vh] overflow-auto">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-lg font-bold">Group Invoice Details</h3>
+                      <button id="close-group-invoice-btn" class="text-gray-600 hover:text-orange-500 font-bold text-xl">&times;</button>
+                    </div>
+                    <!-- Invoice total -->
+                    <div class="mt-4 flex justify-center items-center gap-6">
+                      <div class="text-sm text-gray-600">Invoice Total</div>
+                      <div class="text-lg font-semibold"><?= isset($invoice['grand_total']) ? '₹'.number_format($invoice['grand_total'], 2) : '-' ?></div>
+                    </div>
+                    <!-- <div class="mb-4 text-sm text-gray-700">This invoice is mapped to the following purchase orders:</div> -->
+                    <table class="w-full text-sm border-collapse">
+                      <thead>
+                        <tr class="bg-gray-100">
+                          <th class="text-left px-3 py-2">PO Number</th>
+                          <th class="text-right px-3 py-2">Amount (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <?php foreach ($group_invoice_items as $g): ?>
+                          <tr class="border-t">
+                            <td class="px-3 py-2"><a target="_blank" href="<?= base_url('?page=purchase_orders&action=view&po_id=').$g['po_id'] ?>" class="text-blue-600 hover:underline"><?= htmlspecialchars($g['po_number']) ?></a></td>
+                            <td class="text-right px-3 py-2"><?= isset($g['total_cost']) ? '₹'.number_format($g['total_cost'], 2) : '-' ?></td>
+                          </tr>
+                        <?php endforeach; ?>
+                      </tbody>
+                    </table>
+
+                    
+
+                  </div>
+                </div>
+
+                <script>
+                  (function(){
+                    var openBtn = document.getElementById('open-group-invoice-btn');
+                    var modal = document.getElementById('group-invoice-modal');
+                    var closeBtn = document.getElementById('close-group-invoice-btn');
+                    var overlay = document.getElementById('group-invoice-overlay');
+                    if (openBtn) {
+                      openBtn.addEventListener('click', function(){
+                        modal.classList.remove('hidden');
+                        modal.classList.add('flex');
+                      });
+                    }
+                    if (closeBtn) {
+                      closeBtn.addEventListener('click', function(){
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                      });
+                    }
+                    if (overlay) {
+                      overlay.addEventListener('click', function(){
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                      });
+                    }
+                  })();
+                </script>
+              <?php endif; ?>
             </div>
           <?php } 
         } ?>
