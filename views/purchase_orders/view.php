@@ -322,8 +322,8 @@
                       <button id="close-group-invoice-btn" class="text-gray-600 hover:text-orange-500 font-bold text-xl">&times;</button>
                     </div>
                     <!-- Invoice total -->
-                    <div class="mt-4 flex justify-center items-center gap-6">
-                      <div class="text-sm text-gray-600">Invoice Total</div>
+                    <div class="mt-4 flex justify-end items-center gap-6">
+                      <div class="text-sm text-gray-600">Invoice Total:</div>
                       <div class="text-lg font-semibold"><?= isset($invoice['grand_total']) ? '₹'.number_format($invoice['grand_total'], 2) : '-' ?></div>
                     </div>
                     <!-- <div class="mb-4 text-sm text-gray-700">This invoice is mapped to the following purchase orders:</div> -->
