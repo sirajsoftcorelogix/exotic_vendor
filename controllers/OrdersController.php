@@ -34,6 +34,16 @@ class OrdersController {
             $filters['order_from'] = $_GET['order_from'];
             $filters['order_till'] = $_GET['order_till'];
         }
+        
+        // if(!empty($_GET['daterange'])){
+        //     echo urldecode($_GET['daterange']);
+        //     $dateRange = explode(' - ', $_GET['daterange']);       
+        //     print_array($dateRange);     
+        //     if (count($dateRange) === 2) {
+        //         $filters['order_from'] = date('Y-m-d', strtotime($dateRange[0]));
+        //         $filters['order_till'] = date('Y-m-d', strtotime($dateRange[1]));
+        //     }
+        // }
         if (!empty($_GET['item_name'])) {
             $filters['title'] = $_GET['item_name'];            
         }

@@ -144,6 +144,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                                     <?php } ?>
                                 <?php endif; ?>
                             </select>
+                            <p id="vendor-error" class="text-red-500 text-xs mt-1 font-semibold hidden"></p>
                         </div>
                         <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative z-0">
                             <label class="block text-gray-700 font-bold text-sm mb-2 ml-1">Invoice Number</label>
@@ -152,6 +153,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
                                    placeholder="Enter Invoice No"
                                    value="<?php echo $invoice_no; ?>" 
                                    class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-[#d9822b] focus:border-[#d9822b] outline-none font-medium shadow-sm transition-all text-gray-800">
+                                   <p id="invoice-no-error" class="text-red-500 text-xs mt-1 font-semibold hidden"></p>
                         </div>
                         <div class="hidden md:block mt-auto p-4 bg-orange-50 border border-orange-100 rounded-xl text-sm text-orange-800">
                             <p class="font-bold mb-1">Instructions:</p>
@@ -212,7 +214,7 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
 
     const invoiceInput = document.getElementById('invoice');
     const previewImg = document.getElementById('preview');
-    const pdfPreview = document.getElementById('pdf-preview'); // New Element
+    const pdfPreview = document.getElementById('pdf-preview');
     const deleteBtn = document.getElementById('delete-preview-btn');
     const placeholder = document.getElementById('placeholder-box');
     const errorBox = document.getElementById("photo-error");
@@ -223,19 +225,15 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
-                // Check file Type
                 if (file.type === 'application/pdf') {
-                    // Show PDF
                     previewImg.classList.add('hidden');
                     pdfPreview.src = e.target.result;
                     pdfPreview.classList.remove('hidden');
                 } else {
-                    // Show Image
                     pdfPreview.classList.add('hidden');
                     previewImg.src = e.target.result;
                     previewImg.classList.remove('hidden');
                 }
-
                 deleteBtn.classList.remove('hidden');
                 placeholder.classList.add('hidden');
                 errorBox.textContent = ""; 
@@ -246,10 +244,10 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
 
     // 3. Delete Logic
     deleteBtn.addEventListener('click', function() {
-        invoiceInput.value = ''; // Clear input
+        invoiceInput.value = ''; 
         previewImg.src = '#';
         previewImg.classList.add('hidden');
-        pdfPreview.src = ''; // Clear PDF src
+        pdfPreview.src = ''; 
         pdfPreview.classList.add('hidden');
         deleteBtn.classList.add('hidden');
         placeholder.classList.remove('hidden');
@@ -261,32 +259,42 @@ $pdfPreviewClass  = ($showPreview && $isPdf) ? '' : 'hidden';
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
     document.getElementById("cancel-btn").addEventListener("click", function () {
-        window.location.href = window.location.origin + "/index.php?page=inbounding&action=list"; // Fixed typo 'lsit'
+        window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
 
-    // 5. Validation
+    // ---------------------------------------------
+    // 5. VALIDATION LOGIC (UPDATED for Inline Errors)
+    // ---------------------------------------------
     document.getElementById("invoiceForm").addEventListener("submit", function(e) {
-        const isEditMode = "<?php echo $isEdit ? '1' : '0'; ?>";
-        const hasFile = invoiceInput.files.length > 0;
-        // Check if either preview is visible
-        const previewVisible = (!previewImg.classList.contains('hidden')) || (!pdfPreview.classList.contains('hidden'));
+        let isValid = true;
+        
+        // --- 1. Get Inputs & Error Containers ---
+        const vendorInput = document.getElementById("vendor_id");
+        const vendorError = document.getElementById("vendor-error");
+        
+        const invoiceNoInput = document.querySelector('input[name="invoice_no"]');
+        const invoiceError = document.getElementById("invoice-no-error");
 
-        // Validate File Upload
-        if (isEditMode === '0' && !hasFile) {
-            errorBox.textContent = "Please upload an invoice photo or PDF.";
-            e.preventDefault();
-            return false;
-        }
-        if (isEditMode === '1' && !previewVisible) {
-             errorBox.textContent = "Please upload an invoice photo or PDF.";
-             e.preventDefault();
-             return false;
+        // --- 2. Reset Previous Errors ---
+        vendorError.classList.add("hidden");
+        vendorError.innerText = "";
+        invoiceError.classList.add("hidden");
+        invoiceError.innerText = "";
+        
+        // Remove red borders
+        invoiceNoInput.classList.remove("border-red-500", "ring-2", "ring-red-100");
+        const tsControl = document.querySelector('.ts-control');
+        if(tsControl) tsControl.style.borderColor = "#d1d5db"; // Reset TomSelect border
+
+
+        // --- 5. Stop Form if Invalid ---
+        if (!isValid) {
+            e.preventDefault(); 
         }
     });
 
     // Popup Logic for Images
     function openImagePopup(imageUrl) {
-        // Only open popup if it's not a PDF (simple check)
         if(!imageUrl.toLowerCase().endsWith('.pdf')) {
             document.getElementById('popupImage').src = imageUrl;
             document.getElementById('imagePopup').classList.remove('hidden');
