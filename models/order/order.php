@@ -355,7 +355,7 @@ class Order{
         }
     }*/
     public function insertOrder($data) {
-        print_array($data);
+        //print_array($data);
         //echo "<br>";
         // Assuming $data is an associative array with keys matching the database columns
         if (empty($data) || !is_array($data)) {
@@ -453,6 +453,8 @@ class Order{
 
         // Bind dynamically
         $stmt->bind_param($types, ...$values);
+        //set_charset('utf8mb4')
+        $this->db->set_charset('utf8mb4');
 
         // After execute
         if (!$stmt->execute()) {
