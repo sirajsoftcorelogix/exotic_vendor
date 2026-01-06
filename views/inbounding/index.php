@@ -453,7 +453,7 @@ function isFilled($value) {
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Category</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['group_name_display']; ?></span></div>
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Received by</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['received_name']; ?></span></div>
                                 <div class="flex items-baseline justify-between sm:justify-start">
-                                    <span class="grid-label w-24 shrink-0">Updated by</span>
+                                    <span class="grid-label w-24 shrink-0">Feeded By</span>
                                     <span class="text-slate-400 px-2">:</span>
                                     <span class="grid-value text-right sm:text-left flex-grow text-gray-600">
                                         <?php echo $tc['updated_name']; ?>
