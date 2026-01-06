@@ -172,6 +172,9 @@ switch ($page) {
             case 'deleteSearch':
                 $controller->deleteSearch();
                 break;
+            case 'invoice_list':
+                $controller->invoiceList();
+                break;
             default:
                 $controller->index();
                 break;
