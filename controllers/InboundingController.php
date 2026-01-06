@@ -18,7 +18,8 @@ class InboundingController {
             'vendor_code'         => $_GET['vendor_code'] ?? '',
             'received_by_user_id' => $_GET['agent_id'] ?? '',
             'group_name'          => $_GET['group_name'] ?? '',
-            'status_step'         => $_GET['status_step'] ?? ''
+            'status_step'         => $_GET['status_step'] ?? '',
+            'updated_by_user_id'  => $_GET['updated_by'] ?? ''
         ];
 
         // 2. Pagination Logic
@@ -42,7 +43,7 @@ class InboundingController {
             'currentPage'     => $pt_data["currentPage"],
             'limit'           => $limit,
             'totalRecords'    => $pt_data["totalRecords"],
-            
+            'updated_user_list' => $dropdowns['updated_users'],
             // Pass the filter data to the View
             'filters'         => $filters,
             'vendor_list'     => $dropdowns['vendors'],
@@ -713,54 +714,54 @@ class InboundingController {
 
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
 
-    // 1. Generate the Prefix for the NEW item (e.g., 'H' + 'S' = "HS")
-    $group_val = $_POST['group_name'] ?? ''; 
-    $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
+            // 1. Generate the Prefix for the NEW item (e.g., 'H' + 'S' = "HS")
+            $group_val = $_POST['group_name'] ?? ''; 
+            $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
 
-    $category_id = $_POST['category_code'] ?? 0;
-    $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
-    
-    $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-    $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
-    
-    $current_prefix = $char1 . $char2; // "HS"
+            $category_id = $_POST['category_code'] ?? 0;
+            $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
+            
+            $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
+            $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
+            
+            $current_prefix = $char1 . $char2; // "HS"
 
-    // 2. GET THE GLOBAL LAST CODE (e.g., "CSAA01")
-    // If you use getByPrefix here, it will fail and give you 01.
-    $last_code = $inboundingModel->getLastItemCodeGlobal();
+            // 2. GET THE GLOBAL LAST CODE (e.g., "CSAA01")
+            // If you use getByPrefix here, it will fail and give you 01.
+            $last_code = $inboundingModel->getLastItemCodeGlobal();
 
-    if (empty($last_code)) {
-        // Table is empty, start fresh
-        $item_code = $current_prefix . 'AA01'; 
-    } else {
-        // 3. Cut off the OLD prefix (First 2 chars)
-        // "CSAA01" -> becomes "AA01"
-        $last_sequence = substr($last_code, 2); 
-
-        // 4. Increment Logic
-        if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
-            $letters = $matches[1]; // "AA"
-            $number  = intval($matches[2]); // 1
-
-            if ($number < 99) {
-                $number++; // 2
-                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT); // AA02
+            if (empty($last_code)) {
+                // Table is empty, start fresh
+                $item_code = $current_prefix . 'AA01'; 
             } else {
-                $number = 1; 
-                $letters++; // AA -> AB
-                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
-            }
-        } else {
-            // Fallback: If DB had old format like "CS01" (no letters in middle)
-            // We force it to start the AA sequence now.
-            $new_seq = 'AA01'; 
-        }
+                // 3. Cut off the OLD prefix (First 2 chars)
+                // "CSAA01" -> becomes "AA01"
+                $last_sequence = substr($last_code, 2); 
 
-        // 5. Attach NEW prefix to INCREMENTED sequence
-        // "HS" + "AA02"
-        $item_code = $current_prefix . $new_seq;
-    }
-}
+                // 4. Increment Logic
+                if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
+                    $letters = $matches[1]; // "AA"
+                    $number  = intval($matches[2]); // 1
+
+                    if ($number < 99) {
+                        $number++; // 2
+                        $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT); // AA02
+                    } else {
+                        $number = 1; 
+                        $letters++; // AA -> AB
+                        $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
+                    }
+                } else {
+                    // Fallback: If DB had old format like "CS01" (no letters in middle)
+                    // We force it to start the AA sequence now.
+                    $new_seq = 'AA01'; 
+                }
+
+                // 5. Attach NEW prefix to INCREMENTED sequence
+                // "HS" + "AA02"
+                $item_code = $current_prefix . $new_seq;
+            }
+        }
 
         // --- SKU GENERATION LOGIC ---
         $size  = trim($_POST['size'] ?? '');
@@ -1112,6 +1113,49 @@ class InboundingController {
         }
         exit;
     }
+    public function deleteSelected() {
+        // 1. Use the Global variable (Like in your sample code)
+        // Make sure this matches the variable name defined in your index.php
+        global $inboundingModel; 
+        global $conn; // Sometimes needed if the model relies on it implicitly
+
+        // 2. Security Check
+        if (!isset($_SESSION['user']['id'])) {
+            // Redirect to login or show error
+            header("Location: " . base_url('?page=inbounding&action=list&msg=unauthorized'));
+            exit;
+        }
+
+        // 3. Get IDs from POST
+        $ids_string = $_POST['ids'] ?? '';
+
+        if (!empty($ids_string)) {
+            // Convert string "1,2,3" into array
+            $ids_array = explode(',', $ids_string);
+            $ids_array = array_map('intval', $ids_array); // Security: Force integers
+            $ids_array = array_filter($ids_array); // Remove empty values
+
+            if (!empty($ids_array)) {
+                // 4. Call Model using the global variable
+                // Ensure you added the 'deleteInboundItems' function to your Model class!
+                $result = $inboundingModel->deleteInboundItems($ids_array);
+
+                if ($result) {
+                    // Success: Redirect back to the list
+                    header("Location: " . base_url('?page=inbounding&action=list&msg=deleted_success'));
+                    exit;
+                } else {
+                    // Database Error
+                    header("Location: " . base_url('?page=inbounding&action=list&msg=error_db'));
+                    exit;
+                }
+            }
+        }
+        
+        // Fallback: No IDs selected or other error
+        header("Location: " . base_url('?page=inbounding&action=list&msg=no_selection'));
+        exit;
+    }
     public function inbound_product_publish(){
         global $inboundingModel;
         $API_data = array();
@@ -1165,7 +1209,14 @@ class InboundingController {
         $stock_price_temp[0]['prod_width'] = $data['data']['width'];
         $stock_price_temp[0]['prod_height'] = $data['data']['height'];
         $stock_price_temp[0]['length_unit'] = 'inch';
-        $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($data['data']['added_date'])); 
+        $input_date = $data['data']['added_date'] ?? null;
+        if (!empty($input_date) && $input_date != '0000-00-00') {
+            // If set and not zero -> Use the provided date
+            $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($input_date));
+        } else {
+            // If null, empty, or zero -> Use Current Date
+            $stock_price_temp[0]['date_added'] = date('Y-m-d');
+        } 
         $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
         $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
         $stock_price_temp[0]['flex_status'] = '0';

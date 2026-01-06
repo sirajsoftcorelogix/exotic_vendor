@@ -46,6 +46,11 @@ class Inbounding {
             $step = $this->conn->real_escape_string($filters['status_step']);
             $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
         }
+        // feeder by
+        if (!empty($filters['updated_by_user_id'])) {
+            $upd_id = (int)$filters['updated_by_user_id'];
+            $where[] = "vi.updated_by_user_id = $upd_id";
+        }
 
         // Combine WHERE clauses
         $whereSql = "";
@@ -105,7 +110,7 @@ class Inbounding {
     // --- NEW HELPER FOR DROPDOWNS ---
     // --- HELPER FOR FILTERS ---
     public function getFilterDropdowns() {
-        $data = ['vendors' => [], 'users' => [], 'groups' => []];
+        $data = ['vendors' => [], 'users' => [], 'groups' => [], 'updated_users' => []];
 
         // 1. Get Vendors (Only those present in vp_inbound)
         $v_sql = "SELECT DISTINCT v.id, v.vendor_name 
@@ -130,7 +135,16 @@ class Inbounding {
                 $data['users'][] = $r; 
             }
         }
-
+        $upd_sql = "SELECT DISTINCT u.id, u.name 
+                FROM vp_users u 
+                INNER JOIN vp_inbound i ON i.updated_by_user_id = u.id 
+                ORDER BY u.name ASC";
+        $upd_res = $this->conn->query($upd_sql);
+        if($upd_res) {
+            while($r = $upd_res->fetch_assoc()) { 
+                $data['updated_users'][] = $r; 
+            }
+        }
         // 3. Get Groups (Joined with Category Table)
         // Logic: vp_inbound.group_name stores the ID -> matches vp_categories.category
         $g_sql = "SELECT DISTINCT c.category as id, c.display_name as name 
@@ -635,33 +649,42 @@ public function update_image_variation($img_id, $variation_id) {
         return $stmt->execute();
     }
     public function updatedesktopform($id, $data) {
+        // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
-        $cols = []; $values = []; $types = "";
+        
+        $cols = []; 
+        $values = []; 
+        $types = "";
 
         foreach ($data as $key => $val) {
-            if ($val !== '' && $val !== null) {
+            // FIX: Removed "$val !== ''" check.
+            // Now, empty strings WILL be included in the UPDATE query.
+            if ($val !== null) { 
                 $cols[] = "$key = ?";
                 $values[] = $val;
                 
                 // Type logic: integers, floats, or default to string
                 if (is_int($val)) $types .= "i";
                 elseif (is_float($val)) $types .= "d";
-                else $types .= "s"; // Handles your comma-separated strings and Group Name strings
+                else $types .= "s"; 
             }
         }
 
-        if (empty($cols)) return ['success' => true, 'message' => "No changes made."];
+        if (empty($cols)) return ['success' => true, 'message' => "No changes detected."];
 
+        // Add ID for the WHERE clause
         $types .= "i"; 
         $values[] = $id;
 
         $sql = "UPDATE vp_inbound SET " . implode(', ', $cols) . " WHERE id = ?";
+        
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => "Prepare failed: " . $this->conn->error];
         
         $stmt->bind_param($types, ...$values);
         
         if ($stmt->execute()) return ['success' => true, 'message' => "Updated successfully."];
+        
         return ['success' => false, 'message' => "Update failed: " . $stmt->error];
     }
     // --- Add these functions inside your InboundingModel class ---
@@ -990,6 +1013,21 @@ public function update_image_variation($img_id, $variation_id) {
         }
         
         return false;
+    }
+    public function deleteInboundItems($ids_array) {
+        if (empty($ids_array)) {
+            return false;
+        }
+
+        // Prepare placeholders (?,?,?)
+        $placeholders = implode(',', array_fill(0, count($ids_array), '?'));
+        
+        // Use your actual table name here (e.g., vp_inbound)
+        $sql = "DELETE FROM vp_inbound WHERE id IN ($placeholders)";
+        
+        $stmt = $this->conn->prepare($sql);
+        
+        return $stmt->execute($ids_array);
     }
     public function getpublishdata($id) {
         $id = (int)$id;

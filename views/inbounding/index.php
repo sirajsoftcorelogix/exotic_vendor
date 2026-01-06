@@ -18,7 +18,10 @@ if (isset($inbounding_data) && is_array($inbounding_data)) {
         $inbounding_data[$key]['vendor_name'] = $vendor ? $vendor['vendor_name'] : '';
         
         $userDetails = $usersModel->getUserById($value['received_by_user_id']);
-        $inbounding_data[$key]['received_name'] = $userDetails ? $userDetails['name'] : '';
+        $inbounding_data[$key]['received_name'] = $userDetails ? $userDetails['name'] : ''; 
+
+        $updaterDetails = $usersModel->getUserById($value['updated_by_user_id']);
+        $inbounding_data[$key]['updated_name'] = $updaterDetails ? $updaterDetails['name'] : '-';
     }
 } else {
     $inbounding_data = [];
@@ -198,9 +201,6 @@ function isFilled($value) {
                     <button type="button" onclick="clearAllFilters()" class="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-full text-xs font-bold transition border border-red-200">
                         Clear
                     </button>
-                    <button type="button" onclick="exportSelectedData()" class="bg-green-50 text-green-700 hover:bg-green-100 px-4 py-2 rounded-full text-xs font-bold transition border border-green-200 flex items-center gap-1">
-                        Export (<span id="count-display">0</span>)
-                    </button>
                     <a href="<?php echo base_url('?page=inbounding&action=form1'); ?>" class="bg-black text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-gray-800 transition flex items-center gap-1">
                         <i data-lucide="plus" class="w-3 h-3"></i> Add
                     </a>
@@ -271,7 +271,21 @@ function isFilled($value) {
                                 ?>
                             </select>
                         </div>
-
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Feeded By</label>
+                            <select id="filter_updated_by" name="updated_by" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">Select User...</option>
+                                <?php 
+                                    $selUpd = $data['filters']['updated_by_user_id'] ?? '';
+                                    if(!empty($data['updated_user_list'])) {
+                                        foreach($data['updated_user_list'] as $u) {
+                                            $s = ($selUpd == $u['id']) ? 'selected' : '';
+                                            echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
+                                        }
+                                    }
+                                ?>
+                            </select>
+                        </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Group</label>
                             <select id="filter_group" name="group_name" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
@@ -313,28 +327,44 @@ function isFilled($value) {
         ?>
 
         <div class="bg-white border-b border-gray-200 mb-6 sticky top-0 z-30">
-            <div class="max-w-6xl mx-auto px-4">
+            <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
+                
                 <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar" aria-label="Tabs">
                     <?php foreach($tabs as $key => $label): 
                         $isActive = ($current_step == $key);
-                        
-                        // Dynamic Classes for Active vs Inactive
-                        $activeClass   = "border-orange-500 text-orange-600 font-bold border-b-4";
-                        $inactiveClass = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
-                        
-                        // Build URL (preserves other filters if needed, or resets them)
-                        // Simple version: ?page=inbounding&action=list&status_step=KEY
+                        $activeClass    = "border-orange-500 text-orange-600 font-bold border-b-4";
+                        $inactiveClass  = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
                         $url = "?page=inbounding&action=list&status_step=" . urlencode($key);
                     ?>
-                    
-                    <a href="<?= $url ?>" 
-                       class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
+                    <a href="<?= $url ?>" class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
                         <?= $label ?>
                     </a>
-                    
                     <?php endforeach; ?>
                 </nav>
-            </div>
+
+                <div class="relative inline-block text-left ml-4">
+                    <button type="button" onclick="toggleActionMenu()" class="bg-[#856404] hover:bg-[#6d5203] text-white px-5 py-2 rounded-md text-sm font-bold shadow-sm flex items-center gap-2 transition-colors">
+                        Actions
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                    </button>
+
+                    <div id="action-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 transform origin-top-right">
+                        <div class="py-1">
+                            <button type="button" onclick="exportSelectedData()" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                <i data-lucide="download" class="w-4 h-4 text-green-600"></i>
+                                Export Selected
+                            </button>
+                            
+                            <div class="border-t border-gray-100 my-1"></div>
+
+                            <button type="button" onclick="deleteSelectedData()" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                Delete Selected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                </div>
         </div>
 
     <?php if (!empty($inbounding_data)): ?>
@@ -422,6 +452,13 @@ function isFilled($value) {
                                 
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Category</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['group_name_display']; ?></span></div>
                                 <div class="flex items-baseline justify-between sm:justify-start"><span class="grid-label w-24 shrink-0">Received by</span><span class="text-slate-400 px-2">:</span><span class="grid-value text-right sm:text-left flex-grow"><?php echo $tc['received_name']; ?></span></div>
+                                <div class="flex items-baseline justify-between sm:justify-start">
+                                    <span class="grid-label w-24 shrink-0">Updated by</span>
+                                    <span class="text-slate-400 px-2">:</span>
+                                    <span class="grid-value text-right sm:text-left flex-grow text-gray-600">
+                                        <?php echo $tc['updated_name']; ?>
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -624,10 +661,11 @@ function isFilled($value) {
         
         if(document.getElementById('filter_vendor')) new TomSelect("#filter_vendor", config);
         if(document.getElementById('filter_agent')) new TomSelect("#filter_agent", config);
+        if(document.getElementById('filter_updated_by')) new TomSelect("#filter_updated_by", config);
         if(document.getElementById('filter_group')) new TomSelect("#filter_group", config);
         
         // Auto-open filter panel if any filter is applied (optional UX improvement)
-        <?php if(!empty($data['filters']['vendor_code']) || !empty($data['filters']['received_by_user_id']) || !empty($data['filters']['group_name']) || !empty($data['filters']['status_step'])): ?>
+        <?php if(!empty($data['filters']['vendor_code']) || !empty($data['filters']['received_by_user_id']) || !empty($data['filters']['updated_by_user_id']) || !empty($data['filters']['group_name']) || !empty($data['filters']['status_step'])): ?>
             toggleFilterPanel();
         <?php endif; ?>
     });
@@ -745,5 +783,98 @@ function isFilled($value) {
         const baseUrl = window.location.href.split('?')[0]; 
         const exportUrl = `${baseUrl}?page=inbounding&action=exportSelected&ids=${ids.join(',')}`;
         window.location.href = exportUrl;
+    }
+    // --- DROPDOWN LOGIC ---
+    function toggleActionMenu() {
+        const menu = document.getElementById('action-menu');
+        if (menu.classList.contains('hidden')) {
+            menu.classList.remove('hidden');
+        } else {
+            menu.classList.add('hidden');
+        }
+    }
+
+    // Close dropdown if clicked outside
+    document.addEventListener('click', function(event) {
+        const menu = document.getElementById('action-menu');
+        const button = event.target.closest('button[onclick="toggleActionMenu()"]');
+        const insideMenu = event.target.closest('#action-menu');
+
+        if (!button && !insideMenu && !menu.classList.contains('hidden')) {
+            menu.classList.add('hidden');
+        }
+    });
+
+    // --- DELETE LOGIC ---
+    function deleteSelectedData() {
+        const ids = getSelectedIds();
+        
+        if (ids.length === 0) {
+            alert("Please select at least one item to delete.");
+            toggleActionMenu(); // Close menu
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to PERMANENTLY DELETE ${ids.length} selected item(s)?\nThis action cannot be undone.`)) {
+            return;
+        }
+
+        // Create a temporary form to submit via POST (More secure than GET)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '?page=inbounding&action=deleteSelected'; // Ensure this matches your Controller route
+
+        // Input for IDs
+        const inputIds = document.createElement('input');
+        inputIds.type = 'hidden';
+        inputIds.name = 'ids';
+        inputIds.value = ids.join(','); // Send as comma separated string: "1,2,5"
+        form.appendChild(inputIds);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+    // Toggle the dropdown visibility
+    function toggleActionMenu() {
+        const menu = document.getElementById('action-menu');
+        menu.classList.toggle('hidden');
+    }
+
+    // Close dropdown if clicking outside
+    window.addEventListener('click', function(e) {
+        const btn = document.querySelector('button[onclick="toggleActionMenu()"]');
+        const menu = document.getElementById('action-menu');
+        if (!btn.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add('hidden');
+        }
+    });
+
+    // Logic for Deleting
+    function deleteSelectedData() {
+        const ids = getSelectedIds(); // Uses your existing selection logic
+        
+        if (ids.length === 0) {
+            alert("Please select at least one item to delete.");
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to PERMANENTLY DELETE ${ids.length} selected item(s)?`)) {
+            return;
+        }
+
+        // Create a hidden form to submit securely via POST
+        const form = document.createElement('form');
+        form.method = 'POST';
+        // Ensure this matches your route case 'deleteSelected'
+        form.action = '?page=inbounding&action=deleteSelected'; 
+
+        const inputIds = document.createElement('input');
+        inputIds.type = 'hidden';
+        inputIds.name = 'ids';
+        inputIds.value = ids.join(',');
+
+        form.appendChild(inputIds);
+        document.body.appendChild(form);
+        form.submit();
     }
 </script>
