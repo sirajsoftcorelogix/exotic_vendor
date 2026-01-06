@@ -419,8 +419,8 @@ class Order{
         $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
         //$this->db->set_charset('utf8mb4');
         //$this->db->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-        var_dump(mysqli_character_set_name(Database::getConnection()));
-exit;
+        //var_dump(mysqli_character_set_name(Database::getConnection()));
+        //exit;
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
