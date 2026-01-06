@@ -1144,7 +1144,7 @@ class OrdersController {
     }
     public function invoiceList() {
         is_login();
-        global $poInvoiceModel;
+        global $poInvoiceModel;       
         $limit = 20;
         $offset = 0;
         if (isset($_GET['limit'])) {
@@ -1153,8 +1153,38 @@ class OrdersController {
         if (isset($_GET['offset'])) {
             $offset = intval($_GET['offset']);
         }
-        $invoices = $poInvoiceModel->getAllInvoices($limit, $offset);
-        $total_orders = $poInvoiceModel->getTotalInvoices($limit, $offset);
+        //search filters
+        $filters = [];
+        if (isset($_GET['vendor_id']) && !empty($_GET['vendor_id'])) {
+            $filters['vendor_id'] = intval($_GET['vendor_id']);
+        }
+        if (isset($_GET['invoice_date']) && !empty($_GET['invoice_date'])) {
+            $filters['invoice_date'] = $_GET['invoice_date'];
+        }
+        //amount range filter
+        if (isset($_GET['amount_min']) && is_numeric($_GET['amount_min'])) {
+            $filters['amount_min'] = floatval($_GET['amount_min']);
+        }
+        if (isset($_GET['amount_max']) && is_numeric($_GET['amount_max'])) {
+            $filters['amount_max'] = floatval($_GET['amount_max']);
+        }
+        //po number filter
+        if (isset($_GET['po_number']) && !empty($_GET['po_number'])) {
+            $filters['po_number'] = $_GET['po_number'];
+        }
+        //utr filter
+        if (isset($_GET['utr_number']) && !empty($_GET['utr_number'])) {
+            $filters['utr_number'] = $_GET['utr_number'];
+        }
+
+        $invoices = $poInvoiceModel->getAllInvoices($limit, $offset, $filters);
+        $total_orders = $poInvoiceModel->getTotalInvoices($limit, $offset, $filters);
+        //foreach invoice get po items
+        foreach($invoices as $id => $invoice){
+            $items = $poInvoiceModel->getPOsByInvoiceId($invoice['id']);
+            $invoices[$id]['items'] = $items;            
+        }      
+        //print_array($invoices);
 
         renderTemplate('views/purchase_orders/invoice_list.php', ['invoices' => $invoices, 'total_orders' => $total_orders], 'Purchase Order Invoices');
     }
