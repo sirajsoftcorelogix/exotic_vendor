@@ -708,14 +708,27 @@ public function update_image_variation($img_id, $variation_id) {
      */
     public function getNextProductCount() {
         // We run a simple query to count existing rows
-        $result = $this->conn->query("SELECT COUNT(*) as total FROM vp_products");
+        $result = $this->conn->query("SELECT COUNT(*) as total FROM vp_inbound");
         if ($row = $result->fetch_assoc()) {
             return (int)$row['total'] + 1;
         }
         return 1; // Default to 1 if table is empty
     }
     // 2. UNIFIED SAVE/UPDATE FUNCTION
-    
+
+    // In InboundingModel.php
+    public function getLastItemCodeGlobal() {
+        // We do NOT use "WHERE item_code LIKE...". 
+        // We want the last code from the WHOLE table.
+        $sql = "SELECT item_code FROM vp_inbound where is_variant = 'N' ORDER BY id DESC LIMIT 1";
+        
+        $result = $this->conn->query($sql);
+        
+        if ($row = $result->fetch_assoc()) {
+            return $row['item_code'];
+        }
+        return null; 
+    }
    
     // --- Add this to your Inbounding.php Model ---
     public function getById($id) {
@@ -994,38 +1007,22 @@ public function update_image_variation($img_id, $variation_id) {
         // Check if data was found
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
         
-        $category_rows = []; // Renamed to avoid confusion with the final string
-
-        // 2. Only run the second query if we have data and category_code is not empty
-        if (!empty($inbounding) && !empty($inbounding['category_code'])) {
-            
-            $cat_ids_input = $inbounding['category_code']; 
-            $sub_cat_ids_input = $inbounding['sub_category_code'];
-            $sub_sub_cat_ids_input = $inbounding['sub_sub_category_code'];
-            $all_cat_ids = $cat_ids_input.','.$sub_cat_ids_input.','.$sub_sub_cat_ids_input;
-            $all_cat_ids = rtrim($all_cat_ids, ',');
-            if (!empty($all_cat_ids)) {
-                $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($all_cat_ids)");
-            } else {
-                // Handle the case where there are no IDs (e.g., return an empty array or skip)
-                $cat_result = false; 
-            }
-            
-            if ($cat_result) {
-                $category_rows = $cat_result->fetch_all(MYSQLI_ASSOC);
-            }
-        }
-
-        // 3. Process the loop to create the string
-        $cat_id_string = ''; // Initialize variable to avoid "Undefined variable" error
         
-        foreach ($category_rows as $key => $value) {
-            $cat_id_string .= $value['category'];
-            $cat_id_string .= ',';
+       
+        // 3. Process the loop to create the string
+        $cat_id_string = '';
+
+        if ($inbounding) {
+            // Correct concatenation using dots (.) outside of quotes
+            $cat_id_string = $inbounding['category_code'] . ',' . 
+                             $inbounding['sub_category_code'] . ',' . 
+                             $inbounding['sub_sub_category_code']. ',';
         }
+        
+        
         
         // Trim the trailing comma
-        $final_cat_ids = rtrim($cat_id_string, ',');
+        $final_cat_ids = rtrim($cat_id_string, ',') ;
         $inbounding['final_cat_ids'] = $final_cat_ids;
         // Add to main array
         $inbounding['cat_ids'] = $final_cat_ids; // Added missing semicolon here

@@ -234,7 +234,7 @@ class InboundingController {
         $data = $inboundingModel->getform2data($id);
         $data['form2']['gecolormaps'] = $this->gecolormaps();
         // echo "<pre>";print_r($data['form2']['gecolormaps']);exit;
-        $data['form2']['optionals'] = $this->getoptionals();
+        $data['form2']['optionals_data'] = $this->getoptionals();
         $data['images'] = $inboundingModel->getitem_imgs($id);
         // echo "<pre>";print_r($data['icon_data']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
@@ -711,22 +711,56 @@ class InboundingController {
         $cat_input = $_POST['category_code'] ?? '';
         $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
 
-        // --- Auto-Generate Item Code Logic ---
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
-            $group_val = $_POST['group_name'] ?? ''; 
-            $group_real_name = $inboundingModel->getGroupNameByCode($group_val); 
 
-            $category_id = $_POST['category_code'] ?? 0;
-            $cat_real_name = $inboundingModel->getCategoryName($category_id);
-            
-            $next_count = $inboundingModel->getNextProductCount();
+    // 1. Generate the Prefix for the NEW item (e.g., 'H' + 'S' = "HS")
+    $group_val = $_POST['group_name'] ?? ''; 
+    $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
 
-            $char1  = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-            $char23 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 2)) : 'XX';
-            $increment_str = str_pad($next_count, 3, '0', STR_PAD_LEFT);
+    $category_id = $_POST['category_code'] ?? 0;
+    $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
+    
+    $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
+    $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
+    
+    $current_prefix = $char1 . $char2; // "HS"
 
-            $item_code = $char1 . $char23 . $increment_str;
+    // 2. GET THE GLOBAL LAST CODE (e.g., "CSAA01")
+    // If you use getByPrefix here, it will fail and give you 01.
+    $last_code = $inboundingModel->getLastItemCodeGlobal();
+
+    if (empty($last_code)) {
+        // Table is empty, start fresh
+        $item_code = $current_prefix . 'AA01'; 
+    } else {
+        // 3. Cut off the OLD prefix (First 2 chars)
+        // "CSAA01" -> becomes "AA01"
+        $last_sequence = substr($last_code, 2); 
+
+        // 4. Increment Logic
+        if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
+            $letters = $matches[1]; // "AA"
+            $number  = intval($matches[2]); // 1
+
+            if ($number < 99) {
+                $number++; // 2
+                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT); // AA02
+            } else {
+                $number = 1; 
+                $letters++; // AA -> AB
+                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
+            }
+        } else {
+            // Fallback: If DB had old format like "CS01" (no letters in middle)
+            // We force it to start the AA sequence now.
+            $new_seq = 'AA01'; 
         }
+
+        // 5. Attach NEW prefix to INCREMENTED sequence
+        // "HS" + "AA02"
+        $item_code = $current_prefix . $new_seq;
+    }
+}
 
         // --- SKU GENERATION LOGIC ---
         $size  = trim($_POST['size'] ?? '');
@@ -851,6 +885,7 @@ class InboundingController {
             'us_block'            => $_POST['us_block'] ?? '',
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
+            'feedback'         => $_POST['feedback'] ?? '',
         ];
         // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);
@@ -1106,7 +1141,6 @@ class InboundingController {
         $API_data['hscode'] = $data['data']['hsn_code'];
         $API_data['date_first_added'] = date("Y-m-d", strtotime($data['data']['gate_entry_date_time']));
         $API_data['search_term'] = '';
-        $API_data['search_category'] = '';
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
         $API_data['aplus_content_ids'] = '';
@@ -1131,7 +1165,7 @@ class InboundingController {
         $stock_price_temp[0]['prod_width'] = $data['data']['width'];
         $stock_price_temp[0]['prod_height'] = $data['data']['height'];
         $stock_price_temp[0]['length_unit'] = 'inch';
-        $stock_price_temp[0]['date_added'] =  $data['data']['added_date'];
+        $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($data['data']['added_date'])); 
         $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
         $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
         $stock_price_temp[0]['flex_status'] = '0';
@@ -1173,7 +1207,7 @@ class InboundingController {
                 $stock_price_temp[$i]['size'] = $value['size'];
                 $stock_price_temp[$i]['color'] = $value['color'];
                 $stock_price_temp[$i]['marketplace_vendor'] = "exoticindia";
-                $stock_price_temp[$i]['item_level'] = 'parent';
+                $stock_price_temp[$i]['item_level'] = 'variation';
                 $stock_price_temp[$i]['colormap'] = '';
                 $stock_price_temp[$i]['product_weight'] = $value['weight'];
                 $stock_price_temp[$i]['product_weight_unit'] = 'kg';
@@ -1201,7 +1235,7 @@ class InboundingController {
                 $stock_price_temp[$i]['today_india'] = '0';
                 $stock_price_temp[$i]['upc'] = '';
                 $stock_price_temp[$i]['asin'] = '';
-                $stock_price_temp[$i]['location'] = $value['ware_house_code'];
+                $stock_price_temp[$i]['location'] = $value['store_location'];
                 $stock_price_temp[$i]['topurchase'] = '0';
                 $stock_price_temp[$i]['backorder_percent'] = $data['data']['backorder_percent'];
                 $stock_price_temp[$i]['backorder_weeks'] = $data['data']['backorder_day'];
