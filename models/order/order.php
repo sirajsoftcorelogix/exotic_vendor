@@ -454,7 +454,7 @@ class Order{
         // Bind dynamically
         $stmt->bind_param($types, ...$values);
         //set_charset('utf8mb4')
-        $this->db->set_charset('utf8mb4');
+        //$this->db->set_charset('utf8mb4');
 
         // After execute
         if (!$stmt->execute()) {
