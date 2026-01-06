@@ -852,10 +852,12 @@ $currentSize = $data['form2']['size'] ?? '';
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                    <div>
+    
+                    <div class="w-full">
                         <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
-                        <div class="flex gap-2 items-center">
-                            <div class="grow">
+                        <div class="flex gap-2 items-center w-full">
+                            
+                            <div class="flex-1 w-full min-w-0"> 
                                 <select id="material_select" name="material_code" placeholder="Select Material..." autocomplete="off">
                                     <option value="">Select Material</option>
                                     <?php foreach ($data['material'] as $value2) { 
@@ -866,11 +868,12 @@ $currentSize = $data['form2']['size'] ?? '';
                                 </select>
                             </div>
                             
-                            <button type="button" onclick="openMaterialModal()" class="h-[36px] w-[36px] bg-[#28a745] hover:bg-[#218838] text-white rounded-[4px] flex items-center justify-center shadow-sm transition" title="Add New Material">
+                            <button type="button" onclick="openMaterialModal()" class="h-[36px] w-[36px] shrink-0 bg-[#28a745] hover:bg-[#218838] text-white rounded-[4px] flex items-center justify-center shadow-sm transition" title="Add New Material">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             </button>
                         </div>
                     </div>
+
                     <div>
                         <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
                         <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
@@ -884,6 +887,7 @@ $currentSize = $data['form2']['size'] ?? '';
                             <?php endforeach; ?>
                         </select>
                     </div>
+
                 </div>
 
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
@@ -1749,8 +1753,17 @@ document.addEventListener('DOMContentLoaded', function() {
         new TomSelect("#vendor_code", commonConfig);
         new TomSelect("#received_by_select", commonConfig);
         new TomSelect("#updated_by_select", commonConfig);
-        new TomSelect("#material_select", config);
+        // new TomSelect("#material_select", config);
         new TomSelect("#variant_select", commonConfig);
+        new TomSelect("#material_select", {
+            create: false,
+            sortField: { field: "text", direction: "asc" },
+            onInitialize: function() {
+                // This forces the dropdown to take 100% width of the parent div
+                this.wrapper.classList.add('w-full'); 
+                this.control.classList.add('h-[36px]'); // Matches button height
+            }
+        });
     });
 </script>
 
