@@ -95,7 +95,7 @@
                         ?>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($invoice['vendor_name'] ?? '') ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($invoice['utr_no'] ?? '') ?></td>                   
+                    <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($invoice['bank_transaction_refs'] ?? '') ?></td>                   
                     <td class="px-6 py-4 whitespace-nowrap">₹<?= number_format($invoice['grand_total'], 2) ?></td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <a target="_blank" href="<?= base_url($invoice['invoice']) ?>" class="text-blue-600 hover:underline">View Invoice</a>
