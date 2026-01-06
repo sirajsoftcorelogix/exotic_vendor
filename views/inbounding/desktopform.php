@@ -2304,8 +2304,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Set values
             const fields = ['height', 'width', 'depth', 'weight', 'size', 'color', 
-                            'quantity_received', 'cp', 'price_india', 'price_india_mrp', 
-                             'amazon_price', 'usd_price', 'hsn_code', 
+                            'quantity_received', 'cp', 'price_india', 'price_india_mrp', 'usd_price', 'hsn_code', 
                             'gst_rate', 'ware_house_code', 'store_location'];
 
             fields.forEach(field => {
