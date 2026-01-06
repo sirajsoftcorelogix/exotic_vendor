@@ -2,9 +2,11 @@
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
+require_once 'models/order/po_invoice.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
+$poInvoiceModel = new POInvoice($conn);
 global $root_path;
 global $domain;
 class OrdersController { 
@@ -1139,6 +1141,38 @@ class OrdersController {
                 echo json_encode(['success' => false, 'message' => 'Invalid order IDs or status.']);
             }
         }
+    }
+    public function invoiceList() {
+        is_login();
+        global $poInvoiceModel;
+        $limit = 20;
+        $offset = 0;
+        if (isset($_GET['limit'])) {
+            $limit = intval($_GET['limit']);
+        }
+        if (isset($_GET['offset'])) {
+            $offset = intval($_GET['offset']);
+        }
+        $invoices = $poInvoiceModel->getAllInvoices($limit, $offset);
+        $total_orders = $poInvoiceModel->getTotalInvoices($limit, $offset);
+
+        renderTemplate('views/purchase_orders/invoice_list.php', ['invoices' => $invoices, 'total_orders' => $total_orders], 'Purchase Order Invoices');
+    }
+    public function paymentList() {
+        is_login();
+        global $paymentsModel;
+        $limit = 20;
+        $offset = 0;
+        if (isset($_GET['limit'])) {
+            $limit = intval($_GET['limit']);
+        }
+        if (isset($_GET['offset'])) {
+            $offset = intval($_GET['offset']);
+        }
+        $payments = $paymentsModel->getAllPayments($limit, $offset);
+        $total_payments = $paymentsModel->getTotalPayments($limit, $offset);
+
+        renderTemplate('views/payments/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
     }
 }
 ?>

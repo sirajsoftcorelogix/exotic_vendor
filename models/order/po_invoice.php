@@ -451,4 +451,33 @@ class POInvoice
         $stmt->bind_param('i', $id);
         return $stmt->execute();
     }
+    public function getAllInvoices($limit = 0, $offset = 0)
+    {
+        $sql = "SELECT * FROM vp_po_invoice ORDER BY id DESC";
+        if ($limit > 0) {
+            $sql .= " LIMIT ? OFFSET ?";
+        }
+        $stmt = $this->db->prepare($sql);
+        if ($limit > 0) {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function getTotalInvoices($limit = 0, $offset = 0)
+    {
+        $sql = "SELECT COUNT(*) as total FROM vp_po_invoice";
+        if ($limit > 0) {
+            $sql .= " LIMIT ? OFFSET ?";
+        }
+        $stmt = $this->db->prepare($sql);
+        if ($limit > 0) {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        return $row['total'] ?? 0;
+    }
 }
