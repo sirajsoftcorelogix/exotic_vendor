@@ -355,7 +355,7 @@ class Order{
         }
     }*/
     public function insertOrder($data) {
-        //print_array($data);
+        print_array($data);
         //echo "<br>";
         // Assuming $data is an associative array with keys matching the database columns
         if (empty($data) || !is_array($data)) {
@@ -458,9 +458,6 @@ class Order{
         if (!$stmt->execute()) {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
-        //error print
-        if ($stmt->error)
-        echo $stmt->error;
         $insertId = $this->db->insert_id; // ✅ use db object, not stmt
         $stmt->close();
         return ['success' => true, 'insert_id' => $insertId];
