@@ -458,6 +458,9 @@ class Order{
         if (!$stmt->execute()) {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
+        //error print
+        if ($stmt->error)
+        echo $stmt->error;
         $insertId = $this->db->insert_id; // ✅ use db object, not stmt
         $stmt->close();
         return ['success' => true, 'insert_id' => $insertId];
