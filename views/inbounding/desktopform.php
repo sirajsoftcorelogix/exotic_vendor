@@ -570,10 +570,7 @@ $currentSize = $data['form2']['size'] ?? '';
 
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
-                            <div class="w-full min-w-0">
-                                <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
-                                <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]">
-                            </div>
+                            
 
                             <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
                         </div>
