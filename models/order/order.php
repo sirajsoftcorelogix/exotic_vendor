@@ -417,8 +417,9 @@ class Order{
         $columns = implode(', ', $InsertFields);
         $placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
         $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
+        $this->db->set_charset('utf8mb4');
         $this->db->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-        
+
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'error' => 'Prepare failed: ' . $this->db->error];
