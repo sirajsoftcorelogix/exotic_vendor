@@ -245,7 +245,10 @@ class OrdersController {
             //print_r($order['cart']);
             // Check if the order has the required fields
             // Map API fields to your table columns
-                
+            //2658982 order_number continue;
+            if ($order['orderid'] == '2658982') {
+                continue; // Skip invalid orders
+            }    
                 foreach ($order['cart'] as $item) {  
                     $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
                     $esd = '0000-00-00';
