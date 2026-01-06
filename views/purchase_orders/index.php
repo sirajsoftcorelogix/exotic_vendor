@@ -1,4 +1,4 @@
-<div class="mx-auto space-y-6 mr-4">
+<div class="mx-auto space-y-6 mr-4">
     <!-- <div class="p-8">
         
     </div> -->
@@ -968,8 +968,10 @@ function handleAction(action, poId, el) {
             }
             // validation if no po selected
             const selected = getSelectedPoIds();
-            if (selected.length === 0) {
-                isValid = false;
+            if (selected.length === 0 && el === undefined) {
+                //isValid = false;
+                showAlert('No purchase order selected for invoice upload.', 'error');
+                return;
             }
             
             //alert('Validation status: ' + isValid);
