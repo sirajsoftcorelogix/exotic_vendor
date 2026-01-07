@@ -80,7 +80,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Invoice Date</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody class="bg-white divide-y divide-gray-200 text-xs font-medium">
                 <?php foreach ($invoices as $invoice): ?>
                 <tr>
                     <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($invoice['invoice_no'] ?? '') ?></td>
@@ -89,7 +89,7 @@
                         $poItems = $invoice['items'] ?? [];
                         $poNumbers = [];
                         foreach ($poItems as $item) {
-                            $poNumbers[] = '<a target="_blank" href="'.base_url('?page=purchase_orders&action=view&po_id=').$item['po_id'].'" class="text-sm text-blue-600 hover:underline">'.htmlspecialchars($item['po_number']).'</a><br>';
+                            $poNumbers[] = '<a target="_blank" href="'.base_url('?page=purchase_orders&action=view&po_id=').$item['po_id'].'" class="text-blue-600 hover:underline">'.htmlspecialchars($item['po_number']).'</a><br>';
                         }
                         echo implode('', $poNumbers);
                         ?>
