@@ -42,9 +42,19 @@
                 </div>
                  <!-- Status -->
                 
-                <div>
+                <div class="relative">
                     <label for="vendor-name" class="block text-sm font-medium text-gray-600 mb-1">Vendor Name</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['vendor_name'] ?? '') ?>" name="vendor_name" id="vendor-name" placeholder="Vendor Name" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <input
+                        type="text"
+                        id="vendor_autocomplete"
+                        class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                        placeholder="Search vendor by name..."
+                        autocomplete="off"
+                        value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>"
+                    >
+                    <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
+                    <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-48 overflow-auto " style="display:none; top:100%;"></div>
+                
                 </div>
                 <!-- Buttons -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-1 flex items-center gap-2">
@@ -204,8 +214,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // });
 
     // po_from po_to validation and clear functionality
-    const fromDateInput = document.getElementById('po-from');
-    const toDateInput = document.getElementById('po-to');
+    const fromDateInput = document.getElementById('po-amount-from');
+    const toDateInput = document.getElementById('po-amount-to');
     const clearButton = document.getElementById('clear-button');
     fromDateInput.addEventListener('change', () => {
         if (fromDateInput.value) {
@@ -251,4 +261,49 @@ function submitSearchForm() {
     form.submit();
     return false;
 }
+
+//vendor auto complete
+document.getElementById('vendor_autocomplete').addEventListener('input', function() {
+const query = this.value;
+const suggestionsBox = document.getElementById('vendor_suggestions');
+const vendorIdInput = document.getElementById('vendor_id');
+// close suggestions if clicked outside
+document.addEventListener('click', function(event) {
+    if (!suggestionsBox.contains(event.target) && event.target !== document.getElementById('vendor_autocomplete')) {
+        suggestionsBox.style.display = 'none';
+    }
+    if (event.target === document.getElementById('vendor_autocomplete')) {
+        if (suggestionsBox.children.length > 0) {
+            suggestionsBox.style.display = 'block';
+        }
+    }
+});
+
+if (query.length < 2) {
+    suggestionsBox.style.display = 'none';
+    return;
+}
+
+fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
+    .then(response => response.json())
+    .then(data => {            
+        suggestionsBox.innerHTML = '';
+        if (Array.isArray(data.data) && data.data.length > 0) {
+            data.data.forEach(vendor => {
+                const div = document.createElement('div');
+                div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
+                div.textContent = vendor.vendor_name;
+                div.addEventListener('click', function() {
+                    document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
+                    vendorIdInput.value = vendor.id;
+                    suggestionsBox.style.display = 'none';
+                });
+                suggestionsBox.appendChild(div);
+            });
+            suggestionsBox.style.display = 'block';
+        } else {
+            suggestionsBox.style.display = 'none';
+        }
+    });
+});
 </script>
