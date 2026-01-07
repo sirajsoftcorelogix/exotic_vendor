@@ -711,56 +711,77 @@ class InboundingController {
         $old_is_variant = $oldData['form2']['is_variant'] ?? '';
         $cat_input = $_POST['category_code'] ?? '';
         $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
+        // item code logic
+        $raw_cat = $_POST['category_code'] ?? 0;
+        $category_id = is_array($raw_cat) ? $raw_cat[0] : $raw_cat;
 
+        // 2. Generate Prefix Logic (Same as before, but now safe)
+        $group_val = $_POST['group_name'] ?? ''; 
+        $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
+        $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
+        $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
+        $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
+        $current_prefix = $char1 . $char2; 
+
+        // 3. GET GLOBAL LAST CODE & GENERATE NEW (With Safety Loop)
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
-
-            // 1. Generate the Prefix for the NEW item (e.g., 'H' + 'S' = "HS")
-            $group_val = $_POST['group_name'] ?? ''; 
-            $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
-
-            $category_id = $_POST['category_code'] ?? 0;
-            $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
             
-            $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-            $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
-            
-            $current_prefix = $char1 . $char2; // "HS"
-
-            // 2. GET THE GLOBAL LAST CODE (e.g., "CSAA01")
-            // If you use getByPrefix here, it will fail and give you 01.
+            // Start with the logic you had
             $last_code = $inboundingModel->getLastItemCodeGlobal();
 
+            // Initialize variables for the loop
+            $is_unique = false;
+            $attempts = 0;
+
+            // Extract the starting sequence from the global last code
             if (empty($last_code)) {
-                // Table is empty, start fresh
-                $item_code = $current_prefix . 'AA01'; 
+                $letters = 'AA';
+                $number = 0; // Will become 1 in the loop
             } else {
-                // 3. Cut off the OLD prefix (First 2 chars)
-                // "CSAA01" -> becomes "AA01"
                 $last_sequence = substr($last_code, 2); 
-
-                // 4. Increment Logic
                 if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
-                    $letters = $matches[1]; // "AA"
-                    $number  = intval($matches[2]); // 1
-
-                    if ($number < 99) {
-                        $number++; // 2
-                        $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT); // AA02
-                    } else {
-                        $number = 1; 
-                        $letters++; // AA -> AB
-                        $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
-                    }
+                    $letters = $matches[1];
+                    $number  = intval($matches[2]);
                 } else {
-                    // Fallback: If DB had old format like "CS01" (no letters in middle)
-                    // We force it to start the AA sequence now.
-                    $new_seq = 'AA01'; 
+                    $letters = 'AA';
+                    $number  = 0; 
+                }
+            }
+
+            // DO-WHILE LOOP: Keep trying until we find a code that doesn't exist
+            do {
+                $attempts++;
+                
+                // --- Increment Logic ---
+                if ($number < 99) {
+                    $number++; 
+                } else {
+                    $number = 1; 
+                    $letters++; // AA -> AB
+                }
+                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
+                
+                // Construct the candidate code
+                $candidate_code = $current_prefix . $new_seq;
+
+                // --- CRITICAL CHECK: Does this code exist in DB? ---
+                // You need to add a simple helper method to your model: checkItemCodeExists($code)
+                $exists = $inboundingModel->checkItemCodeExists($candidate_code);
+
+                if (!$exists) {
+                    $item_code = $candidate_code;
+                    $is_unique = true;
+                } else {
+                    // If it exists, we loop again (which increments $number again)
+                    // e.g., if HSAA02 exists, next loop tries HSAA03
                 }
 
-                // 5. Attach NEW prefix to INCREMENTED sequence
-                // "HS" + "AA02"
-                $item_code = $current_prefix . $new_seq;
-            }
+                // Safety break to prevent infinite loops
+                if ($attempts > 100) {
+                    die("Error: Unable to generate unique item code after 100 attempts.");
+                }
+
+            } while (!$is_unique);
         }
 
         // --- SKU GENERATION LOGIC ---
@@ -953,7 +974,20 @@ class InboundingController {
                 'stat' => 'Data Entry'
             ];
             $inboundingModel->stat_logs($logData);
-            header("location: " . base_url('?page=inbounding&action=list'));
+
+            // --- NEW REDIRECT LOGIC START ---
+            $action_clicked = $_POST['save_action'] ?? '';
+
+            if ($action_clicked === 'draft') {
+                // 1. If "Save and Draft" clicked -> Redirect back to SAME PAGE
+                // Assuming 'desktopform' is the action used to VIEW the form
+                header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
+            } else {
+                // 2. If "Save and Generate" clicked -> Redirect to LIST
+                header("location: " . base_url('?page=inbounding&action=list'));
+            }
+            // --- NEW REDIRECT LOGIC END ---
+            
             exit;
         } else {
             echo "Update failed: " . $result['message'];
@@ -1272,7 +1306,7 @@ class InboundingController {
                 $stock_price_temp[$i]['fba_us'] = '0';
                 $stock_price_temp[$i]['fba_eu'] = '0';
                 $stock_price_temp[$i]['vendor_us'] = '0';
-                $stock_price_temp[$i]['price'] = $value['price_india'];
+                $stock_price_temp[$i]['price'] = (int) $value['price_india'];
                 $stock_price_temp[$i]['price_india'] = (int) $value['price_india'];
                 $stock_price_temp[$i]['price_india_suggested'] = (int) $data['data']['price_india'];
                 $stock_price_temp[$i]['mrp_india'] = (int) $value['price_india_mrp'];
@@ -1329,7 +1363,7 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
-        // echo "<pre>"; print_r($jsonString); exit;
+        echo "<pre>"; print_r($jsonString); exit;
         $url = 'https://www.exoticindia.com/vendor-api/product/create';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
@@ -1348,19 +1382,40 @@ class InboundingController {
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
         ]);
         $response = curl_exec($ch);
-        echo "<pre>123: "; print_r($response); exit;
-        if (curl_errno($ch)) {
-            error_log("cURL Error: " . curl_error($ch));
-            curl_close($ch);
-            return false;
-        }
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($httpCode != 200) {
-            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
-            return false;
+
+        // --- CHECK FOR CURL ERRORS ---
+        if (curl_errno($ch)) {
+            $error = "cURL Error: " . curl_error($ch);
+            curl_close($ch);
+            echo json_encode(['status' => 'error', 'message' => $error]);
+            exit;
         }
-        return json_decode($response, true);
+        
+        curl_close($ch);
+
+        // --- CHECK HTTP STATUS ---
+        // If it's not 200 OK (and not 201 Created), it might be an error
+        if ($httpCode != 200 && $httpCode != 201) {
+            echo json_encode(['status' => 'error', 'message' => "API Error HTTP $httpCode", 'debug' => $response]);
+            exit;
+        }
+
+        // --- SUCCESS LOGIC (BLANK RESPONSE HANDLING) ---
+        header('Content-Type: application/json');
+
+        // If response is empty/blank, WE CREATE A SUCCESS MESSAGE MANUALLY
+        if (empty($response) || trim($response) === '') {
+            echo json_encode([
+                'status' => 'success', 
+                'message' => 'Product Published Successfully!'
+            ]);
+        } else {
+            // If the API did return text, just pass it through
+            echo $response; 
+        }
+        
+        exit;
     }
 }
 ?>

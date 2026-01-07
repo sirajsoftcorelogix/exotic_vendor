@@ -696,7 +696,7 @@ public function update_image_variation($img_id, $variation_id) {
         if (empty($id)) return '';
         
         // Prepare statement to prevent injection and ensure connection usage
-        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE id = ?");
+        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE category = ?");
         if (!$stmt) return ''; // Error handling
         
         $stmt->bind_param("i", $id);
@@ -726,19 +726,6 @@ public function update_image_variation($img_id, $variation_id) {
         return ''; // Return empty if not found
     }
 
-    /**
-     * Helper to get the next incremental ID count from vp_products
-     */
-    public function getNextProductCount() {
-        // We run a simple query to count existing rows
-        $result = $this->conn->query("SELECT COUNT(*) as total FROM vp_inbound");
-        if ($row = $result->fetch_assoc()) {
-            return (int)$row['total'] + 1;
-        }
-        return 1; // Default to 1 if table is empty
-    }
-    // 2. UNIFIED SAVE/UPDATE FUNCTION
-
     // In InboundingModel.php
     public function getLastItemCodeGlobal() {
         // We do NOT use "WHERE item_code LIKE...". 
@@ -751,6 +738,11 @@ public function update_image_variation($img_id, $variation_id) {
             return $row['item_code'];
         }
         return null; 
+    }
+    public function checkItemCodeExists($code) {
+        $sql = "SELECT id FROM vp_inbound WHERE item_code = '" . $this->conn->real_escape_string($code) . "'";
+        $result = $this->conn->query($sql);
+        return ($result->num_rows > 0);
     }
    
     // --- Add this to your Inbounding.php Model ---

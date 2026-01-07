@@ -1345,11 +1345,11 @@ $currentSize = $data['form2']['size'] ?? '';
                 Publish Product
             </button>
 
-            <button class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
+            <button type="submit" name="save_action" value="draft" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save and Draft
             </button>
             
-            <button class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
+            <button type="submit" name="save_action" value="generate" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
                 Save and Generate Item Code
             </button>
         </div>
@@ -2224,6 +2224,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Run on load
     document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
 </script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
     // 1. Open Popup
     function openPublishPopup() {
@@ -2243,27 +2245,85 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 3. Trigger Controller Function (No Form Submit)
+    // 3. Trigger Controller Function
     function triggerPublishController() {
-        // Get the current ID from the URL (e.g. &id=123)
+        // Get the current ID
         const urlParams = new URLSearchParams(window.location.search);
         const recordId = urlParams.get('id');
 
-        if (recordId) {
-            // Redirect directly to the controller action
-            // This is a GET request, NOT a form submission
-            const targetUrl = `index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`;
-            
-            // Visual feedback
-            const btn = event.target;
-            btn.innerText = "Processing...";
-            btn.disabled = true;
-
-            window.location.href = targetUrl;
-        } else {
-            alert("Error: Record ID not found in URL.");
-            closePublishPopup();
+        // CHECK: Is the library loaded?
+        if (typeof Swal === 'undefined') {
+            alert("Error: SweetAlert2 library not loaded. Please check Fix 1.");
+            return;
         }
+
+        if (!recordId) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Record ID not found in URL.' });
+            closePublishPopup();
+            return;
+        }
+
+        // Visual Feedback
+        const confirmBtn = document.querySelector('#publishConfirmPopup button.confirm-btn') || document.querySelector('#publishConfirmPopup button:last-child');
+        let originalText = "Yes, Publish";
+        
+        if (confirmBtn) {
+            originalText = confirmBtn.innerText;
+            confirmBtn.innerText = "Processing...";
+            confirmBtn.disabled = true;
+        }
+
+        const targetUrl = `index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`;
+
+        fetch(targetUrl)
+        .then(response => {
+            if (!response.ok) throw new Error('Network error: ' + response.status);
+            return response.text(); 
+        })
+        .then(text => {
+            // Handle Blank = Success
+            if (!text || text.trim() === '') {
+                return { status: 'success', message: 'Published Successfully!' };
+            }
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                if (text.toLowerCase().includes('error')) throw new Error('Server Error: ' + text);
+                return { status: 'success', message: 'Published Successfully!' };
+            }
+        })
+        .then(data => {
+            if (data.status === 'error') throw new Error(data.message);
+            
+            closePublishPopup();
+
+            // SUCCESS POPUP
+            Swal.fire({
+                title: 'Published!',
+                text: data.message || "Product has been published.",
+                icon: 'success',
+                confirmButtonColor: '#3085d6',
+                confirmButtonText: 'Great!'
+            }).then((result) => {
+                if (result.isConfirmed) window.location.reload();
+            });
+        })
+        .catch(error => {
+            closePublishPopup();
+            // ERROR POPUP
+            Swal.fire({
+                icon: 'error',
+                title: 'Failed',
+                text: error.message,
+                confirmButtonColor: '#d33'
+            });
+        })
+        .finally(() => {
+            if (confirmBtn) {
+                confirmBtn.innerText = originalText;
+                confirmBtn.disabled = false;
+            }
+        });
     }
 </script>
 
