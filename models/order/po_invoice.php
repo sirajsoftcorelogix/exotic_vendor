@@ -455,12 +455,12 @@ class POInvoice
     {
         // Select all invoice fields plus vendor info, mapped PO numbers and payment references.
         $sql = "SELECT p.*, 
-                       GROUP_CONCAT(DISTINCT m.po_id) AS mapped_po_ids,
-                       GROUP_CONCAT(DISTINCT po.po_number) AS mapped_po_numbers,
+                       m.po_id AS mapped_po_ids,
+                       po.po_number AS mapped_po_numbers,
                        v.vendor_name AS vendor_name,
                        v.city AS vendor_city,
                        v.vendor_phone AS vendor_phone,
-                       GROUP_CONCAT(DISTINCT pay.bank_transaction_reference_no) AS bank_transaction_refs
+                       pay.bank_transaction_reference_no AS bank_transaction_refs
                 FROM vp_po_invoice p
                 LEFT JOIN vp_po_invoice_map m ON m.invoice_id = p.id
                 LEFT JOIN purchase_orders po ON po.id = m.po_id
@@ -492,8 +492,7 @@ class POInvoice
         if (!empty($filters['vendor_id'])) {
             $sql .= " AND po.vendor_id = ?";
         }
-        $sql .= "
-                GROUP BY p.id
+        $sql .= "                
                 ORDER BY p.id DESC";
 
         if ($limit > 0) {
