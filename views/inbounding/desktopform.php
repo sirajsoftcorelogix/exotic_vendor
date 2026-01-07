@@ -186,7 +186,7 @@ $currentSize = $data['form2']['size'] ?? '';
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-3 md:px-5 pt-[15px] pb-5 bg-white md:ml-2.5 md:mr-5">
                 <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
                 
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-[30px] mb-[15px] items-end">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 md:gap-[30px] mb-[15px] items-end">
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Variant:</label>
                         <select id="variant_select" name="is_variant" 
@@ -287,6 +287,11 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[#222] mb-1 pt-[10px]">Enter Remarks:</label>
+                    <input type="text" id="feedback" name="feedback" 
+                           value="<?= htmlspecialchars($data['form2']['feedback'] ?? '') ?>" autocomplete="off" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                 </div>
             </fieldset>
         </div>
@@ -414,13 +419,7 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Amazon Price:</label>
-                        <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['amazon_price'] ?? '') ?>" name="amazon_price">
-                            <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">INR</span>
-                        </div>
-                    </div>
+                    
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
                         <div class="relative flex items-center w-full">
@@ -537,20 +536,41 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['price_india_mrp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Amazon Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['amazon_price'] ?? '') ?>" name="variations[<?= $var['id'] ?>][amazon_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                            <div class="w-full min-w-0">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
+                                <div class="relative w-full">
+                                    <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
+                                           value="<?= htmlspecialchars($data['form2']['price_india'] ?? '') ?>" 
+                                           name="price_india">
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
+                                </div>
+                            </div>
 
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['usd_price'] ?? '') ?>" name="variations[<?= $var['id'] ?>][usd_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span></div></div>
+                            <div class="w-full min-w-0">
+                                <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
+                                <div class="relative w-full">
+                                    <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
+                                           value="<?= htmlspecialchars($data['form2']['price_india_mrp'] ?? '') ?>" 
+                                           name="price_india_mrp">
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
+                                </div>
+                            </div>
+
+                            <div class="flex-1">
+                                <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
+                                <div class="relative flex items-center w-full">
+                                    <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                                           value="<?= htmlspecialchars($data['form2']['usd_price'] ?? '') ?>" 
+                                           name="usd_price">
+                                    <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
+                                </div>
+                            </div>
 
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['hsn_code'] ?? '') ?>" name="variations[<?= $var['id'] ?>][hsn_code]"></div></div>
 
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
-                            <div class="w-full min-w-0">
-                                <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
-                                <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]">
-                            </div>
+                            
 
                             <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
                         </div>
@@ -639,11 +659,32 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][price_india_mrp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Amazon Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][amazon_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
+                <div class="w-full min-w-0">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
+                    <div class="relative w-full">
+                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
+                               name="variations[INDEX][price_india]">
+                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
+                    </div>
+                </div>
 
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][usd_price]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span></div></div>
+                <div class="w-full min-w-0">
+                    <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
+                    <div class="relative w-full">
+                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
+                               name="variations[INDEX][price_india_mrp]">
+                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
+                    </div>
+                </div>
+
+                <div class="w-full min-w-0">
+                    <label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label>
+                    <div class="relative w-full">
+                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
+                               name="variations[INDEX][usd_price]">
+                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span>
+                    </div>
+                </div>
 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
 
@@ -811,10 +852,12 @@ $currentSize = $data['form2']['size'] ?? '';
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                    <div>
+    
+                    <div class="w-full">
                         <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
-                        <div class="flex gap-2 items-center">
-                            <div class="grow">
+                        <div class="flex gap-2 items-center w-full">
+                            
+                            <div class="flex-1 w-full min-w-0"> 
                                 <select id="material_select" name="material_code" placeholder="Select Material..." autocomplete="off">
                                     <option value="">Select Material</option>
                                     <?php foreach ($data['material'] as $value2) { 
@@ -825,11 +868,12 @@ $currentSize = $data['form2']['size'] ?? '';
                                 </select>
                             </div>
                             
-                            <button type="button" onclick="openMaterialModal()" class="h-[36px] w-[36px] bg-[#28a745] hover:bg-[#218838] text-white rounded-[4px] flex items-center justify-center shadow-sm transition" title="Add New Material">
+                            <button type="button" onclick="openMaterialModal()" class="h-[36px] w-[36px] shrink-0 bg-[#28a745] hover:bg-[#218838] text-white rounded-[4px] flex items-center justify-center shadow-sm transition" title="Add New Material">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             </button>
                         </div>
                     </div>
+
                     <div>
                         <label class="block text-xs font-bold text-[#222] mb-1">Group:</label>
                         <select id="group_select" name="group_name" placeholder="Select Group..." autocomplete="off">
@@ -843,13 +887,18 @@ $currentSize = $data['form2']['size'] ?? '';
                             <?php endforeach; ?>
                         </select>
                     </div>
+
                 </div>
 
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
-                    
+    
                     <div class="w-full md:w-1/3 flex flex-col">
                         <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="main_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
                             <div id="category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
                                 <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group to view options</div>
                             </div>
@@ -860,7 +909,7 @@ $currentSize = $data['form2']['size'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-1">Sub Category:</label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
                             <div class="p-1 border-b border-gray-200 bg-gray-50">
-                                <input type="text" id="sub_cat_search" placeholder="Search Sub Category..." 
+                                <input type="text" id="sub_cat_search" placeholder="Search..." 
                                        class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
                             </div>
                             <div id="sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
@@ -873,7 +922,7 @@ $currentSize = $data['form2']['size'] ?? '';
                         <label class="block text-xs font-bold text-[#222] mb-1">SubSubCategory:</label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
                             <div class="p-1 border-b border-gray-200 bg-gray-50">
-                                <input type="text" id="sub_sub_cat_search" placeholder="Search Sub Sub Category..." 
+                                <input type="text" id="sub_sub_cat_search" placeholder="Search..." 
                                        class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
                             </div>
                             <div id="sub_sub_category_container" class="checkbox-list-container overflow-y-auto p-1 flex-grow">
@@ -881,7 +930,9 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
+
                 </div>
+                
             </fieldset>
         </div>
         <?php 
@@ -968,54 +1019,55 @@ $currentSize = $data['form2']['size'] ?? '';
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Terms</legend>
                 <div>
-                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Keywords (Tags):</label>
-                    <input type="text" id="search_term_input" name="search_term" 
+                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Search Terms:</label>
+                    <input type="text" name="search_term" 
                            value="<?= htmlspecialchars($data['form2']['search_term'] ?? '') ?>" 
-                           placeholder="Type a keyword and press Enter..." 
-                           autocomplete="off">
-                    <div class="text-[10px] text-gray-500 mt-1">
-                        Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
-                    </div>
+                           placeholder="Type search terms..." 
+                           autocomplete="off"
+                           class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                 </div>
             </fieldset>
         </div>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Identification</legend>
+                
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Title:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" value="<?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>">
                 </div>
+
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
-                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['key_words'] ?? '') ?>" name= "key_words">
+                    <input type="text" id="keywords_input" 
+                           class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                           value="<?= htmlspecialchars($data['form2']['key_words'] ?? '') ?>" 
+                           name="key_words"
+                           placeholder="Type keyword and press Enter or Comma...">
+                    <div class="text-[10px] text-gray-500 mt-1">
+                        Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
+                    </div>
                 </div>
+
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
-                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name= "snippet_description">
+                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name="snippet_description">
                 </div>
+
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
-                    
                     <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
-                        
                         <div class="checkbox-list-container overflow-y-auto p-1 h-full">
                             <?php 
-                                // 1. Get the initial data
                                 $source_data = $data['form2']['optionals_data'] ?? [];
-
-                                // echo "<pre>source_data: "; print_r($source_data);
-                                // exit;
                                 if (isset($source_data['optionals']) && is_array($source_data['optionals'])) {
                                     $available_options = $source_data['optionals'];
                                 } else {
                                     $available_options = $source_data;
                                 }
 
-                                // 3. Get Saved Values
                                 $saved_raw = $data['form2']['optionals'] ?? []; 
                                 $saved_values = [];
-                                
                                 if (is_array($saved_raw)) {
                                     $saved_values = $saved_raw;
                                 } elseif (is_string($saved_raw)) {
@@ -1024,33 +1076,19 @@ $currentSize = $data['form2']['size'] ?? '';
 
                                 if (!empty($available_options) && is_array($available_options)) {
                                     foreach ($available_options as $key => $val_str) {
-                                        
-                                        // Ensure strictly string
-                                        if (is_array($val_str)) continue; // Skip bad data
+                                        if (is_array($val_str)) continue; 
                                         $val_str = (string)$val_str; 
-
-                                        // Format Label
                                         $label = str_replace(['OPTIONALS_', '_'], ['', ' '], $val_str); 
-                                        $label = ucwords(strtolower($label));               
-
-                                        // Check if checked
+                                        $label = ucwords(strtolower($label));                
                                         $isChecked = in_array($val_str, $saved_values) ? 'checked' : '';
                                         $uniqueId = 'opt_' . md5($val_str); 
                             ?>
-                                    
-                                    <div class="checkbox-item flex items-center p-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
-                                        <input type="checkbox" 
-                                               id="<?= $uniqueId ?>" 
-                                               name="optionals[]" 
-                                               value="<?= htmlspecialchars($val_str) ?>" 
-                                               class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2"
-                                               <?= $isChecked ?>>
-                                        
-                                        <label for="<?= $uniqueId ?>" class="w-full text-sm font-medium text-gray-900 cursor-pointer select-none">
-                                            <?= $label ?>
-                                        </label>
-                                    </div>
-
+                                        <div class="checkbox-item flex items-center p-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                                            <input type="checkbox" id="<?= $uniqueId ?>" name="optionals[]" value="<?= htmlspecialchars($val_str) ?>" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2" <?= $isChecked ?>>
+                                            <label for="<?= $uniqueId ?>" class="w-full text-sm font-medium text-gray-900 cursor-pointer select-none">
+                                                <?= $label ?>
+                                            </label>
+                                        </div>
                             <?php 
                                     }
                                 } else {
@@ -1255,11 +1293,11 @@ $currentSize = $data['form2']['size'] ?? '';
                     </div>
 
                     <div class="flex-1 sm:col-span-2 lg:col-span-2 flex items-start border border-[#eee] rounded bg-gray-50 p-1"> 
-                        
+    
                         <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">US Block:</label>
                             <div class="flex items-center gap-4">
-                                <?php $us_val = $data['form2']['us_block'] ?? 'Y'; ?>
+                                <?php $us_val = $data['form2']['us_block'] ?? 'N'; ?>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="us_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($us_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
@@ -1291,7 +1329,7 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
+        <!-- <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Remarks</legend>
                 <div>
@@ -1300,7 +1338,7 @@ $currentSize = $data['form2']['size'] ?? '';
                            value="<?= htmlspecialchars($data['form2']['feedback'] ?? '') ?>" autocomplete="off" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                 </div>
             </fieldset>
-        </div>
+        </div> -->
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
             <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -1495,95 +1533,96 @@ $currentSize = $data['form2']['size'] ?? '';
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Select ALL variation grids
-    const grids = document.querySelectorAll('.photo-group-grid');
+    
+    // Track the item currently being dragged
     let draggedItem = null;
-    let sourceGrid = null;
 
-    if (grids.length === 0) return;
+    // 1. DRAG START (Global Listener)
+    document.addEventListener('dragstart', function(e) {
+        // Only trigger if the element is one of our draggable items
+        const item = e.target.closest('.draggable-item');
+        if (!item) return;
 
-    // Apply logic to every grid
-    grids.forEach(grid => {
-        // Init existing items
-        const items = grid.querySelectorAll('.draggable-item');
-        items.forEach(setupDragEvents);
-
-        // Grid-level events (Drop Zone)
-        grid.addEventListener('dragover', handleDragOver);
-        grid.addEventListener('drop', handleDrop);
+        draggedItem = item;
+        item.classList.add('dragging'); // Used for styling and logic
+        item.style.opacity = '0.5';     // Visual feedback
+        
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', ''); // Required for Firefox
     });
 
-    function setupDragEvents(item) {
-        item.addEventListener('dragstart', handleDragStart);
-        item.addEventListener('dragend', handleDragEnd);
-    }
+    // 2. DRAG END (Cleanup)
+    document.addEventListener('dragend', function(e) {
+        const item = e.target.closest('.draggable-item');
+        if (!item) return;
 
-    function handleDragStart(e) {
-        draggedItem = this;
-        sourceGrid = this.parentNode;
-        this.style.opacity = '0.4';
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', this.innerHTML);
-    }
+        item.classList.remove('dragging');
+        item.style.opacity = '1';
+        draggedItem = null;
+    });
 
-    function handleDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        return false;
-    }
+    // 3. DRAG OVER (The "Shuffle" Logic)
+    document.addEventListener('dragover', function(e) {
+        // If we aren't dragging a valid item, ignore
+        if (!draggedItem) return;
 
-    function handleDrop(e) {
-        e.stopPropagation();
-        e.preventDefault();
+        // Check if we are over a valid Drop Zone (The Grid)
+        const container = e.target.closest('.photo-group-grid');
+        if (!container) return;
 
-        // Find which grid we dropped into
-        const targetGrid = e.target.closest('.photo-group-grid');
+        e.preventDefault(); // Necessary to allow dropping
 
-        if (draggedItem && targetGrid) {
-            
-            // 1. Move the Element
-            const afterElement = getDragAfterElement(targetGrid, e.clientY, e.clientX);
-            if (afterElement == null) {
-                targetGrid.appendChild(draggedItem);
-            } else {
-                targetGrid.insertBefore(draggedItem, afterElement);
-            }
+        // Calculate where to place the item based on Mouse X position
+        const afterElement = getDragAfterElement(container, e.clientX);
+        
+        // Move the DOM element live (Swapping effect)
+        if (afterElement == null) {
+            container.appendChild(draggedItem);
+        } else {
+            container.insertBefore(draggedItem, afterElement);
+        }
+    });
 
-            // 2. UPDATE VARIATION ID (CRITICAL FIX)
-            // Get the ID of the grid we dropped into (-1, 101, 102, etc.)
-            const newVarId = targetGrid.getAttribute('data-var-id');
+    // 4. DROP (Save Data)
+    document.addEventListener('drop', function(e) {
+        e.preventDefault(); // Prevent browser default (opening file)
+        
+        // We only care if we dropped into a valid grid
+        const container = e.target.closest('.photo-group-grid');
+        
+        if (draggedItem && container) {
+            // A. Update the Hidden Variation ID Input
+            // This ensures the photo is now assigned to the new color/variation
+            const newVarId = container.getAttribute('data-var-id');
             const varInput = draggedItem.querySelector('.variation-input');
             if(varInput) {
-                varInput.value = newVarId; // Update hidden input value
+                varInput.value = newVarId;
             }
 
-            // 3. Recalculate Orders
-            updateOrderInputs(sourceGrid);
-            if (sourceGrid !== targetGrid) {
-                updateOrderInputs(targetGrid);
-            }
+            // B. Recalculate Sort Order for ALL grids
+            // (We update all because moving an item changes the order in both Source and Target)
+            document.querySelectorAll('.photo-group-grid').forEach(grid => {
+                updateOrderInputs(grid);
+            });
         }
-        return false;
-    }
+    });
 
-    function handleDragEnd(e) {
-        this.style.opacity = '1';
-        draggedItem = null;
-        sourceGrid = null;
-    }
-
-    function getDragAfterElement(container, y, x) {
+    // --- HELPER: Calculate Position based on X Axis ---
+    function getDragAfterElement(container, x) {
+        // Get all items in this grid EXCEPT the one we are dragging
         const draggableElements = [...container.querySelectorAll('.draggable-item:not(.dragging)')];
 
         return draggableElements.reduce((closest, child) => {
             const box = child.getBoundingClientRect();
-            // Logic for grid layout: approximate based on center point
-            const boxCenterY = box.top + box.height / 2;
-            const boxCenterX = box.left + box.width / 2;
             
-            // Simple distance check usually works best for flexible grids
-            const offset = y - boxCenterY; // Primary check on Y
+            // Find the horizontal center of the child
+            const boxCenter = box.left + box.width / 2;
             
+            // Distance between cursor and center
+            const offset = x - boxCenter;
+
+            // We are looking for the element where the cursor is to the LEFT of its center
+            // (negative offset) but closest to 0 (smallest negative number)
             if (offset < 0 && offset > closest.offset) {
                 return { offset: offset, element: child };
             } else {
@@ -1592,12 +1631,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-    function updateOrderInputs(gridContainer) {
-        if(!gridContainer) return;
-        const currentItems = gridContainer.querySelectorAll('.draggable-item');
+    // --- HELPER: Update hidden input values (1, 2, 3...) ---
+    function updateOrderInputs(container) {
+        if(!container) return;
+        const currentItems = container.querySelectorAll('.draggable-item');
         currentItems.forEach((item, index) => {
             const input = item.querySelector('.order-input');
-            if(input) input.value = index + 1;
+            if(input) {
+                input.value = index + 1;
+            }
         });
     }
 });
@@ -1711,8 +1753,17 @@ document.addEventListener('DOMContentLoaded', function() {
         new TomSelect("#vendor_code", commonConfig);
         new TomSelect("#received_by_select", commonConfig);
         new TomSelect("#updated_by_select", commonConfig);
-        new TomSelect("#material_select", config);
+        // new TomSelect("#material_select", config);
         new TomSelect("#variant_select", commonConfig);
+        new TomSelect("#material_select", {
+            create: false,
+            sortField: { field: "text", direction: "asc" },
+            onInitialize: function() {
+                // This forces the dropdown to take 100% width of the parent div
+                this.wrapper.classList.add('w-full'); 
+                this.control.classList.add('h-[36px]'); // Matches button height
+            }
+        });
     });
 </script>
 
@@ -1785,11 +1836,10 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // 1. DATA FROM PHP
+    // --- 1. DATA FROM PHP ---
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
     
-    // 2. Pre-selection Data
-    // These sets now contain STRINGS (e.g., "mens_wear", "shirts") from your DB
+    // --- 2. PRE-SELECTION DATA ---
     const rawCatId = "<?php echo $selected_cat_id; ?>"; 
     const preSelected = {
         groupVal: "<?php echo $selected_group_val; ?>",
@@ -1798,41 +1848,46 @@ document.addEventListener('DOMContentLoaded', function() {
         subsub: new Set(<?php echo json_encode($selected_sub_sub); ?>.map(String))
     };
 
-    // 3. DOM Elements
+    // --- 3. DOM ELEMENTS ---
     const categoryContainer = document.getElementById('category_container');
     const subCatContainer = document.getElementById('sub_category_container');
     const subSubCatContainer = document.getElementById('sub_sub_category_container');
     
-    // 4. Init TomSelect
-    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
-    if(document.getElementById("material_select")) new TomSelect("#material_select", config);
-    
     const groupSelectEl = document.getElementById("group_select");
+    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
+    
+    // Init Group Dropdown
     let groupTs = null;
     if(groupSelectEl) {
-        groupTs = new TomSelect(groupSelectEl, config);
+        if(groupSelectEl.tomselect) groupTs = groupSelectEl.tomselect;
+        else groupTs = new TomSelect(groupSelectEl, config);
+
+        groupTs.on('change', function(groupValue) {
+            preSelected.cat.clear(); 
+            preSelected.sub.clear(); 
+            preSelected.subsub.clear();        
+            updateCategoryList(groupValue);
+        });
     }
 
     // --- HELPER: Create Checkbox ---
     function createCheckboxItem(item, inputName, selectedSet, onChangeCallback) {
         const div = document.createElement('div');
-        div.className = 'checkbox-item pl-2'; 
+        // Add specific class for easy selection
+        div.className = 'checkbox-item pl-2 flex items-center p-1 hover:bg-gray-50'; 
         
-        // CHANGE 1: Check if the STORE VALUE (String) is in the selected set
-        // This ensures pre-filled data works with strings like "mens_wear"
         const valToCheck = String(item.store_val);
         const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
         
-        // CHANGE 2: Set 'value' to item.store_val
-        // This ensures "mens_wear" is sent to the DB on save
         div.innerHTML = `
             <input type="checkbox" 
                    id="${inputName}_${item.id}" 
                    name="${inputName}[]" 
                    value="${item.store_val}" 
                    data-parent-path="" 
-                   ${isChecked}>
-            <label for="${inputName}_${item.id}">${item.name}</label>
+                   ${isChecked}
+                   class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2">
+            <label for="${inputName}_${item.id}" class="text-[13px] text-[#333] cursor-pointer select-none w-full">${item.name}</label>
         `;
         
         const checkbox = div.querySelector('input');
@@ -1840,7 +1895,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return div;
     }
 
-    // --- 1. UPDATE CATEGORY LIST (Level 1) ---
+    // --- 4. UPDATE LIST FUNCTIONS ---
+
     function updateCategoryList(rawGroupValue) {
         subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
         subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
@@ -1867,10 +1923,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
+        triggerSearch('main_cat_search');
         if(preSelected.cat.size > 0) handleCategoryChange();
     }
 
-    // --- 2. UPDATE SUB CATEGORY LIST (Level 2) ---
     function handleCategoryChange() {
         const checkedInputs = Array.from(categoryContainer.querySelectorAll('input[type="checkbox"]:checked'));
         subCatContainer.innerHTML = ''; 
@@ -1881,19 +1937,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const groupVal = groupTs ? groupTs.getValue() : document.getElementById("group_select").value;
+        const groupVal = groupTs ? groupTs.getValue() : groupSelectEl.value;
         const groupKey = String(groupVal).trim(); 
 
         let hasAnyOptions = false;
 
         checkedInputs.forEach(input => {
-            // CHANGE 3: Use input.value directly (which is now the string "mens_wear")
             const catStoreVal = input.value; 
             const parentName = input.nextElementSibling.innerText;
-            
-            // PATH LOGIC: "mens_wear|clothing"
             const lookupKey = catStoreVal + "|" + groupKey;
-            
             const children = categoriesByParent[lookupKey];
 
             if (children && children.length > 0) {
@@ -1905,7 +1957,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 children.forEach(item => {
                     const el = createCheckboxItem(item, 'sub_category_code', preSelected.sub, handleSubCategoryChange);
-                    // Pass the path down to the next level
                     el.querySelector('input').setAttribute('data-parent-path', lookupKey);
                     subCatContainer.appendChild(el);
                 });
@@ -1913,10 +1964,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if(!hasAnyOptions) subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
-        else if(preSelected.sub.size > 0) handleSubCategoryChange();
+        
+        triggerSearch('sub_cat_search');
+        if(preSelected.sub.size > 0) handleSubCategoryChange();
     }
 
-    // --- 3. UPDATE SUB SUB CATEGORY LIST (Level 3) ---
     function handleSubCategoryChange() {
         const checkedInputs = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
         subSubCatContainer.innerHTML = ''; 
@@ -1929,14 +1981,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let hasAnyOptions = false;
 
         checkedInputs.forEach(input => {
-            // CHANGE 4: Use input.value (e.g. "shirts")
             const subCatStoreVal = input.value;
             const parentPath = input.getAttribute('data-parent-path'); 
             const parentName = input.nextElementSibling.innerText;
-            
-            // PATH LOGIC: "shirts|mens_wear|clothing"
             const lookupKey = subCatStoreVal + "|" + parentPath;
-            
             const children = categoriesByParent[lookupKey];
 
             if (children && children.length > 0) {
@@ -1953,42 +2001,87 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if(!hasAnyOptions) subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
-    }
-    
-    // --- SEARCH FILTER ---
-    function enableSearchFilter(inputId, containerId) {
-        const input = document.getElementById(inputId);
-        const container = document.getElementById(containerId);
-        input.addEventListener('keyup', function() {
-            const filter = this.value.toLowerCase();
-            const items = container.querySelectorAll('.checkbox-item');
-            const headers = container.querySelectorAll('.group-header');
-            items.forEach(item => {
-                const label = item.querySelector('label').innerText;
-                item.style.display = label.toLowerCase().includes(filter) ? 'flex' : 'none';
-            });
-            if(filter.length > 0) headers.forEach(h => h.style.display = 'none');
-            else headers.forEach(h => h.style.display = 'block');
-        });
+        triggerSearch('sub_sub_cat_search');
     }
 
-    // --- EVENTS ---
-    if(groupTs) {
-        groupTs.on('change', function(groupValue) {
-            preSelected.cat.clear(); 
-            preSelected.sub.clear(); 
-            preSelected.subsub.clear();        
-            updateCategoryList(groupValue);
-        });
+    // --- 5. SEARCH LOGIC (FIXED) ---
+    function enableMainSearch(inputId, containerId) {
+        const input = document.getElementById(inputId);
+        const container = document.getElementById(containerId);
+        
+        if(input && container) {
+            input.addEventListener('keyup', function() {
+                const filter = this.value.toLowerCase().trim();
+                const allElements = Array.from(container.children);
+                
+                let currentHeader = null;
+                let headerMatches = false;
+                let visibleCountInGroup = 0;
+
+                // 1. Reset if empty
+                if(filter === "") {
+                    allElements.forEach(el => el.style.display = ''); 
+                    return;
+                }
+
+                // 2. Iterate elements
+                for (let i = 0; i < allElements.length; i++) {
+                    const el = allElements[i];
+
+                    // --- IS HEADER ---
+                    if (el.classList.contains('group-header')) {
+                        // Close previous group logic
+                        if (currentHeader) {
+                            const showHeader = headerMatches || (visibleCountInGroup > 0);
+                            currentHeader.style.display = showHeader ? 'block' : 'none';
+                        }
+
+                        // Start New Group
+                        currentHeader = el;
+                        headerMatches = el.innerText.toLowerCase().includes(filter);
+                        visibleCountInGroup = 0;
+                        
+                        // Temporarily hide, will decide at next header or end of loop
+                        el.style.display = 'none'; 
+                    } 
+                    // --- IS CHECKBOX ITEM ---
+                    else if (el.classList.contains('checkbox-item')) {
+                        const label = el.querySelector('label').innerText.toLowerCase();
+                        
+                        // IMPORTANT: We check if THIS item matches OR if the Header matched.
+                        // We do NOT use a sticky flag from previous sibling items.
+                        if (headerMatches || label.includes(filter)) {
+                            el.style.display = 'flex';
+                            visibleCountInGroup++;
+                        } else {
+                            el.style.display = 'none';
+                        }
+                    }
+                }
+
+                // Handle the last group after loop finishes
+                if (currentHeader) {
+                    const showHeader = headerMatches || (visibleCountInGroup > 0);
+                    currentHeader.style.display = showHeader ? 'block' : 'none';
+                }
+            });
+        }
     }
-    
-    // --- INITIAL LOAD ---
+
+    function triggerSearch(id) {
+        const el = document.getElementById(id);
+        if(el && el.value) el.dispatchEvent(new Event('keyup'));
+    }
+
+    // --- 6. INITIALIZE ---
     if (preSelected.groupVal) {
         updateCategoryList(preSelected.groupVal);
     }
-    
-    enableSearchFilter('sub_cat_search', 'sub_category_container');
-    enableSearchFilter('sub_sub_cat_search', 'sub_sub_category_container');
+
+    // Enable Search on all 3 columns
+    enableMainSearch('main_cat_search', 'category_container');
+    enableMainSearch('sub_cat_search', 'sub_category_container');
+    enableMainSearch('sub_sub_cat_search', 'sub_sub_category_container');
 });
 </script>
 
@@ -2016,7 +2109,9 @@ document.addEventListener('DOMContentLoaded', function() {
         let d = parseFloat(depthInput.value) || 0;
         let actualWt = parseFloat(weightInput.value) || 0; // In KG
         const dimUnit = dimUnitSelect ? dimUnitSelect.value : 'cm';
-
+         h = h + 4 ;
+         w = w + 4;
+         d = d + 4;
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
         // if (dimUnit === 'cm') {
@@ -2026,9 +2121,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // }
 
         // --- STEP B: ADD BUFFER (4 inches) ---
-        let h_in = h + 4;
-        let w_in = w + 4;
-        let d_in = d + 4;
+        let h_in = h;
+        let w_in = w;
+        let d_in = d;
 
         // --- STEP C: CALCULATE VOLUMETRIC WEIGHT ---
         // Formula: (L x W x H in inches) / 5000
@@ -2222,8 +2317,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Set values
             const fields = ['height', 'width', 'depth', 'weight', 'size', 'color', 
-                            'quantity_received', 'cp', 'price_india', 'price_india_mrp', 
-                             'amazon_price', 'usd_price', 'hsn_code', 
+                            'quantity_received', 'cp', 'price_india', 'price_india_mrp', 'usd_price', 'hsn_code', 
                             'gst_rate', 'ware_house_code', 'store_location'];
 
             fields.forEach(field => {
@@ -2458,34 +2552,30 @@ document.addEventListener('DOMContentLoaded', function() {
         // Use Event Delegation to handle Main Product, Existing Variations, and New Variations
         document.body.addEventListener('input', function(e) {
             
-            // 1. Check if the modified input is an "inr_pricing" field
-            // We check if the name contains 'inr_pricing' to cover both:
-            // Main: name="inr_pricing"
-            // Variations: name="variations[x][inr_pricing]"
-            if (e.target.name && e.target.name.includes('price_india')) {
+            // 1. Check if the modified input is "Price India"
+            // Covers: name="price_india" AND name="variations[x][price_india]"
+            if (e.target.name && e.target.name.includes('price_india') && !e.target.name.includes('mrp')) {
                 
                 const inrInput = e.target;
                 const inrValue = parseFloat(inrInput.value);
                 
-                // 2. Find the container that holds this specific group of inputs
-                // Both the main form and variation cards use a grid layout.
-                // We look for the closest parent with class 'grid' or 'calculation-card'
+                // 2. Find the container (Grid or Card)
                 const container = inrInput.closest('.grid') || inrInput.closest('.calculation-card');
 
                 if (container) {
-                    // 3. Find the Amazon Price input WITHIN this specific container
-                    // This ensures we only update the Amazon price for the specific variation being edited
-                    const amazonInput = container.querySelector('input[name*="amazon_price"]');
+                    // 3. Find the MRP Price input WITHIN this specific container
+                    // CHANGED: Looking for 'price_india_mrp' instead of 'amazon_price'
+                    const mrpInput = container.querySelector('input[name*="price_india_mrp"]');
 
-                    if (amazonInput) {
+                    if (mrpInput) {
                         if (!isNaN(inrValue)) {
                             // Calculate 20% increase
                             const calculatedPrice = inrValue + (inrValue * 0.20);
-                            // Update the Amazon field (rounded to 2 decimal places)
-                            amazonInput.value = calculatedPrice.toFixed(2);
+                            // Update the MRP field
+                            mrpInput.value = calculatedPrice.toFixed(2);
                         } else {
-                            // If INR is cleared/invalid, clear Amazon price
-                            amazonInput.value = '';
+                            // If INR is cleared/invalid, clear MRP
+                            mrpInput.value = '';
                         }
                     }
                 }
@@ -2797,12 +2887,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Check if the input exists BEFORE initializing TomSelect
-    // This prevents the "White Screen" / Disappearing Form issue
-    const termInput = document.getElementById('search_term_input');
+    // CHANGED: Target the 'keywords_input' instead of 'search_term_input'
+    const keywordInput = document.getElementById('keywords_input');
 
-    if (termInput) {
-        new TomSelect(termInput, {
+    if (keywordInput) {
+        new TomSelect(keywordInput, {
             create: true,               // Allow user to type new text
             createOnBlur: true,         // Create tag if user clicks away
             delimiter: ',',             // Store in DB separated by commas
@@ -2814,7 +2903,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     } else {
-        console.warn("Search Term Input not found - skipping initialization");
+        console.warn("Keywords Input not found - skipping initialization");
     }
 
 });

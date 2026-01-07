@@ -464,6 +464,9 @@ switch ($page) {
             case 'exportSelected':
                 $controller->exportSelected();
                 break;
+            case 'deleteSelected': 
+                $controller->deleteSelected();
+                break;
             case 'form1':
                 $controller->getform1();
                 break;
