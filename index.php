@@ -175,6 +175,9 @@ switch ($page) {
             case 'invoice_list':
                 $controller->invoiceList();
                 break;
+            case 'payment_list':
+                $controller->paymentList();
+                break;
             default:
                 $controller->index();
                 break;
