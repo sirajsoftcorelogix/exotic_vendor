@@ -1148,7 +1148,7 @@ class OrdersController {
     public function invoiceList() {
         is_login();
         global $poInvoiceModel;       
-        $limit = 20;
+        $limit = 50;
         $offset = 0;
         if (isset($_GET['limit'])) {
             $limit = intval($_GET['limit']);
@@ -1197,7 +1197,7 @@ class OrdersController {
     public function paymentList() {
         is_login();
         global $poInvoiceModel;
-        $limit = 20;
+        $limit = 50;
         $offset = 0;
         if (isset($_GET['limit'])) {
             $limit = intval($_GET['limit']);

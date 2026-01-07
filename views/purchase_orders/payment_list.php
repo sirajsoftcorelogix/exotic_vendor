@@ -129,8 +129,8 @@
         <?php         
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20; // Orders per page, default 20
-        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 20; // Only allow specific values
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 20
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
         $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         
@@ -152,7 +152,7 @@
             <div class="flex items-center justify-center">
                 <div id="pagination-controls" class="flex items-center gap-4 text-sm text-gray-600">
                     <div>
-                        <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($payments) ?></span> of <span class="font-medium"><?= $total_orders ?></span> Payment</p>
+                        <p class="text-sm text-gray-600">Showing <span class="font-medium"><?= count($payments) ?></span> of <span class="font-medium"><?= $total_payments ?></span> Payment</p>
                     </div>
                     <?php            
                     //echo '****************************************  '.$query_string;
