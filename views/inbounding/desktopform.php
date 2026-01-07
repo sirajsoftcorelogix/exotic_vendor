@@ -14,7 +14,15 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border: 1px solid #ccc; border-radius: 2px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #666; border: 2px solid #e0e0e0; border-radius: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
-    
+    /* Fix for Variant Dropdown Width */
+    .ts-wrapper {
+        width: 100% !important;
+    }
+    /* Ensure the dropdown arrow and text align correctly */
+    .ts-control {
+        display: flex !important;
+        align-items: center;
+    }
     /* Tom Select Customization */
     .ts-wrapper.single .ts-control {
         background: #fff !important;
@@ -60,11 +68,8 @@
     .dim-input { transition: border-color 0.2s; }
     .dim-input:focus { border-color: #d97824 !important; }
 </style>
-
 <?php
 $record_id = $_GET['id'] ?? '';
-
-// --- 1. DEFINE SIZE OPTIONS ---
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
     'S'    => 'Small (S)(36)',
@@ -74,13 +79,8 @@ $sizeOptions = [
     'XXL'  => 'Extra Extra Large (XXL)(44)',
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
-
 $colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
-
-// 2. HELPER FUNCTION TO RENDER COLOR MAP
 function renderColorMapField($fieldName, $savedValue, $customClass = "") {
-    // We render an empty select initially. 
-    // JavaScript will populate it and show/hide it based on the Category.
     return '
     <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
         <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
@@ -91,35 +91,23 @@ function renderColorMapField($fieldName, $savedValue, $customClass = "") {
         </select>
     </div>';
 }
-
-// --- 2. DETECT CLOTHING/TEXTILES (Corrected for ID lookup) ---
 $is_clothing_initial = false; 
 $saved_group_id = $data['form2']['group_name'] ?? '';
-
 if (!empty($data['category']) && !empty($saved_group_id)) {
     foreach ($data['category'] as $cat) {
-        // Check if this category's ID matches the saved group ID
-        // We use loose comparison (==) to handle string "-5" vs integer -5
         if (isset($cat['category']) && $cat['category'] == $saved_group_id) {
-            
-            // We found the matching group, now check its name
             $catName = strtolower($cat['name'] ?? '');
             $catDisplay = strtolower($cat['display_name'] ?? '');
-            
             if (strpos($catName, 'clothing') !== false || strpos($catName, 'textiles') !== false || 
                 strpos($catDisplay, 'clothing') !== false || strpos($catDisplay, 'textiles') !== false) {
                 $is_clothing_initial = true;
             }
-            break; // Stop looping once found
+            break;
         }
     }
 }
-
-// --- 3. HELPER FUNCTION TO RENDER FIELD ---
 function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
     $html = '';
-    
-    // Check if Clothing (TRUE) -> Render Dropdown
     if ($isClothing) {
         $html .= '<select name="' . $fieldName . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">';
         $html .= '<option value="">Select Size</option>';
@@ -130,62 +118,49 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
         }
         $html .= '</select>';
     } 
-    // Check if Not Clothing (FALSE) -> Render Text Input
     else {
         $html .= '<input type="text" name="' . $fieldName . '" value="' . htmlspecialchars($currentValue) . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">';
     }
     return $html;
 }
-
-// Get the current saved value safely
 $currentSize = $data['form2']['size'] ?? '';
 ?>
-
 <div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
     <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
         <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
-            
             <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
-    
-    <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
-        <?php 
-            $mainPhoto = $data['form2']['product_photo'] ?? ''; 
-            $hasMainPhoto = !empty($mainPhoto);
-        ?>
-        
-        <img id="main_photo_preview" 
-             src="<?= $hasMainPhoto ? base_url($mainPhoto) : '' ?>" 
-             onclick="openImagePopup(this.src)"
-             class="w-full h-full object-contain cursor-zoom-in absolute inset-0 z-10"
-             style="<?= $hasMainPhoto ? '' : 'display: none;' ?>">
-             
-        <div id="main_photo_placeholder"
-             class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-full h-full absolute inset-0 z-20 bg-gray-50 hover:bg-gray-100 transition-colors"
-             onclick="document.getElementById('product_photo_main_input').click()"
-             style="<?= $hasMainPhoto ? 'display: none;' : '' ?>">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-            <span class="text-xs font-bold mt-1">Add Photo</span>
-        </div>
-
-        <button type="button"
-                id="main_photo_change_btn"
-                onclick="document.getElementById('product_photo_main_input').click()"
-                class="absolute bottom-0 right-0 bg-black bg-opacity-60 text-white p-2 rounded-tl-md z-30 hover:bg-[#d97824] transition-colors"
-                style="<?= $hasMainPhoto ? '' : 'display: none;' ?>"
-                title="Change Photo">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-        </button>
-
-        <input type="file" name="product_photo_main" id="product_photo_main_input" class="hidden" accept="image/*">
-        <input type="hidden" name="old_product_photo_main" value="<?= htmlspecialchars($mainPhoto) ?>">
-    </div>
-    
-</div>
-
+                <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
+                    <?php 
+                        $mainPhoto = $data['form2']['product_photo'] ?? ''; 
+                        $hasMainPhoto = !empty($mainPhoto);
+                    ?>
+                    <img id="main_photo_preview" 
+                         src="<?= $hasMainPhoto ? base_url($mainPhoto) : '' ?>" 
+                         onclick="openImagePopup(this.src)"
+                         class="w-full h-full object-contain cursor-zoom-in absolute inset-0 z-10"
+                         style="<?= $hasMainPhoto ? '' : 'display: none;' ?>">
+                    <div id="main_photo_placeholder"
+                         class="flex flex-col items-center justify-center text-gray-400 cursor-pointer w-full h-full absolute inset-0 z-20 bg-gray-50 hover:bg-gray-100 transition-colors"
+                         onclick="document.getElementById('product_photo_main_input').click()"
+                         style="<?= $hasMainPhoto ? 'display: none;' : '' ?>">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                        <span class="text-xs font-bold mt-1">Add Photo</span>
+                    </div>
+                    <button type="button"
+                            id="main_photo_change_btn"
+                            onclick="document.getElementById('product_photo_main_input').click()"
+                            class="absolute bottom-0 right-0 bg-black bg-opacity-60 text-white p-2 rounded-tl-md z-30 hover:bg-[#d97824] transition-colors"
+                            style="<?= $hasMainPhoto ? '' : 'display: none;' ?>"
+                            title="Change Photo">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </button>
+                    <input type="file" name="product_photo_main" id="product_photo_main_input" class="hidden" accept="image/*">
+                    <input type="hidden" name="old_product_photo_main" value="<?= htmlspecialchars($mainPhoto) ?>">
+                </div>
+            </div>
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-3 md:px-5 pt-[15px] pb-5 bg-white md:ml-2.5 md:mr-5">
                 <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
-                
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 md:gap-[30px] mb-[15px] items-end">
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Variant:</label>
@@ -232,22 +207,18 @@ $currentSize = $data['form2']['size'] ?? '';
                     ?>
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Stock Added On</label>
-
                         <?php 
-                            // 1. Determine the value in standard Y-m-d format first
                             if (!empty($data['form2']['stock_added_date']) && $data['form2']['stock_added_date'] != "0000-00-00") {
                                 $dateValue = date('Y-m-d', strtotime($data['form2']['stock_added_date']));
                             } else {
                                 $dateValue = date('Y-m-d');
                             }
                         ?>
-
                         <div class="relative w-full">
                             <input type="text" 
                                    class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 pr-10 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white cursor-pointer" 
                                    value="<?php echo $dateValue; ?>" 
                                    name="stock_added_date">
-                            
                             <div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -261,7 +232,6 @@ $currentSize = $data['form2']['size'] ?? '';
                     <?php } ?>
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Added On</label>
-
                         <?php 
                             // 1. Determine the value in standard Y-m-d format first
                             if (!empty($data['form2']['added_date']) && $data['form2']['added_date'] != "0000-00-00") {
@@ -1754,7 +1724,7 @@ document.addEventListener('DOMContentLoaded', function() {
         new TomSelect("#received_by_select", commonConfig);
         new TomSelect("#updated_by_select", commonConfig);
         // new TomSelect("#material_select", config);
-        new TomSelect("#variant_select", commonConfig);
+        // new TomSelect("#variant_select", commonConfig);
         new TomSelect("#material_select", {
             create: false,
             sortField: { field: "text", direction: "asc" },
