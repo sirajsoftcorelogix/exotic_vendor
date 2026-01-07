@@ -112,7 +112,7 @@
                     <td class="px-6 py-4 whitespace-nowrap"><?= $payment['invoice_date'] ? date('d M Y', strtotime($payment['invoice_date'])) : '' ?></td>
                     <td class="px-6 py-4 whitespace-nowrap" title="<?= htmlspecialchars($payment['vendor_phone'] ?? '') ?>  <?= htmlspecialchars($payment['vendor_city'] ?? '') ?>"><?= htmlspecialchars($payment['vendor_name'] ?? '') ?></td>                                     
                     <td class="px-6 py-4 whitespace-nowrap"><?= $payment['invoice_grand_total'] ? '₹'.$payment['invoice_grand_total'] : '' ; ?></td>
-                    <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($payment['bank_transaction_refs'] ?? '') ?></td>  
+                    <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($payment['bank_transaction_reference_no'] ?? '') ?></td>  
                     <td class="px-6 py-4 whitespace-nowrap">
                         ₹<?= number_format($payment['amount_paid'], 2) ?>
                     </td>
