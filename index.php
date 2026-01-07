@@ -172,6 +172,9 @@ switch ($page) {
             case 'deleteSearch':
                 $controller->deleteSearch();
                 break;
+            case 'invoice_list':
+                $controller->invoiceList();
+                break;
             default:
                 $controller->index();
                 break;
@@ -460,6 +463,9 @@ switch ($page) {
                 break;
             case 'exportSelected':
                 $controller->exportSelected();
+                break;
+            case 'deleteSelected': 
+                $controller->deleteSelected();
                 break;
             case 'form1':
                 $controller->getform1();
