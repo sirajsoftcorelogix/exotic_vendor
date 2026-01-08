@@ -46,7 +46,6 @@
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         z-index: 50; /* Ensure dropdown appears above grid items */
     }
-
     /* Checkbox List Styles */
     .checkbox-list-container::-webkit-scrollbar { width: 8px; }
     .checkbox-list-container::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -240,7 +239,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                 $dateValue = date('Y-m-d');
                             }
                         ?>
-
                         <div class="relative w-full">
                             <input type="text" 
                                    class="date-picker h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 pr-10 text-[#333] w-full focus:outline-none focus:border-[#999] bg-white cursor-pointer" 
@@ -274,11 +272,9 @@ $currentSize = $data['form2']['size'] ?? '';
         } else {
             $variations = $data['form2']['variations'];
         }
-
         // Initialize Groups
         $grouped_images = ['-1' => []]; // -1 is Base
         foreach ($variations as $var) { $grouped_images[$var['id']] = []; }
-
         // Sort images into groups
         foreach ($item_photos as $img) {
             $v_id = $img['variation_id'] ?? '-1';
@@ -287,11 +283,9 @@ $currentSize = $data['form2']['size'] ?? '';
             $grouped_images[$v_id][] = $img;
         }
     ?>
-
     <div class="mt-[15px] md:mx-5">
     <div class="bg-white rounded-[5px] w-full max-w-full">
         <h3 class="text-[13px] font-bold text-[#333] mb-4">Item Photos & Details</h3>
-
         <div class="mb-8 border-b-2 border-gray-100 pb-6 w-full">
             <div class="flex items-center gap-2 mb-3">
                 <span class="bg-[#d97824] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Main</span>
@@ -299,7 +293,6 @@ $currentSize = $data['form2']['size'] ?? '';
                     (<?= htmlspecialchars($data['form2']['color'] ?? '') ?> - <?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
             </div>
-
             <div class="w-full mb-5 overflow-hidden">
                 <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1">
                     <?php 
@@ -309,7 +302,6 @@ $currentSize = $data['form2']['size'] ?? '';
                     ?>
                 </div>
             </div>
-
             <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                     
@@ -320,7 +312,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span>
                         </div>
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Width:</label>
                         <div class="relative w-full">
@@ -328,7 +319,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span>
                         </div>
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Depth:</label>
                         <div class="relative w-full">
@@ -336,7 +326,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span>
                         </div>
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Weight:</label>
                         <div class="relative w-full">
@@ -354,12 +343,10 @@ $currentSize = $data['form2']['size'] ?? '';
                         <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
                         <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label>
                         <div class="relative w-full">
@@ -367,7 +354,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span>
                         </div>
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">CP:</label>
                         <div class="relative w-full">
@@ -410,10 +396,8 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
                         </div>
                     </div>
-
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
                 </div>
-
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                     <div class="text-right min-w-[100px]">
                         <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
@@ -427,7 +411,6 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             </div>
         </div>
-
         <div id="variations-container">
             <?php foreach ($variations as $var): ?>
                 <div class="variation-card calculation-card mb-8 border-b-2 border-gray-100 pb-6 w-full last:border-0 last:pb-0 last:mb-0 relative group" data-id="<?= $var['id'] ?>">
@@ -451,7 +434,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             </button>
                         </div>
                     </div>
-
                     <div class="flex gap-4 mb-4">
                         <div class="w-[100px] shrink-0">
                             <label class="block text-xs font-bold text-[#555] mb-1">Main Photo:</label>
@@ -462,7 +444,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                     $rawPhoto = $var['variation_image'] ?? '';
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
                                 ?>
-
                                 <img src="<?= $hasPhoto ? base_url($rawPhoto) : '#' ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
                                      style="<?= $hasPhoto ? '' : 'display: none;' ?>">
@@ -472,7 +453,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                                     <span class="text-[9px] mt-1 font-semibold">Upload</span>
                                 </div>
-
                                 <input type="file" name="variations[<?= $var['id'] ?>][photo]" accept="image/*" class="hidden variation-file-input">
                                 <input type="hidden" name="variations[<?= $var['id'] ?>][old_photo]" value="<?= $hasPhoto ? $rawPhoto : '' ?>">
                             </label>
@@ -489,16 +469,13 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
-
                     <div class="bg-white p-5 rounded border border-gray-200 w-full shadow-sm">
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Height:</label><div class="relative w-full"><input type="text" class="calc-h w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['height'] ?? '') ?>" name="variations[<?= $var['id'] ?>][height]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Width:</label><div class="relative w-full"><input type="text" class="calc-w w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['width'] ?? '') ?>" name="variations[<?= $var['id'] ?>][width]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['depth'] ?? '') ?>" name="variations[<?= $var['id'] ?>][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['weight'] ?? '') ?>" name="variations[<?= $var['id'] ?>][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
-
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['store_location'] ?? '') ?>" name="variations[<?= $var['id'] ?>][store_location]"></div>
-
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
@@ -515,7 +492,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                                 </div>
                             </div>
-
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
                                 <div class="relative w-full">
@@ -525,7 +501,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                                 </div>
                             </div>
-
                             <div class="flex-1">
                                 <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
                                 <div class="relative flex items-center w-full">
@@ -535,16 +510,12 @@ $currentSize = $data['form2']['size'] ?? '';
                                     <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
                                 </div>
                             </div>
-
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['hsn_code'] ?? '') ?>" name="variations[<?= $var['id'] ?>][hsn_code]"></div></div>
-
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                             
-
                             <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
                         </div>
-
                         <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                             <div class="text-right min-w-[100px]">
                                 <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
@@ -560,17 +531,14 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             <?php endforeach; ?>
         </div>
-
         <div class="mt-6 flex justify-center pb-5">
             <button type="button" onclick="addNewVariation()" class="flex items-center gap-2 bg-[#d97824] text-white px-4 py-2 rounded text-sm font-bold hover:bg-[#c66a1d] transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>
                 Add Variation Card
             </button>
         </div>
-
     </div>
 </div>
-
 <template id="variation-template">
     <div class="variation-card calculation-card mb-8 border-b-2 border-gray-100 pb-6 w-full pt-6 border-t-2 mt-6 relative group">
         <div class="flex items-center justify-between mb-3 bg-blue-50 p-2 rounded border border-blue-200">
@@ -605,7 +573,6 @@ $currentSize = $data['form2']['size'] ?? '';
             </div>
             <div class="grow flex items-center justify-center bg-gray-50 border border-dashed border-gray-300 rounded text-gray-400 text-xs">Save item to enable Gallery</div>
         </div>
-
         <div class="bg-white p-5 rounded border border-gray-200 w-full shadow-sm">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Height:</label><div class="relative w-full"><input type="text" class="calc-h w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][height]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
@@ -614,7 +581,6 @@ $currentSize = $data['form2']['size'] ?? '';
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
                 
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][store_location]"></div>
-
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
                 <div class="w-full min-w-0 size-wrapper-js">
                     <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
@@ -637,7 +603,6 @@ $currentSize = $data['form2']['size'] ?? '';
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                     </div>
                 </div>
-
                 <div class="w-full min-w-0">
                     <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
                     <div class="relative w-full">
@@ -646,7 +611,6 @@ $currentSize = $data['form2']['size'] ?? '';
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                     </div>
                 </div>
-
                 <div class="w-full min-w-0">
                     <label class="block text-xs font-bold text-[#555] mb-1">USD Price:</label>
                     <div class="relative w-full">
@@ -655,11 +619,8 @@ $currentSize = $data['form2']['size'] ?? '';
                         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">USD</span>
                     </div>
                 </div>
-
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
-
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
-
                 <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
                     <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
                     <select name="variations[INDEX][colormaps]" class="colormap-select w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">
@@ -667,7 +628,6 @@ $currentSize = $data['form2']['size'] ?? '';
                     </select>
                 </div>
             </div>
-
             <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                 <div class="text-right min-w-[100px]">
                     <span class="text-[10px] font-bold text-gray-500 uppercase">Volumetric</span>
@@ -682,7 +642,6 @@ $currentSize = $data['form2']['size'] ?? '';
         </div>
     </div>
 </template>
-
     <?php 
     // Helper Function for Cards
     function renderPhotoCard($img, $varId) {
@@ -694,15 +653,12 @@ $currentSize = $data['form2']['size'] ?? '';
             <div class="absolute top-1 right-1 text-gray-400 p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
             </div>
-
             <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" onclick="openImagePopup('uploads/itm_img/<?php echo $img['file_name']; ?>')">
                 <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain cursor-pointer">
             </div>
-
             <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
                 <?php echo $img['file_name']; ?>
             </span>
-
             <input type="hidden" name="photo_order[<?php echo $img['id']; ?>]" value="<?php echo $img['display_order']; ?>" class="order-input">
             <input type="hidden" name="photo_variation[<?php echo $img['id']; ?>]" value="<?php echo $varId; ?>" class="variation-input">
         </div>
@@ -740,10 +696,8 @@ $currentSize = $data['form2']['size'] ?? '';
                                 // 1. Get the values safely (force to integer to handle string "0")
                                 $dbValue = isset($data['form2']['updated_by_user_id']) ? (int)$data['form2']['updated_by_user_id'] : 0;
                                 $sessionValue = isset($_SESSION['user']['id']) ? (int)$_SESSION['user']['id'] : 0;
-
                                 // 2. LOGIC: If DB has a valid ID (> 0), use it. Otherwise, default to Session ID.
                                 $selectedId = ($dbValue > 0) ? $dbValue : $sessionValue;
-
                                 foreach ($data['user'] as $value1) { 
                                     // 3. Simple comparison
                                     $isSelected = ($value1['id'] == $selectedId) ? 'selected' : '';
@@ -770,7 +724,6 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             </fieldset>
         </div>
-
         <?php 
             $selected_material = $data['form2']['material_code'] ?? '';
             $selected_group_val = $data['form2']['group_name'] ?? ''; 
@@ -779,18 +732,14 @@ $currentSize = $data['form2']['size'] ?? '';
             $selected_sub = is_array($sub_raw) ? $sub_raw : explode(',', $sub_raw);
             $sub_sub_raw = $data['form2']['sub_sub_category_code'] ?? '';
             $selected_sub_sub = is_array($sub_sub_raw) ? $sub_sub_raw : explode(',', $sub_sub_raw);
-
             $categoriesByParent1 = [];
             $rootCategories = [];
-
             if (!empty($data['category'])) {
                 foreach ($data['category'] as $row) {
                     if (isset($row['is_active']) && $row['is_active'] != 1) { continue; }
-
                     // 1. Get the Parent Key (Strict String)
                     // This matches the 'parent' column in your DB (e.g. "clothing" or "mens_wear|clothing")
                     $parentKey = isset($row['parent']) ? trim((string)$row['parent']) : '';
-
                     // Skip orphans
                     if ($parentKey === '') continue; 
                     
@@ -798,14 +747,12 @@ $currentSize = $data['form2']['size'] ?? '';
                     // Priority: 'category' column -> 'id' column
                     // You mentioned "value should store of category field", so we use that.
                     $storageValue = !empty($row['category']) ? $row['category'] : $row['id'];
-
                     // 3. Build the Tree
                     $categoriesByParent1[$parentKey][] = [
                         'id'          => $row['id'],
                         'name'        => $row['display_name'],
                         'store_val'   => $storageValue // <--- We send this to JS to build paths
                     ];
-
                     // 4. Identify Root Groups (Parent is "0")
                     if ($parentKey === '0') {
                         $rootCategories[] = [
@@ -822,11 +769,9 @@ $currentSize = $data['form2']['size'] ?? '';
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Item Grouping</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-    
                     <div class="w-full">
                         <label class="block text-xs font-bold text-[#222] mb-1">Material:</label>
                         <div class="flex gap-2 items-center w-full">
-                            
                             <div class="flex-1 w-full min-w-0"> 
                                 <select id="material_select" name="material_code" placeholder="Select Material..." autocomplete="off">
                                     <option value="">Select Material</option>
@@ -837,7 +782,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                     <?php } ?>
                                 </select>
                             </div>
-                            
                             <button type="button" onclick="openMaterialModal()" class="h-[36px] w-[36px] shrink-0 bg-[#28a745] hover:bg-[#218838] text-white rounded-[4px] flex items-center justify-center shadow-sm transition" title="Add New Material">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             </button>
@@ -857,11 +801,10 @@ $currentSize = $data['form2']['size'] ?? '';
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                 </div>
 
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
-    
+                    
                     <div class="w-full md:w-1/3 flex flex-col">
                         <label class="block text-xs font-bold text-[#222] mb-1">Category:</label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
@@ -900,7 +843,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
-
                 </div>
                 
             </fieldset>
@@ -912,20 +854,17 @@ $currentSize = $data['form2']['size'] ?? '';
             
             $saved_search_string = $data['form2']['search_category_string'] ?? ''; 
             $search_parts = explode('|', $saved_search_string);
-
             // Map the exploded parts to variables (Default to empty if not found)
             // Order: SubSub | Sub | Cat | Group
             $search_sub_sub_raw = $search_parts[0] ?? '';
             $search_sub_raw     = $search_parts[1] ?? '';
             $search_cat_raw     = $search_parts[2] ?? '';
             $search_group_val   = $search_parts[3] ?? '';
-
             // Convert comma-strings to arrays for JS
             $search_sel_sub_sub = array_filter(explode(',', $search_sub_sub_raw));
             $search_sel_sub     = array_filter(explode(',', $search_sub_raw));
             $search_sel_cat     = array_filter(explode(',', $search_cat_raw));
         ?>
-
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category</legend>
@@ -951,6 +890,10 @@ $currentSize = $data['form2']['size'] ?? '';
                     <div class="w-full md:w-1/3 flex flex-col">
                         <label class="block text-xs font-bold text-[#222] mb-1">Search Category:</label>
                         <div class="border border-[#ccc] rounded-[4px] bg-white flex-grow h-[200px] flex flex-col">
+                            <div class="p-1 border-b border-gray-200 bg-gray-50">
+                                <input type="text" id="search_cat_search" placeholder="Search..." 
+                                       class="w-full h-[28px] text-xs border border-gray-300 rounded px-2 focus:outline-none focus:border-[#d97824]">
+                            </div>
                             <div id="search_category_container" class="checkbox-list-container overflow-y-auto p-1 h-full">
                                 <div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>
                             </div>
@@ -982,6 +925,7 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
+
                 </div>
             </fieldset>
         </div>
@@ -1006,7 +950,6 @@ $currentSize = $data['form2']['size'] ?? '';
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Title:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="product_title" value="<?= htmlspecialchars($data['form2']['product_title'] ?? '') ?>">
                 </div>
-
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
                     <input type="text" id="keywords_input" 
@@ -1018,12 +961,10 @@ $currentSize = $data['form2']['size'] ?? '';
                         Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
                     </div>
                 </div>
-
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
                     <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name="snippet_description">
                 </div>
-
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
                     <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
@@ -1035,7 +976,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                 } else {
                                     $available_options = $source_data;
                                 }
-
                                 $saved_raw = $data['form2']['optionals'] ?? []; 
                                 $saved_values = [];
                                 if (is_array($saved_raw)) {
@@ -1043,7 +983,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                 } elseif (is_string($saved_raw)) {
                                     $saved_values = array_map('trim', explode(',', $saved_raw));
                                 }
-
                                 if (!empty($available_options) && is_array($available_options)) {
                                     foreach ($available_options as $key => $val_str) {
                                         if (is_array($val_str)) continue; 
@@ -1070,7 +1009,6 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             </fieldset>
         </div>
-
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Invoice Details:</legend>
@@ -1079,7 +1017,6 @@ $currentSize = $data['form2']['size'] ?? '';
                     $hasImage = !empty($data['form2']['invoice_image']);
                     $imageSrc = $hasImage ? base_url($data['form2']['invoice_image']) : '';
                 ?>
-
                 <div class="flex flex-col md:flex-row gap-5 items-stretch">
                     
                     <div class="flex-1 md:max-w-[250px]">
@@ -1095,7 +1032,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="text-[11px] text-[#666] font-medium">Click to Upload</span>
                         </div>
                     </div>
-
                     <div id="invoice_preview_container" class="flex-1 <?php echo $hasImage ? '' : 'hidden'; ?>">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Current Invoice:</label>
                         
@@ -1108,13 +1044,11 @@ $currentSize = $data['form2']['size'] ?? '';
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-0 group-hover:opacity-100"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
                                 </div>
                             </div>
-
                             <div class="flex flex-col gap-2 justify-center">
                                 <a id="invoice_download_btn" href="<?php echo $imageSrc; ?>" download="Invoice_Image" class="flex items-center gap-2 text-[12px] font-bold text-[#d97824] hover:text-[#bf7326] transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                     Download
                                 </a>
-
                                 <button type="button" onclick="openDeletePopup(event)" class="flex items-center gap-2 text-[12px] font-bold text-red-500 hover:text-red-700 transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                                     Remove
@@ -1122,7 +1056,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
-
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Invoice Number:</label>
                         <div class="flex flex-col justify-center">
@@ -1130,11 +1063,9 @@ $currentSize = $data['form2']['size'] ?? '';
                                    value="<?php echo !empty($data['form2']['invoice_no']) ? $data['form2']['invoice_no'] : ''; ?>">
                         </div>
                     </div>
-
                 </div>
             </fieldset>
         </div>
-
         <div class="mt-[15px] md:mx-5" style="display:none;">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Unit:</legend>
@@ -1160,13 +1091,10 @@ $currentSize = $data['form2']['size'] ?? '';
                 </div>
             </fieldset>
         </div>
-
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <legend class="text-[13px] font-bold text-[#333] px-[5px]">Stock:</legend>
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start mb-[15px]">
-
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
@@ -1175,7 +1103,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <option value="Y" <?= ($perm == 'Y') ? 'selected' : '' ?>>Yes</option>
                         </select>
                     </div>
-
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Warehouse:</label>
                         <select class="w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="ware_house_code">
@@ -1195,7 +1122,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             ?>
                         </select>
                     </div>
-
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
@@ -1205,7 +1131,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <option value="1" <?= ($backOrder == '1') ? 'selected' : '' ?>>Yes</option>
                         </select>
                     </div>
-
                     <div class="flex-1 backorder-field" style="display: none;">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Percentage:</label>
                         <div class="relative w-full">
@@ -1215,7 +1140,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">%</span>
                         </div>
                     </div>
-
                     <div class="flex-1 backorder-field" style="display: none;">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Days:</label>
                         <div class="relative w-full">
@@ -1225,7 +1149,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
                         </div>
                     </div>
-
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Lead Time:</label>
                         <div class="relative w-full">
@@ -1235,7 +1158,6 @@ $currentSize = $data['form2']['size'] ?? '';
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
                         </div>
                     </div>
-
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">In Stock Lead Time:</label>
                         <div class="relative w-full">
@@ -1261,7 +1183,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                         </div>
                     </div>
-
                     <div class="flex-1 sm:col-span-2 lg:col-span-2 flex items-start border border-[#eee] rounded bg-gray-50 p-1"> 
     
                         <div class="flex-1 pr-4 border-r border-[#ccc] flex flex-col justify-center h-[52px]"> 
@@ -1278,7 +1199,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                 </label>
                             </div>
                         </div>
-
                         <div class="flex-1 pl-4 flex flex-col justify-center h-[52px]"> 
                             <label class="block text-xs font-bold text-[#222] mb-[3px]">India Block:</label>
                             <div class="flex items-center gap-4">
@@ -1287,7 +1207,6 @@ $currentSize = $data['form2']['size'] ?? '';
                                     <input type="radio" name="india_block" value="Y" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'Y') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">Yes</span>
                                 </label>
-
                                 <label class="flex items-center cursor-pointer">
                                     <input type="radio" name="india_block" value="N" class="w-3.5 h-3.5 accent-[#666]" <?= ($in_val == 'N') ? 'checked' : '' ?>>
                                     <span class="ml-1.5 text-[12px] text-[#333]">No</span>
@@ -1314,7 +1233,6 @@ $currentSize = $data['form2']['size'] ?? '';
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                 Publish Product
             </button>
-
             <button type="submit" name="save_action" value="draft" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save and Draft
             </button>
@@ -1345,7 +1263,6 @@ $currentSize = $data['form2']['size'] ?? '';
         
     </div>
 </div>
-
 <div id="deleteConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[60]">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <h3 class="text-lg font-bold mb-2 text-gray-800">Remove Invoice?</h3>
@@ -1371,18 +1288,15 @@ $currentSize = $data['form2']['size'] ?? '';
         <h3 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Add New Material</h3>
         
         <input type="hidden" id="new_user_id" value="<?php echo $_SESSION['user']['id'] ?? 0; ?>">
-
         <div class="flex flex-col gap-3">
             <div>
                 <label class="block text-xs font-bold text-[#333] mb-1">Material Name:</label>
                 <input type="text" id="new_material_name" onkeyup="generateSlug(this.value)" class="w-full h-[34px] border border-[#ccc] rounded px-2.5 text-[13px] focus:outline-none focus:border-[#d97824]" placeholder="e.g. Cotton Fabric">
             </div>
-
             <div>
                 <label class="block text-xs font-bold text-[#333] mb-1">Material Code:</label>
                 <input type="text" id="new_material_slug" class="w-full h-[34px] border border-[#ccc] rounded px-2.5 text-[13px] bg-gray-50 focus:outline-none focus:border-[#d97824]" placeholder="e.g. cotton-fabric">
             </div>
-
             <div class="flex gap-3">
                 <div class="flex-1">
                     <label class="block text-xs font-bold text-[#333] mb-1">Active:</label>
@@ -1391,7 +1305,6 @@ $currentSize = $data['form2']['size'] ?? '';
                         <option value="0">No</option>
                     </select>
                 </div>
-
                 <div class="flex-1">
                     <label class="block text-xs font-bold text-[#333] mb-1">Display Order:</label>
                     <input type="number" id="new_display_order" class="w-full h-[34px] border border-[#ccc] rounded px-2.5 text-[13px] focus:outline-none focus:border-[#d97824]" placeholder="Loading...">
@@ -1426,14 +1339,11 @@ $currentSize = $data['form2']['size'] ?? '';
                 document.getElementById('new_display_order').value = data.next_order;
             })
             .catch(err => console.error("Error fetching order:", err));
-
         document.getElementById('new_material_name').focus();
     }
-
     function closeMaterialModal() {
         document.getElementById('materialModal').classList.add('hidden');
     }
-
     // 2. Helper: Generate Slug automatically
     function generateSlug(text) {
         const slug = text.toLowerCase()
@@ -1442,7 +1352,6 @@ $currentSize = $data['form2']['size'] ?? '';
             .replace(/\s+/g, '-');        // Replace spaces with -
         document.getElementById('new_material_slug').value = slug;
     }
-
     // 3. Save Function
     function saveNewMaterial() {
         const nameVal   = document.getElementById('new_material_name').value.trim();
@@ -1451,25 +1360,21 @@ $currentSize = $data['form2']['size'] ?? '';
         const orderVal  = document.getElementById('new_display_order').value;
         const userId    = document.getElementById('new_user_id').value;
         const errorMsg  = document.getElementById('material_error');
-
         if (!nameVal) {
             errorMsg.innerText = "Material name is required.";
             errorMsg.classList.remove('hidden');
             return;
         }
-
         const btn = event.target;
         const originalText = btn.innerText;
         btn.innerText = "Saving...";
         btn.disabled = true;
-
         const formData = new FormData();
         formData.append('material_name', nameVal);
         formData.append('material_slug', slugVal);
         formData.append('is_active', activeVal);
         formData.append('display_order', orderVal);
         formData.append('user_id', userId);
-
         fetch('<?php echo base_url("?page=inbounding&action=addMaterialAjax"); ?>', {
             method: 'POST',
             body: formData,
@@ -1506,13 +1411,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Track the item currently being dragged
     let draggedItem = null;
-
     // 1. DRAG START (Global Listener)
     document.addEventListener('dragstart', function(e) {
         // Only trigger if the element is one of our draggable items
         const item = e.target.closest('.draggable-item');
         if (!item) return;
-
         draggedItem = item;
         item.classList.add('dragging'); // Used for styling and logic
         item.style.opacity = '0.5';     // Visual feedback
@@ -1520,28 +1423,22 @@ document.addEventListener('DOMContentLoaded', function() {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', ''); // Required for Firefox
     });
-
     // 2. DRAG END (Cleanup)
     document.addEventListener('dragend', function(e) {
         const item = e.target.closest('.draggable-item');
         if (!item) return;
-
         item.classList.remove('dragging');
         item.style.opacity = '1';
         draggedItem = null;
     });
-
     // 3. DRAG OVER (The "Shuffle" Logic)
     document.addEventListener('dragover', function(e) {
         // If we aren't dragging a valid item, ignore
         if (!draggedItem) return;
-
         // Check if we are over a valid Drop Zone (The Grid)
         const container = e.target.closest('.photo-group-grid');
         if (!container) return;
-
         e.preventDefault(); // Necessary to allow dropping
-
         // Calculate where to place the item based on Mouse X position
         const afterElement = getDragAfterElement(container, e.clientX);
         
@@ -1552,7 +1449,6 @@ document.addEventListener('DOMContentLoaded', function() {
             container.insertBefore(draggedItem, afterElement);
         }
     });
-
     // 4. DROP (Save Data)
     document.addEventListener('drop', function(e) {
         e.preventDefault(); // Prevent browser default (opening file)
@@ -1568,7 +1464,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if(varInput) {
                 varInput.value = newVarId;
             }
-
             // B. Recalculate Sort Order for ALL grids
             // (We update all because moving an item changes the order in both Source and Target)
             document.querySelectorAll('.photo-group-grid').forEach(grid => {
@@ -1576,12 +1471,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
-
     // --- HELPER: Calculate Position based on X Axis ---
     function getDragAfterElement(container, x) {
         // Get all items in this grid EXCEPT the one we are dragging
         const draggableElements = [...container.querySelectorAll('.draggable-item:not(.dragging)')];
-
         return draggableElements.reduce((closest, child) => {
             const box = child.getBoundingClientRect();
             
@@ -1590,7 +1483,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Distance between cursor and center
             const offset = x - boxCenter;
-
             // We are looking for the element where the cursor is to the LEFT of its center
             // (negative offset) but closest to 0 (smallest negative number)
             if (offset < 0 && offset > closest.offset) {
@@ -1600,7 +1492,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
-
     // --- HELPER: Update hidden input values (1, 2, 3...) ---
     function updateOrderInputs(container) {
         if(!container) return;
@@ -1625,7 +1516,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectElement = document.getElementById('item_code_select');
     const existingCode  = document.getElementById('existing_item_code').value;
     const originalStatus = document.getElementById('original_variant_status').value;
-
     // --- INITIALIZE TOM SELECT FOR PARENT ITEM ---
     let tomSelectInstance = new TomSelect("#item_code_select", {
         valueField: 'item_code',
@@ -1654,7 +1544,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(err => { console.error("Error loading items:", err); callback(); });
         }
     });
-
     // --- VARIANT TOGGLE ---
     function toggleVariantFields(val) {
         if (val === 'Y') {
@@ -1675,14 +1564,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-
     variantSelect.addEventListener('change', function() {
         toggleVariantFields(this.value);
         if(this.value === 'N') {
             tomSelectInstance.clear(); 
         }
     });
-
     // --- FORM VALIDATION ---
     formElement.addEventListener('submit', function(e) {
         // 1. Auto-Gen Cleanup
@@ -1702,7 +1589,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-
     // --- INITIAL LOAD CHECK ---
     if(variantSelect.value) {
         toggleVariantFields(variantSelect.value);
@@ -1712,7 +1598,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const commonConfig = {
@@ -1736,7 +1621,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 </script>
-
 <script>
     // 1. Preview Function (Updates Image & Download Link)
     function previewInvoice(input) {
@@ -1766,7 +1650,6 @@ document.addEventListener('DOMContentLoaded', function() {
             openImagePopup(imgSrc); // Reuse your global function
         }
     }
-
     // 3. Trigger Delete Popup
     function openDeletePopup(event) {
         event.stopPropagation(); 
@@ -1776,7 +1659,6 @@ document.addEventListener('DOMContentLoaded', function() {
         input.value = '';
         input.focus();
     }
-
     // 4. Confirm Delete Action
     function confirmDeleteInvoice() {
         const inputVal = document.getElementById('deleteConfirmationInput').value;
@@ -1796,59 +1678,57 @@ document.addEventListener('DOMContentLoaded', function() {
             alert("Please type 'Delete' exactly to confirm.");
         }
     }
-
     // 5. Close Delete Popup
     function closeDeletePopup() {
         document.getElementById('deleteConfirmPopup').classList.add('hidden');
     }
 </script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // --- 1. DATA FROM PHP ---
-    const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
+    // --- 1. DATA: Safe Import from PHP ---
+    const searchDataMap = <?php echo json_encode($categoriesByParent1); ?>;
     
-    // --- 2. PRE-SELECTION DATA ---
-    const rawCatId = "<?php echo $selected_cat_id; ?>"; 
-    const preSelected = {
-        groupVal: "<?php echo $selected_group_val; ?>",
-        cat:    new Set(rawCatId ? rawCatId.split(',') : []), 
-        sub:    new Set(<?php echo json_encode($selected_sub); ?>.map(String)), 
-        subsub: new Set(<?php echo json_encode($selected_sub_sub); ?>.map(String))
+    // --- 2. PRE-SELECTION VALUES ---
+    const searchPreSelected = {
+        groupVal: "<?php echo $search_group_val; ?>",
+        cat:    new Set(<?php echo json_encode(array_values($search_sel_cat)); ?>.map(String)), 
+        sub:    new Set(<?php echo json_encode(array_values($search_sel_sub)); ?>.map(String)), 
+        subsub: new Set(<?php echo json_encode(array_values($search_sel_sub_sub)); ?>.map(String))
     };
 
     // --- 3. DOM ELEMENTS ---
-    const categoryContainer = document.getElementById('category_container');
-    const subCatContainer = document.getElementById('sub_category_container');
-    const subSubCatContainer = document.getElementById('sub_sub_category_container');
-    
-    const groupSelectEl = document.getElementById("group_select");
-    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
-    
-    // Init Group Dropdown
-    let groupTs = null;
-    if(groupSelectEl) {
-        if(groupSelectEl.tomselect) groupTs = groupSelectEl.tomselect;
-        else groupTs = new TomSelect(groupSelectEl, config);
+    const sGroupSelectEl = document.getElementById("search_group_select");
+    const sCatContainer = document.getElementById('search_category_container');
+    const sSubCatContainer = document.getElementById('search_sub_category_container');
+    const sSubSubCatContainer = document.getElementById('search_sub_sub_category_container');
 
-        groupTs.on('change', function(groupValue) {
-            preSelected.cat.clear(); 
-            preSelected.sub.clear(); 
-            preSelected.subsub.clear();        
-            updateCategoryList(groupValue);
+    // --- 4. INITIALIZE GROUP DROPDOWN (TomSelect) ---
+    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
+    let sGroupTs = null;
+
+    if(sGroupSelectEl) {
+        // Reuse instance if exists, otherwise create
+        if (sGroupSelectEl.tomselect) sGroupTs = sGroupSelectEl.tomselect;
+        else sGroupTs = new TomSelect(sGroupSelectEl, config);
+
+        sGroupTs.on('change', function(groupValue) {
+            // Clear downstream selections on group change
+            searchPreSelected.cat.clear(); 
+            searchPreSelected.sub.clear(); 
+            searchPreSelected.subsub.clear();        
+            updateSearchCatList(groupValue);
         });
     }
 
-    // --- HELPER: Create Checkbox ---
-    function createCheckboxItem(item, inputName, selectedSet, onChangeCallback) {
+    // --- HELPER: Create HTML for a Checkbox Item ---
+    function createSearchCheckbox(item, inputName, selectedSet, onChangeCallback) {
         const div = document.createElement('div');
-        // Add specific class for easy selection
-        div.className = 'checkbox-item pl-2 flex items-center p-1 hover:bg-gray-50'; 
+        div.className = 'checkbox-item pl-2 flex items-center p-1 hover:bg-gray-50'; // Styling
         
         const valToCheck = String(item.store_val);
         const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
-        
+
         div.innerHTML = `
             <input type="checkbox" 
                    id="${inputName}_${item.id}" 
@@ -1865,86 +1745,97 @@ document.addEventListener('DOMContentLoaded', function() {
         return div;
     }
 
-    // --- 4. UPDATE LIST FUNCTIONS ---
+    // --- 5. RENDER FUNCTIONS ---
 
-    function updateCategoryList(rawGroupValue) {
-        subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
-        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+    // A. Render Category List (Column 1)
+    function updateSearchCatList(rawGroupValue) {
+        // Reset downstream containers
+        sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+        sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
 
         if(!rawGroupValue) {
-             categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
+             sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
              return;
         }
 
         const lookupKey = String(rawGroupValue).trim(); 
         
-        if(!categoriesByParent[lookupKey]) {
-            categoryContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
+        if(!searchDataMap[lookupKey]) {
+            sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
             return;
         }
 
-        const items = categoriesByParent[lookupKey];
-        categoryContainer.innerHTML = '';
+        const items = searchDataMap[lookupKey];
+        sCatContainer.innerHTML = '';
         const seenIds = new Set();
+
         items.forEach(item => {
             if(!seenIds.has(item.id)){
                 seenIds.add(item.id);
-                categoryContainer.appendChild(createCheckboxItem(item, 'category_code', preSelected.cat, handleCategoryChange));
+                sCatContainer.appendChild(createSearchCheckbox(item, 'search_cat', searchPreSelected.cat, handleSearchCatChange));
             }
         });
         
-        triggerSearch('main_cat_search');
-        if(preSelected.cat.size > 0) handleCategoryChange();
+        // Refresh Search Logic for Col 1
+        triggerSearch('search_cat_search');
+        
+        // If we had pre-selected items, trigger next level load
+        if(searchPreSelected.cat.size > 0) handleSearchCatChange();
     }
 
-    function handleCategoryChange() {
-        const checkedInputs = Array.from(categoryContainer.querySelectorAll('input[type="checkbox"]:checked'));
-        subCatContainer.innerHTML = ''; 
-        subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+    // B. Render Sub-Category List (Column 2) - WITH PARENT HEADERS
+    function handleSearchCatChange() {
+        const checkedInputs = Array.from(sCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        sSubCatContainer.innerHTML = ''; 
+        sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
 
         if(checkedInputs.length === 0) {
-            subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+            sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
             return;
         }
 
-        const groupVal = groupTs ? groupTs.getValue() : groupSelectEl.value;
+        const groupVal = sGroupTs ? sGroupTs.getValue() : sGroupSelectEl.value;
         const groupKey = String(groupVal).trim(); 
-
         let hasAnyOptions = false;
 
         checkedInputs.forEach(input => {
             const catStoreVal = input.value; 
-            const parentName = input.nextElementSibling.innerText;
+            const parentName = input.nextElementSibling.innerText; // Get Parent Name
             const lookupKey = catStoreVal + "|" + groupKey;
-            const children = categoriesByParent[lookupKey];
 
+            const children = searchDataMap[lookupKey];
+            
             if (children && children.length > 0) {
                 hasAnyOptions = true;
+                
+                // >>> HEADER INJECTION <<<
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName; 
-                subCatContainer.appendChild(header);
+                sSubCatContainer.appendChild(header);
+                // >>> END HEADER <<<
 
                 children.forEach(item => {
-                    const el = createCheckboxItem(item, 'sub_category_code', preSelected.sub, handleSubCategoryChange);
+                    const el = createSearchCheckbox(item, 'search_sub', searchPreSelected.sub, handleSearchSubCatChange);
                     el.querySelector('input').setAttribute('data-parent-path', lookupKey);
-                    subCatContainer.appendChild(el);
+                    sSubCatContainer.appendChild(el);
                 });
             }
         });
 
-        if(!hasAnyOptions) subCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
+        if(!hasAnyOptions) sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
         
-        triggerSearch('sub_cat_search');
-        if(preSelected.sub.size > 0) handleSubCategoryChange();
+        triggerSearch('search_sub_cat_search');
+        if(searchPreSelected.sub.size > 0) handleSearchSubCatChange();
     }
 
-    function handleSubCategoryChange() {
-        const checkedInputs = Array.from(subCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
-        subSubCatContainer.innerHTML = ''; 
-
+    // C. Render Sub-Sub-Category List (Column 3) - WITH PARENT HEADERS
+    function handleSearchSubCatChange() {
+        const checkedInputs = Array.from(sSubCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        sSubSubCatContainer.innerHTML = ''; 
+        
         if(checkedInputs.length === 0) {
-            subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
+            sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
             return;
         }
 
@@ -1953,32 +1844,37 @@ document.addEventListener('DOMContentLoaded', function() {
         checkedInputs.forEach(input => {
             const subCatStoreVal = input.value;
             const parentPath = input.getAttribute('data-parent-path'); 
-            const parentName = input.nextElementSibling.innerText;
+            const parentName = input.nextElementSibling.innerText; // Get Parent Name
             const lookupKey = subCatStoreVal + "|" + parentPath;
-            const children = categoriesByParent[lookupKey];
-
+            
+            const children = searchDataMap[lookupKey];
+            
             if (children && children.length > 0) {
                 hasAnyOptions = true;
+                
+                // >>> HEADER INJECTION <<<
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName;
-                subSubCatContainer.appendChild(header);
+                sSubSubCatContainer.appendChild(header);
+                // >>> END HEADER <<<
 
                 children.forEach(item => {
-                    subSubCatContainer.appendChild(createCheckboxItem(item, 'sub_sub_category_code', preSelected.subsub, null));
+                    sSubSubCatContainer.appendChild(createSearchCheckbox(item, 'search_sub_sub', searchPreSelected.subsub, null));
                 });
             }
         });
 
-        if(!hasAnyOptions) subSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
-        triggerSearch('sub_sub_cat_search');
+        if(!hasAnyOptions) sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
+        triggerSearch('search_sub_sub_cat_search');
     }
 
-    // --- 5. SEARCH LOGIC (FIXED) ---
-    function enableMainSearch(inputId, containerId) {
+    // --- 6. SMART SEARCH LOGIC (Filters + Keeps Headers Visible) ---
+    function enableSearchLogic(inputId, containerId) {
         const input = document.getElementById(inputId);
         const container = document.getElementById(containerId);
         
+        // Safety Check: Only run if elements exist
         if(input && container) {
             input.addEventListener('keyup', function() {
                 const filter = this.value.toLowerCase().trim();
@@ -1988,38 +1884,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 let headerMatches = false;
                 let visibleCountInGroup = 0;
 
-                // 1. Reset if empty
+                // Reset: If search is empty, show everything
                 if(filter === "") {
                     allElements.forEach(el => el.style.display = ''); 
                     return;
                 }
 
-                // 2. Iterate elements
+                // Iterate over all items in the list
                 for (let i = 0; i < allElements.length; i++) {
                     const el = allElements[i];
 
-                    // --- IS HEADER ---
+                    // CASE 1: It's a Header (Parent Name)
                     if (el.classList.contains('group-header')) {
-                        // Close previous group logic
+                        // If we are moving to a NEW header, decide if the PREVIOUS header should be shown
                         if (currentHeader) {
                             const showHeader = headerMatches || (visibleCountInGroup > 0);
                             currentHeader.style.display = showHeader ? 'block' : 'none';
                         }
-
-                        // Start New Group
+                        
+                        // Start tracking this new group
                         currentHeader = el;
+                        // Does the Header itself match the search? (e.g. searching "Mens" in "Mens Wear")
                         headerMatches = el.innerText.toLowerCase().includes(filter);
                         visibleCountInGroup = 0;
-                        
-                        // Temporarily hide, will decide at next header or end of loop
-                        el.style.display = 'none'; 
+                        el.style.display = 'none'; // Temporarily hide, will decide at next header/end
                     } 
-                    // --- IS CHECKBOX ITEM ---
+                    // CASE 2: It's a Checkbox Item
                     else if (el.classList.contains('checkbox-item')) {
                         const label = el.querySelector('label').innerText.toLowerCase();
                         
-                        // IMPORTANT: We check if THIS item matches OR if the Header matched.
-                        // We do NOT use a sticky flag from previous sibling items.
+                        // Show item IF: The header matched OR The item itself matches
                         if (headerMatches || label.includes(filter)) {
                             el.style.display = 'flex';
                             visibleCountInGroup++;
@@ -2029,12 +1923,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
-                // Handle the last group after loop finishes
+                // Handle the very last group after loop finishes
                 if (currentHeader) {
                     const showHeader = headerMatches || (visibleCountInGroup > 0);
                     currentHeader.style.display = showHeader ? 'block' : 'none';
                 }
             });
+        } else {
+            console.warn("Search Logic: Input or Container not found for ID:", inputId);
         }
     }
 
@@ -2043,18 +1939,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if(el && el.value) el.dispatchEvent(new Event('keyup'));
     }
 
-    // --- 6. INITIALIZE ---
-    if (preSelected.groupVal) {
-        updateCategoryList(preSelected.groupVal);
+    // --- 7. STARTUP ---
+    if (searchPreSelected.groupVal) {
+        updateSearchCatList(searchPreSelected.groupVal);
     }
 
     // Enable Search on all 3 columns
-    enableMainSearch('main_cat_search', 'category_container');
-    enableMainSearch('sub_cat_search', 'sub_category_container');
-    enableMainSearch('sub_sub_cat_search', 'sub_sub_category_container');
+    enableSearchLogic('search_cat_search', 'search_category_container');
+    enableSearchLogic('search_sub_cat_search', 'search_sub_category_container');
+    enableSearchLogic('search_sub_sub_cat_search', 'search_sub_sub_category_container');
 });
 </script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Select Inputs
@@ -2069,10 +1964,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const detailsElement = document.getElementById('courier_calc_details');
     // New Element for Volumetric Weight
     const volDisplayElement = document.getElementById('volumetric_weight_display');
-
     function calculateCourierPrice() {
         if (!heightInput || !widthInput || !depthInput || !weightInput) return;
-
         // 1. Get Raw Values
         let h = parseFloat(heightInput.value) || 0;
         let w = parseFloat(widthInput.value) || 0;
@@ -2089,33 +1982,26 @@ document.addEventListener('DOMContentLoaded', function() {
              w = w / 2.54;
              d = d / 2.54;
         // }
-
         // --- STEP B: ADD BUFFER (4 inches) ---
         let h_in = h;
         let w_in = w;
         let d_in = d;
-
         // --- STEP C: CALCULATE VOLUMETRIC WEIGHT ---
         // Formula: (L x W x H in inches) / 5000
         const volWt = (h_in * w_in * d_in) / 5000;
-
         // --- STEP D: CALCULATE ADJUSTED ACTUAL WEIGHT (x 1.5) ---
         const adjustedActualWt = actualWt * 1.5;
-
         // --- STEP E: DETERMINE CHARGEABLE WEIGHT ---
         const chargeableWt = Math.max(volWt, adjustedActualWt);
-
         // --- STEP F: CALCULATE PRICE ---
         // Price: ₹700 per KG
         const price = chargeableWt * 700;
-
         // --- UPDATE UI ---
         
         // 1. Update Volumetric Weight (Compulsory)
         if (volDisplayElement) {
             volDisplayElement.innerText = volWt.toFixed(3) + " kg";
         }
-
         // 2. Update Price
         if (displayElement) {
             displayElement.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -2127,7 +2013,6 @@ document.addEventListener('DOMContentLoaded', function() {
             detailsElement.innerText = `Chargeable: ${chargeableWt.toFixed(3)} kg (${usedType})`;
         }
     }
-
     // Attach Listeners
     const inputs = [heightInput, widthInput, depthInput, weightInput, dimUnitSelect];
     inputs.forEach(input => {
@@ -2136,12 +2021,10 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('change', calculateCourierPrice);
         }
     });
-
     // Run immediately on load
     calculateCourierPrice();
 });
 </script>
-
 <script>
     function openImagePopup(imageUrl) {
         popupImage.src = imageUrl;
@@ -2181,7 +2064,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const select = document.getElementById('back_order_select');
         const fields = document.querySelectorAll('.backorder-field');
         const inputs = document.querySelectorAll('.backorder-field input'); // Select the input fields
-
         if (select && select.value === '1') {
             fields.forEach(el => el.style.display = 'block');
         } else {
@@ -2195,7 +2077,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('DOMContentLoaded', toggleBackOrderFields);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <script>
     // 1. Open Popup
     function openPublishPopup() {
@@ -2206,7 +2087,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error("Popup element 'publishConfirmPopup' not found!");
         }
     }
-
     // 2. Close Popup
     function closePublishPopup() {
         const popup = document.getElementById('publishConfirmPopup');
@@ -2214,25 +2094,21 @@ document.addEventListener('DOMContentLoaded', function() {
             popup.classList.add('hidden');
         }
     }
-
     // 3. Trigger Controller Function
     function triggerPublishController() {
         // Get the current ID
         const urlParams = new URLSearchParams(window.location.search);
         const recordId = urlParams.get('id');
-
         // CHECK: Is the library loaded?
         if (typeof Swal === 'undefined') {
             alert("Error: SweetAlert2 library not loaded. Please check Fix 1.");
             return;
         }
-
         if (!recordId) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Record ID not found in URL.' });
             closePublishPopup();
             return;
         }
-
         // Visual Feedback
         const confirmBtn = document.querySelector('#publishConfirmPopup button.confirm-btn') || document.querySelector('#publishConfirmPopup button:last-child');
         let originalText = "Yes, Publish";
@@ -2242,9 +2118,7 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmBtn.innerText = "Processing...";
             confirmBtn.disabled = true;
         }
-
         const targetUrl = `index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`;
-
         fetch(targetUrl)
         .then(response => {
             if (!response.ok) throw new Error('Network error: ' + response.status);
@@ -2266,7 +2140,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.status === 'error') throw new Error(data.message);
             
             closePublishPopup();
-
             // SUCCESS POPUP
             Swal.fire({
                 title: 'Published!',
@@ -2296,23 +2169,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 </script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let newVariationCounter = 0;
     const container = document.getElementById('variations-container');
     const template = document.getElementById('variation-template');
-
     // 1. ADD NEW VARIATION FUNCTION
     window.addNewVariation = function() { 
         const newId = 'new_' + newVariationCounter;
         newVariationCounter++;
-
         const clone = template.content.cloneNode(true);
         updateNames(clone, newId);
         container.appendChild(clone);
     };
-
     // 2. EVENT DELEGATION
     container.addEventListener('click', function(e) {
         
@@ -2323,7 +2192,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 card.remove();
             }
         }
-
         // --- CLONE LOGIC ---
         if (e.target.closest('.clone-var-btn')) {
             const sourceCard = e.target.closest('.variation-card');
@@ -2331,7 +2199,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Generate new ID
             const newId = 'new_' + newVariationCounter;
             newVariationCounter++;
-
             // Create new card from template
             const cloneContent = template.content.cloneNode(true);
             const newCard = cloneContent.querySelector('.variation-card');
@@ -2341,20 +2208,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 const el = sourceCard.querySelector(`[name$="[${suffix}]"]`);
                 return el ? el.value : '';
             };
-
             // Update names in the new card first
             updateNames(newCard, newId);
-
             // Set values
             const fields = ['height', 'width', 'depth', 'weight', 'size', 'color', 
                             'quantity_received', 'cp', 'price_india', 'price_india_mrp', 'usd_price', 'hsn_code', 
                             'gst_rate', 'ware_house_code', 'store_location'];
-
             fields.forEach(field => {
                 const el = newCard.querySelector(`[name$="[${field}]"]`);
                 if(el) el.value = getValue(field);
             });
-
             // ---------------------------------------------------------
             // FIX: IMAGE CLONING LOGIC
             // ---------------------------------------------------------
@@ -2367,12 +2230,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const cloneImg = newCard.querySelector('.preview-img');
             const clonePlaceholder = newCard.querySelector('.placeholder-icon');
             const cloneHiddenOldPhoto = newCard.querySelector('input[name$="[old_photo]"]');
-
             // 3. Check visibility (Check both class AND inline display style)
             const isSourceVisible = sourceImg && 
                                    !sourceImg.classList.contains('hidden') && 
                                    sourceImg.style.display !== 'none';
-
             if (isSourceVisible) {
                 // Copy the visual source (Base64 or URL)
                 cloneImg.src = sourceImg.src;
@@ -2384,7 +2245,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Hide Placeholder
                 clonePlaceholder.style.display = 'none';
                 clonePlaceholder.classList.add('hidden');
-
                 // Copy database path if it exists
                 if (sourceHiddenOldPhoto && cloneHiddenOldPhoto) {
                     cloneHiddenOldPhoto.value = sourceHiddenOldPhoto.value;
@@ -2399,7 +2259,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // ---------------------------------------------------------
             // END FIX
             // ---------------------------------------------------------
-
             container.appendChild(newCard);
             
             // Scroll to new item
@@ -2411,7 +2270,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-
     // 3. IMAGE PREVIEW LOGIC (For File Input Changes)
     container.addEventListener('change', function(e) {
         if(e.target.classList.contains('variation-file-input')) {
@@ -2419,7 +2277,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const label = e.target.closest('label');
             const preview = label.querySelector('.preview-img');
             const placeholder = label.querySelector('.placeholder-icon');
-
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(evt) {
@@ -2436,7 +2293,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-
     function updateNames(node, newId) {
         const inputs = node.querySelectorAll('input, select');
         inputs.forEach(input => {
@@ -2454,7 +2310,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // 1. Unified Calculator Function
     function updateCardPrice(card) {
         if (!card) return;
-
         // Find inputs within this specific card (or main container)
         // We look for specific classes: .calc-h, .calc-w, .calc-d, .calc-wt
         // NOTE: For the MAIN Item (top of page), you must add these classes to the inputs as well, 
@@ -2464,7 +2319,6 @@ document.addEventListener('DOMContentLoaded', function() {
         let wInput = card.querySelector('.calc-w') || document.getElementById('dim_width');
         let dInput = card.querySelector('.calc-d') || document.getElementById('dim_depth');
         let wtInput = card.querySelector('.calc-wt') || document.getElementById('dim_weight');
-
         // Output elements
         let volDisplay = card.querySelector('.calc-vol-display') || document.getElementById('volumetric_weight_display');
         let priceDisplay = card.querySelector('.calc-price-display') || document.getElementById('courier_price_display');
@@ -2478,56 +2332,40 @@ document.addEventListener('DOMContentLoaded', function() {
              volDisplay = card.querySelector('.calc-vol-display');
              priceDisplay = card.querySelector('.calc-price-display');
         }
-
         if (!hInput || !wInput || !dInput || !wtInput) return;
-
         // Get Values
         let h = parseFloat(hInput.value) || 0;
         let w = parseFloat(wInput.value) || 0;
         let d = parseFloat(dInput.value) || 0;
         let actualWt = parseFloat(wtInput.value) || 0;
-
         // Logic: Add 4 inches buffer + Volumetric Divisor 5000
-
          h = h / 2.54;
          w = w / 2.54;
          d = d / 2.54;
         let h_in = h + 4;
         let w_in = w + 4;
         let d_in = d + 4;
-
         // Volumetric Weight
         const volWt = (h_in * w_in * d_in) / 5000;
-
         // Chargeable Weight = Max(Volumetric, Actual * 1.5)
         const adjustedActualWt = actualWt * 1.5;
         const chargeableWt = Math.max(volWt, adjustedActualWt);
-
         // Price = Chargeable * 700
         const price = chargeableWt * 700;
-
         // Update UI
         if (volDisplay) volDisplay.innerText = volWt.toFixed(3) + " kg";
         if (priceDisplay) priceDisplay.innerText = "₹ " + price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-
-    // 2. Event Delegation for Inputs
-    // We attach listener to the whole document/body to catch events from dynamic elements
     document.body.addEventListener('input', function(e) {
         if (e.target.matches('.calc-h, .calc-w, .calc-d, .calc-wt') || 
             e.target.id === 'dim_height' || 
             e.target.id === 'dim_width' || 
             e.target.id === 'dim_depth' || 
             e.target.id === 'dim_weight') {
-            
-            // Find the closest container (Variation Card OR Main Item Container)
-            // Assuming Main Item container has class 'bg-gray-50' or similar wrapper
             const card = e.target.closest('.calculation-card') || e.target.closest('.bg-gray-50');
             updateCardPrice(card);
         }
     });
-
-    // 3. Initialize all existing cards on load
     const allCards = document.querySelectorAll('.calculation-card, .bg-gray-50');
     allCards.forEach(card => updateCardPrice(card));
 });
@@ -2536,7 +2374,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('DOMContentLoaded', function() {
         const mainInput = document.getElementById('product_photo_input');
         const mainPreview = document.getElementById('main_photo_preview');
-
         if(mainInput) {
             mainInput.addEventListener('change', function(e) {
                 if (this.files && this.files[0]) {
@@ -2557,16 +2394,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const mainPreview = document.getElementById('main_photo_preview');
         const mainPlaceholder = document.getElementById('main_photo_placeholder');
         const mainChangeBtn = document.getElementById('main_photo_change_btn');
-
         if(mainInput) {
             mainInput.addEventListener('change', function(e) {
                 if (this.files && this.files[0]) {
                     var reader = new FileReader();
                     reader.onload = function(evt) {
-                        // Update Source
                         mainPreview.src = evt.target.result;
-                        
-                        // Show Image, Hide Placeholder, Show Button
                         mainPreview.style.display = 'block';
                         mainPlaceholder.style.display = 'none';
                         mainChangeBtn.style.display = 'block';
@@ -2579,24 +2412,14 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Use Event Delegation to handle Main Product, Existing Variations, and New Variations
         document.body.addEventListener('input', function(e) {
-            
-            // 1. Check if the modified input is "Price India"
-            // Covers: name="price_india" AND name="variations[x][price_india]"
             if (e.target.name && e.target.name.includes('price_india') && !e.target.name.includes('mrp')) {
                 
                 const inrInput = e.target;
                 const inrValue = parseFloat(inrInput.value);
-                
-                // 2. Find the container (Grid or Card)
                 const container = inrInput.closest('.grid') || inrInput.closest('.calculation-card');
-
                 if (container) {
-                    // 3. Find the MRP Price input WITHIN this specific container
-                    // CHANGED: Looking for 'price_india_mrp' instead of 'amazon_price'
                     const mrpInput = container.querySelector('input[name*="price_india_mrp"]');
-
                     if (mrpInput) {
                         if (!isNaN(inrValue)) {
                             // Calculate 20% increase
@@ -2615,55 +2438,38 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
-    // 1. DATA FROM PHP
     const sizeOptionsObj = <?php echo json_encode($sizeOptions); ?>;
-    
-    // Generate Options HTML once
     let sizeOptionsHTML = '<option value="">Select Size</option>';
     for (const [key, value] of Object.entries(sizeOptionsObj)) {
         sizeOptionsHTML += `<option value="${key}">${value}</option>`;
     }
-
     // 2. CHECK IF CATEGORY IS CLOTHING
     function checkIsClothing() {
         let isClothing = false;
-
         // Check Group Dropdown Text
         const groupSelect = document.getElementById('group_select');
         if (groupSelect && groupSelect.selectedIndex > 0) {
             const groupText = groupSelect.options[groupSelect.selectedIndex].text.toLowerCase();
             if (groupText.includes('clothing') || groupText.includes('textile')) isClothing = true;
         }
-
-        // Check Selected Checkboxes (Category, Sub, SubSub)
-        // We look for any checked box with "clothing" or "textile" in its label
         const checkedBoxes = document.querySelectorAll('.checkbox-list-container input[type="checkbox"]:checked');
         checkedBoxes.forEach(cb => {
             const label = cb.nextElementSibling ? cb.nextElementSibling.innerText.toLowerCase() : '';
             if (label.includes('clothing') || label.includes('textile')) isClothing = true;
         });
-
         return isClothing;
     }
-
-    // 3. TOGGLE FUNCTION
     function toggleAllSizeFields() {
         const isClothing = checkIsClothing();
-        
-        // Find ALL size inputs (Main + Variations) using the class we added in PHP
         const allSizeInputs = document.querySelectorAll('.size-input-field');
-
         allSizeInputs.forEach(field => {
             const parent = field.parentElement;
             const currentTag = field.tagName; // 'SELECT' or 'INPUT'
             const currentValue = field.value;
             const currentName = field.name;
-
             // Logic to prevent unnecessary swapping
             if (isClothing && currentTag === 'SELECT') return;
             if (!isClothing && currentTag === 'INPUT') return;
-
             // Create New Element
             let newEl;
             if (isClothing) {
@@ -2676,40 +2482,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 newEl.type = 'text';
                 newEl.value = currentValue; // Keep text value
             }
-
             // Copy Attributes & Classes
             newEl.name = currentName;
             newEl.className = field.className; // Keeps styling
-
             // Swap
             field.remove();
             parent.appendChild(newEl);
         });
     }
-
-    // 4. LISTENERS
-    // Listen to Group Change
     const groupSelect = document.getElementById('group_select');
     if(groupSelect) {
         groupSelect.addEventListener('change', toggleAllSizeFields); // Uses TomSelect change event if native
     }
-    // Since you use TomSelect for group, we hook into it if accessible, 
-    // but the native select usually updates hiddenly. 
-    // If TomSelect hides the native select, we need to listen to TomSelect's event.
     if(document.getElementById('group_select').tomselect) {
         document.getElementById('group_select').tomselect.on('change', toggleAllSizeFields);
     }
-
     // Listen to Checkbox Changes (Delegation for dynamic lists)
     document.body.addEventListener('change', function(e) {
         if (e.target.type === 'checkbox' && e.target.closest('.checkbox-list-container')) {
             toggleAllSizeFields();
         }
     });
-
-    // 5. HOOK INTO "ADD NEW VARIATION"
-    // We need to override or extend the existing addNewVariation function 
-    // to ensure new cards get the correct input type immediately.
     const originalAddVar = window.addNewVariation;
     window.addNewVariation = function() {
         // Run original function
@@ -2722,7 +2515,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
     // --- FIX: RE-INJECT DATA FROM PHP SO THIS SCRIPT CAN SEE IT ---
     const categoriesByParent = <?php echo json_encode($categoriesByParent1); ?>;
     
@@ -2733,19 +2525,16 @@ document.addEventListener('DOMContentLoaded', function() {
         sub:    new Set(<?php echo json_encode(array_values($search_sel_sub)); ?>.map(String)), 
         subsub: new Set(<?php echo json_encode(array_values($search_sel_sub_sub)); ?>.map(String))
     };
-
     // 2. DOM Elements
     const sGroupSelectEl = document.getElementById("search_group_select");
     const sCatContainer = document.getElementById('search_category_container');
     const sSubCatContainer = document.getElementById('search_sub_category_container');
     const sSubSubCatContainer = document.getElementById('search_sub_sub_category_container');
-
     // 3. Init TomSelect for Search Group
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     let sGroupTs = null;
     if(sGroupSelectEl) {
         sGroupTs = new TomSelect(sGroupSelectEl, config);
-        
         // --- EVENT LISTENER FOR TOM SELECT ---
         sGroupTs.on('change', function(groupValue) {
             searchPreSelected.cat.clear(); 
@@ -2754,15 +2543,12 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSearchCatList(groupValue);
         });
     }
-
     // --- HELPER: Create Checkbox ---
     function createSearchCheckbox(item, inputName, selectedSet, onChangeCallback) {
         const div = document.createElement('div');
         div.className = 'checkbox-item pl-2'; 
-        
         const valToCheck = String(item.store_val);
         const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
-        
         div.innerHTML = `
             <input type="checkbox" 
                    id="${inputName}_${item.id}" 
@@ -2777,24 +2563,20 @@ document.addEventListener('DOMContentLoaded', function() {
         checkbox.addEventListener('change', () => { if(onChangeCallback) onChangeCallback(); });
         return div;
     }
-
     // --- 1. UPDATE SEARCH CATEGORY LIST ---
     function updateSearchCatList(rawGroupValue) {
         sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
         sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
-
         if(!rawGroupValue) {
              sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
              return;
         }
-
         const lookupKey = String(rawGroupValue).trim(); 
         
         if(!categoriesByParent[lookupKey]) {
             sCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
             return;
         }
-
         const items = categoriesByParent[lookupKey];
         sCatContainer.innerHTML = '';
         const seenIds = new Set();
@@ -2807,37 +2589,29 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if(searchPreSelected.cat.size > 0) handleSearchCatChange();
     }
-
     // --- 2. UPDATE SEARCH SUB CATEGORY LIST ---
     function handleSearchCatChange() {
         const checkedInputs = Array.from(sCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
         sSubCatContainer.innerHTML = ''; 
         sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
-
         if(checkedInputs.length === 0) {
             sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
             return;
         }
-
         const groupVal = sGroupTs ? sGroupTs.getValue() : sGroupSelectEl.value;
         const groupKey = String(groupVal).trim(); 
-
         let hasAnyOptions = false;
-
         checkedInputs.forEach(input => {
             const catStoreVal = input.value; 
             const parentName = input.nextElementSibling.innerText;
             const lookupKey = catStoreVal + "|" + groupKey;
-            
             const children = categoriesByParent[lookupKey];
-
             if (children && children.length > 0) {
                 hasAnyOptions = true;
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName; 
                 sSubCatContainer.appendChild(header);
-
                 children.forEach(item => {
                     const el = createSearchCheckbox(item, 'search_sub', searchPreSelected.sub, handleSearchSubCatChange);
                     el.querySelector('input').setAttribute('data-parent-path', lookupKey);
@@ -2845,23 +2619,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
-
         if(!hasAnyOptions) sSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
         else if(searchPreSelected.sub.size > 0) handleSearchSubCatChange();
     }
-
     // --- 3. UPDATE SEARCH SUB SUB CATEGORY LIST ---
     function handleSearchSubCatChange() {
         const checkedInputs = Array.from(sSubCatContainer.querySelectorAll('input[type="checkbox"]:checked'));
         sSubSubCatContainer.innerHTML = ''; 
-
         if(checkedInputs.length === 0) {
             sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
             return;
         }
-
         let hasAnyOptions = false;
-
         checkedInputs.forEach(input => {
             const subCatStoreVal = input.value;
             const parentPath = input.getAttribute('data-parent-path'); 
@@ -2869,23 +2638,19 @@ document.addEventListener('DOMContentLoaded', function() {
             const lookupKey = subCatStoreVal + "|" + parentPath;
             
             const children = categoriesByParent[lookupKey];
-
             if (children && children.length > 0) {
                 hasAnyOptions = true;
                 const header = document.createElement('div');
                 header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
                 header.innerText = parentName;
                 sSubSubCatContainer.appendChild(header);
-
                 children.forEach(item => {
                     sSubSubCatContainer.appendChild(createSearchCheckbox(item, 'search_sub_sub', searchPreSelected.subsub, null));
                 });
             }
         });
-
         if(!hasAnyOptions) sSubSubCatContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
     }
-
     // --- SEARCH FILTER ---
     function enableSearchFilter(inputId, containerId) {
         const input = document.getElementById(inputId);
@@ -2904,22 +2669,18 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-
     // --- INITIAL LOAD ---
     if (searchPreSelected.groupVal) {
         updateSearchCatList(searchPreSelected.groupVal);
     }
-
     enableSearchFilter('search_sub_cat_search', 'search_sub_category_container');
     enableSearchFilter('search_sub_sub_cat_search', 'search_sub_sub_category_container');
 });
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
     // CHANGED: Target the 'keywords_input' instead of 'search_term_input'
     const keywordInput = document.getElementById('keywords_input');
-
     if (keywordInput) {
         new TomSelect(keywordInput, {
             create: true,               // Allow user to type new text
@@ -2935,20 +2696,16 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.warn("Keywords Input not found - skipping initialization");
     }
-
 });
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
     // 1. Get PHP Data into JS
     const colorMapDB = <?php echo json_encode($colorMapData); ?>;
-    
     // 2. Function to determine the key (jewelry/textiles) from the Group Name
     function getColorMapKey() {
         const groupSelect = document.getElementById('group_select');
         let groupText = '';
-
         // Handle TomSelect or Native Select
         if (groupSelect) {
             if (groupSelect.tomselect) {
@@ -2961,29 +2718,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 groupText = groupSelect.options[groupSelect.selectedIndex].text.toLowerCase();
             }
         }
-
         // Logic to match keys in your array
         if (groupText.includes('textile') || groupText.includes('clothing')) return 'textiles';
         if (groupText.includes('jewelry') || groupText.includes('jewellery')) return 'jewelry';
-        
         return null; // Return null if neither
     }
-
     // 3. Main Function to Update All Fields
     function updateAllColorMaps() {
         const key = getColorMapKey(); // e.g., 'textiles' or 'jewelry'
         const wrappers = document.querySelectorAll('.colormap-wrapper');
-
         wrappers.forEach(wrapper => {
             const select = wrapper.querySelector('.colormap-select');
-            
             // A. If no matching category, Hide and Clear
             if (!key || !colorMapDB[key]) {
                 wrapper.style.display = 'none';
                 select.innerHTML = '<option value="">Select Color Map</option>';
                 return;
             }
-
             // B. If matching category, Show and Populate
             wrapper.style.display = 'block'; // Or 'flex' depending on your grid
             
@@ -3004,13 +2755,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const isSelected = (String(colorName).trim().toLowerCase() === String(savedVal).trim().toLowerCase()) ? 'selected' : '';
                     html += `<option value="${colorName}" ${isSelected}>${colorName}</option>`;
                 });
-
                 select.innerHTML = html;
                 select.setAttribute('data-loaded-key', key); // Mark as loaded
             }
         });
     }
-
     // 4. Listeners
     // Hook into Group Change (TomSelect or Native)
     const groupSelect = document.getElementById('group_select');
@@ -3022,15 +2771,247 @@ document.addEventListener('DOMContentLoaded', function() {
             groupSelect.tomselect.on('change', updateAllColorMaps);
         }
     }
-
     // Hook into "Add New Variation" to populate the new card immediately
     const originalAddVarForColor = window.addNewVariation;
     window.addNewVariation = function() {
         if(originalAddVarForColor) originalAddVarForColor();
         setTimeout(updateAllColorMaps, 50); // Small delay to ensure DOM is ready
     };
-
     // 5. Initial Run
     updateAllColorMaps();
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. DATA: Import PHP Data
+    const groupingDataMap = <?php echo json_encode($categoriesByParent1); ?>;
+    
+    // 2. PRE-SELECTION: Get PHP Values
+    // Note: Category ID is often comma-separated string in DB, Sub/SubSub are arrays
+    const rawCat = "<?php echo $selected_cat_id; ?>";
+    const groupingPreSelected = {
+        groupVal: "<?php echo $selected_group_val; ?>",
+        cat:    new Set(rawCat ? rawCat.split(',').filter(Boolean) : []), 
+        sub:    new Set(<?php echo json_encode($selected_sub ? (is_array($selected_sub) ? $selected_sub : explode(',',$selected_sub)) : []); ?>.map(String)), 
+        subsub: new Set(<?php echo json_encode($selected_sub_sub ? (is_array($selected_sub_sub) ? $selected_sub_sub : explode(',',$selected_sub_sub)) : []); ?>.map(String))
+    };
+
+    // 3. DOM ELEMENTS
+    const groupSelectEl = document.getElementById("group_select");
+    const catContainer = document.getElementById('category_container');
+    const subContainer = document.getElementById('sub_category_container');
+    const subSubContainer = document.getElementById('sub_sub_category_container');
+
+    // 4. INIT TOM SELECT FOR GROUP
+    const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
+    let groupTs = null;
+
+    if(groupSelectEl) {
+        if(groupSelectEl.tomselect) groupTs = groupSelectEl.tomselect;
+        else groupTs = new TomSelect(groupSelectEl, config);
+
+        groupTs.on('change', function(groupValue) {
+            // Clear downstream selections on manual change
+            groupingPreSelected.cat.clear(); 
+            groupingPreSelected.sub.clear(); 
+            groupingPreSelected.subsub.clear();        
+            updateGroupingCatList(groupValue);
+        });
+    }
+
+    // --- HELPER: Create Checkbox ---
+    function createGroupingCheckbox(item, inputName, selectedSet, onChangeCallback) {
+        const div = document.createElement('div');
+        div.className = 'checkbox-item pl-2 flex items-center p-1 hover:bg-gray-50';
+        
+        const valToCheck = String(item.store_val);
+        const isChecked = selectedSet.has(valToCheck) ? 'checked' : '';
+
+        div.innerHTML = `
+            <input type="checkbox" 
+                   id="${inputName}_${item.id}" 
+                   name="${inputName}[]" 
+                   value="${item.store_val}" 
+                   data-parent-path="" 
+                   ${isChecked}
+                   class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer mr-2">
+            <label for="${inputName}_${item.id}" class="text-[13px] text-[#333] cursor-pointer select-none w-full">${item.name}</label>
+        `;
+        
+        const checkbox = div.querySelector('input');
+        checkbox.addEventListener('change', () => { if(onChangeCallback) onChangeCallback(); });
+        return div;
+    }
+
+    // --- 5. RENDER FUNCTIONS ---
+
+    // A. Render Category (Col 1)
+    function updateGroupingCatList(rawGroupValue) {
+        subContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+        subSubContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(!rawGroupValue) {
+             catContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Group...</div>';
+             return;
+        }
+
+        const lookupKey = String(rawGroupValue).trim(); 
+        
+        if(!groupingDataMap[lookupKey]) {
+            catContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No categories found</div>';
+            return;
+        }
+
+        const items = groupingDataMap[lookupKey];
+        catContainer.innerHTML = '';
+        const seenIds = new Set();
+
+        items.forEach(item => {
+            if(!seenIds.has(item.id)){
+                seenIds.add(item.id);
+                catContainer.appendChild(createGroupingCheckbox(item, 'category_code', groupingPreSelected.cat, handleGroupingCatChange));
+            }
+        });
+        
+        // Setup Search
+        setupSearch('main_cat_search', 'category_container');
+        
+        // AUTO-SELECT DOWNSTREAM
+        if(groupingPreSelected.cat.size > 0) handleGroupingCatChange();
+    }
+
+    // B. Render Sub Category (Col 2)
+    function handleGroupingCatChange() {
+        const checkedInputs = Array.from(catContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        subContainer.innerHTML = ''; 
+        subSubContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Sub Category...</div>';
+
+        if(checkedInputs.length === 0) {
+            subContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select a Category...</div>';
+            return;
+        }
+
+        const groupVal = groupTs ? groupTs.getValue() : groupSelectEl.value;
+        const groupKey = String(groupVal).trim(); 
+        let hasAnyOptions = false;
+
+        checkedInputs.forEach(input => {
+            const catStoreVal = input.value; 
+            const parentName = input.nextElementSibling.innerText;
+            const lookupKey = catStoreVal + "|" + groupKey;
+
+            const children = groupingDataMap[lookupKey];
+            
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
+                header.innerText = parentName; 
+                subContainer.appendChild(header);
+
+                children.forEach(item => {
+                    const el = createGroupingCheckbox(item, 'sub_category_code', groupingPreSelected.sub, handleGroupingSubCatChange);
+                    el.querySelector('input').setAttribute('data-parent-path', lookupKey);
+                    subContainer.appendChild(el);
+                });
+            }
+        });
+
+        if(!hasAnyOptions) subContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Categories found</div>';
+        
+        setupSearch('sub_cat_search', 'sub_category_container');
+        
+        // AUTO-SELECT DOWNSTREAM
+        if(groupingPreSelected.sub.size > 0) handleGroupingSubCatChange();
+    }
+
+    // C. Render Sub Sub Category (Col 3)
+    function handleGroupingSubCatChange() {
+        const checkedInputs = Array.from(subContainer.querySelectorAll('input[type="checkbox"]:checked'));
+        subSubContainer.innerHTML = ''; 
+        
+        if(checkedInputs.length === 0) {
+            subSubContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">Select Sub Category...</div>';
+            return;
+        }
+
+        let hasAnyOptions = false;
+
+        checkedInputs.forEach(input => {
+            const subCatStoreVal = input.value;
+            const parentPath = input.getAttribute('data-parent-path'); 
+            const parentName = input.nextElementSibling.innerText;
+            const lookupKey = subCatStoreVal + "|" + parentPath;
+            
+            const children = groupingDataMap[lookupKey];
+            
+            if (children && children.length > 0) {
+                hasAnyOptions = true;
+                const header = document.createElement('div');
+                header.className = "text-[11px] font-bold text-[#d97824] bg-gray-50 px-2 py-1 border-b border-t border-gray-200 mt-0 sticky top-0 z-10 group-header";
+                header.innerText = parentName;
+                subSubContainer.appendChild(header);
+
+                children.forEach(item => {
+                    subSubContainer.appendChild(createGroupingCheckbox(item, 'sub_sub_category_code', groupingPreSelected.subsub, null));
+                });
+            }
+        });
+
+        if(!hasAnyOptions) subSubContainer.innerHTML = '<div class="text-xs text-gray-400 p-2 text-center mt-10">No Sub Sub Categories found</div>';
+        setupSearch('sub_sub_cat_search', 'sub_sub_category_container');
+    }
+
+    // --- 6. SIMPLE SEARCH LOGIC ---
+    function setupSearch(inputId, containerId) {
+        const input = document.getElementById(inputId);
+        const container = document.getElementById(containerId);
+        
+        if(input && container) {
+            // Remove old listeners to prevent stacking (using cloneNode trick)
+            const newInput = input.cloneNode(true);
+            input.parentNode.replaceChild(newInput, input);
+            
+            newInput.addEventListener('keyup', function() {
+                const filter = this.value.toLowerCase().trim();
+                const allElements = Array.from(container.children);
+                let currentHeader = null;
+                let headerMatches = false;
+                let visibleCountInGroup = 0;
+
+                if(filter === "") {
+                    allElements.forEach(el => el.style.display = ''); 
+                    return;
+                }
+
+                for (let i = 0; i < allElements.length; i++) {
+                    const el = allElements[i];
+                    if (el.classList.contains('group-header')) {
+                        if (currentHeader) currentHeader.style.display = (headerMatches || visibleCountInGroup > 0) ? 'block' : 'none';
+                        currentHeader = el;
+                        headerMatches = el.innerText.toLowerCase().includes(filter);
+                        visibleCountInGroup = 0;
+                        el.style.display = 'none'; 
+                    } else if (el.classList.contains('checkbox-item')) {
+                        const label = el.querySelector('label').innerText.toLowerCase();
+                        if (headerMatches || label.includes(filter)) {
+                            el.style.display = 'flex';
+                            visibleCountInGroup++;
+                        } else {
+                            el.style.display = 'none';
+                        }
+                    }
+                }
+                if (currentHeader) currentHeader.style.display = (headerMatches || visibleCountInGroup > 0) ? 'block' : 'none';
+            });
+        }
+    }
+
+    // --- 7. STARTUP TRIGGER ---
+    if (groupingPreSelected.groupVal) {
+        // Trigger the cascade
+        updateGroupingCatList(groupingPreSelected.groupVal);
+    }
 });
 </script>

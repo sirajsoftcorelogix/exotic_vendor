@@ -338,9 +338,9 @@ class Inbounding {
         return $images;
     }
     // 1. Fetch Raw Images
-    public function get_raw_imgs($item_id) {
+        public function get_raw_imgs($item_id) {
         $item_id = intval($item_id);
-        // No order needed, usually just by upload date
+        // Ensure 'variation_id' is selected (SELECT * covers it)
         $result = $this->conn->query("SELECT * FROM `item_raw_images` WHERE item_id = $item_id ORDER BY id DESC");
         
         $images = [];
@@ -351,56 +351,47 @@ class Inbounding {
         return $images;
     }
 
-    // 2. Add Raw Image
-    public function add_raw_image($item_id, $filename) {
-        $stmt = $this->conn->prepare("INSERT INTO `item_raw_images` (item_id, file_name) VALUES (?, ?)");
-        $stmt->bind_param("is", $item_id, $filename);
+    // Updated: Accepts variation_id (defaults to -1)
+    public function add_raw_image($item_id, $filename, $variation_id = -1) {
+        // Added variation_id to query
+        $sql = "INSERT INTO `item_raw_images` (item_id, file_name, variation_id) VALUES (?, ?, ?)";
+        $stmt = $this->conn->prepare($sql);
+        
+        // types: integer, string, integer
+        $stmt->bind_param("isi", $item_id, $filename, $variation_id);
+        
         return $stmt->execute();
     }
 
-    // 3. Delete Raw Image
+    // Delete function remains exactly as you provided (it was correct)
     public function delete_raw_image($img_id) {
         $id = intval($img_id);
 
-        // ---------------------------------------------------------
-        // 1. Get filename to delete from disk (SELECT)
-        // ---------------------------------------------------------
+        // 1. Get filename
         $sql_select = "SELECT file_name FROM item_raw_images WHERE id = ?";
         $stmt = $this->conn->prepare($sql_select);
 
         if ($stmt) {
-            // Bind ID (Integer)
             $stmt->bind_param("i", $id);
             $stmt->execute();
-
-            // Get the result set
             $res = $stmt->get_result();
 
             if ($row = $res->fetch_assoc()) {
-                // Note the folder change here: 'itm_raw_img'
                 $path = __DIR__ . '/../uploads/itm_raw_img/' . $row['file_name'];
                 if (file_exists($path)) {
                     unlink($path);
                 }
             }
-            // CRITICAL: Close the first statement before creating a new one
-            $stmt->close();
+            $stmt->close(); 
         }
 
-        // ---------------------------------------------------------
-        // 2. Delete from DB
-        // ---------------------------------------------------------
+        // 2. Delete DB Record
         $sql_delete = "DELETE FROM item_raw_images WHERE id = ?";
         $stmt = $this->conn->prepare($sql_delete);
 
-        if (!$stmt) {
-            return false;
-        }
+        if (!$stmt) return false;
 
-        // Bind ID (Integer)
         $stmt->bind_param("i", $id);
-
-        // Execute and return result
         return $stmt->execute();
     }
     public function getExportData($ids_array = []) { // 1. Fixed argument name
@@ -815,43 +806,64 @@ public function update_image_variation($img_id, $variation_id) {
 
     // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
     public function updateMainInbound($id, $data) {
-        $height = (float) ($data['height'] ?? 0);
-        $width  = (float) ($data['width']  ?? 0);
-        $depth  = (float) ($data['depth']  ?? 0);
-        $weight = (float) ($data['weight'] ?? 0);
-        $color  = $data['color'] ?? '';
-        $size   = $data['size'] ?? '';
-        // FIX: Read 'quantity_received' directly
-        $qty    = (int)   ($data['quantity_received'] ?? 0);
-        $cp     = (float) ($data['cp'] ?? 0);
-        $photo  = $data['product_photo'] ?? '';
-        $wh     = ($data['store_location'] ?? '');
-        $p_ind  = (float) ($data['price_india'] ?? 0);
-        $p_mrp  = (float) ($data['price_india_mrp'] ?? 0);
-        $colormaps  = ($data['colormaps'] ?? 0);
+        // 1. Prepare Variables with correct casting
+        $height     = (float) ($data['height'] ?? 0);
+        $width      = (float) ($data['width']  ?? 0);
+        $depth      = (float) ($data['depth']  ?? 0);
+        $weight     = (float) ($data['weight'] ?? 0);
+        
+        $color      = $data['color'] ?? '';
+        $size       = $data['size'] ?? '';
+        $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
+        $Item_code  = $data['Item_code'] ?? '';
+        
+        $qty        = (int)   ($data['quantity_received'] ?? 0);
+        $cp         = (float) ($data['cp'] ?? 0);
+        $photo      = $data['product_photo'] ?? '';
+        $wh         = $data['store_location'] ?? '';
+        
+        $p_ind      = (float) ($data['price_india'] ?? 0);
+        $p_mrp      = (float) ($data['price_india_mrp'] ?? 0);
+        $colormaps  = $data['colormaps'] ?? ''; // Default to empty string, not 0
+
+        // 2. Correct SQL Syntax (Use column names, not PHP variables)
         $sql = "UPDATE vp_inbound 
-                SET gate_entry_date_time = ?, material_code = ?,  group_name = ?, 
+                SET Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?, 
                     height = ?, width = ?, depth = ?, weight = ?, 
                     color = ?, size = ?, cp = ?, quantity_received = ?, 
                     received_by_user_id = ?, temp_code = ?, product_photo = ?,
-                    store_location = ?, price_india = ?, price_india_mrp = ?,colormaps =?
+                    store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?
                 WHERE id = ?";
+
         $stmt = $this->conn->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
+        if (!$stmt) {
+            return ['success' => false, 'message' => $this->conn->error];
+        }
+
+        // 3. Correct Bind Param Types
+        // s = string, d = double (float), i = integer
+        // String map: sssss dddd ss d i i sss d d s i
         $stmt->bind_param(
-            'sssddddssdiisssidsd', 
+            'sssssddddssdiisssddsi', 
+            $Item_code, 
+            $is_variant,
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
-            $height, $width, $depth, $weight, 
-            $color, $size, $cp, $qty, 
+            $height,$width,$depth, 
+            $weight,$color,$size, 
+            $cp,$qty, 
             $data['received_by_user_id'], 
-            $data['temp_code'],       
-            $photo,
-            $wh, $p_ind, $p_mrp,$colormaps,
+            $data['temp_code'],        
+            $photo,$wh,$p_ind, 
+            $p_mrp,$colormaps,
             $id
         );
-        if ($stmt->execute()) return ['success' => true];
+
+        if ($stmt->execute()) {
+            return ['success' => true];
+        }
+        
         return ['success' => false, 'message' => $stmt->error];
     }
 
