@@ -1158,7 +1158,7 @@ class OrdersController {
         // }
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10; // Orders per page
         $offset = ($page - 1) * $limit;
         //search filters
         $filters = [];
@@ -1188,7 +1188,7 @@ class OrdersController {
         }
 
         $invoices = $poInvoiceModel->getAllInvoices($limit, $offset, $filters);
-        $total_orders = $poInvoiceModel->getTotalInvoices($limit, $offset, $filters);
+        $total_orders = $poInvoiceModel->getTotalInvoices(0, 0, $filters);
         //foreach invoice get po items
         foreach($invoices as $id => $invoice){
             $items = $poInvoiceModel->getPOsByInvoiceId($invoice['id']);
@@ -1241,7 +1241,7 @@ class OrdersController {
         }    
 
         $payments = $poInvoiceModel->getAllPayments($limit, $offset, $filters);
-        $total_payments = $poInvoiceModel->getTotalPayments($limit, $offset, $filters);
+        $total_payments = $poInvoiceModel->getTotalPayments(0, 0, $filters);
         //print_array($payments);
         renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
     }
