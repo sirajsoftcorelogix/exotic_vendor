@@ -1158,7 +1158,7 @@ class OrdersController {
         // }
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10; // Orders per page
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
         $offset = ($page - 1) * $limit;
         //search filters
         $filters = [];

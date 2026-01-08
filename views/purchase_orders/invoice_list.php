@@ -129,8 +129,8 @@
         <?php         
         $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $page = $page < 1 ? 1 : $page;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10; // Orders per page, default 20
-        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 10; // Only allow specific values
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 20
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
         $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
         
