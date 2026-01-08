@@ -133,7 +133,7 @@
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 10; // Only allow specific values
         $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
-        echo $total_pages;
+        
         // Prepare query string for pagination links
         $search_params = $_GET;
         unset($search_params['page_no'], $search_params['limit']);
