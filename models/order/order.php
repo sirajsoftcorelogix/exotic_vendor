@@ -355,7 +355,7 @@ class Order{
         }
     }*/
     public function insertOrder($data) {
-        print_array($data);
+        //print_array($data);
         //echo "<br>";
         // Assuming $data is an associative array with keys matching the database columns
         if (empty($data) || !is_array($data)) {
