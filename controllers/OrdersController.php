@@ -1161,8 +1161,11 @@ class OrdersController {
         if (isset($_GET['vendor_id']) && !empty($_GET['vendor_id'])) {
             $filters['vendor_id'] = intval($_GET['vendor_id']);
         }
-        if (isset($_GET['invoice_date']) && !empty($_GET['invoice_date'])) {
-            $filters['invoice_date'] = $_GET['invoice_date'];
+        if (isset($_GET['invoice_date_from']) && !empty($_GET['invoice_date_from'])) {
+            $filters['invoice_date_from'] = $_GET['invoice_date_from'];
+        }
+        if (isset($_GET['invoice_date_to']) && !empty($_GET['invoice_date_to'])) {
+            $filters['invoice_date_to'] = $_GET['invoice_date_to'];
         }
         //amount range filter
         if (isset($_GET['amount_min']) && is_numeric($_GET['amount_min'])) {
@@ -1193,7 +1196,7 @@ class OrdersController {
     }
     public function paymentList() {
         is_login();
-        global $paymentsModel;
+        global $poInvoiceModel;
         $limit = 20;
         $offset = 0;
         if (isset($_GET['limit'])) {
@@ -1202,11 +1205,39 @@ class OrdersController {
         if (isset($_GET['offset'])) {
             $offset = intval($_GET['offset']);
         }
-        $payments = $paymentsModel->getAllPayments($limit, $offset);
-        $total_payments = $paymentsModel->getTotalPayments($limit, $offset);
+        //filters 
+        $filters = [];
+        if (isset($_GET['vendor_id']) && !empty($_GET['vendor_id'])) {
+            $filters['vendor_id'] = intval($_GET['vendor_id']);
+        }
+        if (isset($_GET['payment_date_from']) && !empty($_GET['payment_date_from'])) {
+            $filters['payment_date_from'] = $_GET['payment_date_from'];
+        }
+        if (isset($_GET['payment_date_to']) && !empty($_GET['payment_date_to'])) {
+            $filters['payment_date_to'] = $_GET['payment_date_to'];
+        }
+        //amount range filter
+        if (isset($_GET['amount_min']) && is_numeric($_GET['amount_min'])) {
+            $filters['amount_min'] = floatval($_GET['amount_min']);
+        }
+        if (isset($_GET['amount_max']) && is_numeric($_GET['amount_max'])) {
+            $filters['amount_max'] = floatval($_GET['amount_max']);
+        }
+        //po number filter
+        if (isset($_GET['po_number']) && !empty($_GET['po_number'])) {
+            $filters['po_number'] = $_GET['po_number'];
+        }
+        //utr filter
+        if (isset($_GET['utr_number']) && !empty($_GET['utr_number'])) {
+            $filters['utr_number'] = $_GET['utr_number'];
+        }    
 
-        renderTemplate('views/payments/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
+        $payments = $poInvoiceModel->getAllPayments($limit, $offset, $filters);
+        $total_payments = $poInvoiceModel->getTotalPayments($limit, $offset, $filters);
+        //print_array($payments);
+        renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
     }
+    
 }
 ?>
 
