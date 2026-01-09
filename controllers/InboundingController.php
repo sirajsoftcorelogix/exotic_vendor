@@ -884,7 +884,7 @@ class InboundingController {
             'cp'                  => $_POST['cp'] ?? '',
             'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
             'price_india'         => $_POST['price_india'] ?? '',
-            'usd_price'           => $_POST['usd_price'] ?? NULL,
+            'usd_price'             => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
             'gst_rate'            => $_POST['gst_rate'] ?? '',
             'height'              => $_POST['height'] ?? '',
@@ -1373,6 +1373,7 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
+        // print_r($jsonString);exit;
         $apiurl =  '';
         $isVariant = $data['data']['is_variant'];
         $hasRows   = !empty($data['data']['var_rows']);
