@@ -1356,9 +1356,11 @@ class InboundingController {
             
             // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
             // If you need a clickable URL for a browser, change this to your website URL.
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $domain = $_SERVER['HTTP_HOST'];
 
-            $imgDir = $_SERVER['HTTPS'].'/uploads/itm_img/'; 
-            
+            $baseUrl = $protocol . '://' . $domain;
+            $imgDir = $baseUrl.'/uploads/itm_img/'; 
             // 1. Get the list of filenames
             $raw_images = array_column($data['data']['img'], 'file_name');
 
