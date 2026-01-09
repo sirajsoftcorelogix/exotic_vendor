@@ -158,8 +158,8 @@ class product{
                     $location = isset($product['location']) ? $product['location'] : '';
                     $fba_in = isset($product['fba_in']) ? (int)$product['fba_in'] : 0;
                     $fba_us = isset($product['fba_us']) ? (int)$product['fba_us'] : 0;
-                    $leadtime = isset($product['leadtime']) ? $product['leadtime'] : '';
-                    $instock_leadtime = isset($product['instock_leadtime']) ? $product['instock_leadtime'] : '';
+                    $leadtime = isset($product['leadtime']) ? (int)$product['leadtime'] : '';
+                    $instock_leadtime = isset($product['instock_leadtime']) ? (int)$product['instock_leadtime'] : '';
                     $permanently_available = isset($product['permanently_available']) ? (int)$product['permanently_available'] : 0;
                     $numsold = isset($product['numsold']) ? (int)$product['numsold'] : 0;
                     $numsold_india = isset($product['numsold_india']) ? (int)$product['numsold_india'] : 0;
