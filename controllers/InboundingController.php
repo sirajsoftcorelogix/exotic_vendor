@@ -1234,10 +1234,22 @@ class InboundingController {
         $stock_price_temp = array();
 
         // Parent Record [0]
-        $stock_price_temp[0]['size'] = $data['data']['size'];
-        $stock_price_temp[0]['color'] = $data['data']['color'];
-        $stock_price_temp[0]['marketplace_vendor'] = "exoticindia";
-        $stock_price_temp[0]['item_level'] = 'parent';
+        if ($data['data']['is_variant'] == 'N') {
+            
+            if (!empty($data['data']['var_rows'])) {
+                $stock_price_temp[0]['size'] = $data['data']['size'];
+                $stock_price_temp[0]['color'] = $data['data']['color'];
+                $stock_price_temp[0]['item_level'] = 'parent';
+            }else{
+                $stock_price_temp[0]['size'] = "";
+                $stock_price_temp[0]['color'] = "";
+                $stock_price_temp[0]['item_level'] = 'standalone';
+            }
+        }else{
+            $stock_price_temp[0]['size'] = $data['data']['size'];
+            $stock_price_temp[0]['color'] = $data['data']['color'];
+            $stock_price_temp[0]['item_level'] = 'variation';
+        }
         $stock_price_temp[0]['colormap'] = '';
         $stock_price_temp[0]['product_weight'] = $data['data']['weight'];
         $stock_price_temp[0]['product_weight_unit'] = 'kg';
@@ -1367,7 +1379,16 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
-        echo "<pre>"; print_r($jsonString); exit;
+        $apiurl =  '';
+        if ($data['data']['is_variant'] = 'N' && !empty($data['data']['var_rows'])) {
+            $apiurl = 'https://www.exoticindia.com/vendor-api/product/create';
+        }else{
+            $apiurl = 'https://www.exoticindia.com/vendor-api/product/create?new_variation=1';
+        }
+        echo "<pre>";print_r($data['data']['is_variant']);
+        echo "<pre>";print_r($apiurl);
+        echo "<pre>";print_r($API_data);
+        exit;
         $url = 'https://www.exoticindia.com/vendor-api/product/create';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
@@ -1387,38 +1408,26 @@ class InboundingController {
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        // --- CHECK FOR CURL ERRORS ---
         if (curl_errno($ch)) {
             $error = "cURL Error: " . curl_error($ch);
             curl_close($ch);
             echo json_encode(['status' => 'error', 'message' => $error]);
             exit;
         }
-        
         curl_close($ch);
-
-        // --- CHECK HTTP STATUS ---
-        // If it's not 200 OK (and not 201 Created), it might be an error
         if ($httpCode != 200 && $httpCode != 201) {
             echo json_encode(['status' => 'error', 'message' => "API Error HTTP $httpCode", 'debug' => $response]);
             exit;
         }
-
-        // --- SUCCESS LOGIC (BLANK RESPONSE HANDLING) ---
         header('Content-Type: application/json');
-
-        // If response is empty/blank, WE CREATE A SUCCESS MESSAGE MANUALLY
         if (empty($response) || trim($response) === '') {
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            // If the API did return text, just pass it through
             echo $response; 
         }
-        
         exit;
     }
 }
