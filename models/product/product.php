@@ -164,7 +164,7 @@ class product{
                     $numsold = isset($product['numsold']) ? (int)$product['numsold'] : 0;
                     $numsold_india = isset($product['numsold_india']) ? (int)$product['numsold_india'] : 0;
                     $numsold_global = isset($product['numsold_global']) ? (int)$product['numsold_global'] : 0;
-                    $lastsold = isset($product['lastsold']) ? $product['lastsold'] : '';
+                    $lastsold = isset($product['lastsold']) ? (int)$product['lastsold'] : '';
                     $vendor = isset($product['vendor']) ? $product['vendor'] : '';
                     $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
