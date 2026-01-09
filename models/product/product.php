@@ -177,7 +177,7 @@ class product{
                     $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
                     $updated_at = date('Y-m-d H:i:s');
                     $stmt->bind_param(
-                        'sissiiiiiiiissdddddddddsssss',                            
+                        'sissiiiiiiiiisdddddddddsssss',                            
                         $asin,
                         $localStock,
                         $upc,
