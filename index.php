@@ -359,6 +359,15 @@ switch ($page) {
             case 'updatePriority':
                 $controller->updatePriority();
                 break;
+            case 'create_purchase_list':
+                $controller->createPurchaseList();
+                break;
+            case 'mark_purchased':
+                $controller->markPurchased();
+                break;
+            case 'purchase_list':
+                $controller->purchaseList();
+                break;
             /*case 'view':
                 $controller->product_view();
                 break;

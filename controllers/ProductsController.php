@@ -1,8 +1,10 @@
 <?php
 require_once 'models/product/product.php';
 require_once 'models/user/user.php';
+require_once 'models/comman/tables.php';
 $productModel = new product($conn);
 $usersModel = new User($conn);
+$commanModel = new Tables($conn);
 class ProductsController {
     public function product_list() {
         is_login();
@@ -435,6 +437,116 @@ class ProductsController {
         }
         //print_r($_POST);
         $res = $productModel->updatePriority($id, $priority);
+        echo json_encode($res);
+        exit;
+    }
+    public function createPurchaseList() {
+        is_login();
+        global $productModel;
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $agent_id = isset($_POST['agent_id']) ? (int)$_POST['agent_id'] : 0;
+        $poitems = isset($_POST['poitem']) && is_array($_POST['poitem']) ? $_POST['poitem'] : [];
+        $skus = isset($_POST['sku']) && is_array($_POST['sku']) ? $_POST['sku'] : [];
+        // If date_purchased not provided, use current datetime
+        $date_purchased = !empty($_POST['date_purchased']) ? $_POST['date_purchased'] : date('Y-m-d H:i:s');
+
+        if ($agent_id <= 0 || empty($poitems)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
+            exit;
+        }
+
+        $created = 0;
+        $failed = [];
+        foreach ($poitems as $idx => $prodId) {
+            $product_id = (int)$prodId;
+            if ($product_id <= 0) {
+                $failed[] = ['product_id' => $prodId, 'message' => 'Invalid product id'];
+                continue;
+            }
+            $sku = isset($skus[$idx]) ? trim($skus[$idx]) : '';
+            $data = [
+                'user_id' => $agent_id,
+                'product_id' => $product_id,
+                'sku' => $sku,
+                'date_purchased' => $date_purchased,
+                'status' => 'pending',
+                'edit_by' => $_SESSION['user']['id'] ?? 0
+            ];
+            $res = $productModel->createPurchaseList($data);
+            if ($res && isset($res['success']) && $res['success']) {
+                $created++;
+            } else {
+                $failed[] = ['product_id' => $product_id, 'message' => ($res['message'] ?? 'Insert failed')];
+            }
+        }
+
+        echo json_encode(['success' => true, 'created' => $created, 'failed' => $failed]);
+        exit;
+    }
+    public function purchaseList() {
+        is_login();
+        global $productModel;
+        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Users per page, default 50
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // If user select value from dropdown
+        $offset = ($page_no - 1) * $limit;
+
+        $filters = [];
+        if (!empty($_GET['agent_id'])) {
+            $filters['agent_id'] = (int)$_GET['agent_id'];            
+        }        
+        if (!empty($_GET['status'])) {
+            $filters['status'] = $_GET['status'];            
+        }
+
+        $purchase_data = $productModel->getPurchaseList($limit, $offset);
+        $total_records = $productModel->countPurchaseList();
+
+        // enrich each purchase row with product details and agent name
+        global $commanModel;
+        $enriched = [];
+        foreach ($purchase_data as $row) {            
+            $product = $productModel->getProduct($row['product_id']);
+            $agent_name = $commanModel->getUserNameById($row['user_id']);
+            $enriched[] = array_merge($row, [
+                'product' => $product,
+                'agent_name' => $agent_name,
+                'date_added_readable' => date('d M Y', strtotime($row['date_added'])),
+                'date_purchased_readable' => $row['date_purchased'] ? date('d M Y', strtotime($row['date_purchased'])) : ''
+            ]);
+        }
+
+        $data = [
+            'purchase_list' => $enriched,
+            'page_no' => $page_no,
+            'total_pages' => ceil($total_records / $limit),
+            'total_records' => $total_records,
+            'limit' => $limit
+        ];
+        // render clean for mobile users
+        if (isMobile()){
+            renderTemplateClean('views/products/purchase_list.php', $data, 'Purchase List');
+            return;
+        }else
+        renderTemplate('views/products/purchase_list.php', $data, 'Purchase List');
+    }
+
+    // Mark a purchase list item as purchased (AJAX)
+    public function markPurchased() {
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (empty($input['id'])) {
+            echo json_encode(['success' => false, 'message' => 'Invalid id']);
+            exit;
+        }
+        $id = (int)$input['id'];
+        $res = $productModel->updatePurchaseListStatus($id, 'purchased', date('Y-m-d H:i:s'));
         echo json_encode($res);
         exit;
     }
