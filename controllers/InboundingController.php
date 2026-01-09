@@ -884,7 +884,7 @@ class InboundingController {
             'cp'                  => $_POST['cp'] ?? '',
             'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
             'price_india'         => $_POST['price_india'] ?? '',
-            'usd_price'           => $_POST['usd_price'] ?? '',
+            'usd_price'           => $_POST['usd_price'] ?? NULL,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
             'gst_rate'            => $_POST['gst_rate'] ?? '',
             'height'              => $_POST['height'] ?? '',
@@ -949,9 +949,7 @@ class InboundingController {
         unset($variant); // Break reference
 
         // Call Model to Save Variations
-        if (!empty($allVariations)) {
-            $inboundingModel->saveVariations($id, $allVariations, $item_code);
-        }
+        $inboundingModel->saveVariations($id, $allVariations, $item_code);
         // =========================================================================
         // END VARIATIONS LOGIC
         // =========================================================================
@@ -1228,16 +1226,23 @@ class InboundingController {
         $API_data['material'] = $data['data']['material_name'];
         $API_data['discrete_vendors'][0]['vendor'] = $data['data']['vendor_code'];
         $API_data['discrete_vendors'][0]['priority'] = 1;
-        // $API_data['images'] = $data['data']['product_photo'];
-
-        // 2. Build stock price array separately
         $stock_price_temp = array();
-
-        // Parent Record [0]
-        $stock_price_temp[0]['size'] = $data['data']['size'];
-        $stock_price_temp[0]['color'] = $data['data']['color'];
-        $stock_price_temp[0]['marketplace_vendor'] = "exoticindia";
-        $stock_price_temp[0]['item_level'] = 'parent';
+        if ($data['data']['is_variant'] == 'N') {
+            
+            if (!empty($data['data']['var_rows'])) {
+                $stock_price_temp[0]['size'] = $data['data']['size'];
+                $stock_price_temp[0]['color'] = $data['data']['color'];
+                $stock_price_temp[0]['item_level'] = 'parent';
+            }else{
+                $stock_price_temp[0]['size'] = "";
+                $stock_price_temp[0]['color'] = "";
+                $stock_price_temp[0]['item_level'] = 'standalone';
+            }
+        }else{
+            $stock_price_temp[0]['size'] = $data['data']['size'];
+            $stock_price_temp[0]['color'] = $data['data']['color'];
+            $stock_price_temp[0]['item_level'] = 'variation';
+        }
         $stock_price_temp[0]['colormap'] = '';
         $stock_price_temp[0]['product_weight'] = $data['data']['weight'];
         $stock_price_temp[0]['product_weight_unit'] = 'kg';
@@ -1247,10 +1252,8 @@ class InboundingController {
         $stock_price_temp[0]['length_unit'] = 'inch';
         $input_date = $data['data']['added_date'] ?? null;
         if (!empty($input_date) && $input_date != '0000-00-00') {
-            // If set and not zero -> Use the provided date
             $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($input_date));
         } else {
-            // If null, empty, or zero -> Use Current Date
             $stock_price_temp[0]['date_added'] = date('Y-m-d');
         } 
         $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
@@ -1367,8 +1370,17 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
-        echo "<pre>"; print_r($jsonString); exit;
-        $url = 'https://www.exoticindia.com/vendor-api/product/create';
+        echo "<pre>";print_r($jsonString);exit;
+        $apiurl =  '';
+        $isVariant = $data['data']['is_variant'];
+        $hasRows   = !empty($data['data']['var_rows']);
+        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+
+        $apiurl = ($isVariant == 'Y' && !$hasRows) 
+            ? $baseUrl . '?new_variation=1' 
+            : $baseUrl;
+
+        $url = $apiurl;
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
@@ -1387,38 +1399,26 @@ class InboundingController {
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        // --- CHECK FOR CURL ERRORS ---
         if (curl_errno($ch)) {
             $error = "cURL Error: " . curl_error($ch);
             curl_close($ch);
             echo json_encode(['status' => 'error', 'message' => $error]);
             exit;
         }
-        
         curl_close($ch);
-
-        // --- CHECK HTTP STATUS ---
-        // If it's not 200 OK (and not 201 Created), it might be an error
         if ($httpCode != 200 && $httpCode != 201) {
             echo json_encode(['status' => 'error', 'message' => "API Error HTTP $httpCode", 'debug' => $response]);
             exit;
         }
-
-        // --- SUCCESS LOGIC (BLANK RESPONSE HANDLING) ---
         header('Content-Type: application/json');
-
-        // If response is empty/blank, WE CREATE A SUCCESS MESSAGE MANUALLY
         if (empty($response) || trim($response) === '') {
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            // If the API did return text, just pass it through
             echo $response; 
         }
-        
         exit;
     }
 }
