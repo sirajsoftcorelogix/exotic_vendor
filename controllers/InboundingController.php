@@ -1373,7 +1373,6 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
-        echo "<pre>";print_r($jsonString);exit;
         $apiurl =  '';
         $isVariant = $data['data']['is_variant'];
         $hasRows   = !empty($data['data']['var_rows']);
