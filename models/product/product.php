@@ -532,4 +532,69 @@ class product{
         }
         return ['success' => false, 'message' => 'Update failed: '.$stmt->error];
     }
+    public function createPurchaseList($data) {       
+        $sql = "INSERT INTO purchase_list (user_id, product_id, sku, date_added, date_purchased, status, edit_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
+        // types: user_id (i), product_id (i), sku (s), date_added (s), date_purchased (s), status (s), edit_by (i), updated_at (s), created_at (s)
+        $types = 'iissssiss';
+        $dateAdded = date('Y-m-d H:i:s');
+        $updatedAt = date('Y-m-d H:i:s');
+        $createdAt = date('Y-m-d H:i:s');
+        $stmt->bind_param($types, $data['user_id'], $data['product_id'], $data['sku'], $dateAdded, $data['date_purchased'], $data['status'], $data['edit_by'], $updatedAt, $createdAt);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Purchase list created successfully.'];
+        }
+        return ['success' => false, 'message' => 'Failed to create purchase list: '.$stmt->error];
+    }
+    public function getPurchaseListByUser($user_id) {
+        $sql = "SELECT * FROM purchase_list WHERE user_id = ? ORDER BY created_at DESC";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+        $stmt->bind_param('i', $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+    public function getPurchaseList($limit = 100, $offset = 0) {
+        $sql = "SELECT * FROM purchase_list ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+        $stmt->bind_param('ii', $limit, $offset);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+    public function countPurchaseList() {
+        $sql = "SELECT COUNT(*) AS cnt FROM purchase_list";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return 0;
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result) {
+            $row = $result->fetch_assoc();
+            return isset($row['cnt']) ? (int)$row['cnt'] : 0;
+        }
+        return 0;
+    }
+
+    public function updatePurchaseListStatus($id, $status, $date_purchased = null) {
+        $sql = "UPDATE purchase_list SET status = ?, date_purchased = ?, updated_at = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
+        $date_purchased = $date_purchased ? $date_purchased : date('Y-m-d H:i:s');
+        $updatedAt = date('Y-m-d H:i:s');
+        $id = (int)$id;
+        $stmt->bind_param('sssi', $status, $date_purchased, $updatedAt, $id);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Status updated'];
+        }
+        return ['success' => false, 'message' => 'Update failed: '.$stmt->error];
+    }
 }
