@@ -884,7 +884,7 @@ class InboundingController {
             'cp'                  => $_POST['cp'] ?? '',
             'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
             'price_india'         => $_POST['price_india'] ?? '',
-            'usd_price'           => $_POST['usd_price'] ?? '',
+            'usd_price'           => $_POST['usd_price'] ?? NULL,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
             'gst_rate'            => $_POST['gst_rate'] ?? '',
             'height'              => $_POST['height'] ?? '',
