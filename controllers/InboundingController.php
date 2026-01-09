@@ -949,9 +949,7 @@ class InboundingController {
         unset($variant); // Break reference
 
         // Call Model to Save Variations
-        if (!empty($allVariations)) {
-            $inboundingModel->saveVariations($id, $allVariations, $item_code);
-        }
+        $inboundingModel->saveVariations($id, $allVariations, $item_code);
         // =========================================================================
         // END VARIATIONS LOGIC
         // =========================================================================
@@ -1228,12 +1226,7 @@ class InboundingController {
         $API_data['material'] = $data['data']['material_name'];
         $API_data['discrete_vendors'][0]['vendor'] = $data['data']['vendor_code'];
         $API_data['discrete_vendors'][0]['priority'] = 1;
-        // $API_data['images'] = $data['data']['product_photo'];
-
-        // 2. Build stock price array separately
         $stock_price_temp = array();
-
-        // Parent Record [0]
         if ($data['data']['is_variant'] == 'N') {
             
             if (!empty($data['data']['var_rows'])) {
@@ -1259,10 +1252,8 @@ class InboundingController {
         $stock_price_temp[0]['length_unit'] = 'inch';
         $input_date = $data['data']['added_date'] ?? null;
         if (!empty($input_date) && $input_date != '0000-00-00') {
-            // If set and not zero -> Use the provided date
             $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($input_date));
         } else {
-            // If null, empty, or zero -> Use Current Date
             $stock_price_temp[0]['date_added'] = date('Y-m-d');
         } 
         $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
@@ -1379,17 +1370,17 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
+        echo "<pre>";print_r($jsonString);exit;
         $apiurl =  '';
-        if ($data['data']['is_variant'] = 'N' && !empty($data['data']['var_rows'])) {
-            $apiurl = 'https://www.exoticindia.com/vendor-api/product/create';
-        }else{
-            $apiurl = 'https://www.exoticindia.com/vendor-api/product/create?new_variation=1';
-        }
-        echo "<pre>";print_r($data['data']['is_variant']);
-        echo "<pre>";print_r($apiurl);
-        echo "<pre>";print_r($API_data);
-        exit;
-        $url = 'https://www.exoticindia.com/vendor-api/product/create';
+        $isVariant = $data['data']['is_variant'];
+        $hasRows   = !empty($data['data']['var_rows']);
+        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+
+        $apiurl = ($isVariant == 'Y' && !$hasRows) 
+            ? $baseUrl . '?new_variation=1' 
+            : $baseUrl;
+
+        $url = $apiurl;
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
