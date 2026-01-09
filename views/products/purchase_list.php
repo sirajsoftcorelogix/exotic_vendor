@@ -81,19 +81,107 @@
 </div>
 
 <script>
-    function markAsPurchased(id) {
-        if (!confirm('Mark this item as purchased?')) return;
+    // Global toast container and showAlert
+    function ensureToastContainer() {
+        let c = document.getElementById('globalToastContainer');
+        if (!c) {
+            c = document.createElement('div');
+            c.id = 'globalToastContainer';
+            c.style.position = 'fixed';
+            c.style.right = '20px';
+            c.style.top = '20px';
+            c.style.zIndex = 99999;
+            document.body.appendChild(c);
+        }
+        return c;
+    }
+
+    function showAlertP(message, type = 'info', timeout = 3000) {
+        const container = ensureToastContainer();
+        const toast = document.createElement('div');
+        toast.className = 'rounded px-4 py-2 mb-2 shadow-md text-sm flex items-center';
+        const colors = {
+            success: {bg: 'rgba(16,185,129,0.12)', color: '#065f46'},
+            error: {bg: 'rgba(239,68,68,0.12)', color: '#991b1b'},
+            info: {bg: 'rgba(99,102,241,0.08)', color: '#3730a3'}
+        };
+        const cfg = colors[type] || colors.info;
+        toast.style.background = cfg.bg;
+        toast.style.color = cfg.color;
+        toast.style.border = '1px solid rgba(0,0,0,0.04)';
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-6px)';
+            setTimeout(() => toast.remove(), 300);
+        }, timeout);
+    }
+
+    // Global confirm modal (returns Promise<boolean>)
+    function ensureConfirmModal() {
+        let m = document.getElementById('globalConfirmModal');
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'globalConfirmModal';
+            m.style.position = 'fixed';
+            m.style.left = '0'; m.style.top = '0'; m.style.right = '0'; m.style.bottom = '0';
+            m.style.display = 'none';
+            m.style.zIndex = 100000;
+            m.style.alignItems = 'center';
+            m.style.justifyContent = 'center';
+            m.style.background = 'rgba(0,0,0,0.35)';
+
+            m.innerHTML = '<div id="globalConfirmBox" style="background:#fff;padding:16px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.2);min-width:420px;max-width:90%;">' +
+                '<div id="globalConfirmMessage" style="margin-bottom:12px;color:#111"></div>' +
+                '<div style="text-align:right">' +
+                '<button id="globalConfirmCancel" style="margin-right:8px;padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;">Cancel</button>' +
+                '<button id="globalConfirmOk" style="padding:8px 12px;border-radius:6px;border:0;background:#059669;color:#fff;">OK</button>' +
+                '</div></div>';
+            document.body.appendChild(m);
+        }
+        return m;
+    }
+
+    function showConfirm(message) {
+        return new Promise(resolve => {
+            const modal = ensureConfirmModal();
+            const msg = document.getElementById('globalConfirmMessage');
+            const ok = document.getElementById('globalConfirmOk');
+            const cancel = document.getElementById('globalConfirmCancel');
+            msg.textContent = message;
+            modal.style.display = 'flex';
+            ok.focus();
+            function cleanup(result) {
+                modal.style.display = 'none';
+                ok.removeEventListener('click', onOk);
+                cancel.removeEventListener('click', onCancel);
+                resolve(result);
+            }
+            function onOk() { cleanup(true); }
+            function onCancel() { cleanup(false); }
+            ok.addEventListener('click', onOk);
+            cancel.addEventListener('click', onCancel);
+        });
+    }
+
+    // Use showConfirm instead of native confirm so we can show consistent UI
+    async function markAsPurchased(id) {
+        const confirmed = await showConfirm('Mark this item as purchased?');
+        if (!confirmed) return;
         fetch('?page=products&action=mark_purchased', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ id: id })
         }).then(r => r.json()).then(data => {
             if (data && data.success) {
-                alert('Marked as purchased');
-                location.reload();
+                showAlert('Marked as purchased', 'success');
+                setInterval(() => location.reload(), 4000);
+                
             } else {
-                alert('Failed: ' + (data.message || 'Error'));
+                showAlert('Failed: ' + (data.message || 'Error'), 'error');
             }
-        }).catch(err => alert('Network error'));
+        }).catch(err => showAlert('Network error', 'error'));
     }
 </script>
