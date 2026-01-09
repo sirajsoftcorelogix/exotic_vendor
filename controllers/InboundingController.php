@@ -1400,6 +1400,7 @@ class InboundingController {
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
         ]);
         $response = curl_exec($ch);
+        echo "<pre>";print_r($response);exit;
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         if (curl_errno($ch)) {
             $error = "cURL Error: " . curl_error($ch);
