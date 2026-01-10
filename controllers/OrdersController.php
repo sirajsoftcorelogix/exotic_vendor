@@ -248,7 +248,7 @@ class OrdersController {
             // Check if the order has the required fields
             // Map API fields to your table columns
             //2658982 order_number continue;
-            if (in_array($order['orderid'], ['2658982', '2660434','2662287','469282'])) {
+            if (in_array($order['orderid'], ['2658982', '2660434','2662287','469282','2664206'])) {
                 continue; // Skip invalid orders
             }   
                 foreach ($order['cart'] as $item) {  
