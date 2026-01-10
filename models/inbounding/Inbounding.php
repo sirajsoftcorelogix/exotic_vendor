@@ -825,6 +825,7 @@ public function update_image_variation($img_id, $variation_id) {
         $size       = $data['size'] ?? '';
         $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
         $Item_code  = $data['Item_code'] ?? '';
+        $feedback  = $data['feedback'] ?? '';
         
         $qty        = (int)   ($data['quantity_received'] ?? 0);
         $cp         = (float) ($data['cp'] ?? 0);
@@ -837,7 +838,7 @@ public function update_image_variation($img_id, $variation_id) {
 
         // 2. Correct SQL Syntax (Use column names, not PHP variables)
         $sql = "UPDATE vp_inbound 
-                SET Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?, 
+                SET feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?, 
                     height = ?, width = ?, depth = ?, weight = ?, 
                     color = ?, size = ?, cp = ?, quantity_received = ?, 
                     received_by_user_id = ?, temp_code = ?, product_photo = ?,
@@ -853,8 +854,9 @@ public function update_image_variation($img_id, $variation_id) {
         // s = string, d = double (float), i = integer
         // String map: sssss dddd ss d i i sss d d s i
         $stmt->bind_param(
-            'sssssddddssdiisssddsi', 
-            $Item_code, 
+            'ssssssddddssdiisssddsi', 
+            $feedback,
+            $Item_code,
             $is_variant,
             $data['gate_entry_date_time'], 
             $data['material_code'], 

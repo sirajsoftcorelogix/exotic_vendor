@@ -1214,7 +1214,25 @@ $currentSize = $data['form2']['size'] ?? '';
                             </div>
                         </div>
                     </div>
-                    
+                    <div class="flex-1 pl-4 flex flex-col justify-center min-w-[200px]"> 
+                        <label class="block text-xs font-bold text-[#222] mb-[3px]">Image Directory:</label>
+                        <select id="image_directory_select" name="image_directory" placeholder="Search directory...">
+                            <option value="">Select Directory</option>
+                            <?php 
+                            // Get directory list safely
+                            $imgDirs = $data['form2']['getimgdir']['image_directories'] ?? [];
+                            $savedDir = $data['form2']['image_directory'] ?? ''; 
+
+                            // Loop through directories
+                            foreach ($imgDirs as $dir): 
+                                $isSelected = ($savedDir == $dir) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo htmlspecialchars($dir); ?>" <?php echo $isSelected; ?>>
+                                    <?php echo htmlspecialchars($dir); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
             </fieldset>
         </div>
@@ -3014,4 +3032,18 @@ document.addEventListener('DOMContentLoaded', function() {
         updateGroupingCatList(groupingPreSelected.groupVal);
     }
 });
+</script>
+<script>
+    // Initialize Image Directory Search
+if(document.getElementById('image_directory_select')) {
+    new TomSelect("#image_directory_select", {
+        create: false, // Set to true if you want to allow typing new folder names
+        sortField: { field: "text", direction: "asc" },
+        placeholder: "Search folder...",
+        onInitialize: function() {
+            this.wrapper.classList.add('w-full'); // Fixes width issue
+            this.control.classList.add('h-[32px]', 'text-[13px]'); // Matches your existing design
+        }
+    });
+}
 </script>
