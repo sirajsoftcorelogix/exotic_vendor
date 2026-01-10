@@ -27,7 +27,7 @@ class POInvoice
     {
         // Build SQL dynamically based on whether 'invoice' is set
         $fields = [
-            'po_id = ?',
+            //'po_id = ?',
             'invoice_type = ?',
             'invoice_no = ?',
             'invoice_date = ?',
@@ -38,7 +38,7 @@ class POInvoice
             'grand_total = ?'
         ];
         $params = [
-            $data['po_id'],
+            //$data['po_id'],
             $data['invoice_type'],
             $data['invoice_no'],
             $data['invoice_date'],
@@ -48,7 +48,7 @@ class POInvoice
             $data['shipping'],
             $data['grand_total']
         ];
-        $types = 'issssssss';
+        $types = 'ssssssss';
 
         if (isset($data['invoice'])) {
             $fields[] = 'invoice = ?';
@@ -76,33 +76,45 @@ class POInvoice
     }
     public function addPoInvoice($data)
     {
-        //check if po_id already exists
-        $existing = $this->getInvoiceByPoId($data['po_id'],$data['invoice_type']);
-        if ($existing) {
-            return false; // PO ID already has an invoice
+        // Support mapping one invoice to multiple PO IDs (po_ids as array or comma-separated string)
+        $poIds = [];
+        if (!empty($data['po_ids'])) {
+            if (is_string($data['po_ids'])) {
+                $poIds = array_map('trim', explode(',', $data['po_ids']));
+            } elseif (is_array($data['po_ids'])) {
+                $poIds = $data['po_ids'];
+            }
+        } else {
+            $poIds = [isset($data['po_id']) ? $data['po_id'] : 0];
         }
-        /*if ($data['invoice_type'] === 'performa') {
-            $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, performa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $this->db->prepare($sql);
-            $stmt->bind_param(
+        // Normalize to unique ints
+        $poIds = array_values(array_unique(array_map('intval', $poIds)));
+        if (empty($poIds)) {
+            return ['success' => false, 'message' => 'No Purchase Order IDs provided.'];
+        }
+
+        // Determine which PO IDs already have an invoice of this type
+        $skipped = [];
+        $toMap = [];
+        foreach ($poIds as $pid) {
+            $existing = $this->getInvoiceByPoId($pid, $data['invoice_type'] ?? null);
+            if ($existing) {
+                $skipped[] = $pid;
+            } else {
+                $toMap[] = $pid;
+            }
+        }
+        if (empty($toMap)) {
+            return ['success' => false, 'message' => 'All selected POs already have an invoice.', 'skipped' => $skipped];
+        }
+
+        // Insert invoice record (use the first mapped PO as representative in vp_po_invoice.po_id)
+        $representativePoId = $toMap[0];
+        $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param(
             'isssssssss',
-            $data['po_id'],
-            $data['invoice_type'],
-            $data['invoice_no'],
-            $data['invoice_date'],
-            $data['gst_reg'],
-            $data['sub_total'],
-            $data['gst_total'],
-            $data['shipping'],
-            $data['grand_total'],
-            $data['performa']
-            );
-        } else {*/
-            $sql = "INSERT INTO vp_po_invoice (po_id, invoice_type, invoice_no, invoice_date, gst_reg, sub_total, gst_total, shipping, grand_total, invoice) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $this->db->prepare($sql);
-            $stmt->bind_param(
-            'isssssssss',
-            $data['po_id'],
+            $representativePoId,
             $data['invoice_type'],
             $data['invoice_no'],
             $data['invoice_date'],
@@ -112,30 +124,73 @@ class POInvoice
             $data['shipping'],
             $data['grand_total'],
             $data['invoice']
-            );
-        //}
-        $stmt->execute();
-        if ($stmt->error) {
-            return false;
+        );
+
+        try {
+            $this->db->autocommit(FALSE);
+            if (!$stmt->execute()) {
+                $this->db->rollback();
+                $this->db->autocommit(TRUE);
+                return ['success' => false, 'message' => 'Failed to insert invoice record.'];
+            }
+            $invoiceId = $stmt->insert_id;
+            $sqlMap = "INSERT INTO vp_po_invoice_map (po_id, invoice_id) VALUES (?, ?)";
+            $stmtMap = $this->db->prepare($sqlMap);
+            foreach ($toMap as $pid) {
+                $stmtMap->bind_param('ii', $pid, $invoiceId);
+                if (!$stmtMap->execute()) {
+                    $this->db->rollback();
+                    $this->db->autocommit(TRUE);
+                    return ['success' => false, 'message' => 'Failed to map invoice to PO: ' . $pid];
+                }
+            }
+            $this->db->commit();
+            $this->db->autocommit(TRUE);
+        } catch (Exception $e) {
+            $this->db->rollback();
+            $this->db->autocommit(TRUE);
+            return ['success' => false, 'message' => 'Exception: ' . $e->getMessage()];
         }
-        return true;
+
+        if ($stmt->error) {
+            return ['success' => false, 'message' => 'Database error saving invoice.'];
+        }
+        return ['success' => true, 'mapped' => $toMap, 'skipped' => $skipped, 'invoice_id' => $invoiceId];
+    
     }
     public function getInvoiceByPoId($poId, $invoiceType = null)
     {
-        $sql = "SELECT * FROM vp_po_invoice WHERE po_id = ? ";
+        // First, check mapping table to support invoices mapped to multiple POs
+        $sql = "SELECT p.* FROM vp_po_invoice p JOIN vp_po_invoice_map m ON p.id = m.invoice_id WHERE m.po_id = ? ";
         if ($invoiceType) {
-            $sql .= "AND invoice_type = ?";
+            $sql .= "AND p.invoice_type = ?";
         }
         $stmt = $this->db->prepare($sql);
-        
         if ($invoiceType) {
             $stmt->bind_param('is', $poId, $invoiceType);
-        }else{
+        } else {
             $stmt->bind_param('i', $poId);
         }
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        $row = $result->fetch_assoc();
+        if ($row) {
+            return $row;
+        }
+        // Fallback: check direct po_id column (legacy behavior)
+        $sql2 = "SELECT * FROM vp_po_invoice WHERE po_id = ? ";
+        if ($invoiceType) {
+            $sql2 .= "AND invoice_type = ?";
+        }
+        $stmt2 = $this->db->prepare($sql2);
+        if ($invoiceType) {
+            $stmt2->bind_param('is', $poId, $invoiceType);
+        } else {
+            $stmt2->bind_param('i', $poId);
+        }
+        $stmt2->execute();
+        $result2 = $stmt2->get_result();
+        return $result2->fetch_assoc();
     }
     public function deletePoInvoice($id)
     {
@@ -153,6 +208,20 @@ class POInvoice
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
+
+    /**
+     * Get POs mapped to a group invoice (returns array of ['po_id','po_number','total_cost'])
+     */
+    public function getPOsByInvoiceId($invoiceId)
+    {
+        $sql = "SELECT m.po_id, p.po_number, p.total_cost, p.vendor_id FROM vp_po_invoice_map m JOIN purchase_orders p ON p.id = m.po_id WHERE m.invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $invoiceId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
     public function addPayment($data)
     {
         global $secretKey;
@@ -382,4 +451,356 @@ class POInvoice
         $stmt->bind_param('i', $id);
         return $stmt->execute();
     }
+    public function getAllInvoices($limit = 0, $offset = 0, $filters = [])
+    {
+        // Select all invoice fields plus vendor info, mapped PO numbers and payment references.
+        $sql = "SELECT p.*, 
+                       m.po_id AS mapped_po_ids,
+                       po.po_number AS mapped_po_numbers,
+                       v.vendor_name AS vendor_name,
+                       v.city AS vendor_city,
+                       v.vendor_phone AS vendor_phone,
+                       pay.bank_transaction_reference_no AS bank_transaction_refs
+                FROM vp_po_invoice p
+                LEFT JOIN vp_po_invoice_map m ON m.invoice_id = p.id
+                LEFT JOIN purchase_orders po ON po.id = m.po_id
+                LEFT JOIN vp_vendors v ON v.id = po.vendor_id
+                LEFT JOIN vp_invoice_payments pay ON pay.invoice_id = p.id
+                WHERE 1=1";
+        // Apply filters if provided
+        if (!empty($filters['po_number'])) {
+            $sql .= " AND po.po_number = ?";
+        }
+        if (!empty($filters['amount_min'])) {
+            $sql .= " AND p.grand_total >= ?";
+        }
+        if (!empty($filters['amount_max'])) {
+            $sql .= " AND p.grand_total <= ?";
+        }
+        if (!empty($filters['utr_number'])) {
+            $sql .= " AND pay.bank_transaction_reference_no = ?";
+        }
+        if (!empty($filters['invoice_date_from'])) {
+            $sql .= " AND p.invoice_date >= ?";
+        }
+        if (!empty($filters['invoice_date_to'])) {
+            $sql .= " AND p.invoice_date <= ?";
+        }
+        // if (!empty($filters['invoice_date'])) {
+        //     $sql .= " AND p.invoice_date = ?";
+        // }
+        if (!empty($filters['vendor_id'])) {
+            $sql .= " AND po.vendor_id = ?";
+        }
+        $sql .= "                
+                ORDER BY p.id DESC";
+
+        if ($limit > 0) {
+            $sql .= " LIMIT ? OFFSET ?";
+        }
+
+        $stmt = $this->db->prepare($sql);
+        if ($limit > 0) {
+            $types = '';
+            $params = [];
+            // Bind filter parameters
+            if (!empty($filters['po_number'])) {
+                $types .= 's';
+                $params[] = $filters['po_number'];
+            }
+            if (!empty($filters['amount_min'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_min'];
+            }
+            if (!empty($filters['amount_max'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_max'];
+            }
+            if (!empty($filters['utr_number'])) {
+                $types .= 's';
+                $params[] = $filters['utr_number'];
+            }
+            if (!empty($filters['invoice_date_from'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_from'];
+            }
+            if (!empty($filters['invoice_date_to'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_to'];
+            }
+            if (!empty($filters['vendor_id'])) {
+                $types .= 'i';
+                $params[] = $filters['vendor_id'];
+            }
+            // Add limit and offset
+            $types .= 'ii';
+            $params[] = $limit;
+            $params[] = $offset;
+
+            $stmt->bind_param($types, ...$params);
+        } else {
+            // Bind only filter parameters
+            $types = '';
+            $params = [];
+            if (!empty($filters['po_number'])) {
+                $types .= 's';
+                $params[] = $filters['po_number'];
+            }
+            if (!empty($filters['amount_min'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_min'];
+            }
+            if (!empty($filters['amount_max'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_max'];
+            }
+            if (!empty($filters['utr_number'])) {
+                $types .= 's';
+                $params[] = $filters['utr_number'];
+            }
+            if (!empty($filters['invoice_date_from'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_from'];
+            }
+            if (!empty($filters['invoice_date_to'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_to'];
+            }
+            if (!empty($filters['vendor_id'])) {
+                $types .= 'i';
+                $params[] = $filters['vendor_id'];
+            }
+            if (!empty($types)) {
+                $stmt->bind_param($types, ...$params);
+            }
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function getTotalInvoices($limit = 0, $offset = 0)
+    {
+        $sql = "SELECT COUNT(*) as total FROM vp_po_invoice";
+        if ($limit > 0) {
+            $sql .= " LIMIT ? OFFSET ?";
+        }
+        $stmt = $this->db->prepare($sql);
+        if ($limit > 0) {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        return $row['total'] ?? 0;
+    }
+    public function getAllPayments($limit = 0, $offset = 0, $filters = [])
+    {
+        global $secretKey;
+        $sql = "SELECT p.*, 
+                        po.po_number AS po_number,
+                        v.vendor_name AS vendor_name,
+                        v.city AS vendor_city,
+                        v.vendor_phone AS vendor_phone,
+                        inv.invoice_no AS invoice_no,
+                        inv.grand_total AS invoice_grand_total,
+                        inv.invoice_date AS invoice_date
+                FROM vp_invoice_payments p
+                LEFT JOIN purchase_orders po ON po.id = p.po_id
+                LEFT JOIN vp_vendors v ON v.id = p.vendor_id
+                LEFT JOIN vp_po_invoice inv ON inv.id = p.invoice_id
+                WHERE 1=1";
+        //filtering and pagination
+        if (!empty($filters)) {
+            // Apply filters if provided
+            if (!empty($filters['po_number'])) {
+                $sql .= " AND po.po_number = ?";
+            }
+            if (!empty($filters['amount_min'])) {
+                $sql .= " AND p.amount_paid >= ?";
+            }
+            if (!empty($filters['amount_max'])) {
+                $sql .= " AND p.amount_paid <= ?";
+            }
+            if (!empty($filters['utr_number'])) {
+                $sql .= " AND p.bank_transaction_reference_no = ?";
+            }
+            if (!empty($filters['payment_date_from'])) {
+                $sql .= " AND p.payment_date >= ?";
+            }
+            if (!empty($filters['payment_date_to'])) {
+                $sql .= " AND p.payment_date <= ?";
+            }
+            if (!empty($filters['vendor_id'])) {
+                $sql .= " AND p.vendor_id = ?";
+            }            
+        }
+        $sql .= " ORDER BY p.id DESC";
+        if ($limit > 0) {
+            $sql .= " LIMIT ? OFFSET ?";
+        }
+        
+        $stmt = $this->db->prepare($sql);
+        if ($limit > 0) {
+            $types = '';
+            $params = [];
+            // Bind filter parameters
+            if (!empty($filters['po_number'])) {
+                $types .= 's';
+                $params[] = $filters['po_number'];
+            }
+            if (!empty($filters['amount_min'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_min'];
+            }
+            if (!empty($filters['amount_max'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_max'];
+            }
+            if (!empty($filters['utr_number'])) {
+                $types .= 's';
+                $params[] = $filters['utr_number'];
+            }
+            if (!empty($filters['payment_date_from'])) {
+                $types .= 's';
+                $params[] = $filters['payment_date_from'];
+            }
+            if (!empty($filters['payment_date_to'])) {
+                $types .= 's';
+                $params[] = $filters['payment_date_to'];
+            }
+            if (!empty($filters['vendor_id'])) {
+                $types .= 'i';
+                $params[] = $filters['vendor_id'];
+            }
+            // Add limit and offset
+            $types .= 'ii';
+            $params[] = $limit;
+            $params[] = $offset;
+
+            $stmt->bind_param($types, ...$params);
+        } else {
+            // Bind only filter parameters
+            $types = '';
+            $params = [];
+            if (!empty($filters['po_number'])) {
+                $types .= 's';
+                $params[] = $filters['po_number'];
+            }
+            if (!empty($filters['amount_min'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_min'];
+            }
+            if (!empty($filters['amount_max'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_max'];
+            }
+            if (!empty($filters['utr_number'])) {
+                $types .= 's';
+                $params[] = $filters['utr_number'];
+            }
+            if (!empty($filters['payment_date_from'])) {
+                $types .= 's';
+                $params[] = $filters['payment_date_from'];
+            }
+            if (!empty($filters['payment_date_to'])) {
+                $types .= 's';
+                $params[] = $filters['payment_date_to'];
+            }
+            if (!empty($filters['vendor_id'])) {
+                $types .= 'i';
+                $params[] = $filters['vendor_id'];
+            }
+            if (!empty($types)) {
+                $stmt->bind_param($types, ...$params);
+            }
+        }
+        //echo $sql;
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function getTotalPayments($limit = 0, $offset = 0, $filters = [])
+    {
+        // Count payments with same joins/filters as getAllPayments
+        $sql = "SELECT COUNT(*) as total FROM vp_invoice_payments p LEFT JOIN purchase_orders po ON po.id = p.po_id WHERE 1=1";
+        //filtering
+        if (!empty($filters)) {
+            // Apply filters if provided
+            if (!empty($filters['po_number'])) {
+                $sql .= " AND po.po_number = ?";
+            }
+            if (!empty($filters['amount_min'])) {
+                $sql .= " AND p.amount_paid >= ?";
+            }
+            if (!empty($filters['amount_max'])) {
+                $sql .= " AND p.amount_paid <= ?";
+            }
+            if (!empty($filters['utr_number'])) {
+                $sql .= " AND p.bank_transaction_reference_no = ?";
+            }
+            if (!empty($filters['payment_date_from'])) {
+                $sql .= " AND p.payment_date >= ?";
+            }
+            if (!empty($filters['payment_date_to'])) {
+                $sql .= " AND p.payment_date <= ?";
+            }
+            if (!empty($filters['vendor_id'])) {
+                $sql .= " AND p.vendor_id = ?";
+            }
+        }
+        if ($limit > 0) {
+            $sql .= " LIMIT ? OFFSET ?";
+        }
+
+        $stmt = $this->db->prepare($sql);
+
+        // Bind parameters in same order as in getAllPayments
+        $types = '';
+        $params = [];
+        if (!empty($filters['po_number'])) {
+            $types .= 's';
+            $params[] = $filters['po_number'];
+        }
+        if (!empty($filters['amount_min'])) {
+            $types .= 'd';
+            $params[] = $filters['amount_min'];
+        }
+        if (!empty($filters['amount_max'])) {
+            $types .= 'd';
+            $params[] = $filters['amount_max'];
+        }
+        if (!empty($filters['utr_number'])) {
+            $types .= 's';
+            $params[] = $filters['utr_number'];
+        }
+        if (!empty($filters['payment_date_from'])) {
+            $types .= 's';
+            $params[] = $filters['payment_date_from'];
+        }
+        if (!empty($filters['payment_date_to'])) {
+            $types .= 's';
+            $params[] = $filters['payment_date_to'];
+        }
+        if (!empty($filters['vendor_id'])) {
+            $types .= 'i';
+            $params[] = $filters['vendor_id'];
+        }
+
+        if ($limit > 0) {
+            $types .= 'ii';
+            $params[] = $limit;
+            $params[] = $offset;
+        }
+
+        if (!empty($types)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        //print_r($params);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        return $row['total'] ?? 0;
+    }
+
 }

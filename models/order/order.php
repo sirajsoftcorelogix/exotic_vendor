@@ -426,6 +426,14 @@ class Order{
         $types = '';
         $values = [];
         foreach ($InsertFields as $field) {
+			if(is_string($data[$field])){
+				if (strlen($data[$field]) > 255) {
+					// Truncate the string to the specified length
+					$data[$field] = substr($data[$field], 0, 255);
+					// Optionally, append an ellipsis
+					$data[$field] .= '...';
+				}
+			}
             $value = isset($data[$field]) ? $data[$field] : null;
             // If the incoming value is an array, encode it to JSON to avoid "Array to string conversion"
             if (is_array($value)) {
@@ -596,6 +604,13 @@ class Order{
         }
                
         if(!empty($data)) {
+			if (strlen($data['author']) > 255) {
+				// Truncate the string to the specified length
+				$data['author'] = substr($data['author'], 0, 255);
+				// Optionally, append an ellipsis
+				$data['author'] .= '...';
+			}
+
         $sql = "INSERT INTO vp_products (sku, item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price,publisher,author,shippingfee,sourcingfee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ssssssssiissdisiiisissii', 

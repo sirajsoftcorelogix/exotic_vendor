@@ -119,6 +119,8 @@ class ChatServer implements MessageComponentInterface
             }
         } catch (Throwable $e) {
             error_log("onMessage error: " . $e->getMessage());
+            error_log($e->getTraceAsString());
+
             try { $from->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
         }
     }

@@ -18,7 +18,8 @@ class InboundingController {
             'vendor_code'         => $_GET['vendor_code'] ?? '',
             'received_by_user_id' => $_GET['agent_id'] ?? '',
             'group_name'          => $_GET['group_name'] ?? '',
-            'status_step'         => $_GET['status_step'] ?? ''
+            'status_step'         => $_GET['status_step'] ?? '',
+            'updated_by_user_id'  => $_GET['updated_by'] ?? ''
         ];
 
         // 2. Pagination Logic
@@ -42,7 +43,7 @@ class InboundingController {
             'currentPage'     => $pt_data["currentPage"],
             'limit'           => $limit,
             'totalRecords'    => $pt_data["totalRecords"],
-            
+            'updated_user_list' => $dropdowns['updated_users'],
             // Pass the filter data to the View
             'filters'         => $filters,
             'vendor_list'     => $dropdowns['vendors'],
@@ -87,7 +88,7 @@ class InboundingController {
             $excel_headers = [
                 'itemcode', 'groupname', 'category', 'itemtype', 'title', 
                 'image', 'redirect', 'snippet_description', 'long_description', 'long_description_india', 
-                'important_info', 'description_icons', 'bundled_items', 'keywords', 'usblock', 
+                'important_info', 'optionals', 'bundled_items', 'keywords', 'usblock', 
                 'indiablock', 'numsold', 'lastsold', 'qty_step', 'related_items', 
                 'search_term', 'search_category', 'hscode', 'vendor', 'cp', 
                 'isbn', 'author', 'publisher', 'language', 'pages', 
@@ -128,7 +129,7 @@ class InboundingController {
                     '',                                     
                     
                     '',                                     
-                    $row['description_icons'] ?? '',        
+                    $row['optionals'] ?? '',        
                     '',                                     
                     $row['key_words'] ?? '',                
                     $us_block_val,                          
@@ -232,13 +233,45 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        $data['form2']['icon_data'] = $this->geticonList();
+        $data['form2']['gecolormaps'] = $this->gecolormaps();
+        // echo "<pre>";print_r($data['form2']['gecolormaps']);exit;
+        $data['form2']['optionals_data'] = $this->getoptionals();
         $data['images'] = $inboundingModel->getitem_imgs($id);
         // echo "<pre>";print_r($data['icon_data']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
-    function geticonList() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/descriptionicons';
+    function gecolormaps() {
+        $url = 'https://www.exoticindia.com/vendor-api/product/colormaps';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json'
+        ];
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
+        ]);
+        $response = curl_exec($ch);
+        if (curl_errno($ch)) {
+            error_log("cURL Error: " . curl_error($ch));
+            curl_close($ch);
+            return false;
+        }
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode != 200) {
+            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
+            return false;
+        }
+        return json_decode($response, true);
+    }
+    function getoptionals() {
+        $url = 'https://www.exoticindia.com/vendor-api/product/optionals';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
@@ -273,6 +306,7 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         if (isset($id) && $id != 0) {
             $data = $inboundingModel->getform2data($id);
+            $data['form2']['gecolormaps'] = $this->gecolormaps();
             renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
         }else{
             header("location: " . base_url('?page=inbounding&action=list'));
@@ -280,45 +314,122 @@ class InboundingController {
     }
     public function saveform1() {
         global $inboundingModel;
-        $vendor_id = $_POST['vendor_id'] ?? '';
-        $record_id = $_POST['record_id'] ?? '';
+        
+        $vendor_id  = $_POST['vendor_id'] ?? '';
+        $record_id  = $_POST['record_id'] ?? '';
         $invoice_no = $_POST['invoice_no'] ?? '';
-        if (!isset($_FILES['invoice']) || $_FILES['invoice']['error'] !== 0) {
-            echo "invoice upload error.";
-            exit;
-        }
-        $uploadDir = __DIR__ . '/../uploads/invoice/';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-        $fileTmp  = $_FILES['invoice']['tmp_name'];
-        $fileName = $_FILES['invoice']['name'];
-        $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-        $allowed = ['jpg','jpeg','png','webp'];
-        if (!in_array($fileExt, $allowed)) {
-            echo "Only JPG, PNG, WEBP allowed.";
-            exit;
-        }
-        $newFile = "IMG_" . time() . "." . $fileExt;
-        $dest    = $uploadDir . $newFile;
-        if (move_uploaded_file($fileTmp, $dest)) {
-            $invoicePath = "uploads/invoice/" . $newFile;
+        
+        // Default invoice path is empty
+        $invoicePath = ''; 
+
+        // CHECK: Only try to upload if a file was actually sent and has no errors
+        if (isset($_FILES['invoice']) && $_FILES['invoice']['error'] === 0) {
             
-            $saveData = [
-                'vendor_id' => $vendor_id,
-                'invoice'    => $invoicePath,
-                'invoice_no' => $invoice_no
-            ];
-            $insertId = $inboundingModel->saveform1($record_id,$saveData);
-            if ($insertId) {
-                header("location: " . base_url('?page=inbounding&action=form3&id='.$insertId));
-                exit;
-            } else {
-                echo "Database error.";
+            $uploadDir = __DIR__ . '/../uploads/invoice/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
             }
+
+            $fileTmp  = $_FILES['invoice']['tmp_name'];
+            $fileName = $_FILES['invoice']['name'];
+            $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            
+            // ADDED 'pdf' to allowed list
+            $allowed = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+
+            if (!in_array($fileExt, $allowed)) {
+                echo "Only JPG, PNG, WEBP, and PDF allowed.";
+                exit;
+            }
+
+            $newFile = "IMG_" . time() . "." . $fileExt;
+            $dest    = $uploadDir . $newFile;
+
+            if (move_uploaded_file($fileTmp, $dest)) {
+                $invoicePath = "uploads/invoice/" . $newFile;
+            } else {
+                echo "Upload failed.";
+                exit;
+            }
+        }
+
+        // Prepare data (Invoice path will be empty string if no file uploaded)
+        $saveData = [
+            'vendor_id'  => $vendor_id,
+            'invoice'    => $invoicePath,
+            'invoice_no' => $invoice_no
+        ];
+
+        $insertId = $inboundingModel->saveform1($record_id, $saveData);
+
+        if ($insertId) {
+            header("location: " . base_url('?page=inbounding&action=form3&id=' . $insertId));
+            exit;
         } else {
-            echo "Upload failed.";
-        }    
+            echo "Database error.";
+        }
+    }
+
+    public function updateform1() {
+        global $inboundingModel;
+
+        $id         = $_GET['id'] ?? 0;
+        $vendor_id  = $_POST['vendor_id'] ?? '';
+        $invoice_no = $_POST['invoice_no'] ?? '';
+
+        $oldData = $inboundingModel->getform1data($id);
+
+        if (!$oldData) {
+            echo "Record not found.";
+            exit;
+        }
+
+        // Keep old image by default
+        $invoicePath = $oldData['form1']['invoice_image'];
+
+        // Only update image if a NEW file is uploaded
+        if (isset($_FILES['invoice']) && $_FILES['invoice']['error'] === 0) {
+
+            $uploadDir = __DIR__ . '/../uploads/invoice/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $fileTmp  = $_FILES['invoice']['tmp_name'];
+            $fileName = $_FILES['invoice']['name'];
+            $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            
+            // ADDED 'pdf' to allowed list
+            $allowed  = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+
+            if (!in_array($fileExt, $allowed)) {
+                echo "Only JPG, PNG, WEBP, and PDF allowed.";
+                exit;
+            }
+
+            $newFile = "IMG_" . time() . "." . $fileExt;
+            $dest    = $uploadDir . $newFile;
+
+            if (move_uploaded_file($fileTmp, $dest)) {
+                $invoicePath = "uploads/invoice/" . $newFile;
+            }
+        }
+
+        $data = [
+            'id'         => $id,
+            'vendor_id'  => $vendor_id,
+            'invoice'    => $invoicePath,
+            'invoice_no' => $invoice_no
+        ];
+
+        $updated = $inboundingModel->updateform1($data);
+
+        if ($updated) {
+            header("location: " . base_url('?page=inbounding&action=form3&id=' . $id));
+            exit;
+        } else {
+            echo "Update failed.";
+        }
     }
 
     /**
@@ -361,68 +472,6 @@ class InboundingController {
         imagedestroy($dst);
 
         return $result;
-    }
-    public function updateform1() {
-        global $inboundingModel;
-
-        $id       = $_GET['id'] ?? 0;
-        $vendor_id = $_POST['vendor_id'] ?? '';
-        $invoice_no = $_POST['invoice_no'] ?? '';
-
-        // Get old record
-        $oldData = $inboundingModel->getform1data($id);;
-
-        if (!$oldData) {
-            echo "Record not found.";
-            exit;
-        }
-
-        // Keep old image if new one not uploaded
-        $invoicePath = $oldData['form1']['invoice_image'];
-
-        // If new photo uploaded
-        if (isset($_FILES['invoice']) && $_FILES['invoice']['error'] === 0) {
-
-            $uploadDir = __DIR__ . '/../uploads/invoice/';
-
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-
-            $fileTmp  = $_FILES['invoice']['tmp_name'];
-            $fileName = $_FILES['invoice']['name'];
-            $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            $allowed  = ['jpg','jpeg','png','webp'];
-
-            if (!in_array($fileExt, $allowed)) {
-                echo "Only JPG, PNG, WEBP allowed.";
-                exit;
-            }
-
-            // Rename
-            $newFile = "IMG_" . time() . "." . $fileExt;
-            $dest    = $uploadDir . $newFile;
-
-            if (move_uploaded_file($fileTmp, $dest)) {
-                $invoicePath = "uploads/invoice/" . $newFile;
-            }
-        }
-        // Save data
-        $data = [
-            'id'       => $id,
-            'vendor_id' => $vendor_id,
-            'invoice'    => $invoicePath,
-            'invoice_no' => $invoice_no
-        ];
-
-        $updated = $inboundingModel->updateform1($data);
-
-        if ($updated) {
-            header("location: " . base_url('?page=inbounding&action=form3&id='.$id));
-            exit;
-        } else {
-            echo "Update failed.";
-        }
     }
 
     // In Inbounding Controller
@@ -578,14 +627,12 @@ class InboundingController {
         
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         
-        // 1. Get Raw Images
+        // 1. Get Raw Images (Now includes variation_id column)
         $data['images'] = $inboundingModel->get_raw_imgs($id);
-        
-        // 2. Get Item Details (Reusing your existing function for the header)
+        // 2. Get Item Details
         $data['item'] = $inboundingModel->getItemDetails($id);
         $data['record_id'] = $id;
 
-        // Load the new view file
         renderTemplate('views/inbounding/i_raw_photos.php', $data, 'Raw Photos');
     }
 
@@ -601,34 +648,39 @@ class InboundingController {
                     $inboundingModel->delete_raw_image(intval($del_id));
                 }
             }
-
             // 2. Handle New File Uploads
             if (!empty($_FILES['new_photos']['name'][0])) {
-                // NEW FOLDER PATH
+                // FOLDER PATH
                 $uploadDir = __DIR__ . '/../uploads/itm_raw_img/';
                 
-                // Create folder if it doesn't exist
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
                 foreach ($_FILES['new_photos']['name'] as $key => $name) {
                     if ($_FILES['new_photos']['error'][$key] === 0) {
+                        
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
                         $ext = pathinfo($name, PATHINFO_EXTENSION);
-                        // Unique name for raw image
                         $newName = 'raw_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
                         
+                        // --- NEW: Retrieve Variation ID ---
+                        // This comes from the hidden input generated by JS for this specific file index
+                        $varId = $_POST['new_image_variation_id'][$key] ?? -1; 
+
                         if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
-                            $inboundingModel->add_raw_image($id, $newName);
+                            // Pass Variation ID to Model
+                            $inboundingModel->add_raw_image($id, $newName, $varId);
                         }
                     }
                 }
             }
+            
             $logData = [
-                    'userid_log' => $_POST['userid_log'] ?? '',
-                    'i_id' => $id,
-                    'stat' => 'Photoshoot'
-                ];
-            $log_res =  $inboundingModel->stat_logs($logData);
+                'userid_log' => $_POST['userid_log'] ?? '',
+                'i_id' => $id,
+                'stat' => 'Photoshoot'
+            ];
+            $inboundingModel->stat_logs($logData);
+            
             header("Location: " . base_url("?page=inbounding&action=list"));
             exit;
         }
@@ -642,7 +694,7 @@ class InboundingController {
 
         if (!$oldData) { echo "Record not found."; exit; }
 
-        // --- File Upload Logic ---
+        // --- Main Invoice File Upload Logic ---
         $invoicePath = $oldData['form1']['invoice_image'] ?? '';
         if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
             $uploadDir = __DIR__ . '/../uploads/invoice/';
@@ -661,31 +713,78 @@ class InboundingController {
         $item_code  = $_POST['Item_code'] ?? '';
         $old_is_variant = $oldData['form2']['is_variant'] ?? '';
         $cat_input = $_POST['category_code'] ?? '';
-        // Convert array to comma-separated string (e.g., "1,5,8")
         $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
+        // item code logic
+        $raw_cat = $_POST['category_code'] ?? 0;
+        $category_id = is_array($raw_cat) ? $raw_cat[0] : $raw_cat;
 
-        // --- Auto-Generate Item Code Logic (For Non-Variants) ---
-        // --- Auto-Generate Item Code Logic ---
-        // --- Auto-Generate Item Code Logic ---
+        // 2. Generate Prefix Logic (Same as before, but now safe)
+        $group_val = $_POST['group_name'] ?? ''; 
+        $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
+        $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
+        $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
+        $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
+        $current_prefix = $char1 . $char2; 
+
+        // 3. GET GLOBAL LAST CODE & GENERATE NEW (With Safety Loop)
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
-
-            // 1. Get Group Name (Use the NEW function to search by 'category' column)
-            $group_val = $_POST['group_name'] ?? ''; 
-            $group_real_name = $inboundingModel->getGroupNameByCode($group_val); 
-
-            // 2. Get Category Name (Use the EXISTING function to search by 'id' column)
-            $category_id = $_POST['category_code'] ?? 0;
-            $cat_real_name = $inboundingModel->getCategoryName($category_id);
             
-            $next_count = $inboundingModel->getNextProductCount();
+            // Start with the logic you had
+            $last_code = $inboundingModel->getLastItemCodeGlobal();
 
-            // 3. Generate Chars
-            // If name is found, take 1st letter. If not found (empty), default to 'X'
-            $char1  = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-            $char23 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 2)) : 'XX';
-            $increment_str = str_pad($next_count, 3, '0', STR_PAD_LEFT);
+            // Initialize variables for the loop
+            $is_unique = false;
+            $attempts = 0;
 
-            $item_code = $char1 . $char23 . $increment_str;
+            // Extract the starting sequence from the global last code
+            if (empty($last_code)) {
+                $letters = 'AA';
+                $number = 0; // Will become 1 in the loop
+            } else {
+                $last_sequence = substr($last_code, 2); 
+                if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
+                    $letters = $matches[1];
+                    $number  = intval($matches[2]);
+                } else {
+                    $letters = 'AA';
+                    $number  = 0; 
+                }
+            }
+
+            // DO-WHILE LOOP: Keep trying until we find a code that doesn't exist
+            do {
+                $attempts++;
+                
+                // --- Increment Logic ---
+                if ($number < 99) {
+                    $number++; 
+                } else {
+                    $number = 1; 
+                    $letters++; // AA -> AB
+                }
+                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
+                
+                // Construct the candidate code
+                $candidate_code = $current_prefix . $new_seq;
+
+                // --- CRITICAL CHECK: Does this code exist in DB? ---
+                // You need to add a simple helper method to your model: checkItemCodeExists($code)
+                $exists = $inboundingModel->checkItemCodeExists($candidate_code);
+
+                if (!$exists) {
+                    $item_code = $candidate_code;
+                    $is_unique = true;
+                } else {
+                    // If it exists, we loop again (which increments $number again)
+                    // e.g., if HSAA02 exists, next loop tries HSAA03
+                }
+
+                // Safety break to prevent infinite loops
+                if ($attempts > 100) {
+                    die("Error: Unable to generate unique item code after 100 attempts.");
+                }
+
+            } while (!$is_unique);
         }
 
         // --- SKU GENERATION LOGIC ---
@@ -694,10 +793,8 @@ class InboundingController {
         $generated_sku = '';
 
         if ($is_variant === 'N') {
-            // Rule: If Variant is No, SKU is exactly the Item Code
             $generated_sku = $item_code;
         } elseif ($is_variant === 'Y') {
-            // Safety check: ensure item_code isn't empty (though JS validation handles this)
             if(!empty($item_code)) {
                 $generated_sku = $item_code . '-' . $size . '-' . $color;
             } else {
@@ -712,31 +809,70 @@ class InboundingController {
         $sub_sub_input = $_POST['sub_sub_category_code'] ?? '';
         $sub_sub_val   = is_array($sub_sub_input) ? implode(',', $sub_sub_input) : $sub_sub_input;
 
-
-        $icons_raw = $_POST['description_icons'] ?? ''; 
+        $icons_raw = $_POST['optionals'] ?? ''; 
         $icons_val = is_array($icons_raw) ? implode(',', $icons_raw) : $icons_raw;
-        $back_order_input = $_POST['back_order'] ?? '0'; // Defaults to '0' (No)
+        
+        $back_order_input = $_POST['back_order'] ?? '0'; 
+        $percent_val = ($back_order_input == '1') ? (!empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0) : 0;
+        $day_val     = ($back_order_input == '1') ? (!empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0) : 0;
 
-        $percent_val = 0;
-        $day_val     = 0;
+        // =========================================================
+        // START NEW CODE: Handle Main Product Photo Upload
+        // =========================================================
+        // Default to old photo if no new one is uploaded
+        $mainProductPhoto = $_POST['old_product_photo_main'] ?? ($oldData['form2']['product_photo'] ?? ''); 
 
-        // Only capture values if "Yes" (1) is selected
-        if ($back_order_input == '1') {
-            // Use intval to force it to be a number (prevents empty strings)
-            $percent_val = !empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0;
-            $day_val     = !empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0;
+        if (isset($_FILES['product_photo_main']) && $_FILES['product_photo_main']['error'] === UPLOAD_ERR_OK) {
+            $tmpName = $_FILES['product_photo_main']['tmp_name'];
+            $name    = $_FILES['product_photo_main']['name'];
+            $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $uploadDir = __DIR__ . '/../uploads/products/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                
+                // Unique Name: MAIN_ID_TIMESTAMP_RANDOM
+                $newFileName = "MAIN_" . $id . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                
+                if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                    $mainProductPhoto = "uploads/products/" . $newFileName;
+                }
+            }
         }
-        // 3. Data Array
+        $s_group   = $_POST['search_group'] ?? '';
+    
+        // Capture arrays and implode to comma-separated strings
+        $s_cat_arr = $_POST['search_cat'] ?? [];
+        $s_cat     = is_array($s_cat_arr) ? implode(',', $s_cat_arr) : $s_cat_arr;
+
+        $s_sub_arr = $_POST['search_sub'] ?? [];
+        $s_sub     = is_array($s_sub_arr) ? implode(',', $s_sub_arr) : $s_sub_arr;
+
+        $s_subsub_arr = $_POST['search_sub_sub'] ?? [];
+        $s_subsub     = is_array($s_subsub_arr) ? implode(',', $s_subsub_arr) : $s_subsub_arr;
+        $search_category_string = $s_subsub . '|' . $s_sub . '|' . $s_cat . '|' . $s_group;
+
+        $search_term = $_POST['search_term'] ?? '';
+
+        // =========================================================
+        // END NEW CODE
+        // =========================================================
+
+        // 3. Prepare Main Data Array
         $data = [
+            'product_photo'       => $mainProductPhoto, // <--- ADDED THIS LINE
             'invoice_image'       => $invoicePath,
+            'search_term' => $search_term,
+            'search_category_string' => $search_category_string,
             'is_variant'          => $is_variant,
             'Item_code'           => $item_code,
-            'sku'                 => $generated_sku, // <--- ADDED SKU HERE
+            'sku'                 => $generated_sku,
             'group_name'          => $_POST['group_name'] ?? '', 
+            'colormaps'             => $_POST['colormaps'] ?? '',
             'category_code'       => $category_val,
             'sub_category_code'   => $sub_cat_val, 
             'sub_sub_category_code' => $sub_sub_val,
-            'stock_added_date'    => $_POST['stock_added_date'] ?? '',
+            'added_date'    => $_POST['added_date'] ?? '',
             'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
             'updated_by_user_id'  => $_POST['updated_by_user_id'] ?? '',
             'invoice_no'          => $_POST['invoice_no'] ?? '',
@@ -745,10 +881,10 @@ class InboundingController {
             'key_words'           => $_POST['key_words'] ?? '',
             'snippet_description' => $_POST['snippet_description'] ?? '',
             'vendor_code'         => $_POST['vendor_code'] ?? '',
-            'inr_pricing'         => $_POST['inr_pricing'] ?? '',
             'cp'                  => $_POST['cp'] ?? '',
-            'amazon_price'        => $_POST['amazon_price'] ?? '',
-            'usd_price'           => $_POST['usd_price'] ?? '',
+            'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
+            'price_india'         => $_POST['price_india'] ?? '',
+            'usd_price'             => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
             'gst_rate'            => $_POST['gst_rate'] ?? '',
             'height'              => $_POST['height'] ?? '',
@@ -761,46 +897,103 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
+            'marketplace'         => $_POST['marketplace'] ?? '',
+            'india_net_qty'       => $_POST['india_net_qty'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
-            'description_icons'   => $icons_val, 
-            'back_order'           => $back_order_input,
-            'backorder_percent'    => $percent_val,
-            'backorder_day'        => $day_val,
+            'optionals'   => $icons_val, 
+            'back_order'          => $back_order_input,
+            'backorder_percent'   => $percent_val,
+            'backorder_day'       => $day_val,
             'us_block'            => $_POST['us_block'] ?? '',
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
+            'feedback'         => $_POST['feedback'] ?? '',
         ];
-
-        // 4. Save
+        // 4. Update Main Record
         $result = $inboundingModel->updatedesktopform($id, $data);
-        // 2. Update Display Order (Existing)
-                if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
-                    foreach ($_POST['photo_order'] as $img_id => $order_num) {
-                        $inboundingModel->update_image_order($img_id, $order_num);
-                    }
-                }
 
-                // 3. UPDATE VARIATIONS (Add This New Block)
-                // This saves which variation the photo belongs to
-                if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
-                    foreach ($_POST['photo_variation'] as $img_id => $var_id) {
-                        $inboundingModel->update_image_variation($img_id, $var_id);
-                    }
-                }
+        // =========================================================================
+        // START VARIATIONS LOGIC (Already present in your code)
+        // =========================================================================
+        
+        // Capture variations array from POST
+        $allVariations = $_POST['variations'] ?? [];
+
+        foreach ($allVariations as $key => &$variant) {
+            // Ensure ID is passed correctly
+            $variant['id'] = $variant['id'] ?? '';
+
+            // Handle File Uploads for each variation
+            $uploadError = $_FILES['variations']['error'][$key]['photo'] ?? UPLOAD_ERR_NO_FILE;
+
+            if ($uploadError === UPLOAD_ERR_OK) {
+                 $tmpName = $_FILES['variations']['tmp_name'][$key]['photo'];
+                 $name    = $_FILES['variations']['name'][$key]['photo'];
+                 $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+                 if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                     $uploadDir = __DIR__ . '/../uploads/products/';
+                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                     // Generate unique name to prevent conflicts
+                     $newFileName = "VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100,999) . "." . $ext;
+                     if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                         $variant['photo'] = "uploads/products/" . $newFileName;
+                     }
+                 }
+            } else {
+                 // Keep the old photo if no new one was uploaded
+                 $variant['photo'] = $variant['old_photo'] ?? '';
+            }
+        }
+        unset($variant); // Break reference
+
+        // Call Model to Save Variations
+        $inboundingModel->saveVariations($id, $allVariations, $item_code);
+        // =========================================================================
+        // END VARIATIONS LOGIC
+        // =========================================================================
+
+        // 5. Update Image Order
+        if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
+            foreach ($_POST['photo_order'] as $img_id => $order_num) {
+                $inboundingModel->update_image_order($img_id, $order_num);
+            }
+        }
+
+        // 6. Update Image Variation Assignment
+        if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
+            foreach ($_POST['photo_variation'] as $img_id => $var_id) {
+                $inboundingModel->update_image_variation($img_id, $var_id);
+            }
+        }
+
         if ($result['success']) {
             $logData = [
-                    'userid_log' => $_POST['userid_log'] ?? '',
-                    'i_id' => $id,
-                    'stat' => 'Data Entry'
-                ];
-            $log_res =  $inboundingModel->stat_logs($logData);
-            header("location: " . base_url('?page=inbounding&action=list'));
+                'userid_log' => $_POST['userid_log'] ?? '',
+                'i_id' => $id,
+                'stat' => 'Data Entry'
+            ];
+            $inboundingModel->stat_logs($logData);
+
+            // --- NEW REDIRECT LOGIC START ---
+            $action_clicked = $_POST['save_action'] ?? '';
+
+            if ($action_clicked === 'draft') {
+                // 1. If "Save and Draft" clicked -> Redirect back to SAME PAGE
+                // Assuming 'desktopform' is the action used to VIEW the form
+                header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
+            } else {
+                // 2. If "Save and Generate" clicked -> Redirect to LIST
+                header("location: " . base_url('?page=inbounding&action=list'));
+            }
+            // --- NEW REDIRECT LOGIC END ---
+            
             exit;
         } else {
             echo "Update failed: " . $result['message'];
         }
-    }    
+    }
     public function submitStep3() {
         global $inboundingModel;
 
@@ -808,13 +1001,12 @@ class InboundingController {
         $record_id = $_POST['record_id'] ?? '';
         if (empty($record_id)) { echo "Record ID missing"; exit; }
 
-        // 2. Process Variations & Images (Capture all inputs)
+        // 2. Process Variations
         $allVariations = array_values($_POST['variations'] ?? []);
-
         foreach ($allVariations as $index => &$variant) {
             $variant['id'] = $_POST['variations'][$index]['id'] ?? '';
             
-            // Handle File Uploads
+            // Handle File Uploads (Same as before)
             $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
             if ($uploadError === UPLOAD_ERR_OK) {
                 $tmpName = $_FILES['variations']['tmp_name'][$index]['photo'];
@@ -834,83 +1026,69 @@ class InboundingController {
         }
         unset($variant); 
 
-        // 3. Extract Base Variant (Index 0) for Main Data
+        // 3. Extract Base Variant (Index 0)
         $mainVariant = $allVariations[0] ?? []; 
 
-        // --- 4. TEMP CODE LOGIC (Updated to match saveform3) ---
-        
-        // A. Fetch Existing Data
+        // 4. TEMP CODE LOGIC (Same as before)
         $existingData = $inboundingModel->getById($record_id); 
-        
-        // Only generate if Temp Code doesn't exist or is invalid
         if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
             $temp_code = $existingData['temp_code'];
         } else {
-            // B. Get Category Name (First Char)
             $categoryName = '';
-            // Use group_name from existing data as Category ID
             if (!empty($existingData['group_name'])) {
                 $catData = $inboundingModel->getCategoryById($existingData['group_name']);
                 $categoryName = $catData['display_name'] ?? ''; 
             }
-
-            // C. Get Material Name (First Char)
             $materialId = $_POST['material_code'] ?? '';
             $materialName = '';
             if (!empty($materialId)) {
                 $matData = $inboundingModel->getMaterialById($materialId);
                 $materialName = $matData['material_name'] ?? '';
             }
-
-            // D. Get Color (First Char) - From Main Variation
             $colorName = $mainVariant['color'] ?? '';
-
-            // E. Generate Prefix (e.g., "BSB")
             $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
             $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
             $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
             $prefix = $char1 . $char2 . $char3;
-
-            // F. Generate Full Temp Code
             $temp_code = $inboundingModel->generateNextTempCode($prefix);
         }
 
         // 5. PREPARE MAIN UPDATE DATA
+        // FIX: Mapping HTML inputs to exact DB Column names here
         $gate_entry = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
-
         $mainUpdateData = [
             'gate_entry_date_time' => $gate_entry,
             'material_code'        => $_POST['material_code'] ?? '',
             'group_name'           => $_POST['category'] ?? '',
             'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
+            'Item_code'             => $_POST['Item_code'] ?? '',
+            'is_variant'             => $_POST['is_variant'] ?? '',
             'temp_code'            => $temp_code,
             
-            // Data from Main Variant
+            // Map Index 0 Data to DB Columns
             'height'               => $mainVariant['height'] ?? 0,
             'width'                => $mainVariant['width'] ?? 0,
             'depth'                => $mainVariant['depth'] ?? 0,
             'weight'               => $mainVariant['weight'] ?? 0,
             'color'                => $mainVariant['color'] ?? '',
             'size'                 => $mainVariant['size'] ?? '',
-            'quantity_received'    => $mainVariant['quantity'] ?? 0,
             'cp'                   => $mainVariant['cp'] ?? 0,
-            'product_photo'        => $mainVariant['photo'] ?? '' 
-        ];
+            'product_photo'        => $mainVariant['photo'] ?? '',
+            'store_location'       => $mainVariant['store_location'] ?? '',
+            'price_india'          => $mainVariant['price_india'] ?? '',
+            'price_india_mrp'      => $mainVariant['price_india_mrp'] ?? '',
 
+            // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
+            'quantity_received'    => $mainVariant['quantity'] ?? 0, 
+        ];
         // 6. Update Database
         $res = $inboundingModel->updateMainInbound($record_id, $mainUpdateData);
 
         if ($res['success']) {
-            // Log the action
+            // Log logic...
             $userid_log = $_POST['userid_log'] ?? 0;
-            $logData = [
-                'stat'       => 'inbound',
-                'userid_log' => $userid_log,
-                'i_id'       => $record_id
-            ];
-            // Assuming stat_logs is available in the model
             if(method_exists($inboundingModel, 'stat_logs')) {
-                 $inboundingModel->stat_logs($logData);
+                 $inboundingModel->stat_logs(['stat'=>'inbound', 'userid_log'=>$userid_log, 'i_id'=>$record_id]);
             }
 
             // Save extra variations
@@ -969,121 +1147,247 @@ class InboundingController {
         }
         exit;
     }
+    public function deleteSelected() {
+        // 1. Use the Global variable (Like in your sample code)
+        // Make sure this matches the variable name defined in your index.php
+        global $inboundingModel; 
+        global $conn; // Sometimes needed if the model relies on it implicitly
+
+        // 2. Security Check
+        if (!isset($_SESSION['user']['id'])) {
+            // Redirect to login or show error
+            header("Location: " . base_url('?page=inbounding&action=list&msg=unauthorized'));
+            exit;
+        }
+
+        // 3. Get IDs from POST
+        $ids_string = $_POST['ids'] ?? '';
+
+        if (!empty($ids_string)) {
+            // Convert string "1,2,3" into array
+            $ids_array = explode(',', $ids_string);
+            $ids_array = array_map('intval', $ids_array); // Security: Force integers
+            $ids_array = array_filter($ids_array); // Remove empty values
+
+            if (!empty($ids_array)) {
+                // 4. Call Model using the global variable
+                // Ensure you added the 'deleteInboundItems' function to your Model class!
+                $result = $inboundingModel->deleteInboundItems($ids_array);
+
+                if ($result) {
+                    // Success: Redirect back to the list
+                    header("Location: " . base_url('?page=inbounding&action=list&msg=deleted_success'));
+                    exit;
+                } else {
+                    // Database Error
+                    header("Location: " . base_url('?page=inbounding&action=list&msg=error_db'));
+                    exit;
+                }
+            }
+        }
+        
+        // Fallback: No IDs selected or other error
+        header("Location: " . base_url('?page=inbounding&action=list&msg=no_selection'));
+        exit;
+    }
     public function inbound_product_publish(){
         global $inboundingModel;
         $API_data = array();
-        
+
         // top level data
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         $data = $inboundingModel->getpublishdata($id);
 
+        // --- HELPER: Get Current Date in Y-m-d format ---
+        $current_date_formatted = date("Y-m-d"); 
+
         // 1. Add all other fields FIRST
         $API_data['itemcode'] = $data['data']['Item_code'];
         $API_data['groupname'] = $data['data']['groupname'];
-        $API_data['category'] = $data['data']['Item_code'];
+        $API_data['category'] = $data['data']['final_cat_ids'];
         $API_data['itemtype'] ='product';
         $API_data['title'] = $data['data']['product_title'];
-        // REMOVED item_stock_price from here
         $API_data['status'] = 1;
         $API_data['snippet_description'] = $data['data']['snippet_description'];
-        $API_data['description_icons'] = $data['data']['description_icons'];
-        $API_data['india_net_qty'] = $data['data']['quantity_received'];
+        $API_data['creator'] = $data['data']['received_by_user_id'];
+        // $API_data['optionals'] = $data['data']['optionals'];
+        $API_data['india_net_qty'] = (int)$data['data']['india_net_qty'];
         $API_data['keywords'] = $data['data']['key_words'];
-        $API_data['usblock'] = $data['data']['us_block'];
-        $API_data['indiablock'] = $data['data']['india_block'];
+        // Convert 'Y' to 1, and 'N' (or anything else) to 0
+        $API_data['usblock']    = ($data['data']['us_block'] === 'Y') ? 1 : 0;
+        $API_data['indiablock'] = ($data['data']['india_block'] === 'Y') ? 1 : 0;
         $API_data['hscode'] = $data['data']['hsn_code'];
-        $API_data['vendor'] = $data['data']['Item_code'];
-        $API_data['date_first_added'] = $data['data']['vendor_code'];
+        $API_data['date_first_added'] = date("Y-m-d", strtotime($data['data']['gate_entry_date_time']));
+        $API_data['search_term'] = '';
+        $API_data['long_description'] = '';
+        $API_data['long_description_india'] = '';
+        $API_data['aplus_content_ids'] = '';
+        $API_data['optionals'] = 'OPTIONALS_TEXTILES_SARIS';
         $API_data['material'] = $data['data']['material_name'];
-        $API_data['images'] = $data['data']['product_photo'];
-
-        // 2. Build stock price array separately in a TEMP variable
+        $API_data['discrete_vendors'][0]['vendor'] = $data['data']['vendor_code'];
+        $API_data['discrete_vendors'][0]['priority'] = 1;
         $stock_price_temp = array();
-
-        // Parent Record [0]
-        $stock_price_temp[0]['price'] = $data['data']['inr_pricing'];
-        $stock_price_temp[0]['size'] = $data['data']['size'];
-        $stock_price_temp[0]['color'] = $data['data']['color'];
+        if ($data['data']['is_variant'] == 'N') {
+            
+            if (!empty($data['data']['var_rows'])) {
+                $stock_price_temp[0]['size'] = $data['data']['size'];
+                $stock_price_temp[0]['color'] = $data['data']['color'];
+                $stock_price_temp[0]['item_level'] = 'parent';
+            }else{
+                $stock_price_temp[0]['size'] = "";
+                $stock_price_temp[0]['color'] = "";
+                $stock_price_temp[0]['item_level'] = 'standalone';
+            }
+        }else{
+            $stock_price_temp[0]['size'] = $data['data']['size'];
+            $stock_price_temp[0]['color'] = $data['data']['color'];
+            $stock_price_temp[0]['item_level'] = 'variation';
+        }
+        $stock_price_temp[0]['colormap'] = '';
         $stock_price_temp[0]['product_weight'] = $data['data']['weight'];
-        $stock_price_temp[0]['prod_height'] = $data['data']['height'];
-        $stock_price_temp[0]['prod_width'] = $data['data']['width'];
-        $stock_price_temp[0]['prod_length'] = $data['data']['depth'];
-        $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
-        $stock_price_temp[0]['date_added'] = time();
-        $stock_price_temp[0]['stock_date_added'] = $data['data']['stock_added_date']; // Fixed mapping (was photo)
-        $stock_price_temp[0]['gst'] = $data['data']['gst_rate'];
-        $stock_price_temp[0]['price_india'] = $data['data']['inr_pricing'];
-        $stock_price_temp[0]['item_level'] = 'parent';
         $stock_price_temp[0]['product_weight_unit'] = 'kg';
+        $stock_price_temp[0]['prod_length'] = $data['data']['depth'];
+        $stock_price_temp[0]['prod_width'] = $data['data']['width'];
+        $stock_price_temp[0]['prod_height'] = $data['data']['height'];
         $stock_price_temp[0]['length_unit'] = 'inch';
+        $input_date = $data['data']['added_date'] ?? null;
+        if (!empty($input_date) && $input_date != '0000-00-00') {
+            $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($input_date));
+        } else {
+            $stock_price_temp[0]['date_added'] = date('Y-m-d');
+        } 
+        $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
+        $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
+        $stock_price_temp[0]['flex_status'] = '0';
+        $stock_price_temp[0]['fba_in'] = '0';
+        $stock_price_temp[0]['fba_us'] = '0';
+        $stock_price_temp[0]['fba_eu'] = '0';
+        $stock_price_temp[0]['vendor_us'] = '0';
+        $stock_price_temp[0]['price'] = (int) $data['data']['price_india'];
+        $stock_price_temp[0]['price_india'] = (int) $data['data']['price_india'];
+        $stock_price_temp[0]['price_india_suggested'] = (int) $data['data']['price_india'];
+        $stock_price_temp[0]['mrp_india'] = (int) $data['data']['price_india_mrp'];
+        $stock_price_temp[0]['gst'] = $data['data']['gst_rate'];
+        $stock_price_temp[0]['permanent_discount'] = '1';
+        $stock_price_temp[0]['discount_global'] = '0';
+        $stock_price_temp[0]['today_global'] = '0';
+        $stock_price_temp[0]['discount_india'] = '0';
+        $stock_price_temp[0]['today_india'] = '0';
+        $stock_price_temp[0]['upc'] = '';
+        $stock_price_temp[0]['asin'] = '';
         $stock_price_temp[0]['location'] = $data['data']['store_location'];
+        $stock_price_temp[0]['topurchase'] = '0';
         $stock_price_temp[0]['backorder_percent'] = $data['data']['backorder_percent'];
         $stock_price_temp[0]['backorder_weeks'] = $data['data']['backorder_day'];
         $stock_price_temp[0]['leadtime'] = $data['data']['lead_time_days'];
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
-        $stock_price_temp[0]['permanently_available'] = $data['data']['permanently_available'];
+        $stock_price_temp[0]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+        $stock_price_temp[0]['amazon_sold'] = '0';
+        $stock_price_temp[0]['amazon_leadtime'] = '10';
+        $stock_price_temp[0]['amazon_itemcode_alias'] = '';
+        $stock_price_temp[0]['youtube_links'] = '';
+        $stock_price_temp[0]['sketchfab_links'] = '';
 
         // Variation Records [1..n]
         if (!empty($data['data']['var_rows'])) {
             $i = 0;
             foreach ($data['data']['var_rows'] as $key => $value) {
                 $i++;
-                $stock_price_temp[$i]['price'] = $data['data']['inr_pricing'];
                 $stock_price_temp[$i]['size'] = $value['size'];
                 $stock_price_temp[$i]['color'] = $value['color'];
-                $stock_price_temp[$i]['product_weight'] = $value['weight'];
-                $stock_price_temp[$i]['prod_height'] = $value['height'];
-                $stock_price_temp[$i]['prod_width'] = $value['width'];
-                $stock_price_temp[$i]['prod_length'] = $value['depth'];
-                $stock_price_temp[$i]['local_stock'] = $value['quantity'];
-                $stock_price_temp[$i]['date_added'] = time();
-                $stock_price_temp[$i]['stock_date_added'] = $data['data']['stock_added_date'];
-                $stock_price_temp[$i]['gst'] = $data['data']['gst_rate'];
-                $stock_price_temp[$i]['price_india'] = $data['data']['inr_pricing'];
+                $stock_price_temp[$i]['marketplace_vendor'] = "exoticindia";
                 $stock_price_temp[$i]['item_level'] = 'variation';
+                $stock_price_temp[$i]['colormap'] = '';
+                $stock_price_temp[$i]['product_weight'] = $value['weight'];
                 $stock_price_temp[$i]['product_weight_unit'] = 'kg';
+                $stock_price_temp[$i]['prod_length'] = $value['depth'];
+                $stock_price_temp[$i]['prod_width'] = $value['width'];
+                $stock_price_temp[$i]['prod_height'] = $value['height'];
                 $stock_price_temp[$i]['length_unit'] = 'inch';
-                $stock_price_temp[$i]['location'] = $data['data']['store_location'];
+                $stock_price_temp[$i]['date_added'] = $data['data']['added_date']; 
+                $stock_price_temp[$i]['stock_date_added'] = date("Y-m-d", strtotime($current_date_formatted));
+                $stock_price_temp[$i]['local_stock'] = $value['quantity_received'];
+                $stock_price_temp[$i]['flex_status'] = '0';
+                $stock_price_temp[$i]['fba_in'] = '0';
+                $stock_price_temp[$i]['fba_us'] = '0';
+                $stock_price_temp[$i]['fba_eu'] = '0';
+                $stock_price_temp[$i]['vendor_us'] = '0';
+                $stock_price_temp[$i]['price'] = (int) $value['price_india'];
+                $stock_price_temp[$i]['price_india'] = (int) $value['price_india'];
+                $stock_price_temp[$i]['price_india_suggested'] = (int) $data['data']['price_india'];
+                $stock_price_temp[$i]['mrp_india'] = (int) $value['price_india_mrp'];
+                $stock_price_temp[$i]['gst'] = $value['gst_rate'];
+                $stock_price_temp[$i]['permanent_discount'] = '1';
+                $stock_price_temp[$i]['discount_global'] = '0';
+                $stock_price_temp[$i]['today_global'] = '0';
+                $stock_price_temp[$i]['discount_india'] = '0';
+                $stock_price_temp[$i]['today_india'] = '0';
+                $stock_price_temp[$i]['upc'] = '';
+                $stock_price_temp[$i]['asin'] = '';
+                $stock_price_temp[$i]['location'] = $value['store_location'];
+                $stock_price_temp[$i]['topurchase'] = '0';
                 $stock_price_temp[$i]['backorder_percent'] = $data['data']['backorder_percent'];
                 $stock_price_temp[$i]['backorder_weeks'] = $data['data']['backorder_day'];
                 $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
-                $stock_price_temp[$i]['permanently_available'] = $data['data']['permanently_available'];
+                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+                $stock_price_temp[$i]['amazon_sold'] = '0';
+                $stock_price_temp[$i]['amazon_leadtime'] = '10';
+                $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
+                $stock_price_temp[$i]['youtube_links'] = '';
+                $stock_price_temp[$i]['sketchfab_links'] = '';
             }
         }
 
-        // 3. Assign it to main array LAST
-        // Because this is the last assignment, it will appear at the bottom of the JSON
-        $API_data['item_stock_price'] = $stock_price_temp;
+        // 3. Assign item_stock_price to main array
+        // array_values ensures JSON encodes this as a list [...] and not an object {"0":..}
+        $API_data['item_stock_price'] = array_values($stock_price_temp);
 
-        // 1. Initialize the array and keys to defaults to avoid "Undefined Index" errors
+
+        // 4. Handle Images (The major fix)
         $images_payload = array();
         $images_payload['image_directory'] = '';
-        $images_payload['images'] = '';
+        $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
-        // 2. Check if image data exists
         if (!empty($data['data']['img'])) {
+            $images_payload['image_directory'] = '';
             
-            // Create directory name (sanitize title to be safe for folders)
-            $clean_title = preg_replace('/[^A-Za-z0-9\-]/', '-', $data['data']['product_title']);
-            $images_payload['image_directory'] = $clean_title . '-2025';
+            // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
+            // If you need a clickable URL for a browser, change this to your website URL.
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $domain = $_SERVER['HTTP_HOST'];
 
-            // 3. Use array_column and implode (Cleaner & Faster than foreach)
-            // This extracts all 'file_name' values and joins them with commas automatically
-            $images_payload['images'] = implode(',', array_column($data['data']['img'], 'file_name'));
+            $baseUrl = $protocol . '://' . $domain;
+            $imgDir = $baseUrl.'/uploads/itm_img/'; 
+            // 1. Get the list of filenames
+            $raw_images = array_column($data['data']['img'], 'file_name');
+
+            // 2. Concatenate $imgDir to each filename
+            $images_payload['images'] = array_map(function($filename) use ($imgDir) {
+                return $imgDir . $filename;
+            }, $raw_images);
         }
 
-        // 4. Assign to the specific key in your main API array (Do not use $API_data = ...)
         $API_data['images'] = $images_payload;
-        $jsonString = json_encode($API_data);
 
-        $url = 'https://wp.exoticindia.com/vendor-api/product/create';
+        $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
+        // print_r($jsonString);exit;
+        $apiurl =  '';
+        $isVariant = $data['data']['is_variant'];
+        $hasRows   = !empty($data['data']['var_rows']);
+        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+
+        $apiurl = ($isVariant == 'Y' && !$hasRows) 
+            ? $baseUrl . '?new_variation=1' 
+            : $baseUrl;
+
+        $url = $apiurl;
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
-            'Accept: application/json'
+            'Accept: application/json' 
         ];
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -1097,20 +1401,29 @@ class InboundingController {
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
         ]);
         $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            error_log("cURL Error: " . curl_error($ch));
-            curl_close($ch);
-            return false;
-        }
+        // echo "<pre>";print_r($response);exit;
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($httpCode != 200) {
-            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
-            return false;
+        if (curl_errno($ch)) {
+            $error = "cURL Error: " . curl_error($ch);
+            curl_close($ch);
+            echo json_encode(['status' => 'error', 'message' => $error]);
+            exit;
         }
-        echo "<pre>"; print_r($response); exit;
-        return json_decode($response, true);
+        curl_close($ch);
+        if ($httpCode != 200 && $httpCode != 201) {
+            echo json_encode(['status' => 'error', 'message' => "API Error HTTP $httpCode", 'debug' => $response]);
+            exit;
+        }
+        header('Content-Type: application/json');
+        if (empty($response) || trim($response) === '') {
+            echo json_encode([
+                'status' => 'success', 
+                'message' => 'Product Published Successfully!'
+            ]);
+        } else {
+            echo $response; 
+        }
+        exit;
     }
-
 }
 ?>

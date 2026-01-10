@@ -276,6 +276,25 @@
             </div>
         </div>
     </div>
+    <?php 
+    // if (isset($_GET['order_from']) && !empty($_GET['order_from'])) {
+    //     $from_date = $_GET['order_from'];
+    // } else {
+    //     $from_date = date('Y-m-d');
+    // }
+    // if (isset($_GET['order_till']) && !empty($_GET['order_till'])) {
+    //     $till_date = $_GET['order_till'];
+    // } else {
+    //     $till_date = date('Y-m-d');
+    // }
+    $dtrange = '';
+    if (empty($_GET['order_till'])) {
+        $dtrange = htmlspecialchars($_GET['order_from'] ?? '');
+    } else {
+        $dtrange = htmlspecialchars($_GET['order_from'] ?? '') . ' - ' . htmlspecialchars($_GET['order_till'] ?? '');
+    }
+    
+   ?>
     <!-- Advance Search Accordion -->
     <div class="mt-2 mb-8 bg-white rounded-xl p-4 ">
         <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
@@ -294,15 +313,57 @@
                 
                     <div class="w-full date-field">
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order Date Range</label>
-                        <input type="text" value="<?= htmlspecialchars($_GET['daterange'] ?? '') ?>" name="daterange" id="daterange" placeholder="Select date range" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
+                        <input type="text" autocomplete="off" value="<?= $dtrange ?>" name="daterange" id="daterange" placeholder="Select date range" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
                         <i class="fa fa-calendar"></i>
+                        <input type="hidden" name="order_from"  value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" id="from_date">
+                        <input type="hidden" name="order_till"  value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" id="to_date">
+
                     </div>
                      <script>
                         $(function() {
-                        $('#daterange').daterangepicker({
-                            opens: 'right',
-                            locale: { format: 'YYYY-MM-DD' }
-                        });
+                            // Initialize date range picker: display format 'DD MMM YYYY' (e.g., 25 Dec 2015)
+                            $('#daterange').daterangepicker({
+                                autoUpdateInput: false,     // keep field blank until Apply
+                                showDropdowns: true,        // optional: month/year dropdowns
+                                locale: { format: 'DD MMM YYYY' },
+                                alwaysShowCalendars: true,  // ensures only calendars show
+                                drops: 'down',              // position of calendar
+                                opens: 'right',             // alignment
+                                autoApply: false 
+                            }, function(start, end) {
+                                // Update hidden fields whenever a range is selected (ISO for server)
+                                $('#from_date').val(start.format('YYYY-MM-DD'));
+                                $('#to_date').val(end.format('YYYY-MM-DD'));
+                            });
+
+                            // When user selects a range, update the input using 'DD MMM YYYY' format
+                            $('#daterange').on('apply.daterangepicker', function(ev, picker) {
+                                $(this).val(picker.startDate.format('DD MMM YYYY') + ' - ' + picker.endDate.format('DD MMM YYYY'));
+                                // ensure hidden fields are updated too (in case callback didn't run)
+                                $('#from_date').val(picker.startDate.format('YYYY-MM-DD'));
+                                $('#to_date').val(picker.endDate.format('YYYY-MM-DD'));
+                            });
+
+                            // If user clears, reset to placeholder and clear hidden fields
+                            $('#daterange').on('cancel.daterangepicker', function(ev, picker) {
+                                $(this).val('');
+                                $('#from_date').val('');
+                                $('#to_date').val('');
+                            });
+
+                            // If page already has from/to values (e.g., after a search), format and show them
+                            var existingFrom = $('#from_date').val();
+                            var existingTo = $('#to_date').val();
+                            if (existingFrom && existingTo) {
+                                try {
+                                    var fromFormatted = moment(existingFrom, 'YYYY-MM-DD').format('DD MMM YYYY');
+                                    var toFormatted = moment(existingTo, 'YYYY-MM-DD').format('DD MMM YYYY');
+                                    $('#daterange').val(fromFormatted + ' - ' + toFormatted);
+                                } catch (e) {
+                                    // ignore formatting errors
+                                }
+                            }
+
                         });
                     </script>
                     <!-- <div class="w-1/2">
@@ -470,9 +531,11 @@
             <!-- Save Search Controls -->
             <div class="mt-4">
                 <?php if (!empty($query_string) && trim($query_string, '&') != ''): ?>
-                    <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-700 transition">Save Search</button>
+                    <a href="javascript:void(0);" id="saveSearchBtn" onclick="saveCurrentSearch()" class=""><img src="<?php echo base_url('images/save_search.jpeg'); ?>" alt="Save" class="ml-1 w-10 h-10"></a>
+                    <!-- <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-700 transition">Save Search</button> -->
                 <?php else: ?>
-                    <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm" disabled>Save Search</button>
+                    <!-- <button id="saveSearchBtn" onclick="saveCurrentSearch()" class="bg-green-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm" disabled>Save Search</button> -->
+                    <img src="<?php echo base_url('images/save_search.jpeg'); ?>" alt="Save" class="ml-1 w-10 h-10">
                 <?php endif; ?>
             </div>
 
@@ -813,7 +876,9 @@
                             } elseif (is_array($options)) {
                                 $optionsArr = $options;
                             }
-
+                            if(strtolower($order['payment_type']) == 'cod'){
+                                $bordercolor = 'border-4 border-yellow-300';
+                            }
                             if (!empty($optionsArr)) {
                                 foreach ($optionsArr as $opt) {
                                     $addon_css = '';
@@ -827,9 +892,7 @@
                                     if ($opt_text === '') {
                                         continue;
                                     }
-                                    if(strtolower($order['payment_type']) == 'cod'){
-                                        $bordercolor = 'border-4 border-yellow-300';
-                                    }
+                                    
                                     // Highlight Express Shipping specially, otherwise show default style
                                     if (strpos($opt_text, 'Express') !== false) {
                                         $display = 'Express Shipping';
@@ -1691,8 +1754,8 @@
         // });
 
         // Date validation and clear functionality
-        const fromDateInput = document.getElementById('order-from');
-        const toDateInput = document.getElementById('order-till');
+        const fromDateInput = document.getElementById('from_date');
+        const toDateInput = document.getElementById('to_date');
         const clearButton = document.getElementById('clear-button');
 
         fromDateInput.addEventListener('input', function() {

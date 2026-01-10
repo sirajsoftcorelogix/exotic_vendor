@@ -46,6 +46,11 @@ class Inbounding {
             $step = $this->conn->real_escape_string($filters['status_step']);
             $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
         }
+        // feeder by
+        if (!empty($filters['updated_by_user_id'])) {
+            $upd_id = (int)$filters['updated_by_user_id'];
+            $where[] = "vi.updated_by_user_id = $upd_id";
+        }
 
         // Combine WHERE clauses
         $whereSql = "";
@@ -105,7 +110,7 @@ class Inbounding {
     // --- NEW HELPER FOR DROPDOWNS ---
     // --- HELPER FOR FILTERS ---
     public function getFilterDropdowns() {
-        $data = ['vendors' => [], 'users' => [], 'groups' => []];
+        $data = ['vendors' => [], 'users' => [], 'groups' => [], 'updated_users' => []];
 
         // 1. Get Vendors (Only those present in vp_inbound)
         $v_sql = "SELECT DISTINCT v.id, v.vendor_name 
@@ -130,7 +135,16 @@ class Inbounding {
                 $data['users'][] = $r; 
             }
         }
-
+        $upd_sql = "SELECT DISTINCT u.id, u.name 
+                FROM vp_users u 
+                INNER JOIN vp_inbound i ON i.updated_by_user_id = u.id 
+                ORDER BY u.name ASC";
+        $upd_res = $this->conn->query($upd_sql);
+        if($upd_res) {
+            while($r = $upd_res->fetch_assoc()) { 
+                $data['updated_users'][] = $r; 
+            }
+        }
         // 3. Get Groups (Joined with Category Table)
         // Logic: vp_inbound.group_name stores the ID -> matches vp_categories.category
         $g_sql = "SELECT DISTINCT c.category as id, c.display_name as name 
@@ -530,21 +544,24 @@ public function update_image_variation($img_id, $variation_id) {
         $vendor_code = $data['vendor_id'] ?? '';
         $invoice_img = $data['invoice'] ?? '';
         $invoice_no  = $data['invoice_no'] ?? '';
-        // Prepare statement
-        $sql = "INSERT INTO vp_inbound (vendor_code, invoice_image, invoice_no) VALUES (?, ?, ?)";
+
+        // UPDATED SQL: Added 'gate_entry_date_time' with NOW()
+        $sql = "INSERT INTO vp_inbound 
+                (vendor_code, invoice_image, invoice_no, gate_entry_date_time) 
+                VALUES (?, ?, ?, NOW())";
+        
         $stmt = $this->conn->prepare($sql);
 
         if (!$stmt) {
-            // Debugging: echo "Prepare failed: (" . $this->conn->errno . ") " . $this->conn->error;
             return false;
         }
 
-        // Bind parameters: 's' = string. 
-        // Assuming vendor_code, invoice_image, and invoice_no are strings.
-        $stmt->bind_param("isi", $vendor_code, $invoice_img, $invoice_no);
+        // Bind parameters (s = string)
+        // We only bind 3 values; NOW() is handled by MySQL directly
+        $stmt->bind_param("iss", $vendor_code, $invoice_img, $invoice_no);
 
         if ($stmt->execute()) {
-            return $stmt->insert_id; // Return the new ID
+            return $stmt->insert_id;
         }
 
         return false;
@@ -632,33 +649,42 @@ public function update_image_variation($img_id, $variation_id) {
         return $stmt->execute();
     }
     public function updatedesktopform($id, $data) {
+        // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
-        $cols = []; $values = []; $types = "";
+        
+        $cols = []; 
+        $values = []; 
+        $types = "";
 
         foreach ($data as $key => $val) {
-            if ($val !== '' && $val !== null) {
+            // FIX: Removed "$val !== ''" check.
+            // Now, empty strings WILL be included in the UPDATE query.
+            if ($val !== null) { 
                 $cols[] = "$key = ?";
                 $values[] = $val;
                 
                 // Type logic: integers, floats, or default to string
                 if (is_int($val)) $types .= "i";
                 elseif (is_float($val)) $types .= "d";
-                else $types .= "s"; // Handles your comma-separated strings and Group Name strings
+                else $types .= "s"; 
             }
         }
 
-        if (empty($cols)) return ['success' => true, 'message' => "No changes made."];
+        if (empty($cols)) return ['success' => true, 'message' => "No changes detected."];
 
+        // Add ID for the WHERE clause
         $types .= "i"; 
         $values[] = $id;
 
         $sql = "UPDATE vp_inbound SET " . implode(', ', $cols) . " WHERE id = ?";
+        
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => "Prepare failed: " . $this->conn->error];
         
         $stmt->bind_param($types, ...$values);
         
         if ($stmt->execute()) return ['success' => true, 'message' => "Updated successfully."];
+        
         return ['success' => false, 'message' => "Update failed: " . $stmt->error];
     }
     // --- Add these functions inside your InboundingModel class ---
@@ -670,7 +696,7 @@ public function update_image_variation($img_id, $variation_id) {
         if (empty($id)) return '';
         
         // Prepare statement to prevent injection and ensure connection usage
-        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE id = ?");
+        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE category = ?");
         if (!$stmt) return ''; // Error handling
         
         $stmt->bind_param("i", $id);
@@ -700,19 +726,24 @@ public function update_image_variation($img_id, $variation_id) {
         return ''; // Return empty if not found
     }
 
-    /**
-     * Helper to get the next incremental ID count from vp_products
-     */
-    public function getNextProductCount() {
-        // We run a simple query to count existing rows
-        $result = $this->conn->query("SELECT COUNT(*) as total FROM vp_products");
+    // In InboundingModel.php
+    public function getLastItemCodeGlobal() {
+        // We do NOT use "WHERE item_code LIKE...". 
+        // We want the last code from the WHOLE table.
+        $sql = "SELECT item_code FROM vp_inbound where is_variant = 'N' ORDER BY id DESC LIMIT 1";
+        
+        $result = $this->conn->query($sql);
+        
         if ($row = $result->fetch_assoc()) {
-            return (int)$row['total'] + 1;
+            return $row['item_code'];
         }
-        return 1; // Default to 1 if table is empty
+        return null; 
     }
-    // 2. UNIFIED SAVE/UPDATE FUNCTION
-    
+    public function checkItemCodeExists($code) {
+        $sql = "SELECT id FROM vp_inbound WHERE item_code = '" . $this->conn->real_escape_string($code) . "'";
+        $result = $this->conn->query($sql);
+        return ($result->num_rows > 0);
+    }
    
     // --- Add this to your Inbounding.php Model ---
     public function getById($id) {
@@ -725,7 +756,7 @@ public function update_image_variation($img_id, $variation_id) {
         return false;
     }
     public function getlabeldata($id){
-        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name  FROM vp_inbound as v 
+        $sql = "SELECT v.*,c.display_name as category,m.material_name,vv.vendor_name as vendor_name,v.store_location as location  FROM vp_inbound as v 
         LEFT JOIN category as c on v.group_name=c.category
         LEFT JOIN material as m on v.material_code=m.id
         LEFT JOIN vp_vendors as vv on v.vendor_code=vv.id
@@ -784,125 +815,174 @@ public function update_image_variation($img_id, $variation_id) {
 
     // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
     public function updateMainInbound($id, $data) {
-        // 1. EXTRACT DIMENSIONS FROM VARIATION [0]
-        // If not found there, fallback to direct keys just in case.
-        $var0 = $data['variations'][0] ?? [];
+        // 1. Prepare Variables with correct casting
+        $height     = (float) ($data['height'] ?? 0);
+        $width      = (float) ($data['width']  ?? 0);
+        $depth      = (float) ($data['depth']  ?? 0);
+        $weight     = (float) ($data['weight'] ?? 0);
         
-        // Explicitly cast to (float) to ensure they are decimals
-        $height = (float) ($var0['height'] ?? $data['height'] ?? 0);
-        $width  = (float) ($var0['width']  ?? $data['width']  ?? 0);
-        $depth  = (float) ($var0['depth']  ?? $data['depth']  ?? 0);
-        $weight = (float) ($var0['weight'] ?? $data['weight'] ?? 0);
+        $color      = $data['color'] ?? '';
+        $size       = $data['size'] ?? '';
+        $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
+        $Item_code  = $data['Item_code'] ?? '';
         
-        // Also capture Main Color/Size/Qty/CP/Photo from Index 0
-        $color  = $var0['color']  ?? $data['color'] ?? '';
-        $size   = $var0['size']   ?? $data['size'] ?? '';
+        $qty        = (int)   ($data['quantity_received'] ?? 0);
+        $cp         = (float) ($data['cp'] ?? 0);
+        $photo      = $data['product_photo'] ?? '';
+        $wh         = $data['store_location'] ?? '';
         
-        // CP is also a float (money), Quantity is usually an integer
-        $qty    = (int)   ($var0['quantity'] ?? $data['quantity_received'] ?? 0);
-        $cp     = (float) ($var0['cp']       ?? $data['cp'] ?? 0);
-        $photo  = $var0['photo']  ?? $data['product_photo'] ?? '';
+        $p_ind      = (float) ($data['price_india'] ?? 0);
+        $p_mrp      = (float) ($data['price_india_mrp'] ?? 0);
+        $colormaps  = $data['colormaps'] ?? ''; // Default to empty string, not 0
 
-        // 2. UPDATE SQL
+        // 2. Correct SQL Syntax (Use column names, not PHP variables)
         $sql = "UPDATE vp_inbound 
-                SET gate_entry_date_time = ?, material_code = ?,  group_name = ?, 
+                SET Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?, 
                     height = ?, width = ?, depth = ?, weight = ?, 
                     color = ?, size = ?, cp = ?, quantity_received = ?, 
-                    received_by_user_id = ?, temp_code = ?, product_photo = ? 
+                    received_by_user_id = ?, temp_code = ?, product_photo = ?,
+                    store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?
                 WHERE id = ?";
-        
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => $this->conn->error];
 
-        // BIND PARAMETERS
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => $this->conn->error];
+        }
+
+        // 3. Correct Bind Param Types
         // s = string, d = double (float), i = integer
-        // Position 4, 5, 6, 7 are 'd' for Height, Width, Depth, Weight
+        // String map: sssss dddd ss d i i sss d d s i
         $stmt->bind_param(
-            'sssddddssdiissi', 
+            'sssssddddssdiisssddsi', 
+            $Item_code, 
+            $is_variant,
             $data['gate_entry_date_time'], 
             $data['material_code'], 
             $data['group_name'], 
-            $height, $width, $depth, $weight, // 'd' ensures these are stored as Floats
-            $color, $size, $cp, $qty,         // CP is 'd', Qty is 'i'
+            $height,$width,$depth, 
+            $weight,$color,$size, 
+            $cp,$qty, 
             $data['received_by_user_id'], 
-            $data['temp_code'],      
-            $photo, 
+            $data['temp_code'],        
+            $photo,$wh,$p_ind, 
+            $p_mrp, 
+            $colormaps,
             $id
         );
 
-        if ($stmt->execute()) return ['success' => true];
+        if ($stmt->execute()) {
+            return ['success' => true];
+        }
+        
         return ['success' => false, 'message' => $stmt->error];
     }
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
-    // models/inbounding/Inbounding.php
-
-    // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $temp_code) {
-    
-        // 1. Filter out IDs to Keep (Skipping Index 0)
+        // 1. Filter out IDs to Keep
+        // We strictly check for existing DB IDs to know what NOT to delete.
         $submittedIds = [];
-        foreach ($variations as $key => $var) {
-            // SKIP Index 0 (Main Item - stored in vp_inbound)
-            if ($key == 0) continue; 
+        
+        // Ensure variations is an array (in case it was empty/null from controller)
+        if (!is_array($variations)) {
+            $variations = [];
+        }
 
-            if (!empty($var['id'])) {
+        foreach ($variations as $key => $var) {
+            // STRICT CHECK: Use === to ensure string keys like "new_0" don't trigger this
+            if ($key === 0) continue; 
+            
+            // If the variation has a numeric ID, we keep it.
+            if (!empty($var['id']) && is_numeric($var['id'])) {
                 $submittedIds[] = (int)$var['id'];
             }
         }
 
-        // 2. DELETE old variations (that are not in the kept list)
+        // 2. DELETE old variations
+        // Logic: If we have submitted IDs, delete everything EXCEPT those.
+        // If we have NO submitted IDs, delete EVERYTHING for this item.
         if (!empty($submittedIds)) {
             $idsStr = implode(',', $submittedIds);
-            $sql = "DELETE FROM vp_variations WHERE it_id = $it_id AND id NOT IN ($idsStr)";
+            // Ensure $it_id is safe
+            $safe_it_id = (int)$it_id;
+            $sql = "DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)";
             $this->conn->query($sql);
         } else {
-            // If we have variations but no IDs, delete all old ones (except main item logic which isn't here)
-            // Note: Be careful not to delete logic if you have other checks, but this is standard.
-            // We only clear variations if we are submitting new ones.
-            if (count($variations) > 1) { 
-                 $this->conn->query("DELETE FROM vp_variations WHERE it_id = $it_id");
-            }
+            // User deleted all variations, so clear the table for this item
+            $safe_it_id = (int)$it_id;
+            $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
         }
 
-        // 3. LOOP TO INSERT OR UPDATE
-        $insertSql = "INSERT INTO vp_variations (it_id, temp_code, color, size, quantity, cp, variation_image, height, width, depth, weight) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $updateSql = "UPDATE vp_variations SET temp_code=?, color=?, size=?, quantity=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=? WHERE id=?";
+        // 3. INSERT & UPDATE QUERIES
+        $insertSql = "INSERT INTO vp_variations 
+                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $updateSql = "UPDATE vp_variations 
+                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=?
+                      WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
         $stmtUpdate = $this->conn->prepare($updateSql);
 
         foreach ($variations as $key => $var) {
-            // CRITICAL: SKIP Index 0 (Main Item)
-            if ($key == 0) continue;
+            if ($key === 0) continue; // Strict check here too
 
-            $id     = $var['id'] ?? '';
-            $img    = $var['photo'] ?? '';
+            $id = $var['id'] ?? '';
+            $img = $var['photo'] ?? '';
             
-            // Use 0.00 if empty
+            // Defaults
             $h = !empty($var['height']) ? $var['height'] : 0.00;
             $w = !empty($var['width']) ? $var['width'] : 0.00;
             $d = !empty($var['depth']) ? $var['depth'] : 0.00;
             $wt = !empty($var['weight']) ? $var['weight'] : 0.00;
             
-            if (!empty($id)) {
-                // Update
-                $stmtUpdate->bind_param("sssidsddddi", $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt, $id);
+            $wh = !empty($var['store_location']) ? (string)$var['store_location'] : '';
+            $qty = !empty($var['quantity']) ? (int)$var['quantity'] : 0;
+            
+            $pi = !empty($var['price_india']) ? (float)$var['price_india'] : 0.00;
+            $pm = !empty($var['price_india_mrp']) ? (float)$var['price_india_mrp'] : 0.00;
+            $inr = !empty($var['inr_pricing']) ? (float)$var['inr_pricing'] : 0.00;
+            $amz = !empty($var['amazon_price']) ? (float)$var['amazon_price'] : 0.00;
+            $usd = !empty($var['usd_price']) ? (float)$var['usd_price'] : 0.00;
+            
+            $hsn = !empty($var['hsn_code']) ? $var['hsn_code'] : '';
+            $gst = !empty($var['gst_rate']) ? (int)$var['gst_rate'] : 0;
+            $colm = !empty($var['colormaps']) ? $var['colormaps'] : '';
+
+            // Check if ID exists AND is numeric to decide Update vs Insert
+            if (!empty($id) && is_numeric($id)) {
+                // UPDATE
+                $stmtUpdate->bind_param("sssidsddddsdddddsisi", 
+                    $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
+                    $h, $w, $d, $wt, 
+                    $wh, 
+                    $pi, $pm, $inr, $amz, $usd, 
+                    $hsn, $gst, $colm,
+                    $id
+                );
                 $stmtUpdate->execute();
             } else {
-                // Insert
-                $stmtInsert->bind_param("isssidsdddd", $it_id, $temp_code, $var['color'], $var['size'], $var['quantity'], $var['cp'], $img, $h, $w, $d, $wt);
+                // INSERT
+                $stmtInsert->bind_param("isssidsddddsdddddsis", 
+                    $it_id, $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
+                    $h, $w, $d, $wt, 
+                    $wh, 
+                    $pi, $pm, $inr, $amz, $usd, 
+                    $hsn, $gst, $colm
+                );
                 $stmtInsert->execute();
             }
         }
-        
         return true;
     }
 
-    // 3. GET VARIATIONS (For View)
     public function getVariations($it_id) {
-        // Added height, width, depth, weight to SELECT
-        $sql = "SELECT id, color, size, quantity, cp, variation_image, height, width, depth, weight FROM vp_variations WHERE it_id = ?";
+        // Added 'quantity_received as quantity' for HTML compatibility
+        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, 
+                inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps
+                FROM vp_variations WHERE it_id = ?";
+                
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("i", $it_id);
         $stmt->execute();
@@ -959,11 +1039,26 @@ public function update_image_variation($img_id, $variation_id) {
         
         return false;
     }
+    public function deleteInboundItems($ids_array) {
+        if (empty($ids_array)) {
+            return false;
+        }
+
+        // Prepare placeholders (?,?,?)
+        $placeholders = implode(',', array_fill(0, count($ids_array), '?'));
+        
+        // Use your actual table name here (e.g., vp_inbound)
+        $sql = "DELETE FROM vp_inbound WHERE id IN ($placeholders)";
+        
+        $stmt = $this->conn->prepare($sql);
+        
+        return $stmt->execute($ids_array);
+    }
     public function getpublishdata($id) {
         $id = (int)$id;
 
         // 1. Get Main Inbound Data
-        $sql = "SELECT vi.*, vv.vendor_name, c.display_name as category, c.category as category_id, c.display_name as groupname, m.material_name 
+        $sql = "SELECT vi.*, vv.vendor_name, c.display_name as category, c.category as category_id, c.name as groupname, m.material_name 
                 FROM vp_inbound AS vi 
                 LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id
                 LEFT JOIN category as c on vi.group_name = c.category
@@ -975,30 +1070,22 @@ public function update_image_variation($img_id, $variation_id) {
         // Check if data was found
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
         
-        $category_rows = []; // Renamed to avoid confusion with the final string
-
-        // 2. Only run the second query if we have data and category_code is not empty
-        if (!empty($inbounding) && !empty($inbounding['category_code'])) {
-            
-            $cat_ids_input = $inbounding['category_code']; 
-            
-            $cat_result = $this->conn->query("SELECT * FROM `category` WHERE id IN ($cat_ids_input)");
-            
-            if ($cat_result) {
-                $category_rows = $cat_result->fetch_all(MYSQLI_ASSOC);
-            }
-        }
-
-        // 3. Process the loop to create the string
-        $cat_id_string = ''; // Initialize variable to avoid "Undefined variable" error
         
-        foreach ($category_rows as $key => $value) {
-            $cat_id_string .= $value['category'];
-            $cat_id_string .= ',';
+       
+        // 3. Process the loop to create the string
+        $cat_id_string = '';
+
+        if ($inbounding) {
+            // Correct concatenation using dots (.) outside of quotes
+            $cat_id_string = $inbounding['category_code'] . ',' . 
+                             $inbounding['sub_category_code'] . ',' . 
+                             $inbounding['sub_sub_category_code']. ',';
         }
+        
+        
         
         // Trim the trailing comma
-        $final_cat_ids = rtrim($cat_id_string, ',');
+        $final_cat_ids = rtrim($cat_id_string, ',') ;
         $inbounding['final_cat_ids'] = $final_cat_ids;
         // Add to main array
         $inbounding['cat_ids'] = $final_cat_ids; // Added missing semicolon here

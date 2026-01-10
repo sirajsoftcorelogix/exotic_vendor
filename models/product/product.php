@@ -32,7 +32,7 @@ class product{
         }
         
 
-        $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE 1=1 $search LIMIT ? OFFSET ?");
+        $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE 1=1 $search order by vp_products.id DESC LIMIT ? OFFSET ?");
         if ($stmt === false) {
             return [];
         }

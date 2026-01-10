@@ -194,7 +194,7 @@
                                 <div class="flex items-center mt-auto">
                                     
                                     <span class="typo-vendor">Vendor : <?php echo $product['vendor']; ?></span>
-                                    <a href="javascript:void(0);" class="ml-2 text-details-link hover:text-amber-700" title="Edit Vendor" onclick="openEditVendorModal('<?php echo $product['item_code']; ?>', '<?php echo htmlspecialchars(addslashes($product['vendor'])); ?>')">
+                                    <a href="javascript:void(0);" class="ml-2 text-details-link hover:text-amber-700" title="Edit Vendor" onclick="openEditVendorModal('<?php echo $product['item_code']; ?>', '<?php echo htmlspecialchars(addslashes($product['vendor'] ?? '')); ?>')">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
@@ -259,7 +259,8 @@
         <!-- Pagination -->
         <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8 bottom-0 border border-[rgba(226,228,230,1)] py-4">
             <div>
-                <p class="text-sm text-gray-600">Showing <span class="font-medium">
+                <p class="text-sm text-gray-600">Showing <span class="font-medium"> <?php echo ($total_orders > 0) ? (($page - 1) * $limit + 1) : 0; ?></span> to <span class="font-medium"><?php echo min($page * $limit, $total_orders); ?></span> of <span class="font-medium"><?php echo $total_orders; ?></span> products</p>
+            </div>
              <?php            
             //echo '****************************************  '.$query_string;
             if ($total_pages > 1): ?>          

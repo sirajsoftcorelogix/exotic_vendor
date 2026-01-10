@@ -2,9 +2,11 @@
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
+require_once 'models/order/po_invoice.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
+$poInvoiceModel = new POInvoice($conn);
 global $root_path;
 global $domain;
 class OrdersController { 
@@ -30,17 +32,20 @@ class OrdersController {
         if (!empty($_GET['item_code'])) {
             $filters['item_code'] = $_GET['item_code'];            
         }
-        // if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
-        //     $filters['order_from'] = $_GET['order_from'];
-        //     $filters['order_till'] = $_GET['order_till'];
-        // }
-        if(!empty($GET['daterange'])){
-            $dateRange = explode(' - ', $_GET['daterange']);
-            if (count($dateRange) === 2) {
-                $filters['order_from'] = date('Y-m-d', strtotime($dateRange[0]));
-                $filters['order_till'] = date('Y-m-d', strtotime($dateRange[1]));
-            }
+        if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
+            $filters['order_from'] = $_GET['order_from'];
+            $filters['order_till'] = $_GET['order_till'];
         }
+        
+        // if(!empty($_GET['daterange'])){
+        //     echo urldecode($_GET['daterange']);
+        //     $dateRange = explode(' - ', $_GET['daterange']);       
+        //     print_array($dateRange);     
+        //     if (count($dateRange) === 2) {
+        //         $filters['order_from'] = date('Y-m-d', strtotime($dateRange[0]));
+        //         $filters['order_till'] = date('Y-m-d', strtotime($dateRange[1]));
+        //     }
+        // }
         if (!empty($_GET['item_name'])) {
             $filters['title'] = $_GET['item_name'];            
         }
@@ -1137,6 +1142,99 @@ class OrdersController {
             }
         }
     }
+    public function invoiceList() {
+        is_login();
+        global $poInvoiceModel;       
+        $limit = 20;
+        $offset = 0;
+        if (isset($_GET['limit'])) {
+            $limit = intval($_GET['limit']);
+        }
+        if (isset($_GET['offset'])) {
+            $offset = intval($_GET['offset']);
+        }
+        //search filters
+        $filters = [];
+        if (isset($_GET['vendor_id']) && !empty($_GET['vendor_id'])) {
+            $filters['vendor_id'] = intval($_GET['vendor_id']);
+        }
+        if (isset($_GET['invoice_date_from']) && !empty($_GET['invoice_date_from'])) {
+            $filters['invoice_date_from'] = $_GET['invoice_date_from'];
+        }
+        if (isset($_GET['invoice_date_to']) && !empty($_GET['invoice_date_to'])) {
+            $filters['invoice_date_to'] = $_GET['invoice_date_to'];
+        }
+        //amount range filter
+        if (isset($_GET['amount_min']) && is_numeric($_GET['amount_min'])) {
+            $filters['amount_min'] = floatval($_GET['amount_min']);
+        }
+        if (isset($_GET['amount_max']) && is_numeric($_GET['amount_max'])) {
+            $filters['amount_max'] = floatval($_GET['amount_max']);
+        }
+        //po number filter
+        if (isset($_GET['po_number']) && !empty($_GET['po_number'])) {
+            $filters['po_number'] = $_GET['po_number'];
+        }
+        //utr filter
+        if (isset($_GET['utr_number']) && !empty($_GET['utr_number'])) {
+            $filters['utr_number'] = $_GET['utr_number'];
+        }
+
+        $invoices = $poInvoiceModel->getAllInvoices($limit, $offset, $filters);
+        $total_orders = $poInvoiceModel->getTotalInvoices($limit, $offset, $filters);
+        //foreach invoice get po items
+        foreach($invoices as $id => $invoice){
+            $items = $poInvoiceModel->getPOsByInvoiceId($invoice['id']);
+            $invoices[$id]['items'] = $items;            
+        }      
+        //print_array($invoices);
+
+        renderTemplate('views/purchase_orders/invoice_list.php', ['invoices' => $invoices, 'total_orders' => $total_orders], 'Purchase Order Invoices');
+    }
+    public function paymentList() {
+        is_login();
+        global $poInvoiceModel;
+        $limit = 20;
+        $offset = 0;
+        if (isset($_GET['limit'])) {
+            $limit = intval($_GET['limit']);
+        }
+        if (isset($_GET['offset'])) {
+            $offset = intval($_GET['offset']);
+        }
+        //filters 
+        $filters = [];
+        if (isset($_GET['vendor_id']) && !empty($_GET['vendor_id'])) {
+            $filters['vendor_id'] = intval($_GET['vendor_id']);
+        }
+        if (isset($_GET['payment_date_from']) && !empty($_GET['payment_date_from'])) {
+            $filters['payment_date_from'] = $_GET['payment_date_from'];
+        }
+        if (isset($_GET['payment_date_to']) && !empty($_GET['payment_date_to'])) {
+            $filters['payment_date_to'] = $_GET['payment_date_to'];
+        }
+        //amount range filter
+        if (isset($_GET['amount_min']) && is_numeric($_GET['amount_min'])) {
+            $filters['amount_min'] = floatval($_GET['amount_min']);
+        }
+        if (isset($_GET['amount_max']) && is_numeric($_GET['amount_max'])) {
+            $filters['amount_max'] = floatval($_GET['amount_max']);
+        }
+        //po number filter
+        if (isset($_GET['po_number']) && !empty($_GET['po_number'])) {
+            $filters['po_number'] = $_GET['po_number'];
+        }
+        //utr filter
+        if (isset($_GET['utr_number']) && !empty($_GET['utr_number'])) {
+            $filters['utr_number'] = $_GET['utr_number'];
+        }    
+
+        $payments = $poInvoiceModel->getAllPayments($limit, $offset, $filters);
+        $total_payments = $poInvoiceModel->getTotalPayments($limit, $offset, $filters);
+        //print_array($payments);
+        renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
+    }
+    
 }
 ?>
 

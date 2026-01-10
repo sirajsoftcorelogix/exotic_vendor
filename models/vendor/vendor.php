@@ -154,7 +154,6 @@ class vendor {
             $checkPanStmt->close();
         }
         $vendorCode = generateVendorCode($this->conn);
-        $vendorCode = generateVendorCode($this->conn);
         $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('ssssssssssssssssiiis',
