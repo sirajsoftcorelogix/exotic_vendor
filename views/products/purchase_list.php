@@ -1,23 +1,50 @@
 <div class="container mx-auto p-4">
-    <div class="mb-4 flex items-center justify-between">
-        <h1 class="text-2xl font-bold">Purchase List</h1>
-        <div class="text-sm text-gray-600">Showing <strong><?php echo isset($data['total_records']) ? (int)$data['total_records'] : 0; ?></strong> items</div>
+    <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Purchase List</h1>
+            <div class="text-sm text-gray-600 ml-auto px-2">Showing <strong><?php echo isset($data['total_records']) ? (int)$data['total_records'] : 0; ?></strong> items</div>
+        </div>
+        <form method="GET" action="" class="flex items-center gap-3">
+            <input type="hidden" name="page" value="products">
+            <input type="hidden" name="action" value="purchase_list">
+            <div class="flex items-center gap-2">
+                <label class="text-xs text-gray-600">Category</label>
+                <select name="category" class="text-sm border rounded px-2 py-1 bg-white" onchange="this.form.submit()">
+                    <option value="all">All</option>
+                    <?php foreach (($data['categories'] ?? []) as $cat): ?>
+                        <option value="<?= htmlspecialchars($cat) ?>" <?= (isset($data['selected_filters']['category']) && $data['selected_filters']['category'] === $cat) ? 'selected' : '' ?>><?= htmlspecialchars($cat) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="text-xs text-gray-600">Status</label>
+                <select name="status" class="text-sm border rounded px-2 py-1 bg-white" onchange="this.form.submit()">
+                    <option value="all" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'all') ? 'selected' : '' ?>>All</option>
+                    <option value="pending" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'pending') ? 'selected' : '' ?> <?= (!isset($data['selected_filters']['status']) ? 'selected' : '') ?>>Pending</option>
+                    <option value="purchased" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'purchased') ? 'selected' : '' ?>>Purchased</option>
+                </select>
+            </div>
+            <!-- <div class="flex items-center gap-2">
+                <button type="submit" class="bg-amber-600 text-white px-3 py-1 rounded">Filter</button>
+                <a href="?page=products&action=purchase_list" class="px-3 py-1 border rounded text-sm">Clear</a>
+            </div> -->
+        </form>
     </div>
 
     <?php if (!empty($data['purchase_list'])): ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <?php foreach ($data['purchase_list'] as $pl):
-                $product = $pl['product'] ?? null;
-                $image = $product['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
-                $title = $product['title'] ?? ($product['item_code'] ?? 'Product');
-                $item_code = $product['item_code'] ?? ($pl['sku'] ?? '');
-                $cost = isset($product['cost_price']) ? '₹' . number_format((float)$product['cost_price']) : '';
+                //$product = $pl['product'] ?? null;
+                $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
+                $title = $pl['title'] ?? ($pl['item_code'] ?? 'Product');
+                $item_code = $pl['item_code'] ?? ($pl['sku'] ?? '');
+                $cost = isset($pl['cost_price']) ? '₹' . number_format((float)$pl['cost_price']) : '';
                 $status = $pl['status'] ?? '';
                 $agent_name = $pl['agent_name'] ?? '';
                 $date_added = $pl['date_added_readable'] ?? ($pl['date_added'] ? date('d M Y', strtotime($pl['date_added'])) : '');
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
             ?>
-                <div class="bg-white border border-gray-300 rounded-lg shadow-lg p-4">
+                <div class="bg-white border border-gray-300 rounded-3xl shadow-lg p-4">
                     <div class="flex space-x-4">
                         <img src="<?php echo htmlspecialchars($image); ?>" alt="<?php echo htmlspecialchars($title); ?>" class="w-24 h-32 object-cover rounded-md flex-shrink-0">
                         <div class="flex-1">
@@ -47,11 +74,15 @@
                             <div>Material : <strong><?php echo htmlspecialchars($pl['material'] ?? ''); ?></strong></div>
                             <div>Dimensions : <strong><?php echo htmlspecialchars($pl['prod_height'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_width'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_length'] ?? ''); ?></strong></div>
                             <div>Weight : <strong><?php echo htmlspecialchars($pl['product_weight'] ?? '').' '.htmlspecialchars($pl['product_weight_unit'] ?? ''); ?></strong></div>
+                            <label class="block">Quantity: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
+                        </div>
+
+                        <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">                            
+                            <label class="block">Remarks: <textarea id="remarks_<?php echo (int)$pl['id']; ?>" class="border rounded px-2 py-1 mt-1 w-full" rows="2"><?php echo htmlspecialchars($pl['remarks'] ?? ''); ?></textarea></label>
                         </div>
 
                         <div class="mt-4 flex items-center justify-end space-x-2">
-                            <!-- <a href="?page=products&action=view&product_id=<?php echo (int)$pl['product_id']; ?>" class="px-3 py-1 bg-gray-100 rounded text-sm">View Product</a> -->
-                            <a target="_blank" href="<?php echo base_url('?page=products&action=get_product_details_html&type=outer&item_code=') . $item_code; ?>" class="px-3 py-1 bg-gray-100 rounded text-sm">View Product</a>
+                            <button onclick="savePurchaseItem(<?php echo (int)$pl['id']; ?>, this)" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Save</button>
                             <button onclick="markAsPurchased(<?php echo (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">Mark Purchased</button>
                         </div>
                     </div>
@@ -94,29 +125,6 @@
             document.body.appendChild(c);
         }
         return c;
-    }
-
-    function showAlertP(message, type = 'info', timeout = 3000) {
-        const container = ensureToastContainer();
-        const toast = document.createElement('div');
-        toast.className = 'rounded px-4 py-2 mb-2 shadow-md text-sm flex items-center';
-        const colors = {
-            success: {bg: 'rgba(16,185,129,0.12)', color: '#065f46'},
-            error: {bg: 'rgba(239,68,68,0.12)', color: '#991b1b'},
-            info: {bg: 'rgba(99,102,241,0.08)', color: '#3730a3'}
-        };
-        const cfg = colors[type] || colors.info;
-        toast.style.background = cfg.bg;
-        toast.style.color = cfg.color;
-        toast.style.border = '1px solid rgba(0,0,0,0.04)';
-        toast.textContent = message;
-        container.appendChild(toast);
-        setTimeout(() => {
-            toast.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(-6px)';
-            setTimeout(() => toast.remove(), 300);
-        }, timeout);
     }
 
     // Global confirm modal (returns Promise<boolean>)
@@ -166,6 +174,31 @@
         });
     }
 
+   
+
+    // Save quantity and remarks for a purchase item
+    function savePurchaseItem(id, btn) {
+        const qty = document.getElementById('quantity_' + id).value;
+        const remarks = document.getElementById('remarks_' + id).value;
+        if (!btn) btn = {};
+        btn.disabled = true;
+        const originalText = btn.innerHTML || '';
+        btn.innerHTML = 'Saving...';
+        fetch('?page=products&action=update_purchase_item', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ id: id, quantity: qty, remarks: remarks })
+        }).then(r => r.json()).then(data => {
+            if (data && data.success) {
+                showAlert('Saved successfully', 'success');
+                setTimeout(() => { location.reload(); }, 800);
+            } else {
+                showAlert('Failed: ' + (data.message || 'Error'), 'error');
+            }
+        }).catch(err => showAlert('Network error', 'error'))
+        .finally(() => { btn.disabled = false; btn.innerHTML = originalText; });
+    }
+
     // Use showConfirm instead of native confirm so we can show consistent UI
     async function markAsPurchased(id) {
         const confirmed = await showConfirm('Mark this item as purchased?');
@@ -177,8 +210,7 @@
         }).then(r => r.json()).then(data => {
             if (data && data.success) {
                 showAlert('Marked as purchased', 'success');
-                setInterval(() => location.reload(), 4000);
-                
+                setTimeout(() => location.reload(), 900);
             } else {
                 showAlert('Failed: ' + (data.message || 'Error'), 'error');
             }

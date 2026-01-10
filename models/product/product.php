@@ -547,11 +547,12 @@ class product{
         }
         return ['success' => false, 'message' => 'Failed to create purchase list: '.$stmt->error];
     }
-    public function getPurchaseListByUser($user_id) {
-        $sql = "SELECT * FROM purchase_list WHERE user_id = ? ORDER BY created_at DESC";
+    public function getPurchaseListByUser($user_id, $limit = 100, $offset = 0, $filters = []) {
+        $sql = "SELECT * FROM purchase_list WHERE user_id = ? AND status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?";
+       
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
-        $stmt->bind_param('i', $user_id);
+        $stmt->bind_param('isii', $user_id, $filters['status'], $limit, $offset);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
@@ -559,11 +560,61 @@ class product{
         }
         return [];
     }
-    public function getPurchaseList($limit = 100, $offset = 0) {
-        $sql = "SELECT * FROM purchase_list ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    public function getPurchaseList($limit = 100, $offset = 0, $filters = []) {
+        // Join with vp_products to allow filtering by product category/groupname and by user
+        $where = [];
+        $params = [];
+        $types = '';
+
+        if (!empty($filters['user_id'])) {
+            $where[] = 'pl.user_id = ?';
+            $params[] = (int)$filters['user_id'];
+            $types .= 'i';
+        }
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
+            $where[] = 'pl.status = ?';
+            $params[] = $filters['status'];
+            $types .= 's';
+        }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            $where[] = 'p.groupname = ?';
+            $params[] = $filters['category'];
+            $types .= 's';
+        }
+        if (!empty($filters['search'])) {
+            $where[] = '(p.item_code LIKE ? OR p.title LIKE ?)';
+            $searchTerm = '%' . $filters['search'] . '%';
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $types .= 'ss';
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+        //echo $whereSql."**********************";
+        $sql = "SELECT pl.*, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql ORDER BY pl.created_at DESC LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
-        $stmt->bind_param('ii', $limit, $offset);
+
+        // bind dynamic params followed by limit and offset
+        if (!empty($params)) {
+            $types_all = $types . 'ii';
+            $bindParams = [$types_all];
+            foreach ($params as $k => $v) {
+                $bindParams[] = &$params[$k];
+            }
+            $bindParams[] = &$limit;
+            $bindParams[] = &$offset;
+            // convert to references for call_user_func_array
+            $refs = [];
+            foreach ($bindParams as $key => $val) { $refs[$key] = &$bindParams[$key]; }
+            call_user_func_array([$stmt, 'bind_param'], $refs);
+        } else {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
@@ -571,10 +622,39 @@ class product{
         }
         return [];
     }
-    public function countPurchaseList() {
-        $sql = "SELECT COUNT(*) AS cnt FROM purchase_list";
+    public function countPurchaseList($filters = []) {
+        $where = [];
+        $params = [];
+        $types = '';
+        if (!empty($filters['user_id'])) {
+            $where[] = 'pl.user_id = ?';
+            $params[] = (int)$filters['user_id'];
+            $types .= 'i';
+        }
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
+            $where[] = 'pl.status = ?';
+            $params[] = $filters['status'];
+            $types .= 's';
+        }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            $where[] = 'p.groupname = ?';
+            $params[] = $filters['category'];
+            $types .= 's';
+        }
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+        $sql = "SELECT COUNT(*) AS cnt FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return 0;
+        if (!empty($params)) {
+            $bindParams = [$types];
+            foreach ($params as $k => $v) { $bindParams[] = &$params[$k]; }
+            $refs = [];
+            foreach ($bindParams as $key => $val) { $refs[$key] = &$bindParams[$key]; }
+            call_user_func_array([$stmt, 'bind_param'], $refs);
+        }
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result) {
@@ -582,6 +662,19 @@ class product{
             return isset($row['cnt']) ? (int)$row['cnt'] : 0;
         }
         return 0;
+    }
+
+    // Return distinct product categories (groupname) for filter dropdown
+    public function getCategories() {
+        $sql = "SELECT DISTINCT COALESCE(NULLIF(groupname, ''), '-') AS groupname FROM vp_products WHERE groupname IS NOT NULL ORDER BY groupname ASC";
+        $res = $this->db->query($sql);
+        $cats = [];
+        if ($res && $res->num_rows > 0) {
+            while ($row = $res->fetch_assoc()) {
+                $cats[] = $row['groupname'];
+            }
+        }
+        return $cats;
     }
 
     public function updatePurchaseListStatus($id, $status, $date_purchased = null) {
@@ -596,5 +689,44 @@ class product{
             return ['success' => true, 'message' => 'Status updated'];
         }
         return ['success' => false, 'message' => 'Update failed: '.$stmt->error];
+    }
+
+    // Update quantity and remarks for a purchase list item
+    public function updatePurchaseItem($id, $quantity, $remarks) {
+        $sql = "UPDATE purchase_list SET quantity = ?, remarks = ?, updated_at = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
+        $updatedAt = date('Y-m-d H:i:s');
+        $id = (int)$id;
+        $qty = ($quantity === '' || $quantity === null) ? null : (int)$quantity;
+        $stmt->bind_param('issi', $qty, $remarks, $updatedAt, $id);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Updated successfully'];
+        }
+        return ['success' => false, 'message' => 'Update failed: '.$stmt->error];
+    }
+    public function deletePurchaseItem($id) {
+        $sql = "DELETE FROM purchase_list WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
+        $id = (int)$id;
+        $stmt->bind_param('i', $id);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Deleted successfully'];
+        }
+        return ['success' => false, 'message' => 'Delete failed: '.$stmt->error];
+    }
+    public function getPurchaseItemById($id) {
+        $sql = "SELECT p.*, pl.* FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id WHERE pl.id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return null;
+        $id = (int)$id;
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
     }
 }

@@ -464,8 +464,8 @@ $msgCnt = $notificationController->getUnreadCount();
         var closeBtn = document.getElementById('global-alert-close');
 
         msgEl.textContent = message;
-        iconEl.innerHTML = type === 'success' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-exclamation-circle"></i>';
-        inner.className = 'max-w-md w-full rounded-lg p-4 shadow-2xl text-white flex items-start gap-3 transform transition-all duration-200 pointer-events-auto ' + (type === 'success' ? 'bg-green-600' : 'bg-red-600');
+        iconEl.innerHTML = type === 'success' ? '<i class="fas fa-check-circle"></i>' : type === 'warning' ? '<i class="fas fa-exclamation-triangle"></i>' : '<i class="fas fa-exclamation-circle"></i>';
+        inner.className = 'max-w-md w-full rounded-lg p-4 shadow-2xl text-white flex items-start gap-3 transform transition-all duration-200 pointer-events-auto ' + (type === 'success' ? 'bg-green-600' : type === 'warning' ? 'bg-yellow-500' : 'bg-red-600');
         container.classList.remove('hidden');
         if (backdrop) backdrop.classList.remove('hidden');
         container.style.pointerEvents = 'auto';
