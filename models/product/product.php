@@ -717,7 +717,7 @@ class product{
         return ['success' => false, 'message' => 'Delete failed: '.$stmt->error];
     }
     public function getPurchaseItemById($id) {
-        $sql = "SELECT p.*, pl.* FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id WHERE pl.id = ? LIMIT 1";
+        $sql = "SELECT p.*, pl.*,  u.name as agent_name FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id LEFT JOIN vp_users u ON pl.user_id = u.id WHERE pl.id = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
         $id = (int)$id;

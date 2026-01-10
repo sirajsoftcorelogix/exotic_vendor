@@ -492,5 +492,6 @@ $msgCnt = $notificationController->getUnreadCount();
         closeBtn.onclick = function() { hideAlert(); };
         if (backdrop) backdrop.onclick = function() { hideAlert(); };
     };
+    // confirm dialog
 })();
 </script>

@@ -377,7 +377,7 @@ switch ($page) {
             case 'get_purchase_list_details':
                 $controller->getPurchaseListDetails();
                 break;
-            case 'delete_purchase_item':
+            case 'delete_purchase_list_item':
                 $controller->deletePurchaseItem();
                 break;
             /*case 'view':

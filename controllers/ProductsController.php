@@ -645,8 +645,10 @@ class ProductsController {
             echo '<p>Purchase Item not found.</p>';
             exit;
         }
-        $product = $productModel->getProduct($purchaseItem['product_id']);
-        echo json_encode(['success' => true, 'purchaseItem' => $purchaseItem, 'product' => $product]);
+        //date formatting
+        $purchaseItem['date_added_readable'] = date('d M Y', strtotime($purchaseItem['date_added']));
+        $purchaseItem['date_purchased_readable'] = $purchaseItem['date_purchased'] ? date('d M Y', strtotime($purchaseItem['date_purchased'])) : '';
+        echo json_encode(['success' => true, 'purchaseItem' => $purchaseItem]);
         //renderTemplateClean('views/products/partial_purchase_item_details.php', ['purchaseItem' => $purchaseItem, 'product' => $product], 'Purchase Item Details');
         exit;
     }
