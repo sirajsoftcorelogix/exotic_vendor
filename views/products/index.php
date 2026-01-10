@@ -125,15 +125,17 @@
                 <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
                     <!-- <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
                     <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a> -->
-                    <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create Purchase List</a>
+                    <a href="javascript:void(0)" id="importProductsBtn" title="Import products" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Import Products</a>
+                    <a href="javascript:void(0)" id="bulkUpdateBtn" title="Update stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Products</a>
+                    <a href="javascript:void(0)" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
                 </div>
             </div>
-            <button id="importProductsBtn" title="Import products" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
+            <!-- <button id="importProductsBtn" title="Import products" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
                 Import             
             </button>
             <button id="bulkUpdateBtn" title="Update stock" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
                 Update
-            </button>
+            </button> -->
             <select id="rows-per-page" class="text-sm right-0 pagination-select px-1 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                 onchange="location.href='?page=products&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
                 <?php foreach ([10, 20, 50, 100] as $opt): ?>
@@ -540,7 +542,7 @@ function updateProductsStock(itemCode) {
 document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
     const checkboxes = document.querySelectorAll('input[name="product_select[]"]:checked');
     if (checkboxes.length === 0) {
-        alert('Please select at least one product to update.');
+        showAlert('Please select at least one product to update.', 'warning');
         return;
     }
     showPopup('Updating selected products. Please wait...');    
@@ -548,7 +550,7 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
     const itemCodes = Array.from(checkboxes).map(checkbox => checkbox.value).join(',');
     //validate max item codes per request 50
     if (checkboxes.length > 50) {
-        alert('You can update a maximum of 50 products at a time.');
+        showAlert('You can update a maximum of 50 products at a time.', 'warning');
         hidePopup();
         return;
     }
@@ -1237,7 +1239,7 @@ window.updateVendorPriority = function(id,item_code, priority, el) {
         const products = getSelectedProductIds();
         console.log('Selected products to create purchase list:', products);
         if (products.length === 0) {
-            alert('Please select at least one product to create purchase list.');
+            showAlert('Please select at least one product to create purchase list.', 'warning');
             return;
         }
         const form = document.getElementById('bulkAssignForm');

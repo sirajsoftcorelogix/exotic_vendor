@@ -365,8 +365,20 @@ switch ($page) {
             case 'mark_purchased':
                 $controller->markPurchased();
                 break;
+            case 'update_purchase_item':
+                $controller->updatePurchaseItem();
+                break;
             case 'purchase_list':
                 $controller->purchaseList();
+                break;
+            case 'master_purchase_list':
+                $controller->masterPurchaseList();
+                break;
+            case 'get_purchase_list_details':
+                $controller->getPurchaseListDetails();
+                break;
+            case 'delete_purchase_list_item':
+                $controller->deletePurchaseItem();
                 break;
             /*case 'view':
                 $controller->product_view();

@@ -487,6 +487,52 @@ class ProductsController {
         echo json_encode(['success' => true, 'created' => $created, 'failed' => $failed]);
         exit;
     }
+    public function masterPurchaseList() {
+        is_login();
+        global $productModel;
+        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Users per page, default 50
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // If user select value from dropdown
+        $offset = ($page_no - 1) * $limit;
+        // Filters: category and status
+        $filters = [];
+        $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'pending';
+        $filters['category'] = isset($_GET['category']) ? $_GET['category'] : 'all';
+        //search
+        if (!empty($_GET['search'])) {
+            $filters['search'] = trim($_GET['search']);
+        }
+
+        // fetch purchase list and count
+        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters);
+        $total_records = $productModel->countPurchaseList($filters);
+        //print_array($purchase_data);
+        //exit;
+        //enrich each purchase row with product details and agent name
+        global $commanModel;
+        $enriched = [];
+        foreach ($purchase_data as $row) {
+            //$product = $productModel->getProduct($row['product_id']);
+            $agent_name = $commanModel->getUserNameById($row['user_id']);
+            $enriched[] = array_merge($row, [
+                //'product' => $product,                
+                'added_by' => $commanModel->getUserNameById($row['edit_by']),
+                'agent_name' => $agent_name,
+                'date_added_readable' => date('d M Y', strtotime($row['date_added'])),
+                'date_purchased_readable' => $row['date_purchased'] ? date('d M Y', strtotime($row['date_purchased'])) : ''
+            ]);
+        }
+
+        $data = [
+            'categories' => getCategories(),
+            'purchase_list' => $enriched,
+            'page_no' => $page_no,
+            'total_pages' => ceil($total_records / $limit),
+            'total_records' => $total_records,
+            'limit' => $limit
+        ];
+        renderTemplate('views/products/master_purchase_list.php', $data, 'Master Purchase List');
+    }
     public function purchaseList() {
         is_login();
         global $productModel;
@@ -495,21 +541,23 @@ class ProductsController {
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // If user select value from dropdown
         $offset = ($page_no - 1) * $limit;
 
+        // Filters: category and status
         $filters = [];
-        if (!empty($_GET['agent_id'])) {
-            $filters['agent_id'] = (int)$_GET['agent_id'];            
-        }        
-        if (!empty($_GET['status'])) {
-            $filters['status'] = $_GET['status'];            
-        }
+        $filters['user_id'] = $_SESSION['user']['id'];
+        $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'pending';
+        $filters['category'] = isset($_GET['category']) ? $_GET['category'] : 'all';
 
-        $purchase_data = $productModel->getPurchaseList($limit, $offset);
-        $total_records = $productModel->countPurchaseList();
+        // fetch purchase list and count with filters
+        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters);
+        $total_records = $productModel->countPurchaseList($filters);
+
+        // fetch categories for filter UI
+        //$categories = $productModel->getCategories();
 
         // enrich each purchase row with product details and agent name
         global $commanModel;
         $enriched = [];
-        foreach ($purchase_data as $row) {            
+        foreach ($purchase_data as $row) {
             $product = $productModel->getProduct($row['product_id']);
             $agent_name = $commanModel->getUserNameById($row['user_id']);
             $enriched[] = array_merge($row, [
@@ -525,7 +573,9 @@ class ProductsController {
             'page_no' => $page_no,
             'total_pages' => ceil($total_records / $limit),
             'total_records' => $total_records,
-            'limit' => $limit
+            'limit' => $limit,
+            'categories' => getCategories(),
+            'selected_filters' => $filters
         ];
         // render clean for mobile users
         if (isMobile()){
@@ -548,6 +598,58 @@ class ProductsController {
         $id = (int)$input['id'];
         $res = $productModel->updatePurchaseListStatus($id, 'purchased', date('Y-m-d H:i:s'));
         echo json_encode($res);
+        exit;
+    }
+
+    // Update quantity and remarks for a purchase list item (AJAX)
+    public function updatePurchaseItem() {
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+        $input = json_decode(file_get_contents('php://input'), true);
+        $id = isset($input['id']) ? (int)$input['id'] : 0;
+        $quantity = isset($input['quantity']) ? $input['quantity'] : null;
+        $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid id']);
+            exit;
+        }
+        $res = $productModel->updatePurchaseItem($id, $quantity, $remarks);
+        echo json_encode($res);
+        exit;
+    }
+    public function deletePurchaseItem() {
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+        $input = json_decode(file_get_contents('php://input'), true);
+        $id = isset($input['id']) ? (int)$input['id'] : 0;
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid id']);
+            exit;
+        }
+        $res = $productModel->deletePurchaseItem($id);
+        echo json_encode($res);
+        exit;
+    }
+    public function getPurchaseListDetails() {
+        is_login();
+        global $productModel;
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id <= 0) {
+            echo '<p>Invalid Purchase Item ID.</p>';
+            exit;
+        }
+        $purchaseItem = $productModel->getPurchaseItemById($id);
+        if (!$purchaseItem) {
+            echo '<p>Purchase Item not found.</p>';
+            exit;
+        }
+        //date formatting
+        $purchaseItem['date_added_readable'] = date('d M Y', strtotime($purchaseItem['date_added']));
+        $purchaseItem['date_purchased_readable'] = $purchaseItem['date_purchased'] ? date('d M Y', strtotime($purchaseItem['date_purchased'])) : '';
+        echo json_encode(['success' => true, 'purchaseItem' => $purchaseItem]);
+        //renderTemplateClean('views/products/partial_purchase_item_details.php', ['purchaseItem' => $purchaseItem, 'product' => $product], 'Purchase Item Details');
         exit;
     }
 }
