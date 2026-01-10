@@ -299,7 +299,7 @@ class OrdersController {
 					'size' => $item['size'] ?? '',
 					'color' => $item['color'] ?? '',
 					'groupname' => $item['groupname'] ?? '',
-					'subcategories' => $item['subcategories'] ?? '',
+                    'subcategories' => !empty($item['subcategories']) ? str_replace(',', '', $item['subcategories']) : '',
 					'currency' => $item['currency'] ?? '',
 					'itemprice' => $item['itemprice'] ?? '',
 					'finalprice' => $item['finalprice'] ?? '',
