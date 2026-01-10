@@ -1,5 +1,5 @@
 <?php
-// 1. PHP Logic & Data Fetching
+// 1. PHP Logic & Data Fetching (Kept exactly the same)
 $label_data = $data['form2'] ?? [];
 
 if(empty($label_data) && isset($_GET['id'])) {
@@ -41,8 +41,10 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         </div>
 
         <div class="p-8 bg-gray-50 flex flex-col items-center justify-center gap-4">
-            <div class="w-[300px] h-[200px] border-2 border-black bg-white flex items-center justify-center shadow-lg">
-                <span class="text-gray-500 font-bold">Preview (3x2 Inch)</span>
+            <div id="preview-container" class="w-[300px] h-[200px] border-2 border-black bg-white shadow-lg overflow-hidden relative">
+                <div class="w-full h-full flex items-center justify-center text-gray-400">
+                    Loading Preview...
+                </div>
             </div>
             <p class="text-sm text-gray-500">Click the button below to generate the high-quality PDF.</p>
         </div>
@@ -149,8 +151,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
 
-    // 2. Generate High-Res QR Code on Load
-    // Adjusted Size: 280x280 (High Res but fits better)
+    // 2. Generate High-Res QR Code on Load & Update Preview
     window.addEventListener('load', function() {
         const qrContainer = document.getElementById("qrcode-highres");
         if(qrContainer) {
@@ -163,10 +164,50 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 colorLight : "#ffffff",
                 correctLevel : QRCode.CorrectLevel.H 
             });
+
+            // WAIT A MOMENT for the QR to generate canvas, then update preview
+            setTimeout(updateLivePreview, 100); 
         }
     });
 
-    // 3. Generate PDF Function
+    // 3. New Function: Clone the High-Res Label into the Preview Box
+    function updateLivePreview() {
+        const source = document.getElementById('high-res-print-area');
+        const container = document.getElementById('preview-container');
+        
+        if (!source || !container) return;
+        
+        // Clone the original high-res node
+        const clone = source.cloneNode(true);
+        
+        // Remove ID to avoid duplicate IDs in DOM
+        clone.removeAttribute('id');
+        
+        // MANUALLY COPY CANVAS: cloneNode() often ignores dynamic canvas content
+        const originalCanvas = source.querySelector('canvas');
+        const clonedCanvas = clone.querySelector('canvas');
+        if (originalCanvas && clonedCanvas) {
+            clonedCanvas.width = originalCanvas.width;
+            clonedCanvas.height = originalCanvas.height;
+            clonedCanvas.getContext('2d').drawImage(originalCanvas, 0, 0);
+        }
+
+        // Apply scaling styles to fit 1200x800 into 300x200
+        clone.classList.remove('fixed', 'top-0', '-left-[9999px]'); // Remove hidden positioning
+        
+        // We use inline styles for the transform to ensure specific overrides
+        clone.style.transform = "scale(0.25)"; // Scale down to 25%
+        clone.style.transformOrigin = "top left"; // Anchor to top-left corner
+        clone.style.position = "absolute";
+        clone.style.top = "0";
+        clone.style.left = "0";
+        
+        // Clear container and append the clone
+        container.innerHTML = '';
+        container.appendChild(clone);
+    }
+
+    // 4. Generate PDF Function (Unchanged logic)
     function generatePDF() {
         const { jsPDF } = window.jspdf;
         const element = document.getElementById("high-res-print-area");
@@ -180,7 +221,6 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             height: 800,
             windowWidth: 2000, 
             onclone: (clonedDoc) => {
-                // QR Canvas fix
                 const originalCanvas = element.querySelector('canvas');
                 const clonedCanvas = clonedDoc.querySelector('#qrcode-highres canvas');
                 if (originalCanvas && clonedCanvas) {
@@ -193,8 +233,8 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         }).then(canvas => {
             const imgData = canvas.toDataURL("image/png", 1.0);
             
-            const pdfWidth = 76.2; 
-            const pdfHeight = 50.8; 
+            const pdfWidth = 76.2; // 3 inches in mm
+            const pdfHeight = 50.8; // 2 inches in mm
             
             const pdf = new jsPDF({
                 orientation: "landscape",
