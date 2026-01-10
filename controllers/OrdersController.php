@@ -247,7 +247,10 @@ class OrdersController {
             //print_r($order['cart']);
             // Check if the order has the required fields
             // Map API fields to your table columns
-                
+            //2658982 order_number continue;
+            if (in_array($order['orderid'], ['2658982', '2660434','2662287','469282'])) {
+                continue; // Skip invalid orders
+            }   
                 foreach ($order['cart'] as $item) {  
                     $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
                     $esd = '0000-00-00';
@@ -1145,14 +1148,18 @@ class OrdersController {
     public function invoiceList() {
         is_login();
         global $poInvoiceModel;       
-        $limit = 20;
-        $offset = 0;
-        if (isset($_GET['limit'])) {
-            $limit = intval($_GET['limit']);
-        }
-        if (isset($_GET['offset'])) {
-            $offset = intval($_GET['offset']);
-        }
+        // $limit = 50;
+        // $offset = 0;
+        // if (isset($_GET['limit'])) {
+        //     $limit = intval($_GET['limit']);
+        // }
+        // if (isset($_GET['offset'])) {
+        //     $offset = intval($_GET['offset']);
+        // }
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
+        $offset = ($page - 1) * $limit;
         //search filters
         $filters = [];
         if (isset($_GET['vendor_id']) && !empty($_GET['vendor_id'])) {
@@ -1181,7 +1188,7 @@ class OrdersController {
         }
 
         $invoices = $poInvoiceModel->getAllInvoices($limit, $offset, $filters);
-        $total_orders = $poInvoiceModel->getTotalInvoices($limit, $offset, $filters);
+        $total_orders = $poInvoiceModel->getTotalInvoices(0, 0, $filters);
         //foreach invoice get po items
         foreach($invoices as $id => $invoice){
             $items = $poInvoiceModel->getPOsByInvoiceId($invoice['id']);
@@ -1194,14 +1201,18 @@ class OrdersController {
     public function paymentList() {
         is_login();
         global $poInvoiceModel;
-        $limit = 20;
-        $offset = 0;
-        if (isset($_GET['limit'])) {
-            $limit = intval($_GET['limit']);
-        }
-        if (isset($_GET['offset'])) {
-            $offset = intval($_GET['offset']);
-        }
+        // $limit = 50;
+        // $offset = 0;
+        // if (isset($_GET['limit'])) {
+        //     $limit = intval($_GET['limit']);
+        // }
+        // if (isset($_GET['offset'])) {
+        //     $offset = intval($_GET['offset']);
+        // }
+        $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $page = $page < 1 ? 1 : $page;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
+        $offset = ($page - 1) * $limit;
         //filters 
         $filters = [];
         if (isset($_GET['vendor_id']) && !empty($_GET['vendor_id'])) {
@@ -1230,7 +1241,7 @@ class OrdersController {
         }    
 
         $payments = $poInvoiceModel->getAllPayments($limit, $offset, $filters);
-        $total_payments = $poInvoiceModel->getTotalPayments($limit, $offset, $filters);
+        $total_payments = $poInvoiceModel->getTotalPayments(0, 0, $filters);
         //print_array($payments);
         renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
     }

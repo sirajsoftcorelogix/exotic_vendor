@@ -578,9 +578,30 @@ class POInvoice
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
-    public function getTotalInvoices($limit = 0, $offset = 0)
+    public function getTotalInvoices($limit = 0, $offset = 0, $filters = [])
     {
         $sql = "SELECT COUNT(*) as total FROM vp_po_invoice";
+        // Apply filters if provided
+        if (!empty($filters)) {
+            if (!empty($filters['po_number'])) {
+                $sql .= " AND po_number = ?";
+            }
+            if (!empty($filters['amount_min'])) {
+                $sql .= " AND grand_total >= ?";
+            }
+            if (!empty($filters['amount_max'])) {
+                $sql .= " AND grand_total <= ?";
+            }
+            if (!empty($filters['utr_number'])) {
+                $sql .= " AND utr_number = ?";
+            }
+            if (!empty($filters['invoice_date_from'])) {
+                $sql .= " AND invoice_date >= ?";
+            }
+            if (!empty($filters['invoice_date_to'])) {
+                $sql .= " AND invoice_date <= ?";
+            }
+        }
         if ($limit > 0) {
             $sql .= " LIMIT ? OFFSET ?";
         }
