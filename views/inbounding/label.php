@@ -1,5 +1,5 @@
 <?php
-// 1. PHP Logic & Data Fetching (Kept exactly the same)
+// 1. PHP Logic & Data Fetching
 $label_data[0] = $data['form2'] ?? [];
 $variations = $data['variation'];
 if (isset($variations) && !empty($variations)) {
@@ -47,17 +47,18 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             <button id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             </button>
-            <h1 class="font-bold text-lg">Print Dual Label (3x4)</h1>
+            <h1 class="font-bold text-lg">Print Labels (3x2)</h1>
             <button id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-1 px-4 rounded-full border border-white/30 text-sm">CLOSE</button>
         </div>
+        
         <?php 
-            // Calculate dynamic height: 200px per label
-            // If you have 1 label, height is 200. If 2, height is 400.
+            // Calculate dynamic height for the preview container
             $label_count = count($label_data); 
             $preview_height = $label_count * 200; 
         ?>
+        
         <div id="preview-container" 
-             class="w-[300px] border-2 border-black bg-white shadow-lg overflow-hidden relative"
+             class="mx-auto my-6 w-[300px] border-2 border-black bg-white shadow-lg overflow-hidden relative"
              style="height: <?php echo $preview_height; ?>px;">
             <div class="w-full h-full flex items-center justify-center text-gray-400">
                 Loading Preview...
@@ -67,7 +68,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         <div class="p-5 bg-white border-t border-gray-100">
             <button onclick="generatePDF()" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Download / Print Dual Label
+                Download / Print Labels
             </button>
         </div>
     </div>
@@ -78,15 +79,11 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
     <?php foreach($label_data as $index => $current_label): ?>
         
         <?php 
-            // Calculate variables specifically for THIS label in the loop
             $thisPhotoUrl = base_url(safe($current_label['product_photo'] ?? 'assets/images/placeholder.png'));
         ?>
 
-        <?php if($index > 0): ?>
-            <div class="w-full h-[1px] bg-white"></div>
-        <?php endif; ?>
-
-        <div class="w-full h-[800px] border-[4px] border-black flex bg-white box-border">
+        <div class="single-label-item w-full h-[800px] border-[4px] border-black flex bg-white box-border mb-0">
+            
             <div class="w-[384px] border-r-[4px] border-black p-5 flex flex-col items-center justify-start">
                 <div class="w-full h-[320px] border-[4px] border-black p-2.5 flex items-center justify-center mb-[15px] shrink-0">
                     <img src="<?php echo $thisPhotoUrl; ?>" crossorigin="anonymous" class="max-w-full max-h-full object-contain">
@@ -107,7 +104,6 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             </div>
 
             <div class="w-[816px] flex flex-col">
-                
                 <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
                     <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
                         <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">SIZE:</span>
@@ -180,7 +176,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
 
-    // 2. Generate High-Res QR Code on Load & Update Preview
+    // 2. Generate High-Res QR Code on Load
     window.addEventListener('load', function() {
         const qrContainers = document.querySelectorAll(".qrcode-highres");
         
@@ -196,11 +192,11 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             });
         });
 
-        // Wait a moment for QRs to render before showing preview
+        // Delay slightly to ensure QRs are rendered before creating preview
         setTimeout(updateLivePreview, 500); 
     });
 
-    // 3. Update Live Preview
+    // 3. Update Live Preview (Centers content in the box)
     function updateLivePreview() {
         const source = document.getElementById('high-res-print-area');
         const container = document.getElementById('preview-container');
@@ -209,10 +205,18 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         
         const clone = source.cloneNode(true);
         clone.removeAttribute('id');
+        clone.classList.remove('fixed', 'top-0', '-left-[9999px]'); 
         
+        // Scale to 25% to fit the 300px container (1200px * 0.25 = 300px)
+        clone.style.transform = "scale(0.25)"; 
+        clone.style.transformOrigin = "top left"; 
+        clone.style.position = "absolute";
+        clone.style.top = "0";
+        clone.style.left = "0";
+        
+        // Fix canvas context for preview QRs
         const originalCanvases = source.querySelectorAll('canvas');
         const clonedCanvases = clone.querySelectorAll('canvas');
-        
         originalCanvases.forEach((orig, index) => {
             if(clonedCanvases[index]) {
                 clonedCanvases[index].width = orig.width;
@@ -221,84 +225,79 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             }
         });
 
-        clone.classList.remove('fixed', 'top-0', '-left-[9999px]'); 
-        clone.style.transform = "scale(0.25)"; 
-        clone.style.transformOrigin = "top left"; 
-        clone.style.position = "absolute";
-        clone.style.top = "0";
-        clone.style.left = "0";
-        
         container.innerHTML = '';
         container.appendChild(clone);
     }
 
-    // 4. Generate PDF Function (DYNAMIC FIX)
-    function generatePDF() {
+    // 4. Generate PDF Function (Multi-page, ignores preview, correct size)
+    async function generatePDF() {
         const { jsPDF } = window.jspdf;
-        const element = document.getElementById("high-res-print-area");
-
-        // --- STEP A: Count the actual labels ---
-        // We look for elements with the specific label height class
-        const labelsFound = element.querySelectorAll('.h-\\[800px\\]').length;
         
-        // Fallback: if class search fails, count the border boxes
-        const count = labelsFound > 0 ? labelsFound : element.children.length;
+        // IMPORTANT: Select only the high-res hidden labels, NOT the preview ones
+        const labels = document.querySelectorAll('#high-res-print-area .single-label-item');
 
-        if (count === 0) { alert("No data to print"); return; }
+        if (labels.length === 0) {
+            console.error("No elements found in #high-res-print-area");
+            alert("No data to print. Check console.");
+            return;
+        }
 
-        // --- STEP B: Calculate Dynamic Heights ---
-        const singleHeight = 800; 
-        const spacing = 1; // 1px white border (if used)
-        
-        // Calculate total pixels: (800 * count)
-        const totalHeightPx = (singleHeight * count); 
-        const totalWidthPx = 1200;
+        // Initialize PDF: Landscape, 3x2 inches (76.2mm x 50.8mm)
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: [76.2, 50.8] 
+        });
 
-        html2canvas(element, { 
-            scale: 2, 
-            useCORS: true,
-            backgroundColor: "#ffffff",
-            logging: false,
-            width: totalWidthPx, 
-            height: totalHeightPx, // <--- DYNAMIC HEIGHT
-            windowWidth: 2000, 
-            onclone: (clonedDoc) => {
-                const originalCanvases = element.querySelectorAll('.qrcode-highres canvas');
-                const clonedCanvases = clonedDoc.querySelectorAll('.qrcode-highres canvas');
+        const btn = document.querySelector("button[onclick='generatePDF()']");
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "Generating...";
+        btn.disabled = true;
+
+        try {
+            // Loop through every label found
+            for (let i = 0; i < labels.length; i++) {
                 
-                originalCanvases.forEach((orig, index) => {
-                    if (clonedCanvases[index]) {
-                        const ctx = clonedCanvases[index].getContext('2d');
-                        clonedCanvases[index].width = orig.width;
-                        clonedCanvases[index].height = orig.height;
-                        ctx.drawImage(orig, 0, 0);
+                // Add new page for every label except the first one
+                if (i > 0) {
+                    pdf.addPage([76.2, 50.8], 'landscape');
+                }
+
+                const element = labels[i];
+
+                const canvas = await html2canvas(element, {
+                    scale: 2, 
+                    useCORS: true,
+                    backgroundColor: "#ffffff",
+                    logging: false,
+                    windowWidth: 2000,
+                    onclone: (clonedDoc) => {
+                        const origQR = element.querySelector('.qrcode-highres canvas');
+                        const clonedQR = clonedDoc.querySelector('.qrcode-highres canvas');
+                        if (origQR && clonedQR) {
+                            const ctx = clonedQR.getContext('2d');
+                            clonedQR.width = origQR.width;
+                            clonedQR.height = origQR.height;
+                            ctx.drawImage(origQR, 0, 0);
+                        }
                     }
                 });
-            }
-        }).then(canvas => {
-            const imgData = canvas.toDataURL("image/png", 1.0);
-            
-            const pdfWidth = 76.2; // 3 inches (fixed width)
-            const singleLabelHeightMm = 50.8; // 2 inches per label
-            
-            // --- STEP C: Calculate PDF Page Height ---
-            // If 1 label = 2 inches. If 3 labels = 6 inches.
-            const pdfHeight = singleLabelHeightMm * count; 
-            
-            const pdf = new jsPDF({
-                orientation: "portrait", 
-                unit: "mm",
-                format: [pdfWidth, pdfHeight] // <--- DYNAMIC PAGE SIZE
-            });
 
-            pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-            
-            // Use the code of the first item for the filename
+                const imgData = canvas.toDataURL("image/png", 1.0);
+                
+                // Print exactly at 3x2 inches
+                pdf.addImage(imgData, "PNG", 0, 0, 76.2, 50.8);
+            }
+
             const fileName = "Labels_<?php echo safe($label_data[0]['temp_code'] ?? 'Batch'); ?>.pdf";
             pdf.save(fileName);
-        }).catch(err => {
-            console.error("PDF Gen Error:", err);
-            alert("Error generating label. Please check console.");
-        });
+
+        } catch (err) {
+            console.error("PDF Generation Error:", err);
+            alert("Error generating labels.");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 </script>
