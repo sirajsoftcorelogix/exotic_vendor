@@ -217,6 +217,7 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getlabeldata($id);
+        $data['variation'] = $inboundingModel->getVariations($id);
         renderTemplateClean('views/inbounding/label.php', $data, 'label');
     }
     public function getform1() {

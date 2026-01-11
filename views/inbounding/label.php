@@ -1,7 +1,19 @@
 <?php
-// 1. PHP Logic & Data Fetching (Kept exactly the same)
-$label_data = $data['form2'] ?? [];
-
+// 1. PHP Logic & Data Fetching
+$label_data[0] = $data['form2'] ?? [];
+$variations = $data['variation'];
+if (isset($variations) && !empty($variations)) {
+    foreach ($variations as $key => $value) {
+        $key++;    
+        $label_data[$key] = $value;
+        $label_data[$key]['product_photo'] = $value['variation_image'];
+        $label_data[$key]['temp_code'] = $label_data[0]['temp_code'];
+        $label_data[$key]['Item_code'] = $label_data[0]['Item_code'];
+        $label_data[$key]['material_name'] = $label_data[0]['material_name'];
+        $label_data[$key]['vendor_name'] = $label_data[0]['vendor_name'];
+        $label_data[$key]['gate_entry_date_time'] = $label_data[0]['gate_entry_date_time'];
+    }
+}
 if(empty($label_data) && isset($_GET['id'])) {
     is_login();
     require_once 'settings/database/database.php';
@@ -21,7 +33,6 @@ function safe($value) {
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
 }
 
-$photoUrl = base_url(safe($label_data['product_photo'] ?? 'assets/images/placeholder.png'));
 $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 ?>
 
@@ -36,109 +47,123 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             <button id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             </button>
-            <h1 class="font-bold text-lg">Print Label (3x2)</h1>
+            <h1 class="font-bold text-lg">Print Labels (3x2)</h1>
             <button id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-1 px-4 rounded-full border border-white/30 text-sm">CLOSE</button>
         </div>
-
-        <div class="p-8 bg-gray-50 flex flex-col items-center justify-center gap-4">
-            <div id="preview-container" class="w-[300px] h-[200px] border-2 border-black bg-white shadow-lg overflow-hidden relative">
-                <div class="w-full h-full flex items-center justify-center text-gray-400">
-                    Loading Preview...
-                </div>
+        
+        <?php 
+            // Calculate dynamic height for the preview container
+            $label_count = count($label_data); 
+            $preview_height = $label_count * 200; 
+        ?>
+        
+        <div id="preview-container" 
+             class="mx-auto my-6 w-[300px] border-2 border-black bg-white shadow-lg overflow-hidden relative"
+             style="height: <?php echo $preview_height; ?>px;">
+            <div class="w-full h-full flex items-center justify-center text-gray-400">
+                Loading Preview...
             </div>
-            <p class="text-sm text-gray-500">Click the button below to generate the high-quality PDF.</p>
         </div>
 
         <div class="p-5 bg-white border-t border-gray-100">
             <button onclick="generatePDF()" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Download / Print Label
+                Download / Print Labels
             </button>
         </div>
     </div>
 </div>
 
-<div id="high-res-print-area" class="fixed top-0 -left-[9999px] w-[1200px] h-[800px] bg-white border-[4px] border-black flex font-sans box-border z-[9999] text-black">
+<div id="high-res-print-area" class="fixed top-0 -left-[9999px] w-[1200px] flex flex-col font-sans box-border z-[9999] text-black bg-white">
     
-    <div class="w-[384px] border-r-[4px] border-black p-5 flex flex-col items-center justify-start">
-        <div class="w-full h-[320px] border-[4px] border-black p-2.5 flex items-center justify-center mb-[15px] shrink-0">
-            <img src="<?php echo $photoUrl; ?>" crossorigin="anonymous" class="max-w-full max-h-full object-contain">
-        </div>
+    <?php foreach($label_data as $index => $current_label): ?>
         
-        <div class="w-full grow flex flex-col items-center justify-start pb-2.5">
-            <div id="qrcode-highres" class="flex justify-center items-center mb-[5px]"></div>
-            <div class="text-[40px] font-black mt-[5px] leading-none text-center">
-                <?php echo safe($label_data['Item_code'] ?? $label_data['temp_code']); ?>
+        <?php 
+            $thisPhotoUrl = base_url(safe($current_label['product_photo'] ?? 'assets/images/placeholder.png'));
+        ?>
+
+        <div class="single-label-item w-full h-[800px] border-[4px] border-black flex bg-white box-border mb-0">
+            
+            <div class="w-[384px] border-r-[4px] border-black p-5 flex flex-col items-center justify-start">
+                <div class="w-full h-[320px] border-[4px] border-black p-2.5 flex items-center justify-center mb-[15px] shrink-0">
+                    <img src="<?php echo $thisPhotoUrl; ?>" crossorigin="anonymous" class="max-w-full max-h-full object-contain">
+                </div>
+                
+                <div class="w-full grow flex flex-col items-center justify-start pb-2.5">
+                    <div class="qrcode-highres flex justify-center items-center mb-[5px]"></div>
+                    <div class="text-[40px] font-black mt-[5px] leading-none text-center">
+                        <?php echo safe($current_label['Item_code'] ?? $current_label['temp_code']); ?>
+                    </div>
+                    <div class="text-[36px] font-bold mt-[5px] text-center">
+                        <?php 
+                            $dt = $current_label['gate_entry_date_time'] ?? '';
+                            echo ($dt) ? date('d M Y', strtotime($dt)) : date('d M Y'); 
+                        ?>
+                    </div>
+                </div>
             </div>
-            <div class="text-[36px] font-bold mt-[5px] text-center">
-                <?php 
-                    $dt = $label_data['gate_entry_date_time'] ?? '';
-                    echo ($dt) ? date('d M Y', strtotime($dt)) : date('d M Y'); 
-                ?>
+
+            <div class="w-[816px] flex flex-col">
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">SIZE:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['size'] ?? '-'); ?></span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">COLOR:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['color'] ?? '-'); ?></span>
+                    </div>
+                </div>
+
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">WxHxD:</span>
+                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
+                            <?php echo safe($current_label['width'] ?? '-'); ?>x<?php echo safe($current_label['height'] ?? '-'); ?>x<?php echo safe($current_label['depth'] ?? '-'); ?>
+                        </span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">WEIGHT:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['weight'] ?? '0'); ?> kg</span>
+                    </div>
+                </div>
+
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">CP:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">₹ <?php echo safe($current_label['cp'] ?? '-'); ?></span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">MATERIAL:</span>
+                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3] pb-1">
+                            <?php echo safe($current_label['material_name'] ?? '-'); ?>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">QTY:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['quantity_received'] ?? '0'); ?></span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">LOC:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['location'] ?? 'Rack1'); ?></span>
+                    </div>
+                </div>
+
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0 border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">VENDOR:</span>
+                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
+                            <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts'); ?>
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+    <?php endforeach; ?>
 
-    <div class="w-[816px] flex flex-col">
-        
-        <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">SIZE:</span>
-                <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($label_data['size'] ?? '-'); ?></span>
-            </div>
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">COLOR:</span>
-                <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($label_data['color'] ?? '-'); ?></span>
-            </div>
-        </div>
-
-        <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">WxHxD:</span>
-                <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
-                    <?php echo safe($label_data['width'] ?? '-'); ?>x<?php echo safe($label_data['height'] ?? '-'); ?>x<?php echo safe($label_data['depth'] ?? '-'); ?>
-                </span>
-            </div>
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">WEIGHT:</span>
-                <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($label_data['weight'] ?? '0'); ?> kg</span>
-            </div>
-        </div>
-
-        <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">CP:</span>
-                <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">₹ <?php echo safe($label_data['cp'] ?? '-'); ?></span>
-            </div>
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">MATERIAL:</span>
-                <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3] pb-1">
-                    <?php echo safe($label_data['material_name'] ?? '-'); ?>
-                </span>
-            </div>
-        </div>
-
-        <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">QTY:</span>
-                <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($label_data['quantity_received'] ?? '0'); ?></span>
-            </div>
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">LOC:</span>
-                <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($label_data['location'] ?? 'Rack1'); ?></span>
-            </div>
-        </div>
-
-        <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
-            <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0 border-r-0">
-                <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">VENDOR:</span>
-                <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
-                    <?php echo safe($label_data['vendor_name'] ?? 'Jagapoorani Arts'); ?>
-                </span>
-            </div>
-        </div>
-
-    </div>
 </div>
 
 <script>
@@ -151,12 +176,13 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
 
-    // 2. Generate High-Res QR Code on Load & Update Preview
+    // 2. Generate High-Res QR Code on Load
     window.addEventListener('load', function() {
-        const qrContainer = document.getElementById("qrcode-highres");
-        if(qrContainer) {
-            qrContainer.innerHTML = "";
-            new QRCode(qrContainer, {
+        const qrContainers = document.querySelectorAll(".qrcode-highres");
+        
+        qrContainers.forEach(container => {
+            container.innerHTML = "";
+            new QRCode(container, {
                 text: "<?php echo $currentUrl; ?>",
                 width: 280,  
                 height: 280, 
@@ -164,91 +190,114 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 colorLight : "#ffffff",
                 correctLevel : QRCode.CorrectLevel.H 
             });
+        });
 
-            // WAIT A MOMENT for the QR to generate canvas, then update preview
-            setTimeout(updateLivePreview, 100); 
-        }
+        // Delay slightly to ensure QRs are rendered before creating preview
+        setTimeout(updateLivePreview, 500); 
     });
 
-    // 3. New Function: Clone the High-Res Label into the Preview Box
+    // 3. Update Live Preview (Centers content in the box)
     function updateLivePreview() {
         const source = document.getElementById('high-res-print-area');
         const container = document.getElementById('preview-container');
         
         if (!source || !container) return;
         
-        // Clone the original high-res node
         const clone = source.cloneNode(true);
-        
-        // Remove ID to avoid duplicate IDs in DOM
         clone.removeAttribute('id');
+        clone.classList.remove('fixed', 'top-0', '-left-[9999px]'); 
         
-        // MANUALLY COPY CANVAS: cloneNode() often ignores dynamic canvas content
-        const originalCanvas = source.querySelector('canvas');
-        const clonedCanvas = clone.querySelector('canvas');
-        if (originalCanvas && clonedCanvas) {
-            clonedCanvas.width = originalCanvas.width;
-            clonedCanvas.height = originalCanvas.height;
-            clonedCanvas.getContext('2d').drawImage(originalCanvas, 0, 0);
-        }
-
-        // Apply scaling styles to fit 1200x800 into 300x200
-        clone.classList.remove('fixed', 'top-0', '-left-[9999px]'); // Remove hidden positioning
-        
-        // We use inline styles for the transform to ensure specific overrides
-        clone.style.transform = "scale(0.25)"; // Scale down to 25%
-        clone.style.transformOrigin = "top left"; // Anchor to top-left corner
+        // Scale to 25% to fit the 300px container (1200px * 0.25 = 300px)
+        clone.style.transform = "scale(0.25)"; 
+        clone.style.transformOrigin = "top left"; 
         clone.style.position = "absolute";
         clone.style.top = "0";
         clone.style.left = "0";
         
-        // Clear container and append the clone
+        // Fix canvas context for preview QRs
+        const originalCanvases = source.querySelectorAll('canvas');
+        const clonedCanvases = clone.querySelectorAll('canvas');
+        originalCanvases.forEach((orig, index) => {
+            if(clonedCanvases[index]) {
+                clonedCanvases[index].width = orig.width;
+                clonedCanvases[index].height = orig.height;
+                clonedCanvases[index].getContext('2d').drawImage(orig, 0, 0);
+            }
+        });
+
         container.innerHTML = '';
         container.appendChild(clone);
     }
 
-    // 4. Generate PDF Function (Unchanged logic)
-    function generatePDF() {
+    // 4. Generate PDF Function (Multi-page, ignores preview, correct size)
+    async function generatePDF() {
         const { jsPDF } = window.jspdf;
-        const element = document.getElementById("high-res-print-area");
+        
+        // IMPORTANT: Select only the high-res hidden labels, NOT the preview ones
+        const labels = document.querySelectorAll('#high-res-print-area .single-label-item');
 
-        html2canvas(element, { 
-            scale: 2, 
-            useCORS: true,
-            backgroundColor: "#ffffff",
-            logging: false,
-            width: 1200, 
-            height: 800,
-            windowWidth: 2000, 
-            onclone: (clonedDoc) => {
-                const originalCanvas = element.querySelector('canvas');
-                const clonedCanvas = clonedDoc.querySelector('#qrcode-highres canvas');
-                if (originalCanvas && clonedCanvas) {
-                    const ctx = clonedCanvas.getContext('2d');
-                    clonedCanvas.width = originalCanvas.width;
-                    clonedCanvas.height = originalCanvas.height;
-                    ctx.drawImage(originalCanvas, 0, 0);
-                }
-            }
-        }).then(canvas => {
-            const imgData = canvas.toDataURL("image/png", 1.0);
-            
-            const pdfWidth = 76.2; // 3 inches in mm
-            const pdfHeight = 50.8; // 2 inches in mm
-            
-            const pdf = new jsPDF({
-                orientation: "landscape",
-                unit: "mm",
-                format: [pdfWidth, pdfHeight]
-            });
+        if (labels.length === 0) {
+            console.error("No elements found in #high-res-print-area");
+            alert("No data to print. Check console.");
+            return;
+        }
 
-            pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-            
-            const fileName = "Label_3x2_<?php echo safe($label_data['temp_code'] ?? 'Item'); ?>.pdf";
-            pdf.save(fileName);
-        }).catch(err => {
-            console.error("PDF Gen Error:", err);
-            alert("Error generating label. Please check console.");
+        // Initialize PDF: Landscape, 3x2 inches (76.2mm x 50.8mm)
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: [76.2, 50.8] 
         });
+
+        const btn = document.querySelector("button[onclick='generatePDF()']");
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "Generating...";
+        btn.disabled = true;
+
+        try {
+            // Loop through every label found
+            for (let i = 0; i < labels.length; i++) {
+                
+                // Add new page for every label except the first one
+                if (i > 0) {
+                    pdf.addPage([76.2, 50.8], 'landscape');
+                }
+
+                const element = labels[i];
+
+                const canvas = await html2canvas(element, {
+                    scale: 2, 
+                    useCORS: true,
+                    backgroundColor: "#ffffff",
+                    logging: false,
+                    windowWidth: 2000,
+                    onclone: (clonedDoc) => {
+                        const origQR = element.querySelector('.qrcode-highres canvas');
+                        const clonedQR = clonedDoc.querySelector('.qrcode-highres canvas');
+                        if (origQR && clonedQR) {
+                            const ctx = clonedQR.getContext('2d');
+                            clonedQR.width = origQR.width;
+                            clonedQR.height = origQR.height;
+                            ctx.drawImage(origQR, 0, 0);
+                        }
+                    }
+                });
+
+                const imgData = canvas.toDataURL("image/png", 1.0);
+                
+                // Print exactly at 3x2 inches
+                pdf.addImage(imgData, "PNG", 0, 0, 76.2, 50.8);
+            }
+
+            const fileName = "Labels_<?php echo safe($label_data[0]['temp_code'] ?? 'Batch'); ?>.pdf";
+            pdf.save(fileName);
+
+        } catch (err) {
+            console.error("PDF Generation Error:", err);
+            alert("Error generating labels.");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 </script>
