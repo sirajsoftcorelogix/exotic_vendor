@@ -117,12 +117,25 @@
                 </a>
             </div>
             <div class="absolute right-0 top-0 flex items-center space-x-4">
-            <button id="importProductsBtn" title="Import products" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
+            <div class="relative inline-block text-left">
+                <button id="bulk-action-toggle" type="button" class="btn btn-success inline-flex items-center px-4 py-2" aria-haspopup="true" aria-expanded="false">
+                    Actions
+                    <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
+                    <!-- <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                    <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a> -->
+                    <a href="javascript:void(0)" id="importProductsBtn" title="Import products" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Import Products</a>
+                    <a href="javascript:void(0)" id="bulkUpdateBtn" title="Update stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Products</a>
+                    <a href="javascript:void(0)" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
+                </div>
+            </div>
+            <!-- <button id="importProductsBtn" title="Import products" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
                 Import             
             </button>
             <button id="bulkUpdateBtn" title="Update stock" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
                 Update
-            </button>
+            </button> -->
             <select id="rows-per-page" class="text-sm right-0 pagination-select px-1 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                 onchange="location.href='?page=products&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
                 <?php foreach ([10, 20, 50, 100] as $opt): ?>
@@ -430,6 +443,44 @@
         </div>
     </div>
 </div>
+
+<!-- Bulk Assign To Modal -->
+<div id="bulkAssignPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAssignPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
+        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <h2 class="text-xl font-bold mb-4">Create Purchase List</h2>
+        <form id="bulkAssignForm" method="post" action="">
+            <div class="mb-4 flex gap-4 w-full">
+                <div class="w-1/2">
+                <label class="block text-sm font-bold mb-2">Assign To</label>
+                <select id="bulkAssignAgent" name="agent_id" class="border rounded px-3 py-2 w-full">
+                    <option value="">-- Select Agent --</option>
+                    <?php foreach ($user as $id => $name): ?>
+                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-sm font-bold mb-2">Date Purchased</label>
+                    <input type="date" id="bulkAssignDatePurchased" name="date_purchased" class="border rounded px-3 py-2 w-full">
+                </div>
+            </div>
+            <div class="mb-4">
+                <!-- <label class="block text-sm font-bold mb-2">Notes</label>
+                <textarea id="bulkStatusNotes" name="notes" class="border rounded px-3 py-2 w-full" rows="3"></textarea> -->
+                <!--list selected item image-->
+                <div id="bulkAssignSelectedItems" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto border p-2">
+                    <!-- Selected item images will be displayed here -->
+                </div>
+            </div>
+            <div id="bulkAssignError" class="text-red-500 text-sm hidden mb-2"></div>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeBulkAssignPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
 <script>
 // image popup functions
 function openImagePopup(imageUrl) {
@@ -491,7 +542,7 @@ function updateProductsStock(itemCode) {
 document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
     const checkboxes = document.querySelectorAll('input[name="product_select[]"]:checked');
     if (checkboxes.length === 0) {
-        alert('Please select at least one product to update.');
+        showAlert('Please select at least one product to update.', 'warning');
         return;
     }
     showPopup('Updating selected products. Please wait...');    
@@ -499,7 +550,7 @@ document.getElementById('bulkUpdateBtn').addEventListener('click', function() {
     const itemCodes = Array.from(checkboxes).map(checkbox => checkbox.value).join(',');
     //validate max item codes per request 50
     if (checkboxes.length > 50) {
-        alert('You can update a maximum of 50 products at a time.');
+        showAlert('You can update a maximum of 50 products at a time.', 'warning');
         hidePopup();
         return;
     }
@@ -1150,4 +1201,133 @@ window.updateVendorPriority = function(id,item_code, priority, el) {
         alert('Network error');
     });
 };
+</script>
+<script>
+    // Helper to get selected product objects (id, image, item_code, sku)
+    function getSelectedProductIds() {
+        const checkboxes = document.querySelectorAll('input[name="product_select[]"]:checked');
+        //const element = document.querySelector('#order-id-' + id);
+        //get product data from data-product attribute
+
+        const products = Array.from(checkboxes).map(checkbox => {
+            const row = checkbox.closest('tr');
+            const productData = row ? JSON.parse(row.getAttribute('data-product') || '{}') : {};
+            return {
+                id: productData.id || null,
+                image: productData.image || '',
+                item_code: productData.item_code || productData.itemcode || '',
+                sku: productData.sku || productData.item_code || productData.itemcode || ''
+            };
+        });
+        return products;
+    }
+    // Toggle bulk actions menu
+    document.getElementById('bulk-action-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        const menu = document.getElementById('bulk-action-menu');
+        menu.classList.toggle('hidden');
+    });
+    // close menu on outside click
+    document.addEventListener('click', function() {
+        document.getElementById('bulk-action-menu').classList.add('hidden');
+    });
+
+
+    // Bulk Assign handlers
+    document.getElementById('action-assign-to').addEventListener('click', function(e){
+        e.preventDefault();
+        const products = getSelectedProductIds();
+        console.log('Selected products to create purchase list:', products);
+        if (products.length === 0) {
+            showAlert('Please select at least one product to create purchase list.', 'warning');
+            return;
+        }
+        const form = document.getElementById('bulkAssignForm');
+        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+        products.forEach(p => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'poitem[]';
+            input.value = p.id;
+            input.className = 'poitem_hidden';
+            form.appendChild(input);
+            // also include sku for each product so backend can store it
+            const skuInput = document.createElement('input');
+            skuInput.type = 'hidden';
+            skuInput.name = 'sku[]';
+            skuInput.value = p.sku || p.item_code || '';
+            skuInput.className = 'poitem_hidden';
+            form.appendChild(skuInput);
+        });
+        // populate selected items list with image and sku/item_code
+        const selectedItemsContainer = document.getElementById('bulkAssignSelectedItems');
+        selectedItemsContainer.innerHTML = '';
+        products.forEach(p => {
+            const div = document.createElement('div');
+            div.classList.add('rounded-md', 'flex-shrink-0',  'flex', 'flex-col', 'items-center', 'justify-start', 'bg-gray-50', 'overflow-hidden', 'w-32','h-32', 'm-2','mb-2', 'text-center', 'p-2');
+            // image
+            const img = document.createElement('img');
+            img.src = p.image || 'default-image.png';
+            img.classList.add('max-w-full', 'h-24', 'object-contain');
+            div.appendChild(img);
+            // sku / item code label
+            const label = document.createElement('div');
+            label.classList.add('text-sm', 'mt-2', 'break-words');
+            label.textContent = p.sku || p.item_code || ('ID ' + (p.id || ''));
+            div.appendChild(label);
+            // append hidden product id
+            // const hiddenInput = document.createElement('input');
+            // hiddenInput.type = 'hidden';
+            // hiddenInput.name = 'order_ids[]';
+            // hiddenInput.value = p.id;
+            // div.appendChild(hiddenInput);
+            selectedItemsContainer.appendChild(div);
+        });
+        document.getElementById('bulkAssignError').classList.add('hidden');
+        document.getElementById('bulkAssignPopup').classList.remove('hidden');
+    });
+    function closeBulkAssignPopup(e){
+        document.getElementById('bulkAssignPopup').classList.add('hidden');
+    }
+
+    //bulk assign submit
+    document.getElementById('bulkAssignForm').addEventListener('submit', function(e){
+        const agent = document.getElementById('bulkAssignAgent').value;
+        if (!agent) {
+            e.preventDefault();
+            document.getElementById('bulkAssignError').textContent = 'Please select an agent.';
+            document.getElementById('bulkAssignError').classList.remove('hidden');
+            return;
+        }
+        //ajax submit
+        document.getElementById('bulkAssignError').textContent = 'Processing..'
+        document.getElementById('bulkAssignError').classList.remove('hidden');
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch('index.php?page=products&action=create_purchase_list', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                //alert(data.message);
+                document.getElementById('bulkAssignError').classList.remove('text-red-500');
+                document.getElementById('bulkAssignError').classList.add('text-green-500');
+                document.getElementById('bulkAssignError').textContent = 'Purchase List created successfully.';
+                //poitem clear from localStorage
+                //localStorage.removeItem('selected_po_orders');
+
+                //timeout to close popup and reload
+                setTimeout(() => {
+                    closeBulkAssignPopup();
+                    location.reload();
+                }, 3000);
+                //bulkStatusError.classList.remove('hidden');
+                //location.reload();
+            } else {
+                alert(data.message);
+            }
+        });
+    });
 </script>

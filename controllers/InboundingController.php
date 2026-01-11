@@ -217,6 +217,7 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getlabeldata($id);
+        $data['variation'] = $inboundingModel->getVariations($id);
         renderTemplateClean('views/inbounding/label.php', $data, 'label');
     }
     public function getform1() {
@@ -234,11 +235,41 @@ class InboundingController {
         $data = array();
         $data = $inboundingModel->getform2data($id);
         $data['form2']['gecolormaps'] = $this->gecolormaps();
-        // echo "<pre>";print_r($data['form2']['gecolormaps']);exit;
         $data['form2']['optionals_data'] = $this->getoptionals();
+        $data['form2']['getimgdir'] = $this->getimgdir();
         $data['images'] = $inboundingModel->getitem_imgs($id);
-        // echo "<pre>";print_r($data['icon_data']);exit;
+        // echo "<pre>";print_r($data['getimgdir']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
+    }
+    function getimgdir() {
+        $url = 'https://www.exoticindia.com/vendor-api/product/image-directories';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json'
+        ];
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
+        ]);
+        $response = curl_exec($ch);
+        if (curl_errno($ch)) {
+            error_log("cURL Error: " . curl_error($ch));
+            curl_close($ch);
+            return false;
+        }
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode != 200) {
+            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
+            return false;
+        }
+        return json_decode($response, true);
     }
     function gecolormaps() {
         $url = 'https://www.exoticindia.com/vendor-api/product/colormaps';
@@ -868,7 +899,8 @@ class InboundingController {
             'Item_code'           => $item_code,
             'sku'                 => $generated_sku,
             'group_name'          => $_POST['group_name'] ?? '', 
-            'colormaps'             => $_POST['colormaps'] ?? '',
+            'colormaps'           => $_POST['colormaps'] ?? '',
+            'image_directory'     => $_POST['image_directory'] ?? '',
             'category_code'       => $category_val,
             'sub_category_code'   => $sub_cat_val, 
             'sub_sub_category_code' => $sub_sub_val,
@@ -1063,6 +1095,7 @@ class InboundingController {
             'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
             'Item_code'             => $_POST['Item_code'] ?? '',
             'is_variant'             => $_POST['is_variant'] ?? '',
+            'feedback'             => $_POST['feedback'] ?? '',
             'temp_code'            => $temp_code,
             
             // Map Index 0 Data to DB Columns
@@ -1348,11 +1381,11 @@ class InboundingController {
 
         // 4. Handle Images (The major fix)
         $images_payload = array();
-        $images_payload['image_directory'] = '';
+        $images_payload['image_directory'] = $data['data']['image_directory'] ?? '';
         $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
         if (!empty($data['data']['img'])) {
-            $images_payload['image_directory'] = '';
+            $images_payload['image_directory'] = $data['data']['image_directory'] ?? '';
             
             // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
             // If you need a clickable URL for a browser, change this to your website URL.
@@ -1372,8 +1405,7 @@ class InboundingController {
 
         $API_data['images'] = $images_payload;
 
-        $jsonString = json_encode($API_data, JSON_PRETTY_PRINT); // Pretty print for easier reading
-        // print_r($jsonString);exit;
+        $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
         $apiurl =  '';
         $isVariant = $data['data']['is_variant'];
         $hasRows   = !empty($data['data']['var_rows']);
