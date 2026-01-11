@@ -86,7 +86,7 @@ $countries = country_array();
                         <div class="w-[180px] flex flex-col items-start pt-1">
                             <form action="<?php echo base_url('?page=purchase_orders&action=custom_po'); ?>" method="post">
                         <input type="hidden" name="cpoitem[]" value="<?php echo $item['id']?>">                                        
-                        <button class="create-po-btn mb-6 w-full">
+                        <button class="create-po-btn mb-6 w-36">
                             <i class="fas fa-file-invoice mr-2"></i>
                             Create PO
                         </button>   
