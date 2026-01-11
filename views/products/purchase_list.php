@@ -7,8 +7,8 @@
         <form method="GET" action="" class="flex items-center gap-3">
             <input type="hidden" name="page" value="products">
             <input type="hidden" name="action" value="purchase_list">
-            <div class="flex items-center gap-2">
-                <label class="text-xs text-gray-600">Category</label>
+            <div class=" gap-2 w-1/2 flex-1">
+                <label class="text-xs text-gray-600">Category</label><br>
                 <select name="category" class="text-sm border rounded px-2 py-1 bg-white" onchange="this.form.submit()">
                     <option value="all">All</option>
                     <?php foreach (($data['categories'] ?? []) as $cat): ?>
@@ -16,9 +16,9 @@
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="flex items-center gap-2">
-                <label class="text-xs text-gray-600">Status</label>
-                <select name="status" class="text-sm border rounded px-2 py-1 bg-white" onchange="this.form.submit()">
+            <div class=" gap-2 w-1/2 ml-2 flex-2">
+                <label class="text-xs text-gray-600">Status</label><br>
+                <select name="status" class="text-sm border rounded px-2 py-1 bg-white w-full" onchange="this.form.submit()">
                     <option value="all" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'all') ? 'selected' : '' ?>>All</option>
                     <option value="pending" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'pending') ? 'selected' : '' ?> <?= (!isset($data['selected_filters']['status']) ? 'selected' : '') ?>>Pending</option>
                     <option value="purchased" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'purchased') ? 'selected' : '' ?>>Purchased</option>
@@ -112,71 +112,12 @@
 </div>
 
 <script>
-    // Global toast container and showAlert
-    function ensureToastContainer() {
-        let c = document.getElementById('globalToastContainer');
-        if (!c) {
-            c = document.createElement('div');
-            c.id = 'globalToastContainer';
-            c.style.position = 'fixed';
-            c.style.right = '20px';
-            c.style.top = '20px';
-            c.style.zIndex = 99999;
-            document.body.appendChild(c);
-        }
-        return c;
+    // Use global helpers when available (defined in layout). Fallbacks included.
+    function showAlertP(message, type = 'info', timeout = 3000) {
+        if (window.showGlobalToast) return window.showGlobalToast(message, type, timeout);
+        alert(message);
     }
 
-    // Global confirm modal (returns Promise<boolean>)
-    function ensureConfirmModal() {
-        let m = document.getElementById('globalConfirmModal');
-        if (!m) {
-            m = document.createElement('div');
-            m.id = 'globalConfirmModal';
-            m.style.position = 'fixed';
-            m.style.left = '0'; m.style.top = '0'; m.style.right = '0'; m.style.bottom = '0';
-            m.style.display = 'none';
-            m.style.zIndex = 100000;
-            m.style.alignItems = 'center';
-            m.style.justifyContent = 'center';
-            m.style.background = 'rgba(0,0,0,0.35)';
-
-            m.innerHTML = '<div id="globalConfirmBox" style="background:#fff;padding:16px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.2);min-width:420px;max-width:90%;">' +
-                '<div id="globalConfirmMessage" style="margin-bottom:12px;color:#111"></div>' +
-                '<div style="text-align:right">' +
-                '<button id="globalConfirmCancel" style="margin-right:8px;padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;">Cancel</button>' +
-                '<button id="globalConfirmOk" style="padding:8px 12px;border-radius:6px;border:0;background:#059669;color:#fff;">OK</button>' +
-                '</div></div>';
-            document.body.appendChild(m);
-        }
-        return m;
-    }
-
-    function showConfirm(message) {
-        return new Promise(resolve => {
-            const modal = ensureConfirmModal();
-            const msg = document.getElementById('globalConfirmMessage');
-            const ok = document.getElementById('globalConfirmOk');
-            const cancel = document.getElementById('globalConfirmCancel');
-            msg.textContent = message;
-            modal.style.display = 'flex';
-            ok.focus();
-            function cleanup(result) {
-                modal.style.display = 'none';
-                ok.removeEventListener('click', onOk);
-                cancel.removeEventListener('click', onCancel);
-                resolve(result);
-            }
-            function onOk() { cleanup(true); }
-            function onCancel() { cleanup(false); }
-            ok.addEventListener('click', onOk);
-            cancel.addEventListener('click', onCancel);
-        });
-    }
-
-   
-
-    // Save quantity and remarks for a purchase item
     function savePurchaseItem(id, btn) {
         const qty = document.getElementById('quantity_' + id).value;
         const remarks = document.getElementById('remarks_' + id).value;
@@ -191,17 +132,18 @@
         }).then(r => r.json()).then(data => {
             if (data && data.success) {
                 showAlert('Saved successfully', 'success');
+                //if (window.showGlobalToast) window.showGlobalToast('Saved successfully', 'success'); else alert('Saved successfully');
                 setTimeout(() => { location.reload(); }, 800);
             } else {
                 showAlert('Failed: ' + (data.message || 'Error'), 'error');
+                //if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
             }
-        }).catch(err => showAlert('Network error', 'error'))
+        }).catch(err => { if (window.showGlobalToast) window.showGlobalToast('Network error', 'error'); else alert('Network error'); })
         .finally(() => { btn.disabled = false; btn.innerHTML = originalText; });
     }
 
-    // Use showConfirm instead of native confirm so we can show consistent UI
     async function markAsPurchased(id) {
-        const confirmed = await showConfirm('Mark this item as purchased?');
+        const confirmed = window.customConfirm ? await window.customConfirm('Mark this item as purchased?') : confirm('Mark this item as purchased?');
         if (!confirmed) return;
         fetch('?page=products&action=mark_purchased', {
             method: 'POST',
@@ -210,10 +152,11 @@
         }).then(r => r.json()).then(data => {
             if (data && data.success) {
                 showAlert('Marked as purchased', 'success');
+                //if (window.showGlobalToast) window.showGlobalToast('Marked as purchased', 'success'); else alert('Marked as purchased');
                 setTimeout(() => location.reload(), 900);
             } else {
-                showAlert('Failed: ' + (data.message || 'Error'), 'error');
+                if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
             }
-        }).catch(err => showAlert('Network error', 'error'));
+        }).catch(err => { if (window.showGlobalToast) window.showGlobalToast('Network error', 'error'); else alert('Network error'); });
     }
 </script>

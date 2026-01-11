@@ -62,22 +62,22 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
+                        <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Added</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Purchased</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Actions</th>
+                        <th class="px-0 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                     <?php foreach ($data['purchase_list'] as $pl): ?>
                         <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')"><?php echo htmlspecialchars($pl['item_code']); ?></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer" onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')"><?php echo htmlspecialchars($pl['item_code']); ?></td>
                             <td class="px-6 py-4 whitespace-normal text-sm text-gray-900 break-words"><?php echo htmlspecialchars($pl['title']); ?></td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo htmlspecialchars($pl['category']); ?></td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo (int)$pl['quantity']; ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $pl['cost_price'] ? "₹".htmlspecialchars($pl['cost_price']) : 'N/A'; ?></td>
+                            <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php //echo htmlspecialchars($pl['agent_name']); ?></td>                             -->
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo ucfirst(htmlspecialchars($pl['status'])); ?></td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo htmlspecialchars($pl['added_by']); ?></td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php 
@@ -153,24 +153,24 @@
                     if ($total_pages > 1): ?>          
                     <!-- Prev Button -->
                         <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
-                        href="?page=purchase_orders&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                        href="?page=products&action=master_purchase_list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                             &laquo; Prev
                         </a>
                         <!-- Page Slots -->
                         <?php for ($i = $start; $i <= $end; $i++): ?>
                             <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
-                            href="?page=purchase_orders&action=list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
+                            href="?page=products&action=master_purchase_list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
                                 <?= $i ?>
                             </a>
                         <?php endfor; ?>
                         <!-- Next Button -->
                         <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
-                        href="?page=purchase_orders&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                        href="?page=products&action=master_purchase_list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                             Next &raquo;
                         </a>
                     <?php endif; ?>
                     <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
-                            onchange="location.href='?page=purchase_orders&action=list&page_no=1&limit=' + this.value;">
+                            onchange="location.href='?page=products&action=master_purchase_list&page_no=1&limit=' + this.value;">
                         <?php foreach ([10, 20, 50, 100] as $opt): ?>
                             <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                                 <?= $opt ?>
@@ -265,7 +265,7 @@
 
                     // Populate fields dynamically
                     fieldsContainer.innerHTML = `
-                        <div><strong>Title : </strong> ${plDetails.title || 'N/A'}</div>
+                        <div class="col-span-2"><strong>Title : </strong> ${plDetails.title || 'N/A'}</div>
                         <div><strong>Assigned Agent : </strong> ${plDetails.agent_name || 'N/A'}</div>
                         <div><strong>Date Added : </strong> ${plDetails.date_added_readable || 'N/A'}</div>
                         <div><strong>Date Purchased : </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
@@ -276,7 +276,7 @@
                         <div><strong>Dimensions : </strong> ${plDetails.dimensions || 'N/A'}</div>
                         <div><strong>Weight : </strong> ${plDetails.weight || 'N/A'}</div>
                         <div><strong>Quantity : </strong> <input type="number" id="pl-quantity" value="${plDetails.quantity || 0}" class="border rounded px-2 py-1 mt-1 w-16"></div>
-                        <div class="col-span-2"><strong>Remark : </strong> <textarea id="pl-remark" class="border rounded px-2 py-1 mt-1 w-full">${plDetails.remarks || ''}</textarea></div>
+                        <div class="col-span-2"><strong>Remark : </strong> <textarea id="pl-remark" rows="3" class="border rounded px-2 py-1 mt-1 w-full">${plDetails.remarks || ''}</textarea></div>
                     `;
                     
 
