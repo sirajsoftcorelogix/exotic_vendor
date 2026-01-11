@@ -453,7 +453,17 @@ class ProductsController {
         $skus = isset($_POST['sku']) && is_array($_POST['sku']) ? $_POST['sku'] : [];
         // If date_purchased not provided, use current datetime
         $date_purchased = !empty($_POST['date_purchased']) ? $_POST['date_purchased'] : date('Y-m-d H:i:s');
+        //if product_ids empty
+        if (empty($poitems) && isset($_POST['order_ids']) && is_array($_POST['sku'])) {
+            //fetch product ids from skus
+            foreach ($_POST['sku'] as $sku) {
+                $product = $productModel->getProductByskuExact($sku);
+                if ($product) {
+                    $poitems[] = $product['id'];                    
+                }
+            }
 
+        }
         if ($agent_id <= 0 || empty($poitems)) {
             echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
             exit;

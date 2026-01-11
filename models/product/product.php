@@ -729,4 +729,15 @@ class product{
         }
         return null;
     }
+    public function getProductByskuExact($sku) {
+        $sql = "SELECT * FROM vp_products WHERE sku = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
 }
