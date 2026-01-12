@@ -482,7 +482,7 @@ class ProductsController {
                 'user_id' => $agent_id,
                 'product_id' => $product_id,
                 'sku' => $sku,
-                'date_purchased' => '0000-00-00',//$date_purchased,
+                'date_purchased' => NULL,//$date_purchased,
                 'status' => 'pending',
                 'edit_by' => $_SESSION['user']['id'] ?? 0
             ];
