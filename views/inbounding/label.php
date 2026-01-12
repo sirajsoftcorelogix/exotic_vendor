@@ -1,7 +1,19 @@
 <?php
 // 1. PHP Logic & Data Fetching
-$label_data = $data['form2'] ?? [];
-
+$label_data[0] = $data['form2'] ?? [];
+$variations = $data['variation'];
+if (isset($variations) && !empty($variations)) {
+    foreach ($variations as $key => $value) {
+        $key++;    
+        $label_data[$key] = $value;
+        $label_data[$key]['product_photo'] = $value['variation_image'];
+        $label_data[$key]['temp_code'] = $label_data[0]['temp_code'];
+        $label_data[$key]['Item_code'] = $label_data[0]['Item_code'];
+        $label_data[$key]['material_name'] = $label_data[0]['material_name'];
+        $label_data[$key]['vendor_name'] = $label_data[0]['vendor_name'];
+        $label_data[$key]['gate_entry_date_time'] = $label_data[0]['gate_entry_date_time'];
+    }
+}
 if(empty($label_data) && isset($_GET['id'])) {
     is_login();
     require_once 'settings/database/database.php';
@@ -21,7 +33,6 @@ function safe($value) {
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
 }
 
-$photoUrl = base_url(safe($label_data['product_photo'] ?? 'assets/images/placeholder.png'));
 $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 ?>
 
@@ -29,288 +40,264 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-<style>
-    /* 1. Fonts */
-    @font-face {
-        font-family: 'DejaVuSans';
-        src: url('/fonts/DejaVuSans.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-    }
-    @font-face {
-        font-family: 'DejaVuSans';
-        src: url('/fonts/DejaVuSans-Bold.ttf') format('truetype');
-        font-weight: bold;
-        font-style: normal;
-    }
-
-    /* 2. Print Area Defaults */
-    #printArea {
-        font-family: 'DejaVuSans', sans-serif !important;
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        box-sizing: border-box;
-    }
-    
-    #printArea * {
-        box-sizing: border-box; 
-        color: #000000 !important; 
-        border-color: #000000 !important; 
-    }
-
-    #printArea img {
-        image-rendering: pixelated; 
-    }
-</style>
-
-<div class="w-full flex items-center justify-center p-0 md:p-6 bg-gray-100 min-h-screen">
-
-    <div class="w-full h-screen md:h-auto md:min-h-[600px] md:max-w-3xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200">
+<div class="w-full flex items-center justify-center p-0 md:p-6 bg-gray-100 min-h-screen font-sans">
+    <div class="w-full md:max-w-3xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-200">
         
-        <div class="bg-[#d9822b] px-4 py-4 flex items-center justify-between text-white shadow-md z-20 flex-shrink-0">
-            <button type="button" id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                </svg>
+        <div class="bg-[#d9822b] px-4 py-4 flex items-center justify-between text-white shadow-md">
+            <button id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             </button>
-            <h1 class="font-semibold text-lg tracking-wide">Print Label (3x2 inch)</h1>
-            <button type="button" id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white text-sm font-bold py-1 px-4 rounded-full transition border border-white/30 shadow-sm uppercase tracking-wider">
-                Close
-            </button>
+            <h1 class="font-bold text-lg">Print Labels (3x2)</h1>
+            <button id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-1 px-4 rounded-full border border-white/30 text-sm">CLOSE</button>
         </div>
-
-        <div id="previewContainer" class="flex-1 overflow-hidden bg-gray-100 flex items-center justify-center w-full p-2 relative">
-            
-            <div id="previewWrapper" class="relative shadow-xl bg-white overflow-hidden transition-all duration-200">
-                
-                <div id="printArea" class="bg-white flex gap-4 overflow-hidden" 
-                     style="width: 600px; height: 400px; padding: 20px; border: 4px solid #000000; 
-                            position: absolute; top: 50%; left: 50%; transform-origin: center center;">
-    
-                    <div class="w-[150px] flex flex-col justify-between h-full flex-shrink-0 border-r-2 border-black pr-3">
-                        <div class="w-full h-[170px] border-2 border-black rounded p-1 flex items-center justify-center bg-white mb-2">
-                             <img src="<?php echo $photoUrl; ?>" class="max-w-full max-h-full object-contain filter grayscale contrast-125" crossorigin="anonymous">
-                        </div>
-                        
-                        <div class="flex flex-col items-center justify-center flex-grow">
-                            <div id="qrcode" class="border-2 border-black p-1 bg-white rounded"></div>
-                            
-                            <div class="text-[24px] font-bold mt-2 tracking-widest text-center break-all leading-none">
-                                <?php echo safe($label_data['Item_code'] ?? $label_data['temp_code']); ?>
-                            </div>
-                            <div class="text-[18px] font-bold mt-1 tracking-widest text-center break-all leading-none">
-                                <?php 
-                                    $dt = $label_data['gate_entry_date_time'] ?? '';
-                                    echo substr($dt, 0, 10); 
-                                ?>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex-1 flex flex-col h-full pl-1">
-                        
-                        <div class="border-b-2 border-black pb-2 mb-2 flex items-center gap-2">
-                            <div class="text-[12px] font-bold uppercase tracking-wider whitespace-nowrap">Material : </div>
-                            <div class="text-[18px] font-bold leading-none truncate flex-1">
-                                <?php echo safe($label_data['material_name'] ?? ''); ?>
-                            </div>
-                        </div>
-
-                        <div class="flex-1 flex flex-col justify-between">
-                            
-                            <div class="grid grid-cols-2 gap-4 border-b-2 border-black pb-2">
-                                <div class="flex flex-col justify-center">
-                                    <span class="text-[14px] font-bold uppercase">Size</span>
-                                    <span class="text-[22px] font-bold truncate leading-normal pb-1">
-                                        <?php echo safe($label_data['size'] ?? '-'); ?>
-                                    </span>
-                                </div>
-                                <div class="flex flex-col justify-center border-l-2 border-black pl-4">
-                                    <span class="text-[14px] font-bold uppercase">Color</span>
-                                    <span class="text-[22px] font-bold truncate leading-normal pb-1">
-                                        <?php echo safe($label_data['color'] ?? '-'); ?>
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4 border-b-2 border-black pb-2 pt-2">
-                                <div class="flex flex-col justify-center">
-                                    <span class="text-[14px] font-bold uppercase">Dim(WxHxD)</span>
-                                    <span class="text-[20px] font-bold truncate leading-normal pb-1">
-                                        <?php echo safe($label_data['width'] ?? '-'); ?>x<?php echo safe($label_data['height'] ?? '-'); ?>x<?php echo safe($label_data['depth'] ?? '-'); ?>
-                                    </span>
-                                </div>
-                                <div class="flex flex-col justify-center border-l-2 border-black pl-4">
-                                    <span class="text-[14px] font-bold uppercase">Weight</span>
-                                    <span class="text-[20px] font-bold truncate leading-normal pb-1">
-                                        <?php echo safe($label_data['weight'] ?? '-'); ?> kg
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4 pt-2">
-                                <div class="flex flex-col justify-center">
-                                    <span class="text-[14px] font-bold uppercase">Qty</span>
-                                    <span class="text-[22px] font-bold truncate leading-normal pb-1">
-                                        <?php echo safe($label_data['quantity_received'] ?? '0'); ?>
-                                    </span>
-                                </div>
-                                <div class="flex flex-col justify-center border-l-2 border-black pl-4">
-                                    <span class="text-[14px] font-bold uppercase">Loc</span>
-                                    <span class="text-[22px] font-bold truncate leading-normal pb-1">
-                                        <?php echo safe($label_data['location'] ?? '-'); ?>
-                                    </span>
-                                </div>
-                            </div>
-
-                        </div>
-                        
-                        <div class="mt-2 pt-2 border-t-2 border-black">
-                            <div class="w-full">
-                                <div class="text-[10px] font-bold uppercase mb-1">Vendor</div>
-                                <div class="font-bold text-[14px] leading-snug w-full truncate pb-1">
-                                    <?php echo safe($label_data['vendor_name'] ?? 'N/A'); ?>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
+        
+        <?php 
+            // Calculate dynamic height for the preview container
+            $label_count = count($label_data); 
+            $preview_height = $label_count * 200; 
+        ?>
+        
+        <div id="preview-container" 
+             class="mx-auto my-6 w-[300px] border-2 border-black bg-white shadow-lg overflow-hidden relative"
+             style="height: <?php echo $preview_height; ?>px;">
+            <div class="w-full h-full flex items-center justify-center text-gray-400">
+                Loading Preview...
             </div>
-            
-            <p class="absolute bottom-2 text-xs text-gray-400 text-center w-full">Preview (3x2 inch Landscape)</p>
         </div>
 
-        <div class="p-5 bg-white border-t border-gray-100 mt-auto z-20">
-            <button onclick="generatePDF()" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3 rounded-xl shadow-lg transform transition active:scale-[0.99] flex justify-center items-center gap-2">
-                Print Label (3x2)
+        <div class="p-5 bg-white border-t border-gray-100">
+            <button onclick="generatePDF()" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Download / Print Labels
             </button>
         </div>
-
     </div>
 </div>
 
-<script>
-    // 1. Generate QR Code
-    window.addEventListener('load', function() {
-        const qrContainer = document.getElementById("qrcode");
-        if(qrContainer) {
-            qrContainer.innerHTML = "";
-            new QRCode(qrContainer, {
-                text: "<?php echo $currentUrl; ?>",
-                width: 80,  
-                height: 80,
-                colorDark : "#000000",
-                colorLight : "#ffffff",
-                correctLevel : QRCode.CorrectLevel.L
-            });
-        }
-        // Initial Fit
-        setTimeout(fitLabelToScreen, 100);
-    });
-
-    // 2. Responsive Scaling Logic (Fixed)
-    function fitLabelToScreen() {
-        const container = document.getElementById('previewContainer');
-        const wrapper = document.getElementById('previewWrapper');
-        const label = document.getElementById('printArea');
+<div id="high-res-print-area" class="fixed top-0 -left-[9999px] w-[1200px] flex flex-col font-sans box-border z-[9999] text-black bg-white">
+    
+    <?php foreach($label_data as $index => $current_label): ?>
         
-        if (!container || !wrapper || !label) return;
+        <?php 
+            $thisPhotoUrl = base_url(safe($current_label['product_photo'] ?? 'assets/images/placeholder.png'));
+        ?>
 
-        // Base Label Dimensions
-        const baseWidth = 600;
-        const baseHeight = 400;
+        <div class="single-label-item w-full h-[800px] border-[4px] border-black flex bg-white box-border mb-0">
+            
+            <div class="w-[384px] border-r-[4px] border-black p-5 flex flex-col items-center justify-start">
+                <div class="w-full h-[320px] border-[4px] border-black p-2.5 flex items-center justify-center mb-[15px] shrink-0">
+                    <img src="<?php echo $thisPhotoUrl; ?>" crossorigin="anonymous" class="max-w-full max-h-full object-contain">
+                </div>
+                
+                <div class="w-full grow flex flex-col items-center justify-start pb-2.5">
+                    <div class="qrcode-highres flex justify-center items-center mb-[5px]"></div>
+                    <div class="text-[40px] font-black mt-[5px] leading-none text-center">
+                        <?php echo safe($current_label['Item_code'] ?? $current_label['temp_code']); ?>
+                    </div>
+                    <div class="text-[36px] font-bold mt-[5px] text-center">
+                        <?php 
+                            $dt = $current_label['gate_entry_date_time'] ?? '';
+                            echo ($dt) ? date('d M Y', strtotime($dt)) : date('d M Y'); 
+                        ?>
+                    </div>
+                </div>
+            </div>
 
-        // Available space (minus padding)
-        const availableWidth = container.offsetWidth - 32; // 1rem padding each side
-        const availableHeight = container.offsetHeight - 40; // Space for text/padding
+            <div class="w-[816px] flex flex-col">
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">SIZE:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['size'] ?? '-'); ?></span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">COLOR:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['color'] ?? '-'); ?></span>
+                    </div>
+                </div>
 
-        // Calculate Scale to fit within view
-        let scale = Math.min(
-            availableWidth / baseWidth,
-            availableHeight / baseHeight,
-            1 // Max scale 1 (don't make it bigger than actual 600px)
-        );
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">WxHxD:</span>
+                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
+                            <?php echo safe($current_label['width'] ?? '-'); ?>x<?php echo safe($current_label['height'] ?? '-'); ?>x<?php echo safe($current_label['depth'] ?? '-'); ?>
+                        </span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">WEIGHT:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['weight'] ?? '0'); ?> kg</span>
+                    </div>
+                </div>
 
-        // Apply Size to Wrapper (It shrinks to fit)
-        wrapper.style.width = `${baseWidth * scale}px`;
-        wrapper.style.height = `${baseHeight * scale}px`;
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">CP:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">₹ <?php echo safe($current_label['cp'] ?? '-'); ?></span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">MATERIAL:</span>
+                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3] pb-1">
+                            <?php echo safe($current_label['material_name'] ?? '-'); ?>
+                        </span>
+                    </div>
+                </div>
 
-        // Center and Scale the Inner Label
-        // We use translate(-50%, -50%) because position is absolute top 50% left 50%
-        label.style.transform = `translate(-50%, -50%) scale(${scale})`;
-    }
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">QTY:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['quantity_received'] ?? '0'); ?></span>
+                    </div>
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">LOC:</span>
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]"><?php echo safe($current_label['location'] ?? 'Rack1'); ?></span>
+                    </div>
+                </div>
 
-    window.addEventListener('resize', fitLabelToScreen);
+                <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
+                    <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0 border-r-0">
+                        <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">VENDOR:</span>
+                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
+                            <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts'); ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
 
-    // 3. Navigation
+</div>
+
+<script>
+    // 1. Navigation
     const recordId = "<?php echo isset($_GET['id']) ? $_GET['id'] : ''; ?>";
-    document.getElementById("back-btn").addEventListener("click", function () {
+    document.getElementById("back-btn").addEventListener("click", () => {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=form3&id=" + recordId;
     });
-    document.getElementById("cancel-btn").addEventListener("click", function () {
+    document.getElementById("cancel-btn").addEventListener("click", () => {
         window.location.href = window.location.origin + "/index.php?page=inbounding&action=list";
     });
 
-    // 4. PDF Generation (Maintained your Working Version)
-    function generatePDF() {
-        const { jsPDF } = window.jspdf;
-        const originalElement = document.querySelector("#printArea");
-
-        // Clone element
-        const clone = originalElement.cloneNode(true);
+    // 2. Generate High-Res QR Code on Load
+    window.addEventListener('load', function() {
+        const qrContainers = document.querySelectorAll(".qrcode-highres");
         
-        // Manually copy QR Canvas (Fix for missing QR)
-        const originalCanvases = originalElement.querySelectorAll('canvas');
+        qrContainers.forEach(container => {
+            container.innerHTML = "";
+            new QRCode(container, {
+                text: "<?php echo $currentUrl; ?>",
+                width: 280,  
+                height: 280, 
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H 
+            });
+        });
+
+        // Delay slightly to ensure QRs are rendered before creating preview
+        setTimeout(updateLivePreview, 500); 
+    });
+
+    // 3. Update Live Preview (Centers content in the box)
+    function updateLivePreview() {
+        const source = document.getElementById('high-res-print-area');
+        const container = document.getElementById('preview-container');
+        
+        if (!source || !container) return;
+        
+        const clone = source.cloneNode(true);
+        clone.removeAttribute('id');
+        clone.classList.remove('fixed', 'top-0', '-left-[9999px]'); 
+        
+        // Scale to 25% to fit the 300px container (1200px * 0.25 = 300px)
+        clone.style.transform = "scale(0.25)"; 
+        clone.style.transformOrigin = "top left"; 
+        clone.style.position = "absolute";
+        clone.style.top = "0";
+        clone.style.left = "0";
+        
+        // Fix canvas context for preview QRs
+        const originalCanvases = source.querySelectorAll('canvas');
         const clonedCanvases = clone.querySelectorAll('canvas');
         originalCanvases.forEach((orig, index) => {
-            const dest = clonedCanvases[index];
-            const ctx = dest.getContext('2d');
-            dest.width = orig.width;   
-            dest.height = orig.height;
-            ctx.drawImage(orig, 0, 0); 
+            if(clonedCanvases[index]) {
+                clonedCanvases[index].width = orig.width;
+                clonedCanvases[index].height = orig.height;
+                clonedCanvases[index].getContext('2d').drawImage(orig, 0, 0);
+            }
         });
 
-        // Setup Clone Styles for Capture
-        clone.style.transform = "none";
-        clone.style.position = "fixed"; 
-        clone.style.top = "-10000px";   
-        clone.style.left = "0";
-        clone.style.zIndex = "-9999"; 
+        container.innerHTML = '';
+        container.appendChild(clone);
+    }
+
+    // 4. Generate PDF Function (Multi-page, ignores preview, correct size)
+    async function generatePDF() {
+        const { jsPDF } = window.jspdf;
         
-        document.body.appendChild(clone);
+        // IMPORTANT: Select only the high-res hidden labels, NOT the preview ones
+        const labels = document.querySelectorAll('#high-res-print-area .single-label-item');
 
-        html2canvas(clone, { 
-            scale: 2, 
-            useCORS: true,
-            backgroundColor: "#ffffff",
-            logging: false,
-            windowWidth: 1200, 
-            windowHeight: 800
-        }).then(canvas => {
-            const imgData = canvas.toDataURL("image/png");
-            
-            // 3 inch x 2 inch
-            const pdfWidth = 76.2; 
-            const pdfHeight = 50.8; 
-            
-            const pdf = new jsPDF({
-                orientation: "landscape",
-                unit: "mm",
-                format: [pdfWidth, pdfHeight]
-            });
+        if (labels.length === 0) {
+            console.error("No elements found in #high-res-print-area");
+            alert("No data to print. Check console.");
+            return;
+        }
 
-            pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-            
-            const fileName = "Label_3x2_<?php echo safe($label_data['temp_code'] ?? 'Item'); ?>.pdf";
-            pdf.save(fileName);
-            window.open(pdf.output('bloburl'), '_blank');
-            
-            document.body.removeChild(clone);
-        }).catch(err => {
-            console.error("PDF Generation Error:", err);
-            alert("Error generating PDF. Please try again.");
-            document.body.removeChild(clone);
+        // Initialize PDF: Landscape, 3x2 inches (76.2mm x 50.8mm)
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: [76.2, 50.8] 
         });
+
+        const btn = document.querySelector("button[onclick='generatePDF()']");
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "Generating...";
+        btn.disabled = true;
+
+        try {
+            // Loop through every label found
+            for (let i = 0; i < labels.length; i++) {
+                
+                // Add new page for every label except the first one
+                if (i > 0) {
+                    pdf.addPage([76.2, 50.8], 'landscape');
+                }
+
+                const element = labels[i];
+
+                const canvas = await html2canvas(element, {
+                    scale: 2, 
+                    useCORS: true,
+                    backgroundColor: "#ffffff",
+                    logging: false,
+                    windowWidth: 2000,
+                    onclone: (clonedDoc) => {
+                        const origQR = element.querySelector('.qrcode-highres canvas');
+                        const clonedQR = clonedDoc.querySelector('.qrcode-highres canvas');
+                        if (origQR && clonedQR) {
+                            const ctx = clonedQR.getContext('2d');
+                            clonedQR.width = origQR.width;
+                            clonedQR.height = origQR.height;
+                            ctx.drawImage(origQR, 0, 0);
+                        }
+                    }
+                });
+
+                const imgData = canvas.toDataURL("image/png", 1.0);
+                
+                // Print exactly at 3x2 inches
+                pdf.addImage(imgData, "PNG", 0, 0, 76.2, 50.8);
+            }
+
+            const fileName = "Labels_<?php echo safe($label_data[0]['temp_code'] ?? 'Batch'); ?>.pdf";
+            pdf.save(fileName);
+
+        } catch (err) {
+            console.error("PDF Generation Error:", err);
+            alert("Error generating labels.");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 </script>
