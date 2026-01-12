@@ -784,3 +784,49 @@ span.mention {
 .tick.read {
   color: #06060e;
 }
+#emoji-picker span {
+    font-size: 20px;
+    cursor: pointer;
+    padding: 6px;
+    display: inline-block;
+}
+#emoji-picker span:hover {
+    background: #f3f4f6;
+    border-radius: 6px;
+}
+.drag-active {
+    border: 2px dashed #d06706;
+    background: rgba(208, 103, 6, 0.08);
+}
+#image-preview-container img {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+#image-preview-container .remove-preview {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #000;
+    color: #fff;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.message-image {
+    max-width: 180px;
+    border-radius: 12px;
+    cursor: pointer;
+    display: block;
+}
+.message-image:hover {
+    opacity: 0.95;
+}
+
+.message-file {
+    margin-top: 6px;
+}

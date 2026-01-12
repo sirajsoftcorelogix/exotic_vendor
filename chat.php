@@ -218,122 +218,85 @@ $msgCnt = $notificationController->getUnreadCount();
 
     </aside>
     <main id="chat-main" class="flex-1 flex flex-col h-full">
-      <!-- Chat Header -->
-      <header id="chat-header" class="h-16 px-5 flex items-center justify-between bg-darkHeaderBg flex-shrink-0">
-          <div>
-              <div id="chat-title" class="font-sf-pro font-semibold text-chat-name text-darkHeaderName">Select a conversation</div>
-              <div id="chat-subtitle" class="font-sf-pro font-normal text-chat-sub text-darkHeaderSub"></div>
-          </div>
-          <div id="chat-presence" class="text-sm text-green-500" style="display: none;"></div>
-      </header>
-      <div class="h-16 px-4 flex items-center justify-between bg-darkHeaderBg z-20 shadow-md">
-          <div class="flex flex-col">
-              <h2 id="header-name" class="text-white font-medium"></h2>
-              <span id="header-role" class="text-gray-400 text-sm"></span>
-          </div>
-      </div>
-
-      <!-- Messages Section -->
-      <section id="messages" class="flex-1 overflow-y-auto custom-scrollbar p-6 chat-bg-pattern">
-          <!-- Messages injected by JS -->
-            
-      </section>
-
-      <!-- Chat Footer -->
-      <div class="h-16 px-4 flex items-center justify-between bg-darkHeaderBg z-20 shadow-md">
-      <footer id="chat-footer" class="px-4 py-3 bg-darkHeaderBg border-t border-gray-800 relative z-20">
-          <div id="typing-indicator" class="typing hidden">
-            typing…
-          </div>
-          <div id="input-row" class="flex items-center w-full gap-3">
-              <div class="flex gap-4 items-center">
-                  <div id="attachment-preview" class="hidden attachment-preview"></div>
-                  <input type="file" id="file-input" style="display:none;">
-                  <button id="attach-btn" title="Attach file" class="text-inputIcon hover:text-white transition relative"><i class="ph ph-paperclip text-2xl"></i></button>
-              </div>
-              <div class="flex-1 bg-inputFieldBg rounded-full flex items-center px-4 py-2 border border-transparent focus-within:ring-1 focus-within:ring-white/20 transition-all mention-wrapper relative">
-                <input id="message-input" placeholder="Type a message" autocomplete="off"
-                    class="flex-1 bg-inputFieldBg text-white rounded-full px-4 py-2 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all">
-                    <div id="mention-dropdown" class="mention-dropdown hidden"></div>
-              </div>
-                    <button id="send-btn" class="text-inputIcon hover:text-white transition flex items-center justify-center"><i class="ph-fill ph-paper-plane-right text-2xl"></i></button>
-          </div>
-      </footer>
-       </div>
-      <?php /*?>
-          <aside id="sidebar">
-          <div class="sidebar-header">
-            <h2>Users</h2>
-          </div>
-
-          <div id="users-section">
-            <!-- <input type="text" id="user-search" placeholder="Search users..." /> -->
-            <div id="user-list"></div>
-          </div>
-
-          <div class="sidebar-header" style="margin-top:8px;">
-            <h2>Recent Chats</h2>
-          </div>
-          <div id="conversation-list"></div>
-          <!-- Group chat members -->
-          <div id="group-members-panel" class="group-members hidden">
-            <div class="group-members-header">Group Members</div>
-            <div id="chat-group-members-list"></div>
-          </div>
-          <!-- End -->
-          <button id="create-group-btn">+ Create Group</button>
-        </aside>
-
-        <main id="chat-main">
-          <header id="chat-header">
+        <!-- Chat Header -->
+        <header id="chat-header" class="h-16 px-5 flex items-center justify-between bg-darkHeaderBg flex-shrink-0">
             <div>
-              <div id="chat-title">Select a conversation</div>
-              <div id="chat-subtitle"></div>
+                <div id="chat-title" class="font-sf-pro font-semibold text-chat-name text-darkHeaderName">Select a conversation</div>
+                <div id="chat-subtitle" class="font-sf-pro font-normal text-chat-sub text-darkHeaderSub"></div>
             </div>
-            <div id="chat-presence" style="display: none;"></div>
-          </header>
-
-          <section id="messages"></section>
-
-          <footer id="chat-footer">
-            <div id="typing-indicator" style="display:none;">Someone is typing...</div>
-            <div id="input-row">
-              <input type="file" id="file-input" style="display:none;">
-              <button id="attach-btn" title="Attach file">📎</button>
-              <input id="message-input" placeholder="Type a message" autocomplete="off">
-              <button id="send-btn">Send</button>
-              <div id="mention-dropdown" class="mention-dropdown hidden"></div>
+            <div id="chat-presence" class="text-sm text-green-500" style="display: none;"></div>
+        </header>
+        <div class="h-16 px-4 flex items-center justify-between bg-darkHeaderBg z-20 shadow-md">
+            <div class="flex flex-col">
+                <h2 id="header-name" class="text-white font-medium"></h2>
+                <span id="header-role" class="text-gray-400 text-sm"></span>
             </div>
-          </footer>
-        </main>
-      <?php */?>
+        </div>
+        <!-- Messages Section -->
+        <section id="messages" class="flex-1 overflow-y-auto custom-scrollbar p-6 chat-bg-pattern">
+            <!-- Messages injected by JS -->
+        </section>
+        <!-- Chat Footer -->
+        <div class="h-16 px-4 flex items-center justify-between bg-darkHeaderBg z-20 shadow-md">
+            <div id="image-preview-container" class="hidden flex gap-2 mb-2"></div>
+            <footer id="chat-footer" class="px-4 py-3 bg-darkHeaderBg border-t border-gray-800 relative z-20 chat-input-wrapper">
+                <div id="typing-indicator" class="typing hidden">
+                    typing…
+                </div>
+                <button id="emoji-btn" class="text-inputIcon hover:text-white transition">
+                    <i class="ph ph-smiley text-2xl"></i>
+                </button>
+
+                <div id="emoji-picker"
+                    class="hidden absolute bottom-16 left-4 bg-white rounded-lg shadow-lg p-2 w-64 max-h-60 overflow-y-auto z-50">
+                </div>
+                <div id="input-row" class="flex items-center w-full gap-3">
+                    <div class="flex gap-4 items-center">
+                        <div id="attachment-preview" class="hidden attachment-preview"></div>
+                        <input type="file" id="file-input" style="display:none;">
+                        <button id="attach-btn" title="Attach file" class="text-inputIcon hover:text-white transition relative"><i class="ph ph-paperclip text-2xl"></i></button>
+                    </div>
+                    <div id="file-preview" class="hidden flex items-center gap-3 p-2 bg-gray-800 rounded-lg mb-2">
+                        <img id="preview-img" class="w-16 h-16 rounded object-cover" />
+                        <div class="flex-1 text-white text-sm" id="preview-name"></div>
+                        <button id="preview-remove" class="text-red-400">✕</button>
+                    </div>
+                    <div class="flex-1 bg-inputFieldBg rounded-full flex items-center px-4 py-2 border border-transparent focus-within:ring-1 focus-within:ring-white/20 transition-all mention-wrapper relative">
+                    <input id="message-input" placeholder="Type a message" autocomplete="off"
+                        class="flex-1 bg-inputFieldBg text-white rounded-full px-4 py-2 focus:outline-none focus:ring-1 focus:ring-gray-600 transition-all">
+                        <div id="mention-dropdown" class="mention-dropdown hidden"></div>
+                    </div>
+                    <button id="send-btn" class="text-inputIcon hover:text-white transition flex items-center justify-center"><i class="ph-fill ph-paper-plane-right text-2xl"></i></button>
+                </div>
+            </footer>
+        </div>
+    </main>
   </div>
-
 </div>
 <div id="group-modal" class="modal hidden">
     <div class="modal-overlay"></div>
 
     <div class="modal-content">
-      <div class="modal-header">
+    <div class="modal-header">
         <h2>Create Group</h2>
         <button class="modal-close" id="group-close-btn">&times;</button>
-      </div>
+    </div>
 
-      <div class="modal-body">
+    <div class="modal-body">
         <label for="group-name">Group Name</label>
         <input id="group-name" type="text" placeholder="Enter group name" />
 
         <label>Select Members</label>
         <div id="group-members-list"
-             class="members-list border rounded p-2"
-             style="max-height: 230px; overflow-y: auto; background: #fff;">
+            class="members-list border rounded p-2"
+            style="max-height: 230px; overflow-y: auto; background: #fff;">
         </div>
-      </div>
+    </div>
 
-      <div class="modal-footer">
+    <div class="modal-footer">
         <button class="btn btn-secondary" id="group-cancel-btn">Cancel</button>
         <button class="btn btn-primary" id="create-group-submit">Create Group</button>
-      </div>
+    </div>
     </div>
 </div>
 <!-- Delete Conversation Modal -->

@@ -47,7 +47,181 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const openConvParam = urlParams.get("conversation_id");
+  // Emoji
+  const EMOJIS = [
+    "😀","😁","😂","🤣","😊","😍","😘","😎",
+    "😢","😭","😡","👍","👎","🙏","🔥","❤️",
+    "🎉","🚀","💯","📎"
+  ];
 
+  const emojiBtn = document.getElementById("emoji-btn");
+  const emojiPicker = document.getElementById("emoji-picker");
+
+  EMOJIS.forEach(e => {
+      const span = document.createElement("span");
+      span.textContent = e;
+      span.onclick = () => insertEmoji(e);
+      emojiPicker.appendChild(span);
+  });
+
+  emojiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    emojiPicker.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", () => {
+    emojiPicker.classList.add("hidden");
+  });
+
+  function insertEmoji(emoji) {
+    const input = inputEl; // your existing message input
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+
+    const text = input.value;
+    input.value =
+        text.substring(0, start) +
+        emoji +
+        text.substring(end);
+
+    const newPos = start + emoji.length;
+    input.setSelectionRange(newPos, newPos);
+    input.focus();
+  }
+  // END Emoji
+
+  // Drag n Drop
+  const chatInputWrapper = document.querySelector(".chat-input-wrapper");
+
+  chatInputWrapper.addEventListener("dragover", e => {
+    e.preventDefault();
+    chatInputWrapper.classList.add("drag-active");
+  });
+
+  chatInputWrapper.addEventListener("dragleave", () => {
+    chatInputWrapper.classList.remove("drag-active");
+  });
+
+  chatInputWrapper.addEventListener("drop", e => {
+    e.preventDefault();
+    chatInputWrapper.classList.remove("drag-active");
+
+    const files = e.dataTransfer.files;
+    if (files.length) {
+        handleSelectedFile(files[0]);
+    }
+  });
+
+  inputEl.addEventListener("paste", (e) => {
+    const items = e.clipboardData.items;
+    for (const item of items) {
+        if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            handleSelectedFile(file);
+            e.preventDefault();
+            break;
+        }
+    }
+  });
+
+  function handleSelectedFile(file) {
+    if (!file) return;
+
+    // Only images for now
+    if (!file.type.startsWith("image/")) {
+        alert("Only image files are allowed");
+        return;
+    }
+
+    showPreview(file);
+  }
+
+  function showPreview(file) {
+    const preview = document.getElementById("file-preview");
+    const img = document.getElementById("preview-img");
+    const name = document.getElementById("preview-name");
+
+    name.textContent = file.name;
+
+    if (file.type.startsWith("image/")) {
+        img.src = URL.createObjectURL(file);
+        img.classList.remove("hidden");
+    }
+
+    preview.classList.remove("hidden");
+
+    // Store file temporarily
+    fileInput.dataset.pendingFile = "1";
+    window.pendingUploadFile = file;
+  }
+
+  document.getElementById("preview-remove").onclick = () => {
+    document.getElementById("file-preview").classList.add("hidden");
+    window.pendingUploadFile = null;
+  };
+
+  function uploadFile(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    fetch(window.API_BASE + "/upload_file.php", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.error) {
+            alert(res.error);
+            return;
+        }
+
+        ws.send(JSON.stringify({
+            type: "send_message",
+            conversation_id: activeConversationId,
+            file_path: res.path,
+            original_name: res.original_name || file.name
+        }));
+
+        clearPreview();
+    });
+  }
+  function clearPreview() {
+    document.getElementById("file-preview").classList.add("hidden");
+    window.pendingUploadFile = null;
+  }
+  // END
+
+  const previewContainer = document.getElementById("image-preview-container");
+  let pendingImageFile = null;
+
+  function showImagePreview(file) {
+      if (!file || !file.type.startsWith("image/")) return;
+
+      previewContainer.innerHTML = "";
+      previewContainer.classList.remove("hidden");
+
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "relative";
+
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+
+      const remove = document.createElement("span");
+      remove.className = "remove-preview";
+      remove.textContent = "×";
+      remove.onclick = () => {
+          pendingImageFile = null;
+          previewContainer.classList.add("hidden");
+          previewContainer.innerHTML = "";
+      };
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(remove);
+      previewContainer.appendChild(wrapper);
+
+      pendingImageFile = file;
+  }
   // Search functionality
   const globalSearchEl = document.getElementById("global-search");
 
@@ -634,16 +808,36 @@
       }
 
       if (msg.file_path) {
-        const fileDiv = document.createElement("div");
-        fileDiv.className = "message-file";
 
-        const link = document.createElement("a");
-        link.href = msg.file_path;
-        link.target = "_blank";
-        link.textContent = msg.original_name || "Attachment";
+        // IMAGE PREVIEW
+        if (isImageFile(msg.file_path, msg.original_name)) {
 
-        fileDiv.appendChild(link);
-        bubble.appendChild(fileDiv);
+            const imgLink = document.createElement("a");
+            imgLink.href = msg.file_path;
+            imgLink.target = "_blank";
+
+            const img = document.createElement("img");
+            img.src = msg.file_path;
+            img.className = "message-image";
+            img.alt = msg.original_name || "Image";
+
+            imgLink.appendChild(img);
+            bubble.appendChild(imgLink);
+
+        } 
+        // NON-IMAGE FILE
+        else {
+            const fileDiv = document.createElement("div");
+            fileDiv.className = "message-file";
+
+            const link = document.createElement("a");
+            link.href = msg.file_path;
+            link.target = "_blank";
+            link.textContent = msg.original_name || "Attachment";
+
+            fileDiv.appendChild(link);
+            bubble.appendChild(fileDiv);
+        }
       }
 
       const meta = document.createElement('div');
@@ -704,40 +898,76 @@
       return safe;
   }
   function sendMessage() {
-  if (!activeConversationId) {
-    alert("Select a conversation first");
-    return;
+    if (!activeConversationId) {
+      alert("Select a conversation first");
+      return;
+    }
+    if (window.pendingUploadFile) {
+        uploadFile(window.pendingUploadFile);
+        return;
+    }
+    if (pendingImageFile) {
+        uploadAndSendImage(pendingImageFile);
+        return;
+    }
+
+    const text = inputEl.value.trim();
+    const filePath = fileInput.dataset.uploadedPath || null;
+    const originalName = fileInput.dataset.uploadedOriginalName || null;
+
+    // Prevent empty send
+    if (!text && !filePath) return;
+
+    const payload = {
+      type: "send_message",
+      conversation_id: activeConversationId,
+      message: text || null
+    };
+
+    if (filePath) {
+      payload.file_path = filePath;
+      payload.original_name = originalName;
+    }
+
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    } else {
+      console.warn("WS not open");
+      return;
+    }
+
+    // Reset UI
+    inputEl.value = "";
+    clearAttachment();
   }
+  function uploadAndSendImage(file) {
+    const formData = new FormData();
+    formData.append("file", file);
 
-  const text = inputEl.value.trim();
-  const filePath = fileInput.dataset.uploadedPath || null;
-  const originalName = fileInput.dataset.uploadedOriginalName || null;
+    fetch(window.API_BASE + "/upload_file.php", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.error) {
+            alert("Upload failed");
+            return;
+        }
 
-  // Prevent empty send
-  if (!text && !filePath) return;
+        ws.send(JSON.stringify({
+            type: "send_message",
+            conversation_id: activeConversationId,
+            file_path: res.path,
+            original_name: file.name
+        }));
 
-  const payload = {
-    type: "send_message",
-    conversation_id: activeConversationId,
-    message: text || null
-  };
-
-  if (filePath) {
-    payload.file_path = filePath;
-    payload.original_name = originalName;
+        pendingImageFile = null;
+        previewContainer.classList.add("hidden");
+        previewContainer.innerHTML = "";
+    });
   }
-
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(payload));
-  } else {
-    console.warn("WS not open");
-    return;
-  }
-
-  // Reset UI
-  inputEl.value = "";
-  clearAttachment();
-}
   function handleWsMessage(data) {
     switch (data.type) {
       case 'system':
@@ -1143,5 +1373,8 @@
 
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
-  
+  function isImageFile(path, name = "") {
+    const str = (name || path || "").toLowerCase();
+    return /\.(jpg|jpeg|png|gif|webp)$/.test(str);
+  }
 })();
