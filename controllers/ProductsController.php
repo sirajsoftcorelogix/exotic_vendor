@@ -529,7 +529,7 @@ class ProductsController {
                 'added_by' => $commanModel->getUserNameById($row['edit_by']),
                 'agent_name' => $agent_name,
                 'date_added_readable' => date('d M Y', strtotime($row['date_added'])),
-                'date_purchased_readable' => ($row['date_purchased'] != '0000-00-00' || $row['date_purchased'] !== NULL) ? date('d M Y', strtotime($row['date_purchased'])) : 'N/A'
+                'date_purchased_readable' => ($row['date_purchased'] != '0000-00-00' && $row['date_purchased'] !== NULL) ? date('d M Y', strtotime($row['date_purchased'])) : 'N/A'
             ]);
         }
 
