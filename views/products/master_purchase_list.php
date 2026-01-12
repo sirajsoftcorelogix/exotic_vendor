@@ -71,7 +71,8 @@
                     </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                    <?php foreach ($data['purchase_list'] as $pl): ?>
+                    <?php //print_array($data['purchase_list']); 
+                    foreach ($data['purchase_list'] as $pl): ?>
                         <tr>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer" onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')"><?php echo htmlspecialchars($pl['item_code']); ?></td>
                             <td class="px-6 py-4 whitespace-normal text-sm text-gray-900 break-words"><?php echo htmlspecialchars($pl['title']); ?></td>

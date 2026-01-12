@@ -482,7 +482,7 @@ class ProductsController {
                 'user_id' => $agent_id,
                 'product_id' => $product_id,
                 'sku' => $sku,
-                'date_purchased' => $date_purchased,
+                'date_purchased' => '',//$date_purchased,
                 'status' => 'pending',
                 'edit_by' => $_SESSION['user']['id'] ?? 0
             ];
@@ -529,7 +529,7 @@ class ProductsController {
                 'added_by' => $commanModel->getUserNameById($row['edit_by']),
                 'agent_name' => $agent_name,
                 'date_added_readable' => date('d M Y', strtotime($row['date_added'])),
-                'date_purchased_readable' => $row['date_purchased'] ? date('d M Y', strtotime($row['date_purchased'])) : ''
+                'date_purchased_readable' => $row['date_purchased'] != '0000-00-00' ? date('d M Y', strtotime($row['date_purchased'])) : 'N/A'
             ]);
         }
 
@@ -574,7 +574,7 @@ class ProductsController {
                 'product' => $product,
                 'agent_name' => $agent_name,
                 'date_added_readable' => date('d M Y', strtotime($row['date_added'])),
-                'date_purchased_readable' => $row['date_purchased'] ? date('d M Y', strtotime($row['date_purchased'])) : ''
+                'date_purchased_readable' => $row['date_purchased'] != '0000-00-00' ? date('d M Y', strtotime($row['date_purchased'])) : ''
             ]);
         }
 
