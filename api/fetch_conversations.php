@@ -13,6 +13,7 @@ $sql = "
 SELECT c.id,
        c.type,
        c.name,
+       c.owner_id,
        (
          SELECT m.message
          FROM messages m
