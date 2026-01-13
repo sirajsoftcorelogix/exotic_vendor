@@ -118,7 +118,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
                     <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
                         <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">WxHxD:</span>
-                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
                             <?php echo safe($current_label['width'] ?? '-'); ?>x<?php echo safe($current_label['height'] ?? '-'); ?>x<?php echo safe($current_label['depth'] ?? '-'); ?>
                         </span>
                     </div>
@@ -135,7 +135,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     </div>
                     <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0">
                         <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">MATERIAL:</span>
-                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3] pb-1">
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3] pb-1">
                             <?php echo safe($current_label['material_name'] ?? '-'); ?>
                         </span>
                     </div>
@@ -155,7 +155,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 <div class="w-full h-[160px] border-b-[4px] border-black flex last:border-b-0">
                     <div class="flex-1 border-r-[4px] border-black p-5 flex flex-col justify-center overflow-hidden last:border-r-0 border-r-0">
                         <span class="text-[22px] font-extrabold uppercase mb-2 leading-none">VENDOR:</span>
-                        <span class="text-[34px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
+                        <span class="text-[42px] font-bold whitespace-nowrap overflow-visible leading-[1.3]">
                             <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts'); ?>
                         </span>
                     </div>

@@ -123,6 +123,77 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
+function getThumbnail($fileName, $width = 150, $height = 150) {
+    // 1. Define Paths
+    $sourceDir = 'uploads/itm_img/';
+    $thumbDir  = 'uploads/itm_img/thumbs/'; // We will create this folder
+    
+    $sourcePath = $sourceDir . $fileName;
+    $thumbPath  = $thumbDir . $fileName;
+
+    // 2. Return cached thumbnail if it exists
+    if (file_exists($thumbPath)) {
+        return $thumbPath;
+    }
+
+    // 3. If original doesn't exist, return placeholder or empty
+    if (!file_exists($sourcePath)) {
+        return 'assets/images/placeholder.png'; // Update with your placeholder path
+    }
+
+    // 4. Create Thumb Directory if not exists
+    if (!is_dir($thumbDir)) {
+        mkdir($thumbDir, 0777, true);
+    }
+
+    // 5. Generate Thumbnail (Resize Logic)
+    $info = getimagesize($sourcePath);
+    $mime = $info['mime'];
+
+    switch ($mime) {
+        case 'image/jpeg': $image = imagecreatefromjpeg($sourcePath); break;
+        case 'image/png':  $image = imagecreatefrompng($sourcePath); break;
+        case 'image/gif':  $image = imagecreatefromgif($sourcePath); break;
+        case 'image/webp': $image = imagecreatefromwebp($sourcePath); break;
+        default: return $sourcePath; // Return original if format not supported
+    }
+
+    // Calculate Aspect Ratio
+    $oldW = imagesx($image);
+    $oldH = imagesy($image);
+    $aspectRatio = $oldW / $oldH;
+
+    if ($width / $height > $aspectRatio) {
+        $width = $height * $aspectRatio;
+    } else {
+        $height = $width / $aspectRatio;
+    }
+
+    $newImage = imagecreatetruecolor($width, $height);
+
+    // Maintain transparency for PNG/WEBP
+    if ($mime == 'image/png' || $mime == 'image/webp') {
+        imagecolortransparent($newImage, imagecolorallocatealpha($newImage, 0, 0, 0, 127));
+        imagealphablending($newImage, false);
+        imagesavealpha($newImage, true);
+    }
+
+    imagecopyresampled($newImage, $image, 0, 0, 0, 0, $width, $height, $oldW, $oldH);
+
+    // Save Thumbnail
+    switch ($mime) {
+        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 80); break; // 80% quality
+        case 'image/png':  imagepng($newImage, $thumbPath); break;
+        case 'image/gif':  imagegif($newImage, $thumbPath); break;
+        case 'image/webp': imagewebp($newImage, $thumbPath); break;
+    }
+
+    // Free memory
+    imagedestroy($image);
+    imagedestroy($newImage);
+
+    return $thumbPath;
+}
 ?>
 <div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
     <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
@@ -642,9 +713,14 @@ $currentSize = $data['form2']['size'] ?? '';
         </div>
     </div>
 </template>
-    <?php 
-    // Helper Function for Cards
+   <?php 
+    // ... inside your existing renderPhotoCard function ...
+
     function renderPhotoCard($img, $varId) {
+        // GENERATE THUMBNAIL PATH
+        // This will create the thumb on first load, then reuse it
+        $thumbSrc = getThumbnail($img['file_name']); 
+        $originalSrc = "uploads/itm_img/" . $img['file_name'];
     ?>
         <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group cursor-grab active:cursor-grabbing shadow-sm" 
              draggable="true" 
@@ -653,9 +729,14 @@ $currentSize = $data['form2']['size'] ?? '';
             <div class="absolute top-1 right-1 text-gray-400 p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
             </div>
-            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" onclick="openImagePopup('uploads/itm_img/<?php echo $img['file_name']; ?>')">
-                <img src="uploads/itm_img/<?php echo $img['file_name']; ?>" class="max-w-full max-h-full object-contain cursor-pointer">
+
+            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" 
+                 onclick="openImagePopup('<?php echo $originalSrc; ?>')">
+                <img src="<?php echo $thumbSrc; ?>" 
+                     loading="lazy" 
+                     class="max-w-full max-h-full object-contain cursor-pointer">
             </div>
+
             <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
                 <?php echo $img['file_name']; ?>
             </span>

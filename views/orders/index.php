@@ -1047,6 +1047,8 @@
                                                     <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Order</a>
                                                     <hr class="my-1 mx-2"></hr>
                                                     <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                    <hr class="my-1 mx-2"></hr>
+                                                    <a href="javascript:void(0)" class="single-add-to-purchase-list block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-order-id="<?= $order['order_id'] ?>">Add to purchase list</a>
                                                 </div>
                                             </span>
                                         </div>
@@ -1717,10 +1719,10 @@
                     <?php endforeach; ?>
                 </select>
                 </div>
-                <div class="w-1/2">
+                <!-- <div class="w-1/2">
                     <label class="block text-sm font-bold mb-2">Date Purchased</label>
                     <input type="date" id="bulkAddToPurchaseDatePurchased" name="date_purchased" class="border rounded px-3 py-2 w-full">
-                </div>
+                </div> -->
             </div>
             <div class="mb-4">
                 <!-- <label class="block text-sm font-bold mb-2">Notes</label>
@@ -2632,106 +2634,149 @@ function closesearch(){
 }
 
 // Bulk add to purchase list handlers
-    document.getElementById('action-add-to-purchase-list').addEventListener('click', function(e){
+document.getElementById('action-add-to-purchase-list').addEventListener('click', function(e){
+    e.preventDefault();
+    const oids = getSelectedOrderIds();
+    console.log('Selected orders to create purchase list:', oids);
+    if (oids.length === 0) {
+        showAlert('Please select at least one order to create purchase list.', 'warning');
+        return;
+    }
+    const form = document.getElementById('bulkAddToPurchaseForm');
+    form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+    oids.forEach(p => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'order_ids[]';
+        input.value = p;
+        input.className = 'poitem_hidden';
+        form.appendChild(input);
+        // also include sku for each product so backend can store it
+        // const skuInput = document.createElement('input');
+        // skuInput.type = 'hidden';
+        // skuInput.name = 'sku[]';
+        // skuInput.value = p.sku || p.item_code || '';
+        // skuInput.className = 'poitem_hidden';
+        // form.appendChild(skuInput);
+    });
+    // populate selected items list with image and sku/item_code
+    const selectedItemsContainer = document.getElementById('bulkAddToPurchaseSelectedItems');
+    selectedItemsContainer.innerHTML = '';
+    oids.forEach(p => {
+        const element = document.querySelector('#order-id-' + p);
+        if (!element) return; // Skip if element not found on current page
+        const orderData = JSON.parse(element.getAttribute('data-order'));
+        const itemText = 'Order' + (orderData.order_number || ' ID ' + p);
+        const image = orderData.image || 'default-image.png';
+
+        const div = document.createElement('div');
+        div.classList.add('rounded-md', 'flex-shrink-0',  'flex', 'flex-col', 'items-center', 'justify-start', 'bg-gray-50', 'overflow-hidden', 'w-32','h-32', 'm-2','mb-2', 'text-center', 'p-2');
+        // image
+        const img = document.createElement('img');
+        img.src = image || 'default-image.png';
+        img.classList.add('max-w-full', 'h-24', 'object-contain');
+        div.appendChild(img);
+        // sku / item code label
+        const label = document.createElement('div');
+        label.classList.add('text-sm', 'mt-2', 'break-words');
+        label.textContent = orderData.sku || orderData.item_code || ('ID ' + (p || ''));
+        div.appendChild(label);
+        // append hidden product id
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'sku[]';
+        hiddenInput.value = orderData.sku || orderData.item_code || '';
+        div.appendChild(hiddenInput);
+        selectedItemsContainer.appendChild(div);
+    });
+    document.getElementById('bulkAddToPurchaseError').classList.add('hidden');
+    document.getElementById('bulkAddToPurchasePopup').classList.remove('hidden');
+});
+
+// Single add to purchase list (per-order)
+document.querySelectorAll('.single-add-to-purchase-list').forEach(function(el){
+    el.addEventListener('click', function(e){
         e.preventDefault();
-        const oids = getSelectedOrderIds();
-        console.log('Selected orders to create purchase list:', oids);
-        if (oids.length === 0) {
-            showAlert('Please select at least one order to create purchase list.', 'warning');
-            return;
-        }
+        const orderId = el.dataset.orderId;
+        if (!orderId) return;
+        const element = document.getElementById('order-id-' + orderId);
+        if (!element) return;
+        const orderData = JSON.parse(element.getAttribute('data-order'));
         const form = document.getElementById('bulkAddToPurchaseForm');
-        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
-        oids.forEach(p => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'order_ids[]';
-            input.value = p;
-            input.className = 'poitem_hidden';
-            form.appendChild(input);
-            // also include sku for each product so backend can store it
-            // const skuInput = document.createElement('input');
-            // skuInput.type = 'hidden';
-            // skuInput.name = 'sku[]';
-            // skuInput.value = p.sku || p.item_code || '';
-            // skuInput.className = 'poitem_hidden';
-            // form.appendChild(skuInput);
-        });
-        // populate selected items list with image and sku/item_code
+        form.querySelectorAll('input.poitem_hidden').forEach(x => x.remove());
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'order_ids[]';
+        input.value = orderId;
+        input.className = 'poitem_hidden';
+        form.appendChild(input);
+
         const selectedItemsContainer = document.getElementById('bulkAddToPurchaseSelectedItems');
         selectedItemsContainer.innerHTML = '';
-        oids.forEach(p => {
-            const element = document.querySelector('#order-id-' + p);
-            if (!element) return; // Skip if element not found on current page
-            const orderData = JSON.parse(element.getAttribute('data-order'));
-            const itemText = 'Order' + (orderData.order_number || ' ID ' + p);
-            const image = orderData.image || 'default-image.png';
+        const div = document.createElement('div');
+        div.className = 'rounded-md flex-shrink-0 flex flex-col items-center justify-start bg-gray-50 overflow-hidden w-32 h-32 m-2 mb-2 text-center p-2';
+        const img = document.createElement('img');
+        img.src = orderData.image || 'default-image.png';
+        img.className = 'max-w-full h-24 object-contain';
+        div.appendChild(img);
+        const label = document.createElement('div');
+        label.className = 'text-sm mt-2 break-words';
+        label.textContent = orderData.sku || orderData.item_code || ('ID ' + orderId);
+        div.appendChild(label);
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'sku[]';
+        hiddenInput.value = orderData.sku || orderData.item_code || '';
+        div.appendChild(hiddenInput);
+        selectedItemsContainer.appendChild(div);
 
-            const div = document.createElement('div');
-            div.classList.add('rounded-md', 'flex-shrink-0',  'flex', 'flex-col', 'items-center', 'justify-start', 'bg-gray-50', 'overflow-hidden', 'w-32','h-32', 'm-2','mb-2', 'text-center', 'p-2');
-            // image
-            const img = document.createElement('img');
-            img.src = image || 'default-image.png';
-            img.classList.add('max-w-full', 'h-24', 'object-contain');
-            div.appendChild(img);
-            // sku / item code label
-            const label = document.createElement('div');
-            label.classList.add('text-sm', 'mt-2', 'break-words');
-            label.textContent = orderData.sku || orderData.item_code || ('ID ' + (p || ''));
-            div.appendChild(label);
-            // append hidden product id
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'sku[]';
-            hiddenInput.value = orderData.sku || orderData.item_code || '';
-            div.appendChild(hiddenInput);
-            selectedItemsContainer.appendChild(div);
-        });
         document.getElementById('bulkAddToPurchaseError').classList.add('hidden');
         document.getElementById('bulkAddToPurchasePopup').classList.remove('hidden');
     });
-    function closeBulkAddToPurchasePopup(e){
-        document.getElementById('bulkAddToPurchasePopup').classList.add('hidden');
-    }
+});
 
-    //bulk AddToPurchase submit
-    document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', function(e){
-        const agent = document.getElementById('bulkAddToPurchaseAgent').value;
-        if (!agent) {
-            e.preventDefault();
-            document.getElementById('bulkAddToPurchaseError').textContent = 'Please select an agent.';
-            document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
-            return;
-        }
-        //ajax submit
-        document.getElementById('bulkAddToPurchaseError').textContent = 'Processing..'
-        document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
+function closeBulkAddToPurchasePopup(e){
+    document.getElementById('bulkAddToPurchasePopup').classList.add('hidden');
+}
+
+//bulk AddToPurchase submit
+document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', function(e){
+    const agent = document.getElementById('bulkAddToPurchaseAgent').value;
+    if (!agent) {
         e.preventDefault();
-        const formData = new FormData(this);
-        fetch('index.php?page=products&action=create_purchase_list', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                //alert(data.message);
-                document.getElementById('bulkAddToPurchaseError').classList.remove('text-red-500');
-                document.getElementById('bulkAddToPurchaseError').classList.add('text-green-500');
-                document.getElementById('bulkAddToPurchaseError').textContent = 'Purchase List created successfully.';
-                //poitem clear from localStorage
-                localStorage.removeItem('selected_po_orders');
+        document.getElementById('bulkAddToPurchaseError').textContent = 'Please select an agent.';
+        document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
+        return;
+    }
+    //ajax submit
+    document.getElementById('bulkAddToPurchaseError').textContent = 'Processing..'
+    document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch('index.php?page=products&action=create_purchase_list', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            //alert(data.message);
+            document.getElementById('bulkAddToPurchaseError').classList.remove('text-red-500');
+            document.getElementById('bulkAddToPurchaseError').classList.add('text-green-500');
+            document.getElementById('bulkAddToPurchaseError').textContent = 'Purchase List created successfully.';
+            //poitem clear from localStorage
+            localStorage.removeItem('selected_po_orders');
 
-                //timeout to close popup and reload
-                setTimeout(() => {
-                    closeBulkAddToPurchasePopup();
-                    location.reload();
-                }, 3000);
-                //bulkStatusError.classList.remove('hidden');
-                //location.reload();
-            } else {
-                alert(data.message);
-            }
-        });
+            //timeout to close popup and reload
+            setTimeout(() => {
+                closeBulkAddToPurchasePopup();
+                location.reload();
+            }, 3000);
+            //bulkStatusError.classList.remove('hidden');
+            //location.reload();
+        } else {
+            alert(data.message);
+        }
     });
+});
 </script>
