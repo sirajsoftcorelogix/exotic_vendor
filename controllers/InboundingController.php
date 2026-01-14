@@ -1443,7 +1443,7 @@ class InboundingController {
         }
         curl_close($ch);
         if ($httpCode != 200 && $httpCode != 201) {
-            echo json_encode(['status' => 'error', 'message' => "API Error HTTP $httpCode", 'debug' => $response]);
+            echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response]);
             exit;
         }
         header('Content-Type: application/json');
