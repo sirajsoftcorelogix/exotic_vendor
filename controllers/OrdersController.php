@@ -293,7 +293,7 @@ class OrdersController {
                     'sku' => $item['sku'] ?? '',
 					'order_number' => $order['orderid'] ?? '',
 					'shipping_country' => $order['shipping_country'] ?? '',
-					'title' => $item['title'] ?? '',
+					'title' => !empty($item['title']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['title']) : '',
 					'description' => $item['description'] ?? '',
 					'item_code' => $item['itemcode'] ?? '',
 					'size' => $item['size'] ?? '',
