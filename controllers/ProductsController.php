@@ -617,14 +617,16 @@ class ProductsController {
         global $productModel;
         header('Content-Type: application/json');
         $input = json_decode(file_get_contents('php://input'), true);
+        
         $id = isset($input['id']) ? (int)$input['id'] : 0;
         $quantity = isset($input['quantity']) ? $input['quantity'] : null;
         $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        $status = isset($input['status']) ? trim($input['status']) : '';
         if ($id <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        $res = $productModel->updatePurchaseItem($id, $quantity, $remarks);
+        $res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status);
         echo json_encode($res);
         exit;
     }

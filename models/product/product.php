@@ -692,14 +692,14 @@ class product{
     }
 
     // Update quantity and remarks for a purchase list item
-    public function updatePurchaseItem($id, $quantity, $remarks) {
-        $sql = "UPDATE purchase_list SET quantity = ?, remarks = ?, updated_at = ? WHERE id = ?";
+    public function updatePurchaseItem($id, $quantity, $remarks,$status) {
+        $sql = "UPDATE purchase_list SET quantity = ?, remarks = ?, status = ?, updated_at = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
         $updatedAt = date('Y-m-d H:i:s');
         $id = (int)$id;
         $qty = ($quantity === '' || $quantity === null) ? null : (int)$quantity;
-        $stmt->bind_param('issi', $qty, $remarks, $updatedAt, $id);
+        $stmt->bind_param('isssi', $qty, $remarks, $status, $updatedAt, $id);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Updated successfully'];
         }
