@@ -964,5 +964,63 @@ class Order{
 
         return ['success' => true, 'message' => 'Agent updated successfully for ' . $affectedRows . ' orders.'];
     }
+    function insertAddressInfo(mysqli $conn, array $data)
+    {
+        // Allowed columns (safety whitelist)
+        $columns = [
+            'first_name','last_name','company',
+            'address_line1','address_line2','city','state','state_iso','state_code','country','zipcode',
+            'mobile','email','gstin',
+            'shipping_first_name','shipping_last_name','shipping_company',
+            'shipping_address_line1','shipping_address_line2','shipping_city','shipping_state',
+            'shipping_state_iso','shipping_state_code','shipping_country','shipping_zipcode',
+            'shipping_mobile','shipping_email'
+        ];
+
+        $insertCols   = [];
+        $placeholders = [];
+        $values       = [];
+        $types        = '';
+
+        foreach ($columns as $col) {
+            if (array_key_exists($col, $data)) {
+                $insertCols[]   = $col;
+                $placeholders[] = '?';
+                $values[]       = $data[$col];
+                $types         .= 's'; // all strings (safe for phone, zip, email)
+            }
+        }
+
+        if (empty($insertCols)) {
+            throw new Exception("No valid data provided for insert");
+        }
+
+        $sql = sprintf(
+            "INSERT INTO address_info (%s) VALUES (%s)",
+            implode(',', $insertCols),
+            implode(',', $placeholders)
+        );
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Prepare failed: " . $conn->error);
+        }
+
+        // mysqli requires references
+        $bindParams = [];
+        $bindParams[] = $types;
+        foreach ($values as $key => $value) {
+            $bindParams[] = &$values[$key];
+        }
+
+        call_user_func_array([$stmt, 'bind_param'], $bindParams);
+
+        if (!$stmt->execute()) {
+            throw new Exception("Execute failed: " . $stmt->error);
+        }
+
+        return $stmt->insert_id;
+    }
+
 }
 ?>
