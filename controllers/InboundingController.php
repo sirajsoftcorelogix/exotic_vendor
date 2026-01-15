@@ -1436,8 +1436,9 @@ class InboundingController {
             // --- ADDED HERE ---
             CURLOPT_FOLLOWLOCATION => true, // Follow any "Location: " headers (redirects)
             CURLOPT_MAXREDIRS => 10,        // Stop after 10 redirects to prevent infinite loops
+            CURLOPT_POSTREDIR => 3,
             // ------------------
-            
+            CURLOPT_POSTREDIR => 3,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
