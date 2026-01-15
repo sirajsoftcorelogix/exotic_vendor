@@ -159,24 +159,24 @@
                     if ($total_pages > 1): ?>          
                     <!-- Prev Button -->
                         <a class="page-link px-2 py-1 rounded <?php if($page <= 1) echo 'opacity-50 pointer-events-none'; ?>"
-                        href="?page=purchase_orders&action=list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                        href="?page=orders&action=payment_list&page_no=<?= $page-$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                             &laquo; Prev
                         </a>
                         <!-- Page Slots -->
                         <?php for ($i = $start; $i <= $end; $i++): ?>
                             <a class="page-link px-2 py-1 rounded <?= $i == $page ? 'bg-black text-white font-bold' : 'bg-gray-100 text-gray-700' ?>"
-                            href="?page=purchase_orders&action=list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
+                            href="?page=orders&action=payment_list&page_no=<?= $i ?>&limit=<?= $limit ?><?= $query_string ?>">
                                 <?= $i ?>
                             </a>
                         <?php endfor; ?>
                         <!-- Next Button -->
                         <a class="page-link px-2 py-1 rounded <?php if($page >= $total_pages) echo 'opacity-50 pointer-events-none'; ?>"
-                        href="?page=purchase_orders&action=list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
+                        href="?page=orders&action=payment_list&page_no=<?= $page+$slot_size ?>&limit=<?= $limit ?><?= $query_string ?>">
                             Next &raquo;
                         </a>
                     <?php endif; ?>
                     <select id="rows-per-page" class="pagination-select bg-transparent border-b border-gray-400 focus:outline-none focus:border-gray-800 text-gray-600"
-                            onchange="location.href='?page=purchase_orders&action=list&page_no=1&limit=' + this.value;">
+                            onchange="location.href='?page=orders&action=payment_list&page_no=1&limit=' + this.value;">
                         <?php foreach ([10, 20, 50, 100] as $opt): ?>
                             <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
                                 <?= $opt ?>
