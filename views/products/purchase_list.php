@@ -33,7 +33,9 @@
 
     <?php if (!empty($data['purchase_list'])): ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <?php foreach ($data['purchase_list'] as $pl):
+            <?php 
+            echo "<pre>",print_r($data['purchase_list']),"</pre>";
+            foreach ($data['purchase_list'] as $pl):
                 //$product = $pl['product'] ?? null;
                 $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
                 $title = $pl['title'] ?? ($pl['item_code'] ?? 'Product');
@@ -67,14 +69,20 @@
                         <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
                             <div>Assigned Agent : <strong><?php echo htmlspecialchars($agent_name); ?></strong></div>
                             <div>Date Added : <strong><?php echo htmlspecialchars($date_added); ?></strong></div>
-                            <div>Date Purchased : <strong><?php echo htmlspecialchars($date_purchased); ?></strong></div>
+                            <?php if (!empty($date_purchased)) { ?>
+                                <div>
+                                    Date Purchased :
+                                    <strong><?= htmlspecialchars($date_purchased) ?></strong>
+                                </div>
+                            <?php } ?>
+
                             <div>SKU : <strong><?php echo htmlspecialchars($pl['sku'] ?? ''); ?></strong></div>
                             <div>Color : <strong><?php echo htmlspecialchars($pl['color'] ?? ''); ?></strong></div>
                             <div>Size : <strong><?php echo htmlspecialchars($pl['size'] ?? ''); ?></strong></div>
                             <div>Material : <strong><?php echo htmlspecialchars($pl['material'] ?? ''); ?></strong></div>
                             <div>Dimensions : <strong><?php echo htmlspecialchars($pl['prod_height'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_width'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_length'] ?? ''); ?></strong></div>
                             <div>Weight : <strong><?php echo htmlspecialchars($pl['product_weight'] ?? '').' '.htmlspecialchars($pl['product_weight_unit'] ?? ''); ?></strong></div>
-                            <label class="block">Quantity: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
+                            <label class="block">Quantity Purchased: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
                         </div>
 
                         <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">                            

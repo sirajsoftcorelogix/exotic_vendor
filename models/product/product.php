@@ -588,13 +588,49 @@ class product{
             $params[] = $searchTerm;
             $types .= 'ss';
         }
+        if(!empty($filters['added_by'])){
+            $where[] = 'pl.edit_by = ?';
+            $params[] = (int)$filters['added_by'];
+            $types .= 'i';
+        }
+        if(!empty($filters['asigned_to'])){
+            $where[] = 'pl.user_id = ?';
+            $params[] = (int)$filters['asigned_to'];
+            $types .= 'i';
+        }
+
+        $dateColumn = (!empty($filters['date_type']) && $filters['date_type'] === 'purchased')
+            ? 'pl.date_purchased'
+            : 'pl.date_added';
+
+        if (!empty($filters['date_from'])) {
+            $where[]  = "$dateColumn >= ?";
+            $params[] = $filters['date_from'];
+            $types   .= 's';
+        }
+
+        if (!empty($filters['date_to'])) {
+            $where[]  = "$dateColumn <= ?";
+            $params[] = $filters['date_to'];
+            $types   .= 's';
+        }
+        
+        //print_r($filters);
+        
+        $orderBy = '';
+        if(!empty($filters['sort_by'])) {
+            $orderBy = " ORDER BY pl.date_added $filters[sort_by]";
+        } else {
+            $orderBy = " ORDER BY pl.date_added DESC";
+        }
+        
 
         $whereSql = '';
         if (!empty($where)) {
             $whereSql = 'WHERE ' . implode(' AND ', $where);
         }
         //echo $whereSql."**********************";
-        $sql = "SELECT pl.*, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql ORDER BY pl.created_at DESC LIMIT ? OFFSET ?";
+        $sql = "SELECT pl.*, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql $orderBy LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
 
@@ -717,7 +753,11 @@ class product{
         return ['success' => false, 'message' => 'Delete failed: '.$stmt->error];
     }
     public function getPurchaseItemById($id) {
-        $sql = "SELECT p.*, pl.*,  u.name as agent_name FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id LEFT JOIN vp_users u ON pl.user_id = u.id WHERE pl.id = ? LIMIT 1";
+        $sql = "SELECT p.*, pl.*,  u.name as agent_name, vu.name as added_by_name FROM purchase_list pl 
+        LEFT JOIN vp_products p ON pl.product_id = p.id 
+        LEFT JOIN vp_users u ON pl.user_id = u.id
+        LEFT JOIN vp_users vu ON pl.edit_by = vu.id
+        WHERE pl.id = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
         $id = (int)$id;

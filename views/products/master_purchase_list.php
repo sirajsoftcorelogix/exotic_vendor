@@ -7,44 +7,124 @@
             </svg>
         </button>
         <!-- Advance search and filters can be added here -->
-        <div id="accordion-content" class="accordion-content hidden">
-            <!-- Responsive Grid container -->
+        <?php
+        $hasFilters = !empty($_GET['search'])
+            || !empty($_GET['added_by'])
+            || !empty($_GET['assigned_to'])
+            || !empty($_GET['date_from'])
+            || !empty($_GET['date_to'])
+            || (!empty($_GET['category']) && $_GET['category'] !== 'all')
+            || (!empty($_GET['status']) && $_GET['status'] !== 'all');
+        ?> 
+        <div id="accordion-content" class="accordion-content <?= $hasFilters ? '' : 'hidden' ?>">
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
                     <input type="hidden" name="page" value="products">
                     <input type="hidden" name="action" value="master_purchase_list">
+
+                    <!-- Search -->
                     <div class="col-span-2">
                         <label class="text-sm text-gray-600">Search:</label>
-                        <input type="text" name="search" placeholder="Search by Item Code, Title..." value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>" class="border rounded px-3 py-2 w-full">
+                        <input type="text" name="search"
+                            placeholder="Search by Item Code, Title..."
+                            value="<?= htmlspecialchars($_GET['search'] ?? '') ?>"
+                            class="border rounded px-3 py-2 w-full">
                     </div>
+
+                    <!-- Added By -->
                     <div>
-                        <label class="text-sm text-gray-600">Date From:</label>
-                        <input type="date" name="date_from" value="<?php echo isset($_GET['date_from']) ? htmlspecialchars($_GET['date_from']) : ''; ?>" class="border rounded px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="text-sm text-gray-600">Date To:</label>
-                        <input type="date" name="date_to" value="<?php echo isset($_GET['date_to']) ? htmlspecialchars($_GET['date_to']) : ''; ?>" class="border rounded px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="text-sm text-gray-600">Category:</label>
-                        <select name="category" class="border rounded px-3 py-2">
-                            <option value="all" <?php echo (isset($_GET['category']) && $_GET['category'] === 'all') ? 'selected' : ''; ?>>All</option>
-                            <?php foreach (($data['categories'] ?? []) as $cat): ?>
-                                <option value="<?php echo htmlspecialchars($cat); ?>" <?php echo (isset($_GET['category']) && $_GET['category'] === $cat) ? 'selected' : ''; ?>><?php echo htmlspecialchars($cat); ?></option>
+                        <label class="text-sm text-gray-600">Added By:</label>
+                        <select name="added_by" class="border border-gray-300 rounded px-3 py-2 w-full">
+                            <option value="">Select</option>
+                            <?php foreach ($staff_list as $id => $name): ?>
+                                <option value="<?= $id ?>" <?= ($_GET['added_by'] ?? '') == $id ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($name) ?>
+                                </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
+
+                    <!-- Assigned To -->
                     <div>
-                        <label class="text-sm text-gray-600">Status:</label>
-                        <select name="status" class="border rounded px-3 py-2">
-                            <option value="all" <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'selected' : ''; ?>>All</option>
-                            <option value="pending" <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'selected' : ''; ?>>Pending</option>
-                            <option value="purchased" <?php echo (isset($_GET['status']) && $_GET['status'] === 'purchased') ? 'selected' : ''; ?>>Purchased</option>
+                        <label class="text-sm text-gray-600">Assigned To:</label>
+                        <select name="assigned_to" class="border border-gray-300 rounded px-3 py-2 w-full">
+                            <option value="">Select</option>
+                            <?php foreach ($staff_list as $id => $name): ?>
+                                <option value="<?= $id ?>" <?= ($_GET['assigned_to'] ?? '') == $id ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($name) ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
+
+                    <!-- Date Range Type -->
+                    <div>
+                        <label class="text-sm text-gray-600">Date Range Type:</label>
+                        <select name="date_type" class="border rounded px-3 py-2 w-full">
+                            <option value="">Select</option>
+
+                            <option value="added" <?= ($_GET['date_type'] ?? '') === 'added' ? 'selected' : '' ?>>
+                                Added Date
+                            </option>
+
+                            <option value="purchased" <?= ($_GET['date_type'] ?? '') === 'purchased' ? 'selected' : '' ?>>
+                                Purchased Date
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Date From -->
+                    <div>
+                        <label class="text-sm text-gray-600">Date From:</label>
+                        <input type="date" name="date_from"
+                            value="<?= htmlspecialchars($_GET['date_from'] ?? '') ?>"
+                            class="border rounded px-3 py-2 w-full">
+                    </div>
+
+                    <!-- Date To -->
+                    <div>
+                        <label class="text-sm text-gray-600">Date To:</label>
+                        <input type="date" name="date_to"
+                            value="<?= htmlspecialchars($_GET['date_to'] ?? '') ?>"
+                            class="border rounded px-3 py-2 w-full">
+                    </div>
+
+
+                    <!-- Category -->
+                    <div>
+                        <label class="text-sm text-gray-600">Category:</label>
+                        <select name="category" class="border rounded px-3 py-2 w-full">
+                            <option value="all">All</option>
+                            <?php foreach (($data['categories'] ?? []) as $cat): ?>
+                                <option value="<?= htmlspecialchars($cat) ?>"
+                                    <?= ($_GET['category'] ?? '') === $cat ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($cat) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <!-- Status -->
+                    <div>
+                        <label class="text-sm text-gray-600">Status:</label>
+                        <select name="status" class="border rounded px-3 py-2 w-full">
+                            <option value="all">All</option>
+                            <option value="pending" <?= ($_GET['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
+                            <option value="purchased" <?= ($_GET['status'] ?? '') === 'purchased' ? 'selected' : '' ?>>Purchased</option>
+                        </select>
+                    </div>
+
+                    <!-- Buttons -->
                     <div class="mt-4 flex items-center gap-4">
-                        <button type="button" onclick="window.location.href='?page=products&action=master_purchase_list'" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Reset</button>
-                        <button type="submit" class="bg-orange-400 text-white px-8 py-2 rounded hover:bg-orange-600">Filter</button>
+                        <button type="button"
+                            onclick="window.location.href='?page=products&action=master_purchase_list'"
+                            class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
+                            Reset
+                        </button>
+                        <button type="submit"
+                            class="bg-orange-400 text-white px-8 py-2 rounded hover:bg-orange-600">
+                            Filter
+                        </button>
                     </div>
                 </form>
             </div>
@@ -64,7 +144,20 @@
                             <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Added</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <button class="flex items-center gap-2 hover:text-gray-700"
+                                    onclick="sortTableByDate()">
+                                    Date Added
+                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                        class="h-8 w-8 text-gray-400"
+                                        viewBox="0 0 20 20"
+                                        fill="currentColor">
+                                        <path d="M5 8l5-5 5 5H5z" />
+                                        <path d="M5 12l5 5 5-5H5z" />
+                                    </svg>
+                                </button>
+                            </th>
+
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Purchased</th>
                             <th class="px-0 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
@@ -72,32 +165,60 @@
                     <tbody class="bg-white divide-y divide-gray-200">
                         <?php foreach ($data['purchase_list'] as $pl): ?>
                             <tr>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer" onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')"><?php echo htmlspecialchars($pl['item_code']); ?></td>
-                                <td class="px-6 py-4 whitespace-normal text-sm text-gray-900 break-words"><?php echo htmlspecialchars($pl['title']); ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo htmlspecialchars($pl['category']); ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo (int)$pl['quantity']; ?></td>
-                                <!-- <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php //echo htmlspecialchars($pl['agent_name']); 
-                                                                                                    ?></td>                             -->
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo ucfirst(htmlspecialchars($pl['status'])); ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo htmlspecialchars($pl['added_by']); ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php
-                                                                                                $date_added = $pl['date_added_readable'] ?? ($pl['date_added'] ? date('d M Y', strtotime($pl['date_added'])) : 'N/A');
-                                                                                                echo htmlspecialchars($date_added);
-                                                                                                ?></td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php
-                                                                                                $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : 'N/A');
-                                                                                                echo htmlspecialchars($date_purchased);
-                                                                                                ?></td>
-                                <!--action dropdown menu -->
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer"
+                                    onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')">
+                                    <?php echo htmlspecialchars($pl['item_code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-normal text-sm text-gray-900 break-words">
+                                    <?php echo htmlspecialchars($pl['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo htmlspecialchars($pl['category'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo (int)($pl['quantity'] ?? 0); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo ucfirst(htmlspecialchars($pl['status'] ?? '', ENT_QUOTES, 'UTF-8')); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo htmlspecialchars($pl['added_by'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php
+                                    $date_added = $pl['date_added_readable']
+                                        ?? (!empty($pl['date_added']) ? date('d M Y', strtotime($pl['date_added'])) : 'N/A');
+
+                                    echo htmlspecialchars($date_added, ENT_QUOTES, 'UTF-8');
+                                    ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php
+                                    $date_purchased = $pl['date_purchased_readable']
+                                        ?? (!empty($pl['date_purchased']) ? date('d M Y', strtotime($pl['date_purchased'])) : 'N/A');
+
+                                    echo htmlspecialchars($date_purchased, ENT_QUOTES, 'UTF-8');
+                                    ?>
+                                </td>
+
+                                <!-- action dropdown -->
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
-                                    <!-- Three-dot menu container -->
-                                    <div class="menu-wrapper ">
-                                        <button class="menu-button text-gray-500 hover:text-gray-700 " onclick="toggleMenu(this)">
-                                            &#x22EE; <!-- Vertical ellipsis -->
+                                    <div class="menu-wrapper">
+                                        <button class="menu-button text-gray-500 hover:text-gray-700" onclick="toggleMenu(this)">
+                                            &#x22EE;
                                         </button>
                                         <ul class="menu-popup text-left">
                                             <li>
-                                                <a href="javascript:void(0);" onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                <a href="javascript:void(0);"
+                                                    onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')"
+                                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                                     View / Edit Details
                                                 </a>
                                             </li>
@@ -112,6 +233,7 @@
                                     </div>
                                 </td>
                             </tr>
+
                         <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -202,7 +324,7 @@
         <div id="purchase-list-popup-panel" class="h-full bg-white shadow-xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b p-title"></h2>
+                    <h2 class="text-1xl font-bold text-gray-800 mb-6 pb-6 border-b p-title"></h2>
                     <div id="plDetailMsg" style="margin-top:10px;" class="text-sm font-bold"></div>
                     <form id="plDetailForm">
                         <input type="hidden" name="page" value="vendors">
@@ -242,6 +364,35 @@
 
     </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteConfirmModal"
+     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-2">
+            Confirm Deletion
+        </h2>
+
+        <p class="text-sm text-gray-600 mb-6">
+            Are you sure you want to delete this purchase list item?
+            This action cannot be undone.
+        </p>
+
+        <div class="flex justify-end gap-3">
+            <button onclick="closeDeleteModal()"
+                    class="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300">
+                Cancel
+            </button>
+
+            <button onclick="confirmDelete()"
+                    class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">
+                Delete
+            </button>
+        </div>
+    </div>
+</div>
+<!-- Alert Message -->
 </div>
 </div>
 <script>
@@ -259,7 +410,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const plDetails = data.purchaseItem; console.log(plDetails);
+                    const plDetails = data.purchaseItem;
+                    console.log(plDetails);
                     const fieldsContainer = document.getElementById('pl-detail-fields');
                     //fieldsContainer.innerHTML = ''; // Clear previous fields
 
@@ -280,8 +432,8 @@
                         </div>
                         <div><strong>Assigned Agent : </strong> ${plDetails.agent_name || 'N/A'}</div>
                         <div><strong>Date Added : </strong> ${plDetails.date_added_readable || 'N/A'}</div>
-                        <div><strong>Add By : </strong> ${plDetails.edit_by || 'N/A'}</div>
-                        <div><strong>Date Purchased : </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
+                        <div><strong>Add By : </strong> ${plDetails.added_by_name || 'N/A'}</div>
+                        <div><strong>Purchased Date: </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
                         <div><strong>SKU : </strong> ${plDetails.sku || 'N/A'}</div>
                         <div><strong>Color : </strong> ${plDetails.color || 'N/A'}</div>
                         <div><strong>Size : </strong> ${plDetails.size || 'N/A'}</div>
@@ -343,7 +495,7 @@
         formData.append('action', 'editPlDetails');
         formData.append('id', plId);
         formData.append('quantity', quantity);
-        formData.append('status', status);       
+        formData.append('status', status);
         formData.append('remarks', remark);
 
         // Send AJAX request to update details
@@ -398,7 +550,7 @@
         }
     });
     // Delete purchase list item
-    function deletePurchaseListItem(plId) {
+    /*function deletePurchaseListItem(plId) {
         if (confirm('Are you sure you want to delete this purchase list item?')) {
             fetch(`<?php echo base_url('?page=products&action=delete_purchase_list_item'); ?>`, {
                     method: 'POST',
@@ -426,7 +578,48 @@
                     showAlert('An error occurred while deleting the purchase list item.');
                 });
         }
+    }*/
+
+    let deletePlId = null;
+
+    function deletePurchaseListItem(plId) {
+        deletePlId = plId;
+        document.getElementById('deleteConfirmModal').classList.remove('hidden');
     }
+
+    function closeDeleteModal() {
+        deletePlId = null;
+        document.getElementById('deleteConfirmModal').classList.add('hidden');
+    }
+
+    function confirmDelete() {
+        if (!deletePlId) return;
+
+        fetch(`<?php echo base_url('?page=products&action=delete_purchase_list_item'); ?>`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id: deletePlId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            closeDeleteModal();
+
+            if (data.success) {
+                showAlert('Purchase list item deleted successfully.');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showAlert('Failed to delete purchase list item.');
+            }
+        })
+        .catch(error => {
+            closeDeleteModal();
+            console.error('Error deleting purchase list item:', error);
+            showAlert('An error occurred while deleting the purchase list item.');
+        });
+    }
+
     // Accordion functionality
     const accordionButton = document.getElementById('accordion-button');
     const accordionContent = document.getElementById('accordion-content');
@@ -435,4 +628,13 @@
         accordionContent.classList.toggle('hidden');
         accordionIcon.classList.toggle('rotate-180');
     });
+
+    function sortTableByDate() {
+        const url = new URL(window.location.href);
+        const current = url.searchParams.get('sort_by_date') || 'desc';
+        const next = current === 'asc' ? 'desc' : 'asc';
+
+        url.searchParams.set('sort_by_date', next);
+        window.location.href = url.toString();
+    }
 </script>

@@ -513,6 +513,30 @@ class ProductsController {
             $filters['search'] = trim($_GET['search']);
         }
 
+        //sorting
+        $filters['sort_by'] = ($_GET['sort_by_date'] ?? 'desc') === 'asc' ? 'ASC' : 'DESC';
+
+        //added By filter
+        if (!empty($_GET['added_by'])) {
+            $filters['added_by'] = (int)$_GET['added_by'];
+        }
+
+        //asigned to filter
+        if (!empty($_GET['asigned_to'])) {
+            $filters['asigned_to'] = (int)$_GET['asigned_to'];
+        }
+
+        //date range filter
+        if(!empty($_GET['date_type'])){
+            $filters['date_type'] = $_GET['date_type'];
+        }
+        if(!empty($_GET['date_from'])){
+            $filters['date_from'] = $_GET['date_from'];
+        }
+        if(!empty($_GET['date_to'])){
+            $filters['date_to'] = $_GET['date_to']; 
+        }
+        
         // fetch purchase list and count
         $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters);
         $total_records = $productModel->countPurchaseList($filters);
@@ -532,14 +556,15 @@ class ProductsController {
                 'date_purchased_readable' => $row['date_purchased'] ? date('d M Y', strtotime($row['date_purchased'])) : ''
             ]);
         }
-
+        
         $data = [
             'categories' => getCategories(),
             'purchase_list' => $enriched,
             'page_no' => $page_no,
             'total_pages' => ceil($total_records / $limit),
             'total_records' => $total_records,
-            'limit' => $limit
+            'limit' => $limit,
+            'staff_list' => $commanModel->get_staff_list(),
         ];
         renderTemplate('views/products/master_purchase_list.php', $data, 'Master Purchase List');
     }
