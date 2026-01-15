@@ -410,7 +410,8 @@ class Order{
             'publisher',
             'author',
             'shippingfee',
-            'sourcingfee'
+            'sourcingfee',
+            'customer_id'
         ];
 
         // Build SQL query
@@ -964,10 +965,14 @@ class Order{
 
         return ['success' => true, 'message' => 'Agent updated successfully for ' . $affectedRows . ' orders.'];
     }
-    function insertAddressInfo(mysqli $conn, array $data)
+    function insertAddressInfo(array $data, $customer_id = null)
     {
+        //print_array($data);
+        //print_array($data['address_info']);
+        
         // Allowed columns (safety whitelist)
         $columns = [
+            'order_number','customer_id',
             'first_name','last_name','company',
             'address_line1','address_line2','city','state','state_iso','state_code','country','zipcode',
             'mobile','email','gstin',
@@ -983,27 +988,42 @@ class Order{
         $types        = '';
 
         foreach ($columns as $col) {
-            if (array_key_exists($col, $data)) {
+            if (array_key_exists($col, $data['address_info'])) {
                 $insertCols[]   = $col;
                 $placeholders[] = '?';
-                $values[]       = $data[$col];
+                $values[]       = $data['address_info'][$col];
                 $types         .= 's'; // all strings (safe for phone, zip, email)
             }
         }
+        //order_number add 
+        if (array_key_exists('order_number', $data['address_info'])) {
+            $insertCols[]   = 'order_number';
+            $placeholders[] = '?';
+            $values[]       = $data['orderid'];
+            $types         .= 's';
+        }
+        //customer_id add
+        if ($customer_id !== null) {
+            $insertCols[]   = 'customer_id';
+            $placeholders[] = '?';
+            $values[]       = $customer_id;
+            $types         .= 'i'; // integer
+        }
+        
 
         if (empty($insertCols)) {
             throw new Exception("No valid data provided for insert");
         }
 
         $sql = sprintf(
-            "INSERT INTO address_info (%s) VALUES (%s)",
+            "INSERT INTO vp_address_info (%s) VALUES (%s)",
             implode(',', $insertCols),
             implode(',', $placeholders)
         );
 
-        $stmt = $conn->prepare($sql);
+        $stmt = $this->db->prepare($sql);
         if (!$stmt) {
-            throw new Exception("Prepare failed: " . $conn->error);
+            throw new Exception("Prepare failed: " . $this->db->error);
         }
 
         // mysqli requires references
@@ -1014,12 +1034,51 @@ class Order{
         }
 
         call_user_func_array([$stmt, 'bind_param'], $bindParams);
-
+        //echo $stmt->$sql;
         if (!$stmt->execute()) {
             throw new Exception("Execute failed: " . $stmt->error);
         }
 
         return $stmt->insert_id;
+    }
+    public function getAddressInfoByOrderNumber($order_number) {
+        $sql = "SELECT * FROM address_info WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function addCustomerIfNotExists($data) {
+        $customer_fname = isset($data['address_info']['first_name']) ? $data['address_info']['first_name'] : '';
+        $customer_lname = isset($data['address_info']['last_name']) ? $data['address_info']['last_name'] : '';
+        $customer_name = trim($customer_fname . ' ' . $customer_lname);
+        $customer_email = isset($data['address_info']['email']) ? $data['address_info']['email'] : '';
+        $customer_phone = isset($data['address_info']['mobile']) ? $data['address_info']['mobile'] : '';
+        // Check if customer already exists
+        $sql = "SELECT id FROM vp_customers WHERE email = ? AND phone = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ss', $customer_email, $customer_phone);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return ['success' => true, 'customer_id' => $row['id'], 'message' => 'Customer already exists.'];
+        }
+
+        // Insert new customer
+        $sql = "INSERT INTO vp_customers (name, email, phone) VALUES (?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $customer_name, $customer_email, $customer_phone);
+        if ($stmt->execute()) {
+            return ['success' => true, 'customer_id' => $stmt->insert_id, 'message' => 'Customer added successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+        
     }
 
 }

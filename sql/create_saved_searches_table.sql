@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS `saved_searches` (
 
 CREATE TABLE vp_address_info (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    orders_id INT UNSIGNED NOT NULL,
+    orders_number INT UNSIGNED NOT NULL,
+    customer_id INT UNSIGNED DEFAULT NULL,
 
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
@@ -50,3 +51,14 @@ CREATE TABLE vp_address_info (
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;
+  
+
+CREATE TABLE IF NOT EXISTS `vp_customers` (
+    `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(255) NOT NULL,
+    `email` VARCHAR(255) NOT NULL,
+    `phone` VARCHAR(50) DEFAULT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `unique_email_phone` (`email`, `phone`) 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
