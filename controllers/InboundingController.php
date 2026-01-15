@@ -1436,6 +1436,7 @@ class InboundingController {
             // --- ADDED HERE ---
             CURLOPT_FOLLOWLOCATION => true, // Follow any "Location: " headers (redirects)
             CURLOPT_MAXREDIRS => 10,        // Stop after 10 redirects to prevent infinite loops
+            CURLOPT_POSTREDIR => 3,
             // ------------------
             
             CURLOPT_HTTPHEADER => $headers,
