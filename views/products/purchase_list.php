@@ -34,7 +34,6 @@
     <?php if (!empty($data['purchase_list'])): ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <?php 
-            echo "<pre>",print_r($data['purchase_list']),"</pre>";
             foreach ($data['purchase_list'] as $pl):
                 //$product = $pl['product'] ?? null;
                 $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';

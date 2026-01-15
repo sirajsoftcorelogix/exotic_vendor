@@ -440,63 +440,149 @@ class ProductsController {
         echo json_encode($res);
         exit;
     }
-    public function createPurchaseList() {
+    
+    public function createPurchaseList()
+    {
         is_login();
         global $productModel;
+
+        header('Content-Type: application/json');
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'Invalid request method']);
             exit;
         }
 
-        $agent_id = isset($_POST['agent_id']) ? (int)$_POST['agent_id'] : 0;
-        $poitems = isset($_POST['poitem']) && is_array($_POST['poitem']) ? $_POST['poitem'] : [];
-        $skus = isset($_POST['sku']) && is_array($_POST['sku']) ? $_POST['sku'] : [];
-        // If date_purchased not provided, use current datetime
-        $date_purchased = !empty($_POST['date_purchased']) ? $_POST['date_purchased'] : date('Y-m-d H:i:s');
-        //if product_ids empty
-        if (empty($poitems) && isset($_POST['order_ids']) && is_array($_POST['sku'])) {
-            //fetch product ids from skus
-            foreach ($_POST['sku'] as $sku) {
-                $product = $productModel->getProductByskuExact($sku);
-                if ($product) {
-                    $poitems[] = $product['id'];                    
-                }
-            }
+        $agent_id = (int)($_POST['agent_id'] ?? 0);
 
+        // From your form
+        $orderIds = (isset($_POST['order_ids']) && is_array($_POST['order_ids'])) ? $_POST['order_ids'] : [];
+        $skus     = (isset($_POST['sku']) && is_array($_POST['sku'])) ? $_POST['sku'] : [];
+
+        // quantity can be either:
+        // 1) quantity[ORDER_ID] => qty  (recommended)
+        // 2) quantity[] aligned with sku[] (fallback)
+        $qtysRaw = $_POST['quantity'] ?? [];
+
+        // Date purchased (keep date only if HTML input type=date; else datetime ok)
+        $date_purchased = !empty($_POST['date_purchased']) ? $_POST['date_purchased'] : date('Y-m-d H:i:s');
+
+        if ($agent_id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select an agent.']);
+            exit;
         }
-        if ($agent_id <= 0 || empty($poitems)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
+
+        if (empty($orderIds) && empty($skus)) {
+            echo json_encode(['success' => false, 'message' => 'No items selected.']);
             exit;
         }
 
         $created = 0;
-        $failed = [];
-        foreach ($poitems as $idx => $prodId) {
-            $product_id = (int)$prodId;
-            if ($product_id <= 0) {
-                $failed[] = ['product_id' => $prodId, 'message' => 'Invalid product id'];
-                continue;
+        $failed  = [];
+        
+        //print_array($orderIds); die;
+        // Build a list of items to insert
+        // Prefer mapping by order_ids (because quantity is keyed by orderId)
+        if (!empty($orderIds)) {
+            foreach ($orderIds as $idx => $oid) {
+                $oid = (string)$oid;
+
+                $sku = isset($skus[$idx]) ? trim($skus[$idx]) : '';
+                if ($sku === '') {
+                    $failed[] = ['order_id' => $oid, 'message' => 'SKU missing'];
+                    continue;
+                }
+
+                $product = $productModel->getProductByskuExact($sku);
+                if (!$product || empty($product['id'])) {
+                    $failed[] = ['order_id' => $oid, 'sku' => $sku, 'message' => 'Product not found for SKU'];
+                    continue;
+                }
+
+                // quantity[orderId] preferred
+                $qty = 1;
+                if (is_array($qtysRaw) && array_key_exists($oid, $qtysRaw)) {
+                    $qty = (int)$qtysRaw[$oid];
+                } elseif (is_array($qtysRaw) && isset($qtysRaw[$idx])) {
+                    // fallback if quantity[] came as indexed array
+                    $qty = (int)$qtysRaw[$idx];
+                }
+
+                if ($qty < 1) $qty = 1;
+
+                $data = [
+                    'user_id'        => $agent_id,
+                    'product_id'     => (int)$product['id'],
+                    'sku'            => $sku,
+                    'date_purchased' => $date_purchased,
+                    'status'         => 'pending',
+                    'edit_by'        => (int)($_SESSION['user']['id'] ?? 0),
+                    'quantity'       => $qty
+                ];
+
+                print_array($data); //debug 
+                die;
+
+                $res = $productModel->createPurchaseList($data);
+
+                if ($res && !empty($res['success'])) {
+                    $created++;
+                } else {
+                    $failed[] = [
+                        'order_id' => $oid,
+                        'product_id' => (int)$product['id'],
+                        'sku' => $sku,
+                        'message' => ($res['message'] ?? 'Insert failed')
+                    ];
+                }
             }
-            $sku = isset($skus[$idx]) ? trim($skus[$idx]) : '';
-            $data = [
-                'user_id' => $agent_id,
-                'product_id' => $product_id,
-                'sku' => $sku,
-                'date_purchased' => $date_purchased,
-                'status' => 'pending',
-                'edit_by' => $_SESSION['user']['id'] ?? 0
-            ];
-            $res = $productModel->createPurchaseList($data);
-            if ($res && isset($res['success']) && $res['success']) {
-                $created++;
-            } else {
-                $failed[] = ['product_id' => $product_id, 'message' => ($res['message'] ?? 'Insert failed')];
+        } else {
+            // If order_ids not posted, insert based on sku[] only
+            foreach ($skus as $idx => $sku) {
+                $sku = trim($sku);
+                if ($sku === '') continue;
+
+                $product = $productModel->getProductByskuExact($sku);
+                if (!$product || empty($product['id'])) {
+                    $failed[] = ['sku' => $sku, 'message' => 'Product not found for SKU'];
+                    continue;
+                }
+
+                $qty = 1;
+                if (is_array($qtysRaw) && isset($qtysRaw[$idx])) {
+                    $qty = (int)$qtysRaw[$idx];
+                }
+                if ($qty < 1) $qty = 1;
+
+                $data = [
+                    'user_id'        => $agent_id,
+                    'product_id'     => (int)$product['id'],
+                    'sku'            => $sku,
+                    'date_purchased' => $date_purchased,
+                    'status'         => 'pending',
+                    'edit_by'        => (int)($_SESSION['user']['id'] ?? 0),
+                    'quantity'       => $qty
+                ];
+
+                $res = $productModel->createPurchaseList($data);
+
+                if ($res && !empty($res['success'])) {
+                    $created++;
+                } else {
+                    $failed[] = ['sku' => $sku, 'message' => ($res['message'] ?? 'Insert failed')];
+                }
             }
         }
 
-        echo json_encode(['success' => true, 'created' => $created, 'failed' => $failed]);
+        echo json_encode([
+            'success' => true,
+            'created' => $created,
+            'failed'  => $failed
+        ]);
         exit;
     }
+
+
     public function masterPurchaseList() {
         is_login();
         global $productModel;

@@ -1244,8 +1244,7 @@ class OrdersController {
         $total_payments = $poInvoiceModel->getTotalPayments(0, 0, $filters);
         //print_array($payments);
         renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
-    }
-    
+    }    
 }
 ?>
 

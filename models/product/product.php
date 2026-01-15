@@ -532,21 +532,73 @@ class product{
         }
         return ['success' => false, 'message' => 'Update failed: '.$stmt->error];
     }
-    public function createPurchaseList($data) {       
-        $sql = "INSERT INTO purchase_list (user_id, product_id, sku, date_added, date_purchased, status, edit_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public function createPurchaseList($data)
+    {
+        $sql = "
+            INSERT INTO purchase_list (
+                user_id,
+                product_id,
+                sku,
+                date_added,
+                date_purchased,
+                status,
+                quantity,
+                edit_by,
+                updated_at,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ";
+
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
-        // types: user_id (i), product_id (i), sku (s), date_added (s), date_purchased (s), status (s), edit_by (i), updated_at (s), created_at (s)
-        $types = 'iissssiss';
-        $dateAdded = date('Y-m-d H:i:s');
-        $updatedAt = date('Y-m-d H:i:s');
-        $createdAt = date('Y-m-d H:i:s');
-        $stmt->bind_param($types, $data['user_id'], $data['product_id'], $data['sku'], $dateAdded, $data['date_purchased'], $data['status'], $data['edit_by'], $updatedAt, $createdAt);
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Purchase list created successfully.'];
+        if (!$stmt) {
+            return [
+                'success' => false,
+                'message' => 'Prepare failed: ' . $this->db->error
+            ];
         }
-        return ['success' => false, 'message' => 'Failed to create purchase list: '.$stmt->error];
+
+        $now = date('Y-m-d H:i:s');
+
+        // Types:
+        // i = user_id
+        // i = product_id
+        // s = sku
+        // s = date_added
+        // s = date_purchased
+        // s = status
+        // i = quantity
+        // i = edit_by
+        // s = updated_at
+        // s = created_at
+        $types = 'iisssiisss';
+
+        $stmt->bind_param(
+            $types,
+            $data['user_id'],
+            $data['product_id'],
+            $data['sku'],
+            $now,                          // date_added
+            $data['date_purchased'],       // nullable is OK
+            $data['status'],
+            $data['quantity'],
+            $data['edit_by'],
+            $now,                          // updated_at
+            $now                           // created_at
+        );
+
+        if ($stmt->execute()) {
+            return [
+                'success' => true,
+                'message' => 'Purchase list created successfully.'
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Failed to create purchase list: ' . $stmt->error
+        ];
     }
+
     public function getPurchaseListByUser($user_id, $limit = 100, $offset = 0, $filters = []) {
         $sql = "SELECT * FROM purchase_list WHERE user_id = ? AND status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?";
        
