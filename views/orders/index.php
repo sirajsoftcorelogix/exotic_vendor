@@ -1852,6 +1852,11 @@
                         name="date_purchased"
                         class="border rounded px-3 py-2 w-full">
                 </div>
+
+                <!-- <div class="w-1/2">
+                    <label class="block text-sm font-bold mb-2">Date Purchased</label>
+                    <input type="date" id="bulkAddToPurchaseDatePurchased" name="date_purchased" class="border rounded px-3 py-2 w-full">
+                </div> -->
             </div>
 
             <div class="mb-4">
