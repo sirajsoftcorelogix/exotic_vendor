@@ -47,7 +47,181 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const openConvParam = urlParams.get("conversation_id");
+  // Emoji
+  const EMOJIS = [
+    "😀","😁","😂","🤣","😊","😍","😘","😎",
+    "😢","😭","😡","👍","👎","🙏","🔥","❤️",
+    "🎉","🚀","💯","📎"
+  ];
 
+  const emojiBtn = document.getElementById("emoji-btn");
+  const emojiPicker = document.getElementById("emoji-picker");
+
+  EMOJIS.forEach(e => {
+      const span = document.createElement("span");
+      span.textContent = e;
+      span.onclick = () => insertEmoji(e);
+      emojiPicker.appendChild(span);
+  });
+
+  emojiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    emojiPicker.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", () => {
+    emojiPicker.classList.add("hidden");
+  });
+
+  function insertEmoji(emoji) {
+    const input = inputEl; // your existing message input
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+
+    const text = input.value;
+    input.value =
+        text.substring(0, start) +
+        emoji +
+        text.substring(end);
+
+    const newPos = start + emoji.length;
+    input.setSelectionRange(newPos, newPos);
+    input.focus();
+  }
+  // END Emoji
+
+  // Drag n Drop
+  const chatInputWrapper = document.querySelector(".chat-input-wrapper");
+
+  chatInputWrapper.addEventListener("dragover", e => {
+    e.preventDefault();
+    chatInputWrapper.classList.add("drag-active");
+  });
+
+  chatInputWrapper.addEventListener("dragleave", () => {
+    chatInputWrapper.classList.remove("drag-active");
+  });
+
+  chatInputWrapper.addEventListener("drop", e => {
+    e.preventDefault();
+    chatInputWrapper.classList.remove("drag-active");
+
+    const files = e.dataTransfer.files;
+    if (files.length) {
+        handleSelectedFile(files[0]);
+    }
+  });
+
+  inputEl.addEventListener("paste", (e) => {
+    const items = e.clipboardData.items;
+    for (const item of items) {
+        if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            handleSelectedFile(file);
+            e.preventDefault();
+            break;
+        }
+    }
+  });
+
+  function handleSelectedFile(file) {
+    if (!file) return;
+
+    // Only images for now
+    if (!file.type.startsWith("image/")) {
+        alert("Only image files are allowed");
+        return;
+    }
+
+    showPreview(file);
+  }
+
+  function showPreview(file) {
+    const preview = document.getElementById("file-preview");
+    const img = document.getElementById("preview-img");
+    const name = document.getElementById("preview-name");
+
+    name.textContent = file.name;
+
+    if (file.type.startsWith("image/")) {
+        img.src = URL.createObjectURL(file);
+        img.classList.remove("hidden");
+    }
+
+    preview.classList.remove("hidden");
+
+    // Store file temporarily
+    fileInput.dataset.pendingFile = "1";
+    window.pendingUploadFile = file;
+  }
+
+  document.getElementById("preview-remove").onclick = () => {
+    document.getElementById("file-preview").classList.add("hidden");
+    window.pendingUploadFile = null;
+  };
+
+  function uploadFile(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    fetch(window.API_BASE + "/upload_file.php", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.error) {
+            alert(res.error);
+            return;
+        }
+
+        ws.send(JSON.stringify({
+            type: "send_message",
+            conversation_id: activeConversationId,
+            file_path: res.path,
+            original_name: res.original_name || file.name
+        }));
+
+        clearPreview();
+    });
+  }
+  function clearPreview() {
+    document.getElementById("file-preview").classList.add("hidden");
+    window.pendingUploadFile = null;
+  }
+  // END
+
+  const previewContainer = document.getElementById("image-preview-container");
+  let pendingImageFile = null;
+
+  function showImagePreview(file) {
+      if (!file || !file.type.startsWith("image/")) return;
+
+      previewContainer.innerHTML = "";
+      previewContainer.classList.remove("hidden");
+
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "relative";
+
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+
+      const remove = document.createElement("span");
+      remove.className = "remove-preview";
+      remove.textContent = "×";
+      remove.onclick = () => {
+          pendingImageFile = null;
+          previewContainer.classList.add("hidden");
+          previewContainer.innerHTML = "";
+      };
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(remove);
+      previewContainer.appendChild(wrapper);
+
+      pendingImageFile = file;
+  }
   // Search functionality
   const globalSearchEl = document.getElementById("global-search");
 
@@ -199,7 +373,6 @@
   attachBtn.addEventListener('click', () => { fileInput.click(); });
   fileInput.addEventListener('change', handleFileUpload);
   messagesEl.addEventListener('scroll', () => { if (isAtBottom()) sendReadReceipt(); });
-  window.addEventListener('focus', sendReadReceipt);
 
   function handleGlobalSearch(query) {
     renderUserList(query);
@@ -387,22 +560,41 @@
             convListEl.appendChild(item);
         });
     }
-    function requestDeleteConversation(conv) {
+    function requestDeleteConversation(convOrId) {
+
+      // Normalize argument
+      const conv = (typeof convOrId === 'object')
+          ? convOrId
+          : conversations.find(c => c.id === convOrId);
+
+      if (!conv) {
+          console.error("Conversation not found:", convOrId);
+          return;
+      }
+
       pendingDeleteConversationId = conv.id;
 
       const modal = document.getElementById("delete-modal");
-      const msg = document.getElementById("delete-modal-msg");
+      const msg   = document.getElementById("delete-modal-msg");
+      const confirmBtn = document.getElementById("delete-confirm-btn");
 
-      if (conv.type === 'group' && conv.owner_id !== window.CURRENT_USER) {
+      console.log("Owner:", conv.owner_id);
+      console.log("Current user:", window.CURRENT_USER);
+
+      if (
+          conv.type === 'group' &&
+          Number(conv.owner_id) !== Number(window.CURRENT_USER)
+      ) {
           msg.textContent = "Only the group owner can delete this group.";
-          document.getElementById("delete-confirm-btn").classList.add("hidden");
+          confirmBtn.classList.add("hidden");
       } else {
           msg.textContent = "Are you sure you want to delete this conversation?";
-          document.getElementById("delete-confirm-btn").classList.remove("hidden");
+          confirmBtn.classList.remove("hidden");
       }
 
       modal.classList.remove("hidden");
     }
+
 
     document.getElementById("delete-cancel-btn").onclick = closeDeleteModal;
     document.getElementById("delete-confirm-btn").onclick = confirmDeleteConversation;
@@ -492,7 +684,11 @@
     renderMessages(convId);
     loadMessages(convId).then(() => {
       scrollToBottom();
-      sendReadReceipt();
+    });
+
+    // Only send read when user scrolls / focuses
+    messagesEl.addEventListener('scroll', () => {
+        if (isAtBottom()) sendReadReceipt();
     });
   }
   window.setActiveConversation = setActiveConversation;
@@ -561,7 +757,13 @@
     })
       .then(r => r.json())
       .then(data => {
-        messages[convId] = data;
+        messages[convId] = messages[convId] || [];
+
+        data.forEach(msg => {
+            if (!messages[convId].some(m => m.id === msg.id)) {
+                messages[convId].push(msg);
+            }
+        });
         if (convId === activeConversationId) {
           renderMessages(convId);
         }
@@ -606,16 +808,36 @@
       }
 
       if (msg.file_path) {
-        const fileDiv = document.createElement("div");
-        fileDiv.className = "message-file";
 
-        const link = document.createElement("a");
-        link.href = msg.file_path;
-        link.target = "_blank";
-        link.textContent = msg.original_name || "Attachment";
+        // IMAGE PREVIEW
+        if (isImageFile(msg.file_path, msg.original_name)) {
 
-        fileDiv.appendChild(link);
-        bubble.appendChild(fileDiv);
+            const imgLink = document.createElement("a");
+            imgLink.href = msg.file_path;
+            imgLink.target = "_blank";
+
+            const img = document.createElement("img");
+            img.src = msg.file_path;
+            img.className = "message-image";
+            img.alt = msg.original_name || "Image";
+
+            imgLink.appendChild(img);
+            bubble.appendChild(imgLink);
+
+        } 
+        // NON-IMAGE FILE
+        else {
+            const fileDiv = document.createElement("div");
+            fileDiv.className = "message-file";
+
+            const link = document.createElement("a");
+            link.href = msg.file_path;
+            link.target = "_blank";
+            link.textContent = msg.original_name || "Attachment";
+
+            fileDiv.appendChild(link);
+            bubble.appendChild(fileDiv);
+        }
       }
 
       const meta = document.createElement('div');
@@ -623,10 +845,14 @@
       meta.textContent = msg.created_at;
 
       if (msg.sender_id == CURRENT_USER) {
-        meta.innerHTML += `
+        /*meta.innerHTML += `
           <span class="read ${msg.is_read ? 'read' : ''}">
             ${msg.is_read ? '✔✔' : '✔'}
           </span>
+        `;*/
+        meta.innerHTML = `
+          ${msg.created_at}
+          ${getTick(msg.delivery_status)}
         `;
       }
 
@@ -672,40 +898,76 @@
       return safe;
   }
   function sendMessage() {
-  if (!activeConversationId) {
-    alert("Select a conversation first");
-    return;
+    if (!activeConversationId) {
+      alert("Select a conversation first");
+      return;
+    }
+    if (window.pendingUploadFile) {
+        uploadFile(window.pendingUploadFile);
+        return;
+    }
+    if (pendingImageFile) {
+        uploadAndSendImage(pendingImageFile);
+        return;
+    }
+
+    const text = inputEl.value.trim();
+    const filePath = fileInput.dataset.uploadedPath || null;
+    const originalName = fileInput.dataset.uploadedOriginalName || null;
+
+    // Prevent empty send
+    if (!text && !filePath) return;
+
+    const payload = {
+      type: "send_message",
+      conversation_id: activeConversationId,
+      message: text || null
+    };
+
+    if (filePath) {
+      payload.file_path = filePath;
+      payload.original_name = originalName;
+    }
+
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    } else {
+      console.warn("WS not open");
+      return;
+    }
+
+    // Reset UI
+    inputEl.value = "";
+    clearAttachment();
   }
+  function uploadAndSendImage(file) {
+    const formData = new FormData();
+    formData.append("file", file);
 
-  const text = inputEl.value.trim();
-  const filePath = fileInput.dataset.uploadedPath || null;
-  const originalName = fileInput.dataset.uploadedOriginalName || null;
+    fetch(window.API_BASE + "/upload_file.php", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.error) {
+            alert("Upload failed");
+            return;
+        }
 
-  // Prevent empty send
-  if (!text && !filePath) return;
+        ws.send(JSON.stringify({
+            type: "send_message",
+            conversation_id: activeConversationId,
+            file_path: res.path,
+            original_name: file.name
+        }));
 
-  const payload = {
-    type: "send_message",
-    conversation_id: activeConversationId,
-    message: text || null
-  };
-
-  if (filePath) {
-    payload.file_path = filePath;
-    payload.original_name = originalName;
+        pendingImageFile = null;
+        previewContainer.classList.add("hidden");
+        previewContainer.innerHTML = "";
+    });
   }
-
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(payload));
-  } else {
-    console.warn("WS not open");
-    return;
-  }
-
-  // Reset UI
-  inputEl.value = "";
-  clearAttachment();
-}
   function handleWsMessage(data) {
     switch (data.type) {
       case 'system':
@@ -726,6 +988,12 @@
         break;
       case 'read_receipt':
         console.log('read_receipt', data);
+        messages[data.conversation_id].forEach(m => {
+          if (m.id <= data.last_read_message_id) {
+            m.delivery_status = 'read';
+          }
+        });
+        renderMessages(activeConversationId);
         break;
       case 'message_deleted':
         handleDeletedMessage(data);
@@ -906,16 +1174,19 @@
   function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
   function isAtBottom() { return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 50; }
   function sendReadReceipt() {
-    if (!activeConversationId) return;
-    const list = messages[activeConversationId] || [];
-    if (!list.length) return;
-    const lastId = list[list.length - 1].id;
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'mark_read', conversation_id: activeConversationId, last_read_message_id: lastId }));
-    }
+      if (!activeConversationId) return;
+      if (!isAtBottom()) return;
 
-    const conv = conversations.find(c => c.id == activeConversationId);
-    if (conv) { conv.unread_count = 0; renderConversationList(); }
+      const list = messages[activeConversationId] || [];
+      if (!list.length) return;
+
+      const lastId = list[list.length - 1].id;
+
+      ws.send(JSON.stringify({
+          type: 'mark_read',
+          conversation_id: activeConversationId,
+          last_read_message_id: lastId
+      }));
   }
   function showUiPopup(message) {
     const container = document.getElementById("ui-popup-container");
@@ -1090,7 +1361,20 @@
       document.getElementById("group-name").value = "";
   }
 
+  function getTick(status) {
+    if (status === 'read') {
+      return '<span class="tick read">✓✓</span>';
+    }
+    if (status === 'delivered') {
+      return '<span class="tick delivered">✓✓</span>';
+    }
+    return '<span class="tick sent">✓</span>';
+  }
+
   // small util
   function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; }); }
-  
+  function isImageFile(path, name = "") {
+    const str = (name || path || "").toLowerCase();
+    return /\.(jpg|jpeg|png|gif|webp)$/.test(str);
+  }
 })();

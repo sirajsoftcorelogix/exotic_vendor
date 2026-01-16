@@ -87,9 +87,9 @@ foreach ($images as $img) {
                         <img src="<?php echo !empty($var['variation_image']) ? base_url($var['variation_image']) : 'assets/no-img.png'; ?>" class="max-w-full max-h-full object-contain rounded">
                     </div>
                     <div class="text-xs text-gray-600 flex flex-col gap-0.5">
-                        <div><span class="font-bold text-gray-800">Cat:</span> <?php echo $item['category']; ?></div>
-                        <div><span class="font-bold text-gray-800">Color:</span> <?php echo $var['color']; ?></div>
-                        <div><span class="font-bold text-gray-800">Size:</span> <?php echo $var['size']; ?></div>
+                        <div><span class="font-bold text-gray-800">Cat:</span> <?php echo $item['category'] ?? ''; ?></div>
+                        <div><span class="font-bold text-gray-800">Color:</span> <?php echo $var['color'] ?? ''; ?></div>
+                        <div><span class="font-bold text-gray-800">Size:</span> <?php echo $var['size'] ?? ''; ?></div>
                     </div>
                 </div>
             <?php endforeach; ?>

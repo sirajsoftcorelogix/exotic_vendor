@@ -7,9 +7,32 @@ require_once 'models/user/user.php';
 $usersModel = new User($conn);
 $currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
 unset($usersModel);
+
 $record_id = $_GET['id'] ?? '';
 $form2 = $data['form2'] ?? []; 
 $saved_category_code = $form2['group_name'] ?? ''; 
+
+// --- VARIANT DATA PREPARATION (Matches Desktop Logic) ---
+$is_variant = $form2['is_variant'] ?? 'N'; 
+
+// Initialize variables
+$current_sku = $form2['sku'] ?? ''; 
+$item_code_value = '';       
+$parent_code_value = '';     
+$parent_code_display = '';   
+
+if ($is_variant === 'N') {
+    // If No: The Item_code is the product's own code
+    $item_code_value = $form2['Item_code'] ?? '';
+} elseif ($is_variant === 'Y') {
+    // If Yes: The Item_code stored in DB is actually the Parent's Code
+    $item_code_value = ''; // Clear own code view
+    $parent_code_value = $form2['Item_code'] ?? '';
+    $parent_code_display = $form2['parent_item_title'] ?? $parent_code_value; 
+} else {
+    // Default fallback
+    $item_code_value = '';
+}
 
 $raw_categories = $data['category'] ?? []; 
 $icon_map = [
@@ -37,15 +60,7 @@ if (!empty($raw_categories)) {
     }
 }
 
-// Prepare Warehouse Options
-$warehouseOptions = "";
-if (!empty($data['address'])) {
-    foreach ($data['address'] as $va) {
-        $warehouseOptions .= '<option value="'.$va['id'].'">'.htmlspecialchars($va['address_title']).'</option>';
-    }
-}
-
-// --- 1. DEFINE SIZE OPTIONS ---
+// --- DEFINE SIZE OPTIONS ---
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
     'S'    => 'Small (S)(36)',
@@ -57,47 +72,34 @@ $sizeOptions = [
 ];
 $colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
 
-
 function renderColorMapField($index, $value) {
     $fieldName = "variations[$index][colormaps]";
-    
-    // Clean the value to ensure valid HTML attribute
     $cleanValue = htmlspecialchars(trim((string)$value));
-
     return '
     <div class="colormap-wrapper mt-2" style="display:none;">
         <label class="block text-xs font-bold text-black mb-1">Color Map (Dropdown):</label>
-        
         <select name="'.$fieldName.'" 
                 class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white colormap-select"
                 data-saved-value="'.$cleanValue.'">
             <option value="">Select Color Map</option>
         </select>
-        
-        </div>';
+    </div>';
 }
+
 function renderSizeField($index, $value, $categoryCode, $sizeOptions) {
     $fieldName = "variations[$index][size]";
-    
-    // Normalize: lowercase and trim
     $check = strtolower(trim((string)$categoryCode));
-    
-    // CHECK: Does it contain 'textiles' OR 'clothing'?
     $isClothing = (strpos($check, 'textiles') !== false || strpos($check, 'clothing') !== false);
 
     if ($isClothing) {
-        // Render Dropdown
         $html = '<select name="'.$fieldName.'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">';
         $html .= '<option value="">Select Size</option>';
         foreach ($sizeOptions as $optVal => $optLabel) {
-            // Strict comparison is safer, trim just in case
             $isSelected = (trim((string)$value) === (string)$optVal) ? 'selected' : '';
             $html .= '<option value="'.$optVal.'" '.$isSelected.'>'.$optLabel.'</option>';
         }
         $html .= '</select>';
     } else {
-        // Render Disabled Input
-        // Note: We keep the value here so we don't lose data if they accidentally saved a size for non-clothing
         $html = '<input type="text" name="'.$fieldName.'" value="'.htmlspecialchars($value).'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm  cursor-not-allowed size-input" >';
     }
     return $html;
@@ -116,7 +118,7 @@ $mainVar = [
     'depth'           => $form2['depth'] ?? '',
     'weight'          => $form2['weight'] ?? '',
     'store_location'  => $form2['store_location'] ?? '',
-    'colormaps'         => $form2['colormaps'] ?? '',
+    'colormaps'       => $form2['colormaps'] ?? '',
 ];
 
 global $inboundingModel;
@@ -138,17 +140,36 @@ foreach ($extraVars as $ex) {
         'depth'           => $ex['depth'] ?? '',
         'weight'          => $ex['weight'] ?? '',
         'store_location'  => $ex['store_location'] ?? '',
-        'colormaps'  => $ex['colormaps'] ?? '',
+        'colormaps'       => $ex['colormaps'] ?? '',
     ];
 }
 
-$temp_code      = $form2['temp_code'] ?? '';
-$vendor_name    = $form2['vendor_name'] ?? '';
+$temp_code       = $form2['temp_code'] ?? '';
+$vendor_name     = $form2['vendor_name'] ?? '';
 $gate_entry_date_time = $form2['gate_entry_date_time'] ?? '';
 $material_code        = $form2['material_code'] ?? '';
+$feedback        = $form2['feedback'] ?? '';
 
 $formAction = base_url('?page=inbounding&action=submitStep3');
 ?>
+
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<style>
+    /* CSS to make TomSelect look like the other inputs */
+    .ts-control {
+        border: 1px solid #9ca3af; /* Matches border-gray-400 */
+        border-radius: 0.25rem;
+        padding: 6px 8px;
+        font-size: 0.875rem; /* text-sm */
+    }
+    .ts-wrapper.focus .ts-control {
+        border-color: black;
+        box-shadow: none;
+    }
+    /* Hide the dropdown arrow if strictly needed to match inputs, or keep it */
+    .ts-control { display: flex; align-items: center; }
+</style>
 
 <div class="w-full min-h-screen bg-white p-2 md:p-6 font-sans">
     <div class="max-w-[1400px] mx-auto border border-gray-400 rounded-lg overflow-hidden">
@@ -162,8 +183,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="mainForm" class="p-4 space-y-6">
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
             <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
+            
             <div class="flex flex-col lg:flex-row gap-6 items-start">
-                
                 <div class="flex flex-row bg-gray-100 border border-gray-300 rounded p-2 gap-3 min-w-[350px] lg:w-1/3">
                     <div class="w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-pointer overflow-hidden" onclick="openImagePopup('<?= !empty($mainVar['invoice']) ? base_url($mainVar['invoice']) : '' ?>')">
                         <?php if(!empty($mainVar['invoice'])): ?>
@@ -191,7 +212,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <div class="absolute top-2 left-2 w-3.5 h-3.5 rounded-full border-2 border-white peer-checked:border-black flex items-center justify-center">
                                          <div class="w-1.5 h-1.5 rounded-full bg-white peer-checked:bg-black opacity-0 peer-checked:opacity-100"></div>
                                     </div>
-                                    
                                     <i class="<?= $item['icon'] ?> text-3xl mb-2"></i>
                                     <span class="text-[10px] font-bold uppercase text-center"><?= $item['label'] ?></span>
                                 </div>
@@ -201,7 +221,53 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-gray-200 py-4">
+            <div class="bg-gray-50 border border-gray-300 rounded p-4">
+                <h3 class="font-bold text-sm text-gray-700 mb-3 border-b pb-1">Item Linking</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Is Variant?</label>
+                        <select id="variant_select" name="is_variant" class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
+                            <option value="N" <?php echo ($is_variant === 'N') ? 'selected' : ''; ?>>No</option>
+                            <option value="Y" <?php echo ($is_variant === 'Y') ? 'selected' : ''; ?>>Yes</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-800 font-bold text-xs mb-1">SKU (Auto):</label>
+                        <input type="text" 
+                               readonly 
+                               value="<?php echo htmlspecialchars($current_sku); ?>" 
+                               class="w-full bg-gray-200 border border-gray-300 rounded px-2 py-2 text-sm text-gray-500 cursor-not-allowed" 
+                               placeholder="Generated on Save">
+                    </div>
+
+                    <div id="wrapper_input" class="<?php echo ($is_variant === 'Y') ? 'hidden' : ''; ?>">
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Item Code:</label>
+                        <input type="text" 
+                               readonly 
+                               name="Item_code_readonly"
+                               value="<?php echo htmlspecialchars($item_code_value); ?>" 
+                               class="w-full bg-gray-200 border border-gray-300 rounded px-2 py-2 text-sm text-gray-500 cursor-not-allowed" 
+                               placeholder="Generated on Save">
+                        <?php if($is_variant === 'N'): ?>
+                            <input type="hidden" name="Item_code" value="<?php echo htmlspecialchars($item_code_value); ?>">
+                        <?php endif; ?>
+                    </div>
+
+                    <div id="wrapper_select" class="w-full <?php echo ($is_variant === 'N') ? 'hidden' : ''; ?>">
+                        <label class="block text-gray-800 font-bold text-xs mb-1">Parent Item Code:</label>
+                        <select id="item_code_select" name="Item_code" placeholder="Type to search title..." class="w-full">
+                            <?php if ($is_variant === 'Y' && !empty($parent_code_value)) { ?>
+                                <option value="<?php echo $parent_code_value; ?>" selected><?php echo $parent_code_display; ?></option>
+                            <?php } ?>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-b border-gray-200 py-4">
                 <div>
                     <label class="block text-gray-800 font-bold text-xs mb-1">Gate Entry Date</label>
                     <?php 
@@ -226,6 +292,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     <label class="block text-gray-800 font-bold text-xs mb-1">Received By</label>
                     <input type="hidden" name="received_by_user_id" value="<?php echo $_SESSION['user']['id']; ?>">
                     <input type="text" name="received_by_name" value="<?php echo htmlspecialchars($currentuserDetails['name']); ?>"  class="w-full bg-gray-100 border border-gray-400 rounded px-2 py-1 text-sm text-gray-600 cursor-not-allowed">
+                </div>
+                <div>
+                    <label class="block text-gray-800 font-bold text-xs mb-1">Remarks</label>
+                    <input type="text" name="feedback" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none" value="<?php echo $feedback; ?>">
                 </div>
             </div>
             
@@ -272,9 +342,9 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
                                     <input type="number" min="0" 
-                                       name="variations[<?php echo $index; ?>][quantity]" 
-                                       value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '') ? $var['quantity'] : 1; ?>" 
-                                       class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                     name="variations[<?php echo $index; ?>][quantity]" 
+                                     value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '') ? $var['quantity'] : 1; ?>" 
+                                     class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 
                                 <div class="size-container">
@@ -306,10 +376,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <label class="block text-xs font-bold text-black mb-1">Location:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][store_location]" value="<?php echo $var['store_location'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
-                                <!-- <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Coloraps:</label>
-                                    <input type="text" name="variations[<?php echo $index; ?>][colormaps]" value="<?php echo $var['colormaps']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div> -->
 
                                 <div>
                                     <?php echo renderColorMapField($index, $var['colormaps'] ?? ''); ?>
@@ -341,6 +407,63 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // --- START: VARIANT / PARENT ITEM CODE LOGIC ---
+        const apiUrl = '/index.php?page=inbounding&action=getItamcode'; 
+        const variantSelect = document.getElementById('variant_select');
+        const wrapperSelect = document.getElementById('wrapper_select');
+        const wrapperInput  = document.getElementById('wrapper_input');
+        
+        let tomSelectInstance = new TomSelect("#item_code_select", {
+            valueField: 'item_code',
+            labelField: 'title',
+            searchField: ['item_code', 'title'], 
+            maxItems: 1,
+            create: false,
+            preload: true,
+            render: {
+                option: function(data, escape) {
+                    return '<div class="py-1 px-2 flex flex-col">' +
+                            '<span class="font-bold text-gray-800">' + escape(data.item_code) + '</span>' +
+                            '<span class="text-gray-500 text-xs">' + escape(data.title) + '</span>' +
+                        '</div>';
+                },
+                item: function(data, escape) {
+                    if (data.title === data.item_code) return '<div>' + escape(data.item_code) + '</div>';
+                    if (data.title.indexOf(data.item_code) === 0) return '<div>' + escape(data.title) + '</div>';
+                    return '<div>' + escape(data.item_code) + ' - ' + escape(data.title) + '</div>';
+                }
+            },
+            load: function(query, callback) {
+                fetch(apiUrl)
+                    .then(response => response.json())
+                    .then(json => { callback(json); })
+                    .catch(err => { console.error("Error loading items:", err); callback(); });
+            }
+        });
+
+        function toggleVariantFields(val) {
+            if (val === 'Y') {
+                wrapperSelect.classList.remove('hidden');
+                wrapperInput.classList.add('hidden');
+                tomSelectInstance.enable();
+            } else {
+                wrapperSelect.classList.add('hidden');
+                wrapperInput.classList.remove('hidden');
+                tomSelectInstance.disable();
+            }
+        }
+
+        // Listener
+        variantSelect.addEventListener('change', function() {
+            toggleVariantFields(this.value);
+            if(this.value === 'N') tomSelectInstance.clear(); 
+        });
+
+        // Initialize state based on PHP value
+        toggleVariantFields(variantSelect.value);
+        // --- END: VARIANT / PARENT ITEM CODE LOGIC ---
+
+
         const container = document.getElementById('variations-container');
         const addBtn = document.getElementById('add-variation-btn');
         const radioButtons = document.querySelectorAll('.category-radio');
@@ -610,8 +733,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     const newPlaceholder = newCard.querySelector('.placeholder-icon');
 
                     if (sourceImg && !sourceImg.classList.contains('hidden') && sourceImg.getAttribute('src') !== '#') {
-                        newImg.src = sourceImg.src;            
-                        newImg.classList.remove('hidden');    
+                        newImg.src = sourceImg.src;             
+                        newImg.classList.remove('hidden');      
                         newPlaceholder.classList.add('hidden'); 
                     }
                 }, 50);
@@ -673,13 +796,20 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 } else {
                     clearError(qtyInput);
                 }
-
-                // 2. VALIDATE COST PRICE (Removed)
-                // if (!cpInput.value || cpInput.value < 0) setError(cpInput); else clearError(cpInput);
-
-                // 3. VALIDATE LOCATION (Removed)
-                // if (!locInput.value.trim()) setError(locInput); else clearError(locInput);
             });
+
+            // PARENT ITEM CODE VALIDATION
+            const isVariant = document.getElementById('variant_select').value;
+            if(isVariant === 'Y') {
+                // Check if TomSelect has a value
+                // TomSelect stores value on the underlying select element
+                const parentCodeSelect = document.getElementById('item_code_select');
+                if(!parentCodeSelect.value) {
+                    alert("Please select a Parent Item Code.");
+                    e.preventDefault();
+                    return;
+                }
+            }
 
             if (!isValid) {
                 e.preventDefault();

@@ -912,6 +912,7 @@
                 <?php */ ?>
 
 
+<<<<<<< HEAD
                 <?php
                 if (!empty($data['orders'])) {
                     foreach ($data['orders'] as $order) {
@@ -924,6 +925,52 @@
                             $decoded = json_decode($options, true);
                             if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
                                 $optionsArr = $decoded;
+=======
+                            $options = $order['options'] ?? '';
+                            $optionsArr = [];
+                            $bordercolor = 'border border-gray-300';
+                            $addontxt = '';
+                            if (is_string($options)) {
+                                $decoded = json_decode($options, true);
+                                if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
+                                    $optionsArr = $decoded;
+                                } else {
+                                    // fallback: comma separated string
+                                    $optionsArr = array_filter(array_map('trim', explode(',', $options)));
+                                }
+                            } elseif (is_array($options)) {
+                                $optionsArr = $options;
+                            }
+                            if(strtolower($order['payment_type'] ?? '') == 'cod'){
+                                $bordercolor = 'border-4 border-yellow-300';
+                            }
+                            if (!empty($optionsArr)) {
+                                foreach ($optionsArr as $opt) {
+                                    $addon_css = '';
+                                    // normalize option value to a string to avoid warnings with strpos()
+                                    if (is_array($opt)) {
+                                        $opt_text = implode(', ', $opt);
+                                    } else {
+                                        $opt_text = (string)$opt;
+                                    }
+                                    $opt_text = trim($opt_text);
+                                    if ($opt_text === '') {
+                                        continue;
+                                    }
+                                    
+                                    // Highlight Express Shipping specially, otherwise show default style
+                                    if (strpos($opt_text, 'Express') !== false) {
+                                        $display = 'Express Shipping';
+                                        $addon_css = 'bg-green-200 text-green-900';
+                                        $bordercolor = 'border-4 border-green-300';
+                                        
+                                    } else {
+                                        $display = $opt_text;
+                                        $addon_css = 'bg-gray-100 text-gray-800';
+                                    }
+                                    $addontxt =  '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
+                                }
+>>>>>>> 332fbd86f6f88e1a146e230b3474f56f2a95e6b2
                             } else {
                                 // fallback: comma separated string
                                 $optionsArr = array_filter(array_map('trim', explode(',', $options)));
@@ -1091,6 +1138,7 @@
                                                
                                             </div>
                                         </div> -->
+<<<<<<< HEAD
                                             <div class="w-auto flex flex-col items-center space-y-2">
                                                 <span class="text-gray-500 hover:text-gray-800">
                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1114,6 +1162,22 @@
                                                 <h4 class="note-heading mb-2">Note:</h4>
                                                 <div class="note-content bg-[#f3f3f3] p-4 rounded-[5px] w-full max-w-[452px] min-h-[100px]">
                                                     <?= isset($order['remarks']) ? $order['remarks'] : '' ?>
+=======
+                                        <div class="w-auto flex flex-col items-center space-y-2">
+                                            <span class="text-gray-500 hover:text-gray-800">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                            </span>
+                                            <span class="menu-button text-gray-500 hover:text-gray-700 font-semibold relative inline-block" onclick="toggleMenu(<?= $order['order_id'] ?>)">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                                <div id="menu-<?= $order['order_id'] ?>" style="display: none;" class="menu-popup-order absolute right-0 mt-8 z-50 bg-white shadow rounded">
+                                                    <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Order</a>
+                                                    <hr class="my-1 mx-2"></hr>
+                                                    <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                    <hr class="my-1 mx-2"></hr>
+                                                    <a href="javascript:void(0)" class="single-add-to-purchase-list block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-order-id="<?= $order['order_id'] ?>">Add to purchase list</a>
+>>>>>>> 332fbd86f6f88e1a146e230b3474f56f2a95e6b2
                                                 </div>
                                             </div>
                                             <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem );">
@@ -1779,6 +1843,7 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
+<<<<<<< HEAD
 
                 <!-- Date Purchased -->
                 <div class="w-1/2">
@@ -1788,6 +1853,12 @@
                         name="date_purchased"
                         class="border rounded px-3 py-2 w-full">
                 </div>
+=======
+                <!-- <div class="w-1/2">
+                    <label class="block text-sm font-bold mb-2">Date Purchased</label>
+                    <input type="date" id="bulkAddToPurchaseDatePurchased" name="date_purchased" class="border rounded px-3 py-2 w-full">
+                </div> -->
+>>>>>>> 332fbd86f6f88e1a146e230b3474f56f2a95e6b2
             </div>
 
             <div class="mb-4">
@@ -2864,4 +2935,5 @@
                 errorEl.textContent = 'An error occurred. Please try again.';
             });
     });
+});
 </script>

@@ -248,7 +248,7 @@ class OrdersController {
             // Check if the order has the required fields
             // Map API fields to your table columns
             //2658982 order_number continue;
-            if (in_array($order['orderid'], ['2658982', '2660434','2662287'])) {
+            if (in_array($order['orderid'], ['2658982', '2660434','2662287','469282','2664206'])) {
                 continue; // Skip invalid orders
             }   
                 foreach ($order['cart'] as $item) {  
@@ -293,13 +293,13 @@ class OrdersController {
                     'sku' => $item['sku'] ?? '',
 					'order_number' => $order['orderid'] ?? '',
 					'shipping_country' => $order['shipping_country'] ?? '',
-					'title' => $item['title'] ?? '',
+					'title' => !empty($item['title']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['title']) : '',
 					'description' => $item['description'] ?? '',
 					'item_code' => $item['itemcode'] ?? '',
 					'size' => $item['size'] ?? '',
 					'color' => $item['color'] ?? '',
 					'groupname' => $item['groupname'] ?? '',
-					'subcategories' => $item['subcategories'] ?? '',
+                    'subcategories' => !empty($item['subcategories']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['subcategories']) : '',
 					'currency' => $item['currency'] ?? '',
 					'itemprice' => $item['itemprice'] ?? '',
 					'finalprice' => $item['finalprice'] ?? '',
