@@ -520,8 +520,7 @@ class ProductsController {
                     'quantity'       => $qty
                 ];
 
-                print_array($data); //debug 
-                die;
+                //print_array($data); die;
 
                 $res = $productModel->createPurchaseList($data);
 
