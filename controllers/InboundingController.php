@@ -1421,32 +1421,51 @@ class InboundingController {
             'x-adminapitest: 1',
             'Accept: application/json' 
         ];
+
         $ch = curl_init();
+        
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
-            CURLOPT_HTTPGET => true,
-            CURLOPT_POST => true,              // <--- Changed from HTTPGET to POST
+            // Note: You have both GET and POST set. POST usually overrides GET, 
+            // but it is safer to remove CURLOPT_HTTPGET if you are doing a POST.
+            CURLOPT_HTTPGET => true, 
+            CURLOPT_POST => true,              
             CURLOPT_POSTFIELDS => $jsonString,
             CURLOPT_RETURNTRANSFER => true,
+            
+            // --- ADDED HERE ---
+            CURLOPT_FOLLOWLOCATION => true, // Follow any "Location: " headers (redirects)
+            CURLOPT_MAXREDIRS => 10,        // Stop after 10 redirects to prevent infinite loops
+            CURLOPT_POSTREDIR => 3,
+            // ------------------
+            CURLOPT_POSTREDIR => 3,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
         ]);
+
         $response = curl_exec($ch);
+        
         // echo "<pre>";print_r($response);exit;
+        
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        
         if (curl_errno($ch)) {
             $error = "cURL Error: " . curl_error($ch);
             curl_close($ch);
             echo json_encode(['status' => 'error', 'message' => $error]);
             exit;
         }
+        
         curl_close($ch);
+
         if ($httpCode != 200 && $httpCode != 201) {
-            echo json_encode(['status' => 'error', 'message' => "API Error HTTP $httpCode", 'debug' => $response]);
+            echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response]);
             exit;
         }
+
         header('Content-Type: application/json');
+
         if (empty($response) || trim($response) === '') {
             echo json_encode([
                 'status' => 'success', 
