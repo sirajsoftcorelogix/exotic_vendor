@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS `saved_searches` (
 
 CREATE TABLE vp_address_info (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    orders_number INT UNSIGNED NOT NULL,
+    order_number INT UNSIGNED NOT NULL,
     customer_id INT UNSIGNED DEFAULT NULL,
 
     first_name VARCHAR(100) NOT NULL,

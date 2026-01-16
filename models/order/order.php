@@ -996,12 +996,13 @@ class Order{
             }
         }
         //order_number add 
-        if (array_key_exists('order_number', $data['address_info'])) {
+        if ($data['orderid'] !== null) {
             $insertCols[]   = 'order_number';
             $placeholders[] = '?';
             $values[]       = $data['orderid'];
-            $types         .= 's';
+            $types         .= 's';            
         }
+        
         //customer_id add
         if ($customer_id !== null) {
             $insertCols[]   = 'customer_id';

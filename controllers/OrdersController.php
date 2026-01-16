@@ -241,7 +241,7 @@ class OrdersController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
             return;
         }
-        $imported = 0; $totalorder = 0;
+        $imported = 0; $totalorder = 0; $result =[]; $pdata = []; $addressdata = [];
         foreach ($orders['orders'] as $order) { 
             
             //print_r($order['cart']);
@@ -367,7 +367,8 @@ class OrdersController {
             }
             //add address info
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
-           
+           //print_array($addressdata);
+           //print_array($order);exit;
         }
         //print_array($pdata);
         //print_r($result);
