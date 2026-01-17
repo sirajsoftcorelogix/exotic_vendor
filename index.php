@@ -365,6 +365,9 @@ switch ($page) {
             case 'mark_purchased':
                 $controller->markPurchased();
                 break;
+            case 'mark_unpurchased':
+                $controller->markUnPurchased();
+                break;
             case 'update_purchase_item':
                 $controller->updatePurchaseItem();
                 break;
