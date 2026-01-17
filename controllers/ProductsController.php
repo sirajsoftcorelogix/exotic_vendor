@@ -721,6 +721,21 @@ class ProductsController {
         exit;
     }
 
+    public function markUnPurchased(){
+        is_login();
+        global $productModel;
+        header('Content-Type: application/json');
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (empty($input['id'])) {
+            echo json_encode(['success' => false, 'message' => 'Invalid id']);
+            exit;
+        }
+        $id = (int)$input['id'];
+        $res = $productModel->updatePurchaseListStatus($id, 'pending', null);
+        echo json_encode($res);
+        exit;
+    }
+
     // Update quantity and remarks for a purchase list item (AJAX)
     public function updatePurchaseItem() {
         is_login();
