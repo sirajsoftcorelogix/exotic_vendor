@@ -23,7 +23,7 @@
                     <input type="hidden" name="action" value="master_purchase_list">
 
                     <!-- Search -->
-                    <div class="col-span-2">
+                    <div class="col-span-3">
                         <label class="text-sm text-gray-600">Search:</label>
                         <input type="text" name="search"
                             placeholder="Search by Item Code, Title..."

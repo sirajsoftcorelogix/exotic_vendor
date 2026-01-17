@@ -68,7 +68,7 @@
                         <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
                             <div>Assigned Agent : <strong><?php echo htmlspecialchars($agent_name); ?></strong></div>
                             <div>Date Added : <strong><?php echo htmlspecialchars($date_added); ?></strong></div>
-                            <?php if (!empty($date_purchased)) { ?>
+                            <?php if (!empty($date_purchased) && $date_purchased !='N/A') { ?>
                                 <div>
                                     Date Purchased :
                                     <strong><?= htmlspecialchars($date_purchased) ?></strong>
@@ -89,8 +89,19 @@
                         </div>
 
                         <div class="mt-4 flex items-center justify-end space-x-2">
-                            <button onclick="savePurchaseItem(<?php echo (int)$pl['id']; ?>, this)" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Save</button>
-                            <button onclick="markAsPurchased(<?php echo (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">Mark Purchased</button>
+                            <button onclick="savePurchaseItem(<?= (int)$pl['id']; ?>, this)" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">
+                                Save
+                            </button>
+
+                            <?php if ($pl['status'] === 'pending'): ?>
+                                <button onclick="markAsPurchased(<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">
+                                    Mark Purchased
+                                </button>
+                            <?php else: ?>
+                                <button onclick="markUnpurchased(<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-red-600 text-white rounded text-sm">
+                                    Mark Unpurchased
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -165,5 +176,36 @@
                 if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
             }
         }).catch(err => { if (window.showGlobalToast) window.showGlobalToast('Network error', 'error'); else alert('Network error'); });
+    }
+
+    async function markUnpurchased(id) {
+        const confirmed = window.customConfirm
+            ? await window.customConfirm('Mark this item as unpurchased?')
+            : confirm('Mark this item as unpurchased?');
+
+        if (!confirmed) return;
+
+        fetch('?page=products&action=mark_unpurchased', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) {
+                showAlert('Marked as unpurchased', 'success');
+                setTimeout(() => location.reload(), 900);
+            } else {
+                const msg = data?.message || 'Error';
+                if (window.showGlobalToast)
+                    window.showGlobalToast('Failed: ' + msg, 'error');
+                else alert('Failed');
+            }
+        })
+        .catch(err => {
+            if (window.showGlobalToast)
+                window.showGlobalToast('Network error', 'error');
+            else alert('Network error');
+        });
     }
 </script>
