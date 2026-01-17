@@ -3,6 +3,7 @@ namespace ChatModule;
 
 use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
+use React\EventLoop\LoopInterface;
 use PDO;
 use Throwable;
 
@@ -27,10 +28,45 @@ class ChatServer implements MessageComponentInterface
     /** userId => [ resourceId => ConnectionInterface, ... ] */
     protected array $connectionsByUser = [];
 
-    public function __construct(PDO $pdo)
+    protected LoopInterface $loop;
+
+    public function __construct(PDO $pdo, LoopInterface $loop)
     {
         $this->clients = new \SplObjectStorage();
         $this->conn = $pdo;
+        $this->loop    = $loop;
+
+        $this->initDbKeepAlive();
+    }
+
+    private function initDbKeepAlive(): void
+    {
+        // Ping DB every 60 seconds
+        $this->loop->addPeriodicTimer(60, function () {
+            try {
+                $this->conn->query('SELECT 1');
+            } catch (\Throwable $e) {
+                error_log('[ChatServer] MySQL disconnected, reconnecting...');
+                $this->reconnectDb();
+            }
+        });
+    }
+
+    private function reconnectDb(): void
+    {
+        $config = require __DIR__ . '/../config.php';
+        $dsn = "mysql:host={$config['db']['host']};dbname={$config['db']['name']};charset={$config['db']['charset']}";
+       
+        $this->conn = new \PDO(
+            $dsn,
+            $config['db']['user'],
+            $config['db']['pass'],
+            [
+                \PDO::ATTR_ERRMODE            => \PDO::ERRMODE_EXCEPTION,
+                \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+                \PDO::ATTR_EMULATE_PREPARES   => false,
+            ]
+        );
     }
 
     /**
