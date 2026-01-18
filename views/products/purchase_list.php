@@ -67,6 +67,12 @@
                     <div>
                         <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
                             <div>Assigned Agent : <strong><?php echo htmlspecialchars($agent_name); ?></strong></div>
+                            <?php if (!empty($pl['vendor']) && strtoupper(trim($pl['vendor'])) !== 'N/A'): ?>
+                                <div>
+                                    Vendor : <strong><?php echo ucwords($pl['vendor']); ?></strong>
+                                </div>
+                            <?php endif; ?>
+
                             <div>Date Added : <strong><?php echo htmlspecialchars($date_added); ?></strong></div>
                             <?php if (!empty($date_purchased) && $date_purchased !='N/A') { ?>
                                 <div>
@@ -81,7 +87,11 @@
                             <div>Material : <strong><?php echo htmlspecialchars($pl['material'] ?? ''); ?></strong></div>
                             <div>Dimensions : <strong><?php echo htmlspecialchars($pl['prod_height'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_width'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_length'] ?? ''); ?></strong></div>
                             <div>Weight : <strong><?php echo htmlspecialchars($pl['product_weight'] ?? '').' '.htmlspecialchars($pl['product_weight_unit'] ?? ''); ?></strong></div>
+
+                            <label class="block">Quantity to be Purchased: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
+                            
                             <label class="block">Quantity Purchased: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
+
                         </div>
 
                         <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">                            

@@ -793,7 +793,7 @@
                             <option value="<?php //echo $key; 
                                             ?>" <?php //echo (isset($_GET['category']) && $_GET['category'] === $key) ? 'selected' : ''; 
                                                 ?>><?php //echo $value; 
-                                                                        ?></option>
+                                                    ?></option>
                         <?php //endforeach; 
                         ?>                    
                     </select>-->
@@ -964,7 +964,8 @@
                         }
 
                 ?>
-                        <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md  <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
+                       
+                       <div class="max-w-7xl mx-auto bg-white rounded-lg shadow-md  <?= $bordercolor ?>" style="margin: 0px 0px 10px 0px">
                             <div class="flex items-start p-4 gap-4">
                                 <!-- Checkbox -->
                                 <div class="flex-shrink-0 pt-1">
@@ -1782,7 +1783,7 @@
 
                 <!-- Date Purchased -->
                 <div class="w-1/2">
-                    <label class="block text-sm font-bold mb-2">Date Purchased</label>
+                    <label class="block text-sm font-bold mb-2">Purchased By</label>
                     <input type="date"
                         id="bulkAddToPurchaseDatePurchased"
                         name="date_purchased"
@@ -2710,7 +2711,7 @@
         e.preventDefault();
 
         const oids = getSelectedOrderIds();
-        console.log('Selected orders to create purchase list:', oids);
+        //console.log('Selected orders to create purchase list:', oids);
 
         if (oids.length === 0) {
             showAlert('Please select at least one order to create purchase list.', 'warning');
@@ -2846,16 +2847,39 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    errorEl.classList.remove('text-red-500');
-                    errorEl.classList.add('text-green-500');
-                    errorEl.textContent = 'Purchase List created successfully.';
+                    errorEl.classList.remove('hidden');
+                    errorEl.innerHTML = '';
 
-                    localStorage.removeItem('selected_po_orders');
+                    let html = '';
 
-                    setTimeout(() => {
-                        closeBulkAddToPurchasePopup();
-                        location.reload();
-                    }, 3000);
+                    // Created summary (GREEN)
+                    if (data.created && data.created > 0) {
+                        html += `<div class="text-green-600 font-semibold">Created: ${data.created}</div>`;
+                    }
+
+                    // Failed summary (RED)
+                    let failedCount = data.failed ? data.failed.length : 0;
+                    if (failedCount > 0) {
+                        html += `<div class="text-red-600 font-semibold">Failed: ${failedCount}</div>`;
+                        html += `<ul class="mt-1 text-xs text-red-500">`;
+                        data.failed.forEach(f => {
+                            html += `<li>- ${f.order_id ? 'Order #'+f.order_id+' ' : ''}${f.sku ? 'SKU: '+f.sku+' ' : ''}(${f.message})</li>`;
+                        });
+                        html += `</ul>`;
+                    }
+
+                    errorEl.innerHTML = html;
+
+                    // Logic check
+                    let allFailed = (data.created === 0 && failedCount > 0);
+
+                    // Redirect only if not all failed
+                    if (!allFailed) {
+                        setTimeout(() => {
+                            closeBulkAddToPurchasePopup();
+                            location.reload();
+                        }, 2500);
+                    }
                 } else {
                     errorEl.textContent = data.message || 'Failed to create purchase list.';
                 }
@@ -2864,5 +2888,4 @@
                 errorEl.textContent = 'An error occurred. Please try again.';
             });
     });
-
 </script>
