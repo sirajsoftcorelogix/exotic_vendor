@@ -33,7 +33,7 @@
 
     <?php if (!empty($data['purchase_list'])): ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <?php 
+            <?php
             foreach ($data['purchase_list'] as $pl):
                 //$product = $pl['product'] ?? null;
                 $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
@@ -44,8 +44,31 @@
                 $agent_name = $pl['agent_name'] ?? '';
                 $date_added = $pl['date_added_readable'] ?? ($pl['date_added'] ? date('d M Y', strtotime($pl['date_added'])) : '');
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
+
+                // Build WhatsApp share text
+                $waText = "Product Details:%0A";
+                $waText .= "Item: " . urlencode($title) . "%0A";
+                $waText .= "SKU: " . urlencode($pl['sku'] ?? '') . "%0A";
+                $waText .= "Color: " . urlencode($pl['color'] ?? '') . "%0A";
+                $waText .= "Size: " . urlencode($pl['size'] ?? '') . "%0A";
+                $waText .= "Dimensions (HxWxD): " . urlencode(($pl['prod_height'] ?? '') . ' x ' . ($pl['prod_width'] ?? '') . ' x ' . ($pl['prod_length'] ?? '')) . "%0A";
+                $waText .= "Weight: " . urlencode(($pl['product_weight'] ?? '') . ' ' . ($pl['product_weight_unit'] ?? '')) . "%0A";
+                $waText .= "Image: " . urlencode($image) . "%0A";
             ?>
                 <div class="bg-white border border-gray-300 rounded-3xl shadow-lg p-4">
+                    <div class="mt-0 flex justify-end">
+                        <a href="https://wa.me/?text=<?= $waText; ?>"
+                            target="_blank"
+                            class="text-yellow-900 hover:text-yellow-1000 flex items-center space-x-1 text-sm">
+
+                            <!-- Share Icon (arrow) -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
+                                <path d="M12 3l5 5h-3v6h-4V8H7l5-5z"/>
+                            </svg>
+                        </a>
+                    </div>
+
                     <div class="flex space-x-4">
                         <img src="<?php echo htmlspecialchars($image); ?>" alt="<?php echo htmlspecialchars($title); ?>" class="w-24 h-32 object-cover rounded-md flex-shrink-0">
                         <div class="flex-1">
@@ -56,19 +79,26 @@
                                     <div class="text-xs text-gray-500">Status: <span class="font-medium px-2 bg-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-100 text-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-800"><?php echo htmlspecialchars($status); ?></span></div>
                                 </div>
                                 <div class="text-right">
-                                    <!-- <div class="text-sm font-bold text-gray-900"><?php //echo $cost; ?></div> -->
-                                    
+                                    <!-- <div class="text-sm font-bold text-gray-900"><?php //echo $cost; 
+                                                                                        ?></div> -->
+
                                 </div>
                             </div>
 
-                            
+
                         </div>
                     </div>
                     <div>
                         <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
                             <div>Assigned Agent : <strong><?php echo htmlspecialchars($agent_name); ?></strong></div>
+                            <?php if (!empty($pl['vendor']) && strtoupper(trim($pl['vendor'])) !== 'N/A'): ?>
+                                <div>
+                                    Vendor : <strong><?php echo ucwords($pl['vendor']); ?></strong>
+                                </div>
+                            <?php endif; ?>
+
                             <div>Date Added : <strong><?php echo htmlspecialchars($date_added); ?></strong></div>
-                            <?php if (!empty($date_purchased) && $date_purchased !='N/A') { ?>
+                            <?php if (!empty($date_purchased) && $date_purchased != 'N/A') { ?>
                                 <div>
                                     Date Purchased :
                                     <strong><?= htmlspecialchars($date_purchased) ?></strong>
@@ -80,11 +110,20 @@
                             <div>Size : <strong><?php echo htmlspecialchars($pl['size'] ?? ''); ?></strong></div>
                             <div>Material : <strong><?php echo htmlspecialchars($pl['material'] ?? ''); ?></strong></div>
                             <div>Dimensions : <strong><?php echo htmlspecialchars($pl['prod_height'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_width'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_length'] ?? ''); ?></strong></div>
-                            <div>Weight : <strong><?php echo htmlspecialchars($pl['product_weight'] ?? '').' '.htmlspecialchars($pl['product_weight_unit'] ?? ''); ?></strong></div>
-                            <label class="block">Quantity Purchased: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
+                            <div>Weight : <strong><?php echo htmlspecialchars($pl['product_weight'] ?? '') . ' ' . htmlspecialchars($pl['product_weight_unit'] ?? ''); ?></strong></div>
+
+                            <label class="block">
+                                Quantity to be Purchased:
+                                <span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-16 text-center">
+                                    <?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>
+                                </span>
+                            </label>
+
+                            <label class="block">Quantity Purchased: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="" class="border rounded px-2 py-1 mt-1 w-16"></label>
+
                         </div>
 
-                        <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">                            
+                        <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">
                             <label class="block">Remarks: <textarea id="remarks_<?php echo (int)$pl['id']; ?>" class="border rounded px-2 py-1 mt-1 w-full" rows="2"><?php echo htmlspecialchars($pl['remarks'] ?? ''); ?></textarea></label>
                         </div>
 
@@ -110,17 +149,22 @@
 
         <!-- Pagination -->
         <div class="mt-6 flex items-center justify-center space-x-2">
-            <?php $page_no = $data['page_no'] ?? 1; $total_pages = $data['total_pages'] ?? 1; $limit = $data['limit'] ?? 50; $query_string = '';
-                // preserve existing filters in query string (if any)
-                $qs = $_GET; unset($qs['page_no'], $qs['limit']); $query_string = http_build_query($qs);
-                $query_string = $query_string ? '&' . $query_string : '';
+            <?php $page_no = $data['page_no'] ?? 1;
+            $total_pages = $data['total_pages'] ?? 1;
+            $limit = $data['limit'] ?? 50;
+            $query_string = '';
+            // preserve existing filters in query string (if any)
+            $qs = $_GET;
+            unset($qs['page_no'], $qs['limit']);
+            $query_string = http_build_query($qs);
+            $query_string = $query_string ? '&' . $query_string : '';
             ?>
             <?php if ($page_no > 1): ?>
-                <a href="?page=products&action=purchase_list&page_no=<?php echo max(1, $page_no-1); ?>&limit=<?php echo $limit . $query_string; ?>" class="px-3 py-1 border rounded">&laquo; Prev</a>
+                <a href="?page=products&action=purchase_list&page_no=<?php echo max(1, $page_no - 1); ?>&limit=<?php echo $limit . $query_string; ?>" class="px-3 py-1 border rounded">&laquo; Prev</a>
             <?php endif; ?>
             <span class="px-3 py-1 text-sm">Page <?php echo $page_no; ?> of <?php echo $total_pages; ?></span>
             <?php if ($page_no < $total_pages): ?>
-                <a href="?page=products&action=purchase_list&page_no=<?php echo min($total_pages, $page_no+1); ?>&limit=<?php echo $limit . $query_string; ?>" class="px-3 py-1 border rounded">Next &raquo;</a>
+                <a href="?page=products&action=purchase_list&page_no=<?php echo min($total_pages, $page_no + 1); ?>&limit=<?php echo $limit . $query_string; ?>" class="px-3 py-1 border rounded">Next &raquo;</a>
             <?php endif; ?>
         </div>
 
@@ -144,20 +188,34 @@
         const originalText = btn.innerHTML || '';
         btn.innerHTML = 'Saving...';
         fetch('?page=products&action=update_purchase_item', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ id: id, quantity: qty, remarks: remarks })
-        }).then(r => r.json()).then(data => {
-            if (data && data.success) {
-                showAlert('Saved successfully', 'success');
-                //if (window.showGlobalToast) window.showGlobalToast('Saved successfully', 'success'); else alert('Saved successfully');
-                setTimeout(() => { location.reload(); }, 800);
-            } else {
-                showAlert('Failed: ' + (data.message || 'Error'), 'error');
-                //if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
-            }
-        }).catch(err => { if (window.showGlobalToast) window.showGlobalToast('Network error', 'error'); else alert('Network error'); })
-        .finally(() => { btn.disabled = false; btn.innerHTML = originalText; });
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id: id,
+                    quantity: qty,
+                    remarks: remarks
+                })
+            }).then(r => r.json()).then(data => {
+                if (data && data.success) {
+                    showAlert('Saved successfully', 'success');
+                    //if (window.showGlobalToast) window.showGlobalToast('Saved successfully', 'success'); else alert('Saved successfully');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 800);
+                } else {
+                    showAlert('Failed: ' + (data.message || 'Error'), 'error');
+                    //if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
+                }
+            }).catch(err => {
+                if (window.showGlobalToast) window.showGlobalToast('Network error', 'error');
+                else alert('Network error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
     }
 
     async function markAsPurchased(id) {
@@ -165,47 +223,59 @@
         if (!confirmed) return;
         fetch('?page=products&action=mark_purchased', {
             method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ id: id })
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: id
+            })
         }).then(r => r.json()).then(data => {
             if (data && data.success) {
                 showAlert('Marked as purchased', 'success');
                 //if (window.showGlobalToast) window.showGlobalToast('Marked as purchased', 'success'); else alert('Marked as purchased');
                 setTimeout(() => location.reload(), 900);
             } else {
-                if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
+                if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error');
+                else alert('Failed');
             }
-        }).catch(err => { if (window.showGlobalToast) window.showGlobalToast('Network error', 'error'); else alert('Network error'); });
+        }).catch(err => {
+            if (window.showGlobalToast) window.showGlobalToast('Network error', 'error');
+            else alert('Network error');
+        });
     }
 
     async function markUnpurchased(id) {
-        const confirmed = window.customConfirm
-            ? await window.customConfirm('Mark this item as unpurchased?')
-            : confirm('Mark this item as unpurchased?');
+        const confirmed = window.customConfirm ?
+            await window.customConfirm('Mark this item as unpurchased?') :
+            confirm('Mark this item as unpurchased?');
 
         if (!confirmed) return;
 
         fetch('?page=products&action=mark_unpurchased', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: id })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data && data.success) {
-                showAlert('Marked as unpurchased', 'success');
-                setTimeout(() => location.reload(), 900);
-            } else {
-                const msg = data?.message || 'Error';
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id: id
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success) {
+                    showAlert('Marked as unpurchased', 'success');
+                    setTimeout(() => location.reload(), 900);
+                } else {
+                    const msg = data?.message || 'Error';
+                    if (window.showGlobalToast)
+                        window.showGlobalToast('Failed: ' + msg, 'error');
+                    else alert('Failed');
+                }
+            })
+            .catch(err => {
                 if (window.showGlobalToast)
-                    window.showGlobalToast('Failed: ' + msg, 'error');
-                else alert('Failed');
-            }
-        })
-        .catch(err => {
-            if (window.showGlobalToast)
-                window.showGlobalToast('Network error', 'error');
-            else alert('Network error');
-        });
+                    window.showGlobalToast('Network error', 'error');
+                else alert('Network error');
+            });
     }
 </script>
