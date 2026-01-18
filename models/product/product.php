@@ -695,7 +695,14 @@ class product
             $whereSql = 'WHERE ' . implode(' AND ', $where);
         }
         //echo $whereSql."**********************";
-        $sql = "SELECT pl.id,pl.user_id,pl.product_id,pl.order_id,pl.sku,pl.date_added,pl.date_purchased,pl.status,sum(pl.quantity) as quantity, pl.remarks,pl.edit_by,pl.updated_at,pl.created_at, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql GROUP BY pl.product_id $orderBy LIMIT ? OFFSET ?";
+        $sql = "SELECT pl.id,pl.user_id,pl.product_id,pl.order_id,pl.sku,pl.date_added,pl.date_purchased,pl.status,
+		sum(pl.quantity) as quantity, pl.remarks,pl.edit_by,pl.updated_at,pl.created_at, 
+		p.item_code, p.title, p.groupname AS category, p.cost_price, p.image 
+		FROM purchase_list pl 
+		LEFT JOIN vp_products p ON pl.product_id = p.id 
+		$whereSql 
+		GROUP BY pl.product_id 
+		$orderBy LIMIT ? OFFSET ?";
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
