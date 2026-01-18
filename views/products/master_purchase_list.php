@@ -1,3 +1,6 @@
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <div class="mx-auto space-y-6 mr-4">
     <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
         <button id="accordion-button" class="w-full flex justify-between items-center mb-2">
@@ -15,7 +18,7 @@
             || !empty($_GET['date_to'])
             || (!empty($_GET['category']) && $_GET['category'] !== 'all')
             || (!empty($_GET['status']) && $_GET['status'] !== 'all');
-        ?> 
+        ?>
         <div id="accordion-content" class="accordion-content <?= $hasFilters ? '' : 'hidden' ?>">
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" class="contents">
@@ -58,37 +61,40 @@
                     </div>
 
                     <!-- Date Range Type -->
-                    <div>
-                        <label class="text-sm text-gray-600">Date Range Type:</label>
+                    <div> <label class="text-sm text-gray-600">Date Range Type:</label>
                         <select name="date_type" class="border rounded px-3 py-2 w-full">
-                            <option value="">Select</option>
-
-                            <option value="added" <?= ($_GET['date_type'] ?? '') === 'added' ? 'selected' : '' ?>>
-                                Added Date
-                            </option>
-
-                            <option value="purchased" <?= ($_GET['date_type'] ?? '') === 'purchased' ? 'selected' : '' ?>>
-                                Purchased Date
-                            </option>
+                            <option value="added" <?= ($_GET['date_type'] ?? '') === 'added' ? 'selected' : '' ?>> Added Date </option>
+                            <option value="purchased" <?= ($_GET['date_type'] ?? '') === 'purchased' ? 'selected' : '' ?>> Purchased Date </option>
                         </select>
                     </div>
 
-                    <!-- Date From -->
+                    <!-- Date Range -->
                     <div>
-                        <label class="text-sm text-gray-600">Date From:</label>
-                        <input type="date" name="date_from"
-                            value="<?= htmlspecialchars($_GET['date_from'] ?? '') ?>"
-                            class="border rounded px-3 py-2 w-full">
-                    </div>
+                        <label class="text-sm text-gray-600">Date Range:</label>
 
-                    <!-- Date To -->
-                    <div>
-                        <label class="text-sm text-gray-600">Date To:</label>
-                        <input type="date" name="date_to"
-                            value="<?= htmlspecialchars($_GET['date_to'] ?? '') ?>"
-                            class="border rounded px-3 py-2 w-full">
-                    </div>
+                        <div class="relative">
+                            <input type="text"
+                                autocomplete="off"
+                                name="daterange"
+                                id="daterange"
+                                placeholder="Select"
+                                class="w-full pr-9 px-3 py-2 border border-gray-300 rounded shadow-sm
+                   focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500" />
 
+                            <!-- Right-side amber icon -->
+                            <span class="absolute inset-y-0 right-3 flex items-center text-amber-500 pointer-events-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M4 21h16a2 2 0 002-2V7a2 2 
+                    0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                            </span>
+                        </div>
+
+                        <!-- Hidden fields -->
+                        <input type="hidden" name="date_from" id="date_from" value="<?= htmlspecialchars($_GET['date_from'] ?? '') ?>">
+                        <input type="hidden" name="date_to" id="date_to" value="<?= htmlspecialchars($_GET['date_to'] ?? '') ?>">
+                    </div>
 
                     <!-- Category -->
                     <div>
@@ -138,7 +144,8 @@
                     <thead>
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>                            
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
                             <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
@@ -172,6 +179,10 @@
 
                                 <td class="px-6 py-4 whitespace-normal text-sm text-gray-900 break-words">
                                     <?php echo htmlspecialchars($pl['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo htmlspecialchars($pl['vendor'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -367,8 +378,8 @@
 
 <!-- Delete Confirmation Modal -->
 <div id="deleteConfirmModal"
-     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+
     <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
         <h2 class="text-lg font-semibold text-gray-800 mb-2">
             Confirm Deletion
@@ -381,12 +392,12 @@
 
         <div class="flex justify-end gap-3">
             <button onclick="closeDeleteModal()"
-                    class="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300">
+                class="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300">
                 Cancel
             </button>
 
             <button onclick="confirmDelete()"
-                    class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">
+                class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">
                 Delete
             </button>
         </div>
@@ -596,28 +607,30 @@
         if (!deletePlId) return;
 
         fetch(`<?php echo base_url('?page=products&action=delete_purchase_list_item'); ?>`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ id: deletePlId })
-        })
-        .then(response => response.json())
-        .then(data => {
-            closeDeleteModal();
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id: deletePlId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                closeDeleteModal();
 
-            if (data.success) {
-                showAlert('Purchase list item deleted successfully.');
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                showAlert('Failed to delete purchase list item.');
-            }
-        })
-        .catch(error => {
-            closeDeleteModal();
-            console.error('Error deleting purchase list item:', error);
-            showAlert('An error occurred while deleting the purchase list item.');
-        });
+                if (data.success) {
+                    showAlert('Purchase list item deleted successfully.');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert('Failed to delete purchase list item.');
+                }
+            })
+            .catch(error => {
+                closeDeleteModal();
+                console.error('Error deleting purchase list item:', error);
+                showAlert('An error occurred while deleting the purchase list item.');
+            });
     }
 
     // Accordion functionality
@@ -636,5 +649,50 @@
 
         url.searchParams.set('sort_by_date', next);
         window.location.href = url.toString();
+    }
+
+
+    $('#daterange').daterangepicker({
+        autoUpdateInput: false,
+        locale: {
+            format: 'YYYY-MM-DD'
+        },
+        opens: 'right',
+        drops: 'down',
+    }, function(start, end) {
+        $('#date_from').val(start.format('YYYY-MM-DD'));
+        $('#date_to').val(end.format('YYYY-MM-DD'));
+    });
+
+    // make calendar wider
+    $('.daterangepicker').css({
+        'width': '520px',
+        'max-width': '520px'
+    });
+
+    $('#daterange').on('apply.daterangepicker', function(ev, picker) {
+        $(this).val(
+            picker.startDate.format('DD MMM YYYY') + ' - ' + picker.endDate.format('DD MMM YYYY')
+        );
+        $('#date_from').val(picker.startDate.format('YYYY-MM-DD'));
+        $('#date_to').val(picker.endDate.format('YYYY-MM-DD'));
+    });
+
+    $('#daterange').on('cancel.daterangepicker', function() {
+        $(this).val('');
+        $('#date_from').val('');
+        $('#date_to').val('');
+    });
+
+    // Prefill from GET
+    let existingFrom = $('#date_from').val();
+    let existingTo = $('#date_to').val();
+
+    if (existingFrom && existingTo) {
+        $('#daterange').val(
+            moment(existingFrom, 'YYYY-MM-DD').format('DD MMM YYYY') +
+            ' - ' +
+            moment(existingTo, 'YYYY-MM-DD').format('DD MMM YYYY')
+        );
     }
 </script>
