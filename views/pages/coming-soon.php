@@ -50,7 +50,7 @@
     <p>This feature is currently under development.</p>
     <p>Please check back later.</p>
     <br>
-    <a href="dashboard.php">← Back to Dashboard</a>
+    <a href="?page=orders&action=list">← Back to Dashboard</a>
 </div>
 
 </body>
