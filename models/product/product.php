@@ -532,21 +532,73 @@ class product{
         }
         return ['success' => false, 'message' => 'Update failed: '.$stmt->error];
     }
-    public function createPurchaseList($data) {       
-        $sql = "INSERT INTO purchase_list (user_id, product_id, sku, date_added, date_purchased, status, edit_by, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public function createPurchaseList($data)
+    {
+        $sql = "
+            INSERT INTO purchase_list (
+                user_id,
+                product_id,
+                sku,
+                date_added,
+                date_purchased,
+                status,
+                quantity,
+                edit_by,
+                updated_at,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ";
+
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
-        // types: user_id (i), product_id (i), sku (s), date_added (s), date_purchased (s), status (s), edit_by (i), updated_at (s), created_at (s)
-        $types = 'iissssiss';
-        $dateAdded = date('Y-m-d H:i:s');
-        $updatedAt = date('Y-m-d H:i:s');
-        $createdAt = date('Y-m-d H:i:s');
-        $stmt->bind_param($types, $data['user_id'], $data['product_id'], $data['sku'], $dateAdded, $data['date_purchased'], $data['status'], $data['edit_by'], $updatedAt, $createdAt);
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Purchase list created successfully.'];
+        if (!$stmt) {
+            return [
+                'success' => false,
+                'message' => 'Prepare failed: ' . $this->db->error
+            ];
         }
-        return ['success' => false, 'message' => 'Failed to create purchase list: '.$stmt->error];
+
+        $now = date('Y-m-d H:i:s');
+
+        // Types:
+        // i = user_id
+        // i = product_id
+        // s = sku
+        // s = date_added
+        // s = date_purchased
+        // s = status
+        // i = quantity
+        // i = edit_by
+        // s = updated_at
+        // s = created_at
+        $types = 'iisssiisss';
+
+        $stmt->bind_param(
+            $types,
+            $data['user_id'],
+            $data['product_id'],
+            $data['sku'],
+            $now,                          // date_added
+            $data['date_purchased'],       // nullable is OK
+            $data['status'],
+            $data['quantity'],
+            $data['edit_by'],
+            $now,                          // updated_at
+            $now                           // created_at
+        );
+
+        if ($stmt->execute()) {
+            return [
+                'success' => true,
+                'message' => 'Purchase list created successfully.'
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Failed to create purchase list: ' . $stmt->error
+        ];
     }
+
     public function getPurchaseListByUser($user_id, $limit = 100, $offset = 0, $filters = []) {
         $sql = "SELECT * FROM purchase_list WHERE user_id = ? AND status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?";
        
@@ -588,13 +640,49 @@ class product{
             $params[] = $searchTerm;
             $types .= 'ss';
         }
+        if(!empty($filters['added_by'])){
+            $where[] = 'pl.edit_by = ?';
+            $params[] = (int)$filters['added_by'];
+            $types .= 'i';
+        }
+        if(!empty($filters['asigned_to'])){
+            $where[] = 'pl.user_id = ?';
+            $params[] = (int)$filters['asigned_to'];
+            $types .= 'i';
+        }
+
+        $dateColumn = (!empty($filters['date_type']) && $filters['date_type'] === 'purchased')
+            ? 'pl.date_purchased'
+            : 'pl.date_added';
+
+        if (!empty($filters['date_from'])) {
+            $where[]  = "$dateColumn >= ?";
+            $params[] = $filters['date_from'];
+            $types   .= 's';
+        }
+
+        if (!empty($filters['date_to'])) {
+            $where[]  = "$dateColumn <= ?";
+            $params[] = $filters['date_to'];
+            $types   .= 's';
+        }
+        
+        //print_r($filters);
+        
+        $orderBy = '';
+        if(!empty($filters['sort_by'])) {
+            $orderBy = " ORDER BY pl.date_added $filters[sort_by]";
+        } else {
+            $orderBy = " ORDER BY pl.date_added DESC";
+        }
+        
 
         $whereSql = '';
         if (!empty($where)) {
             $whereSql = 'WHERE ' . implode(' AND ', $where);
         }
         //echo $whereSql."**********************";
-        $sql = "SELECT pl.*, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql ORDER BY pl.created_at DESC LIMIT ? OFFSET ?";
+        $sql = "SELECT pl.*, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql $orderBy LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
 
@@ -692,14 +780,14 @@ class product{
     }
 
     // Update quantity and remarks for a purchase list item
-    public function updatePurchaseItem($id, $quantity, $remarks) {
-        $sql = "UPDATE purchase_list SET quantity = ?, remarks = ?, updated_at = ? WHERE id = ?";
+    public function updatePurchaseItem($id, $quantity, $remarks,$status) {
+        $sql = "UPDATE purchase_list SET quantity = ?, remarks = ?, status = ?, updated_at = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: '.$this->db->error];
         $updatedAt = date('Y-m-d H:i:s');
         $id = (int)$id;
         $qty = ($quantity === '' || $quantity === null) ? null : (int)$quantity;
-        $stmt->bind_param('issi', $qty, $remarks, $updatedAt, $id);
+        $stmt->bind_param('isssi', $qty, $remarks, $status, $updatedAt, $id);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Updated successfully'];
         }
@@ -717,7 +805,11 @@ class product{
         return ['success' => false, 'message' => 'Delete failed: '.$stmt->error];
     }
     public function getPurchaseItemById($id) {
-        $sql = "SELECT p.*, pl.*,  u.name as agent_name FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id LEFT JOIN vp_users u ON pl.user_id = u.id WHERE pl.id = ? LIMIT 1";
+        $sql = "SELECT p.*, pl.*,  u.name as agent_name, vu.name as added_by_name FROM purchase_list pl 
+        LEFT JOIN vp_products p ON pl.product_id = p.id 
+        LEFT JOIN vp_users u ON pl.user_id = u.id
+        LEFT JOIN vp_users vu ON pl.edit_by = vu.id
+        WHERE pl.id = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
         $id = (int)$id;

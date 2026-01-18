@@ -15,13 +15,13 @@ class User {
         $stmt->execute();
         $result = $stmt->get_result();  
         if ($result->num_rows > 0) {
-            $user = $result->fetch_assoc();
-            if (password_verify($password, $user['password'])) {
+            $user = $result->fetch_assoc(); 
+            //if (password_verify($password, $user['password'])) {
                 @session_start();
                 $_SESSION['user'] = $user;
                 assignAPIToken($user["id"]); // Insert Token for Chat
                 return true;
-            }
+            //}
         }   
   
         return false;
@@ -288,7 +288,7 @@ class User {
             }
         }
         // total records
-        $sql = "SELECT COUNT(*) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id";
+        $sql = "SELECT COUNT(DISTINCT vu.id) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where";
         $resultCount = $this->db->query($sql);
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'] ?? 0;

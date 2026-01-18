@@ -33,7 +33,8 @@
 
     <?php if (!empty($data['purchase_list'])): ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <?php foreach ($data['purchase_list'] as $pl):
+            <?php 
+            foreach ($data['purchase_list'] as $pl):
                 //$product = $pl['product'] ?? null;
                 $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
                 $title = $pl['title'] ?? ($pl['item_code'] ?? 'Product');
@@ -67,14 +68,20 @@
                         <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
                             <div>Assigned Agent : <strong><?php echo htmlspecialchars($agent_name); ?></strong></div>
                             <div>Date Added : <strong><?php echo htmlspecialchars($date_added); ?></strong></div>
-                            <div>Date Purchased : <strong><?php echo htmlspecialchars($date_purchased); ?></strong></div>
+                            <?php if (!empty($date_purchased) && $date_purchased !='N/A') { ?>
+                                <div>
+                                    Date Purchased :
+                                    <strong><?= htmlspecialchars($date_purchased) ?></strong>
+                                </div>
+                            <?php } ?>
+
                             <div>SKU : <strong><?php echo htmlspecialchars($pl['sku'] ?? ''); ?></strong></div>
                             <div>Color : <strong><?php echo htmlspecialchars($pl['color'] ?? ''); ?></strong></div>
                             <div>Size : <strong><?php echo htmlspecialchars($pl['size'] ?? ''); ?></strong></div>
                             <div>Material : <strong><?php echo htmlspecialchars($pl['material'] ?? ''); ?></strong></div>
                             <div>Dimensions : <strong><?php echo htmlspecialchars($pl['prod_height'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_width'] ?? ''); ?> x <?php echo htmlspecialchars($pl['prod_length'] ?? ''); ?></strong></div>
                             <div>Weight : <strong><?php echo htmlspecialchars($pl['product_weight'] ?? '').' '.htmlspecialchars($pl['product_weight_unit'] ?? ''); ?></strong></div>
-                            <label class="block">Quantity: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
+                            <label class="block">Quantity Purchased: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="<?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>" class="border rounded px-2 py-1 mt-1 w-16"></label>
                         </div>
 
                         <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">                            
@@ -82,8 +89,19 @@
                         </div>
 
                         <div class="mt-4 flex items-center justify-end space-x-2">
-                            <button onclick="savePurchaseItem(<?php echo (int)$pl['id']; ?>, this)" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Save</button>
-                            <button onclick="markAsPurchased(<?php echo (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">Mark Purchased</button>
+                            <button onclick="savePurchaseItem(<?= (int)$pl['id']; ?>, this)" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">
+                                Save
+                            </button>
+
+                            <?php if ($pl['status'] === 'pending'): ?>
+                                <button onclick="markAsPurchased(<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">
+                                    Mark Purchased
+                                </button>
+                            <?php else: ?>
+                                <button onclick="markUnpurchased(<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-red-600 text-white rounded text-sm">
+                                    Mark Unpurchased
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -158,5 +176,36 @@
                 if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
             }
         }).catch(err => { if (window.showGlobalToast) window.showGlobalToast('Network error', 'error'); else alert('Network error'); });
+    }
+
+    async function markUnpurchased(id) {
+        const confirmed = window.customConfirm
+            ? await window.customConfirm('Mark this item as unpurchased?')
+            : confirm('Mark this item as unpurchased?');
+
+        if (!confirmed) return;
+
+        fetch('?page=products&action=mark_unpurchased', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) {
+                showAlert('Marked as unpurchased', 'success');
+                setTimeout(() => location.reload(), 900);
+            } else {
+                const msg = data?.message || 'Error';
+                if (window.showGlobalToast)
+                    window.showGlobalToast('Failed: ' + msg, 'error');
+                else alert('Failed');
+            }
+        })
+        .catch(err => {
+            if (window.showGlobalToast)
+                window.showGlobalToast('Network error', 'error');
+            else alert('Network error');
+        });
     }
 </script>

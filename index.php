@@ -7,7 +7,18 @@ date_default_timezone_set('Asia/Kolkata');
 require_once 'bootstrap/init/init.php';
 $page = $_GET['page'] ?? 'orders';
 $action = $_GET['action'] ?? 'list';
-//$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
+
+// Prevent directory traversal
+$page = basename($page);
+
+$viewsPath = __DIR__ . '/views';
+$pageDir   = $viewsPath . '/' . $page;
+
+if (!is_dir($pageDir)) {
+    // Page not implemented → coming soon
+    require $viewsPath . '/pages/coming-soon.php';
+    exit;
+}
 
 switch ($page) {
 	case 'users':
@@ -364,6 +375,9 @@ switch ($page) {
                 break;
             case 'mark_purchased':
                 $controller->markPurchased();
+                break;
+            case 'mark_unpurchased':
+                $controller->markUnPurchased();
                 break;
             case 'update_purchase_item':
                 $controller->updatePurchaseItem();
