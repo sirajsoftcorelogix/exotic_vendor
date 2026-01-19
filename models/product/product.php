@@ -1028,7 +1028,7 @@ class product
 
         return 0;
     }
- 
+
 
     // Return distinct product categories (groupname) for filter dropdown
     public function getCategories()
@@ -1059,72 +1059,114 @@ class product
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }*/
 
-    public function updatePurchaseListStatus($product_id)
+    public function updatePurchaseListStatus($product_id, $transactionQty, $purchase_type = 'purchased')
     {
-        // 1. Fetch planned qty
-        $sql = "SELECT quantity FROM purchase_list WHERE product_id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $product_id);
-        $stmt->execute();
-        $result = $stmt->get_result()->fetch_assoc();
-        $planned = (int)$result['quantity'];
+        if ($purchase_type === 'unpurchased') {
+            /**
+             * UNPURCHASED CASE:
+             * Reverse purchases: set all rows back to pending and restore planned quantity
+             */
+            $sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased 
+                FROM purchase_transactions 
+                WHERE product_id = ?";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('i', $product_id);
+            $stmt->execute();
+            $purchasedTotal = (int)$stmt->get_result()->fetch_assoc()['purchased'];
 
-        // 2. Sum purchased qty from transactions
-        $sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased FROM purchase_transactions WHERE product_id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $product_id);
-        $stmt->execute();
-        $res2 = $stmt->get_result()->fetch_assoc();
-        $purchased = (int)$res2['purchased'];
+            // set purchase_list quantities back
+            $sql = "UPDATE purchase_list 
+                SET quantity = quantity + ?, status='pending', date_purchased=NULL, updated_at=NOW()
+                WHERE product_id = ? AND status='purchased'";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('ii', $purchasedTotal, $product_id);
+            $stmt->execute();
 
-        // 3. Determine status
-        $remaining = $planned - $purchased;
-        $status = ($remaining <= 0) ? 'purchased' : 'pending';
-        $datePurchased = ($status === 'purchased') ? date('Y-m-d') : null;
-
-        // 4. Update purchase_list record
-        $sql = "UPDATE purchase_list SET status = ?, date_purchased = ?, updated_at = NOW() WHERE product_id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('ssi', $status, $datePurchased, $product_id);
-
-        /*return [
-            'success' => true,
-            'planned' => $planned,
-            'purchased' => $purchased,
-            'remaining' => $remaining,
-            'status' => $status
-        ];*/
-
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Status updated'];
+            return ['success' => true, 'message' => 'Un purchased Successfully'];
         }
-        return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+
+
+        /** PURCHASED CASE (FIFO CONSUME) **/
+
+        $remaining = $transactionQty;
+
+        // Fetch purchase list rows FIFO (oldest first)
+        $sql = "SELECT id, quantity 
+            FROM purchase_list 
+            WHERE product_id = ? AND status != 'purchased'
+            ORDER BY created_at ASC, id ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $product_id);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+        foreach ($rows as $row) {
+            if ($remaining <= 0) break;
+
+            $id = $row['id'];
+            $qty = (int)$row['quantity'];
+
+            if ($qty <= $remaining) {
+                // fully consumed
+                $remaining -= $qty;
+
+                $sql = "UPDATE purchase_list 
+                    SET quantity = 0,
+                        status='purchased',
+                        date_purchased = NOW(),
+                        updated_at = NOW()
+                    WHERE id = ?";
+                $u = $this->db->prepare($sql);
+                $u->bind_param('i', $id);
+                $u->execute();
+            } else {
+                // partially consumed
+                $newQty = $qty - $remaining;
+                $remaining = 0;
+
+                $sql = "UPDATE purchase_list 
+                    SET quantity = ?, status='partial-purchased', updated_at = NOW()
+                    WHERE id = ?";
+                $u = $this->db->prepare($sql);
+                $u->bind_param('ii', $newQty, $id);
+                $u->execute();
+            }
+        }
+
+        return [
+            'success' => true,
+            'purchased' => $transactionQty,
+            'remaining_not_consumed' => $remaining, // should be 0 normally
+            'message' => 'Purchased Successfully'
+        ];
     }
 
-    public function addPurchaseTransaction($product_id, $qty, $user_id, $reason = null)
+
+    public function addPurchaseTransaction($purchase_list_id, $qty, $user_id, $reason = null)
     {
-        $sql = "INSERT INTO purchase_transactions (product_id, qty_purchased, purchased_by, remarks, date_purchased)
-            VALUES (?,?,?,?,?, NOW())";
+        $sql = "INSERT INTO purchase_transactions 
+            (purchase_list_id, qty_purchased, purchased_by, remarks, date_purchased)
+            VALUES (?,?,?, ?, NOW())";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('iisss', $product_id, $qty,$user_id, $reason);
+        $stmt->bind_param('iiis', $purchase_list_id, $qty, $user_id, $reason);
         $stmt->execute();
 
         // Update status after transaction
-        return $this->updatePurchaseListStatus($product_id);
+        return $this->updatePurchaseListStatus($purchase_list_id, 'purchased');
     }
 
-    public function reversePurchaseTransaction($product_id, $qty, $user_id, $reason = null)
+    public function reversePurchaseTransaction($purchase_list_id, $qty, $user_id, $reason = null)
     {
         $qty = -abs($qty); // always negative
 
-        $sql = "INSERT INTO purchase_transactions (product_id, qty_purchased, purchased_by, remarks, date_purchased)
+        $sql = "INSERT INTO purchase_transactions (purchase_list_id, qty_purchased, purchased_by, remarks, date_purchased)
             VALUES (?,?,?,?, NOW())";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('iisss', $product_id, $qty, $user_id, $reason);
+        $stmt->bind_param('iiis', $purchase_list_id, $qty, $user_id, $reason);
         $stmt->execute();
-        return $this->updatePurchaseListStatus($product_id);
+        return $this->updatePurchaseListStatus($purchase_list_id, 'unpurchased');
     }
 
 

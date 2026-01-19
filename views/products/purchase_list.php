@@ -188,7 +188,7 @@ input[type="date"] {
                             </button>
 
                             <?php if ($pl['status'] === 'pending'): ?>
-                                <button onclick="markAsPurchased(<?= (int)$pl['product_id']; ?>,<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">
+                                <button onclick="markAsPurchased(<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">
                                     Mark Purchased
                                 </button>
                             <?php else: ?>
@@ -277,7 +277,7 @@ input[type="date"] {
             });
     }
 
-    async function markAsPurchased(product_id,id) {
+    async function markAsPurchased(id) {
         const confirmed = window.customConfirm ? await window.customConfirm('Mark this item as purchased?') : confirm('Mark this item as purchased?');
         if (!confirmed) return;
         fetch('?page=products&action=mark_purchased', {
@@ -286,9 +286,9 @@ input[type="date"] {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                product_id: product_id,
-                quantity: $('#quantity_' + id).val(),
-                remarks: $('#remarks_' + id).val()
+                purchase_list_id: id,
+                quantity: document.getElementById('quantity_' + id)?.value || 0,
+                remarks: document.getElementById('remarks_' + id)?.value || ''
             })
         }).then(r => r.json()).then(data => {
             if (data && data.success) {
@@ -318,9 +318,9 @@ input[type="date"] {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    product_id: product_id,
-                    quantity: $('#quantity_' + id).val(),
-                    remarks: $('#remarks_' + id).val()
+                    purchase_list_id: id,
+                    quantity: document.getElementById('quantity_' + id)?.value || 0,
+                    remarks: document.getElementById('remarks_' + id)?.value || ''
                 })
             })
             .then(r => r.json())

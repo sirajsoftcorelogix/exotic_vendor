@@ -713,15 +713,15 @@ class ProductsController {
         global $productModel;
         header('Content-Type: application/json');
         $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input['product_id'])) {
+        if (empty($input['purchase_list_id'])) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        $product_id = (int)$input['product_id'];
+        $purchase_list_id = (int)$input['purchase_list_id'];
         $user_id = $_SESSION['user']['id'];
         $qty = $input['quantity'];
         $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
-        $res = $productModel->addPurchaseTransaction($product_id, $qty, $user_id, $remarks);
+        $res = $productModel->addPurchaseTransaction($purchase_list_id, $qty, $user_id, $remarks);
         echo json_encode($res);
         exit;
     }
@@ -731,17 +731,16 @@ class ProductsController {
         global $productModel;
         header('Content-Type: application/json');
         $input = json_decode(file_get_contents('php://input'), true);
-        if (empty($input['id'])) {
+        if (empty($input['purchase_list_id'])) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
-        }
-        $id = (int)$input['id'];
-        $product_id = (int)$input['product_id'];
+        }        
+        $purchase_list_id = (int)$input['purchase_list_id'];
         $qty = (int)$input['quantity'];
         $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $user_id = $_SESSION['user']['id'];
         // $res = $productModel->updatePurchaseListStatus($id, 'pending', null);
-        $res = $productModel->reversePurchaseTransaction($product_id, $qty, $user_id, $remarks);
+        $res = $productModel->reversePurchaseTransaction($purchase_list_id, $qty, $user_id, $remarks);
         echo json_encode($res);
         exit;
     }
