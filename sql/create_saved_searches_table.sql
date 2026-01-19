@@ -87,7 +87,7 @@ CREATE TABLE vp_invoices (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_invoice_number (invoice_number),
-    INDEX idx_vendor_id (vendor_id),
+    INDEX idx_customer_id (customer_id),
     INDEX idx_invoice_date (invoice_date)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4

@@ -41,7 +41,7 @@ class Invoice {
             $invoice_number,
             $data['invoice_date'],
             $data['customer_id'],
-            $data['customer_address'],
+            $data['vp_address_info_id'],
             $data['currency'],
             $data['subtotal'],
             $data['tax_amount'],
