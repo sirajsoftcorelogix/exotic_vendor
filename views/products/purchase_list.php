@@ -37,7 +37,7 @@
             foreach ($data['purchase_list'] as $pl):
                 //$product = $pl['product'] ?? null;
                 $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
-                //$title = $pl['title'] ?? ($pl['item_code'] ?? 'Product');
+                $title = $pl['title'] ?? ($pl['item_code'] ?? 'Product');
                 $item_code = $pl['item_code'] ?? ($pl['sku'] ?? '');
                 $cost = isset($pl['cost_price']) ? '₹' . number_format((float)$pl['cost_price']) : '';
                 $status = $pl['status'] ?? '';
@@ -47,6 +47,7 @@
 
                 // Build WhatsApp share text
                 $waText = "Product Details:%0A";
+                //$waText .= "Item: " . urlencode($title) . "%0A";
                 $waText .= "SKU: " . urlencode($pl['sku'] ?? '') . "%0A";
                 $waText .= "Color: " . urlencode($pl['color'] ?? '') . "%0A";
                 $waText .= "Size: " . urlencode($pl['size'] ?? '') . "%0A";
