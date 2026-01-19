@@ -199,7 +199,8 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
 }
 ?>
 <div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
-    <form action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
+    <form id="product_form" action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="save_action" id="hidden_save_action" value="">
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
         <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
             <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
@@ -1263,7 +1264,7 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Indian Net Qty.:</label>
                         <div class="relative w-full">
                             <input type="number" name="india_net_qty" 
-                                   value="<?= htmlspecialchars($data['form2']['india_net_qty '] ?? '0') ?>" 
+                                   value="<?= htmlspecialchars($data['form2']['india_net_qty'] ?? '1') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                         </div>
                     </div>
@@ -1335,11 +1336,12 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                 Publish Product
             </button>
-            <button type="submit" name="save_action" value="draft" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
+
+            <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save and Draft
             </button>
             
-            <button type="submit" name="save_action" value="generate" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
+            <button type="button" onclick="validateAndSubmit('generate')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
                 Save and Generate Item Code
             </button>
         </div>
@@ -3129,5 +3131,110 @@ if(document.getElementById('image_directory_select')) {
             this.control.classList.add('h-[32px]', 'text-[13px]'); // Matches your existing design
         }
     });
+}
+</script>
+<script>
+function validateAndSubmit(actionType) {
+    let errors = [];
+    const form = document.getElementById('product_form');
+    
+    // Helper to get value cleanly
+    const getVal = (name) => {
+        const el = form.querySelector(`[name="${name}"]`);
+        return el ? el.value.trim() : '';
+    };
+
+    // --- 1. GENERAL FIELDS VALIDATION ---
+    if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
+    if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
+    if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
+    if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
+    if (!getVal('material_code')) errors.push("Field 'Material' is required.");
+    if (!getVal('group_name')) errors.push("Field 'Group' is required.");
+    if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
+    if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
+    if (!getVal('snippet_description')) errors.push("Field 'Snippet Description' is required.");
+    if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
+    if (!getVal('image_directory')) errors.push("Please select an 'Image Directory'.");
+
+    // Category Check (Checkboxes)
+    const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
+    if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+
+    // Lead Time
+    const leadTime = parseFloat(getVal('lead_time_days')) || 0;
+    if (leadTime < 1) errors.push("'Lead Time' must be at least 1 day.");
+
+    // --- 2. MAIN ITEM VALIDATION ---
+    const mainQty = parseFloat(getVal('quantity_received')) || 0;
+    if (mainQty < 1) errors.push("Main Item: 'Quantity' must be at least 1.");
+
+    if (!getVal('cp')) errors.push("Main Item: 'CP' is required.");
+    if (!getVal('price_india')) errors.push("Main Item: 'Price India' is required.");
+    if (!getVal('price_india_mrp')) errors.push("Main Item: 'Price India MRP' is required.");
+    if (!getVal('usd_price')) errors.push("Main Item: 'USD Price' is required.");
+    if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
+
+    const mainGst = parseFloat(getVal('gst_rate'));
+    if (isNaN(mainGst) || mainGst < 0) errors.push("Main Item: 'GST' must be 0 or greater.");
+
+    // Main Gallery Check (ID -1)
+    const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
+    const mainImgCount = mainGrid ? mainGrid.querySelectorAll('.draggable-item').length : 0;
+    if (mainImgCount < 1) errors.push("Main Item: Please add at least 1 photo to the Gallery.");
+
+
+    // --- 3. VARIATIONS VALIDATION ---
+    const variations = document.querySelectorAll('.variation-card');
+    variations.forEach((card, index) => {
+        const cardTitle = `Variation #${index + 1}`;
+        
+        // Helper specifically for card inputs
+        const getCardVal = (partialName) => {
+            // Matches name="variations[...][partialName]"
+            const input = card.querySelector(`input[name*="[${partialName}]"], select[name*="[${partialName}]"]`);
+            return input ? input.value.trim() : '';
+        };
+
+        const vQty = parseFloat(getCardVal('quantity')) || 0;
+        if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
+
+        if (!getCardVal('cp')) errors.push(`${cardTitle}: 'CP' is required.`);
+        if (!getCardVal('price_india')) errors.push(`${cardTitle}: 'Price India' is required.`);
+        if (!getCardVal('price_india_mrp')) errors.push(`${cardTitle}: 'Price India MRP' is required.`);
+        if (!getCardVal('usd_price')) errors.push(`${cardTitle}: 'USD Price' is required.`);
+        if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);
+        
+        const vGst = parseFloat(getCardVal('gst_rate'));
+        if (isNaN(vGst) || vGst < 0) errors.push(`${cardTitle}: 'GST' must be 0 or greater.`);
+
+        // Variation Gallery Check
+        // We look for the photo grid *inside* this specific card
+        const vGrid = card.querySelector('.photo-group-grid');
+        const vImgCount = vGrid ? vGrid.querySelectorAll('.draggable-item').length : 0;
+        if (vImgCount < 1) errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
+    });
+
+
+    // --- 4. RESULT ---
+    if (errors.length > 0) {
+        // Validation Failed - Show Popup
+        let errorHtml = '<div style="text-align: left; max-height: 300px; overflow-y: auto;"><ul style="list-style-type: disc; padding-left: 20px;">';
+        errors.forEach(err => {
+            errorHtml += `<li style="margin-bottom: 5px; color: #d33;">${err}</li>`;
+        });
+        errorHtml += '</ul></div>';
+
+        Swal.fire({
+            icon: 'error',
+            title: 'Validation Failed',
+            html: errorHtml,
+            confirmButtonColor: '#d97824'
+        });
+    } else {
+        // Validation Passed - Submit
+        document.getElementById('hidden_save_action').value = actionType;
+        form.submit();
+    }
 }
 </script>
