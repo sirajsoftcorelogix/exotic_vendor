@@ -1,3 +1,18 @@
+<style>
+/* Hide native date icon without breaking click behavior (Chrome/Edge/Safari) */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  width: 2.5rem;      /* keep click area */
+  height: 100%;
+  cursor: pointer;
+}
+
+/* Optional: avoid weird default styling */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+</style>    
 <div class="container mx-auto p-4">
     <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div class="flex justify-between items-center">
@@ -22,6 +37,8 @@
                     <option value="all" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'all') ? 'selected' : '' ?>>All</option>
                     <option value="pending" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'pending') ? 'selected' : '' ?> <?= (!isset($data['selected_filters']['status']) ? 'selected' : '') ?>>Pending</option>
                     <option value="purchased" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'purchased') ? 'selected' : '' ?>>Purchased</option>
+                    <option value="item_ordered" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'item_ordered') ? 'selected' : '' ?>>Item Ordered</option>
+                    <option value="item_not_available" <?= (isset($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'item_not_available') ? 'selected' : '' ?>> Item not available</option>
                 </select>
             </div>
             <!-- <div class="flex items-center gap-2">
@@ -40,14 +57,14 @@
                 $title = $pl['title'] ?? ($pl['item_code'] ?? 'Product');
                 $item_code = $pl['item_code'] ?? ($pl['sku'] ?? '');
                 $cost = isset($pl['cost_price']) ? '₹' . number_format((float)$pl['cost_price']) : '';
-                $status = $pl['status'] ?? '';
+                $status = str_replace("_"," ",$pl['status']) ?? '';
                 $agent_name = $pl['agent_name'] ?? '';
                 $date_added = $pl['date_added_readable'] ?? ($pl['date_added'] ? date('d M Y', strtotime($pl['date_added'])) : '');
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
 
                 // Build WhatsApp share text
                 $waText = "Product Details:%0A";
-                $waText .= "Item: " . urlencode($title) . "%0A";
+                //$waText .= "Item: " . urlencode($title) . "%0A";
                 $waText .= "SKU: " . urlencode($pl['sku'] ?? '') . "%0A";
                 $waText .= "Color: " . urlencode($pl['color'] ?? '') . "%0A";
                 $waText .= "Size: " . urlencode($pl['size'] ?? '') . "%0A";
@@ -76,7 +93,7 @@
                                 <div>
                                     <div class="text-sm font-semibold text-gray-800"><?php echo htmlspecialchars($title); ?></div>
                                     <div class="text-xs text-gray-500 mt-1">Item Code: <strong><?php echo htmlspecialchars($item_code); ?></strong></div>
-                                    <div class="text-xs text-gray-500">Status: <span class="font-medium px-2 bg-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-100 text-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-800"><?php echo htmlspecialchars($status); ?></span></div>
+                                    <div class="text-xs text-gray-500">Status: <span class="font-medium px-2 bg-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-100 text-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-800"><?php echo ucwords(htmlspecialchars($status)); ?></span></div>
                                 </div>
                                 <div class="text-right">
                                     <!-- <div class="text-sm font-bold text-gray-900"><?php //echo $cost; 
@@ -115,13 +132,51 @@
                             <label class="block">
                                 Quantity to be Purchased:
                                 <span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-16 text-center">
-                                    <?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>
+                                    <?php echo htmlspecialchars($pl['quantity'] ?? '0'); ?>
                                 </span>
                             </label>
 
                             <label class="block">Quantity Purchased: <input type="number" id="quantity_<?php echo (int)$pl['id']; ?>" value="" class="border rounded px-2 py-1 mt-1 w-16"></label>
 
                         </div>
+
+                        <?php if (isset($pl['status']) && $pl['status'] === 'item_ordered'): ?>
+                            <div class="mt-3">
+                                <label for="edd_<?php echo (int)$pl['id']; ?>" class="block text-xs text-gray-600">
+                                    Expected Delivery Date
+                                </label>
+
+                                <div class="mt-1 relative w-full md:w-48">
+                                    <input
+                                    type="date"
+                                    id="edd_<?php echo (int)$pl['id']; ?>"
+                                    name="edd"
+                                    value="<?php echo htmlspecialchars($pl['expected_time_of_delivery'] ?? ''); ?>"
+                                    class="border rounded px-3 py-2 pr-10 text-sm w-full bg-white focus:outline-none"
+                                    />
+
+                                    <!-- Clickable yellow calendar icon -->
+                                    <button
+                                    type="button"
+                                    class="absolute inset-y-0 right-2 flex items-center px-2 text-amber-500"
+                                    onclick="(function(btn){
+                                        const input = btn.parentElement.querySelector('input[type=date]');
+                                        if (!input) return;
+                                        if (typeof input.showPicker === 'function') input.showPicker();
+                                        else input.focus();
+                                    })(this)"
+                                    aria-label="Open calendar"
+                                    >
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                                        viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    </button>
+                                </div>
+                                </div>
+
+                        <?php endif; ?>
 
                         <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">
                             <label class="block">Remarks: <textarea id="remarks_<?php echo (int)$pl['id']; ?>" class="border rounded px-2 py-1 mt-1 w-full" rows="2"><?php echo htmlspecialchars($pl['remarks'] ?? ''); ?></textarea></label>
@@ -183,6 +238,9 @@
     function savePurchaseItem(id, btn) {
         const qty = document.getElementById('quantity_' + id).value;
         const remarks = document.getElementById('remarks_' + id).value;
+        const eddEl = document.getElementById('edd_' + id);
+        const edd = (eddEl && eddEl.value && eddEl.value.trim() !== '') ? eddEl.value : null;
+
         if (!btn) btn = {};
         btn.disabled = true;
         const originalText = btn.innerHTML || '';
@@ -195,7 +253,8 @@
                 body: JSON.stringify({
                     id: id,
                     quantity: qty,
-                    remarks: remarks
+                    remarks: remarks,
+                    expected_time_of_delivery: edd
                 })
             }).then(r => r.json()).then(data => {
                 if (data && data.success) {
@@ -282,4 +341,6 @@
                 else alert('Network error');
             });
     }
+
+    
 </script>

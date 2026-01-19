@@ -757,11 +757,15 @@ class ProductsController {
         $quantity = isset($input['quantity']) ? $input['quantity'] : null;
         $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $status = isset($input['status']) ? trim($input['status']) : '';
+        $expected_time_of_delivery = !empty($input['expected_time_of_delivery'])
+                    ? date('Y-m-d', strtotime($input['expected_time_of_delivery']))
+                    : '';
+
         if ($id <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        $res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status);
+        $res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery);
         echo json_encode($res);
         exit;
     }
