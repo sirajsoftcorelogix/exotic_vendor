@@ -513,6 +513,7 @@ class ProductsController {
                 $data = [
                     'user_id'        => $agent_id,
                     'product_id'     => (int)$product['id'],
+                    'order_id'       => $oid,
                     'sku'            => $sku,
                     'date_purchased' => $date_purchased,
                     'status'         => 'pending',
@@ -556,6 +557,7 @@ class ProductsController {
                 $data = [
                     'user_id'        => $agent_id,
                     'product_id'     => (int)$product['id'],
+                    'order_id'       => '',
                     'sku'            => $sku,
                     'date_purchased' => $date_purchased,
                     'status'         => 'pending',
@@ -668,7 +670,7 @@ class ProductsController {
         $filters['category'] = isset($_GET['category']) ? $_GET['category'] : 'all';
 
         // fetch purchase list and count with filters
-        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters);
+        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters); 
         $total_records = $productModel->countPurchaseList($filters);
 
         // fetch categories for filter UI

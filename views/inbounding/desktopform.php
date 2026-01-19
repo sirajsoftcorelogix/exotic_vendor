@@ -3,6 +3,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <style>
+    body {
+        overflow: hidden; /* Crucial Fix */
+    }
     .draggable-item {
         cursor: grab;
         user-select: none;
@@ -164,12 +167,12 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
     $aspectRatio = $oldW / $oldH;
 
     if ($width / $height > $aspectRatio) {
-        $width = $height * $aspectRatio;
+        $width = (int) ($height * $aspectRatio);
     } else {
-        $height = $width / $aspectRatio;
+        $height = (int) ($width / $aspectRatio);
     }
 
-    $newImage = imagecreatetruecolor($width, $height);
+    $newImage = imagecreatetruecolor((int)$width, (int)$height);
 
     // Maintain transparency for PNG/WEBP
     if ($mime == 'image/png' || $mime == 'image/webp') {
