@@ -624,7 +624,7 @@ class product
         }
         return [];
     }
-    public function getPurchaseList($limit = 100, $offset = 0, $filters = [])
+    /*public function getPurchaseList($limit = 100, $offset = 0, $filters = [])
     {
         // Join with vp_products to allow filtering by product category/groupname and by user
         $where = [];
@@ -732,53 +732,306 @@ class product
             return $result->fetch_all(MYSQLI_ASSOC);
         }
         return [];
-    }
-    public function countPurchaseList($filters = [])
+    }*/
+
+    public function getPurchaseList($limit = 100, $offset = 0, $filters = [])
     {
-        $where = [];
-        $params = [];
-        $types = '';
+        // -----------------------------
+        // Build WHERE for purchase_list (subqueries + latest-row join)
+        // NOTE: no alias here because we reuse it in multiple places.
+        // -----------------------------
+        $plWhere  = [];
+        $plParams = [];
+        $plTypes  = '';
+
         if (!empty($filters['user_id'])) {
-            $where[] = 'pl.user_id = ?';
-            $params[] = (int)$filters['user_id'];
-            $types .= 'i';
+            $plWhere[]  = 'user_id = ?';
+            $plParams[] = (int)$filters['user_id'];
+            $plTypes   .= 'i';
         }
+
         if (!empty($filters['status']) && $filters['status'] !== 'all') {
-            $where[] = 'pl.status = ?';
-            $params[] = $filters['status'];
-            $types .= 's';
+            $plWhere[]  = 'status = ?';
+            $plParams[] = $filters['status'];
+            $plTypes   .= 's';
         }
+
+        if (!empty($filters['added_by'])) {
+            $plWhere[]  = 'edit_by = ?';
+            $plParams[] = (int)$filters['added_by'];
+            $plTypes   .= 'i';
+        }
+
+        if (!empty($filters['asigned_to'])) {
+            $plWhere[]  = 'user_id = ?';
+            $plParams[] = (int)$filters['asigned_to'];
+            $plTypes   .= 'i';
+        }
+
+        $dateColumn = (!empty($filters['date_type']) && $filters['date_type'] === 'purchased')
+            ? 'date_purchased'
+            : 'date_added';
+
+        if (!empty($filters['date_from'])) {
+            $plWhere[]  = "$dateColumn >= ?";
+            $plParams[] = $filters['date_from'];
+            $plTypes   .= 's';
+        }
+
+        if (!empty($filters['date_to'])) {
+            $plWhere[]  = "$dateColumn <= ?";
+            $plParams[] = $filters['date_to'];
+            $plTypes   .= 's';
+        }
+
+        $plWhereSql = '';
+        if (!empty($plWhere)) {
+            $plWhereSql = ' WHERE ' . implode(' AND ', $plWhere);
+        }
+
+        // -----------------------------
+        // Build OUTER filters for vp_products (category/search)
+        // -----------------------------
+        $outerWhere  = [];
+        $outerParams = [];
+        $outerTypes  = '';
+
         if (!empty($filters['category']) && $filters['category'] !== 'all') {
-            $where[] = 'p.groupname = ?';
-            $params[] = $filters['category'];
-            $types .= 's';
+            $outerWhere[]  = 'p.groupname = ?';
+            $outerParams[] = $filters['category'];
+            $outerTypes   .= 's';
         }
-        $whereSql = '';
-        if (!empty($where)) {
-            $whereSql = 'WHERE ' . implode(' AND ', $where);
+
+        if (!empty($filters['search'])) {
+            $outerWhere[]  = '(p.item_code LIKE ? OR p.title LIKE ?)';
+            $searchTerm    = '%' . $filters['search'] . '%';
+            $outerParams[] = $searchTerm;
+            $outerParams[] = $searchTerm;
+            $outerTypes   .= 'ss';
         }
-        $sql = "SELECT COUNT(*) AS cnt FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql GROUP BY pl.product_id";
+
+        $outerWhereSql = '';
+        if (!empty($outerWhere)) {
+            $outerWhereSql = ' WHERE ' . implode(' AND ', $outerWhere);
+        }
+
+        // -----------------------------
+        // ORDER BY (use pl_latest alias, not pl)
+        // -----------------------------
+        $sortDir = 'DESC';
+        if (!empty($filters['sort_by'])) {
+            $sortDir = (strtoupper($filters['sort_by']) === 'ASC') ? 'ASC' : 'DESC';
+        }
+        $orderBy = " ORDER BY pl_latest.date_added $sortDir";
+
+        // -----------------------------
+        // SQL: total quantity per product + latest row per product (by updated_at)
+        // -----------------------------
+        $sql = "
+            SELECT
+            pl_latest.id,
+            pl_latest.user_id,
+            pl_latest.product_id,
+            pl_latest.order_id,
+            pl_latest.sku,
+            pl_latest.date_added,
+            pl_latest.date_purchased,
+            pl_latest.status,
+            qty.quantity,
+            pl_latest.remarks,
+            pl_latest.edit_by,
+            pl_latest.updated_at,
+            pl_latest.created_at,
+            pl_latest.expected_time_of_delivery,
+            p.item_code,
+            p.title,
+            p.groupname AS category,
+            p.cost_price,
+            p.image
+            FROM
+            (
+            SELECT product_id, SUM(quantity) AS quantity
+            FROM purchase_list
+            $plWhereSql
+            GROUP BY product_id
+            ) qty
+            JOIN
+            (
+            SELECT pl.*
+            FROM purchase_list pl
+            JOIN (
+                SELECT product_id, MAX(updated_at) AS max_updated_at
+                FROM purchase_list
+                $plWhereSql
+                GROUP BY product_id
+            ) latest
+                ON latest.product_id = pl.product_id
+            AND latest.max_updated_at = pl.updated_at
+            $plWhereSql
+            ) pl_latest
+            ON pl_latest.product_id = qty.product_id
+            LEFT JOIN vp_products p
+            ON p.id = pl_latest.product_id
+            $outerWhereSql
+            $orderBy
+            LIMIT ? OFFSET ?
+        ";
+
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return 0;
-        if (!empty($params)) {
-            $bindParams = [$types];
-            foreach ($params as $k => $v) {
-                $bindParams[] = &$params[$k];
-            }
-            $refs = [];
-            foreach ($bindParams as $key => $val) {
-                $refs[$key] = &$bindParams[$key];
-            }
-            call_user_func_array([$stmt, 'bind_param'], $refs);
+        if (!$stmt) return [];
+
+        // -----------------------------
+        // Bind params (IMPORTANT ORDER)
+        // We used $plWhereSql 3 times and $outerWhereSql once:
+        // 1) qty subquery:        $plParams
+        // 2) latest subquery:     $plParams
+        // 3) pl_latest filter:    $plParams
+        // 4) outer product filter $outerParams
+        // 5) limit/offset
+        // -----------------------------
+        $bindTypes  = $plTypes . $plTypes . $plTypes . $outerTypes . 'ii';
+        $bindValues = array_merge($plParams, $plParams, $plParams, $outerParams, [(int)$limit, (int)$offset]);
+
+        // mysqli bind_param requires references
+        $refs   = [];
+        $refs[] = &$bindTypes;
+        foreach ($bindValues as $k => $v) {
+            $refs[] = &$bindValues[$k];
         }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+
         $stmt->execute();
         $result = $stmt->get_result();
+
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+
+    public function countPurchaseList($filters = [])
+    {
+        // We want the count of DISTINCT product_id groups after applying filters.
+        // With ONLY_FULL_GROUP_BY, do NOT "COUNT(*) ... GROUP BY product_id" and then fetch one row.
+        // Instead: count distinct product_id using a subquery (or COUNT(DISTINCT ...)).
+
+        // -----------------------------
+        // Build WHERE for purchase_list fields
+        // -----------------------------
+        $plWhere  = [];
+        $plParams = [];
+        $plTypes  = '';
+
+        if (!empty($filters['user_id'])) {
+            $plWhere[]  = 'pl.user_id = ?';
+            $plParams[] = (int)$filters['user_id'];
+            $plTypes   .= 'i';
+        }
+
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
+            $plWhere[]  = 'pl.status = ?';
+            $plParams[] = $filters['status'];
+            $plTypes   .= 's';
+        }
+
+        if (!empty($filters['added_by'])) {
+            $plWhere[]  = 'pl.edit_by = ?';
+            $plParams[] = (int)$filters['added_by'];
+            $plTypes   .= 'i';
+        }
+
+        if (!empty($filters['asigned_to'])) {
+            $plWhere[]  = 'pl.user_id = ?';
+            $plParams[] = (int)$filters['asigned_to'];
+            $plTypes   .= 'i';
+        }
+
+        $dateColumn = (!empty($filters['date_type']) && $filters['date_type'] === 'purchased')
+            ? 'pl.date_purchased'
+            : 'pl.date_added';
+
+        if (!empty($filters['date_from'])) {
+            $plWhere[]  = "$dateColumn >= ?";
+            $plParams[] = $filters['date_from'];
+            $plTypes   .= 's';
+        }
+
+        if (!empty($filters['date_to'])) {
+            $plWhere[]  = "$dateColumn <= ?";
+            $plParams[] = $filters['date_to'];
+            $plTypes   .= 's';
+        }
+
+        $plWhereSql = '';
+        if (!empty($plWhere)) {
+            $plWhereSql = ' WHERE ' . implode(' AND ', $plWhere);
+        }
+
+        // -----------------------------
+        // Build WHERE for vp_products fields (category/search)
+        // -----------------------------
+        $pWhere  = [];
+        $pParams = [];
+        $pTypes  = '';
+
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            $pWhere[]  = 'p.groupname = ?';
+            $pParams[] = $filters['category'];
+            $pTypes   .= 's';
+        }
+
+        if (!empty($filters['search'])) {
+            $pWhere[]  = '(p.item_code LIKE ? OR p.title LIKE ?)';
+            $searchTerm = '%' . $filters['search'] . '%';
+            $pParams[] = $searchTerm;
+            $pParams[] = $searchTerm;
+            $pTypes   .= 'ss';
+        }
+
+        $pWhereSql = '';
+        if (!empty($pWhere)) {
+            // if purchase_list WHERE exists already, append with AND, else start WHERE
+            $pWhereSql = ($plWhereSql ? ' AND ' : ' WHERE ') . implode(' AND ', $pWhere);
+        }
+
+        // -----------------------------
+        // Count distinct grouped products
+        // -----------------------------
+        $sql = "
+            SELECT COUNT(DISTINCT pl.product_id) AS cnt
+            FROM purchase_list pl
+            LEFT JOIN vp_products p ON pl.product_id = p.id
+            $plWhereSql
+            $pWhereSql
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return 0;
+
+        $allParams = array_merge($plParams, $pParams);
+        $allTypes  = $plTypes . $pTypes;
+
+        if (!empty($allParams)) {
+            // mysqli bind_param requires references
+            $bindParams = [];
+            $bindParams[] = &$allTypes;
+            foreach ($allParams as $k => $v) {
+                $bindParams[] = &$allParams[$k];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindParams);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+
         if ($result) {
             $row = $result->fetch_assoc();
             return isset($row['cnt']) ? (int)$row['cnt'] : 0;
         }
+
         return 0;
     }
+ 
 
     // Return distinct product categories (groupname) for filter dropdown
     public function getCategories()
@@ -810,20 +1063,53 @@ class product
     }
 
     // Update quantity and remarks for a purchase list item
-    public function updatePurchaseItem($id, $quantity, $remarks, $status)
+    public function updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery = null)
     {
-        $sql = "UPDATE purchase_list SET quantity = ?, remarks = ?, status = ?, updated_at = ? WHERE id = ?";
+        $sql = "UPDATE purchase_list 
+                SET quantity = ?, 
+                    remarks = ?, 
+                    status = ?, 
+                    expected_time_of_delivery = ?, 
+                    updated_at = ? 
+                WHERE id = ?";
+
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
         $updatedAt = date('Y-m-d H:i:s');
-        $id = (int)$id;
+        $id  = (int) $id;
+
+        // quantity can be NULL
         $qty = ($quantity === '' || $quantity === null) ? null : (int)$quantity;
-        $stmt->bind_param('isssi', $qty, $remarks, $status, $updatedAt, $id);
+
+        // normalize date (NULL allowed)
+        if (!empty($expected_time_of_delivery)) {
+            $dt = date_create($expected_time_of_delivery);
+            $expected_time_of_delivery = $dt ? $dt->format('Y-m-d') : null;
+        } else {
+            $expected_time_of_delivery = null;
+        }
+
+        // ✅ FIXED bind_param
+        $stmt->bind_param(
+            'issssi',
+            $qty,
+            $remarks,
+            $status,
+            $expected_time_of_delivery,
+            $updatedAt,
+            $id
+        );
+
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Updated successfully'];
         }
+
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }
+
     public function deletePurchaseItem($id)
     {
         $sql = "DELETE FROM purchase_list WHERE id = ?";
