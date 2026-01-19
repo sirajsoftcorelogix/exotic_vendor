@@ -840,7 +840,11 @@ class product
             p.title,
             p.groupname AS category,
             p.cost_price,
-            p.image
+            p.image,
+            p.product_weight,
+            p.prod_height,
+            p.prod_width,
+            p.prod_length
             FROM
             (
             SELECT product_id, SUM(quantity) AS quantity
