@@ -261,35 +261,37 @@ switch ($page) {
             case 'remove_payment':
                 $controller->removePayment();
                 break;
-            case 'add_challan':
-                $controller->addChallan();
+            default:
+                $controller->index();
                 break;
-            case 'get_challan':
-                $controller->getChallans();
+        }
+        break;
+    
+    case 'invoices':
+        require_once 'controllers/InvoicesController.php';
+        $controller = new InvoicesController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
                 break;
-            case 'remove_challan':
-                $controller->deleteChallan();
+            case 'create':
+                $controller->create();
                 break;
-            case 'vendor_search':
-                $controller->vendorSearch();
+            case 'create_post':
+                $controller->createPost();
                 break;
-            case 'custom_po':
-                $controller->customPO();
+            case 'view':
+                $controller->view();
                 break;
-            case 'custompo_post':
-                $controller->customPOSave();
-                break;
-            case 'product_items':
-                $controller->productItems();
-                break;
-            case 'stock_purchase':
-                $controller->stockPurchase();
+            case 'generate_pdf':
+                $controller->generatePdf();
                 break;
             default:
                 $controller->index();
                 break;
         }
         break;
+    
     case 'payement_terms':
         require_once 'controllers/PaymenetTermsController.php';
         $controller = new PaymenetTermsController();
