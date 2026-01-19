@@ -835,6 +835,7 @@ class product
             pl_latest.edit_by,
             pl_latest.updated_at,
             pl_latest.created_at,
+            pl_latest.expected_time_of_delivery,
             p.item_code,
             p.title,
             p.groupname AS category,
@@ -1055,20 +1056,53 @@ class product
     }
 
     // Update quantity and remarks for a purchase list item
-    public function updatePurchaseItem($id, $quantity, $remarks, $status)
+    public function updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery = null)
     {
-        $sql = "UPDATE purchase_list SET quantity = ?, remarks = ?, status = ?, updated_at = ? WHERE id = ?";
+        $sql = "UPDATE purchase_list 
+                SET quantity = ?, 
+                    remarks = ?, 
+                    status = ?, 
+                    expected_time_of_delivery = ?, 
+                    updated_at = ? 
+                WHERE id = ?";
+
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
         $updatedAt = date('Y-m-d H:i:s');
-        $id = (int)$id;
+        $id  = (int) $id;
+
+        // quantity can be NULL
         $qty = ($quantity === '' || $quantity === null) ? null : (int)$quantity;
-        $stmt->bind_param('isssi', $qty, $remarks, $status, $updatedAt, $id);
+
+        // normalize date (NULL allowed)
+        if (!empty($expected_time_of_delivery)) {
+            $dt = date_create($expected_time_of_delivery);
+            $expected_time_of_delivery = $dt ? $dt->format('Y-m-d') : null;
+        } else {
+            $expected_time_of_delivery = null;
+        }
+
+        // ✅ FIXED bind_param
+        $stmt->bind_param(
+            'issssi',
+            $qty,
+            $remarks,
+            $status,
+            $expected_time_of_delivery,
+            $updatedAt,
+            $id
+        );
+
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Updated successfully'];
         }
+
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }
+
     public function deletePurchaseItem($id)
     {
         $sql = "DELETE FROM purchase_list WHERE id = ?";
