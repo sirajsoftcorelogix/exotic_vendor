@@ -241,7 +241,7 @@ class OrdersController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
             return;
         }
-        $imported = 0; $totalorder = 0;
+        $imported = 0; $totalorder = 0; $result =[]; $pdata = []; $addressdata = [];
         foreach ($orders['orders'] as $order) { 
             
             //print_r($order['cart']);
@@ -250,7 +250,10 @@ class OrdersController {
             //2658982 order_number continue;
             if (in_array($order['orderid'], ['2658982', '2660434','2662287','469282','2664206'])) {
                 continue; // Skip invalid orders
-            }   
+            }
+            //customer data
+            $customerdata = $ordersModel->addCustomerIfNotExists($order);
+            //print_array($customerdata);
                 foreach ($order['cart'] as $item) {  
                     $orderdate =  !empty($order['processed_time']) ? date('Y-m-d H:i:s', $order['processed_time']) : date('Y-m-d H:i:s'); 
                     $esd = '0000-00-00';
@@ -348,6 +351,8 @@ class OrdersController {
                         $rdata['status'] = 'cod_confirmation_required';
                         $rdata['agent_id'] = 31; // Assign to specific agent Ashutosh for COD confirmation
                     }
+                    //customer id add
+                    $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
 					$totalorder++;                
                     
                     $data = $ordersModel->insertOrder($rdata);
@@ -360,7 +365,10 @@ class OrdersController {
                     } 
                     //print_array($rdata);                   
             }
-           
+            //add address info
+            $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+           //print_array($addressdata);
+           //print_array($order);exit;
         }
         //print_array($pdata);
         //print_r($result);
@@ -380,6 +388,7 @@ class OrdersController {
             //print_array($log_update_data);
             $ordersModel->updateOrderImportLog($log_id, $log_update_data);
         }
+        //print_array($result);
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
             'result' => $result,
