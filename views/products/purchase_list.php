@@ -62,7 +62,7 @@
                             class="text-yellow-900 hover:text-yellow-1000 flex items-center space-x-1 text-sm">
 
                             <!-- Share Icon (arrow) -->
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
                                 <path d="M12 3l5 5h-3v6h-4V8H7l5-5z"/>
                             </svg>
@@ -133,7 +133,7 @@
                             </button>
 
                             <?php if ($pl['status'] === 'pending'): ?>
-                                <button onclick="markAsPurchased(<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">
+                                <button onclick="markAsPurchased(<?= (int)$pl['product_id']; ?>,<?= (int)$pl['id']; ?>)" class="px-3 py-1 bg-amber-600 text-white rounded text-sm">
                                     Mark Purchased
                                 </button>
                             <?php else: ?>
@@ -218,7 +218,7 @@
             });
     }
 
-    async function markAsPurchased(id) {
+    async function markAsPurchased(product_id,id) {
         const confirmed = window.customConfirm ? await window.customConfirm('Mark this item as purchased?') : confirm('Mark this item as purchased?');
         if (!confirmed) return;
         fetch('?page=products&action=mark_purchased', {
@@ -227,7 +227,9 @@
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                id: id
+                product_id: product_id,
+                quantity: $('#quantity_' + id).val(),
+                remarks: $('#remarks_' + id).val()
             })
         }).then(r => r.json()).then(data => {
             if (data && data.success) {
@@ -257,7 +259,9 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    id: id
+                    product_id: product_id,
+                    quantity: $('#quantity_' + id).val(),
+                    remarks: $('#remarks_' + id).val()
                 })
             })
             .then(r => r.json())

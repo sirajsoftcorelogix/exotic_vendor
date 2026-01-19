@@ -695,7 +695,7 @@ class product
             $whereSql = 'WHERE ' . implode(' AND ', $where);
         }
         //echo $whereSql."**********************";
-        $sql = "SELECT pl.id,pl.user_id,pl.product_id,pl.order_id,pl.sku,pl.date_added,pl.date_purchased,pl.status,sum(pl.quantity) as quantity, pl.remarks,pl.edit_by,pl.updated_at,pl.created_at, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql GROUP BY pl.product_id $orderBy LIMIT ? OFFSET ?";
+        $sql = "SELECT pl.id,pl.user_id,pl.product_id,pl.order_id,pl.sku,pl.date_added,pl.date_purchased,pl.status,sum(pl.quantity) as quantity, pl.remarks,pl.edit_by,pl.updated_at,pl.created_at, p.item_code, p.title, p.groupname AS category, p.cost_price, p.image FROM purchase_list pl LEFT JOIN vp_products p ON pl.product_id = p.id $whereSql GROUP BY pl.product_id, p.item_code, p.title, p.groupname, p.cost_price, p.image $orderBy LIMIT ? OFFSET ?";
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
@@ -787,20 +787,91 @@ class product
         return $cats;
     }
 
-    public function updatePurchaseListStatus($id, $status, $date_purchased = null)
+    /*public function updatePurchaseListStatus($product_id, $status, $date_purchased = null)
     {
-        $sql = "UPDATE purchase_list SET status = ?, date_purchased = ?, updated_at = ? WHERE id = ?";
+        $sql = "UPDATE purchase_list SET status = ?, date_purchased = ?, updated_at = ? WHERE product_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
         $date_purchased = $date_purchased ? $date_purchased : date('Y-m-d H:i:s');
         $updatedAt = date('Y-m-d H:i:s');
-        $id = (int)$id;
+        $id = (int)$product_id;
         $stmt->bind_param('sssi', $status, $date_purchased, $updatedAt, $id);
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Status updated'];
         }
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+    }*/
+
+    public function updatePurchaseListStatus($product_id)
+    {
+        // 1. Fetch planned qty
+        $sql = "SELECT quantity FROM purchase_list WHERE product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $product_id);
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        $planned = (int)$result['quantity'];
+
+        // 2. Sum purchased qty from transactions
+        $sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased FROM purchase_transactions WHERE product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $product_id);
+        $stmt->execute();
+        $res2 = $stmt->get_result()->fetch_assoc();
+        $purchased = (int)$res2['purchased'];
+
+        // 3. Determine status
+        $remaining = $planned - $purchased;
+        $status = ($remaining <= 0) ? 'purchased' : 'pending';
+        $datePurchased = ($status === 'purchased') ? date('Y-m-d') : null;
+
+        // 4. Update purchase_list record
+        $sql = "UPDATE purchase_list SET status = ?, date_purchased = ?, updated_at = NOW() WHERE product_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssi', $status, $datePurchased, $product_id);
+
+        /*return [
+            'success' => true,
+            'planned' => $planned,
+            'purchased' => $purchased,
+            'remaining' => $remaining,
+            'status' => $status
+        ];*/
+
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Status updated'];
+        }
+        return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }
+
+    public function addPurchaseTransaction($product_id, $qty, $user_id, $reason = null)
+    {
+        $sql = "INSERT INTO purchase_transactions (product_id, qty_purchased, purchased_by, remarks, date_purchased)
+            VALUES (?,?,?,?,?, NOW())";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('iisss', $product_id, $qty,$user_id, $reason);
+        $stmt->execute();
+
+        // Update status after transaction
+        return $this->updatePurchaseListStatus($product_id);
+    }
+
+    public function reversePurchaseTransaction($product_id, $qty, $user_id, $reason = null)
+    {
+        $qty = -abs($qty); // always negative
+
+        $sql = "INSERT INTO purchase_transactions (product_id, qty_purchased, purchased_by, remarks, date_purchased)
+            VALUES (?,?,?,?, NOW())";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('iisss', $product_id, $qty, $user_id, $reason);
+        $stmt->execute();
+        return $this->updatePurchaseListStatus($product_id);
+    }
+
+
+
 
     // Update quantity and remarks for a purchase list item
     public function updatePurchaseItem($id, $quantity, $remarks, $status)
