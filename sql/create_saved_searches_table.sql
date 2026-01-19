@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `saved_searches` (
   INDEX `idx_user_page` (`user_id`, `page`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- invoice related tables
 CREATE TABLE vp_address_info (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     order_number INT UNSIGNED NOT NULL,
@@ -62,3 +63,103 @@ CREATE TABLE IF NOT EXISTS `vp_customers` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY `unique_email_phone` (`email`, `phone`) 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE vp_invoices (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    invoice_number VARCHAR(100) NOT NULL,
+    invoice_date DATE NOT NULL,
+
+    customer_id BIGINT UNSIGNED NOT NULL,
+    currency CHAR(3) NOT NULL DEFAULT 'INR',
+
+    subtotal DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    tax_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    discount_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+
+    status ENUM('draft','final') 
+           NOT NULL DEFAULT 'draft',
+
+    notes TEXT NULL,
+
+    
+    created_by BIGINT UNSIGNED DEFAULT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_invoice_number (invoice_number),
+    INDEX idx_vendor_id (vendor_id),
+    INDEX idx_invoice_date (invoice_date)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+  
+ALTER TABLE `vp_invoices` ADD `vp_address_info_id` INT NULL AFTER `customer_id`;
+
+CREATE TABLE vp_invoice_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    invoice_id BIGINT UNSIGNED NOT NULL,
+    order_number VARCHAR(100) NULL,
+
+    item_code VARCHAR(100) NULL,
+    item_name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+
+    box_no VARCHAR(50) NULL,
+
+    quantity DECIMAL(12,3) NOT NULL DEFAULT 1,
+    unit_price DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+
+    tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+
+    cgst DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    sgst DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    igst DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+
+    tax_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    line_total DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_invoice_id (invoice_id),
+
+    CONSTRAINT fk_invoice_items_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES vp_invoices(id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO vp_po_invoice_map (po_id, invoice_id)
+SELECT i.po_id, i.id
+FROM vp_po_invoice i
+LEFT JOIN vp_po_invoice_map m
+    ON m.invoice_id = i.id
+WHERE m.invoice_id IS NULL
+  AND i.po_id IS NOT NULL;
+
+
+CREATE TABLE global_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    invoice_prefix VARCHAR(20) NOT NULL,
+    invoice_series INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO global_settings (invoice_prefix, invoice_series) VALUES ('INV', 1);
+
+CREATE TABLE firm_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    firm_name VARCHAR(150) NOT NULL,
+    pan VARCHAR(20),
+    gst VARCHAR(20),
+    address TEXT,
+    phone VARCHAR(20),
+    city VARCHAR(100),
+    state VARCHAR(100),
+    country VARCHAR(100),
+    pin VARCHAR(10),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

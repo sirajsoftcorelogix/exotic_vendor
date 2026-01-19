@@ -660,10 +660,12 @@
                     <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
                     <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
                     <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
+                    <a href="javascript:void(0)" id="action-add-to-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                 </div>
             </div>
             </div>
             <div class="ml-auto flex items-center space-x-4">
+            <span class="text-sm bg-white border border-gray-300 rounded-md px-2 py-1 cursor-pointer" onclick="clearSelectedOrders()" title="Clear selected orders">Clear All </span>
             <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
                     
                     <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
@@ -2779,4 +2781,54 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
         }
     });
 });
+
+// Add to Invoice handler
+document.getElementById('action-add-to-invoice').addEventListener('click', function(e){
+    e.preventDefault();
+    const oids = getSelectedOrderIds();
+    if (oids.length === 0) {
+        showAlert('Please select at least one order to create invoice.', 'warning');
+        return;
+    }
+    //customer_id should be same for all selected orders
+    let customerId = null;
+    for (const id of oids) {
+        const element = document.querySelector('#order-id-' + id);
+        if (!element) continue;
+        const orderData = JSON.parse(element.getAttribute('data-order'));
+        console.log('Order', id, 'customer_id:', orderData.customer_id);
+        if (customerId === null) {
+            customerId = orderData.customer_id;
+        } else if (customerId !== orderData.customer_id) {
+            showAlert('Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
+            return;
+        }
+    }
+    const form = document.getElementById('orders-form');
+    form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
+        if (!oids.includes(parseInt(el.value))) {
+            el.checked = false;
+        }
+    });
+    const hiddenInputs = form.querySelectorAll('input[name="invoice_order_ids[]"]');
+    hiddenInputs.forEach(el => el.remove());
+    
+    oids.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'poitem[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    
+    form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
+    form.method = 'POST';
+    form.submit();
+});
+
+//clear selected orders from localStorage on page unload
+function clearSelectedOrders() {
+    localStorage.removeItem('selected_po_orders');
+    window.location.reload();
+}
 </script>
