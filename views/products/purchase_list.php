@@ -132,7 +132,7 @@ input[type="date"] {
                             <label class="block">
                                 Quantity to be Purchased:
                                 <span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-16 text-center">
-                                    <?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>
+                                    <?php echo htmlspecialchars($pl['quantity'] ?? '0'); ?>
                                 </span>
                             </label>
 
