@@ -112,7 +112,7 @@ foreach ($images as $img) {
                 </div>
                 <label class="cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 px-5 rounded inline-flex items-center text-sm transition shadow-sm border border-gray-300">
                     <i class="fa-solid fa-folder-open mr-2"></i> Choose File
-                    <input type="file" name="new_photos[]" id="fileInput" multiple accept="image/*" class="hidden">
+                    <input type="file" name="new_photos[]" id="fileInput" multiple accept=".jpg, .jpeg, image/jpeg" class="hidden">
                 </label>
             </div>
 
@@ -197,7 +197,20 @@ function renderImageGrid($imgs) {
 
         for (let i = 0; i < this.files.length; i++) {
             let file = this.files[i];
-            let uniqueKey = file.name + '-' + file.size + '-' + activeVarId; // Include VarId in key
+
+            // --- START CHANGE: JPG VALIDATION ---
+            // Check file extension and mime type
+            const fileName = file.name.toLowerCase();
+            const isJpgExtension = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg');
+            const isJpgMime = file.type === 'image/jpeg' || file.type === 'image/jpg';
+
+            if (!isJpgExtension && !isJpgMime) {
+                alert('Only JPG/JPEG images are allowed. Skipped: ' + file.name);
+                continue; // Skip this file and move to the next
+            }
+            // --- END CHANGE ---
+
+            let uniqueKey = file.name + '-' + file.size + '-' + activeVarId; 
             
             if(!globalFiles.has(uniqueKey)){
                 globalFiles.set(uniqueKey, file);

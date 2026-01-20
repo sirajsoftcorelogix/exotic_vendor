@@ -625,6 +625,18 @@ switch ($page) {
                 break;
         }
         break;
+    case 'customer':
+        require_once 'controllers/CustomerController.php';
+        $controller = new CustomerController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            default:
+                $controller->index();   
+                break;
+        }
+        break;
     default:
         require_once 'controllers/DashboardController.php';
         $controller = new DashboardController();
