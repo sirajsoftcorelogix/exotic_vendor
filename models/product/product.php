@@ -844,7 +844,8 @@ class product
             p.product_weight,
             p.prod_height,
             p.prod_width,
-            p.prod_length
+            p.prod_length,
+            p.vendor
             FROM
             (
             SELECT product_id, SUM(quantity) AS quantity
