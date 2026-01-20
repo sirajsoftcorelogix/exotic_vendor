@@ -1415,10 +1415,10 @@ class InboundingController {
         $hasRows   = !empty($data['data']['var_rows']);
         $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
 
-        $apiurl = ($isVariant == 'Y' && !$hasRows) 
-            ? $baseUrl . '?new_variation=1' 
-            : $baseUrl;
-
+        // $apiurl = ($isVariant == 'Y' && !$hasRows) 
+        //     ? $baseUrl . '?new_variation=1'
+        //     : $baseUrl;
+        $apiurl = 'https://www.exoticindia.com/vendor-api/product/create?new_variation=1';
         $url = $apiurl;
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',

@@ -562,8 +562,8 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                                 <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
                                 <div class="relative w-full">
                                     <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
-                                           value="<?= htmlspecialchars($data['form2']['price_india'] ?? '') ?>" 
-                                           name="price_india">
+                                           value="<?= htmlspecialchars($var['price_india'] ?? '') ?>" 
+                                           name="variations[<?= $var['id'] ?>][price_india]">
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                                 </div>
                             </div>
@@ -571,8 +571,8 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                                 <label class="block text-xs font-bold text-[#555] mb-1">Price India MRP:</label>
                                 <div class="relative w-full">
                                     <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" 
-                                           value="<?= htmlspecialchars($data['form2']['price_india_mrp'] ?? '') ?>" 
-                                           name="price_india_mrp">
+                                           value="<?= htmlspecialchars($var['price_india_mrp'] ?? '') ?>" 
+                                           name="variations[<?= $var['id'] ?>][price_india_mrp]">
                                     <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span>
                                 </div>
                             </div>
@@ -580,8 +580,8 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                                 <label class="block text-xs font-bold text-[#222] mb-[5px]">USD Price:</label>
                                 <div class="relative flex items-center w-full">
                                     <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                                           value="<?= htmlspecialchars($data['form2']['usd_price'] ?? '') ?>" 
-                                           name="usd_price">
+                                           value="<?= htmlspecialchars($var['usd_price'] ?? '') ?>" 
+                                           name="variations[<?= $var['id'] ?>][usd_price]">
                                     <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">USD</span>
                                 </div>
                             </div>
@@ -3144,6 +3144,13 @@ function validateAndSubmit(actionType) {
         return el ? el.value.trim() : '';
     };
 
+    // Helper to check if price is strictly greater than 0
+    // Returns TRUE if invalid (empty, 0, 0.00, -5, etc.)
+    const isInvalidPrice = (val) => {
+        const num = parseFloat(val);
+        return !val || isNaN(num) || num <= 0;
+    };
+
     // --- 1. GENERAL FIELDS VALIDATION ---
     if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
@@ -3169,10 +3176,12 @@ function validateAndSubmit(actionType) {
     const mainQty = parseFloat(getVal('quantity_received')) || 0;
     if (mainQty < 1) errors.push("Main Item: 'Quantity' must be at least 1.");
 
-    if (!getVal('cp')) errors.push("Main Item: 'CP' is required.");
-    if (!getVal('price_india')) errors.push("Main Item: 'Price India' is required.");
-    if (!getVal('price_india_mrp')) errors.push("Main Item: 'Price India MRP' is required.");
-    if (!getVal('usd_price')) errors.push("Main Item: 'USD Price' is required.");
+    // UPDATED: Check for 0.00
+    if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+    if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
+    if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+    if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
+    
     if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
 
     const mainGst = parseFloat(getVal('gst_rate'));
@@ -3199,20 +3208,23 @@ function validateAndSubmit(actionType) {
         const vQty = parseFloat(getCardVal('quantity')) || 0;
         if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
 
-        if (!getCardVal('cp')) errors.push(`${cardTitle}: 'CP' is required.`);
-        if (!getCardVal('price_india')) errors.push(`${cardTitle}: 'Price India' is required.`);
-        if (!getCardVal('price_india_mrp')) errors.push(`${cardTitle}: 'Price India MRP' is required.`);
-        if (!getCardVal('usd_price')) errors.push(`${cardTitle}: 'USD Price' is required.`);
+        // UPDATED: Check for 0.00 inside variations
+        if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
+        if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
+        if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+        if (isInvalidPrice(getCardVal('usd_price'))) errors.push(`${cardTitle}: 'USD Price' must be greater than 0.`);
+
         if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);
         
         const vGst = parseFloat(getCardVal('gst_rate'));
         if (isNaN(vGst) || vGst < 0) errors.push(`${cardTitle}: 'GST' must be 0 or greater.`);
 
         // Variation Gallery Check
-        // We look for the photo grid *inside* this specific card
         const vGrid = card.querySelector('.photo-group-grid');
-        const vImgCount = vGrid ? vGrid.querySelectorAll('.draggable-item').length : 0;
-        if (vImgCount < 1) errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
+        if (vGrid) {
+            const vImgCount = vGrid.querySelectorAll('.draggable-item').length;
+            if (vImgCount < 1) errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
+        }
     });
 
 
