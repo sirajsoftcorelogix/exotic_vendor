@@ -1385,7 +1385,8 @@ class InboundingController {
 
         // 4. Handle Images (The major fix)
         $images_payload = array();
-        $images_payload['image_directory'] = $data['data']['image_directory'] ?? '';
+        $img_directory = ($isVariant == 'N') ? ($data['data']['image_directory'] ?? '') : ''; 
+        $images_payload['image_directory'] = $img_directory;
         $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
         if (!empty($data['data']['img'])) {
