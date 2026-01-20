@@ -79,7 +79,7 @@ input[type="date"] {
                             class="text-yellow-900 hover:text-yellow-1000 flex items-center space-x-1 text-sm">
 
                             <!-- Share Icon (arrow) -->
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
                                 <path d="M12 3l5 5h-3v6h-4V8H7l5-5z"/>
                             </svg>
