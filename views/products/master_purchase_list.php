@@ -442,6 +442,7 @@
                             }
                         </div>
                         <div><strong>Assigned Agent : </strong> ${plDetails.agent_name || 'N/A'}</div>
+                        <div><strong>Vendor : </strong> ${plDetails.vendor || 'N/A'}</div>
                         <div><strong>Date Added : </strong> ${plDetails.date_added_readable || 'N/A'}</div>
                         <div><strong>Add By : </strong> ${plDetails.added_by_name || 'N/A'}</div>
                         <div><strong>Purchased Date: </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>

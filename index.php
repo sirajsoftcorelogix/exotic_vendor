@@ -624,22 +624,24 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
-        break;
-    case 'customer':
-        require_once 'controllers/CustomerController.php';
-        $controller = new CustomerController($conn);
+        break;    
+    case 'purchase_list_comments':
+        require_once 'controllers/PurchaseListCommentController.php';
+        $controller = new PurchaseListCommentController($conn);
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->list();
+                break;
+            case 'add':
+                $controller->add();
                 break;
             default:
-                $controller->index();   
+                $controller->list();
                 break;
         }
-        break;
-    default:
-        require_once 'controllers/DashboardController.php';
-        $controller = new DashboardController();
-        $controller->index();
-        break;
+        default:
+            require_once 'controllers/DashboardController.php';
+            $controller = new DashboardController();
+            $controller->index();
+            break;
 }
