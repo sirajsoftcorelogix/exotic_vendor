@@ -4,13 +4,12 @@ class Customer{
     public function __construct($conn) {
         $this->conn = $conn;
     }
-    public function getGrnDetails($id) {
-        $query = "SELECT * FROM vp_grns WHERE id = ?";
-        $stmt = $this->conn->prepare($query);
-        $stmt->bind_param("i", $id);
+    public function getCustomers() {
+        $query = "SELECT * FROM vp_customers";
+        $stmt = $this->conn->prepare($query);        
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        return $result->fetch_all(MYSQLI_ASSOC);
     }
 }
 ?>
