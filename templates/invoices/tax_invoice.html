@@ -7,9 +7,10 @@
 <style>
     body {
         font-family: DejaVu Sans, Arial, sans-serif;
-        font-size: 12px;
+        font-size: 16px;
         margin: 0;
         padding: 20px;
+        padding-bottom: 120px;
         color: #000;
     }
 
@@ -20,27 +21,28 @@
 
     .header td {
         vertical-align: top;
+        padding-bottom: 20px;
     }
 
     .company {
         font-weight: bold;
-        font-size: 14px;
+        font-size: 18px;
     }
 
     .invoice-title {
         text-align: right;
-        font-size: 22px;
+        font-size: 26px;
         font-weight: bold;
     }
 
     .subtitle {
         text-align: right;
-        font-size: 11px;
+        font-size: 16px;
     }
 
     /* BILL / SHIP */
     .bill-ship {
-        border: 1px solid #000;
+        /* border: 1px solid #000; */
         margin-top: 10px;
     }
 
@@ -86,6 +88,9 @@
     .mt-15 {
         margin-top: 15px;
     }
+    .mt-25 {
+        margin-top: 25px;
+    }
 </style>
 </head>
 
@@ -94,52 +99,54 @@
 <!-- HEADER -->
 <table class="header">
     <tr>
-        <td width="60%">
+        <td width="40%">
+            <img class="" width="350px" src="images/exotic_inv.jpg" alt="EXOTIC INDIA ART PVT LTD" src="https://placehold.co/604x127">
+            
+        </td>
+        <td width="60%" style="text-align:right;">
+            <img src="images/black_rectangle.png" alt="ISO LOGO" style="height: 20px; width: auto; margin-left: 5px; margin-top: 20px;">
+            <!-- <div style="height: 20px; width: 200px; background-color: #000000; display: block;">&nbsp;
+                
+            </div>  -->
+        </td>
+    </tr>
+    <tr >
+        <td width="60%" class="mt-25">
             <div class="company">EXOTIC INDIA ART PVT LTD</div>
             GST ID: 07AADCE1400C1ZJ<br>
             PAN: AADCE1400C
         </td>
-        <td width="40%">
+        <td width="40%" style="text-align: right;">
             <div class="invoice-title">TAX INVOICE</div>
             <div class="subtitle">ORIGINAL FOR RECIPIENT</div>
-            <div class="subtitle">Date: December 15, 2025</div>
+            <div class="subtitle">Date: {{INVOICE_DATE}}</div>
+            <div class="subtitle">Invoice No: {{INVOICE_NUMBER}}</div>
         </td>
     </tr>
 </table>
 
-<hr>
+<!-- <hr> -->
 
 <!-- BILL / SHIP (MATCHING IMAGE DESIGN) -->
 <table class="bill-ship">
     <tr>
-        <td width="49%">
-            <div class="section-title">BILL TO:</div>
-            <b>BRAND PROMOTERS & EVENTS PRIVATE LIMITED</b><br>
-            1st Floor, Shop No. 12Q, 1858, Asa Ram<br>
-            Complex Chotu Ram Chowk, Rohtak,<br>
-            Haryana (06)<br>
-            Pin Code: 124001<br>
-            Tel: 9068686868<br>
-            GSTIN: 06AAJCB8714C1ZV
+        <td width="3%"><div style="width: 15px; height: 100px; background-color: #000000; display: block;">&nbsp; <br> &nbsp;</div></td>
+        <td width="47%">            
+            <div class="section-title">BILL TO:</div>            
+            {{BILL_TO_INFO}}
         </td>
 
-        <td class="divider"></td>
-
-        <td width="49%">
+        <!-- <td class="divider"></td> -->
+        <td width="3%"><div style="width: 15px; height: 100px; background-color: #737373; display: block;">&nbsp; <br> &nbsp;</div></td>
+        <td width="47%" style="flex-wrap: 1;">            
             <div class="section-title">SHIP TO:</div>
-            <b>BRAND PROMOTERS & EVENTS PRIVATE LIMITED</b><br>
-            Joyville, Sector 102, Dwarka Expressway,<br>
-            Tower No. 1, Flat No. 803, Gurugram,<br>
-            Haryana (06)<br>
-            Pin Code: 122505<br>
-            Tel: 9068686868<br>
-            GSTIN: 06AAJCB8714C1ZV
+            {{SHIP_TO_INFO}}
         </td>
     </tr>
 </table>
 
 <!-- ITEMS TABLE -->
-<table class="items mt-15">
+<table class="items mt-25">
     <tr>
         <th>S.No</th>
         <th>Box No</th>
@@ -153,35 +160,56 @@
         <th>Total ₹</th>
     </tr>
 
-    <tr>
+    <tr style="font-size: 13px;">
         <th colspan="6"></th>
-        <th>Rate%</th><th>Amt</th>
-        <th>Rate%</th><th>Amt</th>
-        <th>Rate%</th><th>Amt</th>
+        <th >Rate%</th><th>Amount</th>
+        <th>Rate%</th><th>Amount</th>
+        <th>Rate%</th><th>Amount</th>
         <th></th>
     </tr>
 
-    <tr>
-        <td>1</td>
-        <td>1</td>
-        <td class="desc">
-            4" Superfine Musician Lady – Set of Six | Brass Statue<br>
-            <small>Discount%: 23.19</small>
-        </td>
-        <td></td>
-        <td>1</td>
-        <td class="right">7757.73</td>
-        <td>0</td><td>0.00</td>
-        <td>0</td><td>0.00</td>
-        <td>5</td><td>387.89</td>
-        <td class="right">8145.62</td>
-    </tr>
+    {{ITEM_ROWS}}
 
-    <tr class="bold">
-        <td colspan="12" class="right">Grand Total</td>
-        <td class="right">20000.00</td>
+    <!-- SUMMARY ROWS -->
+    {{SUMMARY_ROWS}}
+</table>
+<table class="items ">
+    <tr>
+        <td class="mt-25" style="text-align: left; padding:20px ;">
+            <b>Amount in Words:</b><br>
+            {{AMOUNT_IN_WORDS}} ONLY
+            <br>
+        </td>
+        
     </tr>
 </table>
 
+<table class="items">
+    <tr>
+        <td style="width:50%; text-align:left; padding-left: 20px; ">            
+            
+            <b>Terms & Conditions:</b><br>
+            {{TERM_AND_CONDITIONS}}
+        </td>
+        <td style="width:50%; text-align:center; vertical-align:top; padding:20px;">
+            For EXOTIC INDIA ART PVT LTD<br><br><br><br>
+            Authorised Signatory
+        </td>
+    </tr>
+</table>
+<!--footer-->
+<table style="width:100%; border-collapse:collapse; margin-top:40px; font-size:12px; text-align:center; position: fixed; bottom: 0; left: 0; right: 0; background-color: #fff; padding-top: 10px; border-top: 1px solid #000;">
+    <tr>
+        <td width="30%"><img src="images/po_logo.png" alt="EXOTIC INDIA ART PVT LTD" style="height: 20px; width: auto; margin-left: 5px; margin-top: 20px;"></td>
+        <td width="35%" style="text-align: left;"><b>Head Office</b><br>
+            A-16/1, Wazirpur Industrial Estate
+            Delhi 110052, India   
+         </td>
+        <td width="35%" style="text-align: left;"><b>Exclusive Stores</b><br>
+            71/2 Kirti Nagar Main Road, WHS Block 2, Delhi 110015, India
+            Tel: +91 95991 00764
+        </td>
+    </tr>
+</table>
 </body>
 </html>

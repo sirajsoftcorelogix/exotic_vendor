@@ -235,5 +235,31 @@ class Tables {
         }
         return null;
     }
+    public function updateRecord($table, $data, $id) {
+        $setClause = [];
+        $types = '';
+        $values = [];
+        foreach ($data as $key => $value) {
+            $setClause[] = "$key = ?";
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_double($value) || is_float($value)) {
+                $types .= 'd';
+            } else {
+                $types .= 's';
+            }
+            $values[] = $value;
+        }
+        $values[] = $id;
+        $types .= 'i';
+
+        $sql = "UPDATE " . $table . " SET " . implode(', ', $setClause) . " WHERE id = ?";
+        $stmt = $this->ci->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param($types, ...$values);
+
+        return $stmt->execute();
+    }
 }
 ?>
