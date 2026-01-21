@@ -9,11 +9,10 @@ $page = $_GET['page'] ?? 'orders';
 $action = $_GET['action'] ?? 'list';
 
 // Prevent directory traversal
-$page = basename($page);
-
+$page = basename($page); 
 $viewsPath = __DIR__ . '/views';
-$pageDir   = $viewsPath . '/' . $page;
-
+$pageDir   = $viewsPath . '/' . $page; 
+            
 if (!is_dir($pageDir)) {
     // Page not implemented → coming soon
     require $viewsPath . '/pages/coming-soon.php';
@@ -408,6 +407,18 @@ switch ($page) {
             case 'delete':
                 $controller->product_delete();
                 break;*/
+             case 'comment_list':
+                require_once 'controllers/PurchaseListCommentController.php';
+                $controller = new PurchaseListCommentController($conn);
+                $controller->list();
+            break;
+            
+            case 'addComment':
+                require_once 'controllers/PurchaseListCommentController.php';
+                $controller = new PurchaseListCommentController($conn);
+                $controller->add();
+            break;
+                
             default:
                 $controller->product_list();
                 break;
@@ -625,20 +636,7 @@ switch ($page) {
                 break;
         }
         break;    
-    case 'purchase_list_comments':
-        require_once 'controllers/PurchaseListCommentController.php';
-        $controller = new PurchaseListCommentController($conn);
-        switch ($action) {
-            case 'list':
-                $controller->list();
-                break;
-            case 'add':
-                $controller->add();
-                break;
-            default:
-                $controller->list();
-                break;
-        }
+
         default:
             require_once 'controllers/DashboardController.php';
             $controller = new DashboardController();

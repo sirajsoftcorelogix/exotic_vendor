@@ -282,7 +282,7 @@ input[type="date"] {
 
         let res;
         try {
-            res = await fetch("?page=purchase_list_comments&action=add", {
+            res = await fetch("?page=products&action=addComment", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: payload.toString(),
@@ -346,7 +346,7 @@ input[type="date"] {
 
             const data = await r.json();
             if (data && data.success) {
-                showAlertP('Saved successfully', 'success');
+                //showAlertP('Saved successfully', 'success');
                 setTimeout(() => location.reload(), 800);
             } else {
                 showAlertP('Failed: ' + (data.message || 'Error'), 'error');
@@ -491,7 +491,7 @@ input[type="date"] {
     const thread = document.getElementById(`commentsThread_${purchaseListId}`);
     thread.innerHTML = "<div class='text-sm text-gray-500'>Loading...</div>";
 
-    const res = await fetch(`?page=purchase_list_comments&action=list&purchase_list_id=${purchaseListId}`);
+    const res = await fetch(`?page=products&action=comment_list&purchase_list_id=${purchaseListId}`);
     const data = await res.json();
 
     if (!data.success) {
@@ -525,7 +525,7 @@ input[type="date"] {
     payload.set("comment", text);
     if (parentId) payload.set("parent_id", parentId);
 
-    const res = await fetch("?page=purchase_list_comments&action=add", {
+    const res = await fetch("?page=products&action=addComment", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: payload.toString(),
