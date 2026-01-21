@@ -1667,6 +1667,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 fixedInput.placeholder = "Auto-generated on Save";
             }
         }
+        const imgDirSelect = document.getElementById('image_directory_select');
+        if (imgDirSelect && imgDirSelect.tomselect) {
+            if (val === 'Y') {
+                // Requirement 1: If Variant Yes -> Clear value, Disable input
+                imgDirSelect.tomselect.clear();   // Remove selected value
+                imgDirSelect.tomselect.disable(); // Prevent user from selecting
+            } else {
+                // Requirement 2: If Variant No -> Enable input
+                imgDirSelect.tomselect.enable();
+            }
+        }
     }
     variantSelect.addEventListener('change', function() {
         toggleVariantFields(this.value);
@@ -3121,17 +3132,17 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
     // Initialize Image Directory Search
-if(document.getElementById('image_directory_select')) {
-    new TomSelect("#image_directory_select", {
-        create: false, // Set to true if you want to allow typing new folder names
-        sortField: { field: "text", direction: "asc" },
-        placeholder: "Search folder...",
-        onInitialize: function() {
-            this.wrapper.classList.add('w-full'); // Fixes width issue
-            this.control.classList.add('h-[32px]', 'text-[13px]'); // Matches your existing design
-        }
-    });
-}
+    if(document.getElementById('image_directory_select')) {
+        new TomSelect("#image_directory_select", {
+            create: true, // CHANGED TO TRUE: Allows user to type custom folder names
+            sortField: { field: "text", direction: "asc" },
+            placeholder: "Select or Type Directory...",
+            onInitialize: function() {
+                this.wrapper.classList.add('w-full');
+                this.control.classList.add('h-[32px]', 'text-[13px]');
+            }
+        });
+    }
 </script>
 <script>
 function validateAndSubmit(actionType) {
@@ -3162,7 +3173,12 @@ function validateAndSubmit(actionType) {
     if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
     if (!getVal('snippet_description')) errors.push("Field 'Snippet Description' is required.");
     if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
-    if (!getVal('image_directory')) errors.push("Please select an 'Image Directory'.");
+    const isVariant = getVal('is_variant'); // Get current Variant status (Y or N)
+
+    // Only validate Image Directory if this is NOT a variant (i.e., it is a Parent/Main item)
+    if (isVariant !== 'Y') {
+        if (!getVal('image_directory')) errors.push("Please select or enter an 'Image Directory'.");
+    }
 
     // Category Check (Checkboxes)
     const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;

@@ -79,7 +79,7 @@ input[type="date"] {
                             class="text-yellow-900 hover:text-yellow-1000 flex items-center space-x-1 text-sm">
 
                             <!-- Share Icon (arrow) -->
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/>
                                 <path d="M12 3l5 5h-3v6h-4V8H7l5-5z"/>
                             </svg>
@@ -95,14 +95,7 @@ input[type="date"] {
                                     <div class="text-xs text-gray-500 mt-1">Item Code: <strong><?php echo htmlspecialchars($item_code); ?></strong></div>
                                     <div class="text-xs text-gray-500">Status: <span class="font-medium px-2 bg-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-100 text-<?php echo $status === 'purchased' ? 'green' : 'yellow'; ?>-800"><?php echo ucwords(htmlspecialchars($status)); ?></span></div>
                                 </div>
-                                <div class="text-right">
-                                    <!-- <div class="text-sm font-bold text-gray-900"><?php //echo $cost; 
-                                                                                        ?></div> -->
-
-                                </div>
                             </div>
-
-
                         </div>
                     </div>
                     <div>
@@ -132,7 +125,7 @@ input[type="date"] {
                             <label class="block">
                                 Quantity to be Purchased:
                                 <span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-16 text-center">
-                                    <?php echo htmlspecialchars($pl['quantity'] ?? ''); ?>
+                                    <?php echo htmlspecialchars($pl['quantity'] ?? '0'); ?>
                                 </span>
                             </label>
 
@@ -178,9 +171,33 @@ input[type="date"] {
 
                         <?php endif; ?>
 
-                        <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">
-                            <label class="block">Remarks: <textarea id="remarks_<?php echo (int)$pl['id']; ?>" class="border rounded px-2 py-1 mt-1 w-full" rows="2"><?php echo htmlspecialchars($pl['remarks'] ?? ''); ?></textarea></label>
+                        <!--<div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600">
+                            <label class="block">Remarks: <textarea id="remarks_<?php //echo (int)$pl['id']; ?>" class="border rounded px-2 py-1 mt-1 w-full" rows="2"><?php //echo htmlspecialchars($pl['remarks'] ?? ''); ?></textarea></label>
+                        </div>-->
+
+                        <div class="mt-3">
+                            <button
+                                type="button"
+                                class="text-sm text-blue-600 hover:underline"
+                                onclick="toggleComments(<?= (int)$pl['id']; ?>)">
+                                Comments
+                            </button>
+
+                            <div id="commentsWrap_<?= (int)$pl['id']; ?>" class="mt-3 hidden">
+                                <!-- Thread list -->
+                                <div id="commentsThread_<?= (int)$pl['id']; ?>" class="space-y-3"></div>
+
+                                <!-- Add comment -->
+                                <div class="mt-3 flex gap-2">
+                                <input
+                                    id="commentInput_<?= (int)$pl['id']; ?>"
+                                    class="w-full border rounded px-3 py-2 text-sm"
+                                    placeholder="Write a comment..."
+                                />
+                                </div>
+                            </div>
                         </div>
+
 
                         <div class="mt-4 flex items-center justify-end space-x-2">
                             <button onclick="savePurchaseItem(<?= (int)$pl['id']; ?>, this)" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">
@@ -235,9 +252,71 @@ input[type="date"] {
         alert(message);
     }
 
-    function savePurchaseItem(id, btn) {
-        const qty = document.getElementById('quantity_' + id).value;
-        const remarks = document.getElementById('remarks_' + id).value;
+    function getMainCommentText(purchaseListId) {
+        const el = document.getElementById(`commentInput_${purchaseListId}`);
+        if (!el) return "";
+        return (el.value || "").trim();
+    }
+
+    function clearMainComment(purchaseListId) {
+        const el = document.getElementById(`commentInput_${purchaseListId}`);
+        if (el) el.value = "";
+    }
+
+    async function saveMainCommentIfAny(purchaseListId) {
+        const text = getMainCommentText(purchaseListId);
+        if (!text) return { success: true, skipped: true };
+
+        // Ensure thread exists & mark it as loaded so we can append immediately
+        const thread = document.getElementById(`commentsThread_${purchaseListId}`);
+        if (thread && !thread.dataset.loaded) {
+            thread.dataset.loaded = "1";
+            if (!thread.innerHTML.trim()) {
+            thread.innerHTML = ""; // clear "Loading..." etc
+            }
+        }
+
+        const payload = new URLSearchParams();
+        payload.set("purchase_list_id", purchaseListId);
+        payload.set("comment", text);
+
+        let res;
+        try {
+            res = await fetch("?page=purchase_list_comments&action=add", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: payload.toString(),
+            });
+        } catch (e) {
+            return { success: false, message: "Network error while saving comment" };
+        }
+
+        let data;
+        try {
+            data = await res.json();
+        } catch (e) {
+            return { success: false, message: "Invalid server response for comment" };
+        }
+
+        if (!data.success) {
+            return { success: false, message: data.message || "Failed to add comment" };
+        }
+
+        // ✅ Append new comment to HTML (create thread area if needed)
+        if (thread) {
+            // if it said "No comments yet." replace it
+            if (thread.textContent.includes("No comments yet")) thread.innerHTML = "";
+            thread.insertAdjacentHTML("beforeend", commentHtml(data.comment));
+        }
+
+        clearMainComment(purchaseListId);
+        return { success: true, skipped: false, comment: data.comment };
+    }
+
+    async function savePurchaseItem(id, btn) {
+        const qtyEl = document.getElementById('quantity_' + id);
+        const qty = qtyEl ? qtyEl.value : "";
+
         const eddEl = document.getElementById('edd_' + id);
         const edd = (eddEl && eddEl.value && eddEl.value.trim() !== '') ? eddEl.value : null;
 
@@ -245,98 +324,233 @@ input[type="date"] {
         btn.disabled = true;
         const originalText = btn.innerHTML || '';
         btn.innerHTML = 'Saving...';
-        fetch('?page=products&action=update_purchase_item', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    id: id,
-                    quantity: qty,
-                    remarks: remarks,
-                    expected_time_of_delivery: edd
-                })
-            }).then(r => r.json()).then(data => {
-                if (data && data.success) {
-                    showAlert('Saved successfully', 'success');
-                    //if (window.showGlobalToast) window.showGlobalToast('Saved successfully', 'success'); else alert('Saved successfully');
-                    setTimeout(() => {
-                        location.reload();
-                    }, 800);
-                } else {
-                    showAlert('Failed: ' + (data.message || 'Error'), 'error');
-                    //if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error'); else alert('Failed');
-                }
-            }).catch(err => {
-                if (window.showGlobalToast) window.showGlobalToast('Network error', 'error');
-                else alert('Network error');
+
+        try {
+            // ✅ 1) Save comment first (if any)
+            const c = await saveMainCommentIfAny(id);
+            if (!c.success) {
+                showAlertP("Comment not saved: " + (c.message || "Error"), "error");
+                return;
+            }
+
+            // ✅ 2) Save purchase item
+            const r = await fetch('?page=products&action=update_purchase_item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: id,
+                quantity: qty,
+                expected_time_of_delivery: edd
             })
-            .finally(() => {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
             });
+
+            const data = await r.json();
+            if (data && data.success) {
+                showAlertP('Saved successfully', 'success');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showAlertP('Failed: ' + (data.message || 'Error'), 'error');
+            }
+        } catch (err) {
+            showAlertP('Network error', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
+
 
     async function markAsPurchased(id) {
-        const confirmed = window.customConfirm ? await window.customConfirm('Mark this item as purchased?') : confirm('Mark this item as purchased?');
+        const confirmed = window.customConfirm
+            ? await window.customConfirm('Mark this item as purchased?')
+            : confirm('Mark this item as purchased?');
         if (!confirmed) return;
-        fetch('?page=products&action=mark_purchased', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                id: id
-            })
-        }).then(r => r.json()).then(data => {
+
+        try {
+            // ✅ Save comment if typed
+            const c = await saveMainCommentIfAny(id);
+            if (!c.success) {
+                showAlertP("Comment not saved: " + (c.message || "Error"), "error");
+                return;
+            }
+
+            const r = await fetch('?page=products&action=mark_purchased', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+
+            const data = await r.json();
             if (data && data.success) {
-                showAlert('Marked as purchased', 'success');
-                //if (window.showGlobalToast) window.showGlobalToast('Marked as purchased', 'success'); else alert('Marked as purchased');
+                showAlertP('Marked as purchased', 'success');
                 setTimeout(() => location.reload(), 900);
             } else {
-                if (window.showGlobalToast) window.showGlobalToast('Failed: ' + (data.message || 'Error'), 'error');
-                else alert('Failed');
+                showAlertP('Failed: ' + (data.message || 'Error'), 'error');
             }
-        }).catch(err => {
-            if (window.showGlobalToast) window.showGlobalToast('Network error', 'error');
-            else alert('Network error');
-        });
+        } catch (err) {
+            showAlertP('Network error', 'error');
+        }
     }
+
 
     async function markUnpurchased(id) {
-        const confirmed = window.customConfirm ?
-            await window.customConfirm('Mark this item as unpurchased?') :
-            confirm('Mark this item as unpurchased?');
-
+        const confirmed = window.customConfirm
+            ? await window.customConfirm('Mark this item as unpurchased?')
+            : confirm('Mark this item as unpurchased?');
         if (!confirmed) return;
 
-        fetch('?page=products&action=mark_unpurchased', {
+        try {
+            // ✅ Save comment if typed
+            const c = await saveMainCommentIfAny(id);
+            if (!c.success) {
+                showAlertP("Comment not saved: " + (c.message || "Error"), "error");
+                return;
+            }
+
+            const r = await fetch('?page=products&action=mark_unpurchased', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    id: id
-                })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data && data.success) {
-                    showAlert('Marked as unpurchased', 'success');
-                    setTimeout(() => location.reload(), 900);
-                } else {
-                    const msg = data?.message || 'Error';
-                    if (window.showGlobalToast)
-                        window.showGlobalToast('Failed: ' + msg, 'error');
-                    else alert('Failed');
-                }
-            })
-            .catch(err => {
-                if (window.showGlobalToast)
-                    window.showGlobalToast('Network error', 'error');
-                else alert('Network error');
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
             });
+
+            const data = await r.json();
+            if (data && data.success) {
+            showAlertP('Marked as unpurchased', 'success');
+            setTimeout(() => location.reload(), 900);
+            } else {
+            showAlertP('Failed: ' + (data.message || 'Error'), 'error');
+            }
+        } catch (err) {
+            showAlertP('Network error', 'error');
+        }
+        }
+
+  
+    async function toggleComments(purchaseListId) {
+        const wrap = document.getElementById(`commentsWrap_${purchaseListId}`);
+        wrap.classList.toggle("hidden");
+
+        // Load once (basic guard)
+        const thread = document.getElementById(`commentsThread_${purchaseListId}`);
+        if (!thread.dataset.loaded) {
+            await loadComments(purchaseListId);
+            thread.dataset.loaded = "1";
+        }
     }
 
+  function formatDateTime(dateStr) {
+    // Expects ISO-ish "YYYY-MM-DD HH:MM:SS" from PHP
+    const d = new Date(dateStr.replace(" ", "T"));
+    if (isNaN(d.getTime())) return dateStr;
+
+    return d.toLocaleString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function commentHtml(c) {
+    const user = escapeHtml(c.user_name || "User");
+    const when = formatDateTime(c.created_at);
+    const text = c.is_deleted ? "<em class='text-gray-500'>Comment deleted</em>" : escapeHtml(c.comment);
+
+    // indent replies
+    const indent = c.parent_id ? "ml-8 border-l pl-4" : "";
+
+    return `
+      <div class="rounded-lg border p-3 ${indent}" data-comment-id="${c.id}">
+        <div class="text-xs text-gray-600">
+          <span class="font-semibold">${user}</span>
+          <span class="ml-1">commented on</span>
+          <span class="ml-1">${escapeHtml(when)}</span>
+        </div>
+        <div class="mt-1 text-sm text-gray-900">${text}</div>        
+      </div>
+    `;
+  }
+
+  function showReplyBox(purchaseListId, commentId) {
+    const el = document.getElementById(`replyBox_${purchaseListId}_${commentId}`);
+    el.classList.toggle("hidden");
+  }
+
+  async function loadComments(purchaseListId) {
+    const thread = document.getElementById(`commentsThread_${purchaseListId}`);
+    thread.innerHTML = "<div class='text-sm text-gray-500'>Loading...</div>";
+
+    const res = await fetch(`?page=purchase_list_comments&action=list&purchase_list_id=${purchaseListId}`);
+    const data = await res.json();
+
+    if (!data.success) {
+      thread.innerHTML = `<div class="text-sm text-red-600">${escapeHtml(data.message || "Failed to load")}</div>`;
+      return;
+    }
+
+    if (!data.comments.length) {
+      thread.innerHTML = "<div class='text-sm text-gray-500'>No comments yet.</div>";
+      return;
+    }
+
+    // Render in order (server already orders)
+    thread.innerHTML = data.comments.map(commentHtml).join("");
+  }
+
+  async function addComment(purchaseListId, parentId = null) {
     
+    let inputId = parentId
+      ? `replyInput_${purchaseListId}_${parentId}`
+      : `commentInput_${purchaseListId}`;
+
+    const input = document.getElementById(inputId);
+    const text = (input.value || "").trim();
+    if (!text) return;
+
+    input.disabled = true;
+
+    const payload = new URLSearchParams();
+    payload.set("purchase_list_id", purchaseListId);
+    payload.set("comment", text);
+    if (parentId) payload.set("parent_id", parentId);
+
+    const res = await fetch("?page=purchase_list_comments&action=add", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: payload.toString(),
+    });
+
+    const data = await res.json();
+    input.disabled = false;
+
+    if (!data.success) {
+      alert(data.message || "Failed to add comment");
+      return;
+    }
+
+    // Append new comment
+    /*const thread = document.getElementById(`commentsThread_${purchaseListId}`);
+    const newHtml = commentHtml(data.comment);
+
+    if (parentId) {
+      // insert reply after parent node
+      const parentNode = thread.querySelector(`[data-comment-id="${parentId}"]`);
+      parentNode.insertAdjacentHTML("afterend", newHtml);      
+    } else {
+      thread.insertAdjacentHTML("beforeend", newHtml);
+    }*/
+
+    input.value = "";
+  }
 </script>
