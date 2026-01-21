@@ -691,7 +691,7 @@ span.mention {
 }
 
 .message-row.sent .bubble {
-  background: #d06706;
+  background: #ff7f2c;
   color: #fff;
   border-top-right-radius: 4px;
 }
@@ -795,7 +795,7 @@ span.mention {
     border-radius: 6px;
 }
 .drag-active {
-    border: 2px dashed #d06706;
+    border: 2px dashed #ff7f2c;
     background: rgba(208, 103, 6, 0.08);
 }
 #image-preview-container img {

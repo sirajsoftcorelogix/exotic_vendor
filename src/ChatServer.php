@@ -3,6 +3,7 @@ namespace ChatModule;
 
 use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
+use React\EventLoop\LoopInterface;
 use PDO;
 use Throwable;
 
@@ -27,12 +28,74 @@ class ChatServer implements MessageComponentInterface
     /** userId => [ resourceId => ConnectionInterface, ... ] */
     protected array $connectionsByUser = [];
 
-    public function __construct(PDO $pdo)
+    protected LoopInterface $loop;
+
+    public function __construct(PDO $pdo, LoopInterface $loop)
     {
         $this->clients = new \SplObjectStorage();
         $this->conn = $pdo;
+        $this->loop    = $loop;
+
+        $this->initDbKeepAlive();
     }
 
+    private function initDbKeepAlive(): void
+    {
+        // Ping DB every 60 seconds
+        $this->loop->addPeriodicTimer(60, function () {
+            try {
+                $this->conn->query('SELECT 1');
+            } catch (\Throwable $e) {
+                error_log('[ChatServer] MySQL disconnected, reconnecting...');
+                $this->reconnectDb();
+            }
+        });
+    }
+    private function reconnectDb(): void
+    {
+        static $retrying = false;
+        if ($retrying) {
+            return;
+        }
+        $retrying = true;
+        try {
+            $config = require __DIR__ . '/../config.php';
+            $dsn = sprintf(
+                'mysql:host=%s;dbname=%s;charset=%s',
+                $config['db']['host'],
+                $config['db']['name'],
+                $config['db']['charset']
+            );
+            $this->conn = new PDO(
+                $dsn,
+                $config['db']['user'],
+                $config['db']['pass'],
+                [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES   => false,
+                ]
+            );
+            echo "[ChatServer] MySQL reconnected successfully\n";
+        } catch (\Throwable $e) {
+            echo "[ChatServer] MySQL reconnect failed: {$e->getMessage()}\n";
+        } finally {
+            $retrying = false;
+        }
+    }
+    private function safeExecute(callable $fn): void
+    {
+        try {
+            $fn();
+        } catch (\PDOException $e) {
+            if (str_contains($e->getMessage(), '2006')) {
+                echo "[ChatServer] MySQL disconnected, reconnecting...\n";
+                $this->reconnectDb();
+            } else {
+                throw $e;
+            }
+        }
+    }
     /**
      * A new connection opened
      */
@@ -189,7 +252,10 @@ class ChatServer implements MessageComponentInterface
                 try {
                     $sql = "UPDATE online_users SET is_online = 0, last_seen = NOW() WHERE user_id = ?";
                     $stmt = $this->conn->prepare($sql);
-                    $stmt->execute([$uid]);
+                    //$stmt->execute([$uid]);
+                    $this->safeExecute(function () use ($stmt, $uid) {
+                        $stmt->execute([$uid]);
+                    });
                 } catch (Throwable $e) {
                     // log and continue
                     error_log("onClose DB update failed: " . $e->getMessage());
@@ -322,7 +388,10 @@ class ChatServer implements MessageComponentInterface
             $sql1 = "INSERT INTO online_users (user_id, is_online, last_seen) VALUES (?, ?, NOW())
                      ON DUPLICATE KEY UPDATE is_online = VALUES(is_online), last_seen = VALUES(last_seen)";
             $stmt = $this->conn->prepare($sql1);
-            $stmt->execute([$userId, $online ? 1 : 0]);
+            //$stmt->execute([$userId, $online ? 1 : 0]);
+            $this->safeExecute(function () use ($stmt, $userId, $online) {
+                $stmt->execute([$userId, $online ? 1 : 0]);
+            });
             return;
         } catch (Throwable $e) {
             // fallback to user_status table if online_users doesn't exist
@@ -442,14 +511,32 @@ class ChatServer implements MessageComponentInterface
         $createdAt = date('Y-m-d H:i:s');
         // Insert message
         $insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, `message`, file_path, original_name, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-        $insert->execute([
+        /*$insert->execute([
             $conversationId,
             $senderId,
             $text ?: null,
             $filePath ?: null,
             $originalName,
             $createdAt
-        ]);
+        ]);*/
+        $this->safeExecute(function () use (
+            $insert,
+            $conversationId,
+            $senderId,
+            $text,
+            $filePath,
+            $originalName,
+            $createdAt
+        ) {
+            $insert->execute([
+                $conversationId,
+                $senderId,
+                $text ?: null,
+                $filePath ?: null,
+                $originalName,
+                $createdAt
+            ]);
+        });
         $msgId = (int)$this->conn->lastInsertId();
 
         $msgRow = [
@@ -593,8 +680,10 @@ class ChatServer implements MessageComponentInterface
             AND m.id = ?
             AND r.message_id IS NULL
         ");
-        $stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
-
+        //$stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
+        $this->safeExecute(function () use ($stmt, $userId, $conversationId, $lastReadId) {
+            $stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
+        });
         /**
          * 2️⃣ UPDATE existing rows (important!)
          */

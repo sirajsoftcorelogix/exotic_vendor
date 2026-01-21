@@ -1037,7 +1037,11 @@ class InboundingController {
         $allVariations = array_values($_POST['variations'] ?? []);
         foreach ($allVariations as $index => &$variant) {
             $variant['id'] = $_POST['variations'][$index]['id'] ?? '';
-            
+            $variant['cp']              = !empty($variant['cp']) ? $variant['cp'] : 0;
+            $variant['price_india']     = !empty($variant['price_india']) ? $variant['price_india'] : 0;
+            $variant['price_india_mrp'] = !empty($variant['price_india_mrp']) ? $variant['price_india_mrp'] : 0;
+            $variant['usd_price']       = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
+            $variant['quantity']        = !empty($variant['quantity']) ? $variant['quantity'] : 0;
             // Handle File Uploads (Same as before)
             $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
             if ($uploadError === UPLOAD_ERR_OK) {
@@ -1381,7 +1385,8 @@ class InboundingController {
 
         // 4. Handle Images (The major fix)
         $images_payload = array();
-        $images_payload['image_directory'] = $data['data']['image_directory'] ?? '';
+        $img_directory = ($isVariant == 'N') ? ($data['data']['image_directory'] ?? '') : ''; 
+        $images_payload['image_directory'] = $img_directory;
         $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
         if (!empty($data['data']['img'])) {
@@ -1411,8 +1416,8 @@ class InboundingController {
         $hasRows   = !empty($data['data']['var_rows']);
         $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
 
-        $apiurl = ($isVariant == 'Y' && !$hasRows) 
-            ? $baseUrl . '?new_variation=1' 
+        $apiurl = ($isVariant == 'Y') 
+            ? $baseUrl . '?new_variation=1'
             : $baseUrl;
 
         $url = $apiurl;

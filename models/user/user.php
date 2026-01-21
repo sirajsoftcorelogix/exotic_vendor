@@ -288,7 +288,7 @@ class User {
             }
         }
         // total records
-        $sql = "SELECT COUNT(*) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id";
+        $sql = "SELECT COUNT(DISTINCT vu.id) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where";
         $resultCount = $this->db->query($sql);
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'] ?? 0;
