@@ -1,5 +1,5 @@
 <?php
-class PurchaseListCommentModel
+class purchaseListComment
 {
     private mysqli $db;
 
@@ -22,7 +22,7 @@ class PurchaseListCommentModel
               c.created_at,
               u.name AS user_name
             FROM purchase_list_comments c
-            LEFT JOIN users u ON u.id = c.user_id
+            LEFT JOIN vp_users u ON u.id = c.user_id
             WHERE c.purchase_list_id = ?
             ORDER BY c.created_at ASC, c.id ASC
         ";
@@ -39,7 +39,8 @@ class PurchaseListCommentModel
 
     public function add(int $purchaseListId, int $userId, string $comment, ?int $parentId = null): ?array
     {
-        $sql = "
+      
+      $sql = "
             INSERT INTO purchase_list_comments
               (purchase_list_id, parent_id, user_id, comment, created_at)
             VALUES
@@ -68,7 +69,7 @@ class PurchaseListCommentModel
               c.created_at,
               u.name AS user_name
             FROM purchase_list_comments c
-            LEFT JOIN users u ON u.id = c.user_id
+            LEFT JOIN vp_users u ON u.id = c.user_id
             WHERE c.id = ?
             LIMIT 1
         ";

@@ -1,12 +1,12 @@
 <?php
-require_once __DIR__ . '/../models/PurchaseListComment.php';
+require_once 'models/product/purchaseListComment.php';
 class PurchaseListCommentController
 {
-    private PurchaseListComment $model;
+    private purchaseListComment $model;
 
     public function __construct(mysqli $db)
     {
-        $this->model = new PurchaseListComment($db);
+        $this->model = new purchaseListComment($db);
 
         // JSON responses only
         header('Content-Type: application/json');
@@ -22,28 +22,17 @@ class PurchaseListCommentController
         echo json_encode($data);
         exit;
     }
-
-    private function requireAuth(): int
-    {
-        if (empty($_SESSION['user_id'])) {
-            $this->respond([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 401);
-        }
-
-        return (int) $_SESSION['user_id'];
-    }
+   
 
     /* -------------------------------------------
        Actions
     ------------------------------------------- */
     public function list(): void
     {
-        $userId = $this->requireAuth();
+        is_login();
 
-        $purchaseListId = isset($_GET['purchase_list_id'])
-            ? (int)$_GET['purchase_list_id']
+        $purchaseListId = isset($_REQUEST['purchase_list_id'])
+            ? (int)$_REQUEST['purchase_list_id']
             : 0;
 
         if ($purchaseListId <= 0) {
@@ -65,8 +54,8 @@ class PurchaseListCommentController
     // POST /comments?action=add
     public function add(): void
     {
-        $userId = $this->requireAuth();
-
+        is_login();
+        
         $purchaseListId = isset($_POST['purchase_list_id'])
             ? (int)$_POST['purchase_list_id']
             : 0;
@@ -102,7 +91,7 @@ class PurchaseListCommentController
 
         $row = $this->model->add(
             $purchaseListId,
-            $userId,
+            $_SESSION['user']['id'],
             $comment,
             $parentId
         );
