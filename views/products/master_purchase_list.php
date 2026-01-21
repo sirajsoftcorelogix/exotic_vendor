@@ -144,9 +144,8 @@
                     <thead>
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>                            
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>                            
+                            
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
                             <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -170,23 +169,23 @@
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                        <?php foreach ($data['purchase_list'] as $pl): ?>
+                        <?php foreach ($data['purchase_list'] as $pl): 
+                             $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
+                            ?>
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer"
                                     onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')">
                                     <?php echo htmlspecialchars($pl['item_code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
                                 </td>
 
-                                <td class="px-6 py-4 whitespace-normal text-sm text-gray-900 break-words">
-                                    <?php echo htmlspecialchars($pl['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php echo htmlspecialchars($pl['vendor'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php echo htmlspecialchars($pl['category'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                <td class="px-5 py-4 text-sm text-gray-900">
+                                    <div class="w-20 h-24 flex items-center justify-center overflow-hidden rounded-md border bg-gray-50">
+                                        <img
+                                            src="<?php echo htmlspecialchars($image); ?>"
+                                            alt="<?php echo htmlspecialchars($pl['item_code'] ?? 'Product'); ?>"
+                                            class="max-w-full max-h-full object-contain"
+                                        >
+                                    </div>
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -442,6 +441,7 @@
                             }
                         </div>
                         <div><strong>Assigned Agent : </strong> ${plDetails.agent_name || 'N/A'}</div>
+                        <div><strong>Vendor : </strong> ${plDetails.vendor || 'N/A'}</div>
                         <div><strong>Date Added : </strong> ${plDetails.date_added_readable || 'N/A'}</div>
                         <div><strong>Add By : </strong> ${plDetails.added_by_name || 'N/A'}</div>
                         <div><strong>Purchased Date: </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>

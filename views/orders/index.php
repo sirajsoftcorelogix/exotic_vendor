@@ -692,46 +692,45 @@
     <div class="mt-5">
         <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post" id="orders-form">
             <div class="flex  ">
-                <div class="w-1/2">
-                    <!-- <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button> -->
-                    <!-- Actions dropdown for bulk operations -->
-                    <div class="relative inline-block text-left">
-                        <button id="bulk-action-toggle" type="button" class="btn btn-success inline-flex items-center px-4 py-2" aria-haspopup="true" aria-expanded="false">
-                            Actions
-                            <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </button>
-                        <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
-                            <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
-                            <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
-                            <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
-                            <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
-                        </div>
-                    </div>
+            <div class="w-1/2">
+            <!-- <button type="submit" onclick="checkPoItmes()" class="btn btn-success">Create PO</button> -->
+             <!-- Actions dropdown for bulk operations -->
+            <div class="relative inline-block text-left">
+                <button id="bulk-action-toggle" type="button" class="btn btn-success inline-flex items-center px-4 py-2" aria-haspopup="true" aria-expanded="false">
+                    Actions
+                    <svg class="ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div id="bulk-action-menu" class="hidden absolute left-0 mt-2 w-48 bg-white border rounded shadow z-50">
+                    <a href="#" id="action-create-po" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                    <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
+                    <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
+                    <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
+                    <a href="javascript:void(0)" id="action-add-to-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                 </div>
-                <div class="ml-auto flex items-center space-x-4">
-                    <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
-
-                        <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
-                        <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
-                    </select>
-                    <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
-                        onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
-                        <?php foreach ([10, 20, 50, 100] as $opt): ?>
-                            <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
-                                <?= $opt ?> Orders per page
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <!-- button refresh-->
-                    <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
-                        <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); 
-                                        ?>" alt="Refresh" class="h-8 inline-block " /> -->
-                        <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
-                    </span>
-                    <!-- update imported orders -->
-                    <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
+            </div>
+            </div>
+            <div class="ml-auto flex items-center space-x-4">
+            <span class="text-sm bg-white border border-gray-300 rounded-md px-2 py-1 cursor-pointer" onclick="clearSelectedOrders()" title="Clear selected orders">Clear All </span>
+            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
+                    
+                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
+                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
+            </select>
+            <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
+                onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
+                <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                    <option value="<?= $opt ?>" <?= $opt === $limit ? 'selected' : '' ?>>
+                        <?= $opt ?> Orders per page
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <!-- button refresh-->
+            <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
+                <!-- <img src="<?php //echo base_url('images/refresh2.jpg'); ?>" alt="Refresh" class="h-8 inline-block " /> -->
+            <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
+            </span>
+            <!-- update imported orders -->
+            <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
                 <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
             </span> -->
                 </div>
@@ -2800,92 +2799,94 @@
         document.getElementById('bulkAddToPurchasePopup').classList.add('hidden');
     }
 
-    //bulk AddToPurchase submit
-    document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', function(e) {
+//bulk AddToPurchase submit
+document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', function(e){
+    const agent = document.getElementById('bulkAddToPurchaseAgent').value;
+    if (!agent) {
         e.preventDefault();
+        document.getElementById('bulkAddToPurchaseError').textContent = 'Please select an agent.';
+        document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
+        return;
+    }
+    //ajax submit
+    document.getElementById('bulkAddToPurchaseError').textContent = 'Processing..'
+    document.getElementById('bulkAddToPurchaseError').classList.remove('hidden');
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch('index.php?page=products&action=create_purchase_list', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            //alert(data.message);
+            document.getElementById('bulkAddToPurchaseError').classList.remove('text-red-500');
+            document.getElementById('bulkAddToPurchaseError').classList.add('text-green-500');
+            document.getElementById('bulkAddToPurchaseError').textContent = 'Purchase List created successfully.';
+            //poitem clear from localStorage
+            localStorage.removeItem('selected_po_orders');
 
-        const errorEl = document.getElementById('bulkAddToPurchaseError');
-        errorEl.classList.remove('hidden', 'text-green-500');
-        errorEl.classList.add('text-red-500');
-
-        // 1️⃣ Validate agent
-        const agent = document.getElementById('bulkAddToPurchaseAgent').value;
-        if (!agent) {
-            errorEl.textContent = 'Please select an agent.';
-            return;
+            //timeout to close popup and reload
+            setTimeout(() => {
+                closeBulkAddToPurchasePopup();
+                location.reload();
+            }, 3000);
+            //bulkStatusError.classList.remove('hidden');
+            //location.reload();
+        } else {
+            alert(data.message);
         }
-
-        // 2️⃣ Validate quantities
-        const qtyInputs = this.querySelectorAll('input[name^="quantity["]');
-        if (qtyInputs.length === 0) {
-            errorEl.textContent = 'No items selected.';
-            return;
-        }
-
-        for (const input of qtyInputs) {
-            const value = parseInt(input.value, 10);
-
-            if (isNaN(value) || value < 1) {
-                errorEl.textContent = 'Quantity must be at least 1 for all items.';
-                input.focus();
-                input.classList.add('border-red-500');
-                return;
-            } else {
-                input.classList.remove('border-red-500');
-            }
-        }
-
-        // 3️⃣ Passed validation → submit via AJAX
-        errorEl.textContent = 'Processing...';
-
-        const formData = new FormData(this);
-
-        fetch('index.php?page=products&action=create_purchase_list', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    errorEl.classList.remove('hidden');
-                    errorEl.innerHTML = '';
-
-                    let html = '';
-
-                    // Created summary (GREEN)
-                    if (data.created && data.created > 0) {
-                        html += `<div class="text-green-600 font-semibold">Created: ${data.created}</div>`;
-                    }
-
-                    // Failed summary (RED)
-                    let failedCount = data.failed ? data.failed.length : 0;
-                    if (failedCount > 0) {
-                        html += `<div class="text-red-600 font-semibold">Failed: ${failedCount}</div>`;
-                        html += `<ul class="mt-1 text-xs text-red-500">`;
-                        data.failed.forEach(f => {
-                            html += `<li>- ${f.order_id ? 'Order #'+f.order_id+' ' : ''}${f.sku ? 'SKU: '+f.sku+' ' : ''}(${f.message})</li>`;
-                        });
-                        html += `</ul>`;
-                    }
-
-                    errorEl.innerHTML = html;
-
-                    // Logic check
-                    let allFailed = (data.created === 0 && failedCount > 0);
-
-                    // Redirect only if not all failed
-                    if (!allFailed) {
-                        setTimeout(() => {
-                            closeBulkAddToPurchasePopup();
-                            location.reload();
-                        }, 2500);
-                    }
-                } else {
-                    errorEl.textContent = data.message || 'Failed to create purchase list.';
-                }
-            })
-            .catch(() => {
-                errorEl.textContent = 'An error occurred. Please try again.';
-            });
     });
+});
+
+// Add to Invoice handler
+document.getElementById('action-add-to-invoice').addEventListener('click', function(e){
+    e.preventDefault();
+    const oids = getSelectedOrderIds();
+    if (oids.length === 0) {
+        showAlert('Please select at least one order to create invoice.', 'warning');
+        return;
+    }
+    //customer_id should be same for all selected orders
+    let customerId = null;
+    for (const id of oids) {
+        const element = document.querySelector('#order-id-' + id);
+        if (!element) continue;
+        const orderData = JSON.parse(element.getAttribute('data-order'));
+        console.log('Order', id, 'customer_id:', orderData.customer_id);
+        if (customerId === null) {
+            customerId = orderData.customer_id;
+        } else if (customerId !== orderData.customer_id) {
+            showAlert('Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
+            return;
+        }
+    }
+    const form = document.getElementById('orders-form');
+    form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
+        if (!oids.includes(parseInt(el.value))) {
+            el.checked = false;
+        }
+    });
+    const hiddenInputs = form.querySelectorAll('input[name="invoice_order_ids[]"]');
+    hiddenInputs.forEach(el => el.remove());
+    
+    oids.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'poitem[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    
+    form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
+    form.method = 'POST';
+    form.submit();
+});
+
+//clear selected orders from localStorage on page unload
+function clearSelectedOrders() {
+    localStorage.removeItem('selected_po_orders');
+    window.location.reload();
+}
 </script>

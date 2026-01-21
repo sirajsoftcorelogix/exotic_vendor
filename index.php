@@ -7,7 +7,17 @@ date_default_timezone_set('Asia/Kolkata');
 require_once 'bootstrap/init/init.php';
 $page = $_GET['page'] ?? 'orders';
 $action = $_GET['action'] ?? 'list';
-//$domain = "http://".$_SERVER['SERVER_NAME']."/exotic_vendor"; 
+
+// Prevent directory traversal
+$page = basename($page); 
+$viewsPath = __DIR__ . '/views';
+$pageDir   = $viewsPath . '/' . $page; 
+            
+if (!is_dir($pageDir)) {
+    // Page not implemented → coming soon
+    require $viewsPath . '/pages/coming-soon.php';
+    exit;
+}
 
 switch ($page) {
 	case 'users':
@@ -250,35 +260,37 @@ switch ($page) {
             case 'remove_payment':
                 $controller->removePayment();
                 break;
-            case 'add_challan':
-                $controller->addChallan();
+            default:
+                $controller->index();
                 break;
-            case 'get_challan':
-                $controller->getChallans();
+        }
+        break;
+    
+    case 'invoices':
+        require_once 'controllers/InvoicesController.php';
+        $controller = new InvoicesController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
                 break;
-            case 'remove_challan':
-                $controller->deleteChallan();
+            case 'create':
+                $controller->create();
                 break;
-            case 'vendor_search':
-                $controller->vendorSearch();
+            case 'create_post':
+                $controller->createPost();
                 break;
-            case 'custom_po':
-                $controller->customPO();
+            case 'view':
+                $controller->view();
                 break;
-            case 'custompo_post':
-                $controller->customPOSave();
-                break;
-            case 'product_items':
-                $controller->productItems();
-                break;
-            case 'stock_purchase':
-                $controller->stockPurchase();
+            case 'generate_pdf':
+                $controller->generatePdf();
                 break;
             default:
                 $controller->index();
                 break;
         }
         break;
+    
     case 'payement_terms':
         require_once 'controllers/PaymenetTermsController.php';
         $controller = new PaymenetTermsController();
@@ -395,6 +407,18 @@ switch ($page) {
             case 'delete':
                 $controller->product_delete();
                 break;*/
+             case 'comment_list':
+                require_once 'controllers/PurchaseListCommentController.php';
+                $controller = new PurchaseListCommentController($conn);
+                $controller->list();
+            break;
+            
+            case 'addComment':
+                require_once 'controllers/PurchaseListCommentController.php';
+                $controller = new PurchaseListCommentController($conn);
+                $controller->add();
+            break;
+                
             default:
                 $controller->product_list();
                 break;
@@ -611,10 +635,11 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
-        break;
-    default:
-        require_once 'controllers/DashboardController.php';
-        $controller = new DashboardController();
-        $controller->index();
-        break;
+        break;    
+
+        default:
+            require_once 'controllers/DashboardController.php';
+            $controller = new DashboardController();
+            $controller->index();
+            break;
 }
