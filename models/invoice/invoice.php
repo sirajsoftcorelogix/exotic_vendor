@@ -30,7 +30,7 @@ class Invoice {
     }
 
     public function createInvoice($data) {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_address_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at) 
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
@@ -38,10 +38,10 @@ class Invoice {
         $invoice_number = 'INV-' . date('Ymd') . '-' . mt_rand(1000, 9999);
         $stmt->bind_param(
             'ssisssdddsds',
-            $invoice_number,
+            $data['invoice_number'],
             $data['invoice_date'],
             $data['customer_id'],
-            $data['vp_address_info_id'],
+            $data['vp_order_info_id'],
             $data['currency'],
             $data['subtotal'],
             $data['tax_amount'],
@@ -59,22 +59,23 @@ class Invoice {
     }
 
     public function createInvoiceItem($data) {
-        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $stmt->bind_param(
-            'issssiiddddddd',
+            'isssssidddddddd',
             $data['invoice_id'],
             $data['order_number'],
             $data['item_code'],
+            $data['hsn'],
             $data['item_name'],
             $data['description'],
             $data['box_no'],
             $data['quantity'],
             $data['unit_price'],
-            $data['tax_rate'],
+            $data['tax_rate'],            
             $data['cgst'],
             $data['sgst'],
             $data['igst'],
