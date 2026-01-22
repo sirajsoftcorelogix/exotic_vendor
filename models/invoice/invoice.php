@@ -30,7 +30,7 @@ class Invoice {
     }
 
     public function createInvoice($data) {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_address_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at) 
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
@@ -41,7 +41,7 @@ class Invoice {
             $data['invoice_number'],
             $data['invoice_date'],
             $data['customer_id'],
-            $data['vp_address_info_id'],
+            $data['vp_order_info_id'],
             $data['currency'],
             $data['subtotal'],
             $data['tax_amount'],

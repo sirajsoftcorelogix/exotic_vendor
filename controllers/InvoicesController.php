@@ -95,7 +95,7 @@ class InvoicesController {
         // Validate form inputs
         $invoice_date = isset($_POST['invoice_date']) ? $_POST['invoice_date'] : date('Y-m-d');
         $customer_id = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
-        $vp_address_info_id = isset($_POST['vp_address_info_id']) ? trim($_POST['vp_address_info_id']) : '';
+        $vp_order_info_id = isset($_POST['vp_order_info_id']) ? trim($_POST['vp_order_info_id']) : '';
         $currency = isset($_POST['currency']) ? trim($_POST['currency']) : 'INR';
         $subtotal = isset($_POST['subtotal']) ? floatval($_POST['subtotal']) : 0;
         $tax_amount = isset($_POST['tax_amount']) ? floatval($_POST['tax_amount']) : 0;
@@ -135,7 +135,7 @@ class InvoicesController {
             'invoice_number' => $invoice_number,
             'invoice_date' => $invoice_date,
             'customer_id' => $customer_id,
-            'vp_address_info_id' => $vp_address_info_id,
+            'vp_order_info_id' => $vp_order_info_id,
             'currency' => $currency,
             'subtotal' => $subtotal,
             'tax_amount' => $tax_amount,
@@ -458,7 +458,7 @@ class InvoicesController {
         ';
         
         // Fetch customer and address information
-        $customer = $commanModel->getRecordById('vp_address_info', $invoice['vp_address_info_id'] ?? 0);
+        $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
         $billToInfo = '';
         $shipToInfo = '';
         
