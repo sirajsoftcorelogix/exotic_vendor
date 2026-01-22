@@ -685,6 +685,7 @@ class ProductsController {
             $enriched[] = array_merge($row, [
                 'product' => $product,
                 'agent_name' => $agent_name,
+                'added_by' => $commanModel->getUserNameById($row['edit_by']),
                 'date_added_readable' => date('d M Y', strtotime($row['date_added'])),
                 'date_purchased_readable' => ($row['date_purchased'] != '0000-00-00' && $row['date_purchased'] !== NULL) ? date('d M Y', strtotime($row['date_purchased'])) : 'N/A'
             ]);
@@ -719,9 +720,9 @@ class ProductsController {
         }
         $purchase_list_id = (int)$input['purchase_list_id'];
         $user_id = $_SESSION['user']['id'];
-        $qty = $input['quantity'];
-        $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
-        $res = $productModel->addPurchaseTransaction($purchase_list_id, $qty, $user_id, $remarks);
+        $qty = isset($input['quantity']) ? (int)$input['quantity']:'';
+        //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        $res = $productModel->addPurchaseTransaction($purchase_list_id, $qty, $user_id, '');
         echo json_encode($res);
         exit;
     }
@@ -736,11 +737,11 @@ class ProductsController {
             exit;
         }        
         $purchase_list_id = (int)$input['purchase_list_id'];
-        $qty = (int)$input['quantity'];
-        $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        $qty =  isset($input['quantity']) ? (int)$input['quantity']:'';
+        //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $user_id = $_SESSION['user']['id'];
         // $res = $productModel->updatePurchaseListStatus($id, 'pending', null);
-        $res = $productModel->reversePurchaseTransaction($purchase_list_id, $qty, $user_id, $remarks);
+        $res = $productModel->reversePurchaseTransaction($purchase_list_id, $qty, $user_id, '');
         echo json_encode($res);
         exit;
     }

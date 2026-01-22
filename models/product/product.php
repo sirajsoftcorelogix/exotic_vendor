@@ -1159,7 +1159,7 @@ class product
 
     public function reversePurchaseTransaction($purchase_list_id, $qty, $user_id, $reason = null)
     {
-        $qty = -abs($qty); // always negative
+        $qty = !empty($qty) ? -abs($qty) : 0; // always negative
 
         $sql = "INSERT INTO purchase_transactions (purchase_list_id, qty_purchased, purchased_by, remarks, date_purchased)
             VALUES (?,?,?,?, NOW())";
