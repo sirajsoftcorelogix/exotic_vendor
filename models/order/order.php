@@ -1081,6 +1081,55 @@ class Order{
         }
         
     }
+    public function updateOrderByOrderNumber($order_number, $data) {
+        // Validate inputs
+        if (empty($order_number) || empty($data)) {
+            return ['success' => false, 'message' => 'Order number or data is missing.'];
+        }
+
+        // Prepare SQL statement
+        $setClauses = [];
+        $values = [];
+        $types = '';
+
+        foreach ($data as $key => $value) {
+            $setClauses[] = "$key = ?";
+            $values[] = $value;
+
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value) || is_double($value)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        $sql = "UPDATE vp_orders SET " . implode(', ', $setClauses) . " WHERE order_number = ?";
+        $values[] = $order_number;
+        $types .= 's';
+
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $stmt->bind_param($types, ...$values);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Order updated successfully. Affected rows: ' . $affectedRows];
+    }
 
 }
 ?>

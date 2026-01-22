@@ -200,7 +200,7 @@ class InvoicesController {
         
         // Update order status to invoiced
         foreach ($order_numbers as $order_number) {
-            // optional: update order status
+            $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_no' => $invoice_number]);
         }
         
         // Clear session
@@ -296,7 +296,7 @@ class InvoicesController {
                 'margin_left' => 10,
                 'margin_right' => 10,
                 'margin_top' => 10,
-                'margin_bottom' => 50,
+                'margin_bottom' => 10,
                 'tempDir' => sys_get_temp_dir()
             ]);
             
@@ -469,7 +469,7 @@ class InvoicesController {
             $billToInfo .= htmlspecialchars($customer['city'] ?? '') . ' ' . htmlspecialchars($customer['state'] ?? '') . ' ' . htmlspecialchars($customer['zipcode'] ?? '') . '<br>';
             $billToInfo .= 'Tel: ' . htmlspecialchars($customer['mobile'] ?? '') . '<br>';
         }
-        if($customer['shipping_address_line1'] != '' && $customer['shipping_address_line2'] != ''){
+        if(!empty($customer['shipping_address_line1']) && !empty($customer['shipping_address_line2'])){
             $shipToInfo = '<strong>' . htmlspecialchars($customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? 'N/A') . '</strong><br>';
             $shipToInfo .= htmlspecialchars($customer['shipping_address_line1'] ?? '') . '';
             $shipToInfo .= htmlspecialchars($customer['shipping_address_line2'] ?? '') . '<br>';
@@ -478,7 +478,7 @@ class InvoicesController {
         }else{
             $shipToInfo = $billToInfo; // Use same info unless stored separately
         }
-        
+        //print_r($billToInfo);
         // Load template
         $templatePath = __DIR__ . '/../templates/invoices/tax_invoice.html';
         if (!file_exists($templatePath)) {
@@ -504,6 +504,112 @@ class InvoicesController {
         );
         
         return $html;
+    }
+    
+    public function previewInvoice() {
+        is_login();
+        header('Content-Type: application/json');
+        
+        try {
+            global $commanModel;
+            $previewData = json_decode(file_get_contents('php://input'), true);
+            //print_r($previewData);
+            // Get preview data from POST
+            $invoiceDate = isset($previewData['invoice_date']) ? $previewData['invoice_date'] : date('Y-m-d');
+            $customerId = isset($previewData['customer_id']) ? (int)$previewData['customer_id'] : 0;
+            $vpAddressInfoId = isset($previewData['vp_order_info_id']) ? trim($previewData['vp_order_info_id']) : '';
+            $currency = isset($previewData['currency']) ? trim($previewData['currency']) : 'INR';
+            $subtotal = isset($previewData['subtotal']) ? floatval($previewData['subtotal']) : 0;
+            $taxAmount = isset($previewData['tax_amount']) ? floatval($previewData['tax_amount']) : 0;
+            $discountAmount = isset($previewData['discount_amount']) ? floatval($previewData['discount_amount']) : 0;
+            $totalAmount = isset($previewData['total_amount']) ? floatval($previewData['total_amount']) : 0;
+            
+            // Get items
+            $items = isset($previewData['items']) ? (array)$previewData['items'] : [];
+            
+            if (empty($items)) {
+                echo json_encode(['success' => false, 'message' => 'No items to preview']);
+                exit;
+            }
+            
+            // Build invoice data structure
+            $invoice = [
+                'invoice_number' => 'PREVIEW',
+                'invoice_date' => $invoiceDate,
+                'currency' => $currency,
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'discount_amount' => $discountAmount,
+                'total_amount' => $totalAmount,
+                'vp_order_info_id' => $vpAddressInfoId,
+                'terms_and_conditions' => ''
+            ];
+            
+            // Get firm settings for terms and conditions
+            $firmSettings = $commanModel->getRecordById('global_settings', 1);
+            $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
+            
+            // Convert items to proper format for HTML generation
+            $invoiceItems = [];
+            foreach ($items as $item) {
+                $invoiceItems[] = [
+                    'box_no' => $item['box_no'] ?? '',
+                    'item_name' => $item['item_name'] ?? '',
+                    'hsn' => $item['hsn'] ?? '',
+                    'quantity' => $item['quantity'] ?? 0,
+                    'unit_price' => $item['unit_price'] ?? 0,
+                    'sgst' => floatval($item['sgst'] ?? 0),
+                    'cgst' => floatval($item['cgst'] ?? 0),
+                    'igst' => floatval($item['igst'] ?? 0),
+                    'tax_amount' => $item['tax_amount'] ?? 0,
+                    'line_total' => $item['line_total'] ?? 0
+                ];
+            }
+            
+            // Get customer and address information
+            // $customer = $commanModel->getRecordById('vp_order_info', $vpAddressInfoId);
+            // $billToInfo = '';
+            // $shipToInfo = '';
+            
+            // if ($customer) {
+            //     $billToInfo = '<strong>' . htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name'] ?? 'N/A') . '</strong><br>';
+            //     $billToInfo .= htmlspecialchars($customer['address_line1'] ?? '') . '';
+            //     $billToInfo .= htmlspecialchars($customer['address_line2'] ?? '') . '<br>';
+            //     $billToInfo .= htmlspecialchars($customer['city'] ?? '') . ' ' . htmlspecialchars($customer['state'] ?? '') . ' ' . htmlspecialchars($customer['zipcode'] ?? '') . '<br>';
+            //     $billToInfo .= 'Tel: ' . htmlspecialchars($customer['mobile'] ?? '') . '<br>';
+            // }
+            // if ($customer && $customer['shipping_address_line1'] != '' && $customer['shipping_address_line2'] != '') {
+            //     $shipToInfo = '<strong>' . htmlspecialchars($customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? 'N/A') . '</strong><br>';
+            //     $shipToInfo .= htmlspecialchars($customer['shipping_address_line1'] ?? '') . '';
+            //     $shipToInfo .= htmlspecialchars($customer['shipping_address_line2'] ?? '') . '<br>';
+            //     $shipToInfo .= htmlspecialchars($customer['shipping_city'] ?? '') . ' ' . htmlspecialchars($customer['shipping_state'] ?? '') . ' ' . htmlspecialchars($customer['shipping_zipcode'] ?? '') . '<br>';
+            //     $shipToInfo .= 'Tel: ' . htmlspecialchars($customer['shipping_mobile'] ?? '') . '<br>';
+            // } else {
+            //     $shipToInfo = $billToInfo;
+            // }
+            
+            // Generate the invoice HTML using the tax invoice template
+            $html = $this->generateInvoiceHtml($invoice, $invoiceItems);
+            
+            if (empty($html)) {
+                echo json_encode(['success' => false, 'message' => 'Failed to generate preview HTML']);
+                exit;
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'html' => $html
+            ]);
+            exit;
+            
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error generating preview: ' . $e->getMessage()
+            ]);
+            exit;
+        }
     }
     
 }

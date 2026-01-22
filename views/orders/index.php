@@ -2848,11 +2848,26 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
         showAlert('Please select at least one order to create invoice.', 'warning');
         return;
     }
-    //customer_id should be same for all selected orders
+    
+    // Validate customer_id for all selected orders
+    let validationPromise = Promise.resolve();
     let customerId = null;
+    const visibleOrderIds = [];
+    const hiddenOrderIds = [];
+    
+    // Separate visible and hidden orders
     for (const id of oids) {
         const element = document.querySelector('#order-id-' + id);
-        if (!element) continue;
+        if (element) {
+            visibleOrderIds.push(id);
+        } else {
+            hiddenOrderIds.push(id);
+        }
+    }
+    
+    // First, validate visible orders
+    for (const id of visibleOrderIds) {
+        const element = document.querySelector('#order-id-' + id);
         const orderData = JSON.parse(element.getAttribute('data-order'));
         console.log('Order', id, 'customer_id:', orderData.customer_id);
         if (customerId === null) {
@@ -2862,26 +2877,63 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
             return;
         }
     }
-    const form = document.getElementById('orders-form');
-    form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
-        if (!oids.includes(parseInt(el.value))) {
-            el.checked = false;
-        }
-    });
-    const hiddenInputs = form.querySelectorAll('input[name="invoice_order_ids[]"]');
-    hiddenInputs.forEach(el => el.remove());
     
-    oids.forEach(id => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'poitem[]';
-        input.value = id;
-        form.appendChild(input);
-    });
+    // If there are hidden orders, fetch their data via AJAX
+    if (hiddenOrderIds.length > 0) {
+        validationPromise = fetch('index.php?page=orders&action=get_orders_customer_id', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ order_ids: hiddenOrderIds })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.orders) {
+                for (const orderData of data.orders) {
+                    console.log('Fetched Order', orderData.order_id, 'customer_id:', orderData.customer_id);
+                    if (customerId === null) {
+                        customerId = orderData.customer_id;
+                    } else if (customerId !== orderData.customer_id) {
+                        throw new Error('Different customers');
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching order data:', error);
+            showAlert('Different customers. Cannot create invoice.', 'error');
+            throw error;
+        });
+    }
     
-    form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
-    form.method = 'POST';
-    form.submit();
+    validationPromise.then(() => {
+        // Validation passed, proceed with form submission
+        const form = document.getElementById('orders-form');
+        form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
+            if (!oids.includes(parseInt(el.value))) {
+                el.checked = false;
+            }
+        });
+        const hiddenInputs = form.querySelectorAll('input[name="invoice_order_ids[]"]');
+        hiddenInputs.forEach(el => el.remove());
+        
+        oids.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'poitem[]';
+            input.value = id;
+            form.appendChild(input);
+        });
+        
+        form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
+        form.method = 'POST';
+        form.submit();
+    })
+    .catch(error => {
+        // Error handling already done in AJAX catch block
+        console.error('Validation failed:', error);
+    });
 });
 
 //clear selected orders from localStorage on page unload
