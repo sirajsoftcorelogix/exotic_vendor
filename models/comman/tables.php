@@ -225,7 +225,7 @@ class Tables {
         return null;
     }
     public function get_customer_address($order_number) {
-        $sql = "SELECT * FROM vp_address_info WHERE order_number = ? LIMIT 1";
+        $sql = "SELECT * FROM vp_order_info WHERE order_number = ? LIMIT 1";
         $stmt = $this->ci->prepare($sql);
         $stmt->bind_param('s', $order_number);
         $stmt->execute();

@@ -85,7 +85,7 @@
                     <label class="block text-gray-700 form-label font-semibold">Bill To : <span class="text-red-500"> *</span> <?php echo count($billToAddresses) > 0 ? '<span class="text-blue-600 cursor-pointer hover:underline" onclick="openAddressSelector()"> Change Addresses</span>' : ''; ?></label>
                     
                     <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
-                    <input type="hidden" name="vp_address_info_id" id="vp_address_info_id" value="<?= $customer_address[0]['id'] ?>">
+                    <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= $customer_address[0]['id'] ?>">
                     <p class="text-sm text-gray-700 mt-1"><?= htmlspecialchars($defaultBillTo) ?></p>
                     
                     <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
@@ -320,7 +320,7 @@ function calculateGSTType(billingState) {
 function openAddressSelector() {
     const modal = document.getElementById('addressSelectorModal');
     const tableBody = document.getElementById('addressTableBody');
-    const currentAddressId = document.getElementById('vp_address_info_id').value;
+    const currentAddressId = document.getElementById('vp_order_info_id').value;
     
     tableBody.innerHTML = '';
     
@@ -358,7 +358,7 @@ function applyAddressSelection() {
     const shipTo = selectedRadio.getAttribute('data-ship-to');
     
     // Update form fields
-    document.getElementById('vp_address_info_id').value = addressId;
+    document.getElementById('vp_order_info_id').value = addressId;
     document.getElementById('billToSelect').value = billTo;
     document.getElementById('billToDisplay').value = billTo;
     
