@@ -1017,7 +1017,7 @@ class Order{
         }
 
         $sql = sprintf(
-            "INSERT INTO vp_address_info (%s) VALUES (%s)",
+            "INSERT INTO vp_order_info (%s) VALUES (%s)",
             implode(',', $insertCols),
             implode(',', $placeholders)
         );

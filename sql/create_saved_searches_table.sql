@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `saved_searches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- invoice related tables
-CREATE TABLE vp_address_info (
+CREATE TABLE vp_order_info (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     order_number INT UNSIGNED NOT NULL,
     customer_id INT UNSIGNED DEFAULT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE vp_invoices (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;
   
-ALTER TABLE `vp_invoices` ADD `vp_address_info_id` INT NULL AFTER `customer_id`;
+ALTER TABLE `vp_invoices` ADD `vp_order_info_id` INT NULL AFTER `customer_id`;
 
 CREATE TABLE vp_invoice_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -163,3 +163,7 @@ CREATE TABLE firm_details (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+-- Add customer_id column to vp_orders table not updated in test
+ALTER TABLE `vp_orders` ADD `customer_id` INT NULL AFTER `vendor_id`;
+ALTER TABLE `vp_invoice_items` ADD `hsn` VARCHAR(50) NULL AFTER `item_code`;
+--ALTER TABLE `vp_invoice_items` CHANGE `item_code` `sku` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL;
