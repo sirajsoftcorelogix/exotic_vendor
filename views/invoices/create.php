@@ -182,16 +182,17 @@
                 <input type="hidden" name="order_number[]" value="<?= $item['order_number'] ?>">
                 <input type="hidden" name="item_code[]" value="<?= $item['item_code'] ?>">
                 <input type="hidden" name="gst[]" value="<?= $item['gst'] ?>">
+                <input type="hidden" name="tax_rate[]" value="<?= $item['gst'] ?>">
                 <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
                 <td class="p-2">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
                 </td>
                 <td class="p-2"><span><?= $item['sku'] ?></span></td>
-                <td class="p-2 " colspan="2"><span><?= $item['title'] ?></span>
-                    <input type="hidden" name="item_name[]" value="<?= $item['title'] ?>" required>
+                <td class="p-2 " colspan="2"><span><?= htmlspecialchars($item['title'] ?? '') ?></span>
+                    <input type="hidden" name="item_name[]" value="<?= htmlspecialchars($item['title'] ?? '') ?>" required>
                 </td>
                 <td class="p-2"><span><?= $item['hsn'] ?></span>
-                    <input type="hidden" name="hsn_code[]" value="<?= $item['hsn'] ?>" > 
+                    <input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>" > 
                 </td>
                 <td class="p-2"><span><?= $item['quantity'] ?? 1 ?></span>
                     <input type="hidden" name="quantity[]"  value="<?= $item['quantity'] ?? 1 ?>">
