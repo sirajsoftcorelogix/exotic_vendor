@@ -150,10 +150,11 @@
                             <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 <button class="flex items-center gap-2 hover:text-gray-700"
                                     onclick="sortTableByDate()">
-                                    Date Added
+                                    Added Date 
                                     <svg xmlns="http://www.w3.org/2000/svg"
                                         class="h-8 w-8 text-gray-400"
                                         viewBox="0 0 20 20"
@@ -164,7 +165,8 @@
                                 </button>
                             </th>
 
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Purchased</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchased Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dimensions</th>
                             <th class="px-0 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
@@ -201,6 +203,10 @@
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo htmlspecialchars($pl['agent_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <?php
                                     $date_added = $pl['date_added_readable']
                                         ?? (!empty($pl['date_added']) ? date('d M Y', strtotime($pl['date_added'])) : 'N/A');
@@ -216,6 +222,16 @@
 
                                     echo htmlspecialchars($date_purchased, ENT_QUOTES, 'UTF-8');
                                     ?>
+                                </td>
+                                <?php
+                                    $dims = array_filter([
+                                        ($pl['prod_height'] ?? null) !== 'N/A' ? $pl['prod_height'] : null,
+                                        ($pl['prod_width']  ?? null) !== 'N/A' ? $pl['prod_width']  : null,
+                                        ($pl['prod_length'] ?? null) !== 'N/A' ? $pl['prod_length'] : null,
+                                    ]);
+                                ?>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo htmlspecialchars(implode(' x ', $dims), ENT_QUOTES, 'UTF-8'); ?>
                                 </td>
 
                                 <!-- action dropdown -->
@@ -406,6 +422,7 @@
 </div>
 </div>
 <script>
+
     //right side popup on item_code click 
     function viewPurchaseListDetails(plId) {
         //DetailModal show
@@ -421,12 +438,16 @@
             .then(data => {
                 if (data.success) {
                     const plDetails = data.purchaseItem;
-                    console.log(plDetails);
+                    //console.log(plDetails);
                     const fieldsContainer = document.getElementById('pl-detail-fields');
                     //fieldsContainer.innerHTML = ''; // Clear previous fields
 
                     // Populate fields dynamically
                     document.querySelector('.p-title').innerText = `${plDetails.title || 'N/A'}`;
+                    const dims = [plDetails.prod_height, plDetails.prod_width, plDetails.prod_length]
+                                .filter(Boolean)
+                                .join(' x ');
+
                     fieldsContainer.innerHTML = `
                         <!-- Product Image -->
                         <div class="col-span-2">
@@ -449,7 +470,7 @@
                         <div><strong>Color : </strong> ${plDetails.color || 'N/A'}</div>
                         <div><strong>Size : </strong> ${plDetails.size || 'N/A'}</div>
                         <div><strong>Material : </strong> ${plDetails.material || 'N/A'}</div>
-                        <div><strong>Dimensions : </strong> ${plDetails.dimensions || 'N/A'}</div>
+                        <div><strong>Dimensions : </strong> ${dims}</div>
                         <div><strong>Weight : </strong> ${plDetails.weight || 'N/A'}</div>
 
                         <!-- Quantity -->
@@ -470,18 +491,34 @@
                             </select>
                         </div>
 
-                        <!-- Remark -->
-                        <div class="col-span-2">
-                            <strong>Remark : </strong>
-                            <textarea id="pl-remark"
-                                rows="3"
-                                class="border rounded px-2 py-1 mt-1 w-full">${plDetails.remarks || ''}</textarea>
-                        </div>
+                         <div class="col-span-2 mt-4">
+                            <button
+                                type="button"
+                                class="text-sm text-blue-600 hover:underline"
+                                onclick="toggleComments(${plDetails.id})">
+                                Comments
+                            </button>
+
+                            <div id="commentsWrap_${plDetails.id}" class="mt-3">
+                                <!-- Thread list -->
+                                <div id="commentsThread_${plDetails.id}" class="space-y-3"></div>
+
+                                <!-- Add comment -->
+                                <div class="mt-3 flex gap-2">
+                                <input
+                                    id="commentInput_${plDetails.id}"
+                                    class="w-full border rounded px-3 py-2 text-sm"
+                                    placeholder="Write a comment..."
+                                />
+                                </div>
+                            </div>
+                        </div>   
+
                     `;
 
                     // Set hidden field value
                     document.getElementById('purchase_list_id').value = plId;
-
+                    loadComments(plId);     
                 } else {
                     showAlert('Failed to fetch purchase list details.');
                 }
@@ -497,7 +534,7 @@
 
         const plId = document.getElementById('purchase_list_id').value;
         const quantity = document.getElementById('pl-quantity').value;
-        const remark = document.getElementById('pl-remark').value;
+        //const remark = document.getElementById('pl-remark').value;
         const status = document.getElementById('pl-status').value;
 
         // Prepare data to send
@@ -507,7 +544,12 @@
         formData.append('id', plId);
         formData.append('quantity', quantity);
         formData.append('status', status);
-        formData.append('remarks', remark);
+        //formData.append('remarks', remark);
+
+        // ✅ 1) Save comment first (if any)
+        if(`commentInput_${plId}`.value !== '') {
+            addComment(plId);
+        }
 
         // Send AJAX request to update details
         fetch(`<?php echo base_url('?page=products&action=update_purchase_item'); ?>`, {
@@ -696,3 +738,4 @@
         );
     }
 </script>
+<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></script>
