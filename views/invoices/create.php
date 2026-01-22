@@ -527,7 +527,7 @@ function updateGSTFields(gstType) {
         const cgstInput = row.querySelector('input[name="cgst[]"]');
         const sgstInput = row.querySelector('input[name="sgst[]"]');
         const igstInput = row.querySelector('input[name="igst[]"]');
-        
+        console.log('Updating GST for row:', row, 'GST Type:', gstType, 'GST Value:', gstValue);
         if (gstType === 'same') {
             // Same state: Split GST between CGST and SGST (50% each)
             const halfGst = gstValue / 2;
