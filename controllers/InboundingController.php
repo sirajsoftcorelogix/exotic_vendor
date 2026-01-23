@@ -1237,7 +1237,6 @@ class InboundingController {
 
         // --- HELPER: Get Current Date in Y-m-d format ---
         $current_date_formatted = date("Y-m-d"); 
-
         // 1. Add all other fields FIRST
         $API_data['itemcode'] = $data['data']['Item_code'];
         $API_data['groupname'] = $data['data']['groupname'];
@@ -1415,7 +1414,7 @@ class InboundingController {
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
         $apiurl =  '';
-        $isVariant = $data['data']['is_variant'];
+        
         $hasRows   = !empty($data['data']['var_rows']);
         $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
 
@@ -1456,7 +1455,7 @@ class InboundingController {
 
         $response = curl_exec($ch);
         
-        // echo "<pre>";print_r($response);exit;
+        echo "<pre>";print_r($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
