@@ -1258,7 +1258,7 @@ class InboundingController {
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
         $API_data['aplus_content_ids'] = '';
-        if (isset($data['data']['optionals'])) {
+        if (isset($data['data']['optionals']) && !empty($data['data']['optionals'])) {
             $API_data['optionals'] = str_replace(',', '|', $data['data']['optionals']);
         }
         $API_data['material'] = $data['data']['material_name'];
