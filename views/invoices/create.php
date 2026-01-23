@@ -85,7 +85,7 @@
                     <label class="block text-gray-700 form-label font-semibold">Bill To : <span class="text-red-500"> *</span> <?php echo count($billToAddresses) > 0 ? '<span class="text-blue-600 cursor-pointer hover:underline" onclick="openAddressSelector()"> Change Addresses</span>' : ''; ?></label>
                     
                     <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
-                    <input type="hidden" name="vp_address_info_id" id="vp_address_info_id" value="<?= $customer_address[0]['id'] ?>">
+                    <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= $customer_address[0]['id'] ?>">
                     <p class="text-sm text-gray-700 mt-1"><?= htmlspecialchars($defaultBillTo) ?></p>
                     
                     <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
@@ -182,16 +182,17 @@
                 <input type="hidden" name="order_number[]" value="<?= $item['order_number'] ?>">
                 <input type="hidden" name="item_code[]" value="<?= $item['item_code'] ?>">
                 <input type="hidden" name="gst[]" value="<?= $item['gst'] ?>">
+                <input type="hidden" name="tax_rate[]" value="<?= $item['gst'] ?>">
                 <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
                 <td class="p-2">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
                 </td>
                 <td class="p-2"><span><?= $item['sku'] ?></span></td>
-                <td class="p-2 " colspan="2"><span><?= $item['title'] ?></span>
-                    <input type="hidden" name="item_name[]" value="<?= $item['title'] ?>" required>
+                <td class="p-2 " colspan="2"><span><?= htmlspecialchars($item['title'] ?? '') ?></span>
+                    <input type="hidden" name="item_name[]" value="<?= htmlspecialchars($item['title'] ?? '') ?>" required>
                 </td>
                 <td class="p-2"><span><?= $item['hsn'] ?></span>
-                    <input type="hidden" name="hsn_code[]" value="<?= $item['hsn'] ?>" > 
+                    <input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>" > 
                 </td>
                 <td class="p-2"><span><?= $item['quantity'] ?? 1 ?></span>
                     <input type="hidden" name="quantity[]"  value="<?= $item['quantity'] ?? 1 ?>">
@@ -319,7 +320,7 @@ function calculateGSTType(billingState) {
 function openAddressSelector() {
     const modal = document.getElementById('addressSelectorModal');
     const tableBody = document.getElementById('addressTableBody');
-    const currentAddressId = document.getElementById('vp_address_info_id').value;
+    const currentAddressId = document.getElementById('vp_order_info_id').value;
     
     tableBody.innerHTML = '';
     
@@ -357,7 +358,7 @@ function applyAddressSelection() {
     const shipTo = selectedRadio.getAttribute('data-ship-to');
     
     // Update form fields
-    document.getElementById('vp_address_info_id').value = addressId;
+    document.getElementById('vp_order_info_id').value = addressId;
     document.getElementById('billToSelect').value = billTo;
     document.getElementById('billToDisplay').value = billTo;
     
@@ -526,7 +527,7 @@ function updateGSTFields(gstType) {
         const cgstInput = row.querySelector('input[name="cgst[]"]');
         const sgstInput = row.querySelector('input[name="sgst[]"]');
         const igstInput = row.querySelector('input[name="igst[]"]');
-        
+        console.log('Updating GST for row:', row, 'GST Type:', gstType, 'GST Value:', gstValue);
         if (gstType === 'same') {
             // Same state: Split GST between CGST and SGST (50% each)
             const halfGst = gstValue / 2;

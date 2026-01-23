@@ -1384,6 +1384,9 @@ class InboundingController {
 
 
         // 4. Handle Images (The major fix)
+       
+        $isVariant = $data['data']['is_variant']; // <-- FIX: Define $isVariant here    
+
         $images_payload = array();
         $img_directory = ($isVariant == 'N') ? ($data['data']['image_directory'] ?? '') : ''; 
         $images_payload['image_directory'] = $img_directory;
@@ -1428,12 +1431,12 @@ class InboundingController {
         ];
 
         $ch = curl_init();
-        
+        //echo $jsonString; // Debug: Output JSON payload
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             // Note: You have both GET and POST set. POST usually overrides GET, 
             // but it is safer to remove CURLOPT_HTTPGET if you are doing a POST.
-            CURLOPT_HTTPGET => true, 
+            //CURLOPT_HTTPGET => true, 
             CURLOPT_POST => true,              
             CURLOPT_POSTFIELDS => $jsonString,
             CURLOPT_RETURNTRANSFER => true,
