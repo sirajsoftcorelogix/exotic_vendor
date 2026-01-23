@@ -1233,24 +1233,95 @@ class product
         }
         return ['success' => false, 'message' => 'Delete failed: ' . $stmt->error];
     }
+    
+
     public function getPurchaseItemById($id)
-    {
-        $sql = "SELECT p.*, pl.*,  u.name as agent_name, vu.name as added_by_name FROM purchase_list pl 
-        LEFT JOIN vp_products p ON pl.product_id = p.id 
-        LEFT JOIN vp_users u ON pl.user_id = u.id
-        LEFT JOIN vp_users vu ON pl.edit_by = vu.id
-        WHERE pl.id = ? LIMIT 1";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) return null;
-        $id = (int)$id;
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
-        }
+{
+    // Step 1: find product_id from this purchase_list entry
+    $sql = "SELECT product_id FROM purchase_list WHERE id = ? LIMIT 1";
+    $stmt = $this->db->prepare($sql);
+    if (!$stmt) return null;
+
+    $id = (int)$id;
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if (!$res || $res->num_rows === 0) {
         return null;
     }
+    $row = $res->fetch_assoc();
+    $productId = (int)$row['product_id'];
+
+    // Step 2: latest + qty with GROUP BY fix
+    $sql = "
+        SELECT
+            pl_latest.id,
+            pl_latest.user_id,
+            pl_latest.product_id,
+            pl_latest.order_id,
+            pl_latest.sku,
+            pl_latest.date_added,
+            pl_latest.date_purchased,
+            pl_latest.status,
+            qty.quantity,
+            pl_latest.remarks,
+            pl_latest.edit_by,
+            pl_latest.updated_at,
+            pl_latest.created_at,
+            pl_latest.expected_time_of_delivery,
+            p.item_code,
+            p.title,
+            p.groupname AS category,
+            p.cost_price,
+            p.image,
+            p.product_weight,
+            p.prod_height,
+            p.prod_width,
+            p.prod_length,
+            p.vendor,
+            u.name as agent_name,
+            vu.name as added_by_name
+        FROM
+        (
+            SELECT product_id, SUM(quantity) AS quantity
+            FROM purchase_list
+            WHERE product_id = ?
+            GROUP BY product_id
+        ) qty
+        JOIN
+        (
+            SELECT pl.*
+            FROM purchase_list pl
+            JOIN (
+                SELECT product_id, MAX(updated_at) AS max_updated_at
+                FROM purchase_list
+                WHERE product_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = pl.product_id
+                AND latest.max_updated_at = pl.updated_at
+            WHERE pl.product_id = ?
+        ) pl_latest ON pl_latest.product_id = qty.product_id
+        LEFT JOIN vp_products p ON p.id = pl_latest.product_id
+        LEFT JOIN vp_users u ON pl_latest.user_id = u.id
+        LEFT JOIN vp_users vu ON pl_latest.edit_by = vu.id
+        LIMIT 1;
+    ";
+
+    $stmt = $this->db->prepare($sql);
+    if (!$stmt) return null;
+
+    $stmt->bind_param('iii', $productId, $productId, $productId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result && $result->num_rows > 0) {
+        return $result->fetch_assoc();
+    }
+
+    return null;
+}
+
+
     public function getProductByskuExact($sku)
     {
         $sql = "SELECT * FROM vp_products WHERE sku = ? LIMIT 1";

@@ -1384,6 +1384,9 @@ class InboundingController {
 
 
         // 4. Handle Images (The major fix)
+       
+        $isVariant = $data['data']['is_variant']; // <-- FIX: Define $isVariant here    
+
         $images_payload = array();
         $img_directory = ($isVariant == 'N') ? ($data['data']['image_directory'] ?? '') : ''; 
         $images_payload['image_directory'] = $img_directory;
@@ -1424,26 +1427,28 @@ class InboundingController {
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
-            'Accept: application/json' 
+            'Accept: application/json',
+            'Content-Type: application/json',
+            'User-Agent: VendorApiClient/1.0',
         ];
 
         $ch = curl_init();
-        
+        //echo $jsonString; // Debug: Output JSON payload
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             // Note: You have both GET and POST set. POST usually overrides GET, 
             // but it is safer to remove CURLOPT_HTTPGET if you are doing a POST.
-            CURLOPT_HTTPGET => true, 
+            //CURLOPT_HTTPGET => true, 
             CURLOPT_POST => true,              
             CURLOPT_POSTFIELDS => $jsonString,
             CURLOPT_RETURNTRANSFER => true,
             
-            // --- ADDED HERE ---
-            CURLOPT_FOLLOWLOCATION => true, // Follow any "Location: " headers (redirects)
-            CURLOPT_MAXREDIRS => 10,        // Stop after 10 redirects to prevent infinite loops
-            CURLOPT_POSTREDIR => 3,
-            // ------------------
-            CURLOPT_POSTREDIR => 3,
+            // --- REDIRECT HANDLING ---
+            //CURLOPT_FOLLOWLOCATION => true,
+            //CURLOPT_MAXREDIRS => 5,         // Reduced from 10 to prevent infinite loops
+            //CURLOPT_POSTREDIR => 3,         // Removed duplicate
+            // ----------------------
+
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
