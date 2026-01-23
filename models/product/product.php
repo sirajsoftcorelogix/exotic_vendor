@@ -1235,25 +1235,25 @@ class product
     }
     
 
-     public function getPurchaseItemById($id)
-    {
-        // Step 1: find product_id from this purchase_list entry
-        $sql = "SELECT product_id FROM purchase_list WHERE id = ? LIMIT 1";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) return null;
+    public function getPurchaseItemById($id)
+{
+    // Step 1: find product_id from this purchase_list entry
+    $sql = "SELECT product_id FROM purchase_list WHERE id = ? LIMIT 1";
+    $stmt = $this->db->prepare($sql);
+    if (!$stmt) return null;
 
-        $id = (int)$id;
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        if (!$res || $res->num_rows === 0) {
-            return null;
-        }
-        $row = $res->fetch_assoc();
-        $productId = (int)$row['product_id'];
+    $id = (int)$id;
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if (!$res || $res->num_rows === 0) {
+        return null;
+    }
+    $row = $res->fetch_assoc();
+    $productId = (int)$row['product_id'];
 
-        // Step 2: run your logic: latest row + total qty for that product
-        $sql = "
+    // Step 2: latest + qty with GROUP BY fix
+    $sql = "
         SELECT
             pl_latest.id,
             pl_latest.user_id,
@@ -1286,6 +1286,7 @@ class product
             SELECT product_id, SUM(quantity) AS quantity
             FROM purchase_list
             WHERE product_id = ?
+            GROUP BY product_id
         ) qty
         JOIN
         (
@@ -1306,19 +1307,20 @@ class product
         LIMIT 1;
     ";
 
-        $stmt = $this->db->prepare($sql);   
-        if (!$stmt) return null;
+    $stmt = $this->db->prepare($sql);
+    if (!$stmt) return null;
 
-        $stmt->bind_param('iii', $productId, $productId, $productId);
-        $stmt->execute();
-        $result = $stmt->get_result();
+    $stmt->bind_param('iii', $productId, $productId, $productId);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-        if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
-        }
-
-        return null;
+    if ($result && $result->num_rows > 0) {
+        return $result->fetch_assoc();
     }
+
+    return null;
+}
+
 
     public function getProductByskuExact($sku)
     {
