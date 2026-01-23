@@ -1245,7 +1245,7 @@ class InboundingController {
         $API_data['title'] = $data['data']['product_title'];
         $API_data['status'] = 1;
         $API_data['snippet_description'] = $data['data']['snippet_description'];
-        $API_data['creator'] = $data['data']['received_by_user_id'];
+        // $API_data['creator'] = $data['data']['received_by_user_id'];
         // $API_data['optionals'] = $data['data']['optionals'];
         $API_data['india_net_qty'] = (int)$data['data']['india_net_qty'];
         $API_data['keywords'] = $data['data']['key_words'];
@@ -1258,7 +1258,11 @@ class InboundingController {
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
         $API_data['aplus_content_ids'] = '';
-        $API_data['optionals'] = 'OPTIONALS_TEXTILES_SARIS';
+        if (isset($data['data']['optionals'])) {
+            $API_data['optionals'] = str_replace(',', '|', $data['data']['optionals']);
+        } else {
+            $API_data['optionals'] = ''; // Or handle empty case as needed
+        }
         $API_data['material'] = $data['data']['material_name'];
         $API_data['discrete_vendors'][0]['vendor'] = $data['data']['vendor_code'];
         $API_data['discrete_vendors'][0]['priority'] = 1;
