@@ -26,7 +26,7 @@
                     <input type="hidden" name="action" value="master_purchase_list">
 
                     <!-- Search -->
-                    <div class="col-span-3">
+                    <div class="col-span-1">
                         <label class="text-sm text-gray-600">Search:</label>
                         <input type="text" name="search"
                             placeholder="Search by Item Code, Title..."
@@ -60,16 +60,40 @@
                         </select>
                     </div>
 
-                    <!-- Date Range Type -->
-                    <div> <label class="text-sm text-gray-600">Date Range Type:</label>
-                        <select name="date_type" class="border rounded px-3 py-2 w-full">
-                            <option value="added" <?= ($_GET['date_type'] ?? '') === 'added' ? 'selected' : '' ?>> Added Date </option>
-                            <option value="purchased" <?= ($_GET['date_type'] ?? '') === 'purchased' ? 'selected' : '' ?>> Purchased Date </option>
+                    <!-- Category -->
+                    <div>
+                        <label class="text-sm text-gray-600">Category:</label>
+                        <select name="category" class="border rounded px-3 py-2 w-full">
+                            <option value="all">All</option>
+                            <?php foreach (($data['categories'] ?? []) as $cat): ?>
+                                <option value="<?= htmlspecialchars($cat) ?>"
+                                    <?= ($_GET['category'] ?? '') === $cat ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($cat) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <!-- Status -->
+                     <?php
+                        $statuses = getPurchaseStatuses(); // returns key => label list
+                        $selected = $_GET['status'] ?? 'pending'; // default fallback
+                    ?>
+                    <div>
+                        <label class="text-sm text-gray-600">Status:</label>
+                        <select name="status" class="border rounded px-3 py-2 w-full">
+                            <option value="all">All</option>
+                            <?php foreach ($statuses as $key => $label): ?>
+                                <option value="<?= htmlspecialchars($key) ?>"
+                                    <?= ($selected === $key) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($label) ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
 
                     <!-- Date Range -->
-                    <div>
+                    <div class="col-span-2">
                         <label class="text-sm text-gray-600">Date Range:</label>
 
                         <div class="relative">
@@ -96,27 +120,11 @@
                         <input type="hidden" name="date_to" id="date_to" value="<?= htmlspecialchars($_GET['date_to'] ?? '') ?>">
                     </div>
 
-                    <!-- Category -->
-                    <div>
-                        <label class="text-sm text-gray-600">Category:</label>
-                        <select name="category" class="border rounded px-3 py-2 w-full">
-                            <option value="all">All</option>
-                            <?php foreach (($data['categories'] ?? []) as $cat): ?>
-                                <option value="<?= htmlspecialchars($cat) ?>"
-                                    <?= ($_GET['category'] ?? '') === $cat ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($cat) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <!-- Status -->
-                    <div>
-                        <label class="text-sm text-gray-600">Status:</label>
-                        <select name="status" class="border rounded px-3 py-2 w-full">
-                            <option value="all">All</option>
-                            <option value="pending" <?= ($_GET['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
-                            <option value="purchased" <?= ($_GET['status'] ?? '') === 'purchased' ? 'selected' : '' ?>>Purchased</option>
+                    <!-- Date Range Type -->
+                    <div> <label class="text-sm text-gray-600">Date Range Type:</label>
+                        <select name="date_type" class="border rounded px-3 py-2 w-full">
+                            <option value="added" <?= ($_GET['date_type'] ?? '') === 'added' ? 'selected' : '' ?>> Added Date </option>
+                            <option value="purchased" <?= ($_GET['date_type'] ?? '') === 'purchased' ? 'selected' : '' ?>> Purchased Date </option>
                         </select>
                     </div>
 
@@ -144,8 +152,8 @@
                     <thead>
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>                            
-                            
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
+
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
                             <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -154,7 +162,7 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 <button class="flex items-center gap-2 hover:text-gray-700"
                                     onclick="sortTableByDate()">
-                                    Added Date 
+                                    Added Date
                                     <svg xmlns="http://www.w3.org/2000/svg"
                                         class="h-8 w-8 text-gray-400"
                                         viewBox="0 0 20 20"
@@ -166,14 +174,15 @@
                             </th>
 
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchased Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dimensions</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weight</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Measurements</th>
                             <th class="px-0 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                        <?php foreach ($data['purchase_list'] as $pl): 
-                             $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
-                            ?>
+                        <?php foreach ($data['purchase_list'] as $pl):
+                            $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
+                        ?>
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer"
                                     onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')">
@@ -186,16 +195,19 @@
                                             src="<?php echo htmlspecialchars($image); ?>"
                                             alt="<?php echo htmlspecialchars($pl['item_code'] ?? 'Product'); ?>"
                                             class="max-w-full max-h-full object-contain"
-                                        >
+                                            onclick="openImagePopup('<?= $pl['image'] ?>')"
+                                            >
                                     </div>
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <?php echo (int)($pl['quantity'] ?? 0); ?>
                                 </td>
-
+                                <?php
+                                $status = ucwords(str_replace('_', ' ', strtolower(htmlspecialchars($pl['status'] ?? '', ENT_QUOTES, 'UTF-8') ?? '')));
+                                ?>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php echo ucfirst(htmlspecialchars($pl['status'] ?? '', ENT_QUOTES, 'UTF-8')); ?>
+                                    <?php echo $status; ?>
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -223,15 +235,33 @@
                                     echo htmlspecialchars($date_purchased, ENT_QUOTES, 'UTF-8');
                                     ?>
                                 </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php
+                                    if (!empty($pl['product_weight']) && $pl['product_weight'] !== 'N/A') {
+                                        echo htmlspecialchars($pl['product_weight'] . ' ' . ($pl['product_weight_unit'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                    } else {
+                                        echo 'N/A';
+                                    }
+                                ?>
+                                </td>
                                 <?php
-                                    $dims = array_filter([
-                                        ($pl['prod_height'] ?? null) !== 'N/A' ? $pl['prod_height'] : null,
-                                        ($pl['prod_width']  ?? null) !== 'N/A' ? $pl['prod_width']  : null,
-                                        ($pl['prod_length'] ?? null) !== 'N/A' ? $pl['prod_length'] : null,
-                                    ]);
+                                $dims = [];
+
+                                if (!empty($pl['prod_height']) && $pl['prod_height'] !== 'N/A') {
+                                    $dims[] = 'H: ' . $pl['prod_height'];
+                                }
+
+                                if (!empty($pl['prod_width']) && $pl['prod_width'] !== 'N/A') {
+                                    $dims[] = 'W: ' . $pl['prod_width'];
+                                }
+
+                                if (!empty($pl['prod_length']) && $pl['prod_length'] !== 'N/A') {
+                                    $dims[] = 'L: ' . $pl['prod_length'];
+                                }
                                 ?>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php echo htmlspecialchars(implode(' x ', $dims), ENT_QUOTES, 'UTF-8'); ?>
+                                    <?= htmlspecialchars(implode(' x ', $dims), ENT_QUOTES, 'UTF-8'); ?>
                                 </td>
 
                                 <!-- action dropdown -->
@@ -421,7 +451,27 @@
 <!-- Alert Message -->
 </div>
 </div>
+
+<!-- Image Popup -->
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
 <script>
+    const statusArray = <?php echo json_encode(getPurchaseStatuses()); ?>;
+
+    // Image popup functionality
+    function openImagePopup(imageUrl) {
+        popupImage.src = imageUrl;
+        document.getElementById('imagePopup').classList.remove('hidden');
+    }
+    
+    function closeImagePopup(event) {
+        document.getElementById('imagePopup').classList.add('hidden');
+        document.getElementById('popupImage').src = '';
+    }                       
 
     //right side popup on item_code click 
     function viewPurchaseListDetails(plId) {
@@ -430,10 +480,10 @@
         document.getElementById('modal-slider-bd').classList.remove('translate-x-full');
 
         // Clear previous messages
-        document.getElementById('plDetailMsg').innerHTML = '';   
+        document.getElementById('plDetailMsg').innerHTML = '';  
 
         // Fetch purchase list details via AJAX
-        fetch(`<?php echo base_url('?page=products&action=get_purchase_list_details'); ?>&id=${plId}`)
+        fetch(`<?php echo base_url('?page=products&action=get_purchase_list_details'); ?>&id=${plId}`)   
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -445,11 +495,14 @@
                     // Populate fields dynamically
                     document.querySelector('.p-title').innerText = `${plDetails.title || 'N/A'}`;
                     const dims = [plDetails.prod_height, plDetails.prod_width, plDetails.prod_length]
-                                .filter(Boolean)
-                                .join(' x ');
+                        .filter(Boolean)
+                        .join(' x ');
+
+                    const isPurchased = (plDetails.status === "purchased");
 
                     fieldsContainer.innerHTML = `
                         <!-- Product Image -->
+                        <input type="hidden" id="productId" value="${plDetails.id}" />
                         <div class="col-span-2">
                             <strong>Product Image : </strong>
                             ${
@@ -470,24 +523,38 @@
                         <div><strong>Color : </strong> ${plDetails.color || 'N/A'}</div>
                         <div><strong>Size : </strong> ${plDetails.size || 'N/A'}</div>
                         <div><strong>Material : </strong> ${plDetails.material || 'N/A'}</div>
-                        <div><strong>Dimensions : </strong> ${dims}</div>
-                        <div><strong>Weight : </strong> ${plDetails.weight || 'N/A'}</div>
+                        <div><strong>Measurements : </strong> ${dims}</div>
+                        <div><strong>Dimensions : </strong> </div>
+                        <div><strong>Weight : </strong> ${plDetails.weight || 'N/A'}</div>`;
 
-                        <!-- Quantity -->
-                        <div>
-                            <strong>Quantity : </strong>
-                            <input type="number"
-                                id="pl-quantity"
-                                value="${plDetails.quantity || 0}"
-                                class="border rounded px-2 py-1 mt-1 w-16">
-                        </div>
+                        fieldsContainer.innerHTML += `
+                            <div>
+                                <strong>Quantity to be Purchased: </strong>
+                                <span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-20 text-center">
+                                    ${plDetails.quantity || 0}
+                                </span>
+                            </div>
 
-                        <!-- Status dropdown -->
-                        <div>
-                            <strong>Status : </strong>
-                            <select id="pl-status" class="border rounded px-2 py-1 mt-1 w-32">
-                                <option value="purchased" ${plDetails.status === 'purchased' ? 'selected' : ''}>Purchased</option>
-                                <option value="pending" ${plDetails.status === 'pending' ? 'selected' : ''}>Pending</option>
+                            <div>
+                                <strong>Quantity Purchased: </strong>
+                                ${
+                                    isPurchased
+                                        ? `<span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-20 text-center">
+                                                ${plDetails.quantity || 0}
+                                        </span>`
+                                        : `<input type="number" id="pl-quantity" value="" class="no-negative border rounded px-2 py-1 mt-1 w-20" />`
+                                }
+                            </div>
+                        `;                       
+
+                        fieldsContainer.innerHTML += `
+                        <div class="col-span-1 md:col-span-2">
+                            <strong>Status: </strong>
+                            <select id="pl-status" class="w-full border rounded px-2 py-1 mt-1 text-sm">
+                                ${Object.entries(statusArray).map(([value, label]) => {
+                                    const selected = (plDetails.status === value) ? 'selected' : '';
+                                    return `<option value="${value}" ${selected}>${label}</option>`;
+                                }).join('')}
                             </select>
                         </div>
 
@@ -518,7 +585,7 @@
 
                     // Set hidden field value
                     document.getElementById('purchase_list_id').value = plId;
-                    loadComments(plId);     
+                    loadComments(plId);
                 } else {
                     showAlert('Failed to fetch purchase list details.');
                 }
@@ -544,10 +611,10 @@
         formData.append('id', plId);
         formData.append('quantity', quantity);
         formData.append('status', status);
-        //formData.append('remarks', remark);
+        formData.append('product_id', productId);
 
         // ✅ 1) Save comment first (if any)
-        if(`commentInput_${plId}`.value !== '') {
+        if (`commentInput_${plId}`.value !== '') {
             addComment(plId);
         }
 
