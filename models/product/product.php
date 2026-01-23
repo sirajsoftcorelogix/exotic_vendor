@@ -1305,7 +1305,7 @@ class product
         LIMIT 1;
     ";
 
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db->prepare($sql);     
         if (!$stmt) return null;
 
         $stmt->bind_param('iii', $productId, $productId, $productId);
