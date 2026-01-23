@@ -1427,7 +1427,9 @@ class InboundingController {
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
-            'Accept: application/json' 
+            'Accept: application/json',
+            'Content-Type: application/json',
+            'User-Agent: VendorApiClient/1.0',
         ];
 
         $ch = curl_init();
@@ -1439,9 +1441,9 @@ class InboundingController {
             CURLOPT_RETURNTRANSFER => true,
             
             // --- REDIRECT HANDLING ---
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 5,         // Reduced from 10 to prevent infinite loops
-            CURLOPT_POSTREDIR => 3,         // Removed duplicate
+            //CURLOPT_FOLLOWLOCATION => true,
+            //CURLOPT_MAXREDIRS => 5,         // Reduced from 10 to prevent infinite loops
+            //CURLOPT_POSTREDIR => 3,         // Removed duplicate
             // ----------------------
             
             CURLOPT_HTTPHEADER => $headers,
