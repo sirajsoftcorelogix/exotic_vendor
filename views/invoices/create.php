@@ -66,19 +66,23 @@
             
             $defaultBillTo = !empty($billToAddresses) ? $billToAddresses[0] : '';
             $defaultShipTo = !empty($shipToAddresses) ? $shipToAddresses[0] : '';
+            $showGSTContainer = isset($customer_address[0]['country']) && strtolower($customer_address[0]['country']) !== 'india';
             ?>
             
-            <div class="space-y-3">
+            <div class="space-y-3 text-sm">
                 <div>
                     <label class="block text-gray-700 form-label font-semibold">Bill To : <span class="text-red-500"> *</span> <?php echo count($billToAddresses) > 0 ? '<span class="text-blue-600 cursor-pointer hover:underline" onclick="openAddressSelector()"> Change Addresses</span>' : ''; ?></label>
                     
                     <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
                     <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= $customer_address[0]['id'] ?>">
-                    <p class="text-sm text-gray-700 mt-1"><?= htmlspecialchars($defaultBillTo) ?></p>
+                    <p class=" text-gray-700 mt-1"><?= htmlspecialchars($defaultBillTo) ?></p>
                     
                     <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
                 </div>
-                
+                <div id="supplystate">Supply State : <?= $billingState ?></div>
+                <?php if ($showGSTContainer): ?>
+                <div id="applyGSTContainer">Apply GST <input type="checkbox" id="applyGST" name="applyGST" value="1" checked></div>
+                <?php endif; ?>
             </div>
             
             <!-- Address Selector Modal -->
@@ -123,6 +127,7 @@
                     <?php endif; ?>
                     
                 </div>
+                <div><?php echo $customer_address[0]['gstin'] ?? "Customer GST : ".$customer_address[0]['gstin']; ?></div>
             </div>
 
             <!-- <div class="flex items-center">
@@ -234,7 +239,10 @@
             <!-- Populated by JavaScript if needed -->
            
         </div>
-        
+         <!-- Add Item Button -->
+        <div class="flex-grow">
+            <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
+        </div>
         <div class="w-full md:w-1/3 space-y-4">
             <div class="flex justify-between border-t pt-4">
                 <span class="font-semibold">Subtotal:</span>
@@ -278,7 +286,30 @@
         </div>
     </div>
 </div>
-
+<!-- Order Item Modal -->
+<div id="orderModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative">
+        <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
+        <h2 class="text-xl font-bold mb-4">Select Order Item</h2>
+        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with order id, item code, or title...">
+        <div class="max-h-72 overflow-y-auto">
+            <table class="w-full border">
+                <thead>
+                    <tr>
+                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-left">Order ID</th>
+                        <th class="p-2 text-left">Order Date</th>
+                        <th class="p-2 text-left">Image</th>
+                        <th class="p-2 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="orderList">
+                    <!-- Dynamic rows here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 <script>
 // Store firm state for GST calculation
 const firmState = <?php echo $firmStateJS; ?>;
@@ -636,4 +667,105 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
         }
     });
 });
+
+// Add event listener for applyGST checkbox
+document.addEventListener('DOMContentLoaded', function() {
+    // Set initial GST based on default billing state
+    const gstType = calculateGSTType('<?php echo $billingState; ?>');
+    updateGSTFields(gstType);
+    
+    // Add listener for GST checkbox
+    const applyGSTCheckbox = document.getElementById('applyGST');
+    if (applyGSTCheckbox) {
+        applyGSTCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                const gstType = calculateGSTType('<?php echo $billingState; ?>');
+                updateGSTFields(gstType);
+            } else {
+                // Clear all GST values
+                clearGSTFields();
+            }
+        });
+    }
+});
+
+// New function to clear GST fields
+function clearGSTFields() {
+    const rows = document.querySelectorAll('#invoiceTable tbody tr');
+    
+    rows.forEach(row => {
+        const cgstInput = row.querySelector('input[name="cgst[]"]');
+        const sgstInput = row.querySelector('input[name="sgst[]"]');
+        const igstInput = row.querySelector('input[name="igst[]"]');
+        
+        if (cgstInput) cgstInput.value = '0';
+        if (sgstInput) sgstInput.value = '0';
+        if (igstInput) igstInput.value = '0';
+        
+        // Update display spans
+        const cgstSpan = row.querySelector('input[name="cgst[]"]')?.previousElementSibling;
+        const sgstSpan = row.querySelector('input[name="sgst[]"]')?.previousElementSibling;
+        const igstSpan = row.querySelector('input[name="igst[]"]')?.previousElementSibling;
+        
+        if (cgstSpan) cgstSpan.textContent = '0%';
+        if (sgstSpan) sgstSpan.textContent = '0%';
+        if (igstSpan) igstSpan.textContent = '0%';
+    });
+    
+    calculateTotals();
+}
+
+// add item
+// Show modal and fetch order items
+document.querySelector('.action-button').addEventListener('click', function(e) {
+    if (e.target.textContent.trim() === 'Add Item') {
+        document.getElementById('orderModal').style.display = 'flex';
+        document.getElementById('orderSearch').value = '';
+        fetchOrderItems('');
+    }
+});
+
+// Close modal
+document.getElementById('closeOrderModal').onclick = function() {
+    document.getElementById('orderModal').style.display = 'none';
+};
+
+// Search filter (fetches filtered items)
+document.getElementById('orderSearch').addEventListener('input', function() {
+    if (this.value.length < 3 && this.value.length > 0) return; // Minimum 3 characters to search
+    fetchOrderItems(this.value);
+});
+function fetchOrderItems(searchTerm) {
+    fetch('<?php echo base_url('?page=orders&action=fetch_items'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({search: searchTerm, customer_id: <?php echo isset($customer['id']) ? (int)$customer['id'] : 0; ?>})
+    })
+    .then(response => response.json())
+    .then(data => {
+        const tbody = document.getElementById('orderItemsTableBody');
+        tbody.innerHTML = '';
+        
+        if (data.items && data.items.length > 0) {
+            data.items.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="border p-2 text-center"><input type="checkbox" class="itemCheckbox" data-item='${JSON.stringify(item)}'></td>
+                    <td class="border p-2">${item.order_number || ''}</td>
+                    <td class="border p-2">${item.sku || ''}</td>
+                    <td class="border p-2">${item.title || ''}</td>
+                    <td class="border p-2 text-right">${item.itemprice ? "₹"+item.itemprice : '0.00'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        } else {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td class="border p-2 text-center" colspan="5">No items found</td>`;
+            tbody.appendChild(row);
+        }
+    })
+    .catch(err => {
+        console.error('Error fetching order items:', err);
+    });
+}
 </script>
