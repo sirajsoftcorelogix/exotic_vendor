@@ -505,9 +505,13 @@
 
                     // Populate fields dynamically
                     document.querySelector('.p-title').innerText = `${plDetails.title || 'N/A'}`;
-                    const dims = [plDetails.prod_height, plDetails.prod_width, plDetails.prod_length]
-                        .filter(Boolean)
-                        .join(' x ');
+                    const dims = [
+                        plDetails.prod_height ? `H: ${plDetails.prod_height}` : null,
+                        plDetails.prod_width  ? `W: ${plDetails.prod_width}`  : null,
+                        plDetails.prod_length ? `L: ${plDetails.prod_length}` : null,
+                    ]
+                    .filter(Boolean)
+                    .join(' x ');
 
                     const isPurchased = (plDetails.status === "purchased");
 
