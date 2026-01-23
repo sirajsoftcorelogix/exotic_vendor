@@ -175,3 +175,6 @@ INSERT INTO `firm_details` (`id`, `firm_name`, `pan`, `gst`, `address`, `phone`,
 
 INSERT INTO `global_settings` (`id`, `invoice_prefix`, `invoice_series`, `terms_and_conditions`, `created_at`, `updated_at`) VALUES
 (1, 'inv/2025-26/', 10017, NULL, '2026-01-18 10:21:56', '2026-01-21 21:02:44');
+
+--new column for storing invoice number in orders table
+ALTER TABLE `vp_orders` ADD `invoice_no` VARCHAR(100) NULL AFTER `customer_id`;
