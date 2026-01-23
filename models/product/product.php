@@ -1060,31 +1060,31 @@ class product
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }*/
 
-    public function updatePurchaseListStatus($purchase_list_id, $transactionQty, $purchase_type = 'purchased')
+    public function updatePurchaseListStatus($product_id, $transactionQty, $purchase_type = 'purchased')
     {
-        //if ($purchase_type === 'unpurchased') {
-        /**
-         * UNPURCHASED CASE:
-         * Reverse purchases: set all rows back to pending and restore planned quantity
-         */
-            /*$sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased 
+        if ($purchase_type === 'unpurchased') {
+            /**
+             * UNPURCHASED CASE:
+             * Reverse purchases: set all rows back to pending and restore planned quantity
+             */
+            $sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased 
                 FROM purchase_transactions 
-                WHERE purchase_list_id = ?";
+                WHERE product_id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('i', $purchase_list_id);
+            $stmt->bind_param('i', $product_id);
             $stmt->execute();
             $purchasedTotal = (int)$stmt->get_result()->fetch_assoc()['purchased'];
 
             // set purchase_list quantities back
             $sql = "UPDATE purchase_list 
                 SET quantity = quantity + ?, status='pending', date_purchased=NULL, updated_at=NOW()
-                WHERE id = ? AND status='purchased'";
+                WHERE product_id = ? AND status='purchased'";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('ii', $purchasedTotal, $purchase_list_id);
+            $stmt->bind_param('ii', $purchasedTotal, $product_id);
             $stmt->execute();
 
             return ['success' => true, 'message' => 'Un purchased Successfully'];
-        }*/
+        }
 
 
         /** PURCHASED CASE (FIFO CONSUME) **/
@@ -1094,10 +1094,10 @@ class product
         // Fetch purchase list rows FIFO (oldest first)
         $sql = "SELECT id, quantity 
             FROM purchase_list 
-            WHERE id = ? AND status != 'purchased'
+            WHERE product_id = ? AND status != 'purchased'
             ORDER BY created_at ASC, id ASC";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $purchase_list_id);
+        $stmt->bind_param('i', $product_id);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
@@ -1126,7 +1126,7 @@ class product
                 $remaining = 0;
 
                 $sql = "UPDATE purchase_list 
-                    SET quantity = ?, status='partially_purchased', updated_at = NOW()
+                    SET quantity = ?, status='partial-purchased', updated_at = NOW()
                     WHERE id = ?";
                 $u = $this->db->prepare($sql);
                 $u->bind_param('ii', $newQty, $id);
@@ -1143,18 +1143,18 @@ class product
     }
 
 
-    public function addPurchaseTransaction($purchase_list_id, $qty, $user_id, $status, $product_id, $reason = '')
+    public function addPurchaseTransaction($purchase_list_id, $qty, $user_id, $reason = null)
     {
         $sql = "INSERT INTO purchase_transactions 
-            (product_id,purchase_list_id, qty_purchased, purchased_by, remarks, date_purchased)
-            VALUES (?,?,?,?, ?, NOW())";
+            (purchase_list_id, qty_purchased, purchased_by, remarks, date_purchased)
+            VALUES (?,?,?, ?, NOW())";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('iiiis', $product_id, $purchase_list_id, $qty, $user_id, $reason);
+        $stmt->bind_param('iiis', $purchase_list_id, $qty, $user_id, $reason);
         $stmt->execute();
 
         // Update status after transaction
-        return $this->updatePurchaseListStatus($purchase_list_id, $qty, $status, 'purchased');
+        return $this->updatePurchaseListStatus($purchase_list_id, 'purchased');
     }
 
     public function reversePurchaseTransaction($purchase_list_id, $qty, $user_id, $reason = null)
@@ -1233,6 +1233,7 @@ class product
         }
         return ['success' => false, 'message' => 'Delete failed: ' . $stmt->error];
     }
+    
 
     public function getPurchaseItemById($id)
     {
@@ -1305,7 +1306,7 @@ class product
         LIMIT 1;
     ";
 
-        $stmt = $this->db->prepare($sql);     
+        $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
 
         $stmt->bind_param('iii', $productId, $productId, $productId);
@@ -1318,7 +1319,6 @@ class product
 
         return null;
     }
-
 
     public function getProductByskuExact($sku)
     {
