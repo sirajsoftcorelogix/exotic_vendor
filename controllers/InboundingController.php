@@ -1431,7 +1431,7 @@ class InboundingController {
         ];
 
         $ch = curl_init();
-        echo $jsonString; // Debug: Output JSON payload
+        //echo $jsonString; // Debug: Output JSON payload
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             // Note: You have both GET and POST set. POST usually overrides GET, 
