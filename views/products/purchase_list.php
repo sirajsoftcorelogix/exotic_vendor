@@ -81,7 +81,7 @@
                 $waText .= "Color: " . urlencode($pl['product']['color'] ?? '') . "%0A";
                 $waText .= "Size: " . urlencode($pl['product']['size'] ?? '') . "%0A";
                 $waText .= "Dimensions (HxWxL): " . urlencode(($pl['product']['prod_height'] ?? '') . ' x ' . ($pl['product']['prod_width'] ?? '') . ' x ' . ($pl['product']['prod_length'] ?? '')) . "%0A";
-                $waText .= "Weight: " . urlencode(($pl['product']['weight'] ?? '') . ' ' . ($pl['product']['weight_unit'] ?? '')) . "%0A";
+                $waText .= "Weight: " . urlencode(($pl['product']['weight'] ?? '') . ' ' . ($pl['product']['weight_unit'] ?? '')) . "KG %0A";
                 $waText .= "Image: " . urlencode($image) . "%0A";   
             ?>
                 <div class="bg-white border border-gray-200 rounded-xl shadow-md p-4 flex flex-col h-full">
@@ -212,11 +212,11 @@
                         </button>
 
                         <div id="commentsWrap_<?= (int)$pl['id']; ?>" class="mt-2">
-                            <div id="commentsThread_<?= (int)$pl['id']; ?>" class="space-y-2 text-xs"></div>
-                            <input id="commentInput_<?= (int)$pl['id']; ?>"
+                            <div id="commentsThread_<?= (int)$pl['id']; ?>" class="space-y-2 text-xs"></div>                            
+                        </div>
+                        <input id="commentInput_<?= (int)$pl['id']; ?>"
                                 class="w-full border rounded px-2 py-1 mt-2 text-xs"
                                 placeholder="Write a comment..." />
-                        </div>
                     </div>
 
                     <!-- Footer Buttons -->
