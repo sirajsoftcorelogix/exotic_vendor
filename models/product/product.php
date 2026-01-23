@@ -727,7 +727,7 @@ class product
         return [];
     }*/
 
-    public function getPurchaseList($limit = 100, $offset = 0, $filters = [],$listType='null')
+    public function getPurchaseList($limit = 100, $offset = 0, $filters = [], $listType = 'null')
     {
         // -----------------------------
         // Build WHERE for purchase_list (subqueries + latest-row join)
@@ -816,7 +816,7 @@ class product
             $sortDir = (strtoupper($filters['sort_by']) === 'ASC') ? 'ASC' : 'DESC';
         }
 
-        if($listType=='master'){
+        if ($listType == 'master') {
             $orderBy = "
                 ORDER BY 
                 FIELD(pl_latest.status, 'pending', 'partially_purchased', 'purchased', 'item_not_available', 'alternate','ordered') ASC,
@@ -825,7 +825,7 @@ class product
         } else {
             $orderBy = " ORDER BY pl_latest.date_added $sortDir";
         }
-        
+
 
         // -----------------------------
         // SQL: total quantity per product + latest row per product (by updated_at)
@@ -1246,7 +1246,7 @@ class product
 
     public function getPurchaseItemById($id)
     {
-        // Step 1: find product_id from this purchase_list entry
+        // Step 1: Get product_id for that purchase_list row
         $sql = "SELECT product_id FROM purchase_list WHERE id = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
@@ -1255,13 +1255,12 @@ class product
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $res = $stmt->get_result();
-        if (!$res || $res->num_rows === 0) {
-            return null;
-        }
-        $row = $res->fetch_assoc();
+        if (!$res || $res->num_rows === 0) return null;
+
+        $row       = $res->fetch_assoc();
         $productId = (int)$row['product_id'];
 
-        // Step 2: run your logic: latest row + total qty for that product
+        // Step 2: Latest row + total quantity for that product
         $sql = "
         SELECT
             pl_latest.id,
@@ -1288,13 +1287,14 @@ class product
             p.prod_width,
             p.prod_length,
             p.vendor,
-            u.name as agent_name,
-            vu.name as added_by_name
+            u.name AS agent_name,
+            vu.name AS added_by_name
         FROM
         (
             SELECT product_id, SUM(quantity) AS quantity
             FROM purchase_list
             WHERE product_id = ?
+            GROUP BY product_id
         ) qty
         JOIN
         (
@@ -1305,17 +1305,18 @@ class product
                 FROM purchase_list
                 WHERE product_id = ?
                 GROUP BY product_id
-            ) latest ON latest.product_id = pl.product_id
+            ) latest
+                ON latest.product_id = pl.product_id
                 AND latest.max_updated_at = pl.updated_at
             WHERE pl.product_id = ?
         ) pl_latest ON pl_latest.product_id = qty.product_id
         LEFT JOIN vp_products p ON p.id = pl_latest.product_id
         LEFT JOIN vp_users u ON pl_latest.user_id = u.id
         LEFT JOIN vp_users vu ON pl_latest.edit_by = vu.id
-        LIMIT 1;
+        LIMIT 1
     ";
 
-        $stmt = $this->db->prepare($sql);   
+        $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
 
         $stmt->bind_param('iii', $productId, $productId, $productId);
@@ -1328,6 +1329,7 @@ class product
 
         return null;
     }
+
 
 
     public function getProductByskuExact($sku)
