@@ -430,7 +430,7 @@
         document.getElementById('modal-slider-bd').classList.remove('translate-x-full');
 
         // Clear previous messages
-        document.getElementById('plDetailMsg').innerHTML = '';
+        document.getElementById('plDetailMsg').innerHTML = '';   
 
         // Fetch purchase list details via AJAX
         fetch(`<?php echo base_url('?page=products&action=get_purchase_list_details'); ?>&id=${plId}`)

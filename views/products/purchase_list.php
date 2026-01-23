@@ -255,4 +255,4 @@ input[type="date"] {
     <?php endforeach; ?>
 });*/ 
 </script>
-<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></script>
+<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></script>   
