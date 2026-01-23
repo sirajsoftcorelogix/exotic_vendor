@@ -791,7 +791,7 @@ class ProductsController {
             echo '<p>Invalid Purchase Item ID.</p>';
             exit;
         }
-        $purchaseItem = $productModel->getPurchaseItemById($id);
+        $purchaseItem = $productModel->getPurchaseItemById($id);    
         if (!$purchaseItem) {
             echo '<p>Purchase Item not found.</p>';
             exit;
@@ -804,3 +804,4 @@ class ProductsController {
         exit;
     }
 }
+
