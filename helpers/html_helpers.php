@@ -621,4 +621,16 @@
 
 		return $vendorCode;
 	}
+
+	function getPurchaseStatuses(): array {
+		return [
+			'pending'          => 'Pending',
+			'item_not_available'    => 'Item not Available',
+			'alternate'        => 'Alternate Item Available',
+			'partially_purchased' => 'Partially Purchased',
+			'purchased'        => 'Purchased',
+			'ordered'          => 'Item Ordered',
+		];
+	}
+
 ?>
