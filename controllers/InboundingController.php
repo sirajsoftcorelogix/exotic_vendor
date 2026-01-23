@@ -1237,7 +1237,6 @@ class InboundingController {
 
         // --- HELPER: Get Current Date in Y-m-d format ---
         $current_date_formatted = date("Y-m-d"); 
-        $isVariant = $data['data']['is_variant'];
         // 1. Add all other fields FIRST
         $API_data['itemcode'] = $data['data']['Item_code'];
         $API_data['groupname'] = $data['data']['groupname'];
