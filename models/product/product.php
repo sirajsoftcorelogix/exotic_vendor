@@ -1235,7 +1235,7 @@ class product
     }
     
 
-    public function getPurchaseItemById($id)
+     public function getPurchaseItemById($id)
     {
         // Step 1: find product_id from this purchase_list entry
         $sql = "SELECT product_id FROM purchase_list WHERE id = ? LIMIT 1";
@@ -1306,7 +1306,7 @@ class product
         LIMIT 1;
     ";
 
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db->prepare($sql);   
         if (!$stmt) return null;
 
         $stmt->bind_param('iii', $productId, $productId, $productId);
