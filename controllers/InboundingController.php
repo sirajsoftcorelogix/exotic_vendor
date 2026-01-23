@@ -1281,7 +1281,7 @@ class InboundingController {
             $stock_price_temp[0]['color'] = $data['data']['color'];
             $stock_price_temp[0]['item_level'] = 'variation';
         }
-        $stock_price_temp[0]['colormap'] = '';
+        $stock_price_temp[0]['colormap'] = $data['data']['colormaps'];
         $stock_price_temp[0]['product_weight'] = $data['data']['weight'];
         $stock_price_temp[0]['product_weight_unit'] = 'kg';
         $stock_price_temp[0]['prod_length'] = $data['data']['depth'];
@@ -1336,7 +1336,7 @@ class InboundingController {
                 $stock_price_temp[$i]['color'] = $value['color'];
                 $stock_price_temp[$i]['marketplace_vendor'] = "exoticindia";
                 $stock_price_temp[$i]['item_level'] = 'variation';
-                $stock_price_temp[$i]['colormap'] = '';
+                $stock_price_temp[$i]['colormap'] = $value['colormaps'];
                 $stock_price_temp[$i]['product_weight'] = $value['weight'];
                 $stock_price_temp[$i]['product_weight_unit'] = 'kg';
                 $stock_price_temp[$i]['prod_length'] = $value['depth'];
