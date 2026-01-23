@@ -758,7 +758,7 @@ class InboundingController {
         $current_prefix = $char1 . $char2; 
 
         // 3. GET GLOBAL LAST CODE & GENERATE NEW (With Safety Loop)
-        if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
+        if ($is_variant === 'N' && ($old_is_variant === 'Y')) {
             
             // Start with the logic you had
             $last_code = $inboundingModel->getLastItemCodeGlobal();
