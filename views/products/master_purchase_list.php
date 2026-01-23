@@ -536,7 +536,7 @@
                         <div><strong>Material : </strong> ${plDetails.material || 'N/A'}</div>
                         <div><strong>Measurements : </strong> ${dims}</div>
                         <div><strong>Dimensions : </strong> </div>
-                        <div><strong>Weight : </strong> ${plDetails.weight || 'N/A'} KG</div>`;
+                        <div><strong>Weight : </strong> ${plDetails.weight ? plDetails.weight + ' kg' : 'N/A'}</div>`;
 
                         fieldsContainer.innerHTML += `
                             <div>
