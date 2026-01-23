@@ -1260,8 +1260,6 @@ class InboundingController {
         $API_data['aplus_content_ids'] = '';
         if (isset($data['data']['optionals'])) {
             $API_data['optionals'] = str_replace(',', '|', $data['data']['optionals']);
-        } else {
-            $API_data['optionals'] = ''; // Or handle empty case as needed
         }
         $API_data['material'] = $data['data']['material_name'];
         $API_data['discrete_vendors'][0]['vendor'] = $data['data']['vendor_code'];
