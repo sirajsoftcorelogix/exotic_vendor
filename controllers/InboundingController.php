@@ -1455,7 +1455,7 @@ class InboundingController {
 
         $response = curl_exec($ch);
         
-        // echo "<pre>";print_r($response);exit;
+        echo "<pre>";print_r($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
