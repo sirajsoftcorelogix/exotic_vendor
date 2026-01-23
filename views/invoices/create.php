@@ -66,7 +66,7 @@
             
             $defaultBillTo = !empty($billToAddresses) ? $billToAddresses[0] : '';
             $defaultShipTo = !empty($shipToAddresses) ? $shipToAddresses[0] : '';
-            $showGSTContainer = isset($customer_address[0]['country']) && strtolower($customer_address[0]['country']) !== 'india';
+            $showGSTContainer = isset($customer_address[0]['country']) && strtolower($customer_address[0]['country']) !== 'in';
             ?>
             
             <div class="space-y-3 text-sm">
