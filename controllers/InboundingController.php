@@ -1384,6 +1384,9 @@ class InboundingController {
 
 
         // 4. Handle Images (The major fix)
+       
+        $isVariant = $data['data']['is_variant']; // <-- FIX: Define $isVariant here    
+
         $images_payload = array();
         $img_directory = ($isVariant == 'N') ? ($data['data']['image_directory'] ?? '') : ''; 
         $images_payload['image_directory'] = $img_directory;

@@ -635,6 +635,18 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
+        break; 
+    case 'customer':
+        require_once 'controllers/CustomerController.php';
+        $controller = new CustomerController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            default:
+                $controller->index();   
+                break;
+        }
         break;    
 
         default:
