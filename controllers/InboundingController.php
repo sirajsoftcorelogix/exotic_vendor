@@ -1413,6 +1413,7 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
+        echo "<pre>";print_r($jsonString);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
@@ -1455,7 +1456,7 @@ class InboundingController {
 
         $response = curl_exec($ch);
         
-        echo "<pre>";print_r($response);
+        // echo "<pre>";print_r($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
