@@ -1245,7 +1245,7 @@ class InboundingController {
         $API_data['title'] = $data['data']['product_title'];
         $API_data['status'] = 1;
         $API_data['snippet_description'] = $data['data']['snippet_description'];
-        $API_data['creator'] = $data['data']['received_by_user_id'];
+        // $API_data['creator'] = $data['data']['received_by_user_id'];
         // $API_data['optionals'] = $data['data']['optionals'];
         $API_data['india_net_qty'] = (int)$data['data']['india_net_qty'];
         $API_data['keywords'] = $data['data']['key_words'];
