@@ -11,7 +11,7 @@ $action = $_GET['action'] ?? 'list';
 // Prevent directory traversal
 $page = basename($page); 
 $viewsPath = __DIR__ . '/views';
-$pageDir   = $viewsPath . '/' . $page; 
+$pageDir   = $viewsPath . '/' . $page;   
             
 if (!is_dir($pageDir)) {
     // Page not implemented → coming soon
@@ -635,23 +635,20 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
-        break; 
-    case 'customer':
-        require_once 'controllers/CustomerController.php';
-        $controller = new CustomerController($conn);
+        break;
+        
+    case 'pos_register':
+        require_once 'controllers/POSRegisterController.php';
+        $controller = new POSRegisterController($conn);
         switch ($action) {
             case 'list':
                 $controller->index();   
-                break;
-            default:
-                $controller->index();   
-                break;
+                break;                
         }
-        break;    
-
-        default:
-            require_once 'controllers/DashboardController.php';
-            $controller = new DashboardController();
-            $controller->index();
-            break;
+        break;        
+    default:
+        require_once 'controllers/DashboardController.php';
+        $controller = new DashboardController();
+        $controller->index();
+        break;
 }
