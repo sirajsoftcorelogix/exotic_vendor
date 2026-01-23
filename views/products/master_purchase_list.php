@@ -380,8 +380,7 @@
         <div id="purchase-list-popup-panel" class="h-full bg-white shadow-xl" style="width: 100%;">
             <div class="h-full w-full overflow-y-auto">
                 <div class="p-6">
-                    <h2 class="text-1xl font-bold text-gray-800 mb-6 pb-6 border-b p-title"></h2>
-                    <div id="plDetailMsg" style="margin-top:10px;" class="text-sm font-bold"></div>
+                    <h2 class="text-1xl font-bold text-gray-800 mb-6 pb-6 border-b p-title"></h2>                    
                     <form id="plDetailForm">
                         <input type="hidden" name="page" value="vendors">
                         <input type="hidden" name="action" value="editPlDetails">
@@ -409,9 +408,21 @@
                             </div>
                         </div>
 
-                        <div class="flex justify-center items-center gap-4 pt-6 border-t">
-                            <button type="button" id="cancel-bd-btn" class="action-btn cancel-btn">Close</button>
-                            <button type="submit" class="action-btn save-btn">Save</button>
+                        <div class="pt-6 border-t">
+                            <!-- Inline message (full width) -->
+                            <div id="plDetailMsg"
+                                class="text-sm font-semibold text-left mb-3 min-h-[20px]">
+                            </div>
+
+                            <!-- Buttons -->
+                            <div class="flex justify-end items-center gap-3">
+                                <button type="button" id="cancel-bd-btn" class="action-btn cancel-btn">
+                                    Close
+                                </button>
+                                <button type="submit" class="action-btn save-btn">
+                                    Save
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -494,9 +505,13 @@
 
                     // Populate fields dynamically
                     document.querySelector('.p-title').innerText = `${plDetails.title || 'N/A'}`;
-                    const dims = [plDetails.prod_height, plDetails.prod_width, plDetails.prod_length]
-                        .filter(Boolean)
-                        .join(' x ');
+                    const dims = [
+                        plDetails.prod_height ? `H: ${plDetails.prod_height}` : null,
+                        plDetails.prod_width  ? `W: ${plDetails.prod_width}`  : null,
+                        plDetails.prod_length ? `L: ${plDetails.prod_length}` : null,
+                    ]
+                    .filter(Boolean)
+                    .join(' x ');
 
                     const isPurchased = (plDetails.status === "purchased");
 
@@ -525,7 +540,7 @@
                         <div><strong>Material : </strong> ${plDetails.material || 'N/A'}</div>
                         <div><strong>Measurements : </strong> ${dims}</div>
                         <div><strong>Dimensions : </strong> </div>
-                        <div><strong>Weight : </strong> ${plDetails.weight || 'N/A'}</div>`;
+                        <div><strong>Weight : </strong> ${plDetails.weight ? plDetails.weight + ' kg' : 'N/A'}</div>`;
 
                         fieldsContainer.innerHTML += `
                             <div>
@@ -600,7 +615,14 @@
         event.preventDefault();
 
         const plId = document.getElementById('purchase_list_id').value;
-        const quantity = document.getElementById('pl-quantity').value;
+        let q = document.getElementById('pl-quantity')?.value;
+        if (q === undefined || q === null || q.trim() === "") {
+            q = 0;
+        } else {
+            q = Number(q);
+        }
+
+        const quantity = q;
         //const remark = document.getElementById('pl-remark').value;
         const status = document.getElementById('pl-status').value;
 

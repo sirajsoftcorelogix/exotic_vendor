@@ -625,7 +625,7 @@ class ProductsController {
         }
         
         // fetch purchase list and count
-        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters);
+        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters,'master');
         $total_records = $productModel->countPurchaseList($filters);
         //print_array($purchase_data);
         //exit;
@@ -747,27 +747,35 @@ class ProductsController {
     }
 
     // Update quantity and remarks for a purchase list item (AJAX)
-    public function updatePurchaseItem() {
+    public function updatePurchaseItem() {        
+    
         is_login();
         global $productModel;
         header('Content-Type: application/json');
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents('php://input'), true); 
         
-        $id = isset($input['id']) ? (int)$input['id'] : 0;
+        $purchase_list_id = isset($input['id']) ? (int)$input['id'] : 0;
+        $product_id = isset($input['product_id']) ? (int)$input['product_id'] : 0;
         $quantity = isset($input['quantity']) ? $input['quantity'] : null;
-        $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $status = isset($input['status']) ? trim($input['status']) : '';
         $expected_time_of_delivery = !empty($input['expected_time_of_delivery'])
                     ? date('Y-m-d', strtotime($input['expected_time_of_delivery']))
                     : '';
 
-        if ($id <= 0) {
+        if ($purchase_list_id <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        $res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery);
-        echo json_encode($res);
-        exit;
+        //$res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery);
+        if($quantity>0){
+            $res = $productModel->addPurchaseTransaction($purchase_list_id, $quantity, $_SESSION['user']['id'], $status, $product_id);            
+            echo json_encode($res);
+            exit;
+        } else {
+            echo json_encode(['success' => true]);
+            exit;
+        }        
     }
     public function deletePurchaseItem() {
         is_login();
@@ -804,4 +812,3 @@ class ProductsController {
         exit;
     }
 }
-
