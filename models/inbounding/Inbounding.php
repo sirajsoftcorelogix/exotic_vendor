@@ -903,15 +903,24 @@ public function update_image_variation($img_id, $variation_id) {
         // 2. DELETE old variations
         // Logic: If we have submitted IDs, delete everything EXCEPT those.
         // If we have NO submitted IDs, delete EVERYTHING for this item.
+         $safe_it_id = (int)$it_id;
         if (!empty($submittedIds)) {
             $idsStr = implode(',', $submittedIds);
-            // Ensure $it_id is safe
-            $safe_it_id = (int)$it_id;
-            $sql = "DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)";
-            $this->conn->query($sql);
+            
+            $sqlImg = "DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id NOT IN ($idsStr) AND variation_id > 0";
+            $this->conn->query($sqlImg);
+
+            // Then Delete the Variations
+            $sqlVar = "DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)";
+            $this->conn->query($sqlVar);
+
         } else {
-            // User deleted all variations, so clear the table for this item
-            $safe_it_id = (int)$it_id;
+            // Case: User deleted ALL variations
+            
+            // --- NEW: Delete All Variation Images ---
+            $this->conn->query("DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id > 0");
+            
+            // Delete All Variations
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
         }
 
@@ -1104,6 +1113,35 @@ public function update_image_variation($img_id, $variation_id) {
         return [
             'data' => $inbounding
         ];
+    }
+    public function get_item_images_by_variation($item_id, $variation_id) {
+        $sql = "SELECT id, file_name FROM item_images WHERE item_id = ? AND variation_id = ? ORDER BY display_order ASC";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("ii", $item_id, $variation_id);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function update_image_filename_direct($img_id, $new_name) {
+        $sql = "UPDATE item_images SET file_name = ? WHERE id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("si", $new_name, $img_id);
+        return $stmt->execute();
+    }
+
+    public function update_main_product_photo($item_id, $path) {
+        $sql = "UPDATE inbound_item SET product_photo = ? WHERE id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("si", $path, $item_id);
+        return $stmt->execute();
+    }
+
+    public function update_variation_photo($var_id, $path) {
+        // FIX: Changed 'item_variations' to your actual table 'vp_variations'
+        $sql = "UPDATE vp_variations SET variation_image = ? WHERE id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("si", $path, $var_id);
+        return $stmt->execute();
     }
 }
 ?>
