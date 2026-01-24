@@ -743,13 +743,26 @@ class InboundingController {
         $is_variant = $_POST['is_variant'] ?? '';
         $item_code  = $_POST['Item_code'] ?? '';
         $old_is_variant = $oldData['form2']['is_variant'] ?? '';
+        
         $cat_input = $_POST['category_code'] ?? '';
         $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
-        // item code logic
+
+        // --- CHANGE DETECTION LOGIC (ADDED FIX) ---
+        // If Group or Category changes, we wipe item_code so it regenerates
+        $old_group_val = $oldData['form2']['group_name'] ?? '';
+        $old_cat_val   = $oldData['form2']['category_code'] ?? '';
+        $new_group_val = $_POST['group_name'] ?? '';
+        
+        // Get raw category ID for comparison logic
         $raw_cat = $_POST['category_code'] ?? 0;
         $category_id = is_array($raw_cat) ? $raw_cat[0] : $raw_cat;
 
-        // 2. Generate Prefix Logic (Same as before, but now safe)
+        if (($new_group_val != $old_group_val) || ($category_id != $old_cat_val)) {
+             $item_code = ''; // Force empty so generation triggers
+        }
+        // ------------------------------------------
+
+        // 2. Generate Prefix Logic
         $group_val = $_POST['group_name'] ?? ''; 
         $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
         $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
@@ -758,9 +771,9 @@ class InboundingController {
         $current_prefix = $char1 . $char2; 
 
         // 3. GET GLOBAL LAST CODE & GENERATE NEW (With Safety Loop)
+        // Note: Because we set $item_code = '' above if changed, this block will now run correctly
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
             
-            // Start with the logic you had
             $last_code = $inboundingModel->getLastItemCodeGlobal();
 
             // Initialize variables for the loop
@@ -799,7 +812,6 @@ class InboundingController {
                 $candidate_code = $current_prefix . $new_seq;
 
                 // --- CRITICAL CHECK: Does this code exist in DB? ---
-                // You need to add a simple helper method to your model: checkItemCodeExists($code)
                 $exists = $inboundingModel->checkItemCodeExists($candidate_code);
 
                 if (!$exists) {
@@ -807,7 +819,6 @@ class InboundingController {
                     $is_unique = true;
                 } else {
                     // If it exists, we loop again (which increments $number again)
-                    // e.g., if HSAA02 exists, next loop tries HSAA03
                 }
 
                 // Safety break to prevent infinite loops
@@ -871,7 +882,7 @@ class InboundingController {
             }
         }
         $s_group   = $_POST['search_group'] ?? '';
-    
+     
         // Capture arrays and implode to comma-separated strings
         $s_cat_arr = $_POST['search_cat'] ?? [];
         $s_cat     = is_array($s_cat_arr) ? implode(',', $s_cat_arr) : $s_cat_arr;
@@ -891,9 +902,9 @@ class InboundingController {
 
         // 3. Prepare Main Data Array
         $data = [
-            'product_photo'       => $mainProductPhoto, // <--- ADDED THIS LINE
+            'product_photo'       => $mainProductPhoto,
             'invoice_image'       => $invoicePath,
-            'search_term' => $search_term,
+            'search_term'         => $search_term,
             'search_category_string' => $search_category_string,
             'is_variant'          => $is_variant,
             'Item_code'           => $item_code,
@@ -946,7 +957,7 @@ class InboundingController {
         $result = $inboundingModel->updatedesktopform($id, $data);
 
         // =========================================================================
-        // START VARIATIONS LOGIC (Already present in your code)
+        // START VARIATIONS LOGIC
         // =========================================================================
         
         // Capture variations array from POST
@@ -1013,7 +1024,6 @@ class InboundingController {
 
             if ($action_clicked === 'draft') {
                 // 1. If "Save and Draft" clicked -> Redirect back to SAME PAGE
-                // Assuming 'desktopform' is the action used to VIEW the form
                 header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
             } else {
                 // 2. If "Save and Generate" clicked -> Redirect to LIST
