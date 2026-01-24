@@ -296,14 +296,15 @@
             <table class="w-full border">
                 <thead>
                     <tr>
-                        <th class="p-2 text-left">Title</th>
+                        <!-- <th class="p-2 text-left"> </th> -->
                         <th class="p-2 text-left">Order ID</th>
-                        <th class="p-2 text-left">Order Date</th>
-                        <th class="p-2 text-left">Image</th>
+                        <th class="p-2 text-left">SKU</th>
+                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-left">Price</th>
                         <th class="p-2 text-left">Action</th>
                     </tr>
                 </thead>
-                <tbody id="orderList">
+                <tbody id="orderItemsTableBody">
                     <!-- Dynamic rows here -->
                 </tbody>
             </table>
@@ -736,7 +737,7 @@ document.getElementById('orderSearch').addEventListener('input', function() {
     fetchOrderItems(this.value);
 });
 function fetchOrderItems(searchTerm) {
-    fetch('<?php echo base_url('?page=orders&action=fetch_items'); ?>', {
+    fetch('<?php echo base_url('?page=invoices&action=fetch_items'); ?>', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({search: searchTerm, customer_id: <?php echo isset($customer['id']) ? (int)$customer['id'] : 0; ?>})
@@ -749,12 +750,14 @@ function fetchOrderItems(searchTerm) {
         if (data.items && data.items.length > 0) {
             data.items.forEach(item => {
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="border p-2 text-center"><input type="checkbox" class="itemCheckbox" data-item='${JSON.stringify(item)}'></td>
-                    <td class="border p-2">${item.order_number || ''}</td>
+                row.innerHTML = `                    
+                    <td class="border p-2" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
                     <td class="border p-2">${item.sku || ''}</td>
                     <td class="border p-2">${item.title || ''}</td>
                     <td class="border p-2 text-right">${item.itemprice ? "₹"+item.itemprice : '0.00'}</td>
+                    <td class="border p-2 text-center">
+                        <button type="button" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 select-item-button" id="selectItemBtn">Select</button>
+                    </td>
                 `;
                 tbody.appendChild(row);
             });
@@ -768,4 +771,62 @@ function fetchOrderItems(searchTerm) {
         console.error('Error fetching order items:', err);
     });
 }
+// Handle item selection
+document.getElementById('orderItemsTableBody').addEventListener('click', function(e) {
+    if (e.target.classList.contains('select-item-button')) {
+        const itemData = JSON.parse(e.target.closest('tr').querySelector('td').getAttribute('data-item'));
+        
+        // Add item to invoice table
+        const tbody = document.querySelector('#invoiceTable tbody');
+        const newRow = document.createElement('tr');
+        newRow.className = 'bg-white';
+        newRow.innerHTML = `
+            <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
+            <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
+            <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
+            <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
+            <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
+            <td class="p-2">
+                <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
+            </td>
+            <td class="p-2">${itemData.sku || ''}</td>
+            <td class="p-2 " colspan="2">${itemData.title ? htmlspecialchars(itemData.title) : ''}
+                <input type="hidden" name="item_name[]" value="${itemData.title ? htmlspecialchars(itemData.title) : ''}" required>
+            </td>
+            <td class="p-2">${itemData.hsn || ''}
+                <input type="hidden" name="hsn[]" value="${itemData.hsn || ''}" > 
+            </td>
+            <td class="p-2">1
+                <input type="hidden" name="quantity[]"  value="1">
+            </td>
+            <td class="p-2">${itemData.itemprice ? "₹"+itemData.itemprice : '0.00'}
+                <input type="hidden" name="unit_price[]"  value="${itemData.itemprice || 0}" >
+            </td>
+            <td class="p-2">0%
+                <input type="hidden" name="discount[]"  value="0" >
+            </td>
+            <td class="p-2">0%
+                <input type="hidden" name="cgst[]"  value="0" >
+            </td>   
+            <td class="p-2">0%
+                <input type="hidden" name="sgst[]"  value="0" >
+            </td>
+            <td class="p-2">0%
+                <input type="hidden" name="igst[]"  value="0" >
+            </td>
+            <td class="p-2">${itemData.itemprice ? "₹"+itemData.itemprice : '0.00'}
+                <input type="hidden" name="line_total[]" step="0.01" >
+            </td>
+            <td class="p-2 rounded-r-lg text-center">
+                <button type="button" onclick="removeRow(this)" class="text-red-500 hover:text-red-700">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(newRow);
+        calculateTotals();
+        // Close modal
+        document.getElementById('orderModal').style.display = 'none';
+    }
+});
 </script>

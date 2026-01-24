@@ -611,5 +611,72 @@ class InvoicesController {
             exit;
         }
     }
+    public function clearSessionItems() {
+        is_login();
+        header('Content-Type: application/json');
+        
+        if (isset($_SESSION['invoice_items'])) {
+            unset($_SESSION['invoice_items']);
+        }
+        
+        echo json_encode(['success' => true, 'message' => 'Invoice items cleared from session']);
+        exit;
+    }
+    public function printInvoice() {
+        is_login();
+        global $invoiceModel;
+        
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        if ($id <= 0) {
+            echo '<p>Invalid Invoice ID.</p>';
+            exit;
+        }
+        
+        $invoice = $invoiceModel->getInvoiceById($id);
+        $items = $invoiceModel->getInvoiceItems($id);
+        
+        if (!$invoice) {
+            echo '<p>Invoice not found.</p>';
+            exit;
+        }
+        
+        $data = [
+            'invoice' => $invoice,
+            'items' => $items
+        ];
+        
+        renderTemplate('views/invoices/print.php', $data, 'Print Invoice');
+    }
+    public function fetchItems(){
+        is_login();
+        header('Content-Type: application/json');
+        global $ordersModel;
+        //print_r($_POST);exit;
+        $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+        $itemIds = isset($_POST['item_ids']) ? $_POST['item_ids'] : [];
+        $search = isset($_POST['search']) ? $_POST['search'] : 0;
+        // if (empty($itemIds) || !is_array($itemIds)) {
+        //     echo json_encode(['success' => false, 'message' => 'No item IDs provided']);
+        //     exit;
+        // }
+        
+         $itemsData = [];
+        // foreach ($itemIds as $id) {
+        //     $order = $ordersModel->getOrderById($id);
+        //     if ($order) {
+        //         $itemsData[] = $order;
+        //     }
+        // }
+        
+        if (!$search) {
+            $orderItems = $ordersModel->getOrderItemsByCustomerId($customerId,$search,$itemIds);
+        }else{
+            $orderItems = $ordersModel->getOrderItemsByCustomerId($customerId,$search,[]);
+        }
+        
+        echo json_encode(['success' => true, 'items' => $orderItems, 'selected_items' => $itemsData]);
+        exit;
+
+    }
     
 }

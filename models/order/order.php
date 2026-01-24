@@ -547,7 +547,28 @@ class Order{
         }
         return $orderItems;
     }
-	
+
+    public function getOrderItemsByCustomerId($customer_id, $searchTerm = '', $itemIds = []) {
+        $sql = "SELECT * FROM vp_orders WHERE customer_id = ?";
+        if (!empty($searchTerm)) {
+            $sql .= " AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
+        }
+        if (!empty($itemIds)) {
+            $placeholders = implode(',', array_fill(0, count($itemIds), '?'));
+            $sql .= " AND id IN ($placeholders)";
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $customer_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = $row;
+            }
+        }
+        return $orderItems;
+    }
     public function updateOrderStatusByPO($po_id, $status) {
         $sql = "UPDATE vp_orders SET status = ? WHERE po_id = ?";
         $stmt = $this->db->prepare($sql);
