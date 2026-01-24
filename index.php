@@ -263,6 +263,31 @@ switch ($page) {
             case 'remove_payment':
                 $controller->removePayment();
                 break;
+            
+            case 'add_challan':
+                $controller->addChallan();
+                break;
+            case 'get_challan':
+                $controller->getChallans();
+                break;
+            case 'remove_challan':
+                $controller->deleteChallan();
+                break;
+            case 'vendor_search':
+                $controller->vendorSearch();
+                break;
+            case 'custom_po':
+                $controller->customPO();
+                break;
+            case 'custompo_post':
+                $controller->customPOSave();
+                break;
+            case 'product_items':
+                $controller->productItems();
+                break;
+            case 'stock_purchase':
+                $controller->stockPurchase();
+                break;
             default:
                 $controller->index();
                 break;
