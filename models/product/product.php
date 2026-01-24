@@ -1070,7 +1070,26 @@ class product
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }*/
 
-    public function updatePurchaseListStatus($purchase_list_id, $transactionQty, $purchase_type = 'purchased')
+    public function updatePurchaseListStatusValue($purchase_list_id, $status)
+    {
+        $sql = "UPDATE purchase_list SET status = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        $id = (int)$purchase_list_id;
+        $stmt->bind_param('si', $status, $id);
+
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Status updated'];
+        }
+
+        return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+    }
+
+
+    public function updatePurchaseListStatus($purchase_list_id, $transactionQty, $status,$purchase_type = 'purchased')
     {
         //if ($purchase_type === 'unpurchased') {
         /**
