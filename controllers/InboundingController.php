@@ -723,34 +723,22 @@ class InboundingController {
         $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
 
-        // 2. Fetch Variations from DB (These have just been updated)
+        // 2. Fetch Variations from DB
         $variations = $inboundingModel->getVariations($itemId);
         $hasVariations = !empty($variations);
 
-        // 3. Determine Case
-        $isVariant = ($currentData['is_variant'] === 'Y'); // Parent = Y ?
+        // 3. Determine Case & Suffix Logic
+        $isVariant = ($currentData['is_variant'] === 'Y'); 
 
-        // =================================================================
-        // LOGIC: Generate the Base Name based on your 4 Cases
-        // =================================================================
-        
-        // CASE 1: Parent = N and Single Variant (Simple Product)
+        // Generate Base Name Logic
         if (!$isVariant && !$hasVariations) {
-            $baseName = $itemCode; // abc1234
-        }
-        // CASE 2: Parent = N and Multiple Variants (Complex Product)
-        // We don't rename the "Main Container" here usually, we rename the variants inside the loop below.
-        // However, if there are images attached to the Base (-1) in a complex product, 
-        // standard logic suggests keeping them generic or matching the item code.
-        // We will leave the Base (-1) images as 'abc1234' (Generic) for Case 2.
-        elseif (!$isVariant && $hasVariations) {
+            // CASE 1: Simple Product -> abc1234
             $baseName = $itemCode; 
-        }
-        // CASE 3: Parent = Y (Single Variant / Child Record)
-        // CASE 4: Parent = Y (Multiple Variants - Rare, but treated same as 3)
-        else {
-            // Parent = Y means this IS a variation.
-            // Rule: abc1234-color.jpg OR abc1234-size.jpg
+        } elseif (!$isVariant && $hasVariations) {
+            // CASE 2: Complex Product (Base) -> abc1234
+            $baseName = $itemCode; 
+        } else {
+            // CASE 3 & 4: Variation -> abc1234-color
             $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
             $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
         }
@@ -760,39 +748,44 @@ class InboundingController {
         // =================================================================
         
         // 1. Rename Main Product Photo (inbound_item table)
-        // For Case 2, this is the "Cover Image" of the group.
         $itemData = $inboundingModel->getform1data($itemId);
         $mainPhotoPath = $itemData['form2']['product_photo'] ?? '';
         
         if (!empty($mainPhotoPath)) {
+            // Main photo always gets the base name
             $this->processRename($mainPhotoPath, $mainPhotoDir, $baseName, $itemId, 'main', $inboundingModel);
         }
 
-        // 2. Rename Gallery Images (item_images table where variation_id = -1)
+        // 2. Rename Gallery Images
         $baseImages = $inboundingModel->get_item_images_by_variation($itemId, -1);
         if (empty($baseImages)) $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
 
         if (!empty($baseImages)) {
-            $counter = 1;
+            $counter = 0; // Start at 0 to track the "First" image
             foreach ($baseImages as $img) {
-                // Logic: abc1234_a01.jpg  OR  abc1234-blue_a01.jpg
-                $newName = $baseName . "_a" . str_pad($counter, 2, '0', STR_PAD_LEFT);
+                
+                // Logic: 
+                // 1st Image (0) -> abc1234.jpg
+                // 2nd Image (1) -> abc1234_a01.jpg
+                if ($counter === 0) {
+                    $newName = $baseName; 
+                } else {
+                    $newName = $baseName . "_a" . str_pad($counter, 2, '0', STR_PAD_LEFT);
+                }
+
                 $this->processRename($img['file_name'], $altPhotoDir, $newName, $img['id'], 'gallery', $inboundingModel);
                 $counter++;
             }
         }
 
         // =================================================================
-        // EXECUTION B: Rename Variations (For Case 2 & 4)
+        // EXECUTION B: Rename Variations
         // =================================================================
         if ($hasVariations) {
             foreach ($variations as $var) {
                 
-                // Generate Suffix for THIS variation (Color > Size)
-                // Example: "blue" or "xl"
+                // Generate Suffix: abc1234-blue
                 $varSuffix = $this->getNamingSuffix($var['color'], $var['size']);
-                
-                // Name: abc1234-blue
                 $varBaseName = $itemCode . ($varSuffix ? '-' . $varSuffix : '');
 
                 // 1. Rename Variation Main Photo
@@ -803,10 +796,18 @@ class InboundingController {
                 // 2. Rename Variation Gallery Images
                 $varImages = $inboundingModel->get_item_images_by_variation($itemId, $var['id']);
                 if (!empty($varImages)) {
-                    $vCounter = 1;
+                    $vCounter = 0; // Start at 0
                     foreach ($varImages as $vImg) {
-                        // Logic: abc1234-blue_a01.jpg
-                        $vNewName = $varBaseName . "_a" . str_pad($vCounter, 2, '0', STR_PAD_LEFT);
+                        
+                        // Logic:
+                        // 1st Image (0) -> abc1234-blue.jpg
+                        // 2nd Image (1) -> abc1234-blue_a01.jpg
+                        if ($vCounter === 0) {
+                            $vNewName = $varBaseName;
+                        } else {
+                            $vNewName = $varBaseName . "_a" . str_pad($vCounter, 2, '0', STR_PAD_LEFT);
+                        }
+
                         $this->processRename($vImg['file_name'], $altPhotoDir, $vNewName, $vImg['id'], 'gallery', $inboundingModel);
                         $vCounter++;
                     }
