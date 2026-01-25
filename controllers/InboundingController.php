@@ -1384,6 +1384,7 @@ class InboundingController {
             $stock_price_temp[0]['color'] = $data['data']['color'];
             $stock_price_temp[0]['item_level'] = 'variation';
         }
+        $stock_price_temp[0]['marketplace_vendor'] = $data['data']['Marketplace'];
         $stock_price_temp[0]['colormap'] = $data['data']['colormaps'];
         $stock_price_temp[0]['product_weight'] = $data['data']['weight'];
         $stock_price_temp[0]['product_weight_unit'] = 'kg';
@@ -1437,7 +1438,7 @@ class InboundingController {
                 $i++;
                 $stock_price_temp[$i]['size'] = $value['size'];
                 $stock_price_temp[$i]['color'] = $value['color'];
-                $stock_price_temp[$i]['marketplace_vendor'] = "exoticindia";
+                $stock_price_temp[$i]['marketplace_vendor'] = $data['data']['Marketplace'];
                 $stock_price_temp[$i]['item_level'] = 'variation';
                 $stock_price_temp[$i]['colormap'] = $value['colormaps'];
                 $stock_price_temp[$i]['product_weight'] = $value['weight'];
