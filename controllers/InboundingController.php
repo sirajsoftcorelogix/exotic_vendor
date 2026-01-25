@@ -901,7 +901,7 @@ class InboundingController {
         $shouldRename = false; 
 
         // If Group or Category changes, reset item code to trigger generation
-        if (($new_group_val != $old_group_val) || ($category_id != $old_cat_val) && $is_variant != 'Y') {
+        if (($new_group_val != $old_group_val) || ($category_id != $old_cat_val) && $is_variant === 'N') {
              $item_code = ''; 
         }
 
