@@ -718,7 +718,7 @@ class InboundingController {
     }
     private function renameImagesToItemCode($itemId, $itemCode, $currentData) {
         global $inboundingModel;
-
+        $itemCode = strtolower($itemCode);
         // 1. Setup Directories
         $mainPhotoDir = __DIR__ . '/../uploads/products/';
         $altPhotoDir  = __DIR__ . '/../uploads/itm_img/';
