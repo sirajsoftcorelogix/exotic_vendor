@@ -888,6 +888,7 @@ class InboundingController {
         // 2. Capture Inputs & Change Detection
         $is_variant = $_POST['is_variant'] ?? '';
         $item_code  = $_POST['Item_code'] ?? '';
+
         $old_is_variant = $oldData['form2']['is_variant'] ?? '';
         
         $old_group_val = $oldData['form2']['group_name'] ?? '';
@@ -901,7 +902,7 @@ class InboundingController {
         $shouldRename = false; 
 
         // If Group or Category changes, reset item code to trigger generation
-        if (($new_group_val != $old_group_val) || ($category_id != $old_cat_val) && $is_variant === 'N') {
+        if ((($new_group_val != $old_group_val) || ($category_id != $old_cat_val)) && $is_variant === 'N') {
              $item_code = ''; 
         }
 
@@ -915,6 +916,7 @@ class InboundingController {
 
         // 3. GENERATE NEW ITEM CODE (If needed)
         if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
+
             $last_code = $inboundingModel->getLastItemCodeGlobal();
             $is_unique = false;
             $attempts = 0;
@@ -955,7 +957,6 @@ class InboundingController {
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
         $generated_sku = '';
-
         if ($is_variant === 'N') {
             $generated_sku = $item_code;
         } elseif ($is_variant === 'Y') {
