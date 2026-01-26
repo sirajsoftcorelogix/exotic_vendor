@@ -70,7 +70,12 @@ class InvoicesController {
             if(!in_array($order['order_number'], $orderNumber)){
                 $orderNumber[] = $order['order_number'];
                 $data['customer_address'][$key]= $commanModel->get_customer_address($order['order_number']);  
-            }     
+            }
+            //unit_price calculation with finalprice
+            $gstRate = isset($order['gst']) ? $order['gst'] : 0;
+            $finalPrice = $order['finalprice'];
+            $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
+            $data['data'][$key]['unit_price'] = $unitPriceBeforeGst;
                     
         }
         //firm info
@@ -650,11 +655,12 @@ class InvoicesController {
     public function fetchItems(){
         is_login();
         header('Content-Type: application/json');
+        $inputdata = json_decode(file_get_contents('php://input'), true);
         global $ordersModel;
-        //print_r($_POST);exit;
-        $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
-        $itemIds = isset($_POST['item_ids']) ? $_POST['item_ids'] : [];
-        $search = isset($_POST['search']) ? $_POST['search'] : 0;
+        //print_r($inputdata);exit;
+        $customerId = isset($inputdata['customer_id']) ? (int)$inputdata['customer_id'] : 0;
+        $itemIds = isset($inputdata['item_ids']) ? $inputdata['item_ids'] : [];
+        $search = isset($inputdata['search']) ? $inputdata['search'] : 0;
         // if (empty($itemIds) || !is_array($itemIds)) {
         //     echo json_encode(['success' => false, 'message' => 'No item IDs provided']);
         //     exit;
@@ -668,10 +674,15 @@ class InvoicesController {
         //     }
         // }
         
-        if (!$search) {
-            $orderItems = $ordersModel->getOrderItemsByCustomerId($customerId,$search,$itemIds);
-        }else{
-            $orderItems = $ordersModel->getOrderItemsByCustomerId($customerId,$search,[]);
+       //echo $customerId.'---'.$search;
+        $orderItems = $ordersModel->getOrderItemsByCustomerId($customerId,$search,[]);
+        
+        //calculate unit price before gst
+        foreach($orderItems as $key => $order){
+            $gstRate = isset($order['gst']) ? $order['gst'] : 0;
+            $finalPrice = $order['finalprice'];
+            $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
+            $orderItems[$key]['unit_price'] = $unitPriceBeforeGst;
         }
         
         echo json_encode(['success' => true, 'items' => $orderItems, 'selected_items' => $itemsData]);

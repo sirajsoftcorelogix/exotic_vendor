@@ -193,6 +193,16 @@ global $domain, $root_path;
         if (backdrop) backdrop.onclick = function() { hideAlert(); };
     };
 })();
+// Helper function to escape HTML special characters
+function htmlspecialchars(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 </script>  
 </body>
 </html>

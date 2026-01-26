@@ -549,7 +549,7 @@ class Order{
     }
 
     public function getOrderItemsByCustomerId($customer_id, $searchTerm = '', $itemIds = []) {
-        $sql = "SELECT * FROM vp_orders WHERE customer_id = ?";
+        $sql = "SELECT * FROM vp_orders WHERE customer_id = ? AND (invoice_no IS NULL OR invoice_no = '')";
         if (!empty($searchTerm)) {
             $sql .= " AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
         }
@@ -557,8 +557,22 @@ class Order{
             $placeholders = implode(',', array_fill(0, count($itemIds), '?'));
             $sql .= " AND id IN ($placeholders)";
         }
+      
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $customer_id);
+        $types = 'i';
+        $params = [$customer_id];
+        if (!empty($searchTerm)) {
+            $searchTerm = "%{$searchTerm}%";
+            $types .= 'sss';
+            $params = array_merge($params, [$searchTerm, $searchTerm, $searchTerm]);
+        }
+        if (!empty($itemIds)) {
+            foreach ($itemIds as $id) {
+                $types .= 'i';
+                $params[] = (int)$id;
+            }
+        }
+        $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $result = $stmt->get_result();
         $orderItems = [];

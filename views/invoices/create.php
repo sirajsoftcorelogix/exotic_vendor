@@ -203,8 +203,8 @@
                 <td class="p-2"><span><?= $item['quantity'] ?? 1 ?></span>
                     <input type="hidden" name="quantity[]"  value="<?= $item['quantity'] ?? 1 ?>">
                 </td>
-                <td class="p-2"><span><?= $item['itemprice'] ? "₹".$item['itemprice'] : '0.00' ?></span>
-                    <input type="hidden" name="unit_price[]"  value="<?= $item['itemprice'] ?? 0 ?>" >
+                <td class="p-2"><span><?= $item['unit_price'] ? "₹".$item['unit_price'] : '0.00' ?></span>
+                    <input type="hidden" name="unit_price[]"  value="<?= $item['unit_price'] ?? 0 ?>" >
                 </td>
                 <td class="p-2"><span>0%</span>
                     <input type="hidden" name="discount[]"  value="0" >
@@ -218,7 +218,7 @@
                 <td class="p-2"><span>0%</span>
                     <input type="hidden" name="igst[]"  value="0" >
                 </td>
-                <td class="p-2"><span><?= $item['itemprice'] ? "₹".$item['itemprice'] : '0.00' ?></span>
+                <td class="p-2"><span><?= $item['unit_price'] ? "₹".$item['unit_price'] : '0.00' ?></span>
                     <input type="hidden" name="line_total[]" step="0.01" >
                 </td>
                 <td class="p-2 rounded-r-lg text-center">
@@ -716,6 +716,7 @@ function clearGSTFields() {
     calculateTotals();
 }
 
+
 // add item
 // Show modal and fetch order items
 document.querySelector('.action-button').addEventListener('click', function(e) {
@@ -754,7 +755,7 @@ function fetchOrderItems(searchTerm) {
                     <td class="border p-2" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
                     <td class="border p-2">${item.sku || ''}</td>
                     <td class="border p-2">${item.title || ''}</td>
-                    <td class="border p-2 text-right">${item.itemprice ? "₹"+item.itemprice : '0.00'}</td>
+                    <td class="border p-2 text-right">${item.unit_price ? "₹"+item.unit_price : '0.00'}</td>
                     <td class="border p-2 text-center">
                         <button type="button" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 select-item-button" id="selectItemBtn">Select</button>
                     </td>
@@ -799,8 +800,8 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
             <td class="p-2">1
                 <input type="hidden" name="quantity[]"  value="1">
             </td>
-            <td class="p-2">${itemData.itemprice ? "₹"+itemData.itemprice : '0.00'}
-                <input type="hidden" name="unit_price[]"  value="${itemData.itemprice || 0}" >
+            <td class="p-2">${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}
+                <input type="hidden" name="unit_price[]"  value="${itemData.unit_price || 0}" >
             </td>
             <td class="p-2">0%
                 <input type="hidden" name="discount[]"  value="0" >
@@ -814,7 +815,7 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
             <td class="p-2">0%
                 <input type="hidden" name="igst[]"  value="0" >
             </td>
-            <td class="p-2">${itemData.itemprice ? "₹"+itemData.itemprice : '0.00'}
+            <td class="p-2">${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}
                 <input type="hidden" name="line_total[]" step="0.01" >
             </td>
             <td class="p-2 rounded-r-lg text-center">
@@ -824,6 +825,10 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
             </td>
         `;
         tbody.appendChild(newRow);
+        // Update GST fields based on current billing state
+        const gstType = calculateGSTType('<?php echo $billingState; ?>');
+        updateGSTFields(gstType);
+        
         calculateTotals();
         // Close modal
         document.getElementById('orderModal').style.display = 'none';
