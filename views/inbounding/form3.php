@@ -688,12 +688,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                         <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
                             <div><label class="block text-xs font-bold text-black mb-1">Color (Manual):</label><input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             
-                            <div class="colormap-wrapper mt-2" style="display:none;">
-                                <label class="block text-xs font-bold text-black mb-1">Color Map (Dropdown):</label>
-                                <select name="variations[${index}][colormaps]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white colormap-select" data-saved-value="">
-                                    <option value="">Select Color Map</option>
-                                </select>
-                            </div>
+                            
 
                             <div><label class="block text-xs font-bold text-black mb-1">Quantity <span class="text-red-500">*</span>:</label><input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                             
@@ -708,6 +703,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div class="colormap-wrapper mt-2" style="display:none;">
+                                <label class="block text-xs font-bold text-black mb-1">Color Map (Dropdown):</label>
+                                <select name="variations[${index}][colormaps]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white colormap-select" data-saved-value="">
+                                    <option value="">Select Color Map</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
