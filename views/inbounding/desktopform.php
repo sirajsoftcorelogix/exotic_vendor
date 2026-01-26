@@ -3266,3 +3266,107 @@ function validateAndSubmit(actionType) {
     }
 }
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. Get Markup Data from PHP
+    const markupMap = <?php echo json_encode($data['markup_list'] ?? []); ?>;
+    let currentMarkupPercent = 0;
+
+    // 2. Update Markup Percentage on Group Change
+    function updateCurrentMarkup() {
+        const groupSelect = document.getElementById('group_select');
+        let selectedGroupId = '';
+
+        if (groupSelect) {
+            if (groupSelect.tomselect) {
+                selectedGroupId = groupSelect.tomselect.getValue();
+            } else {
+                selectedGroupId = groupSelect.value;
+            }
+        }
+        currentMarkupPercent = parseFloat(markupMap[selectedGroupId]) || 0;
+        
+        // Background Update: Only fill empty fields
+        recalculateAllPrices(false); 
+    }
+
+    // 3. MAIN LOGIC: Calculate Price
+    // isUserAction = true (User typed in CP) | false (Group changed or Page Load)
+    function calculatePrice(cpInput, isUserAction) {
+        const cp = parseFloat(cpInput.value);
+        if (isNaN(cp)) return; 
+
+        // Formula: CP + (CP * Percentage / 100)
+        const sellPrice = cp + (cp * currentMarkupPercent / 100);
+
+        const container = cpInput.closest('.grid') || cpInput.closest('.calculation-card') || cpInput.closest('.variation-card');
+        
+        if (container) {
+            let priceInput = null;
+            if (cpInput.name === 'cp') {
+                priceInput = container.querySelector('input[name="price_india"]');
+            } else {
+                priceInput = container.querySelector('input[name*="[price_india]"]:not([name*="mrp"])');
+            }
+
+            if (priceInput) {
+                // Check if user manually locked THIS specific field in this session
+                if (priceInput.getAttribute('data-manual-override') === 'true') {
+                    return; // Stop, user wants a custom price here
+                }
+
+                const currentVal = parseFloat(priceInput.value || 0);
+
+                // LOGIC DECISION:
+                // 1. If Background Action (Group Change): Only update if currently 0 or Empty
+                // 2. If User Action (Typing CP): ALWAYS update (unless locked above)
+                if (isUserAction || currentVal === 0) {
+                    priceInput.value = sellPrice.toFixed(2);
+                    
+                    // Mark as auto-filled so we know script touched it
+                    priceInput.setAttribute('data-auto-filled', 'true'); 
+                    
+                    // Trigger update for MRP
+                    priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+        }
+    }
+
+    // 4. Listen for Manual Price Overrides
+    // If user types in "Price India" directly, we STOP auto-calculating for that row
+    document.body.addEventListener('input', function(e) {
+        if (e.target.matches('input[name*="[price_india]"]') || e.target.name === 'price_india') {
+            if (e.isTrusted) { // Only if human typed it
+                e.target.setAttribute('data-manual-override', 'true');
+            }
+        }
+    });
+
+    // 5. Apply to all rows
+    function recalculateAllPrices(isUserAction) {
+        const allCpInputs = document.querySelectorAll('input[name="cp"], input[name*="[cp]"]');
+        allCpInputs.forEach(input => {
+            if(input.value) calculatePrice(input, isUserAction);
+        });
+    }
+
+    // 6. Init Listeners
+    const groupSelect = document.getElementById('group_select');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', updateCurrentMarkup);
+        if(groupSelect.tomselect) groupSelect.tomselect.on('change', updateCurrentMarkup);
+    }
+
+    // LISTEN FOR CP CHANGES (User Action = true)
+    document.body.addEventListener('input', function(e) {
+        if (e.target.matches('input[name="cp"]') || e.target.matches('input[name*="[cp]"]')) {
+            calculatePrice(e.target, true); // <--- Pass TRUE here
+        }
+    });
+
+    // 7. Run once on load (Background action = false)
+    updateCurrentMarkup();
+});
+</script>
