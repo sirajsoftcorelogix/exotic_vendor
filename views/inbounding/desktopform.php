@@ -952,7 +952,7 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
         ?>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category</legend>
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category (Related Items)</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                     <div>
@@ -1220,7 +1220,7 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Percentage:</label>
                         <div class="relative w-full">
                             <input type="number" name="backorder_percent" min="1" max="100" placeholder="0"
-                                   value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '') ?>" 
+                                   value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '20') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[30px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">%</span>
                         </div>
@@ -3368,5 +3368,119 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 7. Run once on load (Background action = false)
     updateCurrentMarkup();
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // --- Configuration ---
+    const mapConfig = [
+        { 
+            source: 'category_container', 
+            target: 'search_category_container' 
+        },
+        { 
+            source: 'sub_category_container', 
+            target: 'search_sub_category_container' 
+        },
+        { 
+            source: 'sub_sub_category_container', 
+            target: 'search_sub_sub_category_container' 
+        }
+    ];
+
+    // --- Helper: Sync Checkboxes from Source to Target ---
+    function syncCheckboxes(sourceId, targetId) {
+        const sourceContainer = document.getElementById(sourceId);
+        const targetContainer = document.getElementById(targetId);
+        if(!sourceContainer || !targetContainer) return;
+
+        // 1. Get all checked values from Source
+        const checkedValues = Array.from(sourceContainer.querySelectorAll('input[type="checkbox"]:checked'))
+                                   .map(cb => cb.value);
+
+        // 2. Reset Target (Uncheck all first to mirror strict sync)
+        const targetCheckboxes = targetContainer.querySelectorAll('input[type="checkbox"]');
+        targetCheckboxes.forEach(cb => {
+            cb.checked = false; 
+        });
+
+        // 3. Check matching values in Target and Trigger Change
+        let changeTriggered = false;
+        checkedValues.forEach(val => {
+            const match = targetContainer.querySelector(`input[value="${val}"]`);
+            if(match) {
+                match.checked = true;
+                match.dispatchEvent(new Event('change', { bubbles: true }));
+                changeTriggered = true;
+            }
+        });
+
+        // If nothing was checked, trigger change on first element to clear downstream
+        if(!changeTriggered && targetCheckboxes.length > 0) {
+             targetCheckboxes[0].dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    // --- Core Function: Master Sync ---
+    function performFullSync() {
+        // 1. Sync Group (TomSelect)
+        const itemGroupSelect = document.getElementById('group_select');
+        const searchGroupSelect = document.getElementById('search_group_select');
+
+        if (itemGroupSelect && searchGroupSelect && itemGroupSelect.tomselect && searchGroupSelect.tomselect) {
+            const itemVal = itemGroupSelect.tomselect.getValue();
+            // Sync Group Value
+            searchGroupSelect.tomselect.setValue(itemVal); 
+        }
+
+        // 2. Sync Categories (Delayed cascade)
+        setTimeout(() => {
+            syncCheckboxes('category_container', 'search_category_container');
+            setTimeout(() => {
+                syncCheckboxes('sub_category_container', 'search_sub_category_container');
+                setTimeout(() => {
+                    syncCheckboxes('sub_sub_category_container', 'search_sub_sub_category_container');
+                }, 50);
+            }, 50);
+        }, 50);
+    }
+
+    // --- Event Listeners (User Interaction Only) ---
+
+    // A. Listen for Item Group Change
+    const itemGroupSelect = document.getElementById('group_select');
+    if (itemGroupSelect && itemGroupSelect.tomselect) {
+        itemGroupSelect.tomselect.on('change', function() {
+            // ONLY sync when user manually changes the Group
+            performFullSync();
+        });
+    }
+
+    // B. Listen for Checkbox Changes in Item Grouping
+    mapConfig.forEach(config => {
+        const container = document.getElementById(config.source);
+        if(container) {
+            container.addEventListener('change', function(e) {
+                // ONLY sync when user manually clicks a checkbox
+                if(e.target.matches('input[type="checkbox"]')) {
+                    setTimeout(() => {
+                        syncCheckboxes(config.source, config.target);
+                        
+                        // Trigger downstream updates
+                        if(config.source === 'category_container') {
+                             setTimeout(() => syncCheckboxes('sub_category_container', 'search_sub_category_container'), 50);
+                        }
+                        if(config.source === 'sub_category_container') {
+                             setTimeout(() => syncCheckboxes('sub_sub_category_container', 'search_sub_sub_category_container'), 50);
+                        }
+                    }, 10);
+                }
+            });
+        }
+    });
+
+    // --- REMOVED: The "setTimeout(performFullSync, 200)" block ---
+    // This ensures that on page load, your PHP database values are respected.
 });
 </script>
