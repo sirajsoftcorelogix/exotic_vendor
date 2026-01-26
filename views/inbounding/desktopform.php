@@ -1301,22 +1301,13 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                     </div>
                     <div class="flex-1 pl-4 flex flex-col justify-center min-w-[200px]"> 
                         <label class="block text-xs font-bold text-[#222] mb-[3px]">Image Directory:</label>
-                        <select id="image_directory_select" name="image_directory" placeholder="Search directory...">
-                            <option value="">Select Directory</option>
-                            <?php 
-                            // Get directory list safely
-                            $imgDirs = $data['form2']['getimgdir']['image_directories'] ?? [];
-                            $savedDir = $data['form2']['image_directory'] ?? ''; 
-
-                            // Loop through directories
-                            foreach ($imgDirs as $dir): 
-                                $isSelected = ($savedDir == $dir) ? 'selected' : '';
-                            ?>
-                                <option value="<?php echo htmlspecialchars($dir); ?>" <?php echo $isSelected; ?>>
-                                    <?php echo htmlspecialchars($dir); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input type="text" 
+                               id="image_directory_input" 
+                               name="image_directory" 
+                               readonly
+                               value="<?php echo htmlspecialchars($data['form2']['image_directory'] ?? ''); ?>"
+                               class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] bg-gray-100 cursor-not-allowed focus:outline-none"
+                               placeholder="Auto-generated...">
                     </div>
                 </div>
             </fieldset>
@@ -1668,16 +1659,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         const imgDirSelect = document.getElementById('image_directory_select');
-        if (imgDirSelect && imgDirSelect.tomselect) {
-            if (val === 'Y') {
-                // Requirement 1: If Variant Yes -> Clear value, Disable input
-                imgDirSelect.tomselect.clear();   // Remove selected value
-                imgDirSelect.tomselect.disable(); // Prevent user from selecting
-            } else {
-                // Requirement 2: If Variant No -> Enable input
-                imgDirSelect.tomselect.enable();
+            if (imgDirSelect && imgDirSelect.tomselect) {
+                if (val === 'Y') {
+                    imgDirSelect.tomselect.clear();
+                    imgDirSelect.tomselect.disable();
+                } else {
+                    imgDirSelect.tomselect.enable();
+                }
             }
-        }
     }
     variantSelect.addEventListener('change', function() {
         toggleVariantFields(this.value);
@@ -3130,20 +3119,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-<script>
-    // Initialize Image Directory Search
-    if(document.getElementById('image_directory_select')) {
-        new TomSelect("#image_directory_select", {
-            create: true, // CHANGED TO TRUE: Allows user to type custom folder names
-            sortField: { field: "text", direction: "asc" },
-            placeholder: "Select or Type Directory...",
-            onInitialize: function() {
-                this.wrapper.classList.add('w-full');
-                this.control.classList.add('h-[32px]', 'text-[13px]');
-            }
-        });
-    }
-</script>
+
 <script>
 function validateAndSubmit(actionType) {
     let errors = [];
@@ -3176,9 +3152,7 @@ function validateAndSubmit(actionType) {
     const isVariant = getVal('is_variant'); // Get current Variant status (Y or N)
 
     // Only validate Image Directory if this is NOT a variant (i.e., it is a Parent/Main item)
-    if (isVariant !== 'Y') {
-        if (!getVal('image_directory')) errors.push("Please select or enter an 'Image Directory'.");
-    }
+    
 
     // Category Check (Checkboxes)
     const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
@@ -3482,5 +3456,68 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- REMOVED: The "setTimeout(performFullSync, 200)" block ---
     // This ensures that on page load, your PHP database values are respected.
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const variantSelect = document.getElementById('variant_select');
+    const groupSelect = document.getElementById('group_select');
+    const imgDirInput = document.getElementById('image_directory_input');
+
+    // Function to Generate the Directory Name
+    function updateImageDirectory() {
+        // 1. If Variant is YES ('Y'), clear field
+        if (variantSelect && variantSelect.value === 'Y') {
+            imgDirInput.value = "";
+            return;
+        }
+
+        // 2. If Variant is NO (or empty), Generate Name
+        let groupName = "";
+
+        // Get Group Name (Handle TomSelect vs Native)
+        if (groupSelect.tomselect) {
+            const val = groupSelect.tomselect.getValue();
+            const item = groupSelect.tomselect.getItem(val);
+            if(item) groupName = item.innerText;
+        } else if (groupSelect.selectedIndex > -1) {
+            groupName = groupSelect.options[groupSelect.selectedIndex].text;
+        }
+
+        // Only generate if a group is selected
+        if (groupName && groupName !== "Select Group..." && groupName.trim() !== "") {
+            // Get Date (MM and YY)
+            const date = new Date();
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // e.g., '01'
+            const year = String(date.getFullYear()).slice(-2);          // e.g., '26'
+
+            // Clean Group Name (remove spaces/special chars, lowercase)
+            // Example: "Men's Wear" -> "menswear"
+            const cleanGroup = groupName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            // Set Value: books0126
+            imgDirInput.value = cleanGroup + month + year;
+        }
+    }
+
+    // --- EVENT LISTENERS ---
+
+    // 1. Listen for Variant Change
+    if(variantSelect) {
+        variantSelect.addEventListener('change', updateImageDirectory);
+        if(variantSelect.tomselect) variantSelect.tomselect.on('change', updateImageDirectory);
+    }
+
+    // 2. Listen for Group Change
+    if(groupSelect) {
+        groupSelect.addEventListener('change', updateImageDirectory);
+        if(groupSelect.tomselect) groupSelect.tomselect.on('change', updateImageDirectory);
+    }
+
+    // 3. Run on Load (in case editing existing data)
+    // Only run if the input is currently empty (to avoid overwriting saved data on edit load)
+    if(imgDirInput.value === "") {
+        setTimeout(updateImageDirectory, 500); // Small delay to let TomSelect load
+    }
 });
 </script>
