@@ -163,7 +163,6 @@
     if ($end - $start < $slot_size - 1) {
         $start = max(1, $end - $slot_size + 1);
     }
-    print_array($staff_list);
     ?>
     <!-- Header Section -->
     <!-- Stats Section -->
