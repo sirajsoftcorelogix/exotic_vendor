@@ -103,7 +103,8 @@
                     <div class="flex flex-col sm:flex-row gap-3">
                         <img src="<?php echo htmlspecialchars($image); ?>"
                             alt="<?php echo htmlspecialchars($title); ?>"
-                            class="w-24 h-32 object-cover rounded-md mx-auto sm:mx-0" />
+                            class="w-24 h-32 object-cover rounded-md mx-auto sm:mx-0" 
+                            onclick="openImagePopup('<?php echo htmlspecialchars($image); ?>')"/>
 
                         <div class="flex-1 space-y-1">
                             <div class="text-sm font-semibold text-gray-800 leading-tight">
@@ -141,13 +142,17 @@
                         <div>Weight:
                             <strong><?= htmlspecialchars($pl['product']['product_weight'] ?? '', ENT_QUOTES, 'UTF-8'); ?> <?= htmlspecialchars($pl['product']['product_weight_unit'] ?? '', ENT_QUOTES, 'UTF-8'); ?></strong>
                         </div>
-                        <div>Dimensions:
+                        <div>Measurements:
                             <strong>
                                 H: <?= htmlspecialchars((string)($pl['product']['prod_height'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                                 × W: <?= htmlspecialchars((string)($pl['product']['prod_width'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                                 × L: <?= htmlspecialchars((string)($pl['product']['prod_length'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                             </strong>
                         </div>
+                        <?php if($status === 'purchased'): ?>
+                        <div>Purchase By: <strong><?= htmlspecialchars($agent_name); ?></strong></div>
+                        <div>Purchased Date: <strong><?= htmlspecialchars($date_purchased); ?></strong></div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Purchase Fields -->
@@ -264,7 +269,13 @@
         <div class="bg-white rounded-lg shadow-sm p-6 text-center text-gray-600">No items in purchase list.</div>
     <?php endif; ?>
 </div>
-
+<!-- Image Popup -->
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
 <script>
     /*document.addEventListener("DOMContentLoaded", () => {
     <?php foreach ($data['purchase_list'] as $pl): ?>
@@ -275,4 +286,4 @@
     <?php endforeach; ?>
 });*/
 </script>
-<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></scrip
+<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></script>
