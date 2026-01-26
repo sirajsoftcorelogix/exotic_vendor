@@ -379,7 +379,7 @@ class OrdersController {
                 'successful_imports' => $imported,
                 'total_orders' => $totalorder,
                 'error' => isset($error) ? $error : '',
-                'log_details' => json_encode($result),
+                'log_details' => NULL, //json_encode($result),
                 'max_ordered_time' => $order['processed_time'] ?? '',
                 'from_date' => $from_date,
                 'to_date' => $to_date,
