@@ -654,23 +654,58 @@ class ChatServer implements MessageComponentInterface
         /**
          * 1️⃣ INSERT missing rows (delivered → read)
          */
-        $stmt = $this->conn->prepare("INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
+        /*$stmt = $this->conn->prepare("INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
             SELECT m.id, ?, 1, NOW() FROM messages m LEFT JOIN message_read_status r ON r.message_id = m.id AND r.user_id = ?
             WHERE m.conversation_id = ? AND m.id = ? AND r.message_id IS NULL");
         //$stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
         $this->safeExecute(function () use ($stmt, $userId, $conversationId, $lastReadId) {
             $stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
+        });*/
+        $this->safeExecute(function () use ($userId, $conversationId, $lastReadId) {
+            $stmt = $this->conn->prepare("
+                INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
+                SELECT m.id, ?, 1, NOW()
+                FROM messages m
+                LEFT JOIN message_read_status r 
+                    ON r.message_id = m.id AND r.user_id = ?
+                WHERE m.conversation_id = ?
+                AND m.id = ?
+                AND r.message_id IS NULL
+            ");
+            $stmt->execute([
+                $userId,
+                $userId,
+                $conversationId,
+                $lastReadId
+            ]);
         });
         /**
          * 2️⃣ UPDATE existing rows (important!)
          */
-        $stmt = $this->conn->prepare("UPDATE message_read_status r
+        /*$stmt = $this->conn->prepare("UPDATE message_read_status r
             JOIN messages m ON m.id = r.message_id
             SET r.last_read = 1, r.read_at = IFNULL(r.read_at, NOW())
             WHERE r.user_id = ? AND m.conversation_id = ? AND m.id <= ? AND r.last_read = 0");
         //$stmt->execute([$userId, $conversationId, $lastReadId]);
         $this->safeExecute(function () use ($stmt, $userId, $conversationId, $lastReadId) {
             $stmt->execute([$userId, $conversationId, $lastReadId]);
+        });*/
+        $this->safeExecute(function () use ($userId, $conversationId, $lastReadId) {
+            $stmt = $this->conn->prepare("
+                UPDATE message_read_status r
+                JOIN messages m ON m.id = r.message_id
+                SET r.last_read = 1,
+                    r.read_at = IFNULL(r.read_at, NOW())
+                WHERE r.user_id = ?
+                AND m.conversation_id = ?
+                AND m.id <= ?
+                AND r.last_read = 0
+            ");
+            $stmt->execute([
+                $userId,
+                $conversationId,
+                $lastReadId
+            ]);
         });
         /**
          * 3️⃣ Broadcast receipt
