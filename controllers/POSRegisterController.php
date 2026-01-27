@@ -4,7 +4,7 @@ class POSRegisterController
     public function index()
     {
         $registers = '';
-        renderTemplate('views/pos_register/index.php', ['registers' => $registers]);        
+        renderTemplate('views/pos_register/index.php', ['registers' => $registers]);           
     }
     
     /**
