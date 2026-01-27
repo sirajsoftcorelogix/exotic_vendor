@@ -12,25 +12,22 @@ $record_id = $_GET['id'] ?? '';
 $form2 = $data['form2'] ?? []; 
 $saved_category_code = $form2['group_name'] ?? ''; 
 
-// --- VARIANT DATA PREPARATION (Matches Desktop Logic) ---
+// --- VARIANT DATA PREPARATION ---
 $is_variant = $form2['is_variant'] ?? 'N'; 
 
 // Initialize variables
 $current_sku = $form2['sku'] ?? ''; 
-$item_code_value = '';       
-$parent_code_value = '';     
-$parent_code_display = '';   
+$item_code_value = '';        
+$parent_code_value = '';      
+$parent_code_display = '';    
 
 if ($is_variant === 'N') {
-    // If No: The Item_code is the product's own code
     $item_code_value = $form2['Item_code'] ?? '';
 } elseif ($is_variant === 'Y') {
-    // If Yes: The Item_code stored in DB is actually the Parent's Code
-    $item_code_value = ''; // Clear own code view
+    $item_code_value = ''; 
     $parent_code_value = $form2['Item_code'] ?? '';
     $parent_code_display = $form2['parent_item_title'] ?? $parent_code_value; 
 } else {
-    // Default fallback
     $item_code_value = '';
 }
 
@@ -144,17 +141,20 @@ foreach ($extraVars as $ex) {
     ];
 }
 
-$temp_code       = $form2['temp_code'] ?? '';
-$vendor_name     = $form2['vendor_name'] ?? '';
+$temp_code        = $form2['temp_code'] ?? '';
+$vendor_name      = $form2['vendor_name'] ?? '';
 $gate_entry_date_time = $form2['gate_entry_date_time'] ?? '';
 $material_code        = $form2['material_code'] ?? '';
-$feedback        = $form2['feedback'] ?? '';
+$feedback         = $form2['feedback'] ?? '';
 
 $formAction = base_url('?page=inbounding&action=submitStep3');
 ?>
 
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
 <style>
     /* CSS to make TomSelect look like the other inputs */
     .ts-control {
@@ -162,13 +162,56 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         border-radius: 0.25rem;
         padding: 6px 8px;
         font-size: 0.875rem; /* text-sm */
+        display: flex; 
+        align-items: center; 
     }
     .ts-wrapper.focus .ts-control {
         border-color: black;
         box-shadow: none;
     }
-    /* Hide the dropdown arrow if strictly needed to match inputs, or keep it */
-    .ts-control { display: flex; align-items: center; }
+    
+    /* Cropper Modal Styles */
+    #cropModal {
+        display: none;
+        position: fixed;
+        z-index: 9999; /* High z-index to stay on top */
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.85);
+    }
+    .crop-container {
+        position: relative;
+        width: 90%;
+        max-width: 600px;
+        height: 70vh; /* Fixed height for the cropper area */
+        margin: 5% auto;
+        background: #fff;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .crop-image-wrapper {
+        height: calc(100% - 60px); /* Space for buttons */
+        width: 100%;
+        background-color: #333;
+    }
+    .crop-controls {
+        height: 60px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 0 20px;
+        gap: 15px;
+        background-color: #f1f1f1;
+        border-top: 1px solid #ccc;
+    }
+    /* Ensure image fits */
+    #imageToCrop {
+        max-width: 100%;
+        display: block;
+    }
 </style>
 
 <div class="w-full min-h-screen bg-white p-2 md:p-6 font-sans">
@@ -405,6 +448,18 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
     </div>
 </div>
 
+<div id="cropModal">
+    <div class="crop-container">
+        <div class="crop-image-wrapper">
+            <img id="imageToCrop" src="" alt="Picture">
+        </div>
+        <div class="crop-controls">
+            <button type="button" onclick="closeCropModal()" class="text-gray-600 font-bold uppercase text-xs px-4 py-2 hover:bg-gray-200 rounded">Cancel</button>
+            <button type="button" id="cropBtn" class="bg-[#ea8c1e] text-white font-bold uppercase text-xs px-6 py-2 rounded shadow hover:bg-orange-600">Crop & Save</button>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // --- START: VARIANT / PARENT ITEM CODE LOGIC ---
@@ -633,12 +688,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                         <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
                             <div><label class="block text-xs font-bold text-black mb-1">Color (Manual):</label><input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             
-                            <div class="colormap-wrapper mt-2" style="display:none;">
-                                <label class="block text-xs font-bold text-black mb-1">Color Map (Dropdown):</label>
-                                <select name="variations[${index}][colormaps]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white colormap-select" data-saved-value="">
-                                    <option value="">Select Color Map</option>
-                                </select>
-                            </div>
+                            
 
                             <div><label class="block text-xs font-bold text-black mb-1">Quantity <span class="text-red-500">*</span>:</label><input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                             
@@ -653,6 +703,12 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div class="colormap-wrapper mt-2" style="display:none;">
+                                <label class="block text-xs font-bold text-black mb-1">Color Map (Dropdown):</label>
+                                <select name="variations[${index}][colormaps]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white colormap-select" data-saved-value="">
+                                    <option value="">Select Color Map</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -733,32 +789,107 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     const newPlaceholder = newCard.querySelector('.placeholder-icon');
 
                     if (sourceImg && !sourceImg.classList.contains('hidden') && sourceImg.getAttribute('src') !== '#') {
-                        newImg.src = sourceImg.src;             
-                        newImg.classList.remove('hidden');      
-                        newPlaceholder.classList.add('hidden'); 
+                        newImg.src = sourceImg.src;              
+                        newImg.classList.remove('hidden');       
+                        newPlaceholder.classList.add('hidden');  
                     }
                 }, 50);
             }
         });
+
+        // ==========================================
+        // CROPPER JS IMPLEMENTATION (Intercept Change)
+        // ==========================================
+        let currentFileInput = null;
+        let currentPreviewImg = null;
+        let currentPlaceholder = null;
+        let cropper = null;
+
+        const cropModal = document.getElementById('cropModal');
+        const imageElement = document.getElementById('imageToCrop');
+
+        // 1. Intercept file selection
         container.addEventListener('change', function(e) {
             if (e.target.classList.contains('variation-file-input')) {
                 const input = e.target;
                 const file = input.files[0];
-                const label = input.closest('label'); // The parent wrapper
-                const previewImg = label.querySelector('.preview-img');
-                const placeholder = label.querySelector('.placeholder-icon');
 
                 if (file) {
+                    currentFileInput = input;
+                    const label = input.closest('label');
+                    currentPreviewImg = label.querySelector('.preview-img');
+                    currentPlaceholder = label.querySelector('.placeholder-icon');
+
+                    // Read file
                     const reader = new FileReader();
-                    reader.onload = function(e) {
-                        previewImg.src = e.target.result;
-                        previewImg.classList.remove('hidden');
-                        placeholder.classList.add('hidden');
-                    }
+                    reader.onload = function(evt) {
+                        imageElement.src = evt.target.result;
+                        cropModal.style.display = 'block';
+
+                        if (cropper) { cropper.destroy(); }
+
+                        // Init Cropper
+                        cropper = new Cropper(imageElement, {
+                            aspectRatio: NaN, 
+                            viewMode: 1,      
+                            dragMode: 'move', 
+                            autoCropArea: 0.8,
+                            responsive: true,
+                        });
+                    };
                     reader.readAsDataURL(file);
+                    
+                    // Reset input so they can re-select same file if cancelled
+                    input.value = ''; 
                 }
             }
         });
+
+        // 2. Crop & Save
+        document.getElementById('cropBtn').addEventListener('click', function() {
+            if (!cropper) return;
+
+            const canvas = cropper.getCroppedCanvas({
+                width: 800, 
+                height: 800,
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+            });
+
+            canvas.toBlob(function(blob) {
+                // New File object
+                const croppedFile = new File([blob], "cropped_image.jpg", { type: "image/jpeg" });
+
+                // Preview Update
+                const url = URL.createObjectURL(blob);
+                currentPreviewImg.src = url;
+                currentPreviewImg.classList.remove('hidden');
+                currentPlaceholder.classList.add('hidden');
+
+                // Swap Input File
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(croppedFile);
+                currentFileInput.files = dataTransfer.files;
+
+                closeCropModal();
+
+            }, 'image/jpeg', 0.9);
+        });
+
+        // 3. Modal Close Helper
+        window.closeCropModal = function() {
+            cropModal.style.display = 'none';
+            if (cropper) {
+                cropper.destroy();
+                cropper = null;
+            }
+            imageElement.src = "";
+        };
+        // ==========================================
+        // END CROPPER JS
+        // ==========================================
+
+
         // 7. VALIDATION
         mainForm.addEventListener('submit', function(e) {
             let isValid = true;
@@ -802,7 +933,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             const isVariant = document.getElementById('variant_select').value;
             if(isVariant === 'Y') {
                 // Check if TomSelect has a value
-                // TomSelect stores value on the underlying select element
                 const parentCodeSelect = document.getElementById('item_code_select');
                 if(!parentCodeSelect.value) {
                     alert("Please select a Parent Item Code.");
