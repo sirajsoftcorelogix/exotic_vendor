@@ -366,3 +366,26 @@ async function addComment(purchaseListId, parentId = null, page = 'mpl') {
 
     input.value = "";
 }
+
+function checkMinStock(id) {
+    const qtyInput = document.getElementById(`quantity_${id}`);
+    const minStock = parseInt(document.getElementById(`minStock_${id}`).value || 0);
+    const qty = parseInt(qtyInput.value || 0);
+
+    console.log('Checking min stock:', { qty, minStock });
+
+    if (qty > 0 && qty < minStock) {
+        document.getElementById('errorMessage').innerText =
+            `Entered quantity (${qty}) is less than minimum stock (${minStock}).`;
+
+        document.getElementById('errorModal').classList.remove('hidden');
+        qtyInput.value = '';
+        qtyInput.focus();
+    }
+}
+
+function closeErrorModal() {
+    document.getElementById('errorModal').classList.add('hidden');
+}
+// End of purchase_list.js
+

@@ -147,11 +147,12 @@
 
     <div class="bg-white rounded-xl shadow-md ">
         <div class="p-6 ">
-            <div class="table-container">
-                <table class="min-w-full divide-y divide-gray-200">
+            <div class="w-full max-w-full overflow-x-auto block">
+                <table class="min-w-max w-full divide-y divide-gray-200">
                     <thead>
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order Number</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
 
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
@@ -188,6 +189,23 @@
                                     onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')">
                                     <?php echo htmlspecialchars($pl['item_code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
                                 </td>
+                                <?php
+                                $orderLink = '';
+                                if (isset($pl['order_number']) && !empty($pl['order_number'])) {
+                                    $orderLink = base_url('index.php?order_number=' . $pl['order_number']);
+                                ?>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <a href="<?php echo htmlspecialchars($orderLink); ?>" 
+                                    target="_blank" 
+                                    class="text-yellow-500 hover:text-yellow-600">
+                                        <strong><?php echo htmlspecialchars($pl['order_number']); ?></strong>
+                                    </a>
+                                </td>
+                                <?php } else {?>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    N/A
+                                </td>    
+                                <?php } ?>
 
                                 <td class="px-5 py-4 text-sm text-gray-900">
                                     <div class="w-20 h-24 flex items-center justify-center overflow-hidden rounded-md border bg-gray-50">
@@ -473,16 +491,7 @@
 <script>
     const statusArray = <?php echo json_encode(getPurchaseStatuses()); ?>;
 
-    // Image popup functionality
-    function openImagePopup(imageUrl) {
-        popupImage.src = imageUrl;
-        document.getElementById('imagePopup').classList.remove('hidden');
-    }
-    
-    function closeImagePopup(event) {
-        document.getElementById('imagePopup').classList.add('hidden');
-        document.getElementById('popupImage').src = '';
-    }                       
+                          
 
     //right side popup on item_code click 
     function viewPurchaseListDetails(plId) {
@@ -533,6 +542,7 @@
                         <div><strong>Vendor : </strong> ${plDetails.vendor || 'N/A'}</div>
                         <div><strong>Date Added : </strong> ${plDetails.date_added_readable || 'N/A'}</div>
                         <div><strong>Add By : </strong> ${plDetails.added_by_name || 'N/A'}</div>
+                        <div><strong>Purchased By: </strong> ${plDetails.agent_name || 'N/A'}</div>
                         <div><strong>Purchased Date: </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
                         <div><strong>SKU : </strong> ${plDetails.sku || 'N/A'}</div>
                         <div><strong>Color : </strong> ${plDetails.color || 'N/A'}</div>

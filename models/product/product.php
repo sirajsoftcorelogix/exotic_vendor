@@ -855,7 +855,8 @@ class product
             p.prod_height,
             p.prod_width,
             p.prod_length,
-            p.vendor
+            p.vendor,
+            o.order_number
             FROM
             (
             SELECT product_id, SUM(quantity) AS quantity
@@ -880,6 +881,7 @@ class product
             ON pl_latest.product_id = qty.product_id
             LEFT JOIN vp_products p
             ON p.id = pl_latest.product_id
+            LEFT JOIN vp_orders as o ON o.id = pl_latest.order_id
             $outerWhereSql
             $orderBy
             LIMIT ? OFFSET ?
@@ -1121,7 +1123,7 @@ class product
         $remaining = $transactionQty;
 
         // Fetch purchase list rows FIFO (oldest first)
-        $sql = "SELECT id, quantity 
+        $sql = "SELECT id, quantity,sku 
             FROM purchase_list 
             WHERE id = ? AND status != 'purchased'
             ORDER BY created_at ASC, id ASC";
@@ -1130,6 +1132,7 @@ class product
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
+        $status = '';
         foreach ($rows as $row) {
             if ($remaining <= 0) break;
 
@@ -1138,6 +1141,7 @@ class product
 
             if ($qty <= $remaining) {
                 // fully consumed
+                $status = 'purchased';
                 $remaining -= $qty;
 
                 $sql = "UPDATE purchase_list 
@@ -1151,6 +1155,7 @@ class product
                 $u->execute();
             } else {
                 // partially consumed
+                $status = 'partially_purchased';
                 $newQty = $qty - $remaining;
                 $remaining = 0;
 
@@ -1162,6 +1167,11 @@ class product
                 $u->execute();
             }
         }
+
+        $agent_id = $_SESSION['user']['id'];
+        $sku = $rows[0]['sku'];
+        $link = base_url('index.php?page=products&action=master_purchase_list&search=' . $sku.'&status='.$status);    
+        insertNotification($agent_id, 'Product Purchased', 'Product has been purchased successfully.', $link);
 
         return [
             'success' => true,

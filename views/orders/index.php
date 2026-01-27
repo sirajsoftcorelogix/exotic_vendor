@@ -930,7 +930,7 @@
                         } elseif (is_array($options)) {
                             $optionsArr = $options;
                         }
-                        if (strtolower($order['payment_type']) == 'cod') {
+                        if (isset($order['payment_type']) && strtolower($order['payment_type']) == 'cod') {
                             $bordercolor = 'border-4 border-yellow-300';
                         }
                         if (!empty($optionsArr)) {
