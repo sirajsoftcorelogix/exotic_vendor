@@ -41,6 +41,12 @@ class ProductsController {
         renderTemplate('views/products/index.php', $data, 'Products');
     }
 
+    public function getProductById($id) {
+        global $productModel;
+        $product = $productModel->getProduct($id);
+        return $product;
+    }
+    
     public function viewProduct() {
         is_login();
         global $productModel;
@@ -772,8 +778,9 @@ class ProductsController {
             $res = $productModel->addPurchaseTransaction($purchase_list_id, $quantity, $_SESSION['user']['id'], $status, $product_id);            
             echo json_encode($res);
             exit;
-        } else {
-            echo json_encode(['success' => true]);
+        } else if(!empty($status)) {
+           $res = $productModel->updatePurchaseListStatusValue($purchase_list_id, $status);
+            echo json_encode($res);
             exit;
         }        
     }

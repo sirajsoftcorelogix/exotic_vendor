@@ -1,3 +1,14 @@
+// purchase_list.js
+function openImagePopup(imageUrl) {
+    popupImage.src = imageUrl;
+    document.getElementById('imagePopup').classList.remove('hidden');
+}
+
+function closeImagePopup(event) {
+    document.getElementById('imagePopup').classList.add('hidden');
+    document.getElementById('popupImage').src = '';
+}
+
 // Prevent typing negative numbers
 document.addEventListener('keydown', (e) => {
     if (e.target.classList.contains('no-negative')) {
@@ -102,15 +113,15 @@ async function savePurchaseItem(id, btn) {
     const edd = (eddEl && eddEl.value && eddEl.value.trim() !== '') ? eddEl.value : null;
 
     const statusEl = document.getElementById('status_' + id);
-    const status = statusEl ? statusEl.value : ""; 
+    const status = statusEl ? statusEl.value : "";
 
     const prodcutEl = document.getElementById('productId_' + id);
-    const productId = prodcutEl ? prodcutEl.value : ""; 
+    const productId = prodcutEl ? prodcutEl.value : "";
 
     if (!btn) btn = {};
     btn.disabled = true;
     const originalText = btn.innerHTML || '';
-    btn.innerHTML = 'Saving...';     
+    btn.innerHTML = 'Saving...';
 
     try {
         // ✅ 1) Save comment first (if any)
@@ -355,3 +366,26 @@ async function addComment(purchaseListId, parentId = null, page = 'mpl') {
 
     input.value = "";
 }
+
+function checkMinStock(id) {
+    const qtyInput = document.getElementById(`quantity_${id}`);
+    const minStock = parseInt(document.getElementById(`minStock_${id}`).value || 0);
+    const qty = parseInt(qtyInput.value || 0);
+
+    console.log('Checking min stock:', { qty, minStock });
+
+    if (qty > 0 && qty < minStock) {
+        document.getElementById('errorMessage').innerText =
+            `Entered quantity (${qty}) is less than minimum stock (${minStock}).`;
+
+        document.getElementById('errorModal').classList.remove('hidden');
+        qtyInput.value = '';
+        qtyInput.focus();
+    }
+}
+
+function closeErrorModal() {
+    document.getElementById('errorModal').classList.add('hidden');
+}
+// End of purchase_list.js
+
