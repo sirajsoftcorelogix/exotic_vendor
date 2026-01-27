@@ -316,6 +316,9 @@ switch ($page) {
             case 'generate_pdf':
                 $controller->generatePdf();
                 break;
+            case 'fetch_items':
+                $controller->fetchItems();
+                break;
             default:
                 $controller->index();
                 break;

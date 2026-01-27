@@ -203,8 +203,8 @@
                 <td class="p-2"><span><?= $item['quantity'] ?? 1 ?></span>
                     <input type="hidden" name="quantity[]"  value="<?= $item['quantity'] ?? 1 ?>">
                 </td>
-                <td class="p-2"><span><?= $item['itemprice'] ? "₹".$item['itemprice'] : '0.00' ?></span>
-                    <input type="hidden" name="unit_price[]"  value="<?= $item['itemprice'] ?? 0 ?>" >
+                <td class="p-2"><span><?= $item['unit_price'] ? "₹".$item['unit_price'] : '0.00' ?></span>
+                    <input type="hidden" name="unit_price[]"  value="<?= $item['unit_price'] ?? 0 ?>" >
                 </td>
                 <td class="p-2"><span>0%</span>
                     <input type="hidden" name="discount[]"  value="0" >
@@ -218,7 +218,7 @@
                 <td class="p-2"><span>0%</span>
                     <input type="hidden" name="igst[]"  value="0" >
                 </td>
-                <td class="p-2"><span><?= $item['itemprice'] ? "₹".$item['itemprice'] : '0.00' ?></span>
+                <td class="p-2"><span><?= $item['unit_price'] ? "₹".$item['unit_price'] : '0.00' ?></span>
                     <input type="hidden" name="line_total[]" step="0.01" >
                 </td>
                 <td class="p-2 rounded-r-lg text-center">
@@ -296,14 +296,16 @@
             <table class="w-full border">
                 <thead>
                     <tr>
-                        <th class="p-2 text-left">Title</th>
+                        <!-- <th class="p-2 text-left"> </th> -->
                         <th class="p-2 text-left">Order ID</th>
-                        <th class="p-2 text-left">Order Date</th>
-                        <th class="p-2 text-left">Image</th>
+                        <th class="p-2 text-left">SKU</th>
+                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-left">Price</th>
+                        <th class="p-2 text-left">Qty</th>
                         <th class="p-2 text-left">Action</th>
                     </tr>
                 </thead>
-                <tbody id="orderList">
+                <tbody id="orderItemsTableBody">
                     <!-- Dynamic rows here -->
                 </tbody>
             </table>
@@ -311,6 +313,11 @@
     </div>
 </div>
 <script>
+// Helper function to round to 2 decimal places
+function roundToTwo(num) {
+    return Math.round(num * 100) / 100;
+}
+
 // Store firm state for GST calculation
 const firmState = <?php echo $firmStateJS; ?>;
 
@@ -554,44 +561,73 @@ function calculateTotals() {
         const sgst = parseFloat(row.querySelector('input[name="sgst[]"]')?.value) || 0;
         const igst = parseFloat(row.querySelector('input[name="igst[]"]')?.value) || 0;
 
-        const lineTotal = qty * unitPrice;
-        const lineTax = (lineTotal * (cgst + sgst + igst)) / 100;
-
+        const lineTotal = roundToTwo(qty * unitPrice);
+        const lineTax = roundToTwo((lineTotal * (cgst + sgst + igst)) / 100);
+        
+        // Update line total input and display
         const lineTotalInput = row.querySelector('input[name="line_total[]"]');
         if (lineTotalInput) {
             lineTotalInput.value = lineTotal.toFixed(2);
+            // Update display span in parent td
+            const lineTotalDisplay = lineTotalInput.parentElement.querySelector('span');
+            if (lineTotalDisplay) {
+                lineTotalDisplay.textContent = '₹' + lineTotal.toFixed(2);
+            }
+            console.log('Updated line total for row:', row, 'Line Total:', lineTotal);
         }
-        
-        // Update display span if exists
-        // const displaySpan = row.querySelector('td:nth-child(10) span');
-        // if (displaySpan) {
-        //     displaySpan.textContent = '₹' + lineTotal.toFixed(2);
-        // }
+
+        // Update CGST input and display
+        const cgstInput = row.querySelector('input[name="cgst[]"]');
+        if (cgstInput) {
+            const cgstDisplay = cgstInput.parentElement.querySelector('span');
+            if (cgstDisplay) {
+                cgstDisplay.textContent = cgst.toFixed(2) + '%';
+            }
+        }
+
+        // Update SGST input and display
+        const sgstInput = row.querySelector('input[name="sgst[]"]');
+        if (sgstInput) {
+            const sgstDisplay = sgstInput.parentElement.querySelector('span');
+            if (sgstDisplay) {
+                sgstDisplay.textContent = sgst.toFixed(2) + '%';
+            }
+        }
+
+        // Update IGST input and display
+        const igstInput = row.querySelector('input[name="igst[]"]');
+        if (igstInput) {
+            const igstDisplay = igstInput.parentElement.querySelector('span');
+            if (igstDisplay) {
+                igstDisplay.textContent = igst.toFixed(2) + '%';
+            }
+        }
 
         subtotal += lineTotal;
         totalTax += lineTax;
-        totalsgst += (lineTotal * sgst) / 100;
-        totalcgst += (lineTotal * cgst) / 100;
-        totaligst += (lineTotal * igst) / 100;
+        totalsgst += roundToTwo((lineTotal * sgst) / 100);
+        totalcgst += roundToTwo((lineTotal * cgst) / 100);
+        totaligst += roundToTwo((lineTotal * igst) / 100);
     });
 
     const discount = parseFloat(document.getElementById('discount_amount').value) || 0;
-    const totalAmount = subtotal + totalTax - discount;
+    const totalAmount = roundToTwo(subtotal + totalTax - discount);
 
-    document.getElementById('subtotal').value = subtotal.toFixed(2);
-    document.getElementById('tax_amount').value = totalTax.toFixed(2);
+    document.getElementById('subtotal').value = roundToTwo(subtotal).toFixed(2);
+    document.getElementById('tax_amount').value = roundToTwo(totalTax).toFixed(2);
     document.getElementById('total_amount').value = totalAmount.toFixed(2);
+    
     // Update tax totals display
     const taxTotalsDisplay = document.getElementById('taxTotalsDisplay');
     taxTotalsDisplay.innerHTML = `
         <div class="mb-2">
-            <span class="font-semibold">CGST Total:</span> ₹${totalcgst.toFixed(2)}
+            <span class="font-semibold">CGST Total:</span> ₹${roundToTwo(totalcgst).toFixed(2)}
         </div>
         <div class="mb-2">
-            <span class="font-semibold">SGST Total:</span> ₹${totalsgst.toFixed(2)}
+            <span class="font-semibold">SGST Total:</span> ₹${roundToTwo(totalsgst).toFixed(2)}
         </div>
         <div class="mb-2">
-            <span class="font-semibold">IGST Total:</span> ₹${totaligst.toFixed(2)}
+            <span class="font-semibold">IGST Total:</span> ₹${roundToTwo(totaligst).toFixed(2)}
         </div>
     `;
 }
@@ -607,6 +643,15 @@ document.addEventListener('DOMContentLoaded', function() {
 document.getElementById('create_invoice').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+
+    // Validate customer name
+    const customerNameElement = document.querySelector('input[name="customer_id"]');
+    const customerName = document.querySelector('.space-y-2 .flex .font-semibold');
+    
+    if (!customerName || !customerName.textContent.trim() || customerName.textContent.includes('****')) {
+        showAlert('Please select a valid customer', 'error');
+        return;
+    }
     
     fetch('<?php echo base_url('?page=invoices&action=create_post'); ?>', {
         method: 'POST',
@@ -652,7 +697,7 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
             }, 1000);
         } else {
             if (window.showGlobalToast) {
-                window.showGlobalToast('Error: ' + data.message, 'error');
+                window.showAlert('Error: ' + data.message, 'error');
             } else {
                 alert('Error: ' + data.message);
             }
@@ -715,6 +760,7 @@ function clearGSTFields() {
     calculateTotals();
 }
 
+
 // add item
 // Show modal and fetch order items
 document.querySelector('.action-button').addEventListener('click', function(e) {
@@ -736,7 +782,7 @@ document.getElementById('orderSearch').addEventListener('input', function() {
     fetchOrderItems(this.value);
 });
 function fetchOrderItems(searchTerm) {
-    fetch('<?php echo base_url('?page=orders&action=fetch_items'); ?>', {
+    fetch('<?php echo base_url('?page=invoices&action=fetch_items'); ?>', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({search: searchTerm, customer_id: <?php echo isset($customer['id']) ? (int)$customer['id'] : 0; ?>})
@@ -749,12 +795,15 @@ function fetchOrderItems(searchTerm) {
         if (data.items && data.items.length > 0) {
             data.items.forEach(item => {
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="border p-2 text-center"><input type="checkbox" class="itemCheckbox" data-item='${JSON.stringify(item)}'></td>
-                    <td class="border p-2">${item.order_number || ''}</td>
+                row.innerHTML = `                    
+                    <td class="border p-2" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
                     <td class="border p-2">${item.sku || ''}</td>
                     <td class="border p-2">${item.title || ''}</td>
-                    <td class="border p-2 text-right">${item.itemprice ? "₹"+item.itemprice : '0.00'}</td>
+                    <td class="border p-2 text-right">${item.unit_price ? "₹"+item.unit_price : '0.00'}</td>
+                    <td class="border p-2 text-center">${item.quantity || 0}</td>
+                    <td class="border p-2 text-center">
+                        <button type="button" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 select-item-button" id="selectItemBtn">Select</button>
+                    </td>
                 `;
                 tbody.appendChild(row);
             });
@@ -768,4 +817,91 @@ function fetchOrderItems(searchTerm) {
         console.error('Error fetching order items:', err);
     });
 }
+// Handle item selection
+document.getElementById('orderItemsTableBody').addEventListener('click', function(e) {
+    if (e.target.classList.contains('select-item-button')) {
+        const itemData = JSON.parse(e.target.closest('tr').querySelector('td').getAttribute('data-item'));
+        
+        // Check if item already exists in invoice table
+        const existingRows = document.querySelectorAll('#invoiceTable tbody tr');
+        let itemExists = false;
+        
+        existingRows.forEach(row => {
+            const existingItemCode = row.querySelector('input[name="item_code[]"]')?.value;
+            const existingOrderNumber = row.querySelector('input[name="order_number[]"]')?.value;
+            
+            if (existingItemCode === itemData.item_code && existingOrderNumber === itemData.order_number) {
+                itemExists = true;
+                // Increase quantity if item already exists
+                const quantityInput = row.querySelector('input[name="quantity[]"]');
+                const quantitySpan = quantityInput.parentElement.querySelector('span');
+                const currentQty = parseFloat(quantityInput.value) || 1;
+                const newQty = currentQty + (parseFloat(itemData.quantity) || 1);
+                quantityInput.value = newQty;
+                if (quantitySpan) {
+                    quantitySpan.textContent = newQty;
+                }
+            }
+        });
+        
+        // Only add new row if item doesn't exist
+        if (!itemExists) {
+            const tbody = document.querySelector('#invoiceTable tbody');
+            const newRow = document.createElement('tr');
+            newRow.className = 'bg-white';
+            newRow.innerHTML = `
+                <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
+                <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
+                <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
+                <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
+                <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
+                <td class="p-2">
+                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
+                </td>
+                <td class="p-2"><span>${itemData.sku || ''}</span></td>
+                <td class="p-2 " colspan="2">${itemData.title ? htmlspecialchars(itemData.title) : ''}
+                    <input type="hidden" name="item_name[]" value="${itemData.title ? htmlspecialchars(itemData.title) : ''}" required>
+                </td>
+                <td class="p-2"><span>${itemData.hsn || ''}</span>
+                    <input type="hidden" name="hsn[]" value="${itemData.hsn || ''}" > 
+                </td>
+                <td class="p-2"><span>${itemData.quantity || 0}</span>
+                    <input type="hidden" name="quantity[]"  value="${itemData.quantity || 0}">
+                </td>
+                <td class="p-2"><span>${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}</span>
+                    <input type="hidden" name="unit_price[]"  value="${itemData.unit_price || 0}" >
+                </td>
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="discount[]"  value="0" >
+                </td>
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="cgst[]"  value="0" >
+                </td>   
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="sgst[]"  value="0" >
+                </td>
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="igst[]"  value="0" >
+                </td>
+                <td class="p-2"><span>${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}</span>
+                    <input type="hidden" name="line_total[]" step="0.01" >
+                </td>
+                <td class="p-2 rounded-r-lg text-center">
+                    <button type="button" onclick="removeRow(this)" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(newRow);
+        }
+        
+        // Update GST fields based on current billing state
+        const gstType = calculateGSTType('<?php echo $billingState; ?>');
+        updateGSTFields(gstType);
+        
+        calculateTotals();
+        // Close modal
+        document.getElementById('orderModal').style.display = 'none';
+    }
+});
 </script>
