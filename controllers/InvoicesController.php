@@ -75,7 +75,7 @@ class InvoicesController {
             $gstRate = isset($order['gst']) ? $order['gst'] : 0;
             $finalPrice = $order['finalprice'];
             $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
-            $data['data'][$key]['unit_price'] = $unitPriceBeforeGst;
+            $data['data'][$key]['unit_price'] = number_format($unitPriceBeforeGst, 2, '.', '');
                     
         }
         //firm info
@@ -123,7 +123,14 @@ class InvoicesController {
             echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
             exit;
         }
-        
+        //validate if invoice created for same order_number
+        foreach ($order_numbers as $order_number) {
+            $existingInvoice = $invoiceModel->getInvoiceByOrderNumber($order_number);
+            if ($existingInvoice) {
+                echo json_encode(['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"]);
+                exit;
+            }
+        }
         // Generate invoice number from global_settings
         $globalSettings = $commanModel->getRecordById('global_settings', 1);
         $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
@@ -146,7 +153,7 @@ class InvoicesController {
             'tax_amount' => $tax_amount,
             'discount_amount' => $discount_amount,
             'total_amount' => $total_amount,
-            'status' => isset($_POST['status']) ? trim($_POST['status']) : 'draft',
+            'status' => isset($_POST['status']) ? trim($_POST['status']) : 'final',
             'created_by' => $_SESSION['user']['id'] ?? 0,
             'created_at' => date('Y-m-d H:i:s')
         ];
@@ -205,7 +212,7 @@ class InvoicesController {
         
         // Update order status to invoiced
         foreach ($order_numbers as $order_number) {
-            $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_no' => $invoice_number]);
+            $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
         }
         
         // Clear session
@@ -258,9 +265,11 @@ class InvoicesController {
                 ob_end_clean();
             }
             
-            //$invoice_id = isset($_POST['invoice_id']) ? (int)$_POST['invoice_id'] : 0;
+            $invoice_id = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
+            if(!$invoice_id){
             $input = json_decode(file_get_contents('php://input'), true);
             $invoice_id = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
+            }
             if ($invoice_id <= 0) {
                 http_response_code(400);
                 header('Content-Type: application/json');
@@ -557,41 +566,33 @@ class InvoicesController {
             // Convert items to proper format for HTML generation
             $invoiceItems = [];
             foreach ($items as $item) {
+                $quantity = floatval($item['quantity'] ?? 0);
+                $unitPrice = floatval($item['unit_price'] ?? 0);
+                $lineTotal = $quantity * $unitPrice;
+                
+                // Calculate GST amounts based on unit price and quantity
+                $sgstPercent = floatval($item['sgst'] ?? 0);
+                $cgstPercent = floatval($item['cgst'] ?? 0);
+                $igstPercent = floatval($item['igst'] ?? 0);
+                
+                $sgstAmount = ($lineTotal * $sgstPercent) / 100;
+                $cgstAmount = ($lineTotal * $cgstPercent) / 100;
+                $igstAmount = ($lineTotal * $igstPercent) / 100;
+                $totalTaxAmount = $sgstAmount + $cgstAmount + $igstAmount;
+                
                 $invoiceItems[] = [
                     'box_no' => $item['box_no'] ?? '',
                     'item_name' => $item['item_name'] ?? '',
                     'hsn' => $item['hsn'] ?? '',
-                    'quantity' => $item['quantity'] ?? 0,
-                    'unit_price' => $item['unit_price'] ?? 0,
-                    'sgst' => floatval($item['sgst'] ?? 0),
-                    'cgst' => floatval($item['cgst'] ?? 0),
-                    'igst' => floatval($item['igst'] ?? 0),
-                    'tax_amount' => $item['tax_amount'] ?? 0,
-                    'line_total' => $item['line_total'] ?? 0
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'sgst' => $sgstAmount,
+                    'cgst' => $cgstAmount,
+                    'igst' => $igstAmount,
+                    'tax_amount' => $totalTaxAmount,
+                    'line_total' => $lineTotal + $totalTaxAmount
                 ];
             }
-            
-            // Get customer and address information
-            // $customer = $commanModel->getRecordById('vp_order_info', $vpAddressInfoId);
-            // $billToInfo = '';
-            // $shipToInfo = '';
-            
-            // if ($customer) {
-            //     $billToInfo = '<strong>' . htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name'] ?? 'N/A') . '</strong><br>';
-            //     $billToInfo .= htmlspecialchars($customer['address_line1'] ?? '') . '';
-            //     $billToInfo .= htmlspecialchars($customer['address_line2'] ?? '') . '<br>';
-            //     $billToInfo .= htmlspecialchars($customer['city'] ?? '') . ' ' . htmlspecialchars($customer['state'] ?? '') . ' ' . htmlspecialchars($customer['zipcode'] ?? '') . '<br>';
-            //     $billToInfo .= 'Tel: ' . htmlspecialchars($customer['mobile'] ?? '') . '<br>';
-            // }
-            // if ($customer && $customer['shipping_address_line1'] != '' && $customer['shipping_address_line2'] != '') {
-            //     $shipToInfo = '<strong>' . htmlspecialchars($customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? 'N/A') . '</strong><br>';
-            //     $shipToInfo .= htmlspecialchars($customer['shipping_address_line1'] ?? '') . '';
-            //     $shipToInfo .= htmlspecialchars($customer['shipping_address_line2'] ?? '') . '<br>';
-            //     $shipToInfo .= htmlspecialchars($customer['shipping_city'] ?? '') . ' ' . htmlspecialchars($customer['shipping_state'] ?? '') . ' ' . htmlspecialchars($customer['shipping_zipcode'] ?? '') . '<br>';
-            //     $shipToInfo .= 'Tel: ' . htmlspecialchars($customer['shipping_mobile'] ?? '') . '<br>';
-            // } else {
-            //     $shipToInfo = $billToInfo;
-            // }
             
             // Generate the invoice HTML using the tax invoice template
             $html = $this->generateInvoiceHtml($invoice, $invoiceItems);
@@ -682,7 +683,7 @@ class InvoicesController {
             $gstRate = isset($order['gst']) ? $order['gst'] : 0;
             $finalPrice = $order['finalprice'];
             $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
-            $orderItems[$key]['unit_price'] = $unitPriceBeforeGst;
+            $orderItems[$key]['unit_price'] = number_format($unitPriceBeforeGst, 2, '.', '');
         }
         
         echo json_encode(['success' => true, 'items' => $orderItems, 'selected_items' => $itemsData]);

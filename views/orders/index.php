@@ -1123,8 +1123,8 @@
                                                 </div>
                                                 <div>
                                                     <?= $order['po_number'] ? '<a href="?page=purchase_orders&action=view&po_id=' . $order['po_id'] . '" target="_blank" class="mx-10 icon-link create-po-btn">' . $order['po_number'] . '</a>' : '' ?>
-                                                    <?php /*if (!empty($order['vendor_invoice'])): ?>
-                                                    <a href="<?= base_url($order['vendor_invoice']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
+                                                    <?php if (!empty($order['invoice_id'])): ?>
+                                                    <a href="<?= base_url("?page=invoices&action=generate_pdf&invoice_id=".$order['invoice_id']) ?>" target="_blank" class="download-invoice inline-flex items-center hover:text-blue-800 font-semibold">
                                                         <p class="mr-1">Download Invoice</p>
                                                         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                             <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1132,7 +1132,7 @@
                                                     </a>
                                                 <?php else: ?>
                                                     <span class="text-gray-400">No Invoice</span>
-                                                <?php endif; */ ?>
+                                                <?php endif;  ?>
                                                 </div>
                                             </div>
                                         </div>
@@ -2869,11 +2869,18 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
     for (const id of visibleOrderIds) {
         const element = document.querySelector('#order-id-' + id);
         const orderData = JSON.parse(element.getAttribute('data-order'));
-        console.log('Order', id, 'customer_id:', orderData.customer_id);
+        //console.log('Order', id, 'customer_id:', orderData.customer_id);
         if (customerId === null) {
             customerId = orderData.customer_id;
         } else if (customerId !== orderData.customer_id) {
             showAlert('Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
+            return;
+        }
+
+        //invoice created orders check
+        const Inv = orderData.invoice_id;
+        if (Inv && Inv !== '' && Inv !== '0') {
+            showAlert('One or more selected orders are already invoiced. Cannot create invoice.', 'error');
             return;
         }
     }

@@ -549,7 +549,7 @@ class Order{
     }
 
     public function getOrderItemsByCustomerId($customer_id, $searchTerm = '', $itemIds = []) {
-        $sql = "SELECT * FROM vp_orders WHERE customer_id = ? AND (invoice_no IS NULL OR invoice_no = '')";
+        $sql = "SELECT * FROM vp_orders WHERE customer_id = ? AND (invoice_id IS NULL OR invoice_id = '')";
         if (!empty($searchTerm)) {
             $sql .= " AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
         }

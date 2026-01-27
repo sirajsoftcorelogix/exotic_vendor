@@ -178,3 +178,6 @@ INSERT INTO `global_settings` (`id`, `invoice_prefix`, `invoice_series`, `terms_
 
 --new column for storing invoice number in orders table
 ALTER TABLE `vp_orders` ADD `invoice_no` VARCHAR(100) NULL AFTER `customer_id`;
+
+--invoice id
+ALTER TABLE `vp_orders` CHANGE `invoice_no` `invoice_id` INT NULL DEFAULT NULL;
