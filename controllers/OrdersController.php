@@ -1255,7 +1255,6 @@ class OrdersController {
         renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
     }    
 }
-exit;
 ?>
 
                
