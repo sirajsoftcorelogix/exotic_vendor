@@ -666,35 +666,20 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
-        break; 
-    case 'customer':
-        require_once 'controllers/CustomerController.php';
-        $controller = new CustomerController($conn);
-        switch ($action) {
-            case 'list':
-                $controller->index();   
-                break;
-            default:
-                $controller->index();   
-                break;
-        }
         break;
-    case 'category':
-        require_once 'controllers/CategoryController.php';
-        $controller = new CategoryController($conn);
+    
+    case 'pos_register':
+        require_once 'controllers/PosRegisterController.php';
+        $controller = new PosRegisterController($conn);
         switch ($action) {
             case 'list':
                 $controller->index();   
                 break;
-            case 'updateMarkup':
-                $controller->updateMarkup();   
-                break;
             default:
                 $controller->index();   
                 break;
-        }
-        break;    
-
+        }    
+        break;        
         default:
             require_once 'controllers/DashboardController.php';
             $controller = new DashboardController();
