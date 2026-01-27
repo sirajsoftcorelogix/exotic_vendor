@@ -101,15 +101,24 @@ class ChatServer implements MessageComponentInterface
     public function onOpen(ConnectionInterface $conn): void
     {
         try {
+
+            error_log('[WS] onOpen start');
+
+            $cookies = $conn->httpRequest->getHeader('Cookie');
+            error_log('[WS] cookies: ' . json_encode($cookies));
+
             // Read cookies from handshake and restore session user id
             $cookiesHeader = $conn->httpRequest->getHeader('Cookie') ?? '';
             $userId = $this->getUserIdFromSession($cookiesHeader);
 
             if (!$userId) {
+                error_log('[WS] unauthorized');
                 $conn->send(json_encode(['type' => 'error', 'msg' => 'Unauthorized (no valid session)']));
                 $conn->close();
                 return;
             }
+
+            error_log('[WS] user connected: ' . $userId);
 
             $conn->userId = (int)$userId;
 
@@ -136,8 +145,7 @@ class ChatServer implements MessageComponentInterface
             echo "WS CONNECT: user {$conn->userId}, resourceId {$conn->resourceId}\n";
         } catch (Throwable $e) {
             // If anything goes wrong here, close the connection safely
-            error_log("onOpen error: " . $e->getMessage());
-            try { $conn->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
+            error_log('[WS] onOpen fatal: ' . $e->getMessage());
             $conn->close();
         }
     }
