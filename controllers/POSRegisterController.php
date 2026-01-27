@@ -1,12 +1,9 @@
 <?php
 class POSRegisterController
 {
-    /**
-     * Display a list of POS registers
-     */
     public function index()
     {
-        $registers = '';//$this->getRegisters();
+        $registers = '';
         renderTemplate('views/pos_register/index.php', ['registers' => $registers]);        
     }
     
