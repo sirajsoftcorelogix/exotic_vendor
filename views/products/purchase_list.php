@@ -68,6 +68,12 @@
                 $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
                 $title = $pl['title'] ?? ($pl['item_code'] ?? 'Product');
                 $item_code = $pl['item_code'] ?? ($pl['sku'] ?? '');
+
+                $orderLink = '';
+                if (isset($pl['order_number']) && !empty($pl['order_number'])) {
+                    $orderLink = base_url('index.php?order_number=' . $pl['order_number']); // adjust id field
+                }
+
                 $cost = isset($pl['cost_price']) ? '₹' . number_format((float)$pl['cost_price']) : '';
                 $status = str_replace("_", " ", $pl['status']) ?? '';
                 $agent_name = $pl['agent_name'] ?? '';
@@ -80,16 +86,24 @@
                 $waText .= "SKU: " . urlencode($pl['sku'] ?? '') . "%0A";
                 $waText .= "Color: " . urlencode($pl['product']['color'] ?? '') . "%0A";
                 $waText .= "Size: " . urlencode($pl['product']['size'] ?? '') . "%0A";
-                $waText .= "Dimensions (HxWxL): " . urlencode(($pl['product']['prod_height'] ?? '') . ' x ' . ($pl['product']['prod_width'] ?? '') . ' x ' . ($pl['product']['prod_length'] ?? '')) . "%0A";
+                $waText .= "Measurements (HxWxL): " . urlencode(($pl['product']['prod_height'] ?? '') . ' x ' . ($pl['product']['prod_width'] ?? '') . ' x ' . ($pl['product']['prod_length'] ?? '')) . "%0A";
                 $waText .= "Weight: " . urlencode(($pl['product']['product_weight'] ?? '') . ' ' . ($pl['product']['product_weight'] ?? '')) . "KG %0A";
-                $waText .= "Image: " . urlencode($image) . "%0A";   
+                $waText .= "Image: " . urlencode($image) . "%0A"; 
+
+                $shareUrl = base_url('share.php?id=' . (int)$pl['product_id']);
+                // Keep message short; preview card will show details automatically
+                $waText = "Take a look at this product\n" . $shareUrl;
+                $waHref = "https://wa.me/?text=" . urlencode($waText);
             ?>
                 <div class="bg-white border border-gray-200 rounded-xl shadow-md p-4 flex flex-col h-full">
-                    <input type="hidden" id="productId_<?= (int)$pl['id']; ?>" value="<?= (int)$pl['product_id']; ?>" />
+                    <input type="hidden" id="productId_<?= (int)$pl['id']; ?>" value="<?= (int)$pl['product_id']; ?>"/>
+
+                    <input type="hidden" id="minStock_<?= (int)$pl['id']; ?>" value="<?= $pl['product']['min_stock'] ?? ''; ?>" />
+
                     <!-- Top right share -->
                     <div class="flex justify-end mb-2">
-                        <a href="https://wa.me/?text=<?= $waText; ?>"
-                            target="_blank"
+                        <a href="<?= htmlspecialchars($waHref, ENT_QUOTES, 'UTF-8') ?>"
+                            target="_blank" rel="noopener"
                             class="text-amber-600 hover:text-amber-700">
                             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none"
                                 stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -103,7 +117,8 @@
                     <div class="flex flex-col sm:flex-row gap-3">
                         <img src="<?php echo htmlspecialchars($image); ?>"
                             alt="<?php echo htmlspecialchars($title); ?>"
-                            class="w-24 h-32 object-cover rounded-md mx-auto sm:mx-0" />
+                            class="w-24 h-32 object-cover rounded-md mx-auto sm:mx-0" 
+                            onclick="openImagePopup('<?php echo htmlspecialchars($image); ?>')"/>
 
                         <div class="flex-1 space-y-1">
                             <div class="text-sm font-semibold text-gray-800 leading-tight">
@@ -112,6 +127,11 @@
                             <div class="text-xs text-gray-500">
                                 Item Code: <strong><?php echo htmlspecialchars($item_code); ?></strong>
                             </div>
+                            <?php if(!empty($orderLink)) { ?>
+                                <div class="text-xs text-gray-500">
+                                    Order Number: <a href="<?php echo htmlspecialchars($orderLink); ?>" target="_blank"><strong><?php echo htmlspecialchars($pl['order_number']); ?></strong></a>
+                                </div>
+                            <?php } ?>
                             <div class="text-xs">
                                 <span class="inline-block px-2 py-0.5 rounded-full text-[11px]
                     <?php if ($status === 'purchased') echo 'bg-green-100 text-green-800';
@@ -141,13 +161,17 @@
                         <div>Weight:
                             <strong><?= htmlspecialchars($pl['product']['product_weight'] ?? '', ENT_QUOTES, 'UTF-8'); ?> <?= htmlspecialchars($pl['product']['product_weight_unit'] ?? '', ENT_QUOTES, 'UTF-8'); ?></strong>
                         </div>
-                        <div>Dimensions:
+                        <div>Measurements:
                             <strong>
                                 H: <?= htmlspecialchars((string)($pl['product']['prod_height'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                                 × W: <?= htmlspecialchars((string)($pl['product']['prod_width'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                                 × L: <?= htmlspecialchars((string)($pl['product']['prod_length'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                             </strong>
                         </div>
+                        <?php if($status === 'purchased'): ?>
+                        <div>Purchase By: <strong><?= htmlspecialchars($agent_name); ?></strong></div>
+                        <div>Purchased Date: <strong><?= htmlspecialchars($date_purchased); ?></strong></div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Purchase Fields -->
@@ -164,7 +188,7 @@
                         </div>
                         <div>
                             Quantity Purchased:  
-                            <input type="number" min="1" step="1"
+                            <input onblur="checkMinStock(<?= (int)$pl['id']; ?>)" type="number" min="1" step="1"
                                 id="quantity_<?= (int)$pl['id']; ?>"
                                 value="<?= $isPurchased ? htmlspecialchars($pQty) : '' ?>"
                                 class="no-negative w-full border rounded px-2 py-1 mt-1 <?= $isPurchased ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : '' ?>"
@@ -264,6 +288,24 @@
         <div class="bg-white rounded-lg shadow-sm p-6 text-center text-gray-600">No items in purchase list.</div>
     <?php endif; ?>
 </div>
+<!-- Image Popup -->
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
+
+<div id="errorModal" class="fixed inset-0 hidden bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-96 shadow-lg">
+        <h3 class="text-lg font-semibold text-red-600 mb-2">Invalid Quantity</h3>
+        <p id="errorMessage" class="text-gray-700 mb-4"></p>
+        <button onclick="closeErrorModal()"
+                class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+            OK
+        </button>
+    </div>
+</div>
 
 <script>
     /*document.addEventListener("DOMContentLoaded", () => {
@@ -275,4 +317,4 @@
     <?php endforeach; ?>
 });*/
 </script>
-<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></scrip
+<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></script>
