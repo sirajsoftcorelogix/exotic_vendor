@@ -41,6 +41,12 @@ class ProductsController {
         renderTemplate('views/products/index.php', $data, 'Products');
     }
 
+    public function getProductById($id) {
+        global $productModel;
+        $product = $productModel->getProduct($id);
+        return $product;
+    }
+    
     public function viewProduct() {
         is_login();
         global $productModel;
