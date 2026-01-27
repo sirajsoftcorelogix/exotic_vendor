@@ -1,671 +1,470 @@
- 
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
-    }
 
-    body {
-      background: #f5f5f5;
-      color: #333;
-    }
-
-    .page {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 16px;
-    }
-
-    /* Header / store info */
-    .store-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: #fff;
-      padding: 12px 16px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      margin-bottom: 16px;
-    }
-
-    .store-header-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .store-logo {
-      width: 48px;
-      height: 48px;
-      border-radius: 4px;
-      background: #ddd;
-      overflow: hidden;
-    }
-
-    .store-title {
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    .store-meta {
-      font-size: 12px;
-      color: #777;
-      margin-top: 4px;
-    }
-
-    .store-header-right {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .btn-primary,
-    .btn-outline {
-      padding: 8px 14px;
-      border-radius: 4px;
-      font-size: 13px;
-      border: none;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      white-space: nowrap;
-    }
-
-    .btn-primary {
-      background: #f58220;
-      color: #fff;
-    }
-
-    .btn-outline {
-      background: #fff;
-      color: #333;
-      border: 1px solid #ddd;
-    }
-
-    /* Main layout */
-    .layout {
-      display: grid;
-      grid-template-columns: 240px minmax(0, 1fr) 280px;
-      gap: 16px;
-      margin-top: 16px;
-    }
-
-    /* Left filters */
-    .sidebar-left {
-      background: #fff;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      height: fit-content;
-    }
-
-    .sidebar-left h3 {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .filter-section {
-      margin-bottom: 16px;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 12px;
-    }
-
-    .filter-section:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
-      margin-bottom: 0;
-    }
-
-    .filter-label {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .filter-chip-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .filter-chip {
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      border: 1px solid #ddd;
-      background: #fafafa;
-      cursor: pointer;
-    }
-
-    .filter-chip.active {
-      background: #f58220;
-      color: #fff;
-      border-color: #f58220;
-    }
-
-    .filter-checkbox-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 4px;
-    }
-
-    .filter-checkbox-item {
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    /* Products */
-    .products-container {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      padding: 12px 12px 16px;
-    }
-
-    .products-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .products-header-left h2 {
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .products-tabs {
-      display: flex;
-      gap: 8px;
-      margin-top: 6px;
-    }
-
-    .products-tab {
-      font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid #ddd;
-      background: #fafafa;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
-    .products-tab.active {
-      background: #f58220;
-      color: #fff;
-      border-color: #f58220;
-    }
-
-    .products-header-right {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .select,
-    .search-input {
-      font-size: 12px;
-      padding: 5px 8px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-      background: #fff;
-    }
-
-    .search-input {
-      width: 150px;
-    }
-
-    .products-grid {
-      margin-top: 8px;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .product-card {
-      background: #fff;
-      border-radius: 6px;
-      border: 1px solid #eee;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      cursor: pointer;
-      transition: box-shadow 0.15s ease, transform 0.15s ease;
-    }
-
-    .product-card:hover {
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-      transform: translateY(-1px);
-    }
-
-    .product-image {
-      width: 100%;
-      padding-top: 120%;
-      background: #ddd;
-      position: relative;
-    }
-
-    .product-body {
-      padding: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1;
-    }
-
-    .product-title {
-      font-size: 12px;
-      font-weight: 600;
-      min-height: 32px;
-      line-height: 1.3;
-    }
-
-    .product-meta {
-      font-size: 11px;
-      color: #777;
-    }
-
-    .product-price-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 4px;
-    }
-
-    .product-price {
-      font-weight: 600;
-      font-size: 13px;
-    }
-
-    .product-old-price {
-      font-size: 11px;
-      color: #999;
-      text-decoration: line-through;
-      margin-left: 4px;
-    }
-
-    .product-cart-btn {
-      margin-top: 6px;
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid #f58220;
-      color: #f58220;
-      background: #fff7ef;
-      cursor: pointer;
-      width: 100%;
-      text-align: center;
-    }
-
-    /* Right sidebar */
-    .sidebar-right {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-    }
-
-    .card-title {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .cart-items {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .cart-item {
-      display: flex;
-      gap: 8px;
-      font-size: 12px;
-    }
-
-    .cart-item-thumb {
-      width: 40px;
-      height: 40px;
-      border-radius: 4px;
-      background: #ddd;
-    }
-
-    .cart-item-info {
-      flex: 1;
-    }
-
-    .cart-item-title {
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .cart-item-meta {
-      font-size: 11px;
-      color: #777;
-    }
-
-    .cart-summary-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      margin-top: 4px;
-    }
-
-    .cart-summary-row.total {
-      font-weight: 600;
-      margin-top: 6px;
-      border-top: 1px solid #eee;
-      padding-top: 6px;
-    }
-
-    .card-actions {
-      margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .btn-block {
-      width: 100%;
-      justify-content: center;
-    }
-
-    /* Responsive */
-    @media (max-width: 1100px) {
-      .layout {
-        grid-template-columns: 220px minmax(0, 1fr);
-      }
-
-      .sidebar-right {
-        grid-column: 1 / -1;
-        flex-direction: row;
-        align-items: flex-start;
-      }
-
-      .sidebar-right .card {
-        flex: 1;
-      }
-
-      .products-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 768px) {
-      .layout {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .sidebar-left {
-        order: -1;
-      }
-
-      .products-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .store-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-      }
-
-      .store-header-right {
-        align-self: stretch;
-        justify-content: flex-end;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .products-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .search-input {
-        width: 120px;
-      }
-    }
-  </style>
-  <div class="page">
-    <!-- Store header -->
-    <header class="store-header">
-      <div class="store-header-left">
-        <div class="store-logo"></div>
-        <div>
-          <div class="store-title">Store_1</div>
-          <div class="store-meta">
-            Curated collection of antiques &amp; decor · 120 products
+<!-- ===== PAGE WRAPPER ===== -->
+<div class="min-h-screen">
+
+  <!-- ===== TOP BAR ===== -->
+  <header class="border-b bg-white">
+    <div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
+
+      <!-- Menu -->
+      <button class="h-10 w-10 rounded-xl hover:bg-slate-100 flex items-center justify-center">
+        ☰
+      </button>
+
+      <!-- Search -->
+      <input
+        class="w-full max-w-lg rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none"
+        placeholder="Search product by Name or Item Code"
+      />
+
+      <!-- Right -->
+      <div class="ml-auto flex items-center gap-3">
+        <button class="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white">
+          Sold Order
+        </button>
+        <div class="flex items-center gap-2 border rounded-xl px-3 py-2">
+          <div class="h-8 w-8 rounded-full bg-slate-300"></div>
+          <div class="text-xs">
+            <div class="font-semibold">Store_1</div>
+            <div class="text-slate-500">Sales Terminal</div>
           </div>
         </div>
       </div>
-      <div class="store-header-right">
-        <button class="btn-outline">Share Store</button>
-        <button class="btn-primary">Follow</button>
+
+    </div>
+  </header>
+
+  <!-- ===== CONTENT GRID ===== -->
+  <main class="mx-auto max-w-[1500px] grid grid-cols-12 gap-5 px-4 py-5">
+
+    <!-- ===== MAIN COLUMN ===== -->
+    <section class="col-span-12 lg:col-span-9 space-y-5">
+
+      <!-- Sales cards -->
+      <div class="rounded-2xl bg-white border p-4">
+        <div class="mb-3 flex justify-between">
+          <h2 class="font-semibold text-sm">Sales Terminal</h2>
+          <span class="text-xs text-slate-500">Last 24 hours</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <!-- card -->
+          <div class="rounded-xl border p-3 flex gap-3">
+            <img src="https://placehold.co/80x120" class="rounded-lg object-cover" />
+            <div class="text-xs">
+              <div class="font-semibold line-clamp-2">
+                Standing Brass Lord Vishnu Sculpture
+              </div>
+              <div class="text-slate-500 mt-1">Order #85255608</div>
+              <div class="text-slate-500">₹ 24,840</div>
+              <span class="inline-block mt-2 rounded-full bg-green-100 px-2 py-1 text-[11px] text-green-700">
+                Delivered
+              </span>
+            </div>
+          </div>
+
+          <div class="rounded-xl border p-3 flex gap-3">
+            <img src="https://placehold.co/80x120" class="rounded-lg object-cover" />
+            <div class="text-xs">
+              <div class="font-semibold line-clamp-2">
+                Krishna Leela Leather Painting
+              </div>
+              <div class="text-slate-500 mt-1">Order #45754755</div>
+              <div class="text-slate-500">₹ 5,25,000</div>
+              <span class="inline-block mt-2 rounded-full bg-green-100 px-2 py-1 text-[11px] text-green-700">
+                Delivered
+              </span>
+            </div>
+          </div>
+
+          <div class="rounded-xl border p-3 flex gap-3">
+            <img src="https://placehold.co/80x120" class="rounded-lg object-cover" />
+            <div class="text-xs">
+              <div class="font-semibold line-clamp-2">
+                Large Standing Lord Hanuman
+              </div>
+              <div class="text-slate-500 mt-1">Order #152782578</div>
+              <div class="text-slate-500">₹ 12,485</div>
+              <span class="inline-block mt-2 rounded-full bg-orange-100 px-2 py-1 text-[11px] text-orange-700">
+                Under Process
+              </span>
+            </div>
+          </div>
+
+          <div class="rounded-xl border p-3 flex gap-3">
+            <img src="https://placehold.co/80x120" class="rounded-lg object-cover" />
+            <div class="text-xs">
+              <div class="font-semibold line-clamp-2">
+                Modern Art Brass & Resin Sculpture
+              </div>
+              <div class="text-slate-500 mt-1">Order #152782579</div>
+              <div class="text-slate-500">₹ 16,355</div>
+              <span class="inline-block mt-2 rounded-full bg-orange-100 px-2 py-1 text-[11px] text-orange-700">
+                Under Process
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-    </header>
 
-    <main class="layout">
-      <!-- Left filters -->
-      <aside class="sidebar-left">
-        <div class="filter-section">
-          <h3>Filters</h3>
+      <!-- Products -->
+      <div class="rounded-2xl bg-white border p-4">
+        <h2 class="font-semibold text-sm mb-3">Products</h2>
+        <!-- Product category tabs -->
+      <!-- Product category tabs -->
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+
+        <!-- Active -->
+        <button
+          class="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2 text-xs font-semibold text-white shadow-sm"
+        >
+          <!-- list icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          All Products
+        </button>
+
+        <!-- Sculptures -->
+        <button
+          class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3 7h7l-5.5 4.5L18 22l-6-4-6 4 1.5-8.5L2 9h7z"/>
+          </svg>
+          Sculptures
+        </button>
+
+        <!-- Paintings -->
+        <button
+          class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="M21 15l-5-5L5 21"/>
+          </svg>
+          Paintings
+        </button>
+
+        <!-- Clothes -->
+        <button
+          class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 4l4 4-4 4"/>
+            <path d="M8 4L4 8l4 4"/>
+            <path d="M4 8h16v12H4z"/>
+          </svg>
+          Clothes &amp; More
+        </button>
+
+        <!-- Home & Decor -->
+        <button
+          class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12l9-9 9 9"/>
+            <path d="M9 21V9h6v12"/>
+          </svg>
+          Home &amp; Decore
+        </button>
+
+        <!-- Books -->
+        <button
+          class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+            <path d="M6.5 2H20v15H6.5A2.5 2.5 0 014 14.5v-10A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          Books
+        </button>
+
+        <!-- Jewellery -->
+        <button
+          class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l4 6-4 14-4-14 4-6z"/>
+            <path d="M8 8h8"/>
+          </svg>
+          Jewellery
+        </button>
+
+      </div>
+
+
+
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <!-- product -->
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://cdn.exoticindia.com/images/products/original/sculptures-2019/zem062.webp"
+                 class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Raja Rani of Rajasthan Sculpture
+              </div>
+              <div class="text-slate-500 mt-1">Brass · 12 x 4 x 5</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 12,485</div>
+            </div>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://placehold.co/400x600" class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Supreme Lakshmi Ganesh Saraswati
+              </div>
+              <div class="text-slate-500 mt-1">Brass · Trio</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 28,950</div>
+            </div>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://placehold.co/400x600" class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Handwoven Ivory Saree
+              </div>
+              <div class="text-slate-500 mt-1">Cotton · Free Size</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 8,500</div>
+            </div>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://placehold.co/400x600" class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Wooden Shrine Panel (Vintage)
+              </div>
+              <div class="text-slate-500 mt-1">Wood · Hand Painted</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 42,000</div>
+            </div>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://cdn.exoticindia.com/images/products/original/sculptures-2019/zem062.webp"
+                 class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Raja Rani of Rajasthan Sculpture
+              </div>
+              <div class="text-slate-500 mt-1">Brass · 12 x 4 x 5</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 12,485</div>
+            </div>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://placehold.co/400x600" class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Supreme Lakshmi Ganesh Saraswati
+              </div>
+              <div class="text-slate-500 mt-1">Brass · Trio</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 28,950</div>
+            </div>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://placehold.co/400x600" class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Handwoven Ivory Saree
+              </div>
+              <div class="text-slate-500 mt-1">Cotton · Free Size</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 8,500</div>
+            </div>
+          </div>
+
+          <div class="border rounded-xl overflow-hidden">
+            <img src="https://placehold.co/400x600" class="h-60 w-full object-cover" />
+            <div class="p-3 text-xs">
+              <div class="font-semibold line-clamp-2">
+                Wooden Shrine Panel (Vintage)
+              </div>
+              <div class="text-slate-500 mt-1">Wood · Hand Painted</div>
+              <div class="font-semibold text-orange-600 mt-1">₹ 42,000</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===== PAYMENT / CART ===== -->
+  <!-- ===== PAYMENT / CART ===== -->
+<aside class="col-span-12 lg:col-span-3">
+  <div class="sticky top-5 rounded-2xl bg-white border overflow-hidden">
+
+    <div class="border-b p-4">
+      <div class="font-semibold text-sm">Mrs. Avita Desi</div>
+      <div class="text-xs text-slate-500">+91 99999 99999</div>
+    </div>
+
+    <div class="p-4 space-y-4 text-xs">
+
+      <!-- cart item -->
+      <div class="flex gap-3">
+        <img
+          src="https://cdn.exoticindia.com/images/products/original/sculptures-2019/zem062.webp"
+          class="h-12 w-12 rounded-lg object-cover"
+          alt="Product"
+        />
+
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold line-clamp-2">
+            Large Standing Lord Hanuman | Brass
+          </div>
+
+          <!-- price + qty stepper (like screenshot) -->
+          <div class="mt-1 flex items-center justify-between gap-3">
+            <div class="text-orange-600 font-semibold">₹ 12,485</div>
+
+            <div class="inline-flex items-center rounded-lg border border-slate-200 bg-white overflow-hidden">
+              <button
+                type="button"
+                class="h-7 w-7 inline-flex items-center justify-center text-slate-600 hover:bg-slate-50"
+                aria-label="Decrease quantity"
+              >
+                −
+              </button>
+              <div class="h-7 w-8 inline-flex items-center justify-center text-[12px] font-semibold text-slate-800">
+                1
+              </div>
+              <button
+                type="button"
+                class="h-7 w-7 inline-flex items-center justify-center text-slate-600 hover:bg-slate-50"
+                aria-label="Increase quantity"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- shipping (checkbox + express) -->
+      <div class="rounded-xl bg-green-50 p-3 flex justify-between items-center gap-3">
+        <div class="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked
+            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-500"
+            aria-label="Select express delivery"
+          />
+          <div>
+            <div class="font-semibold text-green-800">Express Delivery</div>
+            <div class="text-green-700 font-semibold">₹ 8,265</div>
+          </div>
         </div>
 
-        <div class="filter-section">
-          <div class="filter-label">Categories</div>
-          <div class="filter-chip-group">
-            <button class="filter-chip active">All</button>
-            <button class="filter-chip">Sculptures</button>
-            <button class="filter-chip">Doors</button>
-            <button class="filter-chip">Jewellery</button>
-            <button class="filter-chip">Textiles</button>
-          </div>
+        <div class="text-[11px] font-semibold text-green-800 text-right">
+          Blue Dart<br /><span class="text-green-700 font-medium">(24–48 hrs)</span>
         </div>
+      </div>
 
-        <div class="filter-section">
-          <div class="filter-label">Availability</div>
-          <div class="filter-checkbox-list">
-            <label class="filter-checkbox-item">
-              <input type="checkbox" checked />
-              In stock
-            </label>
-            <label class="filter-checkbox-item">
-              <input type="checkbox" />
-              On sale
-            </label>
-          </div>
+      <!-- coupon -->
+      <div class="flex gap-2">
+        <input
+          class="flex-1 rounded-xl border border-slate-200 px-3 py-2 focus:border-orange-500 outline-none"
+          placeholder="Coupon/Discount Code"
+        />
+        <button class="rounded-xl bg-black text-white px-4 py-2 font-semibold hover:bg-slate-900">
+          Add
+        </button>
+      </div>
+
+      <!-- service dropdown (after coupon) -->
+      <div>
+        <select
+          class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-orange-500 outline-none"
+        >
+          <option value="">Add-on services</option>
+          <option value="giftwrap">Gift Wrap</option>
+          <option value="insurance">Shipping Insurance</option>
+          <option value="priority">Priority Handling</option>
+        </select>
+      </div>
+
+      <!-- Payment Options Tabs -->
+      <div class="mt-2">
+        <div class="mb-2 text-xs font-semibold text-slate-700">Payment Method</div>
+
+        <div class="flex flex-wrap gap-2">
+          <!-- Active -->
+          <button
+            class="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2 text-xs font-semibold text-white"
+          >
+            <svg class="h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+            </svg>
+            Card
+          </button>
+
+          <button
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 7h16" />
+              <path d="M4 12h16" />
+              <path d="M4 17h10" />
+            </svg>
+            UPI
+          </button>
+
+          <button
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 21h18" />
+              <path d="M6 18V9" />
+              <path d="M10 18V9" />
+              <path d="M14 18V9" />
+              <path d="M18 18V9" />
+              <path d="M12 3l9 6H3l9-6z" />
+            </svg>
+            Net Banking
+          </button>
+
+          <button
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Cash
+          </button>
         </div>
+      </div>
 
-        <div class="filter-section">
-          <div class="filter-label">Price Range</div>
-          <div class="filter-checkbox-list">
-            <label class="filter-checkbox-item">
-              <input type="checkbox" /> $0 – $500
-            </label>
-            <label class="filter-checkbox-item">
-              <input type="checkbox" /> $500 – $1500
-            </label>
-            <label class="filter-checkbox-item">
-              <input type="checkbox" /> $1500+
-            </label>
-          </div>
+      <!-- totals -->
+      <div class="space-y-2 pt-2">
+        <div class="flex justify-between text-slate-600">
+          <span>Sub Total</span><span>₹ 99,617.70</span>
         </div>
-      </aside>
-
-      <!-- Products center -->
-      <section class="products-container">
-        <div class="products-header">
-          <div class="products-header-left">
-            <h2>Products</h2>
-            <div class="products-tabs">
-              <button class="products-tab active">All Products</button>
-              <button class="products-tab">New Arrivals</button>
-              <button class="products-tab">Best Sellers</button>
-            </div>
-          </div>
-          <div class="products-header-right">
-            <input
-              type="text"
-              class="search-input"
-              placeholder="Search in store"
-            />
-            <select class="select">
-              <option>Sort: Featured</option>
-              <option>Price: Low to High</option>
-              <option>Price: High to Low</option>
-              <option>Newest</option>
-            </select>
-          </div>
+        <div class="flex justify-between text-slate-600">
+          <span>GST (18%)</span><span>₹ 21,867.30</span>
         </div>
-
-        <div class="products-grid">
-          <!-- Repeat product cards as needed -->
-          <article class="product-card">
-            <div class="product-image"></div>
-            <div class="product-body">
-              <div class="product-title">
-                Hand-carved Standing Deity Sculpture
-              </div>
-              <div class="product-meta">Bronze · 22 in</div>
-              <div class="product-price-row">
-                <div>
-                  <span class="product-price">$1,250</span>
-                  <span class="product-old-price">$1,400</span>
-                </div>
-                <div class="product-meta">In stock</div>
-              </div>
-              <button class="product-cart-btn">Add to cart</button>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-image"></div>
-            <div class="product-body">
-              <div class="product-title">
-                Brass Temple Lamp with Five Flames
-              </div>
-              <div class="product-meta">Brass · 12 in</div>
-              <div class="product-price-row">
-                <div>
-                  <span class="product-price">$320</span>
-                </div>
-                <div class="product-meta">In stock</div>
-              </div>
-              <button class="product-cart-btn">Add to cart</button>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-image"></div>
-            <div class="product-body">
-              <div class="product-title">
-                Antique Painted Shrine Panel (Set of 2)
-              </div>
-              <div class="product-meta">Wood · Vintage</div>
-              <div class="product-price-row">
-                <div>
-                  <span class="product-price">$2,800</span>
-                </div>
-                <div class="product-meta">Only 1 left</div>
-              </div>
-              <button class="product-cart-btn">Add to cart</button>
-            </div>
-          </article>
-
-          <article class="product-card">
-            <div class="product-image"></div>
-            <div class="product-body">
-              <div class="product-title">
-                Traditional Handwoven Saree in Ivory
-              </div>
-              <div class="product-meta">Cotton · Free size</div>
-              <div class="product-price-row">
-                <div>
-                  <span class="product-price">$180</span>
-                </div>
-                <div class="product-meta">In stock</div>
-              </div>
-              <button class="product-cart-btn">Add to cart</button>
-            </div>
-          </article>
-
-          <!-- Add more product-card blocks to match the grid you need -->
+        <div class="flex justify-between font-semibold text-slate-800">
+          <span>Total</span><span>₹ 1,21,485</span>
         </div>
-      </section>
+      </div>
 
-      <!-- Right sidebar: cart & summary -->
-      <aside class="sidebar-right">
-        <section class="card">
-          <div class="card-title">My Basket</div>
-          <div class="cart-items">
-            <div class="cart-item">
-              <div class="cart-item-thumb"></div>
-              <div class="cart-item-info">
-                <div class="cart-item-title">
-                  Hand-carved Standing Deity Sculpture
-                </div>
-                <div class="cart-item-meta">Qty: 1 · $1,250</div>
-              </div>
-            </div>
-            <div class="cart-item">
-              <div class="cart-item-thumb"></div>
-              <div class="cart-item-info">
-                <div class="cart-item-title">Traditional Handwoven Saree</div>
-                <div class="cart-item-meta">Qty: 2 · $180</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="cart-summary-row">
-            <span>Subtotal</span>
-            <span>$1,610</span>
-          </div>
-          <div class="cart-summary-row">
-            <span>Shipping</span>
-            <span>Calculated at checkout</span>
-          </div>
-          <div class="cart-summary-row total">
-            <span>Total</span>
-            <span>$1,610</span>
-          </div>
-
-          <div class="card-actions">
-            <button class="btn-primary btn-block">Checkout</button>
-            <button class="btn-outline btn-block">View cart</button>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-title">Store Info</div>
-          <p style="font-size: 12px; color: #555; margin-bottom: 6px;">
-            Shipping worldwide. All pieces are authenticated and packed with
-            care.
-          </p>
-          <div class="cart-summary-row">
-            <span>Contact</span>
-            <span style="font-size: 11px;">support@store1.com</span>
-          </div>
-          <div class="cart-summary-row">
-            <span>Location</span>
-            <span style="font-size: 11px;">Chennai, India</span>
-          </div>
-        </section>
-      </aside>
-    </main>
+      <!-- actions -->
+      <button class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold hover:bg-orange-700">
+        Apply Cart Discount
+      </button>
+      <button class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold hover:bg-orange-700">
+        Proceed to Payment
+      </button>
+    </div>
   </div>
+</aside>
+
+
+  </main>
+</div>
