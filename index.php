@@ -663,8 +663,8 @@ switch ($page) {
         break;
     
     case 'pos_register':
-        require_once 'controllers/PosRegisterController.php';
-        $controller = new PosRegisterController($conn);
+        require_once 'controllers/POSRegisterController.php';
+        $controller = new POSRegisterController($conn);
         switch ($action) {
             case 'list':
                 $controller->index();   
