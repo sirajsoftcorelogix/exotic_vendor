@@ -678,6 +678,21 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
+        break;
+    case 'category':
+        require_once 'controllers/CategoryController.php';
+        $controller = new CategoryController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'updateMarkup':
+                $controller->updateMarkup();   
+                break;
+            default:
+                $controller->index();   
+                break;
+        }
         break;    
 
         default:

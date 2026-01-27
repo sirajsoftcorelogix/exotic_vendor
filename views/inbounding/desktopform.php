@@ -952,7 +952,7 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
         ?>
         <div class="mt-[15px] md:mx-5">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category</legend>
+                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Search Category (Related Items)</legend>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                     <div>
@@ -1220,7 +1220,7 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Percentage:</label>
                         <div class="relative w-full">
                             <input type="number" name="backorder_percent" min="1" max="100" placeholder="0"
-                                   value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '') ?>" 
+                                   value="<?= htmlspecialchars($data['form2']['backorder_percent'] ?? '20') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[30px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">%</span>
                         </div>
@@ -1301,22 +1301,13 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                     </div>
                     <div class="flex-1 pl-4 flex flex-col justify-center min-w-[200px]"> 
                         <label class="block text-xs font-bold text-[#222] mb-[3px]">Image Directory:</label>
-                        <select id="image_directory_select" name="image_directory" placeholder="Search directory...">
-                            <option value="">Select Directory</option>
-                            <?php 
-                            // Get directory list safely
-                            $imgDirs = $data['form2']['getimgdir']['image_directories'] ?? [];
-                            $savedDir = $data['form2']['image_directory'] ?? ''; 
-
-                            // Loop through directories
-                            foreach ($imgDirs as $dir): 
-                                $isSelected = ($savedDir == $dir) ? 'selected' : '';
-                            ?>
-                                <option value="<?php echo htmlspecialchars($dir); ?>" <?php echo $isSelected; ?>>
-                                    <?php echo htmlspecialchars($dir); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input type="text" 
+                               id="image_directory_input" 
+                               name="image_directory" 
+                               readonly
+                               value="<?php echo htmlspecialchars($data['form2']['image_directory'] ?? ''); ?>"
+                               class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] bg-gray-100 cursor-not-allowed focus:outline-none"
+                               placeholder="Auto-generated...">
                     </div>
                 </div>
             </fieldset>
@@ -1668,16 +1659,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         const imgDirSelect = document.getElementById('image_directory_select');
-        if (imgDirSelect && imgDirSelect.tomselect) {
-            if (val === 'Y') {
-                // Requirement 1: If Variant Yes -> Clear value, Disable input
-                imgDirSelect.tomselect.clear();   // Remove selected value
-                imgDirSelect.tomselect.disable(); // Prevent user from selecting
-            } else {
-                // Requirement 2: If Variant No -> Enable input
-                imgDirSelect.tomselect.enable();
+            if (imgDirSelect && imgDirSelect.tomselect) {
+                if (val === 'Y') {
+                    imgDirSelect.tomselect.clear();
+                    imgDirSelect.tomselect.disable();
+                } else {
+                    imgDirSelect.tomselect.enable();
+                }
             }
-        }
     }
     variantSelect.addEventListener('change', function() {
         toggleVariantFields(this.value);
@@ -3130,20 +3119,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-<script>
-    // Initialize Image Directory Search
-    if(document.getElementById('image_directory_select')) {
-        new TomSelect("#image_directory_select", {
-            create: true, // CHANGED TO TRUE: Allows user to type custom folder names
-            sortField: { field: "text", direction: "asc" },
-            placeholder: "Select or Type Directory...",
-            onInitialize: function() {
-                this.wrapper.classList.add('w-full');
-                this.control.classList.add('h-[32px]', 'text-[13px]');
-            }
-        });
-    }
-</script>
+
 <script>
 function validateAndSubmit(actionType) {
     let errors = [];
@@ -3176,9 +3152,7 @@ function validateAndSubmit(actionType) {
     const isVariant = getVal('is_variant'); // Get current Variant status (Y or N)
 
     // Only validate Image Directory if this is NOT a variant (i.e., it is a Parent/Main item)
-    if (isVariant !== 'Y') {
-        if (!getVal('image_directory')) errors.push("Please select or enter an 'Image Directory'.");
-    }
+    
 
     // Category Check (Checkboxes)
     const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
@@ -3265,4 +3239,285 @@ function validateAndSubmit(actionType) {
         form.submit();
     }
 }
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. Get Markup Data from PHP
+    const markupMap = <?php echo json_encode($data['markup_list'] ?? []); ?>;
+    let currentMarkupPercent = 0;
+
+    // 2. Update Markup Percentage on Group Change
+    function updateCurrentMarkup() {
+        const groupSelect = document.getElementById('group_select');
+        let selectedGroupId = '';
+
+        if (groupSelect) {
+            if (groupSelect.tomselect) {
+                selectedGroupId = groupSelect.tomselect.getValue();
+            } else {
+                selectedGroupId = groupSelect.value;
+            }
+        }
+        currentMarkupPercent = parseFloat(markupMap[selectedGroupId]) || 0;
+        
+        // Background Update: Only fill empty fields
+        recalculateAllPrices(false); 
+    }
+
+    // 3. MAIN LOGIC: Calculate Price
+    // isUserAction = true (User typed in CP) | false (Group changed or Page Load)
+    function calculatePrice(cpInput, isUserAction) {
+        const cp = parseFloat(cpInput.value);
+        if (isNaN(cp)) return; 
+
+        // Formula: CP + (CP * Percentage / 100)
+        const sellPrice = cp + (cp * currentMarkupPercent / 100);
+
+        const container = cpInput.closest('.grid') || cpInput.closest('.calculation-card') || cpInput.closest('.variation-card');
+        
+        if (container) {
+            let priceInput = null;
+            if (cpInput.name === 'cp') {
+                priceInput = container.querySelector('input[name="price_india"]');
+            } else {
+                priceInput = container.querySelector('input[name*="[price_india]"]:not([name*="mrp"])');
+            }
+
+            if (priceInput) {
+                // Check if user manually locked THIS specific field in this session
+                if (priceInput.getAttribute('data-manual-override') === 'true') {
+                    return; // Stop, user wants a custom price here
+                }
+
+                const currentVal = parseFloat(priceInput.value || 0);
+
+                // LOGIC DECISION:
+                // 1. If Background Action (Group Change): Only update if currently 0 or Empty
+                // 2. If User Action (Typing CP): ALWAYS update (unless locked above)
+                if (isUserAction || currentVal === 0) {
+                    priceInput.value = sellPrice.toFixed(2);
+                    
+                    // Mark as auto-filled so we know script touched it
+                    priceInput.setAttribute('data-auto-filled', 'true'); 
+                    
+                    // Trigger update for MRP
+                    priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+        }
+    }
+
+    // 4. Listen for Manual Price Overrides
+    // If user types in "Price India" directly, we STOP auto-calculating for that row
+    document.body.addEventListener('input', function(e) {
+        if (e.target.matches('input[name*="[price_india]"]') || e.target.name === 'price_india') {
+            if (e.isTrusted) { // Only if human typed it
+                e.target.setAttribute('data-manual-override', 'true');
+            }
+        }
+    });
+
+    // 5. Apply to all rows
+    function recalculateAllPrices(isUserAction) {
+        const allCpInputs = document.querySelectorAll('input[name="cp"], input[name*="[cp]"]');
+        allCpInputs.forEach(input => {
+            if(input.value) calculatePrice(input, isUserAction);
+        });
+    }
+
+    // 6. Init Listeners
+    const groupSelect = document.getElementById('group_select');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', updateCurrentMarkup);
+        if(groupSelect.tomselect) groupSelect.tomselect.on('change', updateCurrentMarkup);
+    }
+
+    // LISTEN FOR CP CHANGES (User Action = true)
+    document.body.addEventListener('input', function(e) {
+        if (e.target.matches('input[name="cp"]') || e.target.matches('input[name*="[cp]"]')) {
+            calculatePrice(e.target, true); // <--- Pass TRUE here
+        }
+    });
+
+    // 7. Run once on load (Background action = false)
+    updateCurrentMarkup();
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // --- Configuration ---
+    const mapConfig = [
+        { 
+            source: 'category_container', 
+            target: 'search_category_container' 
+        },
+        { 
+            source: 'sub_category_container', 
+            target: 'search_sub_category_container' 
+        },
+        { 
+            source: 'sub_sub_category_container', 
+            target: 'search_sub_sub_category_container' 
+        }
+    ];
+
+    // --- Helper: Sync Checkboxes from Source to Target ---
+    function syncCheckboxes(sourceId, targetId) {
+        const sourceContainer = document.getElementById(sourceId);
+        const targetContainer = document.getElementById(targetId);
+        if(!sourceContainer || !targetContainer) return;
+
+        // 1. Get all checked values from Source
+        const checkedValues = Array.from(sourceContainer.querySelectorAll('input[type="checkbox"]:checked'))
+                                   .map(cb => cb.value);
+
+        // 2. Reset Target (Uncheck all first to mirror strict sync)
+        const targetCheckboxes = targetContainer.querySelectorAll('input[type="checkbox"]');
+        targetCheckboxes.forEach(cb => {
+            cb.checked = false; 
+        });
+
+        // 3. Check matching values in Target and Trigger Change
+        let changeTriggered = false;
+        checkedValues.forEach(val => {
+            const match = targetContainer.querySelector(`input[value="${val}"]`);
+            if(match) {
+                match.checked = true;
+                match.dispatchEvent(new Event('change', { bubbles: true }));
+                changeTriggered = true;
+            }
+        });
+
+        // If nothing was checked, trigger change on first element to clear downstream
+        if(!changeTriggered && targetCheckboxes.length > 0) {
+             targetCheckboxes[0].dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    // --- Core Function: Master Sync ---
+    function performFullSync() {
+        // 1. Sync Group (TomSelect)
+        const itemGroupSelect = document.getElementById('group_select');
+        const searchGroupSelect = document.getElementById('search_group_select');
+
+        if (itemGroupSelect && searchGroupSelect && itemGroupSelect.tomselect && searchGroupSelect.tomselect) {
+            const itemVal = itemGroupSelect.tomselect.getValue();
+            // Sync Group Value
+            searchGroupSelect.tomselect.setValue(itemVal); 
+        }
+
+        // 2. Sync Categories (Delayed cascade)
+        setTimeout(() => {
+            syncCheckboxes('category_container', 'search_category_container');
+            setTimeout(() => {
+                syncCheckboxes('sub_category_container', 'search_sub_category_container');
+                setTimeout(() => {
+                    syncCheckboxes('sub_sub_category_container', 'search_sub_sub_category_container');
+                }, 50);
+            }, 50);
+        }, 50);
+    }
+
+    // --- Event Listeners (User Interaction Only) ---
+
+    // A. Listen for Item Group Change
+    const itemGroupSelect = document.getElementById('group_select');
+    if (itemGroupSelect && itemGroupSelect.tomselect) {
+        itemGroupSelect.tomselect.on('change', function() {
+            // ONLY sync when user manually changes the Group
+            performFullSync();
+        });
+    }
+
+    // B. Listen for Checkbox Changes in Item Grouping
+    mapConfig.forEach(config => {
+        const container = document.getElementById(config.source);
+        if(container) {
+            container.addEventListener('change', function(e) {
+                // ONLY sync when user manually clicks a checkbox
+                if(e.target.matches('input[type="checkbox"]')) {
+                    setTimeout(() => {
+                        syncCheckboxes(config.source, config.target);
+                        
+                        // Trigger downstream updates
+                        if(config.source === 'category_container') {
+                             setTimeout(() => syncCheckboxes('sub_category_container', 'search_sub_category_container'), 50);
+                        }
+                        if(config.source === 'sub_category_container') {
+                             setTimeout(() => syncCheckboxes('sub_sub_category_container', 'search_sub_sub_category_container'), 50);
+                        }
+                    }, 10);
+                }
+            });
+        }
+    });
+
+    // --- REMOVED: The "setTimeout(performFullSync, 200)" block ---
+    // This ensures that on page load, your PHP database values are respected.
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const variantSelect = document.getElementById('variant_select');
+    const groupSelect = document.getElementById('group_select');
+    const imgDirInput = document.getElementById('image_directory_input');
+
+    // Function to Generate the Directory Name
+    function updateImageDirectory() {
+        // 1. If Variant is YES ('Y'), clear field
+        if (variantSelect && variantSelect.value === 'Y') {
+            imgDirInput.value = "";
+            return;
+        }
+
+        // 2. If Variant is NO (or empty), Generate Name
+        let groupName = "";
+
+        // Get Group Name (Handle TomSelect vs Native)
+        if (groupSelect.tomselect) {
+            const val = groupSelect.tomselect.getValue();
+            const item = groupSelect.tomselect.getItem(val);
+            if(item) groupName = item.innerText;
+        } else if (groupSelect.selectedIndex > -1) {
+            groupName = groupSelect.options[groupSelect.selectedIndex].text;
+        }
+
+        // Only generate if a group is selected
+        if (groupName && groupName !== "Select Group..." && groupName.trim() !== "") {
+            // Get Date (MM and YY)
+            const date = new Date();
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // e.g., '01'
+            const year = String(date.getFullYear()).slice(-2);          // e.g., '26'
+
+            // Clean Group Name (remove spaces/special chars, lowercase)
+            // Example: "Men's Wear" -> "menswear"
+            const cleanGroup = groupName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            // Set Value: books0126
+            imgDirInput.value = cleanGroup + month + year;
+        }
+    }
+
+    // --- EVENT LISTENERS ---
+
+    // 1. Listen for Variant Change
+    if(variantSelect) {
+        variantSelect.addEventListener('change', updateImageDirectory);
+        if(variantSelect.tomselect) variantSelect.tomselect.on('change', updateImageDirectory);
+    }
+
+    // 2. Listen for Group Change
+    if(groupSelect) {
+        groupSelect.addEventListener('change', updateImageDirectory);
+        if(groupSelect.tomselect) groupSelect.tomselect.on('change', updateImageDirectory);
+    }
+
+    // 3. Run on Load (in case editing existing data)
+    // Only run if the input is currently empty (to avoid overwriting saved data on edit load)
+    if(imgDirInput.value === "") {
+        setTimeout(updateImageDirectory, 500); // Small delay to let TomSelect load
+    }
+});
 </script>

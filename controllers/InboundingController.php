@@ -238,6 +238,7 @@ class InboundingController {
         $data['form2']['optionals_data'] = $this->getoptionals();
         $data['form2']['getimgdir'] = $this->getimgdir();
         $data['images'] = $inboundingModel->getitem_imgs($id);
+        $data['markup_list'] = $inboundingModel->getMarkupData();
         // echo "<pre>";print_r($data['getimgdir']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }

@@ -1143,5 +1143,19 @@ public function update_image_variation($img_id, $variation_id) {
         $stmt->bind_param("si", $path, $var_id);
         return $stmt->execute();
     }
+    public function getMarkupData() {
+        // Fetch only category_id and markup_perct
+        $query = "SELECT category_id, markup_perct FROM category_markup";
+        $result = $this->conn->query($query);
+        
+        $markups = [];
+        if ($result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                // Map: Group ID => Percentage (e.g., "-2" => "20.00")
+                $markups[$row['category_id']] = $row['markup_perct'];
+            }
+        }
+        return $markups;
+    }
 }
 ?>

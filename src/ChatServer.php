@@ -61,8 +61,9 @@ class ChatServer implements MessageComponentInterface
         try {
             $config = require __DIR__ . '/../config.php';
             $dsn = sprintf(
-                'mysql:host=%s;dbname=%s;charset=%s',
+                "mysql:host=%s;port=%d;dbname=%s;charset=%s",
                 $config['db']['host'],
+                $config['db']['port'] ?? 3306,
                 $config['db']['name'],
                 $config['db']['charset']
             );
@@ -76,6 +77,9 @@ class ChatServer implements MessageComponentInterface
                     PDO::ATTR_EMULATE_PREPARES   => false,
                 ]
             );
+            $this->conn->exec("SET SESSION wait_timeout=28800");
+            $this->conn->exec("SET SESSION interactive_timeout=28800");
+
             echo "[ChatServer] MySQL reconnected successfully\n";
         } catch (\Throwable $e) {
             echo "[ChatServer] MySQL reconnect failed: {$e->getMessage()}\n";
@@ -88,11 +92,15 @@ class ChatServer implements MessageComponentInterface
         try {
             $fn();
         } catch (\PDOException $e) {
-            if (str_contains($e->getMessage(), '2006')) {
-                echo "[ChatServer] MySQL disconnected, reconnecting...\n";
+            // MySQL connection lost
+            if ((int)$e->getCode() === 2006 || str_contains($e->getMessage(), 'server has gone away')) {
+                error_log('[ChatServer] MySQL disconnected, reconnecting...');
                 $this->reconnectDb();
+
+                // retry ONCE
+                $fn();
             } else {
-                throw $e;
+                throw $e; // real SQL error
             }
         }
     }
@@ -232,9 +240,11 @@ class ChatServer implements MessageComponentInterface
             }*/
 
             $rid = $conn->resourceId;
-            if (isset($this->users[$rid])) {
+            if (!isset($this->users[$rid])) {
+                return;
+            }else{
                 $uid = $this->users[$rid];
-                unset($this->users[$rid]);
+                unset($this->users[$rid], $this->connectionsByUser[$uid][$rid]);
 
                 // Remove that connection from the per-user map
                 if (isset($this->connectionsByUser[$uid][$rid])) {
@@ -657,12 +667,12 @@ class ChatServer implements MessageComponentInterface
         }
 
         // Ensure membership
-        $stmt = $this->conn->prepare("
-            SELECT 1 FROM conversation_members 
-            WHERE conversation_id = ? AND user_id = ? 
-            LIMIT 1
-        ");
-        $stmt->execute([$conversationId, $userId]);
+        $sql = "SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1";
+        $stmt = $this->conn->prepare($sql);
+
+        $this->safeExecute(function () use ($stmt, $userId, $conversationId, $lastReadId) {
+            $stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
+        });
         if (!$stmt->fetchColumn()) {
             return;
         }
