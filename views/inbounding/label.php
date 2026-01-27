@@ -49,17 +49,24 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 <div class="w-full flex items-center justify-center p-0 md:p-6 bg-gray-100 min-h-screen font-sans">
     <div class="w-full md:max-w-4xl bg-white md:rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-200">
         
-        <div class="bg-gray-900 px-6 py-4 flex items-center justify-between text-white shadow-md">
+        <div class="bg-[#d9822b] px-4 py-4 flex items-center justify-between text-white shadow-md">
             <button id="back-btn" class="p-2 hover:bg-white/20 rounded-full transition">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             </button>
-            <h1 class="font-bold text-xl tracking-wide">Label Generator (Fixed Layout)</h1>
-            <button id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-1 px-5 rounded-full border border-white/30 text-xs tracking-wider">CLOSE</button>
+            <h1 class="font-bold text-lg">Print Labels (3x2)</h1>
+            <button id="cancel-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-1 px-4 rounded-full border border-white/30 text-sm">CLOSE</button>
         </div>
         
         <?php 
-            $label_count = count($label_data); 
-            $preview_height = $label_count * 200; 
+            // UPDATED: Calculate total label count based on quantity sum
+            $total_labels_to_print = 0;
+            foreach($label_data as $l) {
+                $q = safeInt($l['quantity_received'] ?? 1);
+                if($q < 1) $q = 1;
+                $total_labels_to_print += $q;
+            }
+            // 200px visual height per label in preview
+            $preview_height = $total_labels_to_print * 200; 
         ?>
         
         <div class="w-full bg-gray-50 flex justify-center py-10 overflow-auto" style="min-height: 400px;">
@@ -69,7 +76,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         </div>
 
         <div class="p-6 bg-white border-t border-gray-200">
-            <button onclick="generatePDF()" class="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold text-lg py-4 rounded-xl shadow-lg flex justify-center items-center gap-3 transition-all transform active:scale-[0.99]">
+            <button onclick="generatePDF()" class="w-full bg-[#d9822b] hover:bg-[#bf7326] text-white font-bold text-lg py-3 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 <span>Download Print File (PDF)</span>
             </button>
@@ -82,28 +89,32 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
     <?php foreach($label_data as $index => $current_label): ?>
         
         <?php 
+            // 1. Get Quantity for this specific variation
+            $qtyToPrint = safeInt($current_label['quantity_received'] ?? 1);
+            if($qtyToPrint < 1) $qtyToPrint = 1;
+
+            // 2. Prepare Data Variables
             $thisPhotoUrl = base_url(safe($current_label['product_photo'] ?? 'assets/images/placeholder.png'));
             $itemCode = safe($current_label['Item_code'] ?? $current_label['temp_code']);
             
-            // Format dimensions
             $w = safeInt($current_label['width']);
             $h = safeInt($current_label['height']);
             $d = safeInt($current_label['depth']);
             $dims = "{$w}x{$h}x{$d}";
+
+            // 3. Loop: Print the label N times
+            for($i = 0; $i < $qtyToPrint; $i++):
         ?>
 
         <div class="single-label-item w-full h-[800px] border-[3px] border-black bg-white box-border mb-0 flex flex-col relative overflow-hidden">
             
             <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
-                
                 <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
                     <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
                 </div>
-
                 <div class="w-[400px] h-full flex items-center justify-center p-4">
                     <img src="<?php echo $thisPhotoUrl; ?>" crossorigin="anonymous" class="object-contain max-w-full max-h-[95%] grayscale hover:grayscale-0 transition-all">
                 </div>
-
                 <div class="flex-1 h-full flex flex-col justify-center pl-10 pr-6 pt-6 space-y-6">
                     <div class="flex flex-col leading-none">
                         <span class="text-[32px] font-bold text-black uppercase mb-3">CP:</span>
@@ -126,34 +137,30 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 </div>
             </div>
 
-            <div class="flex flex-row w-full h-[150px] items-center border-b-[3px] border-black">
-                
+            <div class="flex flex-row w-full h-[160px] items-center border-b-[3px] border-black">
                 <div class="w-[340px] pl-8 flex flex-col justify-center h-full">
                     <div class="text-[50px] font-black tracking-tight leading-none mb-3 text-black">
                         <?php echo $itemCode; ?>
                     </div>
-                    <div class="text-[35px] font-bold text-black leading-none">
+                    <div class="text-[30px] font-bold text-black leading-none">
                         <?php 
                             $dt = $current_label['gate_entry_date_time'] ?? '';
                             echo ($dt) ? date('dS M Y', strtotime($dt)) : date('dS M Y'); 
                         ?>
                     </div>
                 </div>
-
                 <div class="w-[240px] pl-4 flex flex-col justify-center h-full leading-none">
                     <span class="text-[30px] font-bold uppercase text-black mb-2">WEIGHT:</span>
                     <span class="text-[42px] font-black text-black">
                         <?php echo safe($current_label['weight'] ?? '0'); ?> kg
                     </span>
                 </div>
-
                 <div class="w-[320px] pl-4 flex flex-col justify-center h-full leading-none">
                     <span class="text-[30px] font-bold uppercase text-black mb-2">WxHxD:</span>
                     <span class="text-[42px] font-black text-black whitespace-nowrap">
                          <?php echo $dims; ?>
                     </span>
                 </div>
-
                  <div class="flex-1 pl-4 flex flex-col justify-center h-full leading-none">
                     <span class="text-[30px] font-bold uppercase text-black mb-2">SIZE:</span>
                     <span class="text-[42px] font-black text-black">
@@ -170,7 +177,10 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
             </div>
 
         </div>
-    <?php endforeach; ?>
+
+        <?php endfor; // End Loop for Printing N Copies ?>
+        
+    <?php endforeach; // End Loop for Variations ?>
 
 </div>
 
@@ -224,6 +234,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         });
 
         container.innerHTML = '';
+        // Calculate dynamic height based on actual printed items (children of source)
         const totalHeight = source.children.length * 800; 
         container.style.width = (1200 * 0.25) + "px";
         container.style.height = (totalHeight * 0.25) + "px";
@@ -232,6 +243,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
     async function generatePDF() {
         const { jsPDF } = window.jspdf;
+        // This selector will now pick up ALL copies (e.g. 5 copies of var A + 2 copies of var B)
         const labels = document.querySelectorAll('#high-res-print-area .single-label-item');
 
         if (labels.length === 0) {
