@@ -727,7 +727,7 @@ class product
         return [];
     }*/
 
-    public function getPurchaseList($limit = 100, $offset = 0, $filters = [])
+    public function getPurchaseList($limit = 100, $offset = 0, $filters = [], $listType = 'null')
     {
         // -----------------------------
         // Build WHERE for purchase_list (subqueries + latest-row join)
@@ -815,7 +815,17 @@ class product
         if (!empty($filters['sort_by'])) {
             $sortDir = (strtoupper($filters['sort_by']) === 'ASC') ? 'ASC' : 'DESC';
         }
-        $orderBy = " ORDER BY pl_latest.date_added $sortDir";
+
+        if ($listType == 'master') {
+            $orderBy = "
+                ORDER BY 
+                FIELD(pl_latest.status, 'pending', 'partially_purchased', 'purchased', 'item_not_available', 'alternate','ordered') ASC,
+                pl_latest.date_added $sortDir
+            ";
+        } else {
+            $orderBy = " ORDER BY pl_latest.date_added $sortDir";
+        }
+
 
         // -----------------------------
         // SQL: total quantity per product + latest row per product (by updated_at)
@@ -845,7 +855,8 @@ class product
             p.prod_height,
             p.prod_width,
             p.prod_length,
-            p.vendor
+            p.vendor,
+            o.order_number
             FROM
             (
             SELECT product_id, SUM(quantity) AS quantity
@@ -870,6 +881,7 @@ class product
             ON pl_latest.product_id = qty.product_id
             LEFT JOIN vp_products p
             ON p.id = pl_latest.product_id
+            LEFT JOIN vp_orders as o ON o.id = pl_latest.order_id
             $outerWhereSql
             $orderBy
             LIMIT ? OFFSET ?
@@ -1060,31 +1072,50 @@ class product
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }*/
 
-    public function updatePurchaseListStatus($product_id, $transactionQty, $purchase_type = 'purchased')
+    public function updatePurchaseListStatusValue($purchase_list_id, $status)
     {
-        if ($purchase_type === 'unpurchased') {
-            /**
-             * UNPURCHASED CASE:
-             * Reverse purchases: set all rows back to pending and restore planned quantity
-             */
-            $sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased 
+        $sql = "UPDATE purchase_list SET status = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        $id = (int)$purchase_list_id;
+        $stmt->bind_param('si', $status, $id);
+
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Status updated'];
+        }
+
+        return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+    }
+
+
+    public function updatePurchaseListStatus($purchase_list_id, $transactionQty, $status,$purchase_type = 'purchased')
+    {
+        //if ($purchase_type === 'unpurchased') {
+        /**
+         * UNPURCHASED CASE:
+         * Reverse purchases: set all rows back to pending and restore planned quantity
+         */
+            /*$sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased 
                 FROM purchase_transactions 
-                WHERE product_id = ?";
+                WHERE purchase_list_id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('i', $product_id);
+            $stmt->bind_param('i', $purchase_list_id);
             $stmt->execute();
             $purchasedTotal = (int)$stmt->get_result()->fetch_assoc()['purchased'];
 
             // set purchase_list quantities back
             $sql = "UPDATE purchase_list 
                 SET quantity = quantity + ?, status='pending', date_purchased=NULL, updated_at=NOW()
-                WHERE product_id = ? AND status='purchased'";
+                WHERE id = ? AND status='purchased'";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('ii', $purchasedTotal, $product_id);
+            $stmt->bind_param('ii', $purchasedTotal, $purchase_list_id);
             $stmt->execute();
 
             return ['success' => true, 'message' => 'Un purchased Successfully'];
-        }
+        }*/
 
 
         /** PURCHASED CASE (FIFO CONSUME) **/
@@ -1092,15 +1123,16 @@ class product
         $remaining = $transactionQty;
 
         // Fetch purchase list rows FIFO (oldest first)
-        $sql = "SELECT id, quantity 
+        $sql = "SELECT id, quantity,sku 
             FROM purchase_list 
-            WHERE product_id = ? AND status != 'purchased'
+            WHERE id = ? AND status != 'purchased'
             ORDER BY created_at ASC, id ASC";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $product_id);
+        $stmt->bind_param('i', $purchase_list_id);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
+        $status = '';
         foreach ($rows as $row) {
             if ($remaining <= 0) break;
 
@@ -1109,6 +1141,7 @@ class product
 
             if ($qty <= $remaining) {
                 // fully consumed
+                $status = 'purchased';
                 $remaining -= $qty;
 
                 $sql = "UPDATE purchase_list 
@@ -1122,17 +1155,23 @@ class product
                 $u->execute();
             } else {
                 // partially consumed
+                $status = 'partially_purchased';
                 $newQty = $qty - $remaining;
                 $remaining = 0;
 
                 $sql = "UPDATE purchase_list 
-                    SET quantity = ?, status='partial-purchased', updated_at = NOW()
+                    SET quantity = ?, status='partially_purchased', updated_at = NOW()
                     WHERE id = ?";
                 $u = $this->db->prepare($sql);
                 $u->bind_param('ii', $newQty, $id);
                 $u->execute();
             }
         }
+
+        $agent_id = $_SESSION['user']['id'];
+        $sku = $rows[0]['sku'];
+        $link = base_url('index.php?page=products&action=master_purchase_list&search=' . $sku.'&status='.$status);    
+        insertNotification($agent_id, 'Product Purchased', 'Product has been purchased successfully.', $link);
 
         return [
             'success' => true,
@@ -1143,18 +1182,18 @@ class product
     }
 
 
-    public function addPurchaseTransaction($purchase_list_id, $qty, $user_id, $reason = null)
+    public function addPurchaseTransaction($purchase_list_id, $qty, $user_id, $status, $product_id, $reason = '')
     {
         $sql = "INSERT INTO purchase_transactions 
-            (purchase_list_id, qty_purchased, purchased_by, remarks, date_purchased)
-            VALUES (?,?,?, ?, NOW())";
+            (product_id,purchase_list_id, qty_purchased, purchased_by, remarks, date_purchased)
+            VALUES (?,?,?,?, ?, NOW())";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('iiis', $purchase_list_id, $qty, $user_id, $reason);
+        $stmt->bind_param('iiiis', $product_id, $purchase_list_id, $qty, $user_id, $reason);
         $stmt->execute();
 
         // Update status after transaction
-        return $this->updatePurchaseListStatus($purchase_list_id, 'purchased');
+        return $this->updatePurchaseListStatus($purchase_list_id, $qty, $status, 'purchased');
     }
 
     public function reversePurchaseTransaction($purchase_list_id, $qty, $user_id, $reason = null)
@@ -1233,24 +1272,95 @@ class product
         }
         return ['success' => false, 'message' => 'Delete failed: ' . $stmt->error];
     }
+
     public function getPurchaseItemById($id)
     {
-        $sql = "SELECT p.*, pl.*,  u.name as agent_name, vu.name as added_by_name FROM purchase_list pl 
-        LEFT JOIN vp_products p ON pl.product_id = p.id 
-        LEFT JOIN vp_users u ON pl.user_id = u.id
-        LEFT JOIN vp_users vu ON pl.edit_by = vu.id
-        WHERE pl.id = ? LIMIT 1";
+        // Step 1: Get product_id for that purchase_list row
+        $sql = "SELECT product_id FROM purchase_list WHERE id = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
+
         $id = (int)$id;
         $stmt->bind_param('i', $id);
         $stmt->execute();
+        $res = $stmt->get_result();
+        if (!$res || $res->num_rows === 0) return null;
+
+        $row       = $res->fetch_assoc();
+        $productId = (int)$row['product_id'];
+
+        // Step 2: Latest row + total quantity for that product
+        $sql = "
+        SELECT
+            pl_latest.id,
+            pl_latest.user_id,
+            pl_latest.product_id,
+            pl_latest.order_id,
+            pl_latest.sku,
+            pl_latest.date_added,
+            pl_latest.date_purchased,
+            pl_latest.status,
+            qty.quantity,
+            pl_latest.remarks,
+            pl_latest.edit_by,
+            pl_latest.updated_at,
+            pl_latest.created_at,
+            pl_latest.expected_time_of_delivery,
+            p.item_code,
+            p.title,
+            p.groupname AS category,
+            p.cost_price,
+            p.image,
+            p.product_weight,
+            p.prod_height,
+            p.prod_width,
+            p.prod_length,
+            p.vendor,
+            u.name AS agent_name,
+            vu.name AS added_by_name
+        FROM
+        (
+            SELECT product_id, SUM(quantity) AS quantity
+            FROM purchase_list
+            WHERE product_id = ?
+            GROUP BY product_id
+        ) qty
+        JOIN
+        (
+            SELECT pl.*
+            FROM purchase_list pl
+            JOIN (
+                SELECT product_id, MAX(updated_at) AS max_updated_at
+                FROM purchase_list
+                WHERE product_id = ?
+                GROUP BY product_id
+            ) latest
+                ON latest.product_id = pl.product_id
+                AND latest.max_updated_at = pl.updated_at
+            WHERE pl.product_id = ?
+        ) pl_latest ON pl_latest.product_id = qty.product_id
+        LEFT JOIN vp_products p ON p.id = pl_latest.product_id
+        LEFT JOIN vp_users u ON pl_latest.user_id = u.id
+        LEFT JOIN vp_users vu ON pl_latest.edit_by = vu.id
+        LIMIT 1
+    ";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return null;
+
+        $stmt->bind_param('iii', $productId, $productId, $productId);
+        $stmt->execute();
         $result = $stmt->get_result();
+
         if ($result && $result->num_rows > 0) {
             return $result->fetch_assoc();
         }
+
         return null;
     }
+
+
+
     public function getProductByskuExact($sku)
     {
         $sql = "SELECT * FROM vp_products WHERE sku = ? LIMIT 1";

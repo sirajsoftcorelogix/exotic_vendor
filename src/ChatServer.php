@@ -38,11 +38,10 @@ class ChatServer implements MessageComponentInterface
 
         $this->initDbKeepAlive();
     }
-
     private function initDbKeepAlive(): void
     {
-        // Ping DB every 60 seconds
-        $this->loop->addPeriodicTimer(60, function () {
+        // Ping DB every 300 seconds
+        $this->loop->addPeriodicTimer(300, function () {
             try {
                 $this->conn->query('SELECT 1');
             } catch (\Throwable $e) {
@@ -102,15 +101,24 @@ class ChatServer implements MessageComponentInterface
     public function onOpen(ConnectionInterface $conn): void
     {
         try {
+
+            error_log('[WS] onOpen start');
+
+            $cookies = $conn->httpRequest->getHeader('Cookie');
+            error_log('[WS] cookies: ' . json_encode($cookies));
+
             // Read cookies from handshake and restore session user id
             $cookiesHeader = $conn->httpRequest->getHeader('Cookie') ?? '';
             $userId = $this->getUserIdFromSession($cookiesHeader);
 
             if (!$userId) {
+                error_log('[WS] unauthorized');
                 $conn->send(json_encode(['type' => 'error', 'msg' => 'Unauthorized (no valid session)']));
                 $conn->close();
                 return;
             }
+
+            error_log('[WS] user connected: ' . $userId);
 
             $conn->userId = (int)$userId;
 
@@ -137,8 +145,7 @@ class ChatServer implements MessageComponentInterface
             echo "WS CONNECT: user {$conn->userId}, resourceId {$conn->resourceId}\n";
         } catch (Throwable $e) {
             // If anything goes wrong here, close the connection safely
-            error_log("onOpen error: " . $e->getMessage());
-            try { $conn->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
+            error_log('[WS] onOpen fatal: ' . $e->getMessage());
             $conn->close();
         }
     }
@@ -155,7 +162,7 @@ class ChatServer implements MessageComponentInterface
                 $from->send(json_encode(['type' => 'error', 'msg' => 'Invalid payload']));
                 return;
             }
-
+            $this->initDbKeepAlive();
             $type = $payload['type'] ?? '';
             switch ($type) {
                 case 'send_message':
@@ -181,13 +188,12 @@ class ChatServer implements MessageComponentInterface
                     break;
             }
         } catch (Throwable $e) {
-            error_log("onMessage error: " . $e->getMessage());
+            error_log("onMessage error: " . $e->getMessage() . " -- Line number: ". $e->getLine());
             error_log($e->getTraceAsString());
 
             try { $from->send(json_encode(['type'=>'error','msg'=>'Server error'])); } catch (\Throwable $_) {}
         }
     }
-
     private function handleDeleteMessage(ConnectionInterface $from, array $payload)
     {
         $messageId = (int)($payload['message_id'] ?? 0);
@@ -219,22 +225,18 @@ class ChatServer implements MessageComponentInterface
         $this->sendToMembers($members, $payloadOut);
     }
 
-
     /**
      * Connection closed
      */
     public function onClose(ConnectionInterface $conn): void
     {
         try {
-            // Use contains() and remove() per modern SplObjectStorage API
-            /*if ($this->clients->contains($conn)) {
-                $this->clients->remove($conn);
-            }*/
-
             $rid = $conn->resourceId;
+            if (!isset($this->users[$rid])) return;
+
             if (isset($this->users[$rid])) {
                 $uid = $this->users[$rid];
-                unset($this->users[$rid]);
+                unset($this->users[$rid], $this->connectionsByUser[$uid][$rid]);
 
                 // Remove that connection from the per-user map
                 if (isset($this->connectionsByUser[$uid][$rid])) {
@@ -511,14 +513,6 @@ class ChatServer implements MessageComponentInterface
         $createdAt = date('Y-m-d H:i:s');
         // Insert message
         $insert = $this->conn->prepare("INSERT INTO messages (conversation_id, sender_id, `message`, file_path, original_name, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-        /*$insert->execute([
-            $conversationId,
-            $senderId,
-            $text ?: null,
-            $filePath ?: null,
-            $originalName,
-            $createdAt
-        ]);*/
         $this->safeExecute(function () use (
             $insert,
             $conversationId,
@@ -618,7 +612,6 @@ class ChatServer implements MessageComponentInterface
         preg_match_all('/@([A-Za-z0-9_]+)/', $text, $matches);
         return $matches[1] ?? [];
     }
-
     /**
      * Typing indicator — broadcast to other members in conversation
      */
@@ -642,63 +635,78 @@ class ChatServer implements MessageComponentInterface
 
         $this->sendToMembers(array_filter($members, fn($u) => $u != $senderId), $out);
     }
-
     /**
      * Mark read handling and broadcast read receipt
      */
     private function handleMarkRead(ConnectionInterface $from, array $payload): void
     {
-        $userId = $from->userId ?? null;
+        $userId = $from->userId ?? 0;
         $conversationId = (int)($payload['conversation_id'] ?? 0);
         $lastReadId = (int)($payload['last_read_message_id'] ?? 0);
 
-        if (!$conversationId || !$userId || !$lastReadId) {
-            return;
-        }
+        if (!$conversationId || !$userId || !$lastReadId) return;
 
         // Ensure membership
-        $stmt = $this->conn->prepare("
-            SELECT 1 FROM conversation_members 
-            WHERE conversation_id = ? AND user_id = ? 
-            LIMIT 1
-        ");
+        $stmt = $this->conn->prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1");
         $stmt->execute([$conversationId, $userId]);
-        if (!$stmt->fetchColumn()) {
-            return;
-        }
+        if (!$stmt->fetchColumn()) return;
 
         /**
          * 1️⃣ INSERT missing rows (delivered → read)
          */
-        $stmt = $this->conn->prepare("
-            INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
-            SELECT m.id, ?, 1, NOW()
-            FROM messages m
-            LEFT JOIN message_read_status r 
-                ON r.message_id = m.id AND r.user_id = ?
-            WHERE m.conversation_id = ?
-            AND m.id = ?
-            AND r.message_id IS NULL
-        ");
+        /*$stmt = $this->conn->prepare("INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
+            SELECT m.id, ?, 1, NOW() FROM messages m LEFT JOIN message_read_status r ON r.message_id = m.id AND r.user_id = ?
+            WHERE m.conversation_id = ? AND m.id = ? AND r.message_id IS NULL");
         //$stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
         $this->safeExecute(function () use ($stmt, $userId, $conversationId, $lastReadId) {
             $stmt->execute([$userId, $userId, $conversationId, $lastReadId]);
+        });*/
+        $this->safeExecute(function () use ($userId, $conversationId, $lastReadId) {
+            $stmt = $this->conn->prepare("
+                INSERT INTO message_read_status (message_id, user_id, last_read, read_at)
+                SELECT m.id, ?, 1, NOW()
+                FROM messages m
+                LEFT JOIN message_read_status r 
+                    ON r.message_id = m.id AND r.user_id = ?
+                WHERE m.conversation_id = ?
+                AND m.id = ?
+                AND r.message_id IS NULL
+            ");
+            $stmt->execute([
+                $userId,
+                $userId,
+                $conversationId,
+                $lastReadId
+            ]);
         });
         /**
          * 2️⃣ UPDATE existing rows (important!)
          */
-        $stmt = $this->conn->prepare("
-            UPDATE message_read_status r
+        /*$stmt = $this->conn->prepare("UPDATE message_read_status r
             JOIN messages m ON m.id = r.message_id
-            SET r.last_read = 1,
-                r.read_at = IFNULL(r.read_at, NOW())
-            WHERE r.user_id = ?
-            AND m.conversation_id = ?
-            AND m.id <= ?
-            AND r.last_read = 0
-        ");
-        $stmt->execute([$userId, $conversationId, $lastReadId]);
-
+            SET r.last_read = 1, r.read_at = IFNULL(r.read_at, NOW())
+            WHERE r.user_id = ? AND m.conversation_id = ? AND m.id <= ? AND r.last_read = 0");
+        //$stmt->execute([$userId, $conversationId, $lastReadId]);
+        $this->safeExecute(function () use ($stmt, $userId, $conversationId, $lastReadId) {
+            $stmt->execute([$userId, $conversationId, $lastReadId]);
+        });*/
+        $this->safeExecute(function () use ($userId, $conversationId, $lastReadId) {
+            $stmt = $this->conn->prepare("
+                UPDATE message_read_status r
+                JOIN messages m ON m.id = r.message_id
+                SET r.last_read = 1,
+                    r.read_at = IFNULL(r.read_at, NOW())
+                WHERE r.user_id = ?
+                AND m.conversation_id = ?
+                AND m.id <= ?
+                AND r.last_read = 0
+            ");
+            $stmt->execute([
+                $userId,
+                $conversationId,
+                $lastReadId
+            ]);
+        });
         /**
          * 3️⃣ Broadcast receipt
          */
@@ -709,10 +717,7 @@ class ChatServer implements MessageComponentInterface
             'last_read_message_id' => $lastReadId,
         ];
 
-        $stmt = $this->conn->prepare("
-            SELECT user_id FROM conversation_members 
-            WHERE conversation_id = ?
-        ");
+        $stmt = $this->conn->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
         $stmt->execute([$conversationId]);
         $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 

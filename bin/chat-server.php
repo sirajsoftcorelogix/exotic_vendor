@@ -16,7 +16,14 @@ $config = require __DIR__ . '/../config.php';
 $loop = Loop::get();
 
 // Create PDO (NON-persistent)
-$dsn = "mysql:host={$config['db']['host']};dbname={$config['db']['name']};charset={$config['db']['charset']}";
+$dsn = sprintf(
+    "mysql:host=%s;port=%d;dbname=%s;charset=%s",
+    $config['db']['host'],
+    $config['db']['port'] ?? 3306,
+    $config['db']['name'],
+    $config['db']['charset']
+);
+
 $pdo = new PDO($dsn, $config['db']['user'], $config['db']['pass'], [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
