@@ -108,12 +108,13 @@ try {
     $pdo->beginTransaction();
 
     $stmt = $pdo->prepare("
-        INSERT INTO conversations (type, name, created_by)
-        VALUES (?, ?, ?)
+        INSERT INTO conversations (type, name, owner_id, created_by)
+        VALUES (?, ?, ?, ?)
     ");
     $stmt->execute([
         $type,
         $type === 'group' ? ($name ?: null) : null,
+        $currentUser,
         $currentUser
     ]);
 
