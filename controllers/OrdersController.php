@@ -102,6 +102,8 @@ class OrdersController {
             $filters['author'] = $_GET['author'];            
         }
         
+        
+
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
@@ -110,9 +112,21 @@ class OrdersController {
         // Use pagination in the database query for better performance
         //print_r($_GET);
         //print_r($filters);
-        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);             
+        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);   
+
+        $assignmentDates = [];          
         foreach ($orders as $key => $order) {
-            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);            
+            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);  
+            $assignmentDates[$order['order_id']] =  $orders[$key]['status_log']['change_date'] ?? '';         
+        }
+        // Agent filter: use assignment from vp_order_status_log (change_date) instead of vp_orders.assign_date
+       if (!empty($_GET['agent'])) {
+           //sort orders by agent assignment date
+           usort($orders, function($a, $b) use ($assignmentDates) {
+                return strtotime($assignmentDates[$a['order_id']])
+                    - strtotime($assignmentDates[$b['order_id']]);
+            });            
+            
         }
         //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
