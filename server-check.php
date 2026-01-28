@@ -13,7 +13,7 @@ if (!function_exists('full_url')) {
         return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
     }
 }
-$testImageUrl = full_url('assets/img/default-product.png'); // Change to your actual image
+$testImageUrl = 'https://cdn.exoticindia.com/images/products/original/books-2019-012/mzy457.webp'; // Change to your actual image
 
 // Test 1: Check if URL is HTTPS
 $isHttps = str_starts_with($testImageUrl, 'https://');
