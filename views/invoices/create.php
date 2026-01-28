@@ -189,6 +189,7 @@
                 <input type="hidden" name="item_code[]" value="<?= $item['item_code'] ?>">
                 <input type="hidden" name="gst[]" value="<?= $item['gst'] ?>">
                 <input type="hidden" name="tax_rate[]" value="<?= $item['gst'] ?>">
+                <input type="hidden" name="currency[]" value="<?php echo $item['currency'] ?? 'INR'; ?>">
                 <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
                 <td class="p-2">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
@@ -226,6 +227,7 @@
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
+                
             </tr>
                 <?php endforeach; } ?>
             </tbody>
@@ -260,6 +262,7 @@
                 <span>Total Amount:</span>
                 <input type="number" name="total_amount" id="total_amount" step="0.01" class="w-32 text-right border-2 border-indigo-500 rounded-md form-input" readonly>
             </div>
+            
         </div>
     </div>
 
@@ -448,7 +451,8 @@ function previewInvoice() {
             sgst: row.querySelector('input[name="sgst[]"]')?.value || 0,
             igst: row.querySelector('input[name="igst[]"]')?.value || 0,
             tax_amount: row.querySelector('input[name="tax_amount[]"]')?.value || 0,
-            line_total: row.querySelector('input[name="line_total[]"]')?.value || 0
+            line_total: row.querySelector('input[name="line_total[]"]')?.value || 0,
+            currency: row.querySelector('input[name="currency[]"]')?.value || 'INR'
         });
     });
     
@@ -464,8 +468,7 @@ function previewInvoice() {
     const previewData = {
         invoice_date: formData.get('invoice_date') || new Date().toISOString().split('T')[0],
         customer_id: formData.get('customer_id') || 0,
-        vp_order_info_id: vp_order_info_id || 0,
-        currency: formData.get('currency') || 'INR',
+        vp_order_info_id: vp_order_info_id || 0,        
         subtotal: document.getElementById('subtotal')?.value || 0,
         tax_amount: document.getElementById('tax_amount')?.value || 0,
         discount_amount: document.getElementById('discount_amount')?.value || 0,
