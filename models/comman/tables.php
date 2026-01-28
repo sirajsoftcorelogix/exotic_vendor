@@ -261,5 +261,16 @@ class Tables {
 
         return $stmt->execute();
     }
+    public function getRecordByField($table, $field, $value) {
+        $sql = "SELECT * FROM " . $table . " WHERE " . $field . " = ? LIMIT 1";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('s', $value);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
 }
 ?>
