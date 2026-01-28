@@ -36,33 +36,28 @@ if ($product_id <= 0) {
     exit;
 }
 
-/**
- * Quantity to be Purchased:
- * Not in vp_products, so default to 0.
- * You can pass ?qty=1 from your purchase list page if you want.
- */
-$qty = isset($_GET['qty']) ? max(0, (int)$_GET['qty']) : 0;
-
 // Fetch product
 $sql = "
     SELECT
-        id,
-        title,
-        item_code,
-        sku,
-        image,
-        `groupname` AS category,
-        color,
-        size,
-        prod_height,
-        prod_width,
-        prod_length,
-        product_weight,
-        product_weight_unit
-    FROM vp_products
-    WHERE id = ?
-    LIMIT 1
-";
+    vp.id AS product_id,
+    vp.title,
+    vp.item_code,
+    vp.sku,
+    vp.image,
+    vp.`groupname` AS category,
+    vp.color,
+    vp.size,
+    vp.prod_height,
+    vp.prod_width,
+    vp.prod_length,
+    vp.product_weight,
+    vp.product_weight_unit,
+    pl.quantity
+FROM vp_products AS vp
+INNER JOIN purchase_list AS pl 
+    ON vp.id = pl.product_id
+WHERE vp.id = ?
+LIMIT 1";
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
@@ -93,6 +88,7 @@ $sku   = trim((string)($product['sku'] ?? ''));
 $cat   = trim((string)($product['category'] ?? ''));
 $color = trim((string)($product['color'] ?? ''));
 $size  = trim((string)($product['size'] ?? ''));
+$qty   = isset($product['quantity']) ? (int)$product['quantity'] : '0';
 
 // Dimensions format EXACT like you asked: "HxWxL: 0 x 0 x 0"
 $h = (string)($product['prod_height'] ?? '0');
