@@ -1,10 +1,11 @@
 <?php
 return [
   'db' => [
-    'host' => 'localhost',
+    'host' => '127.0.0.1',
     'name' => 'vendor_portal_test',
     'user' => 'vendor_user',
     'pass' => 'eXotic@123',
+    'port' => 3306,
     'charset' => 'utf8mb4'
   ],
   'token_secret' => 'a1b2c3d4e5f678901234567890abcdef',

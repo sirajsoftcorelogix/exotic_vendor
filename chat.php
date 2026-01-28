@@ -220,11 +220,11 @@ $msgCnt = $notificationController->getUnreadCount();
     <main id="chat-main" class="flex-1 flex flex-col h-full">
         <!-- Chat Header -->
         <header id="chat-header" class="h-16 px-5 flex items-center justify-between bg-darkHeaderBg flex-shrink-0">
-            <div>
+            <!-- <div>
                 <div id="chat-title" class="font-sf-pro font-semibold text-chat-name text-darkHeaderName">Select a conversation</div>
                 <div id="chat-subtitle" class="font-sf-pro font-normal text-chat-sub text-darkHeaderSub"></div>
             </div>
-            <div id="chat-presence" class="text-sm text-green-500" style="display: none;"></div>
+            <div id="chat-presence" class="text-sm text-green-500" style="display: none;"></div> -->
         </header>
         <div class="h-16 px-4 flex items-center justify-between bg-darkHeaderBg z-20 shadow-md">
             <div class="flex flex-col">

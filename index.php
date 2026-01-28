@@ -176,6 +176,9 @@ switch ($page) {
             case 'bulk_assign_order':
                 $controller->bulkAssignOrder();
                 break;
+            case 'get_orders_customer_id':
+                $controller->getOrdersCustomerId();
+                break;
             case 'saveSearch':
                 $controller->saveSearch();
                 break;
@@ -260,6 +263,31 @@ switch ($page) {
             case 'remove_payment':
                 $controller->removePayment();
                 break;
+            
+            case 'add_challan':
+                $controller->addChallan();
+                break;
+            case 'get_challan':
+                $controller->getChallans();
+                break;
+            case 'remove_challan':
+                $controller->deleteChallan();
+                break;
+            case 'vendor_search':
+                $controller->vendorSearch();
+                break;
+            case 'custom_po':
+                $controller->customPO();
+                break;
+            case 'custompo_post':
+                $controller->customPOSave();
+                break;
+            case 'product_items':
+                $controller->productItems();
+                break;
+            case 'stock_purchase':
+                $controller->stockPurchase();
+                break;
             default:
                 $controller->index();
                 break;
@@ -282,8 +310,14 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'preview':
+                $controller->previewInvoice();
+                break;
             case 'generate_pdf':
                 $controller->generatePdf();
+                break;
+            case 'fetch_items':
+                $controller->fetchItems();
                 break;
             default:
                 $controller->index();
@@ -635,10 +669,11 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
-        break; 
-    case 'customer':
-        require_once 'controllers/CustomerController.php';
-        $controller = new CustomerController($conn);
+        break;
+    
+    case 'pos_register':
+        require_once 'controllers/POSRegisterController.php';
+        $controller = new POSRegisterController($conn);
         switch ($action) {
             case 'list':
                 $controller->index();   
@@ -646,9 +681,8 @@ switch ($page) {
             default:
                 $controller->index();   
                 break;
-        }
-        break;    
-
+        }    
+        break;        
         default:
             require_once 'controllers/DashboardController.php';
             $controller = new DashboardController();

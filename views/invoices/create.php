@@ -9,19 +9,7 @@
                 <input type="hidden" id="invoice_date" name="invoice_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" value="<?php echo date('Y-m-d'); ?>">
             </div>
 
-            <div class="flex items-center">
-                <label for="customer-name" class="block text-gray-700 form-label">Customer Name: <span class="text-red-500"> *</span></label>
-                <div class="ml-2">
-                    <?php if (isset($customer) && is_array($customer)): ?>
-                        <span class="font-semibold"><?php echo htmlspecialchars($customer['name']); ?></span>
-                        <input type="hidden" name="customer_id" value="<?php echo $customer['id']; ?>">
-                    <?php else: ?>
-                        <span class="text-red-500">Customer not found</span>
-                    <?php endif; ?>
-                    
-                </div>
-            </div>
-
+            
             <!-- Bill To and Ship To Addresses -->
             <?php
             // Helper function to format single-line address
@@ -78,19 +66,23 @@
             
             $defaultBillTo = !empty($billToAddresses) ? $billToAddresses[0] : '';
             $defaultShipTo = !empty($shipToAddresses) ? $shipToAddresses[0] : '';
+            $showGSTContainer = isset($customer_address[0]['country']) && strtolower($customer_address[0]['country']) !== 'in';
             ?>
             
-            <div class="space-y-3">
+            <div class="space-y-3 text-sm">
                 <div>
                     <label class="block text-gray-700 form-label font-semibold">Bill To : <span class="text-red-500"> *</span> <?php echo count($billToAddresses) > 0 ? '<span class="text-blue-600 cursor-pointer hover:underline" onclick="openAddressSelector()"> Change Addresses</span>' : ''; ?></label>
                     
                     <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
                     <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= $customer_address[0]['id'] ?>">
-                    <p class="text-sm text-gray-700 mt-1"><?= htmlspecialchars($defaultBillTo) ?></p>
+                    <p class=" text-gray-700 mt-1"><?= htmlspecialchars($defaultBillTo) ?></p>
                     
                     <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
                 </div>
-                
+                <div id="supplystate">Supply State : <?= $billingState ?></div>
+                <?php if ($showGSTContainer): ?>
+                <div id="applyGSTContainer">Apply GST <input type="checkbox" id="applyGST" name="applyGST" value="1" checked></div>
+                <?php endif; ?>
             </div>
             
             <!-- Address Selector Modal -->
@@ -125,6 +117,20 @@
         <!-- Right Column -->
         <div class="space-y-2 w-full md:w-auto">
             <div class="flex items-center">
+                <label for="customer-name" class="block text-gray-700 form-label">Customer Name: <span class="text-red-500"> *</span></label>
+                <div class="ml-2">
+                    <?php if (isset($customer) && is_array($customer)): ?>
+                        <span class="font-semibold"><?php echo htmlspecialchars($customer['name']); ?></span>
+                        <input type="hidden" name="customer_id" value="<?php echo $customer['id']; ?>">
+                    <?php else: ?>
+                        <span class="text-red-500">Customer not found</span>
+                    <?php endif; ?>
+                    
+                </div>
+                <div><?php echo $customer_address[0]['gstin'] ?? "Customer GST : ".$customer_address[0]['gstin']; ?></div>
+            </div>
+
+            <!-- <div class="flex items-center">
                 <label for="currency" class="block text-gray-700 form-label">Currency : <span class="text-red-500"> *</span></label>
                 <select name="currency" id="currency" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
                     <option value="INR" selected>INR</option>
@@ -139,7 +145,7 @@
                     <option value="draft" selected>Draft</option>
                     <option value="final">Final</option>                  
                 </select>
-            </div>
+            </div> -->
 
             
             <?php if (count($shipToAddresses) > 0): ?>
@@ -197,8 +203,8 @@
                 <td class="p-2"><span><?= $item['quantity'] ?? 1 ?></span>
                     <input type="hidden" name="quantity[]"  value="<?= $item['quantity'] ?? 1 ?>">
                 </td>
-                <td class="p-2"><span><?= $item['itemprice'] ? "₹".$item['itemprice'] : '0.00' ?></span>
-                    <input type="hidden" name="unit_price[]"  value="<?= $item['itemprice'] ?? 0 ?>" >
+                <td class="p-2"><span><?= $item['unit_price'] ? "₹".$item['unit_price'] : '0.00' ?></span>
+                    <input type="hidden" name="unit_price[]"  value="<?= $item['unit_price'] ?? 0 ?>" >
                 </td>
                 <td class="p-2"><span>0%</span>
                     <input type="hidden" name="discount[]"  value="0" >
@@ -212,7 +218,7 @@
                 <td class="p-2"><span>0%</span>
                     <input type="hidden" name="igst[]"  value="0" >
                 </td>
-                <td class="p-2"><span><?= $item['itemprice'] ? "₹".$item['itemprice'] : '0.00' ?></span>
+                <td class="p-2"><span><?= $item['unit_price'] ? "₹".$item['unit_price'] : '0.00' ?></span>
                     <input type="hidden" name="line_total[]" step="0.01" >
                 </td>
                 <td class="p-2 rounded-r-lg text-center">
@@ -228,6 +234,15 @@
 
     <!-- Totals Section -->
     <div class="mt-6 flex justify-end">
+        <!--Show total of sgst cgst igst -->
+        <div class="flex-grow" id="taxTotalsDisplay">
+            <!-- Populated by JavaScript if needed -->
+           
+        </div>
+         <!-- Add Item Button -->
+        <div class="flex-grow">
+            <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
+        </div>
         <div class="w-full md:w-1/3 space-y-4">
             <div class="flex justify-between border-t pt-4">
                 <span class="font-semibold">Subtotal:</span>
@@ -237,10 +252,10 @@
                 <span class="font-semibold">Tax Amount:</span>
                 <input type="number" name="tax_amount" id="tax_amount" step="0.01" class="w-32 text-right border rounded-md form-input" readonly>
             </div>
-            <!-- <div class="flex justify-between">
+            <div class="flex justify-between">
                 <span class="font-semibold">Discount:</span>
-                <input type="number" name="discount_amount" id="discount_amount" step="0.01" class="w-32 text-right border rounded-md form-input" value="0" oninput="calculateTotals()">
-            </div> -->
+                <input type="number" name="discount_amount" id="discount_amount" step="0.01" class="w-32 text-right border rounded-md form-input" value="0" oninput="calculateTotals()" readonly>
+            </div>
             <div class="flex justify-between border-t pt-4 text-lg font-bold">
                 <span>Total Amount:</span>
                 <input type="number" name="total_amount" id="total_amount" step="0.01" class="w-32 text-right border-2 border-indigo-500 rounded-md form-input" readonly>
@@ -271,8 +286,38 @@
         </div>
     </div>
 </div>
-
+<!-- Order Item Modal -->
+<div id="orderModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative">
+        <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
+        <h2 class="text-xl font-bold mb-4">Select Order Item</h2>
+        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with order id, item code, or title...">
+        <div class="max-h-72 overflow-y-auto">
+            <table class="w-full border">
+                <thead>
+                    <tr>
+                        <!-- <th class="p-2 text-left"> </th> -->
+                        <th class="p-2 text-left">Order ID</th>
+                        <th class="p-2 text-left">SKU</th>
+                        <th class="p-2 text-left">Title</th>
+                        <th class="p-2 text-left">Price</th>
+                        <th class="p-2 text-left">Qty</th>
+                        <th class="p-2 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="orderItemsTableBody">
+                    <!-- Dynamic rows here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 <script>
+// Helper function to round to 2 decimal places
+function roundToTwo(num) {
+    return Math.round(num * 100) / 100;
+}
+
 // Store firm state for GST calculation
 const firmState = <?php echo $firmStateJS; ?>;
 
@@ -387,128 +432,75 @@ function applyAddressSelection() {
 
 function previewInvoice() {
     const formData = new FormData(document.getElementById('create_invoice'));
-    const previewData = {
-        invoice_date: formData.get('invoice_date'),
-        customer_id: formData.get('customer_id'),
-        currency: formData.get('currency'),
-        status: formData.get('status'),
-        subtotal: document.getElementById('subtotal').value,
-        tax_amount: document.getElementById('tax_amount').value,
-        //discount_amount: document.getElementById('discount_amount').value,
-        total_amount: document.getElementById('total_amount').value,
-        items: []
-    };
     
     // Collect item data
+    const items = [];
     document.querySelectorAll('#invoiceTable tbody tr').forEach((row, idx) => {
-        previewData.items.push({
-            order_number: row.querySelector('input[name="order_number[]"]').value,
-            item_code: row.querySelector('input[name="item_code[]"]').value,
-            item_name: row.querySelector('input[name="item_name[]"]').value,
-            quantity: row.querySelector('input[name="quantity[]"]').value,
-            unit_price: row.querySelector('input[name="unit_price[]"]').value,
-            cgst: row.querySelector('input[name="cgst[]"]').value,
-            sgst: row.querySelector('input[name="sgst[]"]').value,
-            igst: row.querySelector('input[name="igst[]"]').value,
-            line_total: row.querySelector('input[name="line_total[]"]').value
+        items.push({
+            order_number: row.querySelector('input[name="order_number[]"]')?.value || '',
+            box_no: row.querySelector('input[name="box_no[]"]')?.value || '',
+            item_code: row.querySelector('input[name="item_code[]"]')?.value || '',
+            item_name: row.querySelector('input[name="item_name[]"]')?.value || '',
+            hsn: row.querySelector('input[name="hsn[]"]')?.value || '',
+            quantity: row.querySelector('input[name="quantity[]"]')?.value || 0,
+            unit_price: row.querySelector('input[name="unit_price[]"]')?.value || 0,
+            cgst: row.querySelector('input[name="cgst[]"]')?.value || 0,
+            sgst: row.querySelector('input[name="sgst[]"]')?.value || 0,
+            igst: row.querySelector('input[name="igst[]"]')?.value || 0,
+            tax_amount: row.querySelector('input[name="tax_amount[]"]')?.value || 0,
+            line_total: row.querySelector('input[name="line_total[]"]')?.value || 0
         });
     });
     
-    // Open preview modal
-    const modal = document.getElementById('invoicePreviewModal');
-    const previewContent = document.getElementById('invoicePreviewContent');
+    if (items.length === 0) {
+        alert('Please add at least one item to preview');
+        return;
+    }
     
-    // Get Bill To and Ship To addresses from form
-    const billToSelect = document.getElementById('billToSelect');
-    const shipToSelect = document.getElementById('shipToSelect');
-    const billToAddress = billToSelect.tagName === 'SELECT' ? billToSelect.value : document.getElementById('billToDisplay').value;
-    const shipToAddress = shipToSelect ? (shipToSelect.tagName === 'SELECT' ? shipToSelect.value : document.getElementById('shipToDisplay').value) : '';
+    // Get selected address
+    const vp_order_info_id = document.getElementById('vp_order_info_id').value;
+    //const vpAddressInfoId = billToSelect && billToSelect.tagName === 'SELECT' ? billToSelect.value : '';
     
-    // Build preview HTML
-    let html = `
-        <div class="p-8 bg-white">
-            <h1 class="text-2xl font-bold mb-2">TAX INVOICE</h1>
-            <hr class="mb-6">
+    const previewData = {
+        invoice_date: formData.get('invoice_date') || new Date().toISOString().split('T')[0],
+        customer_id: formData.get('customer_id') || 0,
+        vp_order_info_id: vp_order_info_id || 0,
+        currency: formData.get('currency') || 'INR',
+        subtotal: document.getElementById('subtotal')?.value || 0,
+        tax_amount: document.getElementById('tax_amount')?.value || 0,
+        discount_amount: document.getElementById('discount_amount')?.value || 0,
+        total_amount: document.getElementById('total_amount')?.value || 0,
+        status: formData.get('status') || 'draft',
+        items: items
+    };
+    
+    // Send to server for preview using template
+    fetch('<?php echo base_url('?page=invoices&action=preview'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(previewData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Display the HTML preview in modal
+            const modal = document.getElementById('invoicePreviewModal');
+            const previewContent = document.getElementById('invoicePreviewContent');
             
-            <div class="grid grid-cols-2 gap-8 mb-8">
-                <div>
-                    <h3 class="font-bold mb-2">BILLED TO:</h3>
-                    <p class="text-sm text-gray-700">${billToAddress}</p>
-                </div>
-                ${shipToAddress ? `<div>
-                    <h3 class="font-bold mb-2">SHIP TO:</h3>
-                    <p class="text-sm text-gray-700">${shipToAddress}</p>
-                </div>` : '<div></div>'}
-                <div class="text-right">
-                    <p><strong>Invoice Date:</strong> ${new Date(previewData.invoice_date).toLocaleDateString('en-IN')}</p>
-                    <p><strong>Currency:</strong> ${previewData.currency}</p>
-                    <p><strong>Status:</strong> ${previewData.status}</p>
-                </div>
-            </div>
+            // Set the HTML content from the tax invoice template
+            previewContent.innerHTML = `<div style="max-height: 500px; overflow-y: auto; background: white;">${data.html}</div>`;
             
-            <table class="w-full border-collapse mb-8">
-                <thead>
-                    <tr class="bg-gray-100 border">
-                        <th class="border p-2 text-left">S.No</th>
-                        <th class="border p-2 text-left">Item Code</th>
-                        <th class="border p-2 text-left">Description</th>
-                        <th class="border p-2 text-right">Qty</th>
-                        <th class="border p-2 text-right">Unit Price</th>
-                        <th class="border p-2 text-right">CGST %</th>
-                        <th class="border p-2 text-right">SGST %</th>
-                        <th class="border p-2 text-right">IGST %</th>
-                        <th class="border p-2 text-right">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-    
-    previewData.items.forEach((item, idx) => {
-        html += `
-            <tr class="border">
-                <td class="border p-2">${idx + 1}</td>
-                <td class="border p-2">${item.item_code}</td>
-                <td class="border p-2">${item.item_name}</td>
-                <td class="border p-2 text-right">${item.quantity}</td>
-                <td class="border p-2 text-right">₹ ${parseFloat(item.unit_price).toFixed(2)}</td>
-                <td class="border p-2 text-right">${item.cgst}%</td>
-                <td class="border p-2 text-right">${item.sgst}%</td>
-                <td class="border p-2 text-right">${item.igst}%</td>
-                <td class="border p-2 text-right">₹ ${parseFloat(item.line_total).toFixed(2)}</td>
-            </tr>
-        `;
+            modal.classList.remove('hidden');
+        } else {
+            alert('Error generating preview: ' + data.message);
+        }
+    })
+    .catch(err => {
+        console.error('Preview error:', err);
+        alert('Failed to generate preview');
     });
-    
-    html += `
-                </tbody>
-            </table>
-            
-            <div class="flex justify-end mb-8">
-                <div class="w-80">
-                    <div class="flex justify-between py-2 border-t border-b">
-                        <span class="font-semibold">Subtotal:</span>
-                        <span>₹ ${parseFloat(previewData.subtotal).toFixed(2)}</span>
-                    </div>
-                    <div class="flex justify-between py-2 border-b">
-                        <span class="font-semibold">Tax:</span>
-                        <span>₹ ${parseFloat(previewData.tax_amount).toFixed(2)}</span>
-                    </div>
-                    <div class="flex justify-between py-2 border-b">
-                        <span class="font-semibold">Discount:</span>
-                        <span>₹ ${parseFloat(previewData.discount_amount).toFixed(2)}</span>
-                    </div>
-                    <div class="flex justify-between py-2 bg-gray-100 font-bold text-lg">
-                        <span>Total:</span>
-                        <span>₹ ${parseFloat(previewData.total_amount).toFixed(2)}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    previewContent.innerHTML = html;
-    modal.classList.remove('hidden');
 }
+
 
 function closePreviewModal() {
     document.getElementById('invoicePreviewModal').classList.add('hidden');
@@ -558,6 +550,9 @@ function calculateTotals() {
     const rows = document.querySelectorAll('#invoiceTable tbody tr');
     let subtotal = 0;
     let totalTax = 0;
+    let totalsgst = 0;
+    let totalcgst = 0;
+    let totaligst = 0;
 
     rows.forEach(row => {
         const qty = parseFloat(row.querySelector('input[name="quantity[]"]')?.value) || 0;
@@ -566,30 +561,75 @@ function calculateTotals() {
         const sgst = parseFloat(row.querySelector('input[name="sgst[]"]')?.value) || 0;
         const igst = parseFloat(row.querySelector('input[name="igst[]"]')?.value) || 0;
 
-        const lineTotal = qty * unitPrice;
-        const lineTax = (lineTotal * (cgst + sgst + igst)) / 100;
-
+        const lineTotal = roundToTwo(qty * unitPrice);
+        const lineTax = roundToTwo((lineTotal * (cgst + sgst + igst)) / 100);
+        
+        // Update line total input and display
         const lineTotalInput = row.querySelector('input[name="line_total[]"]');
         if (lineTotalInput) {
             lineTotalInput.value = lineTotal.toFixed(2);
+            // Update display span in parent td
+            const lineTotalDisplay = lineTotalInput.parentElement.querySelector('span');
+            if (lineTotalDisplay) {
+                lineTotalDisplay.textContent = '₹' + lineTotal.toFixed(2);
+            }
+            console.log('Updated line total for row:', row, 'Line Total:', lineTotal);
         }
-        
-        // Update display span if exists
-        // const displaySpan = row.querySelector('td:nth-child(10) span');
-        // if (displaySpan) {
-        //     displaySpan.textContent = '₹' + lineTotal.toFixed(2);
-        // }
+
+        // Update CGST input and display
+        const cgstInput = row.querySelector('input[name="cgst[]"]');
+        if (cgstInput) {
+            const cgstDisplay = cgstInput.parentElement.querySelector('span');
+            if (cgstDisplay) {
+                cgstDisplay.textContent = cgst.toFixed(2) + '%';
+            }
+        }
+
+        // Update SGST input and display
+        const sgstInput = row.querySelector('input[name="sgst[]"]');
+        if (sgstInput) {
+            const sgstDisplay = sgstInput.parentElement.querySelector('span');
+            if (sgstDisplay) {
+                sgstDisplay.textContent = sgst.toFixed(2) + '%';
+            }
+        }
+
+        // Update IGST input and display
+        const igstInput = row.querySelector('input[name="igst[]"]');
+        if (igstInput) {
+            const igstDisplay = igstInput.parentElement.querySelector('span');
+            if (igstDisplay) {
+                igstDisplay.textContent = igst.toFixed(2) + '%';
+            }
+        }
 
         subtotal += lineTotal;
         totalTax += lineTax;
+        totalsgst += roundToTwo((lineTotal * sgst) / 100);
+        totalcgst += roundToTwo((lineTotal * cgst) / 100);
+        totaligst += roundToTwo((lineTotal * igst) / 100);
     });
 
-    const discount = 0;//parseFloat(document.getElementById('discount_amount').value) || 0;
-    const totalAmount = subtotal + totalTax - discount;
+    const discount = parseFloat(document.getElementById('discount_amount').value) || 0;
+    const totalAmount = roundToTwo(subtotal + totalTax - discount);
 
-    document.getElementById('subtotal').value = subtotal.toFixed(2);
-    document.getElementById('tax_amount').value = totalTax.toFixed(2);
+    document.getElementById('subtotal').value = roundToTwo(subtotal).toFixed(2);
+    document.getElementById('tax_amount').value = roundToTwo(totalTax).toFixed(2);
     document.getElementById('total_amount').value = totalAmount.toFixed(2);
+    
+    // Update tax totals display
+    const taxTotalsDisplay = document.getElementById('taxTotalsDisplay');
+    taxTotalsDisplay.innerHTML = `
+        <div class="mb-2">
+            <span class="font-semibold">CGST Total:</span> ₹${roundToTwo(totalcgst).toFixed(2)}
+        </div>
+        <div class="mb-2">
+            <span class="font-semibold">SGST Total:</span> ₹${roundToTwo(totalsgst).toFixed(2)}
+        </div>
+        <div class="mb-2">
+            <span class="font-semibold">IGST Total:</span> ₹${roundToTwo(totaligst).toFixed(2)}
+        </div>
+    `;
 }
 
 // Initialize calculation on page load
@@ -603,6 +643,15 @@ document.addEventListener('DOMContentLoaded', function() {
 document.getElementById('create_invoice').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+
+    // Validate customer name
+    const customerNameElement = document.querySelector('input[name="customer_id"]');
+    const customerName = document.querySelector('.space-y-2 .flex .font-semibold');
+    
+    if (!customerName || !customerName.textContent.trim() || customerName.textContent.includes('****')) {
+        showAlert('Please select a valid customer', 'error');
+        return;
+    }
     
     fetch('<?php echo base_url('?page=invoices&action=create_post'); ?>', {
         method: 'POST',
@@ -648,7 +697,7 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
             }, 1000);
         } else {
             if (window.showGlobalToast) {
-                window.showGlobalToast('Error: ' + data.message, 'error');
+                window.showAlert('Error: ' + data.message, 'error');
             } else {
                 alert('Error: ' + data.message);
             }
@@ -662,5 +711,197 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
             alert('Network error occurred');
         }
     });
+});
+
+// Add event listener for applyGST checkbox
+document.addEventListener('DOMContentLoaded', function() {
+    // Set initial GST based on default billing state
+    const gstType = calculateGSTType('<?php echo $billingState; ?>');
+    updateGSTFields(gstType);
+    
+    // Add listener for GST checkbox
+    const applyGSTCheckbox = document.getElementById('applyGST');
+    if (applyGSTCheckbox) {
+        applyGSTCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                const gstType = calculateGSTType('<?php echo $billingState; ?>');
+                updateGSTFields(gstType);
+            } else {
+                // Clear all GST values
+                clearGSTFields();
+            }
+        });
+    }
+});
+
+// New function to clear GST fields
+function clearGSTFields() {
+    const rows = document.querySelectorAll('#invoiceTable tbody tr');
+    
+    rows.forEach(row => {
+        const cgstInput = row.querySelector('input[name="cgst[]"]');
+        const sgstInput = row.querySelector('input[name="sgst[]"]');
+        const igstInput = row.querySelector('input[name="igst[]"]');
+        
+        if (cgstInput) cgstInput.value = '0';
+        if (sgstInput) sgstInput.value = '0';
+        if (igstInput) igstInput.value = '0';
+        
+        // Update display spans
+        const cgstSpan = row.querySelector('input[name="cgst[]"]')?.previousElementSibling;
+        const sgstSpan = row.querySelector('input[name="sgst[]"]')?.previousElementSibling;
+        const igstSpan = row.querySelector('input[name="igst[]"]')?.previousElementSibling;
+        
+        if (cgstSpan) cgstSpan.textContent = '0%';
+        if (sgstSpan) sgstSpan.textContent = '0%';
+        if (igstSpan) igstSpan.textContent = '0%';
+    });
+    
+    calculateTotals();
+}
+
+
+// add item
+// Show modal and fetch order items
+document.querySelector('.action-button').addEventListener('click', function(e) {
+    if (e.target.textContent.trim() === 'Add Item') {
+        document.getElementById('orderModal').style.display = 'flex';
+        document.getElementById('orderSearch').value = '';
+        fetchOrderItems('');
+    }
+});
+
+// Close modal
+document.getElementById('closeOrderModal').onclick = function() {
+    document.getElementById('orderModal').style.display = 'none';
+};
+
+// Search filter (fetches filtered items)
+document.getElementById('orderSearch').addEventListener('input', function() {
+    if (this.value.length < 3 && this.value.length > 0) return; // Minimum 3 characters to search
+    fetchOrderItems(this.value);
+});
+function fetchOrderItems(searchTerm) {
+    fetch('<?php echo base_url('?page=invoices&action=fetch_items'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({search: searchTerm, customer_id: <?php echo isset($customer['id']) ? (int)$customer['id'] : 0; ?>})
+    })
+    .then(response => response.json())
+    .then(data => {
+        const tbody = document.getElementById('orderItemsTableBody');
+        tbody.innerHTML = '';
+        
+        if (data.items && data.items.length > 0) {
+            data.items.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `                    
+                    <td class="border p-2" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
+                    <td class="border p-2">${item.sku || ''}</td>
+                    <td class="border p-2">${item.title || ''}</td>
+                    <td class="border p-2 text-right">${item.unit_price ? "₹"+item.unit_price : '0.00'}</td>
+                    <td class="border p-2 text-center">${item.quantity || 0}</td>
+                    <td class="border p-2 text-center">
+                        <button type="button" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 select-item-button" id="selectItemBtn">Select</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        } else {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td class="border p-2 text-center" colspan="5">No items found</td>`;
+            tbody.appendChild(row);
+        }
+    })
+    .catch(err => {
+        console.error('Error fetching order items:', err);
+    });
+}
+// Handle item selection
+document.getElementById('orderItemsTableBody').addEventListener('click', function(e) {
+    if (e.target.classList.contains('select-item-button')) {
+        const itemData = JSON.parse(e.target.closest('tr').querySelector('td').getAttribute('data-item'));
+        
+        // Check if item already exists in invoice table
+        const existingRows = document.querySelectorAll('#invoiceTable tbody tr');
+        let itemExists = false;
+        
+        existingRows.forEach(row => {
+            const existingItemCode = row.querySelector('input[name="item_code[]"]')?.value;
+            const existingOrderNumber = row.querySelector('input[name="order_number[]"]')?.value;
+            
+            if (existingItemCode === itemData.item_code && existingOrderNumber === itemData.order_number) {
+                itemExists = true;
+                // Increase quantity if item already exists
+                const quantityInput = row.querySelector('input[name="quantity[]"]');
+                const quantitySpan = quantityInput.parentElement.querySelector('span');
+                const currentQty = parseFloat(quantityInput.value) || 1;
+                const newQty = currentQty + (parseFloat(itemData.quantity) || 1);
+                quantityInput.value = newQty;
+                if (quantitySpan) {
+                    quantitySpan.textContent = newQty;
+                }
+            }
+        });
+        
+        // Only add new row if item doesn't exist
+        if (!itemExists) {
+            const tbody = document.querySelector('#invoiceTable tbody');
+            const newRow = document.createElement('tr');
+            newRow.className = 'bg-white';
+            newRow.innerHTML = `
+                <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
+                <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
+                <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
+                <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
+                <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
+                <td class="p-2">
+                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
+                </td>
+                <td class="p-2"><span>${itemData.sku || ''}</span></td>
+                <td class="p-2 " colspan="2">${itemData.title ? htmlspecialchars(itemData.title) : ''}
+                    <input type="hidden" name="item_name[]" value="${itemData.title ? htmlspecialchars(itemData.title) : ''}" required>
+                </td>
+                <td class="p-2"><span>${itemData.hsn || ''}</span>
+                    <input type="hidden" name="hsn[]" value="${itemData.hsn || ''}" > 
+                </td>
+                <td class="p-2"><span>${itemData.quantity || 0}</span>
+                    <input type="hidden" name="quantity[]"  value="${itemData.quantity || 0}">
+                </td>
+                <td class="p-2"><span>${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}</span>
+                    <input type="hidden" name="unit_price[]"  value="${itemData.unit_price || 0}" >
+                </td>
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="discount[]"  value="0" >
+                </td>
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="cgst[]"  value="0" >
+                </td>   
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="sgst[]"  value="0" >
+                </td>
+                <td class="p-2"><span>0%</span>
+                    <input type="hidden" name="igst[]"  value="0" >
+                </td>
+                <td class="p-2"><span>${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}</span>
+                    <input type="hidden" name="line_total[]" step="0.01" >
+                </td>
+                <td class="p-2 rounded-r-lg text-center">
+                    <button type="button" onclick="removeRow(this)" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(newRow);
+        }
+        
+        // Update GST fields based on current billing state
+        const gstType = calculateGSTType('<?php echo $billingState; ?>');
+        updateGSTFields(gstType);
+        
+        calculateTotals();
+        // Close modal
+        document.getElementById('orderModal').style.display = 'none';
+    }
 });
 </script>
