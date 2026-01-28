@@ -78,28 +78,10 @@
                 $agent_name = $pl['agent_name'] ?? '';
                 $date_added = $pl['date_added_readable'] ?? ($pl['date_added'] ? date('d M Y', strtotime($pl['date_added'])) : '');
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
-
-                // Build WhatsApp share text
-                /*$waText = "Product Details:%0A";
-                $waText .= "Quantity to be Purchased: " . (int)($pl['quantity'] ?? 0) . "%0A";
-                $waText .= "SKU: " . urlencode($pl['sku'] ?? '') . "%0A";
-                $waText .= "Color: " . urlencode($pl['product']['color'] ?? '') . "%0A";
-                $waText .= "Size: " . urlencode($pl['product']['size'] ?? '') . "%0A";
-                $waText .= "Measurements (HxWxL): " . urlencode(($pl['product']['prod_height'] ?? '') . ' x ' . ($pl['product']['prod_width'] ?? '') . ' x ' . ($pl['product']['prod_length'] ?? '')) . "%0A";
-                $waText .= "Weight: " . urlencode(($pl['product']['product_weight'] ?? '') . ' ' . ($pl['product']['product_weight'] ?? '')) . "KG %0A";
-                $waText .= "Image: " . urlencode($image) . "%0A"; */
-
-                //$shareUrl = base_url('share.php?id=' . (int)$pl['product_id']);
-                // Keep message short; preview card will show details automatically
-                //$waText = "Take a look at this product\n" . $shareUrl;
-                //$waHref = "https://wa.me/?text=" . urlencode($waText);
-
+                
                 // Build the share URL
                 $shareUrl = full_url('share.php?id=' . (int)$pl['product_id'].'&v='.time());
-                
-                // WhatsApp share link - just the URL for rich preview
-               // $waHref = "https://wa.me/?text=" . urlencode($shareUrl);
-                
+                                
                 // Alternative: Even simpler approach (recommended)
                 $waHrefSimple = "https://wa.me/?text=" . urlencode($shareUrl);
             ?>
