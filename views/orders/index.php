@@ -938,7 +938,7 @@
                                 $addon_css = '';
                                 // normalize option value to a string to avoid warnings with strpos()
                                 if (is_array($opt)) {
-                                    $opt_text = implode(', ', $opt);
+                                    $opt_text = implode(',', $opt);
                                 } else {
                                     $opt_text = (string)$opt;
                                 }
