@@ -1165,6 +1165,17 @@ class Order{
 
         return ['success' => true, 'message' => 'Order updated successfully. Affected rows: ' . $affectedRows];
     }
-
+    public function getAgentAssignmentDate($order_id, $agent_id) {
+        $sql = "SELECT change_date FROM vp_order_status_log WHERE order_id = ? ORDER BY change_date DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return $row['change_date'];
+        }
+        return null;
+    }
 }
 ?>

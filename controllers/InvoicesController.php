@@ -101,7 +101,7 @@ class InvoicesController {
         $invoice_date = isset($_POST['invoice_date']) ? $_POST['invoice_date'] : date('Y-m-d');
         $customer_id = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
         $vp_order_info_id = isset($_POST['vp_order_info_id']) ? trim($_POST['vp_order_info_id']) : '';
-        $currency = isset($_POST['currency']) ? trim($_POST['currency']) : 'INR';
+        $currency = isset($_POST['currency']) ? $_POST['currency'] : [];
         $subtotal = isset($_POST['subtotal']) ? floatval($_POST['subtotal']) : 0;
         $tax_amount = isset($_POST['tax_amount']) ? floatval($_POST['tax_amount']) : 0;
         $discount_amount = isset($_POST['discount_amount']) ? floatval($_POST['discount_amount']) : 0;
@@ -131,6 +131,14 @@ class InvoicesController {
                 exit;
             }
         }
+        //validate currency same for all items
+        $firstCurrency = $currency[0] ?? '';
+        foreach ($currency as $curr) {
+            if ($curr !== $firstCurrency) {
+                echo json_encode(['success' => false, 'message' => 'All items must have the same currency']);
+                exit;
+            }
+        }
         // Generate invoice number from global_settings
         $globalSettings = $commanModel->getRecordById('global_settings', 1);
         $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
@@ -148,7 +156,7 @@ class InvoicesController {
             'invoice_date' => $invoice_date,
             'customer_id' => $customer_id,
             'vp_order_info_id' => $vp_order_info_id,
-            'currency' => $currency,
+            'currency' => $currency[0] ?? 'INR',
             'subtotal' => $subtotal,
             'tax_amount' => $tax_amount,
             'discount_amount' => $discount_amount,
@@ -464,6 +472,29 @@ class InvoicesController {
             $totalAmount -= $discount;
         }
         
+        // Fetch currency exchange rate and add conversion row
+        $currency = $invoice['currency'] ?? 'INR';
+        $exchangeRate = 1;
+        $convertedAmount = $totalAmount;
+        
+        if ($currency && $currency !== 'INR') {
+            $currencyRecord = $this->getCurrencyByCode($currency);
+            if ($currencyRecord) {
+                $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
+                $convertedAmount = $totalAmount * $exchangeRate;
+                
+                $summaryrows .= '
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="13" style="padding: 20px;" class="right bold">Exchange Rate (' . htmlspecialchars($currency) . ' to INR): '. number_format($exchangeRate, 6) .'</td>
+                        
+                    </tr>
+                    <tr style="background: #f9f9f9;">
+                        <td colspan="12" class="right bold" style="text-align: right;">Converted Amount (INR)</td>
+                        <td class="right bold">' . number_format($convertedAmount, 2) . '</td>
+                    </tr>';
+            }
+        }
+        
         $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
                         <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>                      
@@ -532,7 +563,7 @@ class InvoicesController {
             $invoiceDate = isset($previewData['invoice_date']) ? $previewData['invoice_date'] : date('Y-m-d');
             $customerId = isset($previewData['customer_id']) ? (int)$previewData['customer_id'] : 0;
             $vpAddressInfoId = isset($previewData['vp_order_info_id']) ? trim($previewData['vp_order_info_id']) : '';
-            $currency = isset($previewData['currency']) ? trim($previewData['currency']) : 'INR';
+            //$currency = isset($previewData['currency']) ? $previewData['currency'] : [];
             $subtotal = isset($previewData['subtotal']) ? floatval($previewData['subtotal']) : 0;
             $taxAmount = isset($previewData['tax_amount']) ? floatval($previewData['tax_amount']) : 0;
             $discountAmount = isset($previewData['discount_amount']) ? floatval($previewData['discount_amount']) : 0;
@@ -545,12 +576,12 @@ class InvoicesController {
                 echo json_encode(['success' => false, 'message' => 'No items to preview']);
                 exit;
             }
-            
+            //print_array($currency);exit;
             // Build invoice data structure
             $invoice = [
                 'invoice_number' => 'PREVIEW',
                 'invoice_date' => $invoiceDate,
-                'currency' => $currency,
+                'currency' => $items[0]['currency'] ?? 'INR',
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
                 'discount_amount' => $discountAmount,
@@ -558,7 +589,7 @@ class InvoicesController {
                 'vp_order_info_id' => $vpAddressInfoId,
                 'terms_and_conditions' => ''
             ];
-            
+            //print_array($invoice);exit;
             // Get firm settings for terms and conditions
             $firmSettings = $commanModel->getRecordById('global_settings', 1);
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
@@ -691,4 +722,9 @@ class InvoicesController {
 
     }
     
+    // Helper method to get currency by code
+    private function getCurrencyByCode($code) {
+        global $commanModel;
+        return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
+    }
 }
