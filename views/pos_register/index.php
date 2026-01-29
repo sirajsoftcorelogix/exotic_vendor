@@ -197,8 +197,8 @@
 
     <!-- USER -->
     <div class="px-4 py-3 border-b">
-      <div class="text-sm font-semibold">Mrs. Avita Desi</div>
-      <div class="text-[11px] text-slate-500">+91 99999 99999</div>
+      <div class="text-sm font-semibold justify-center text-center">Mrs. Avita Desi</div>
+      <div class="text-[11px] text-slate-500 justify-center text-center">+91 99999 99999</div>
     </div>
 
     <div class="px-4 py-3 space-y-4 text-[12px]">
@@ -272,14 +272,17 @@
 
       <!-- COUPON -->
       <div class="flex gap-2">
-        <input
-          class="flex-1 rounded-lg border px-3 py-2 outline-none focus:border-orange-500"
-          placeholder="Coupon/Discount Code"
-        />
-        <button class="rounded-lg bg-black px-4 text-white font-semibold">
-          Add
-        </button>
-      </div>
+      <input
+        class="w-2/3 rounded-lg border px-2 py-2 text-xs outline-none focus:border-orange-500"
+        placeholder="Coupon/Discount Code"
+      />
+      <button
+        class="w-1/3 rounded-lg bg-black px-4 py-2 text-xs font-semibold text-white"
+      >
+        Add
+      </button>
+    </div>
+
 
       <!-- ADD-ON -->
       <select class="w-full rounded-lg border px-3 py-2 outline-none focus:border-orange-500">
