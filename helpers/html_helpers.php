@@ -621,4 +621,26 @@
 
 		return $vendorCode;
 	}
+
+	function getPurchaseStatuses(): array {
+		return [
+			'pending'          => 'Pending',
+			'item_not_available'    => 'Item not Available',
+			'alternate'        => 'Alternate Item Available',
+			'partially_purchased' => 'Partially Purchased',
+			'purchased'        => 'Purchased',
+			'ordered'          => 'Item Ordered',
+		];
+	}
+
+	if (!function_exists('full_url')) {
+		function full_url(string $path): string {
+			$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+			$host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+			$dir    = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+			return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
+		}
+	}
+	
+
 ?>

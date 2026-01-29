@@ -226,7 +226,7 @@ class Tables {
         return null;
     }
     public function get_customer_address($order_number) {
-        $sql = "SELECT * FROM vp_address_info WHERE order_number = ? LIMIT 1";
+        $sql = "SELECT * FROM vp_order_info WHERE order_number = ? LIMIT 1";
         $stmt = $this->ci->prepare($sql);
         $stmt->bind_param('s', $order_number);
         $stmt->execute();
@@ -235,6 +235,32 @@ class Tables {
             return $result->fetch_assoc();
         }
         return null;
+    }
+    public function updateRecord($table, $data, $id) {
+        $setClause = [];
+        $types = '';
+        $values = [];
+        foreach ($data as $key => $value) {
+            $setClause[] = "$key = ?";
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_double($value) || is_float($value)) {
+                $types .= 'd';
+            } else {
+                $types .= 's';
+            }
+            $values[] = $value;
+        }
+        $values[] = $id;
+        $types .= 'i';
+
+        $sql = "UPDATE " . $table . " SET " . implode(', ', $setClause) . " WHERE id = ?";
+        $stmt = $this->ci->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param($types, ...$values);
+
+        return $stmt->execute();
     }
 }
 ?>

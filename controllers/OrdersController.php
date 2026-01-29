@@ -1154,6 +1154,40 @@ class OrdersController {
             }
         }
     }
+
+    public function getOrdersCustomerId() {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json');
+        
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $order_ids = $input['order_ids'] ?? [];
+            
+            if (empty($order_ids) || !is_array($order_ids)) {
+                echo json_encode(['success' => false, 'message' => 'Invalid order IDs.']);
+                exit;
+            }
+            
+            $orders = [];
+            foreach ($order_ids as $order_id) {
+                $order_id = (int)$order_id;
+                $order = $ordersModel->getOrderById($order_id);
+                if ($order) {
+                    $orders[] = [
+                        'order_id' => $order_id,
+                        'customer_id' => $order['customer_id'] ?? null
+                    ];
+                }
+            }
+            
+            echo json_encode(['success' => true, 'orders' => $orders]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+        }
+        exit;
+    }
+
     public function invoiceList() {
         is_login();
         global $poInvoiceModel;       

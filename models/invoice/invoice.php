@@ -8,7 +8,9 @@ class Invoice {
     }
 
     public function getAllInvoices($limit, $offset) {
-        $sql = "SELECT * FROM vp_invoices ORDER BY invoice_date DESC LIMIT $limit OFFSET $offset";
+        $sql = "SELECT i.*, c.* FROM vp_invoices i 
+                LEFT JOIN vp_customers c ON i.customer_id = c.id 
+                ORDER BY i.invoice_date DESC LIMIT $limit OFFSET $offset";
         $result = $this->db->query($sql);
         $invoices = [];
         if ($result && $result->num_rows > 0) {
@@ -30,7 +32,7 @@ class Invoice {
     }
 
     public function createInvoice($data) {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_address_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at) 
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
@@ -38,10 +40,10 @@ class Invoice {
         $invoice_number = 'INV-' . date('Ymd') . '-' . mt_rand(1000, 9999);
         $stmt->bind_param(
             'ssisssdddsds',
-            $invoice_number,
+            $data['invoice_number'],
             $data['invoice_date'],
             $data['customer_id'],
-            $data['vp_address_info_id'],
+            $data['vp_order_info_id'],
             $data['currency'],
             $data['subtotal'],
             $data['tax_amount'],
@@ -59,22 +61,23 @@ class Invoice {
     }
 
     public function createInvoiceItem($data) {
-        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $stmt->bind_param(
-            'issssiiddddddd',
+            'isssssidddddddd',
             $data['invoice_id'],
             $data['order_number'],
             $data['item_code'],
+            $data['hsn'],
             $data['item_name'],
             $data['description'],
             $data['box_no'],
             $data['quantity'],
             $data['unit_price'],
-            $data['tax_rate'],
+            $data['tax_rate'],            
             $data['cgst'],
             $data['sgst'],
             $data['igst'],
@@ -149,6 +152,19 @@ class Invoice {
         if (!$stmt) return null;
 
         $stmt->bind_param('i', $customer_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function getInvoiceByOrderNumber($order_number) {
+        $sql = "SELECT * FROM vp_invoices WHERE vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1) LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return null;
+
+        $stmt->bind_param('s', $order_number);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {

@@ -41,6 +41,12 @@ class ProductsController {
         renderTemplate('views/products/index.php', $data, 'Products');
     }
 
+    public function getProductById($id) {
+        global $productModel;
+        $product = $productModel->getProduct($id);
+        return $product;
+    }
+    
     public function viewProduct() {
         is_login();
         global $productModel;
@@ -625,7 +631,7 @@ class ProductsController {
         }
         
         // fetch purchase list and count
-        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters);
+        $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters,'master');
         $total_records = $productModel->countPurchaseList($filters);
         //print_array($purchase_data);
         //exit;
@@ -685,6 +691,7 @@ class ProductsController {
             $enriched[] = array_merge($row, [
                 'product' => $product,
                 'agent_name' => $agent_name,
+                'added_by' => $commanModel->getUserNameById($row['edit_by']),
                 'date_added_readable' => date('d M Y', strtotime($row['date_added'])),
                 'date_purchased_readable' => ($row['date_purchased'] != '0000-00-00' && $row['date_purchased'] !== NULL) ? date('d M Y', strtotime($row['date_purchased'])) : 'N/A'
             ]);
@@ -719,9 +726,9 @@ class ProductsController {
         }
         $purchase_list_id = (int)$input['purchase_list_id'];
         $user_id = $_SESSION['user']['id'];
-        $qty = $input['quantity'];
-        $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
-        $res = $productModel->addPurchaseTransaction($purchase_list_id, $qty, $user_id, $remarks);
+        $qty = isset($input['quantity']) ? (int)$input['quantity']:'';
+        //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        $res = $productModel->addPurchaseTransaction($purchase_list_id, $qty, $user_id, '');
         echo json_encode($res);
         exit;
     }
@@ -736,37 +743,46 @@ class ProductsController {
             exit;
         }        
         $purchase_list_id = (int)$input['purchase_list_id'];
-        $qty = (int)$input['quantity'];
-        $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        $qty =  isset($input['quantity']) ? (int)$input['quantity']:'';
+        //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $user_id = $_SESSION['user']['id'];
         // $res = $productModel->updatePurchaseListStatus($id, 'pending', null);
-        $res = $productModel->reversePurchaseTransaction($purchase_list_id, $qty, $user_id, $remarks);
+        $res = $productModel->reversePurchaseTransaction($purchase_list_id, $qty, $user_id, '');
         echo json_encode($res);
         exit;
     }
 
     // Update quantity and remarks for a purchase list item (AJAX)
-    public function updatePurchaseItem() {
+    public function updatePurchaseItem() {        
+    
         is_login();
         global $productModel;
         header('Content-Type: application/json');
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents('php://input'), true); 
         
-        $id = isset($input['id']) ? (int)$input['id'] : 0;
+        $purchase_list_id = isset($input['id']) ? (int)$input['id'] : 0;
+        $product_id = isset($input['product_id']) ? (int)$input['product_id'] : 0;
         $quantity = isset($input['quantity']) ? $input['quantity'] : null;
-        $remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
+        //$remarks = isset($input['remarks']) ? trim($input['remarks']) : '';
         $status = isset($input['status']) ? trim($input['status']) : '';
         $expected_time_of_delivery = !empty($input['expected_time_of_delivery'])
                     ? date('Y-m-d', strtotime($input['expected_time_of_delivery']))
                     : '';
 
-        if ($id <= 0) {
+        if ($purchase_list_id <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        $res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery);
-        echo json_encode($res);
-        exit;
+        //$res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery);
+        if($quantity>0){
+            $res = $productModel->addPurchaseTransaction($purchase_list_id, $quantity, $_SESSION['user']['id'], $status, $product_id);            
+            echo json_encode($res);
+            exit;
+        } else if(!empty($status)) {
+           $res = $productModel->updatePurchaseListStatusValue($purchase_list_id, $status);
+            echo json_encode($res);
+            exit;
+        }        
     }
     public function deletePurchaseItem() {
         is_login();
@@ -790,7 +806,7 @@ class ProductsController {
             echo '<p>Invalid Purchase Item ID.</p>';
             exit;
         }
-        $purchaseItem = $productModel->getPurchaseItemById($id);
+        $purchaseItem = $productModel->getPurchaseItemById($id);    
         if (!$purchaseItem) {
             echo '<p>Purchase Item not found.</p>';
             exit;

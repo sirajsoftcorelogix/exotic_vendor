@@ -176,6 +176,9 @@ switch ($page) {
             case 'bulk_assign_order':
                 $controller->bulkAssignOrder();
                 break;
+            case 'get_orders_customer_id':
+                $controller->getOrdersCustomerId();
+                break;
             case 'saveSearch':
                 $controller->saveSearch();
                 break;
@@ -260,6 +263,7 @@ switch ($page) {
             case 'remove_payment':
                 $controller->removePayment();
                 break;
+            
             case 'add_challan':
                 $controller->addChallan();
                 break;
@@ -306,8 +310,14 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'preview':
+                $controller->previewInvoice();
+                break;
             case 'generate_pdf':
                 $controller->generatePdf();
+                break;
+            case 'fetch_items':
+                $controller->fetchItems();
                 break;
             default:
                 $controller->index();
@@ -659,11 +669,25 @@ switch ($page) {
                 $controller->index();   
                 break;
         }
-        break;    
-
+        break;
+    
+    case 'pos_register':
+        require_once 'controllers/POSRegisterController.php';
+        $controller = new POSRegisterController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            default:
+                $controller->index();   
+                break;
+        }    
+        break;        
         default:
             require_once 'controllers/DashboardController.php';
             $controller = new DashboardController();
             $controller->index();
             break;
 }
+
+
