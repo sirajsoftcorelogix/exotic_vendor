@@ -8,7 +8,9 @@ class Invoice {
     }
 
     public function getAllInvoices($limit, $offset) {
-        $sql = "SELECT * FROM vp_invoices ORDER BY invoice_date DESC LIMIT $limit OFFSET $offset";
+        $sql = "SELECT i.*, c.id AS customer_id, c.name, c.email, c.phone FROM vp_invoices i 
+                LEFT JOIN vp_customers c ON i.customer_id = c.id 
+                ORDER BY i.invoice_date DESC LIMIT $limit OFFSET $offset";
         $result = $this->db->query($sql);
         $invoices = [];
         if ($result && $result->num_rows > 0) {
@@ -150,6 +152,19 @@ class Invoice {
         if (!$stmt) return null;
 
         $stmt->bind_param('i', $customer_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function getInvoiceByOrderNumber($order_number) {
+        $sql = "SELECT * FROM vp_invoices WHERE vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1) LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return null;
+
+        $stmt->bind_param('s', $order_number);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {

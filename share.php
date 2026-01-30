@@ -21,7 +21,6 @@ if (!function_exists('e')) {
 
 /**
  * Build absolute URL based on current script directory.
- * Example: /exotic_vendor/share.php  -> base = https://domain.com/exotic_vendor/
  */
 function full_url(string $path): string {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -40,23 +39,25 @@ if ($product_id <= 0) {
 // Fetch product
 $sql = "
     SELECT
-        id,
-        title,
-        item_code,
-        sku,
-        image,
-        `groupname` AS category,
-        color,
-        size,
-        prod_height,
-        prod_width,
-        prod_length,
-        product_weight,
-        product_weight_unit
-    FROM vp_products
-    WHERE id = ?
-    LIMIT 1
-";
+    vp.id AS product_id,
+    vp.title,
+    vp.item_code,
+    vp.sku,
+    vp.image,
+    vp.`groupname` AS category,
+    vp.color,
+    vp.size,
+    vp.prod_height,
+    vp.prod_width,
+    vp.prod_length,
+    vp.product_weight,
+    vp.product_weight_unit,
+    pl.quantity
+FROM vp_products AS vp
+INNER JOIN purchase_list AS pl 
+    ON vp.id = pl.product_id
+WHERE vp.id = ?
+LIMIT 1";
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
@@ -76,42 +77,37 @@ if (!$product) {
     exit;
 }
 
-// -------- Build OG Title / Description / Image --------
+// -------- Build fields --------
 $title = trim((string)($product['title'] ?? ''));
 if ($title === '') {
     $title = 'Product ' . (string)($product['sku'] ?? $product_id);
 }
 
-$item = trim((string)($product['item_code'] ?? ''));
-$sku  = trim((string)($product['sku'] ?? ''));
-$cat  = trim((string)($product['category'] ?? ''));
+$item  = trim((string)($product['item_code'] ?? ''));
+$sku   = trim((string)($product['sku'] ?? ''));
+$cat   = trim((string)($product['category'] ?? ''));
+$color = trim((string)($product['color'] ?? ''));
+$size  = trim((string)($product['size'] ?? ''));
+$qty   = isset($product['quantity']) ? (int)$product['quantity'] : '0';
 
-$dimParts = [];
-if (!empty($product['prod_height'])) $dimParts[] = $product['prod_height'] . 'H';
-if (!empty($product['prod_width']))  $dimParts[] = $product['prod_width'] . 'W';
-if (!empty($product['prod_length'])) $dimParts[] = $product['prod_length'] . 'L';
-$dimensions = $dimParts ? (implode(' x ', $dimParts)) : '';
+// Dimensions format EXACT like you asked: "HxWxL: 0 x 0 x 0"
+$h = (string)($product['prod_height'] ?? '0');
+$w = (string)($product['prod_width']  ?? '0');
+$l = (string)($product['prod_length'] ?? '0');
+$dimensions = trim(($h !== '' ? $h : '0') . " x " . ($w !== '' ? $w : '0') . " x " . ($l !== '' ? $l : '0'));
 
+// Weight text
+$weightVal = (string)($product['product_weight'] ?? '');
+$weightUnit = trim((string)($product['product_weight_unit'] ?? ''));
 $weight = '';
-if (isset($product['product_weight']) && (float)$product['product_weight'] > 0) {
-    $unit = trim((string)($product['product_weight_unit'] ?? ''));
-    $weight = 'Weight: ' . rtrim(rtrim((string)$product['product_weight'], '0'), '.') . ($unit ? " $unit" : '');
+if ($weightVal !== '' && (float)$weightVal > 0) {
+    $weight = rtrim(rtrim($weightVal, '0'), '.');
+    $weight = $weight . ($weightUnit ? " $weightUnit" : '');
 }
-
-$descParts = array_filter([
-    $item ? "Item: $item" : '',
-    $sku ? "SKU: $sku" : '',
-    $cat ? "Category: $cat" : '',
-    $dimensions,
-    $weight,
-]);
-
-$description = implode(' | ', $descParts);
-if ($description === '') $description = 'Product details';
 
 // OG image: absolute public URL required by WhatsApp
 $imageRaw = trim((string)($product['image'] ?? ''));
-$defaultImage = full_url('assets/img/default-product.png'); // ensure this exists or change
+$defaultImage = full_url('assets/img/default-product.png'); // ensure this exists
 
 if ($imageRaw !== '' && preg_match('/^https?:\/\//i', $imageRaw)) {
     $ogImage = $imageRaw;
@@ -122,7 +118,7 @@ if ($imageRaw !== '' && preg_match('/^https?:\/\//i', $imageRaw)) {
 }
 
 // OG URL (absolute)
-$ogUrl = full_url('share.php?id=' . $product_id);
+$ogUrl = full_url('share.php?id=' . $product_id . ($qty ? '&qty='.$qty : ''));
 
 // Optional: canonical
 $canonical = $ogUrl;
@@ -130,11 +126,43 @@ $canonical = $ogUrl;
 // Guess MIME for OG (helps some scrapers)
 $ogImageType = 'image/jpeg';
 $lower = strtolower(parse_url($ogImage, PHP_URL_PATH) ?? '');
-if (str_ends_with($lower, '.png'))  $ogImageType = 'image/png';
-if (str_ends_with($lower, '.webp')) $ogImageType = 'image/webp';
+if (function_exists('str_ends_with')) {
+    if (str_ends_with($lower, '.png'))  $ogImageType = 'image/png';
+    if (str_ends_with($lower, '.webp')) $ogImageType = 'image/webp';
+} else {
+    if (substr($lower, -4) === '.png')  $ogImageType = 'image/png';
+    if (substr($lower, -5) === '.webp') $ogImageType = 'image/webp';
+}
 
-// If you want to force refresh WhatsApp cache while testing, share URL like:
-// share.php?id=7135&v=<?=time()?>
+/**
+ * ✅ WhatsApp preview (og:description)
+ * Keep it short but include the fields you requested.
+ */
+$descLines = [
+    "Quantity to be Purchased: {$qty}",
+    "SKU: " . ($sku !== '' ? $sku : 'N/A'),
+    "Color: " . ($color !== '' ? $color : 'N/A'),
+    "Size: " . ($size !== '' ? $size : 'N/A'),
+    "Dimensions (HxWxL): " . ($dimensions !== '' ? $dimensions : '0 x 0 x 0'),
+    "Weight: " . ($weight !== '' ? $weight : 'N/A'),
+];
+$description = implode(" | ", $descLines);
+
+// Share text (WhatsApp)
+$waText = $title . "\n"
+    . "Quantity to be Purchased: {$qty}\n"
+    . "SKU: " . ($sku ?: '') . "\n"
+    . "Color: " . ($color ?: '') . "\n"
+    . "Size: " . ($size ?: '') . "\n"
+    . "Dimensions (HxWxL): " . ($dimensions ?: '0 x 0 x 0') . "\n"
+    . "Weight: " . ($weight ?: '') . "\n"
+    . "View More: " . $ogUrl;
+
+$waHref = "https://wa.me/?text=" . urlencode($waText);
+
+// If you have a product detail page, put real URL here
+$productDetailUrl = full_url('product.php?id=' . $product_id);
+?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -153,8 +181,6 @@ if (str_ends_with($lower, '.webp')) $ogImageType = 'image/webp';
     <meta property="og:url" content="<?= e($ogUrl) ?>">
     <meta property="og:type" content="product">
     <meta property="og:site_name" content="Exotic Vendor">
-
-    <!-- Optional: dimensions help preview in some platforms -->
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
@@ -167,45 +193,140 @@ if (str_ends_with($lower, '.webp')) $ogImageType = 'image/webp';
     <link rel="canonical" href="<?= e($canonical) ?>">
 
     <style>
-        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #f6f7f9; }
-        .wrap { max-width: 920px; margin: 24px auto; padding: 16px; }
-        .card { background: #fff; border: 1px solid #e6e8ee; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,.05); display: grid; grid-template-columns: 280px 1fr; }
-        .img { background: #fafafa; display: flex; align-items: center; justify-content: center; padding: 16px; }
-        .img img { width: 100%; max-width: 260px; height: auto; object-fit: contain; border-radius: 12px; }
-        .content { padding: 18px; }
-        .title { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
-        .meta { color: #556; font-size: 13px; margin-bottom: 12px; line-height: 1.4; }
-        .kv { display: grid; grid-template-columns: 160px 1fr; gap: 8px 12px; font-size: 14px; }
-        .kv div { padding: 8px 0; border-bottom: 1px dashed #e6e8ee; }
-        .label { color: #667; font-weight: 600; }
-        .btns { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 10px; border: 1px solid #d7dbe6; text-decoration: none; color: #111; background: #fff; font-size: 14px; cursor: pointer; }
-        .btn.primary { background: #25D366; border-color: #25D366; color: #fff; }
-        .btn.dark { background: #111827; border-color: #111827; color: #fff; }
-        @media (max-width: 780px) { .card { grid-template-columns: 1fr; } .kv { grid-template-columns: 120px 1fr; } }
+        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: radial-gradient(1200px 600px at 20% 0%, #fff6ed, #f6f7f9 55%); }
+        .wrap { max-width: 980px; margin: 26px auto; padding: 16px; }
+        .shell { display: grid; gap: 14px; }
+        .card {
+            background: #fff;
+            border: 1px solid #e6e8ee;
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 14px 28px rgba(0,0,0,.08);
+            display: grid;
+            grid-template-columns: 360px 1fr;
+        }
+        .img {
+            background: linear-gradient(180deg, #fff, #fafafa);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            position: relative;
+        }
+        .img img {
+            width: 100%;
+            max-width: 320px;
+            height: auto;
+            object-fit: contain;
+            border-radius: 14px;
+            box-shadow: 0 12px 18px rgba(0,0,0,.10);
+            transition: transform .2s ease;
+        }
+        .card:hover .img img { transform: scale(1.02); }
+
+        .badge {
+            position:absolute; top:14px; left:14px;
+            font-size: 11px; font-weight: 700;
+            color:#7c2d12;
+            background:#fff7ed;
+            border:1px solid #fed7aa;
+            padding:6px 10px; border-radius:999px;
+        }
+
+        .content { padding: 18px 18px 20px; }
+        .title { font-size: 20px; font-weight: 800; margin: 0 0 6px; color:#0f172a; letter-spacing: -0.2px;}
+        .sub { color:#64748b; font-size: 13px; margin: 0 0 12px; line-height: 1.4;}
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .tile {
+            border:1px solid #eef2ff;
+            background:#f8fafc;
+            border-radius: 14px;
+            padding: 10px 12px;
+        }
+        .k { font-size: 11px; color:#64748b; font-weight:700; text-transform: uppercase; letter-spacing:.04em;}
+        .v { margin-top: 4px; font-size: 14px; font-weight: 700; color:#0f172a; }
+        .v.muted { font-weight: 600; color:#334155; }
+
+        .actions {
+            display:flex; gap:10px; flex-wrap:wrap;
+            margin-top: 14px;
+        }
+        .btn {
+            display:inline-flex; align-items:center; justify-content:center;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border:1px solid #d7dbe6;
+            text-decoration:none;
+            color:#0f172a;
+            background:#fff;
+            font-size: 14px;
+            font-weight: 700;
+            cursor:pointer;
+            transition: transform .08s ease, box-shadow .15s ease;
+            gap:8px;
+        }
+        .btn:hover { box-shadow: 0 8px 14px rgba(0,0,0,.08); transform: translateY(-1px); }
+        .btn.primary { background:#25D366; border-color:#25D366; color:#fff; }
+        .btn.orange { background:#ea580c; border-color:#ea580c; color:#fff; }
+        .btn.dark { background:#111827; border-color:#111827; color:#fff; }
+
+        .hint { margin-top: 10px; font-size: 12px; color:#64748b; }
+
+        @media (max-width: 840px) {
+            .card { grid-template-columns: 1fr; }
+            .grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 <div class="wrap">
-    <div class="card">
-        <div class="img">
-            <img src="<?= e($ogImage) ?>" alt="<?= e($title) ?>">
-        </div>
+    <div class="shell">
+        <div class="card">
+            <div class="img">
+                <img src="<?= e($ogImage) ?>" alt="<?= e($title) ?>">
+            </div>
 
-        <div class="content">
-            <h1 class="title"><?= e($title) ?></h1>
-            <div class="meta"><?= e($description) ?></div>
+            <div class="content">
+                <h1 class="title"><?= e($title) ?></h1>
+                <p class="k">
+                    <?= e('Category : '.$cat ?: 'Category') ?> 
+                </p>
 
-            <div class="kv">
-                <div class="label">Item Code</div><div><?= e($item ?: 'N/A') ?></div>
-                <div class="label">SKU</div><div><?= e($sku ?: 'N/A') ?></div>
-                <div class="label">Category</div><div><?= e($cat ?: 'N/A') ?></div>
-                <div class="label">Color</div><div><?= e(trim((string)($product['color'] ?? '')) ?: 'N/A') ?></div>
-                <div class="label">Size</div><div><?= e(trim((string)($product['size'] ?? '')) ?: 'N/A') ?></div>
-                <div class="label">Measurements</div>
-                <div><?= e($dimensions ?: 'N/A') ?></div>
-                <div class="label">Weight</div>
-                <div><?= e($weight ?: 'N/A') ?></div>
+                <!-- ✅ Requested fields (UI) -->
+                <div class="grid">
+                    <div class="tile">
+                        <div class="k">Quantity to be Purchased</div>
+                        <div class="v"><?= (int)$qty ?></div>
+                    </div>
+                    <div class="tile">
+                        <div class="k">SKU</div>
+                        <div class="v"><?= e($sku ?: 'N/A') ?></div>
+                    </div>
+
+                    <div class="tile">
+                        <div class="k">Color</div>
+                        <div class="v muted"><?= e($color ?: 'N/A') ?></div>
+                    </div>
+                    <div class="tile">
+                        <div class="k">Size</div>
+                        <div class="v muted"><?= e($size ?: 'N/A') ?></div>
+                    </div>
+
+                    <div class="tile" style="grid-column: 1 / -1;">
+                        <div class="k">Dimensions (HxWxL)</div>
+                        <div class="v muted"><?= e($dimensions ?: '0 x 0 x 0') ?></div>
+                    </div>
+
+                    <div class="tile" style="grid-column: 1 / -1;">
+                        <div class="k">Weight</div>
+                        <div class="v muted"><?= e($weight ?: 'N/A') ?></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

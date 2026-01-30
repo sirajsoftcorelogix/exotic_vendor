@@ -1,6 +1,6 @@
 <div class="container mx-auto px-4 py-8">
     <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold">Invoices</h1>
+        <h1 class="text-3xl font-bold">Customer Invoices</h1>
         <a href="<?php echo base_url('?page=invoices&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Invoice</a>
     </div>
 
@@ -13,7 +13,7 @@
                 <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Date</th>
                 <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Customer</th>
                 <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Total Amount</th>
-                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                <!-- <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th> -->
                 <th class="px-6 py-3 text-right text-sm font-semibold text-gray-900">Actions</th>
             </tr>
             </thead>
@@ -23,19 +23,19 @@
             <tr class="border-t hover:bg-gray-50">
                 <td class="px-6 py-4 text-sm"><?= htmlspecialchars($invoice['invoice_number']) ?></td>
                 <td class="px-6 py-4 text-sm"><?= date('d M Y', strtotime($invoice['invoice_date'])) ?></td>
-                <td class="px-6 py-4 text-sm"><?= $invoice['customer_id'] ?></td>
+                <td class="px-6 py-4 text-sm"><?= htmlspecialchars($invoice['name'] ?? '') ?></td>
                 <td class="px-6 py-4 text-sm font-semibold"><?= $invoice['currency'] ?> <?= number_format($invoice['total_amount'], 2) ?></td>
-                <td class="px-6 py-4 text-sm">
+                <!-- <td class="px-6 py-4 text-sm">
                     <span class="px-3 py-1 rounded-full text-xs font-semibold
                         <?php 
-                            if ($invoice['status'] === 'draft') echo 'bg-gray-100 text-gray-800';
-                            elseif ($invoice['status'] === 'sent') echo 'bg-blue-100 text-blue-800';
-                            elseif ($invoice['status'] === 'paid') echo 'bg-green-100 text-green-800';
+                            // if ($invoice['status'] === 'draft') echo 'bg-gray-100 text-gray-800';
+                            // elseif ($invoice['status'] === 'sent') echo 'bg-blue-100 text-blue-800';
+                            // elseif ($invoice['status'] === 'paid') echo 'bg-green-100 text-green-800';
                         ?>
                     "><?= ucfirst($invoice['status']) ?></span>
-                </td>
+                </td> -->
                 <td class="px-6 py-4 text-right text-sm space-x-2">
-                    <a href="<?php echo base_url('?page=invoices&action=view&id=' . $invoice['id']); ?>" class="text-indigo-600 hover:text-indigo-900">View</a>
+                    <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" target="_blank" class="text-indigo-600 hover:text-indigo-900">Download</a>
                 </td>
             </tr>
                     <?php endforeach; ?>

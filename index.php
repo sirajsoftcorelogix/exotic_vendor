@@ -176,6 +176,9 @@ switch ($page) {
             case 'bulk_assign_order':
                 $controller->bulkAssignOrder();
                 break;
+            case 'get_orders_customer_id':
+                $controller->getOrdersCustomerId();
+                break;
             case 'saveSearch':
                 $controller->saveSearch();
                 break;
@@ -307,8 +310,14 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'preview':
+                $controller->previewInvoice();
+                break;
             case 'generate_pdf':
                 $controller->generatePdf();
+                break;
+            case 'fetch_items':
+                $controller->fetchItems();
                 break;
             default:
                 $controller->index();
@@ -682,6 +691,33 @@ switch ($page) {
             $controller = new DashboardController();
             $controller->index();
             break;
+
+    case 'currency':
+        require_once 'controllers/CurrencyController.php';
+        $controller = new CurrencyController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            case 'addRecord':
+                $controller->addCurrencyRecord();
+                break;
+            case 'updateRecord':
+                $controller->addCurrencyRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'currencyDetails':
+                $controller->getCurrencyDetails();
+            case 'getRateHistory':
+                require_once 'controllers/get_rate_history.php';
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
 }
 
 

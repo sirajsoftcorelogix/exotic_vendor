@@ -633,6 +633,129 @@
 		];
 	}
 
+	if (!function_exists('full_url')) {
+		function full_url(string $path): string {
+			$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+			$host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+			$dir    = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+			return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
+		}
+	}
 	
+	/**
+     * Convert number to words (Indian currency format)
+     * @param float $num
+     * @return string
+     */
+    function numberToWords($num) {
+        $num = round($num, 2);
+        $rupees = floor($num);
+        $paise = round(($num - $rupees) * 100);
+        
+        $words = convertToWords($rupees) . ' Rupees';
+        
+        if ($paise > 0) {
+            $words .= ' and ' . convertToWords($paise) . ' Paise';
+        }
+        
+        return $words;
+    }
+    
+    /**
+     * Helper function to convert number to words
+     * @param int $num
+     * @return string
+     */
+    function convertToWords($num) {
+        if ($num == 0) {
+            return 'Zero';
+        }
+        
+        $ones = array(
+            0 => '',
+            1 => 'One',
+            2 => 'Two',
+            3 => 'Three',
+            4 => 'Four',
+            5 => 'Five',
+            6 => 'Six',
+            7 => 'Seven',
+            8 => 'Eight',
+            9 => 'Nine',
+            10 => 'Ten',
+            11 => 'Eleven',
+            12 => 'Twelve',
+            13 => 'Thirteen',
+            14 => 'Fourteen',
+            15 => 'Fifteen',
+            16 => 'Sixteen',
+            17 => 'Seventeen',
+            18 => 'Eighteen',
+            19 => 'Nineteen'
+        );
+        
+        $tens = array(
+            0 => '',
+            2 => 'Twenty',
+            3 => 'Thirty',
+            4 => 'Forty',
+            5 => 'Fifty',
+            6 => 'Sixty',
+            7 => 'Seventy',
+            8 => 'Eighty',
+            9 => 'Ninety'
+        );
+        
+        $scales = array(
+            100 => 'Hundred',
+            1000 => 'Thousand',
+            100000 => 'Lakh',
+            10000000 => 'Crore'
+        );
+        
+        $num = (int)$num;
+        $numString = '';
+        
+        // Handle Crores
+        if ($num >= 10000000) {
+            $crores = (int)($num / 10000000);
+            $numString .= convertToWords($crores) . ' Crore ';
+            $num = $num % 10000000;
+        }
+        
+        // Handle Lakhs
+        if ($num >= 100000) {
+            $lakhs = (int)($num / 100000);
+            $numString .= convertToWords($lakhs) . ' Lakh ';
+            $num = $num % 100000;
+        }
+        
+        // Handle Thousands
+        if ($num >= 1000) {
+            $thousands = (int)($num / 1000);
+            $numString .= convertToWords($thousands) . ' Thousand ';
+            $num = $num % 1000;
+        }
+        
+        // Handle Hundreds
+        if ($num >= 100) {
+            $hundreds = (int)($num / 100);
+            $numString .= $ones[$hundreds] . ' Hundred ';
+            $num = $num % 100;
+        }
+        
+        // Handle Tens and Ones
+        if ($num >= 20) {
+            $numTens = (int)($num / 10);
+            $numString .= $tens[$numTens] . ' ';
+            $num = $num % 10;
+        }
+        
+        if ($num > 0) {
+            $numString .= $ones[$num] . ' ';
+        }
+        
+        return trim($numString);
+    }
 
 ?>

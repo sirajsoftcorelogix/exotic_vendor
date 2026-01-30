@@ -189,7 +189,8 @@ class Tables {
         return $response;
     }
     public function get_staff_list() {
-        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND role_id ='4'";
+        //$sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND role_id ='4'";
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1";
         $stmt = $this->ci->prepare($sql);        
         $stmt->execute();
         $result = $stmt->get_result();
@@ -260,6 +261,17 @@ class Tables {
         $stmt->bind_param($types, ...$values);
 
         return $stmt->execute();
+    }
+    public function getRecordByField($table, $field, $value) {
+        $sql = "SELECT * FROM " . $table . " WHERE " . $field . " = ? LIMIT 1";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('s', $value);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
     }
 }
 ?>

@@ -547,7 +547,42 @@ class Order{
         }
         return $orderItems;
     }
-	
+
+    public function getOrderItemsByCustomerId($customer_id, $searchTerm = '', $itemIds = []) {
+        $sql = "SELECT * FROM vp_orders WHERE customer_id = ? AND (invoice_id IS NULL OR invoice_id = '')";
+        if (!empty($searchTerm)) {
+            $sql .= " AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
+        }
+        if (!empty($itemIds)) {
+            $placeholders = implode(',', array_fill(0, count($itemIds), '?'));
+            $sql .= " AND id IN ($placeholders)";
+        }
+      
+        $stmt = $this->db->prepare($sql);
+        $types = 'i';
+        $params = [$customer_id];
+        if (!empty($searchTerm)) {
+            $searchTerm = "%{$searchTerm}%";
+            $types .= 'sss';
+            $params = array_merge($params, [$searchTerm, $searchTerm, $searchTerm]);
+        }
+        if (!empty($itemIds)) {
+            foreach ($itemIds as $id) {
+                $types .= 'i';
+                $params[] = (int)$id;
+            }
+        }
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = $row;
+            }
+        }
+        return $orderItems;
+    }
     public function updateOrderStatusByPO($po_id, $status) {
         $sql = "UPDATE vp_orders SET status = ? WHERE po_id = ?";
         $stmt = $this->db->prepare($sql);
@@ -1081,6 +1116,66 @@ class Order{
         }
         
     }
+    public function updateOrderByOrderNumber($order_number, $data) {
+        // Validate inputs
+        if (empty($order_number) || empty($data)) {
+            return ['success' => false, 'message' => 'Order number or data is missing.'];
+        }
 
+        // Prepare SQL statement
+        $setClauses = [];
+        $values = [];
+        $types = '';
+
+        foreach ($data as $key => $value) {
+            $setClauses[] = "$key = ?";
+            $values[] = $value;
+
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value) || is_double($value)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        $sql = "UPDATE vp_orders SET " . implode(', ', $setClauses) . " WHERE order_number = ?";
+        $values[] = $order_number;
+        $types .= 's';
+
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $stmt->bind_param($types, ...$values);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Order updated successfully. Affected rows: ' . $affectedRows];
+    }
+    public function getAgentAssignmentDate($order_id, $agent_id) {
+        $sql = "SELECT change_date FROM vp_order_status_log WHERE order_id = ? ORDER BY change_date DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return $row['change_date'];
+        }
+        return null;
+    }
 }
 ?>
