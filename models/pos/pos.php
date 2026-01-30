@@ -19,94 +19,121 @@ class pos {
      * DataTables / AJAX products
      */
     public function getProductsDataTable(
-        int $start,
-        int $length,
-        string $searchValue = '',
-        string $category = '',
-        string $productCode = '',
-        string $productName = '',
-        string $orderColumn = 'product_name',
-        string $orderDir = 'asc'
-    ): array {
-        // 1) total records (no filters)
-        $totalSql = "SELECT COUNT(*) AS cnt FROM vp_products WHERE is_active = 1";
-        $totalStmt = $this->db->prepare($totalSql);
-        $totalStmt->execute();
-        $recordsTotal = (int)$totalStmt->fetchColumn();
+    int $start,
+    int $length,
+    string $searchValue = '',
+    string $productName = '',
+    string $orderColumn = 'title',
+    string $orderDir = 'asc'
+): array {
 
-        // 2) filtered query base
-        $where = " WHERE is_active = 1 ";
-        $params = [];
+    /* =========================
+     * 1) Total records
+     * ========================= */
+    $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
+    $totalStmt = $this->db->prepare($totalSql);
+    $totalStmt->execute();
+    $totalStmt->bind_result($recordsTotal);
+    $totalStmt->fetch();
+    $totalStmt->close();
 
-        // category filter
-        if ($category !== '' && $category !== 'all') {
-            $where .= " AND category_slug = :category ";
-            $params[':category'] = $category;
-        }
+    /* =========================
+     * 2) Filters
+     * ========================= */
+    $where = " WHERE is_active = 1 ";
+    $params = [];
+    $types  = "";
 
-        // explicit product code filter
-        if ($productCode !== '') {
-            $where .= " AND product_code LIKE :product_code ";
-            $params[':product_code'] = '%' . $productCode . '%';
-        }
 
-        // explicit product name filter
-        if ($productName !== '') {
-            $where .= " AND product_name LIKE :product_name ";
-            $params[':product_name'] = '%' . $productName . '%';
-        }
-
-        // global search (applies to code + name)
-        if ($searchValue !== '') {
-            $where .= " AND (product_code LIKE :search OR product_name LIKE :search) ";
-            $params[':search'] = '%' . $searchValue . '%';
-        }
-
-        // guard order column & direction
-        $allowedColumns = ['product_code', 'product_name', 'category_slug', 'stock_qty', 'price', 'image_url'];
-        if (!in_array($orderColumn, $allowedColumns, true)) {
-            $orderColumn = 'product_name';
-        }
-        $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
-
-        // 3) filtered count
-        $countSql = "SELECT COUNT(*) AS cnt FROM vp_products " . $where;
-        $countStmt = $this->db->prepare($countSql);
-        foreach ($params as $k => $v) {
-            $countStmt->bindValue($k, $v);
-        }
-        $countStmt->execute(); 
-        $recordsFiltered = (int)$countStmt->fetchColumn();
-
-        // 4) data query
-        $dataSql = "
-            SELECT
-                id,
-                category_slug,
-                product_code,
-                product_name,
-                stock_qty,
-                price,
-                image_url
-            FROM vp_products
-            $where
-            ORDER BY $orderColumn $orderDir
-            LIMIT :start, :length
-        ";
-
-        $dataStmt = $this->db->prepare($dataSql);
-        foreach ($params as $k => $v) {
-            $dataStmt->bindValue($k, $v);
-        }
-        $dataStmt->bindValue(':start', $start, PDO::PARAM_INT);
-        $dataStmt->bindValue(':length', $length, PDO::PARAM_INT);
-        $dataStmt->execute();
-        $rows = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        return [
-            'recordsTotal'    => $recordsTotal,
-            'recordsFiltered' => $recordsFiltered,
-            'data'            => $rows,
-        ];
+    if ($productName !== '') {
+        $where .= " AND (title LIKE ? OR item_code LIKE ?) ";
+        $params[] = "%{$productName}%";
+        $params[] = "%{$productName}%";
+        $types   .= "ss";
     }
+
+    if ($searchValue !== '') {
+        $where .= " AND (item_code LIKE ? OR title LIKE ?) ";
+        $params[] = "%{$searchValue}%";
+        $params[] = "%{$searchValue}%";
+        $types   .= "ss";
+    }
+
+    /* =========================
+     * 3) Order guard
+     * ========================= */
+    $allowedColumns = [
+        'item_code',
+        'title',
+        'category_slug',
+        'size',
+        'color',
+        'image'
+    ];
+
+    if (!in_array($orderColumn, $allowedColumns, true)) {
+        $orderColumn = 'title';
+    }
+
+    $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
+
+    /* =========================
+     * 4) Filtered count
+     * ========================= */
+    $countSql = "SELECT COUNT(*) FROM vp_products $where";
+    $countStmt = $this->db->prepare($countSql);
+
+    if (!empty($params)) {
+        $countStmt->bind_param($types, ...$params);
+    }
+
+    $countStmt->execute();
+    $countStmt->bind_result($recordsFiltered);
+    $countStmt->fetch();
+    $countStmt->close();
+
+    /* =========================
+     * 5) Data query
+     * ========================= */
+    $dataSql = "
+        SELECT
+            id,
+            item_code,
+            sku,
+            title,
+            size,
+            color,
+            image,
+            local_stock AS stock_qty,
+            itemprice AS price
+        FROM vp_products
+        $where
+        ORDER BY $orderColumn $orderDir
+        LIMIT ?, ?
+    ";
+
+    $dataStmt = $this->db->prepare($dataSql);
+
+    // add pagination params
+    $paramsWithLimit = $params;
+    $paramsWithLimit[] = $start;
+    $paramsWithLimit[] = $length;
+    $typesWithLimit = $types . "ii";
+
+    if (!empty($paramsWithLimit)) {
+        $dataStmt->bind_param($typesWithLimit, ...$paramsWithLimit);
+    }
+
+    $dataStmt->execute();
+    $result = $dataStmt->get_result();
+    $rows = $result->fetch_all(MYSQLI_ASSOC);
+    $dataStmt->close();
+
+    return [
+        'recordsTotal'    => (int)$recordsTotal,
+        'recordsFiltered' => (int)$recordsFiltered,
+        'data'            => $rows
+    ];
+}
+
 }

@@ -36,8 +36,8 @@ class POSRegisterController
         }
 
         // custom filters
-        $category    = isset($_GET['category'])      ? trim($_GET['category'])      : '';
-        $productCode = isset($_GET['product_code'])  ? trim($_GET['product_code'])  : '';
+        //$category    = isset($_GET['category'])      ? trim($_GET['category'])      : '';
+        //$productCode = isset($_GET['product_code'])  ? trim($_GET['product_code'])  : '';
         $productName = isset($_GET['product_name'])  ? trim($_GET['product_name'])  : '';
 
         // ordering
@@ -46,21 +46,18 @@ class POSRegisterController
 
         // map column index -> actual DB column
         $columns = [
-            0 => 'image_url',      // not really used for sorting
-            1 => 'product_code',
-            2 => 'product_name',
-            3 => 'category_slug',
-            4 => 'stock_qty',
-            5 => 'price',
+            0 => 'image',      // not really used for sorting
+            1 => 'item_code',
+            2 => 'title',
+            3 => 'stock_qty',
+            4 => 'price',
         ];
-        $orderColumn = isset($columns[$orderColumnIndex]) ? $columns[$orderColumnIndex] : 'product_name';
+        $orderColumn = isset($columns[$orderColumnIndex]) ? $columns[$orderColumnIndex] : 'title';
 
         $result = $this->pos->getProductsDataTable(
             $start,
             $length,
             $searchValue,
-            $category,
-            $productCode,
             $productName,
             $orderColumn,
             $orderDir

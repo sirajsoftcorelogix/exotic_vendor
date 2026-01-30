@@ -23,7 +23,7 @@ $(function () {
       }
 
       products.forEach(function (p) {
-        const imgSrc = p.image_url || 'https://via.placeholder.com/200x200?text=No+Image';
+        const imgSrc = p.image || 'https://via.placeholder.com/200x200?text=No+Image';
         const cardHtml = `
           <div
             class="
@@ -40,7 +40,7 @@ $(function () {
             <div class="bg-gray-50 p-2">
               <img
                 src="${imgSrc}"
-                alt="${p.product_name || 'Product image'}"
+                alt="${p.image || 'Product image'}"
                 class="mx-auto h-56 lg:h-52 xl:h-48 object-contain"
               />
             </div>
@@ -49,7 +49,7 @@ $(function () {
             <div class="px-3 pb-3 pt-2 text-xs">
               <!-- Title -->
               <div class="text-[9.5px] text-gray-800 leading-snug line-clamp-2">
-                ${p.product_name || ''}
+                ${p.title || ''}
               </div>
 
               <!-- Bottom row -->
@@ -58,7 +58,7 @@ $(function () {
                 <div class="flex items-center gap-1 whitespace-nowrap">
                   <div class="flex items-center gap-1 whitespace-nowrap">
                     <span class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[9px] font-small text-orange-700">
-                      ${p.product_code || ''}
+                      ${p.item_code || ''}
                     </span>
                     <span class="rounded-md bg-green-100 px-1.5 py-0.5 text-[9px] font-small text-green-700">
                       Stock : ${p.stock_qty != null ? p.stock_qty : '-'}

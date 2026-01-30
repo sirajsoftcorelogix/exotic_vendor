@@ -13,7 +13,7 @@
       <!-- Search -->
       <input
         class="w-full max-w-lg rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none"
-        placeholder="Search product by Name or Item Code"
+        placeholder="Search product by Name or Item Code" id="searchName"
       />
 
       <!-- Right -->
