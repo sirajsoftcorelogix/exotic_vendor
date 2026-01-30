@@ -138,8 +138,8 @@
           </button>
         </div>
         <!-- Product Card -->
-        <div class="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <?php for ($i = 0; $i <= 12; $i++): ?>
+        <div class="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="productsCards">
+          <?php /*for ($i = 0; $i <= 12; $i++): ?>
           <div
             class="
               rounded-2xl
@@ -186,8 +186,10 @@
               </div>
             </div>
           </div>
-          <?php endfor; ?>
-      </div>
+          <?php endfor; */?>
+        </div>
+
+
       </div>
     </section>
 
@@ -318,9 +320,7 @@
     </div>
   </div>
 </aside>
-
-
-
   </main>
-
 </div>
+<!-- ===== END PAGE WRAPPER ===== -->
+<script src="<?php echo base_url(); ?>/assets/js/pos.js"></script> 
