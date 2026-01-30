@@ -1123,18 +1123,34 @@ class product
         $remaining = $transactionQty;
 
         // Fetch purchase list rows FIFO (oldest first)
-        $sql = "SELECT id, quantity,sku 
-            FROM purchase_list 
-            WHERE id = ? AND status != 'purchased'
-            ORDER BY created_at ASC, id ASC";
+        $sql = "SELECT 
+                pl.id,
+                pl.quantity,
+                pl.sku,
+                o.order_number
+            FROM purchase_list AS pl
+            LEFT JOIN vp_orders AS o 
+                ON o.id = pl.order_id
+            WHERE 
+                pl.id = ?
+                AND pl.status != 'purchased'
+            ORDER BY 
+                pl.created_at ASC,
+                pl.id ASC
+            ";
+
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $purchase_list_id);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
         $status = '';
+        $order_number = null;
+        $sku = null;
         foreach ($rows as $row) {
             if ($remaining <= 0) break;
+            $order_number = $rows[0]['order_number'] ?? null;
+            $sku = $rows[0]['item_code'] ?? null;
 
             $id = $row['id'];
             $qty = (int)$row['quantity'];
@@ -1168,10 +1184,13 @@ class product
             }
         }
 
-        $agent_id = $_SESSION['user']['id'];
-        $sku = $rows[0]['sku'];
-        $link = base_url('index.php?page=products&action=master_purchase_list&search=' . $sku.'&status='.$status);    
-        insertNotification($agent_id, 'Product Purchased', 'Product has been purchased successfully.', $link);
+        $agent_id = $_SESSION['user']['id'];        
+        $link = base_url('index.php?page=products&action=master_purchase_list&search=' . $sku.'&status='.$status);
+        
+        require_once 'models/comman/tables.php'; 
+        $commanModel = new Tables($conn);
+        $agent_name = $commanModel->getUserNameById($agent_id);   
+        insertNotification($agent_id, 'Product Purchased', $agent_name . ' has purchased item ' . $sku . ' qty ' . $transactionQty . ' for order'.$order_number.' ', $link);
 
         return [
             'success' => true,
