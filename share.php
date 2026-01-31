@@ -29,11 +29,7 @@ function full_url(string $path): string {
     return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
 }
 
-$uri = $_SERVER['REQUEST_URI']; 
-$afterShare = explode('share.php/', $uri)[1];
-$value = explode('&', $afterShare)[0];
-
-$product_id = base64_decode($value) ?: 0;
+$product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($product_id <= 0) {
     http_response_code(404);
     echo "Invalid product id.";
