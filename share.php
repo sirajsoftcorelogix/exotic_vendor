@@ -29,7 +29,7 @@ function full_url(string $path): string {
     return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
 }
 
-$product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$product_id = isset($_GET['id']) ? base64_decode($_GET['id']) : 0;
 if ($product_id <= 0) {
     http_response_code(404);
     echo "Invalid product id.";
@@ -139,7 +139,6 @@ if (function_exists('str_ends_with')) {
  * Keep it short but include the fields you requested.
  */
 $descLines = [
-    //"Quantity to be Purchased: {$qty}",
     "Color: " . ($color !== '' ? $color : 'N/A'),
     "Size: " . ($size !== '' ? $size : 'N/A'),
     "Dimensions (HxWxL): " . ($dimensions !== '' ? $dimensions : '0 x 0 x 0'),
@@ -148,8 +147,6 @@ $descLines = [
 $description = implode(" | ", $descLines);
 
 // Share text (WhatsApp)
-//. "Quantity to be Purchased: {$qty}\n"
-//. "SKU: " . ($sku ?: '') . "\n" 
 $waText = $title . "\n"    
     . "Color: " . ($color ?: '') . "\n"
     . "Size: " . ($size ?: '') . "\n"
@@ -288,8 +285,8 @@ $waHref = "https://wa.me/?text=" . urlencode($waText);
                 <!-- ✅ Requested fields (UI) -->
                 <div class="grid">
                     <div class="tile">
-                        <div class="k">Quantity to be Purchased</div>
-                        <div class="v"><?= (int)$qty ?></div>
+                        <div class="k">Product</div>
+                        <div class="v"><?= $title  ?></div>
                     </div>
                     <div class="tile">
                         <div class="k">SKU</div>
