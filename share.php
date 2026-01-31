@@ -29,7 +29,11 @@ function full_url(string $path): string {
     return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
 }
 
-$product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$uri = $_SERVER['REQUEST_URI']; 
+$afterShare = explode('share.php/', $uri)[1];
+$value = explode('&', $afterShare)[0];
+
+$product_id = base64_decode($value) ?: 0;
 if ($product_id <= 0) {
     http_response_code(404);
     echo "Invalid product id.";
@@ -139,7 +143,7 @@ if (function_exists('str_ends_with')) {
  * Keep it short but include the fields you requested.
  */
 $descLines = [
-    "Quantity to be Purchased: {$qty}",
+    //"Quantity to be Purchased: {$qty}",
     "SKU: " . ($sku !== '' ? $sku : 'N/A'),
     "Color: " . ($color !== '' ? $color : 'N/A'),
     "Size: " . ($size !== '' ? $size : 'N/A'),
@@ -149,19 +153,17 @@ $descLines = [
 $description = implode(" | ", $descLines);
 
 // Share text (WhatsApp)
-$waText = $title . "\n"
-    . "Quantity to be Purchased: {$qty}\n"
-    . "SKU: " . ($sku ?: '') . "\n"
+//. "Quantity to be Purchased: {$qty}\n"
+//. "SKU: " . ($sku ?: '') . "\n" 
+$waText = $title . "\n"    
     . "Color: " . ($color ?: '') . "\n"
     . "Size: " . ($size ?: '') . "\n"
     . "Dimensions (HxWxL): " . ($dimensions ?: '0 x 0 x 0') . "\n"
     . "Weight: " . ($weight ?: '') . "\n"
-    . "View More: " . $ogUrl;
+    . "\n";
 
 $waHref = "https://wa.me/?text=" . urlencode($waText);
 
-// If you have a product detail page, put real URL here
-$productDetailUrl = full_url('product.php?id=' . $product_id);
 ?>
 <!doctype html>
 <html lang="en">
