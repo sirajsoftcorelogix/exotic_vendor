@@ -165,12 +165,15 @@ $waHref = "https://wa.me/?text=" . urlencode($waText);
 
     <title><?= e($title) ?></title>
     <!-- ✅ Open Graph for WhatsApp/Facebook -->
+    <meta property="og:title" content="<?= e($title) ?>">
+    <meta property="og:description" content="<?= e($description) ?>">
+    <meta name="description" content="<?= e($description) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
     <meta property="og:image:secure_url" content="<?= e($ogImage) ?>">
     <meta property="og:image:type" content="<?= e($ogImageType) ?>">
     <meta property="og:url" content="<?= e($ogUrl) ?>">
     <meta property="og:type" content="Product">
-    <meta property="og:site_name" content="Exotic India Art">
+    <meta property="og:site_name" content="Exotic India">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
