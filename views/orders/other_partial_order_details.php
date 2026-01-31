@@ -1,3 +1,9 @@
+<?php 
+$total_price = 0;
+foreach ($order as $items => $item):
+    $total_price += $item['finalprice'] * $item['quantity'];
+endforeach;
+?>
 <div class="flex-grow space-4 bg-white p-6">
 <div class="max-w-4xl mx-auto text-white rounded-lg grid grid-cols-2 p-4 mt-6" style="background-color: rgba(208, 103, 6, 1);">
     <div>
@@ -6,7 +12,7 @@
         </p>
     </div>
     <div>
-        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo $order[0]['total_price']; ?></span></p>
+        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($total_price, 2); ?></span></p>
         <p><span class="font-bold">Payment Mode : </span><span class=""><?php echo $order[0]['payment_type']; ?></span></p>
     </div>
 </div>
@@ -16,7 +22,11 @@
     //print_array($order);
 	$countries = country_array();
 	//print_array($countries);
-    foreach ($order as $items => $item):?>
+    
+    foreach ($order as $items => $item):
+    //calculate total price
+    $total_price += $item['finalprice'] * $item['quantity'];
+    ?>
             <!-- Accordion Item 1 -->
                 <div class="max-w-4xl mx-auto mb-6 mb-6 bg-white shadow-md rounded-lg overflow-hidden">
                     <div class="accordion-trigger cursor-pointer border-b p-4">
@@ -179,7 +189,8 @@
                                         class="section-value"><?php echo $item['cost_price']; ?></span></p>
                                 <p><span class="section-title">Currency : </span><span 
                                         class="section-value"><?php echo $item['currency']; ?></span></p>
-                                
+                                <p><span class="section-title">item Total : </span><span 
+                                        class="section-value"><?php echo $item['finalprice'] * $item['quantity']; ?></span></p>
                             </div>
                             <div>
                                 <p><span class="section-title">HSN Code : </span><span
