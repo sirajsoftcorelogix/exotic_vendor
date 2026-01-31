@@ -918,7 +918,7 @@
                         $options = $order['options'] ?? '';
                         $optionsArr = [];
                         $bordercolor = 'border border-gray-300';
-                        $addontxt = '';
+                        $addontxt = [];
                         if (is_string($options)) {
                             $decoded = json_decode($options, true);
                             if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
@@ -956,10 +956,10 @@
                                     $display = $opt_text;
                                     $addon_css = 'bg-gray-100 text-gray-800';
                                 }
-                                $addontxt =  '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
+                                $addontxt[] = '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
                             }
                         } else {
-                            $addontxt =  '<span class="data-typography mt-1 block">N/A</span>';
+                            $addontxt[] =  '<span class="data-typography mt-1 block">N/A</span>';
                         }
 
                 ?>
@@ -1119,7 +1119,7 @@
                                             <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem );">
                                                 <div class="mt-[20px] max-w-48">
                                                     <span class="heading-typography block mb-5">Addon</span>
-                                                    <?= $addontxt ?>
+                                                    <?= implode('', $addontxt) ?>
                                                 </div>
                                                 <div>
                                                     <?= $order['po_number'] ? '<a href="?page=purchase_orders&action=view&po_id=' . $order['po_id'] . '" target="_blank" class="mx-10 icon-link create-po-btn">' . $order['po_number'] . '</a>' : '' ?>
