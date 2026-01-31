@@ -159,7 +159,7 @@ class Order{
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
-        echo $sql;
+        //echo $sql;
         // Add limit and offset to params and types
         $params[] = $limit;
         $params[] = $offset;
