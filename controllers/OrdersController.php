@@ -120,14 +120,14 @@ class OrdersController {
             $assignmentDates[$order['order_id']] =  $orders[$key]['status_log']['change_date'] ?? '';         
         }
         // Agent filter: use assignment from vp_order_status_log (change_date) instead of vp_orders.assign_date
-       if (!empty($_GET['agent'])) {
-           //sort orders by agent assignment date
-           usort($orders, function($a, $b) use ($assignmentDates) {
-                return strtotime($assignmentDates[$a['order_id']])
-                    - strtotime($assignmentDates[$b['order_id']]);
-            });            
+    //    if (!empty($_GET['agent'])) {
+    //        //sort orders by agent assignment date
+    //        usort($orders, function($a, $b) use ($assignmentDates) {
+    //             return strtotime($assignmentDates[$a['order_id']])
+    //                 - strtotime($assignmentDates[$b['order_id']]);
+    //         });            
             
-        }
+    //     }
         //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
@@ -565,9 +565,11 @@ class OrdersController {
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($agentLogData);
+                    //update agent_assign_date CURDATE
+                    $ordersModel->updateAgentAssignDate($order_id);
                     //set notification to agent
-                    $link = base_url('index.php?page=orders&action=list&'.$order_id);
-                    insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', $link);
+                    $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number='.$order_id);
+                    insertNotification($agent_id, 'Order Assigned', 'Order <a href="'.$link.'">'.$order_id.'</a> has been assigned to you for processing.', $link);
                 }
                 if($esd != $previous_esd){
                     //log esd change

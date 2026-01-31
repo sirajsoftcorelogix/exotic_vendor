@@ -1177,5 +1177,16 @@ class Order{
         }
         return null;
     }
+    public function updateAgentAssignDate($order_id) {
+        $current_date = date('Y-m-d');
+        $sql = "UPDATE vp_orders SET agent_assign_date = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('si', $current_date, $order_id);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Agent assign date updated successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
 ?>
