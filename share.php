@@ -82,7 +82,7 @@ if (!$product) {
 if ($title === '') {
     $title = 'Product ' . (string)($product['sku'] ?? $product_id);
 }*/
-$title = 'Product Details';
+//$title = 'Product Details';
 
 
 $item  = trim((string)($product['item_code'] ?? ''));
@@ -146,7 +146,9 @@ $descLines = [
     "Dimensions (HxWxL): " . ($dimensions !== '' ? $dimensions : '0 x 0 x 0'),
     "Weight: " . ($weight !== '' ? $weight : 'N/A'),
 ];
-$description = implode(" | ", $descLines);
+$title = implode(" | ", $descLines);
+//$description = implode(" | ", $descLines);
+$description = '';
 
 // Share text (WhatsApp)
 $waText = $title . "\n"    
