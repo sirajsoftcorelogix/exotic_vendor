@@ -1,4 +1,4 @@
-<div class="flex-grow space-y-4">
+<div class="flex-grow ">
 <?php 
 $total_price = 0;
 $courrency = '';
@@ -8,7 +8,7 @@ foreach ($order as $items => $item):
 endforeach;
 ?>
 <div class="flex-grow space-4 bg-white p-6">
-<div class="max-w-4xl mx-auto text-white rounded-lg grid grid-cols-2 p-4 mt-6" style="background-color: rgba(208, 103, 6, 1);">
+<div class="max-w-4xl mx-auto text-white rounded-lg grid grid-cols-2 p-4" style="background-color: rgba(208, 103, 6, 1);">
     <div>
         <p><span class="font-bold">Order number : </span><span class=""><?php echo $order[0]['order_number']; ?></span></p>
         <p><span class="font-bold">Order Date : </span><span class=""><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
