@@ -142,14 +142,24 @@ class Order{
         //echo $sql;
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            //agent assignment date desc
+            if(!empty($filters['agent'])){
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']);
+            }else{
             $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+            }
         } else {
-            $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+            //agent assignment date desc
+            if(!empty($filters['agent'])){
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
+            }else{
+                $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+            }
         }
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
-        //echo $sql;
+        echo $sql;
         // Add limit and offset to params and types
         $params[] = $limit;
         $params[] = $offset;
@@ -1176,17 +1186,6 @@ class Order{
             return $row['change_date'];
         }
         return null;
-    }
-    public function updateAgentAssignDate($order_id) {
-        $current_date = date('Y-m-d');
-        $sql = "UPDATE vp_orders SET agent_assign_date = ? WHERE id = ?";
-        $stmt = $this->db->prepare($sql);   
-        $stmt->bind_param('si', $current_date, $order_id);
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Agent assign date updated successfully.'];
-        } else {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-        }
     }
 }
 ?>

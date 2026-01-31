@@ -213,6 +213,6 @@ CREATE TABLE currency_rate_history (
     INDEX idx_currency_date (currency_code, rate_date)
 );
 
-ALTER TABLE `vp_orders` ADD `agent_assign_date` DATE NULL AFTER `agent_id`;
+ALTER TABLE `vp_orders` ADD `agent_assign_date` DATETIME NULL AFTER `agent_id`;
 
 

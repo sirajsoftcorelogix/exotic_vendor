@@ -68,12 +68,11 @@
                             <tr class="table-content-text">
                                 <td class="px-2 py-2 whitespace-nowrap"><?= date("d M Y H:i") ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <?php if($tc["is_read"]==0) { echo "<strong style='color: black;'>".htmlspecialchars($tc['title'])."</strong>"; } else { ?>
-                                    <?= htmlspecialchars($tc['title']) ?? '' ?>
-                                    <?php } ?>
-                                
+                                    <?php if($tc["is_read"]==0) { echo "<strong style='color: black;'>".$tc['title']."</strong>"; } else { ?>
+                                    <?= $tc['title'] ?? '' ?>
+                                    <?php } ?>                                
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap"><?= htmlspecialchars($tc['message']) ?? '' ?></td>
+                                <td class="px-6 py-4 whitespace-nowrap"><?= $tc['message'] ?? '' ?></td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
                                     <div class="menu-wrapper">
