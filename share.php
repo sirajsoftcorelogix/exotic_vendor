@@ -140,24 +140,45 @@ if (function_exists('str_ends_with')) {
  * ✅ WhatsApp preview (og:description)
  * Keep it short but include the fields you requested.
  */
-$descLines = [
-    "Dimensions (HxWxL): " . ($dimensions !== '' ? $dimensions : '0 x 0 x 0'),
-    "Color: " . ($color !== '' ? $color : 'N/A'),
-    "Size: " . ($size !== '' ? $size : 'N/A'),    
-    "Weight: " . ($weight !== '' ? $weight : 'N/A'),
-];
+$descLines = [];
+
+if (!empty($dimensions)) {
+    $descLines[] = "Dimensions (HxWxL): $dimensions";
+}
+if (!empty($color)) {
+    $descLines[] = "Color: $color";
+}
+if (!empty($size)) {
+    $descLines[] = "Size: $size";
+}
+if (!empty($weight)) {
+    $descLines[] = "Weight: $weight";
+}
+
+$title = implode(" | ", $descLines);
+$description = ''; // intentionally empty
+
 $title = implode(" | ", $descLines);
 //$description = implode(" | ", $descLines);
 $description = '';
 
 // Share text (WhatsApp)
-$waText = $title . "\n"    
-    . "Color: " . ($color ?: '') . "\n"
-    . "Size: " . ($size ?: '') . "\n"
-    . "Dimensions (HxWxL): " . ($dimensions ?: '0 x 0 x 0') . "\n"
-    . "Weight: " . ($weight ?: '') . "\n"
-    . "\n";
+$waLines = [];
 
+if (!empty($color)) {
+    $waLines[] = "Color: $color";
+}
+if (!empty($size)) {
+    $waLines[] = "Size: $size";
+}
+if (!empty($dimensions)) {
+    $waLines[] = "Dimensions (HxWxL): $dimensions";
+}
+if (!empty($weight)) {
+    $waLines[] = "Weight: $weight";
+}
+
+$waText = $title . "\n" . implode("\n", $waLines) . "\n";
 $waHref = "https://wa.me/?text=" . urlencode($waText);
 
 ?>
@@ -291,34 +312,51 @@ $waHref = "https://wa.me/?text=" . urlencode($waText);
 
                 <!-- ✅ Requested fields (UI) -->
                 <div class="grid">
-                    <div class="tile">
-                        <div class="k">Product</div>
-                        <div class="v"><?= $title  ?></div>
-                    </div>
-                    <div class="tile">
-                        <div class="k">SKU</div>
-                        <div class="v"><?= e($sku ?: 'N/A') ?></div>
-                    </div>
 
-                    <div class="tile">
-                        <div class="k">Color</div>
-                        <div class="v muted"><?= e($color ?: 'N/A') ?></div>
-                    </div>
-                    <div class="tile">
-                        <div class="k">Size</div>
-                        <div class="v muted"><?= e($size ?: 'N/A') ?></div>
-                    </div>
+    <?php if (!empty($product['title'])) : ?>
+        <div class="tile">
+            <div class="k">Product</div>
+            <div class="v"><?= e($product['title'] ?? '') ?></div>
+        </div>
+    <?php endif; ?>
 
-                    <div class="tile" style="grid-column: 1 / -1;">
-                        <div class="k">Dimensions (HxWxL)</div>
-                        <div class="v muted"><?= e($dimensions ?: '0 x 0 x 0') ?></div>
-                    </div>
+    <?php if (!empty($sku)) : ?>
+        <div class="tile">
+            <div class="k">SKU</div>
+            <div class="v"><?= e($sku) ?></div>
+        </div>
+    <?php endif; ?>
 
-                    <div class="tile" style="grid-column: 1 / -1;">
-                        <div class="k">Weight</div>
-                        <div class="v muted"><?= e($weight ?: 'N/A') ?></div>
-                    </div>
-                </div>
+    <?php if (!empty($color)) : ?>
+        <div class="tile">
+            <div class="k">Color</div>
+            <div class="v muted"><?= e($color) ?></div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($size)) : ?>
+        <div class="tile">
+            <div class="k">Size</div>
+            <div class="v muted"><?= e($size) ?></div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($dimensions)) : ?>
+        <div class="tile" style="grid-column: 1 / -1;">
+            <div class="k">Dimensions (HxWxL)</div>
+            <div class="v muted"><?= e($dimensions) ?></div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($weight)) : ?>
+        <div class="tile" style="grid-column: 1 / -1;">
+            <div class="k">Weight</div>
+            <div class="v muted"><?= e($weight) ?></div>
+        </div>
+    <?php endif; ?>
+
+</div>
+
             </div>
         </div>
     </div>
