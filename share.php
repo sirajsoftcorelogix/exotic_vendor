@@ -93,10 +93,25 @@ $size  = trim((string)($product['size'] ?? ''));
 $qty   = isset($product['quantity']) ? (int)$product['quantity'] : '0';
 
 // Dimensions format EXACT like you asked: "HxWxL: 0 x 0 x 0"
-$h = (string)($product['prod_height'] ?? '0');
-$w = (string)($product['prod_width']  ?? '0');
-$l = (string)($product['prod_length'] ?? '0');
-$dimensions = trim(($h !== '' ? $h : '0') . " x " . ($w !== '' ? $w : '0') . " x " . ($l !== '' ? $l : '0'));
+$h = trim((string)($product['prod_height'] ?? ''));
+$w = trim((string)($product['prod_width']  ?? ''));
+$l = trim((string)($product['prod_length'] ?? ''));
+
+// treat 0 / 0.0 as empty
+$hasDimension =
+    ($h !== '' && (float)$h > 0) ||
+    ($w !== '' && (float)$w > 0) ||
+    ($l !== '' && (float)$l > 0);
+
+if ($hasDimension) {
+    $dimensions = 
+        ($h !== '' && (float)$h > 0 ? $h : '0') . ' x ' .
+        ($w !== '' && (float)$w > 0 ? $w : '0') . ' x ' .
+        ($l !== '' && (float)$l > 0 ? $l : '0');
+} else {
+    $dimensions = '';
+}
+
 
 // Weight text
 $weightVal = (string)($product['product_weight'] ?? '');
