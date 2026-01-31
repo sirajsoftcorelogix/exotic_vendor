@@ -112,7 +112,6 @@ if ($hasDimension) {
     $dimensions = '';
 }
 
-
 // Weight text
 $weightVal = (string)($product['product_weight'] ?? '');
 $weightUnit = trim((string)($product['product_weight_unit'] ?? ''));
