@@ -80,7 +80,7 @@
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
                 
                 // Build the share URL
-                $shareUrl = full_url('share.php?id=' . (int)$pl['product_id'].'&v='.time());
+                $shareUrl = full_url('share.php?id=' . base64_encode((int)$pl['product_id']).'&v='.time());
                                 
                 // Alternative: Even simpler approach (recommended)
                 $waHrefSimple = "https://wa.me/?text=" . urlencode($shareUrl);
