@@ -170,24 +170,18 @@ $productDetailUrl = full_url('product.php?id=' . $product_id);
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <title><?= e($title) ?></title>
-    <meta name="description" content="<?= e($description) ?>">
-
     <!-- ✅ Open Graph for WhatsApp/Facebook -->
-    <meta property="og:title" content="<?= e($title) ?>">
-    <meta property="og:description" content="<?= e($description) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
     <meta property="og:image:secure_url" content="<?= e($ogImage) ?>">
     <meta property="og:image:type" content="<?= e($ogImageType) ?>">
     <meta property="og:url" content="<?= e($ogUrl) ?>">
-    <meta property="og:type" content="product">
-    <meta property="og:site_name" content="Exotic Vendor">
+    <meta property="og:type" content="Product">
+    <meta property="og:site_name" content="Exotic India Art">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
     <!-- ✅ Twitter (optional) -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="<?= e($title) ?>">
-    <meta name="twitter:description" content="<?= e($description) ?>">
     <meta name="twitter:image" content="<?= e($ogImage) ?>">
 
     <link rel="canonical" href="<?= e($canonical) ?>">
@@ -288,14 +282,11 @@ $productDetailUrl = full_url('product.php?id=' . $product_id);
     <div class="shell">
         <div class="card">
             <div class="img">
-                <img src="<?= e($ogImage) ?>" alt="<?= e($title) ?>">
+                <img src="<?= e($ogImage) ?>">
             </div>
 
             <div class="content">
-                <h1 class="title"><?= e($title) ?></h1>
-                <p class="k">
-                    <?= e('Category : '.$cat ?: 'Category') ?> 
-                </p>
+                
 
                 <!-- ✅ Requested fields (UI) -->
                 <div class="grid">
