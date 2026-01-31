@@ -1,7 +1,9 @@
 <?php 
 $total_price = 0;
+$currency = '';
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
+    $currency = $item['currency'];
 endforeach;
 ?>
 <div class="flex-grow space-4 bg-white p-6">
@@ -12,7 +14,7 @@ endforeach;
         </p>
     </div>
     <div>
-        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($total_price, 2); ?></span></p>
+        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($total_price, 2); ?> <?php echo $currency; ?></span></p>
         <p><span class="font-bold">Payment Mode : </span><span class=""><?php echo $order[0]['payment_type']; ?></span></p>
     </div>
 </div>
@@ -189,7 +191,7 @@ endforeach;
                                         class="section-value"><?php echo $item['cost_price']; ?></span></p>
                                 <p><span class="section-title">Currency : </span><span 
                                         class="section-value"><?php echo $item['currency']; ?></span></p>
-                                <p><span class="section-title">item Total : </span><span 
+                                <p><span class="section-title">item Total(<?php echo $item['finalprice'] ?> x <?php echo $item['quantity']; ?>) : </span><span 
                                         class="section-value"><?php echo $item['finalprice'] * $item['quantity']; ?></span></p>
                             </div>
                             <div>

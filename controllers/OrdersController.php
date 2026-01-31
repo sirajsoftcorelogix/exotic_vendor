@@ -571,7 +571,7 @@ class OrdersController {
                     //set notification to agent
                     
                     $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number='.$orderval['order_number']);
-                    insertNotification($agent_id, 'Order Assigned', 'Order <a href="'.$link.'" class="text-blue-600 hover:underline">'.$orderval['order_number'].'</a> has been assigned to you for processing.', $link);
+                    insertNotification($agent_id, 'Order Assigned', 'Order <a href="'.$link.'" class="text-blue-600 hover:underline" target="_blank">'.$orderval['order_number'].'</a> has been assigned to you for processing.', $link);
                 }
                 if($esd != $previous_esd){
                     //log esd change
