@@ -2828,7 +2828,7 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
             html += `✔ Added: <b>${data.created}</b><br>`;
 
             if (data.failed && data.failed.length > 0) {
-                html += `<br><strong>❌ SKU Not Found(Prod):</strong><ul class="list-disc ml-5 mt-1">`;
+                html += `<br><strong>❌ SKU Not Found(In Products):</strong><ul class="list-disc ml-5 mt-1">`;
 
                 data.failed.forEach(item => {
                     html += `<li>`;

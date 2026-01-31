@@ -144,7 +144,6 @@ if (function_exists('str_ends_with')) {
  */
 $descLines = [
     //"Quantity to be Purchased: {$qty}",
-    "SKU: " . ($sku !== '' ? $sku : 'N/A'),
     "Color: " . ($color !== '' ? $color : 'N/A'),
     "Size: " . ($size !== '' ? $size : 'N/A'),
     "Dimensions (HxWxL): " . ($dimensions !== '' ? $dimensions : '0 x 0 x 0'),
