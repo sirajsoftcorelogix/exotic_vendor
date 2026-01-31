@@ -141,9 +141,9 @@ if (function_exists('str_ends_with')) {
  * Keep it short but include the fields you requested.
  */
 $descLines = [
-    "Color: " . ($color !== '' ? $color : 'N/A'),
-    "Size: " . ($size !== '' ? $size : 'N/A'),
     "Dimensions (HxWxL): " . ($dimensions !== '' ? $dimensions : '0 x 0 x 0'),
+    "Color: " . ($color !== '' ? $color : 'N/A'),
+    "Size: " . ($size !== '' ? $size : 'N/A'),    
     "Weight: " . ($weight !== '' ? $weight : 'N/A'),
 ];
 $title = implode(" | ", $descLines);
