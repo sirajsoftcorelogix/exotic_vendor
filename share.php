@@ -29,7 +29,11 @@ function full_url(string $path): string {
     return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
 }
 
-$product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$uri = $_SERVER['REQUEST_URI']; 
+$afterShare = explode('share.php/', $uri)[1];
+$value = explode('&', $afterShare)[0];
+
+$product_id = base64_decode($value) ?: 0;
 if ($product_id <= 0) {
     http_response_code(404);
     echo "Invalid product id.";
@@ -139,7 +143,7 @@ if (function_exists('str_ends_with')) {
  * Keep it short but include the fields you requested.
  */
 $descLines = [
-    "Quantity to be Purchased: {$qty}",
+    //"Quantity to be Purchased: {$qty}",
     "SKU: " . ($sku !== '' ? $sku : 'N/A'),
     "Color: " . ($color !== '' ? $color : 'N/A'),
     "Size: " . ($size !== '' ? $size : 'N/A'),
@@ -149,19 +153,17 @@ $descLines = [
 $description = implode(" | ", $descLines);
 
 // Share text (WhatsApp)
-$waText = $title . "\n"
-    . "Quantity to be Purchased: {$qty}\n"
-    . "SKU: " . ($sku ?: '') . "\n"
+//. "Quantity to be Purchased: {$qty}\n"
+//. "SKU: " . ($sku ?: '') . "\n" 
+$waText = $title . "\n"    
     . "Color: " . ($color ?: '') . "\n"
     . "Size: " . ($size ?: '') . "\n"
     . "Dimensions (HxWxL): " . ($dimensions ?: '0 x 0 x 0') . "\n"
     . "Weight: " . ($weight ?: '') . "\n"
-    . "View More: " . $ogUrl;
+    . "\n";
 
 $waHref = "https://wa.me/?text=" . urlencode($waText);
 
-// If you have a product detail page, put real URL here
-$productDetailUrl = full_url('product.php?id=' . $product_id);
 ?>
 <!doctype html>
 <html lang="en">
@@ -170,24 +172,18 @@ $productDetailUrl = full_url('product.php?id=' . $product_id);
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <title><?= e($title) ?></title>
-    <meta name="description" content="<?= e($description) ?>">
-
     <!-- ✅ Open Graph for WhatsApp/Facebook -->
-    <meta property="og:title" content="<?= e($title) ?>">
-    <meta property="og:description" content="<?= e($description) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
     <meta property="og:image:secure_url" content="<?= e($ogImage) ?>">
     <meta property="og:image:type" content="<?= e($ogImageType) ?>">
     <meta property="og:url" content="<?= e($ogUrl) ?>">
-    <meta property="og:type" content="product">
-    <meta property="og:site_name" content="Exotic Vendor">
+    <meta property="og:type" content="Product">
+    <meta property="og:site_name" content="Exotic India Art">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
     <!-- ✅ Twitter (optional) -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="<?= e($title) ?>">
-    <meta name="twitter:description" content="<?= e($description) ?>">
     <meta name="twitter:image" content="<?= e($ogImage) ?>">
 
     <link rel="canonical" href="<?= e($canonical) ?>">
@@ -288,14 +284,11 @@ $productDetailUrl = full_url('product.php?id=' . $product_id);
     <div class="shell">
         <div class="card">
             <div class="img">
-                <img src="<?= e($ogImage) ?>" alt="<?= e($title) ?>">
+                <img src="<?= e($ogImage) ?>">
             </div>
 
             <div class="content">
-                <h1 class="title"><?= e($title) ?></h1>
-                <p class="k">
-                    <?= e('Category : '.$cat ?: 'Category') ?> 
-                </p>
+                
 
                 <!-- ✅ Requested fields (UI) -->
                 <div class="grid">
