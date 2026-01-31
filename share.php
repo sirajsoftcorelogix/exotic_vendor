@@ -78,10 +78,12 @@ if (!$product) {
 }
 
 // -------- Build fields --------
-$title = trim((string)($product['title'] ?? ''));
+/*$title = trim((string)($product['title'] ?? ''));
 if ($title === '') {
     $title = 'Product ' . (string)($product['sku'] ?? $product_id);
-}
+}*/
+$title = 'Product Details';
+
 
 $item  = trim((string)($product['item_code'] ?? ''));
 $sku   = trim((string)($product['sku'] ?? ''));
