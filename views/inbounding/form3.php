@@ -68,6 +68,8 @@ $sizeOptions = [
     'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
 ];
 $colorMapData = $data['form2']['gecolormaps']['colormaps'] ?? [];
+$authorsList    = $data['form2']['Author']['creators'] ?? [];
+$publishersList = $data['form2']['Publishers']['creators'] ?? [];
 
 function renderColorMapField($index, $value) {
     $fieldName = "variations[$index][colormaps]";
@@ -116,6 +118,12 @@ $mainVar = [
     'weight'          => $form2['weight'] ?? '',
     'store_location'  => $form2['store_location'] ?? '',
     'colormaps'       => $form2['colormaps'] ?? '',
+
+    'author'          => $form2['author'] ?? '',
+    'publisher'       => $form2['publisher'] ?? '',
+    'isbn'            => $form2['isbn'] ?? '',
+    'language'        => $form2['language'] ?? '',
+    'pages'           => $form2['pages'] ?? '',
 ];
 
 global $inboundingModel;
@@ -348,7 +356,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                         
                         <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
                             <h3 class="font-bold text-black text-sm">
-                                <?php echo ($index === 0) ? 'Main Variant' : 'Variant ' . ($index + 1); ?>
+                                <?php echo ($index === 0) ? 'Main Details' : 'Variant ' . ($index + 1); ?>
                             </h3>
                             <div class="flex gap-3">
                                 <button type="button" class="clone-variation-btn text-blue-600 hover:text-blue-800 font-bold text-xs uppercase flex items-center gap-1">
@@ -366,7 +374,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <label class="cursor-pointer group relative block w-full aspect-square bg-white border border-gray-400 rounded flex items-center justify-center hover:border-black overflow-hidden">
                                     <?php $hasPhoto = !empty($var['photo']); ?>
                                     <img src="<?php echo $hasPhoto ? base_url($var['photo']) : '#'; ?>" class="preview-img <?php echo $hasPhoto ? '' : 'hidden'; ?> w-full h-full object-cover absolute inset-0 z-10">
-                                    
                                     <div class="placeholder-icon <?php echo $hasPhoto ? 'hidden' : ''; ?> flex flex-col items-center justify-center text-gray-500">
                                         <i class="fa-solid fa-camera text-2xl mb-1"></i>
                                     </div>
@@ -377,52 +384,80 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                             </div>
 
-                            <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Color:</label>
-                                    <input type="text" name="variations[<?php echo $index; ?>][color]" value="<?php echo $var['color']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
-                                    <input type="number" min="0" 
-                                     name="variations[<?php echo $index; ?>][quantity]" 
-                                     value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '') ? $var['quantity'] : 1; ?>" 
-                                     class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                
-                                <div class="size-container">
-                                    <label class="block text-xs font-bold text-black mb-1">Size:</label>
-                                    <?php echo renderSizeField($index, $var['size'], $saved_category_code, $sizeOptions); ?>
-                                </div>
-
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Width (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
-                                    <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][weight]" value="<?php echo $var['weight'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-black mb-1">Location:</label>
-                                    <input type="text" name="variations[<?php echo $index; ?>][store_location]" value="<?php echo $var['store_location'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                            <div class="flex-1">
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Quantity <span class="text-red-500">*</span>:</label>
+                                        <input type="number" min="0" name="variations[<?php echo $index; ?>][quantity]" 
+                                         value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '') ? $var['quantity'] : 1; ?>" 
+                                         class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label>
+                                        <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
+                                     <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Location:</label>
+                                        <input type="text" name="variations[<?php echo $index; ?>][store_location]" value="<?php echo $var['store_location'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <?php echo renderColorMapField($index, $var['colormaps'] ?? ''); ?>
+                                <div class="standard-attributes grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Color:</label>
+                                        <input type="text" name="variations[<?php echo $index; ?>][color]" value="<?php echo $var['color']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
+                                    <div class="size-container">
+                                        <label class="block text-xs font-bold text-black mb-1">Size:</label>
+                                        <?php echo renderSizeField($index, $var['size'], $saved_category_code, $sizeOptions); ?>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
+                                        <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][height]" value="<?php echo $var['height'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Width (inch):</label>
+                                        <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][width]" value="<?php echo $var['width'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
+                                        <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][depth]" value="<?php echo $var['depth'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
+                                        <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][weight]" value="<?php echo $var['weight'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    </div>
+                                     <div class="colormap-wrapper" style="display:none;">
+                                        <?php echo renderColorMapField($index, $var['colormaps'] ?? ''); ?>
+                                    </div>
                                 </div>
+
+                                <div class="book-attributes grid grid-cols-2 md:grid-cols-4 gap-4 hidden">
+                                    <div class="col-span-2">
+                                        <label class="block text-xs font-bold text-black mb-1">Book Title / Author:</label>
+                                        <select name="variations[<?php echo $index; ?>][author]" 
+                                                class="w-full book-select author-select" 
+                                                data-type="author"
+                                                data-saved-value="<?php echo htmlspecialchars($var['author'] ?? ''); ?>"
+                                                placeholder="Type to search Author...">
+                                            </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-xs font-bold text-black mb-1">Publisher:</label>
+                                        <select name="variations[<?php echo $index; ?>][publisher]" 
+                                                class="w-full book-select publisher-select" 
+                                                data-type="publisher"
+                                                data-saved-value="<?php echo htmlspecialchars($var['publisher'] ?? ''); ?>"
+                                                placeholder="Type to search Publisher...">
+                                            </select>
+                                    </div>
+
+                                    <div><label class="block text-xs font-bold text-black mb-1">ISBN:</label><input type="text" name="variations[<?php echo $index; ?>][isbn]" value="<?php echo $var['isbn'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                                    <div><label class="block text-xs font-bold text-black mb-1">Language:</label><input type="text" name="variations[<?php echo $index; ?>][language]" value="<?php echo $var['language'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                                    <div><label class="block text-xs font-bold text-black mb-1">Pages:</label><input type="number" min="0" name="variations[<?php echo $index; ?>][pages]" value="<?php echo $var['pages'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                                </div>
+
                             </div>
                         </div>
                     </div>
@@ -462,6 +497,22 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // 1. DATA FROM PHP
+        const colorMapDB    = <?php echo json_encode($colorMapData); ?>; 
+        const authorsDB     = <?php echo json_encode($authorsList); ?>; // [1=>Name, 2=>Name...]
+        const publishersDB  = <?php echo json_encode($publishersList); ?>; 
+
+        // Helper to generate Options HTML
+        function generateOptionsHTML(dataObj, selectedValue = '') {
+            let html = '<option value="">Select Option</option>';
+            // Iterate over object keys
+            for (const [key, name] of Object.entries(dataObj)) {
+                const isSelected = (String(name).trim() === String(selectedValue).trim()) ? 'selected' : '';
+                html += `<option value="${name}" ${isSelected}>${name}</option>`;
+            }
+            return html;
+        }
+
         // --- START: VARIANT / PARENT ITEM CODE LOGIC ---
         const apiUrl = '/index.php?page=inbounding&action=getItamcode'; 
         const variantSelect = document.getElementById('variant_select');
@@ -508,15 +559,13 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             }
         }
 
-        // Listener
         variantSelect.addEventListener('change', function() {
             toggleVariantFields(this.value);
             if(this.value === 'N') tomSelectInstance.clear(); 
         });
 
-        // Initialize state based on PHP value
         toggleVariantFields(variantSelect.value);
-        // --- END: VARIANT / PARENT ITEM CODE LOGIC ---
+        // --- END: VARIANT LOGIC ---
 
 
         const container = document.getElementById('variations-container');
@@ -524,9 +573,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         const radioButtons = document.querySelectorAll('.category-radio');
         const mainForm = document.getElementById('mainForm'); 
         let variationCount = <?php echo count($viewVariations); ?>;
-        
-        // 1. DATA FROM PHP
-        const colorMapDB = <?php echo json_encode($colorMapData); ?>; 
         
         // Size Options
         const sizeOptionsHTML = `
@@ -537,24 +583,21 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         // 2. HELPER: Detect Category Type
         function getCategoryType() {
             const selectedRadio = document.querySelector('input[name="category"]:checked');
-            let info = { isClothing: false, mapKey: null };
+            let info = { isClothing: false, mapKey: null, isBook: false };
 
             if (selectedRadio) {
+                const val = selectedRadio.value.toLowerCase().trim();
                 const parentLabel = selectedRadio.closest('label');
                 const labelText = parentLabel ? parentLabel.innerText.toLowerCase().trim() : '';
-                const val = selectedRadio.value.toLowerCase().trim();
 
-                // Clothing Check
                 if (labelText.includes('textile') || labelText.includes('clothing') || val.includes('textile') || val.includes('clothing')) {
                     info.isClothing = true;
-                }
-
-                // Map Key Check
-                if (labelText.includes('textile') || labelText.includes('clothing') || val.includes('textile') || val.includes('clothing')) {
-                    info.mapKey = 'textiles'; 
+                    info.mapKey = 'textiles';
+                } else if (labelText.includes('jewelry') || labelText.includes('jewellery') || val.includes('jewelry') || val.includes('jewellery')) {
+                    info.mapKey = 'jewelry';
                 } 
-                else if (labelText.includes('jewelry') || labelText.includes('jewellery') || val.includes('jewelry') || val.includes('jewellery')) {
-                    info.mapKey = 'jewelry'; 
+                else if (val === 'book' || labelText.includes('book')) {
+                    info.isBook = true;
                 }
             }
             return info;
@@ -596,76 +639,128 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             });
         }
 
-        // 4. TOGGLE COLOR MAP FIELDS (Logic Fixed for Selection)
+        // 4. TOGGLE COLOR MAP
         function toggleColorMapFields() {
             const { mapKey } = getCategoryType();
             const wrappers = document.querySelectorAll('.colormap-wrapper');
 
             wrappers.forEach(wrapper => {
                 const select = wrapper.querySelector('.colormap-select');
-                
-                // Hide if no match
                 if (!mapKey || !colorMapDB[mapKey]) {
                     wrapper.style.display = 'none';
                     return;
                 }
-
                 wrapper.style.display = 'block';
-
-                // Populate Options (Only if key changed to avoid reset)
                 if (select.getAttribute('data-loaded-key') !== mapKey) {
-                    
-                    // Get saved value from Attribute (Database) OR current Value (Cloned/Edited)
                     const savedVal = (select.getAttribute('data-saved-value') || select.value || "").trim();
-                    
                     let html = '<option value="">Select Color Map</option>';
-                    
                     colorMapDB[mapKey].forEach(colorName => {
                         html += `<option value="${colorName}">${colorName}</option>`;
                     });
-
                     select.innerHTML = html;
                     select.setAttribute('data-loaded-key', mapKey);
+                    if (savedVal) select.value = savedVal;
+                }
+            });
+        }
 
-                    // --- FORCE SELECTION LOGIC ---
-                    if (savedVal) {
-                        select.value = savedVal; // Try direct set
+        // NEW: Function to Init TomSelect on Book Fields
+        // NEW: Function to Init TomSelect with Remote Data
+        function initBookSelects() {
+            document.querySelectorAll('.book-select').forEach(el => {
+                if (!el.classList.contains('tomselected')) {
+                    
+                    const type = el.getAttribute('data-type'); // 'author' or 'publisher'
+                    const savedVal = el.getAttribute('data-saved-value');
+
+                    // URL to your new Controller function
+                    const searchUrl = `/index.php?page=inbounding&action=searchBookAttributes&type=${type}&q=`;
+
+                    let ts = new TomSelect(el, {
+                        valueField: 'value',
+                        labelField: 'text',
+                        searchField: 'text',
+                        create: true, // Allow custom names
+                        placeholder: "Type to search...",
+                        maxOptions: 50, // Keep dropdown fast
+                        preload: 'focus', // Load default list when user clicks
                         
-                        // Fallback: Loose comparison logic
-                        if (select.selectedIndex <= 0) {
-                            Array.from(select.options).forEach(opt => {
-                                if (opt.value.toLowerCase() === savedVal.toLowerCase()) {
-                                    opt.selected = true;
-                                }
-                            });
+                        // Fetch Data from Server
+                        load: function(query, callback) {
+                            const url = searchUrl + encodeURIComponent(query);
+                            fetch(url)
+                                .then(response => response.json())
+                                .then(json => {
+                                    callback(json);
+                                })
+                                .catch(() => {
+                                    callback();
+                                });
+                        },
+                        
+                        // Custom Render (Optional)
+                        render: {
+                            option: function(item, escape) {
+                                return `<div>${escape(item.text)}</div>`;
+                            }
                         }
+                    });
+
+                    // Force Set Saved Value (For Edit Mode)
+                    if (savedVal && savedVal.trim() !== "") {
+                        ts.addOption({value: savedVal, text: savedVal});
+                        ts.setValue(savedVal);
                     }
                 }
             });
         }
 
         function updateAllFields() {
-            toggleSizeFields();
-            toggleColorMapFields();
+            const { isBook } = getCategoryType();
+            
+            const standardWrappers = document.querySelectorAll('.standard-attributes');
+            const bookWrappers     = document.querySelectorAll('.book-attributes');
+            const addVariantBtn    = document.getElementById('add-variation-btn');
+            const cloneBtns        = document.querySelectorAll('.clone-variation-btn');
+
+            if (isBook) {
+                standardWrappers.forEach(el => el.classList.add('hidden'));
+                bookWrappers.forEach(el => el.classList.remove('hidden'));
+                if(addVariantBtn) addVariantBtn.classList.add('hidden');
+                cloneBtns.forEach(btn => btn.classList.add('hidden'));
+
+                // Initialize TomSelect for searches when Book is active
+                initBookSelects();
+            } else {
+                standardWrappers.forEach(el => el.classList.remove('hidden'));
+                bookWrappers.forEach(el => el.classList.add('hidden'));
+                if(addVariantBtn) addVariantBtn.classList.remove('hidden');
+                cloneBtns.forEach(btn => btn.classList.remove('hidden'));
+            }
+
+            if (!isBook) {
+                toggleSizeFields();
+                toggleColorMapFields();
+            }
         }
 
         radioButtons.forEach(radio => {
             radio.addEventListener('change', updateAllFields);
         });
 
-        // 5. ADD NEW VARIATION
+        // 5. ADD NEW VARIATION (Updated for Selects)
+        // 5. ADD NEW VARIATION (Full HTML Structure)
         function createVariationCardHTML(index, count) {
             const { isClothing } = getCategoryType();
-
-            let sizeFieldHTML;
-            if (isClothing) {
-                sizeFieldHTML = `<select name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">${sizeOptionsHTML}</select>`;
-            } else {
-                sizeFieldHTML = `<input type="text" name="variations[${index}][size]" value="" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm size-input" >`;
-            }
+            
+            // Generate Size Field based on category (Select vs Input)
+            let sizeFieldHTML = isClothing 
+                ? `<select name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">${sizeOptionsHTML}</select>`
+                : `<input type="text" name="variations[${index}][size]" value="" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm size-input">`;
 
             return `
                 <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50 animate-fade-in" data-index="${index}">
+                    
                     <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
                         <h3 class="font-bold text-black text-sm">Variant ${count}</h3>
                         <div class="flex gap-3">
@@ -685,30 +780,70 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div class="text-[10px] text-center font-bold mt-1 text-gray-500">Upload Photo</div>
                         </div>
 
-                        <div class="flex-1 grid grid-cols-2 md:grid-cols-6 gap-x-4 gap-y-4 items-start">
-                            <div><label class="block text-xs font-bold text-black mb-1">Color (Manual):</label><input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                        <div class="flex-1">
                             
-                            
-
-                            <div><label class="block text-xs font-bold text-black mb-1">Quantity <span class="text-red-500">*</span>:</label><input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
-                            
-                            <div class="size-container">
-                                <label class="block text-xs font-bold text-black mb-1">Size:</label>
-                                ${sizeFieldHTML}
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Quantity <span class="text-red-500">*</span>:</label>
+                                    <input type="number" min="0" name="variations[${index}][quantity]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field" value="1">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Cost Price(INR) <span class="text-red-500">*</span>:</label>
+                                    <input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label>
+                                    <input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field">
+                                </div>
                             </div>
 
-                            <div><label class="block text-xs font-bold text-black mb-1">Cost Price(INR) <span class="text-red-500">*</span>:</label><input type="number" step="any" min="0" name="variations[${index}][cp]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Height (inch):</label><input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Width (inch):</label><input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
-                            <div><label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
-                            <div class="colormap-wrapper mt-2" style="display:none;">
-                                <label class="block text-xs font-bold text-black mb-1">Color Map (Dropdown):</label>
-                                <select name="variations[${index}][colormaps]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white colormap-select" data-saved-value="">
-                                    <option value="">Select Color Map</option>
-                                </select>
+                            <div class="standard-attributes grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Color (Manual):</label>
+                                    <input type="text" name="variations[${index}][color]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div class="size-container">
+                                    <label class="block text-xs font-bold text-black mb-1">Size:</label>
+                                    ${sizeFieldHTML}
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
+                                    <input type="number" step="any" min="0" name="variations[${index}][height]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Width (inch):</label>
+                                    <input type="number" step="any" min="0" name="variations[${index}][width]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Depth (inch):</label>
+                                    <input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Weight (kg):</label>
+                                    <input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div class="colormap-wrapper mt-2" style="display:none;">
+                                    <label class="block text-xs font-bold text-black mb-1">Color Map:</label>
+                                    <select name="variations[${index}][colormaps]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white colormap-select" data-saved-value="">
+                                        <option value="">Select Color Map</option>
+                                    </select>
+                                </div>
                             </div>
+
+                            <div class="book-attributes grid grid-cols-2 md:grid-cols-4 gap-4 hidden">
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-bold text-black mb-1">Book Title / Author:</label>
+                                    <select name="variations[${index}][author]" class="w-full book-select author-select" data-type="author" placeholder="Type to search..."></select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Publisher:</label>
+                                    <select name="variations[${index}][publisher]" class="w-full book-select publisher-select" data-type="publisher" placeholder="Type to search..."></select>
+                                </div>
+                                <div><label class="block text-xs font-bold text-black mb-1">ISBN:</label><input type="text" name="variations[${index}][isbn]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                                <div><label class="block text-xs font-bold text-black mb-1">Language:</label><input type="text" name="variations[${index}][language]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                                <div><label class="block text-xs font-bold text-black mb-1">Pages:</label><input type="number" min="0" name="variations[${index}][pages]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -738,50 +873,47 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 };
 
                 const data = {
-                    color: getData('color'),
-                    colormaps: getData('colormaps'),
-                    quantity: getData('quantity') || 1,
-                    size: getData('size'),
-                    cp: getData('cp'),
-                    height: getData('height'),
-                    width: getData('width'),
-                    depth: getData('depth'),
-                    weight: getData('weight'),
-                    store_location: getData('store_location'),
-                    old_photo: getData('old_photo') 
+                    color: getData('color'), colormaps: getData('colormaps'), quantity: getData('quantity') || 1,
+                    size: getData('size'), cp: getData('cp'), height: getData('height'),
+                    width: getData('width'), depth: getData('depth'), weight: getData('weight'),
+                    store_location: getData('store_location'), old_photo: getData('old_photo'),
+                    // Get Book Data
+                    author: getData('author'), publisher: getData('publisher'),
+                    isbn: getData('isbn'), language: getData('language'), pages: getData('pages')
                 };
 
                 variationCount++;
                 const html = createVariationCardHTML(variationCount - 1, variationCount);
                 container.insertAdjacentHTML('beforeend', html);
-
                 const newCard = container.lastElementChild;
                 
-                // IMPORTANT: Populate options THEN select value
                 setTimeout(() => {
                     updateAllFields(); 
-
                     const setData = (name, value) => {
                         const el = newCard.querySelector(`[name*="[${name}]"]`);
-                        if(el) el.value = value;
+                        if(el) {
+                            // Check if it's a TomSelect
+                            if(el.tomselect) {
+                                el.tomselect.setValue(value);
+                            } else {
+                                el.value = value;
+                            }
+                        }
                     };
-
-                    setData('color', data.color);
-                    setData('quantity', data.quantity || 1); 
-                    setData('size', data.size);
-                    setData('cp', data.cp);
-                    setData('height', data.height);
-                    setData('width', data.width);
-                    setData('depth', data.depth);
-                    setData('weight', data.weight);
-                    setData('store_location', data.store_location);
-                    setData('old_photo', data.old_photo); 
+                    // Set all standard fields
+                    setData('color', data.color); setData('quantity', data.quantity); setData('size', data.size);
+                    setData('cp', data.cp); setData('height', data.height); setData('width', data.width);
+                    setData('depth', data.depth); setData('weight', data.weight); setData('store_location', data.store_location);
+                    setData('old_photo', data.old_photo);
                     
-                    // --- SPECIFIC CLONE LOGIC FOR COLOR MAP ---
+                    // Set Book Fields
+                    setData('author', data.author); setData('publisher', data.publisher);
+                    setData('isbn', data.isbn); setData('language', data.language); setData('pages', data.pages);
+
                     const cmapSelect = newCard.querySelector('.colormap-select');
                     if(cmapSelect) {
-                        cmapSelect.setAttribute('data-saved-value', data.colormaps); // Set attribute for consistency
-                        cmapSelect.value = data.colormaps; // Set visual value
+                        cmapSelect.setAttribute('data-saved-value', data.colormaps);
+                        cmapSelect.value = data.colormaps;
                     }
 
                     const sourceImg = sourceCard.querySelector('.preview-img');

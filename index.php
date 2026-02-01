@@ -609,6 +609,8 @@ switch ($page) {
                 $controller->getDetails();
             case 'getItamcode':
                 $controller->getItamcode();
+            case 'search_book_attr':
+                $controller->searchBookAttributes();
             default:
                 $controller->index();
                 break;
