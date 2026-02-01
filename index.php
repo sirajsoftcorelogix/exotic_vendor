@@ -678,6 +678,9 @@ switch ($page) {
             case 'list':
                 $controller->index();   
                 break;
+            case 'products-ajax':
+                $controller->productsAjax();   
+                break;
             default:
                 $controller->index();   
                 break;

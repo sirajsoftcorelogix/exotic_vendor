@@ -938,7 +938,7 @@
                                 $addon_css = '';
                                 // normalize option value to a string to avoid warnings with strpos()
                                 if (is_array($opt)) {
-                                    $opt_text = implode(', ', $opt);
+                                    $opt_text = implode(',', $opt);
                                 } else {
                                     $opt_text = (string)$opt;
                                 }
@@ -2819,23 +2819,46 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
     })
     .then(response => response.json())
     .then(data => {
+        const msgBox = document.getElementById('bulkAddToPurchaseError');
+        msgBox.classList.remove('hidden');
+        msgBox.classList.remove('text-red-500', 'text-green-500');
+
         if (data.success) {
-            //alert(data.message);
-            document.getElementById('bulkAddToPurchaseError').classList.remove('text-red-500');
-            document.getElementById('bulkAddToPurchaseError').classList.add('text-green-500');
-            document.getElementById('bulkAddToPurchaseError').textContent = 'Purchase List created successfully.';
-            //poitem clear from localStorage
+            let html = `<strong>✅ Purchase List Created</strong><br>`;
+            html += `✔ Added: <b>${data.created}</b><br>`;
+
+            if (data.failed && data.failed.length > 0) {
+                html += `<br><strong>❌ SKU Not Found(In Products):</strong><ul class="list-disc ml-5 mt-1">`;
+
+                data.failed.forEach(item => {
+                    html += `<li>`;
+                    if (item.order_id) html += `Order: ${item.order_id}, `;
+                    if (item.sku) html += `SKU: ${item.sku}, `;
+                    html += `${item.message}`;
+                    html += `</li>`;
+                });
+
+                html += `</ul>`;
+                msgBox.classList.add('text-yellow-600');
+            } else {
+                html += `<br>🎉 All items added successfully.`;
+                msgBox.classList.add('text-green-500');
+            }
+
+            msgBox.innerHTML = html;
+
+            // clear localStorage
             localStorage.removeItem('selected_po_orders');
 
-            //timeout to close popup and reload
+            // auto close + reload
             setTimeout(() => {
                 closeBulkAddToPurchasePopup();
                 location.reload();
-            }, 3000);
-            //bulkStatusError.classList.remove('hidden');
-            //location.reload();
+            }, 6000);
+
         } else {
-            alert(data.message);
+            msgBox.classList.add('text-red-500');
+            msgBox.textContent = data.message || 'Something went wrong';
         }
     });
 });
