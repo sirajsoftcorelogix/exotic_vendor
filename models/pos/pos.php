@@ -24,7 +24,8 @@ class pos {
     string $searchValue = '',
     string $productName = '',
     string $orderColumn = 'title',
-    string $orderDir = 'asc'
+    string $orderDir = 'asc',
+    string $category = ''
 ): array {
 
     /* =========================
@@ -40,10 +41,16 @@ class pos {
     /* =========================
      * 2) Filters
      * ========================= */
-    $where = " WHERE is_active = 1 ";
+    $where  = " WHERE is_active = 1 ";
     $params = [];
     $types  = "";
 
+    // ✅ Category filter (match groupname)
+    if (!empty($category) && $category != 'allProducts') {
+        $where .= " AND groupname = ? ";
+        $params[] = $category;
+        $types   .= "s";
+    }
 
     if ($productName !== '') {
         $where .= " AND (title LIKE ? OR item_code LIKE ?) ";
@@ -65,10 +72,12 @@ class pos {
     $allowedColumns = [
         'item_code',
         'title',
-        'category_slug',
+        'groupname',     // ✅ allow ordering by groupname too
         'size',
         'color',
-        'image'
+        'image',
+        'local_stock',
+        'itemprice'
     ];
 
     if (!in_array($orderColumn, $allowedColumns, true)) {
@@ -101,6 +110,7 @@ class pos {
             item_code,
             sku,
             title,
+            groupname,
             size,
             color,
             image,
@@ -118,11 +128,10 @@ class pos {
     $paramsWithLimit = $params;
     $paramsWithLimit[] = $start;
     $paramsWithLimit[] = $length;
+
     $typesWithLimit = $types . "ii";
 
-    if (!empty($paramsWithLimit)) {
-        $dataStmt->bind_param($typesWithLimit, ...$paramsWithLimit);
-    }
+    $dataStmt->bind_param($typesWithLimit, ...$paramsWithLimit);
 
     $dataStmt->execute();
     $result = $dataStmt->get_result();
@@ -130,10 +139,11 @@ class pos {
     $dataStmt->close();
 
     return [
-        'recordsTotal'    => (int)$recordsTotal,
-        'recordsFiltered' => (int)$recordsFiltered,
+        'recordsTotal'    => (int) $recordsTotal,
+        'recordsFiltered' => (int) $recordsFiltered,
         'data'            => $rows
     ];
 }
+
 
 }
