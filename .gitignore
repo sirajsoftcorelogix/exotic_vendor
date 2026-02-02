@@ -14,3 +14,4 @@ vendor/autoload.php
 vendor/composer/autoload_classmap.php
 vendor/composer/installed.json
 vendor/composer/*
+config.php
