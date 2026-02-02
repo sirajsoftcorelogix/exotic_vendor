@@ -8,7 +8,7 @@ class Invoice {
     }
 
     public function getAllInvoices($limit, $offset) {
-        $sql = "SELECT i.*, c.* FROM vp_invoices i 
+        $sql = "SELECT i.*, c.id AS customer_id, c.name, c.email, c.phone FROM vp_invoices i 
                 LEFT JOIN vp_customers c ON i.customer_id = c.id 
                 ORDER BY i.invoice_date DESC LIMIT $limit OFFSET $offset";
         $result = $this->db->query($sql);

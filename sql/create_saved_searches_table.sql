@@ -181,3 +181,38 @@ ALTER TABLE `vp_orders` ADD `invoice_no` VARCHAR(100) NULL AFTER `customer_id`;
 
 --invoice id
 ALTER TABLE `vp_orders` CHANGE `invoice_no` `invoice_id` INT NULL DEFAULT NULL;
+
+CREATE TABLE currency_master (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    currency_code CHAR(3) NOT NULL,        -- USD, INR, EUR
+    currency_name VARCHAR(50) NOT NULL,    -- US Dollar, Indian Rupee
+    currency_unit VARCHAR(20) NOT NULL,    -- 1 USD, 100 JPY, etc.
+
+    rate_import DECIMAL(12,6) NOT NULL DEFAULT 0.000000,
+    rate_export DECIMAL(12,6) NOT NULL DEFAULT 0.000000,
+
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uk_currency_code (currency_code)
+);
+
+CREATE TABLE currency_rate_history (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    currency_code CHAR(3) NOT NULL,
+    rate_import DECIMAL(12,6) NOT NULL,
+    rate_export DECIMAL(12,6) NOT NULL,
+    rate_date DATE NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_currency_date (currency_code, rate_date)
+);
+
+ALTER TABLE `vp_orders` ADD `agent_assign_date` DATETIME NULL AFTER `agent_id`;
+
+

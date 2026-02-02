@@ -102,6 +102,8 @@ class OrdersController {
             $filters['author'] = $_GET['author'];            
         }
         
+        
+
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
@@ -110,10 +112,22 @@ class OrdersController {
         // Use pagination in the database query for better performance
         //print_r($_GET);
         //print_r($filters);
-        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);             
+        $orders = $ordersModel->getAllOrders($filters, $limit, $offset);   
+
+        $assignmentDates = [];          
         foreach ($orders as $key => $order) {
-            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);            
+            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['order_id']);  
+            $assignmentDates[$order['order_id']] =  $orders[$key]['status_log']['change_date'] ?? '';         
         }
+        // Agent filter: use assignment from vp_order_status_log (change_date) instead of vp_orders.assign_date
+    //    if (!empty($_GET['agent'])) {
+    //        //sort orders by agent assignment date
+    //        usort($orders, function($a, $b) use ($assignmentDates) {
+    //             return strtotime($assignmentDates[$a['order_id']])
+    //                 - strtotime($assignmentDates[$b['order_id']]);
+    //         });            
+            
+    //     }
         //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
@@ -379,7 +393,7 @@ class OrdersController {
                 'successful_imports' => $imported,
                 'total_orders' => $totalorder,
                 'error' => isset($error) ? $error : '',
-                'log_details' => json_encode($result),
+                'log_details' => NULL, //json_encode($result),
                 'max_ordered_time' => $order['processed_time'] ?? '',
                 'from_date' => $from_date,
                 'to_date' => $to_date,
@@ -498,7 +512,7 @@ class OrdersController {
             $previous_status = isset($_POST['previousStatus']) ? trim($_POST['previousStatus']) : NULL;
             $previous_esd = isset($_POST['previous_esd']) ? trim($_POST['previous_esd']) : NULL;
             $previous_priority = isset($_POST['previous_priority']) ? trim($_POST['previous_priority']) : NULL;
-            $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
+            $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;                       
 
             if ($order_id > 0 && !empty($new_status)) {
                 $update_data = [
@@ -551,9 +565,13 @@ class OrdersController {
                         'change_date' => date('Y-m-d H:i:s')
                     ];
                     $commanModel->add_order_status_log($agentLogData);
+                    //update agent_assign_date CURDATE
+                    $assign = $commanModel->updateRecord('vp_orders', ['agent_assign_date' => date('Y-m-d H:i:s')], $order_id);
+                    //$ordersModel->updateAgentAssignDate($order_id);
                     //set notification to agent
-                    $link = base_url('index.php?page=orders&action=list&'.$order_id);
-                    insertNotification($agent_id, 'Order Assigned', 'You have been assigned a new order. Please check the order details.', $link);
+                    
+                    $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number='.$orderval['order_number']);
+                    insertNotification($agent_id, 'Order Assigned', 'Order <a href="'.$link.'" class="text-blue-600 hover:underline" target="_blank">'.$orderval['order_number'].'</a> has been assigned to you for processing.', $link);
                 }
                 if($esd != $previous_esd){
                     //log esd change

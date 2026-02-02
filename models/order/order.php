@@ -142,9 +142,19 @@ class Order{
         //echo $sql;
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            //agent assignment date desc
+            if(!empty($filters['agent'])){
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']);
+            }else{
             $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+            }
         } else {
-            $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+            //agent assignment date desc
+            if(!empty($filters['agent'])){
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
+            }else{
+                $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+            }
         }
        
         $sql .= " LIMIT ? OFFSET ?";
@@ -1165,6 +1175,17 @@ class Order{
 
         return ['success' => true, 'message' => 'Order updated successfully. Affected rows: ' . $affectedRows];
     }
-
+    public function getAgentAssignmentDate($order_id, $agent_id) {
+        $sql = "SELECT change_date FROM vp_order_status_log WHERE order_id = ? ORDER BY change_date DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);   
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return $row['change_date'];
+        }
+        return null;
+    }
 }
 ?>

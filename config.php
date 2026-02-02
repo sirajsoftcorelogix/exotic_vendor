@@ -3,6 +3,7 @@ return [
   'db' => [
     'host' => '127.0.0.1',
     'name' => 'vendor_portal_test',
+    //'name' => 'exotic_vendor_portal',
     'user' => 'vendor_user',
     'pass' => 'eXotic@123',
     'port' => 3306,
@@ -21,4 +22,5 @@ return [
   'LIVE_WS_URL'    => 'wss://seller.exoticindia.com/ws/',
 
   'WS_PORT' => 8080
-];
+
+ ];
