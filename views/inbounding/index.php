@@ -318,7 +318,7 @@ function isFilled($value) {
             
             // Define your tabs. Key = DB Value, Label = Display Name
             $tabs = [
-                ''           => 'All Orders',
+                ''           => 'All List',
                 'Photoshoot' => 'Pending Photoshoot',
                 'Editing'    => 'Pending Editing',
                 'Data Entry' => 'Pending Data Entry', // Maps to "Edit Info" phase
