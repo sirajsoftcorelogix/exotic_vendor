@@ -7,8 +7,8 @@ $record_id = $data['record_id'] ?? 0;
 
 // Fetch Variations
 $variations = $inboundingModel->getVariations($record_id); 
-
-// Group Images by Variation ID
+// Group Images by Variation ID for easy display
+// Key '-1' is Base Variation (or if variation_id is 0/null)
 $grouped_images = ['-1' => []];
 foreach ($variations as $v) {
     $grouped_images[$v['id']] = [];
@@ -16,79 +16,14 @@ foreach ($variations as $v) {
 
 if (!empty($images)) {
     foreach ($images as $img) {
+        // Assume column is 'variation_id', default to -1 if empty/0
         $v_id = !empty($img['variation_id']) ? $img['variation_id'] : -1;
+        
+        // Safety check: if variation was deleted but image remains, put in Base
         if (!isset($grouped_images[$v_id])) $v_id = -1;
+        
         $grouped_images[$v_id][] = $img;
     }
-}
-
-// --- 2. THUMBNAIL GENERATOR FUNCTION ---
-// This creates a small version of the image for viewing, but keeps the original safe
-function getThumbnail($filePath, $width = 200, $height = 200) {
-    $cleanPath = ltrim($filePath, '/');
-
-    // Return placeholder if file missing
-    if (empty($cleanPath) || !file_exists($cleanPath)) {
-        return 'assets/images/placeholder.png'; // Ensure you have a placeholder image
-    }
-
-    // Auto-detect directory (e.g. uploads/itm_raw_img)
-    $dirName  = dirname($cleanPath);
-    $fileName = basename($cleanPath);
-    
-    $thumbDir  = $dirName . '/thumbs/'; 
-    $thumbPath = $thumbDir . $fileName;
-
-    // Return existing thumb
-    if (file_exists($thumbPath)) return $thumbPath;
-
-    // Create directory
-    if (!is_dir($thumbDir)) mkdir($thumbDir, 0777, true);
-
-    $info = getimagesize($cleanPath);
-    if (!$info) return $cleanPath; // Not an image
-
-    $mime = $info['mime'];
-    switch ($mime) {
-        case 'image/jpeg': $image = imagecreatefromjpeg($cleanPath); break;
-        case 'image/png':  $image = imagecreatefrompng($cleanPath); break;
-        case 'image/gif':  $image = imagecreatefromgif($cleanPath); break;
-        case 'image/webp': $image = imagecreatefromwebp($cleanPath); break;
-        default: return $cleanPath;
-    }
-
-    $oldW = imagesx($image);
-    $oldH = imagesy($image);
-    $aspectRatio = $oldW / $oldH;
-
-    if ($width / $height > $aspectRatio) {
-        $width = (int) ($height * $aspectRatio);
-    } else {
-        $height = (int) ($width / $aspectRatio);
-    }
-
-    $newImage = imagecreatetruecolor((int)$width, (int)$height);
-
-    if ($mime == 'image/png' || $mime == 'image/webp') {
-        imagecolortransparent($newImage, imagecolorallocatealpha($newImage, 0, 0, 0, 127));
-        imagealphablending($newImage, false);
-        imagesavealpha($newImage, true);
-    }
-
-    imagecopyresampled($newImage, $image, 0, 0, 0, 0, $width, $height, $oldW, $oldH);
-
-    // Save with 70% quality (Visual only, original is untouched)
-    switch ($mime) {
-        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 70); break;
-        case 'image/png':  imagepng($newImage, $thumbPath); break;
-        case 'image/gif':  imagegif($newImage, $thumbPath); break;
-        case 'image/webp': imagewebp($newImage, $thumbPath); break;
-    }
-
-    imagedestroy($image);
-    imagedestroy($newImage);
-
-    return $thumbPath;
 }
 ?>
 
@@ -99,8 +34,8 @@ function getThumbnail($filePath, $width = 200, $height = 200) {
     
     /* Active Variation Card Style */
     .var-card.active { 
-        border-color: #2563eb; 
-        background-color: #eff6ff; 
+        border-color: #2563eb; /* Blue border */
+        background-color: #eff6ff; /* Light blue bg */
         box-shadow: 0 0 0 1px #2563eb; 
     }
     
@@ -117,13 +52,7 @@ function getThumbnail($filePath, $width = 200, $height = 200) {
 
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col lg:flex-row gap-6">
         <div class="w-32 h-32 md:w-40 md:h-40 bg-gray-100 rounded-lg border border-gray-200 flex-shrink-0 p-1 flex items-center justify-center">
-            <?php 
-                // OPTIMIZED MAIN IMAGE
-                $mainImgRaw = $item['product_photo'] ?? '';
-                $mainImgThumb = !empty($mainImgRaw) ? base_url(getThumbnail($mainImgRaw)) : 'assets/no-img.png';
-                $mainImgOrig = !empty($mainImgRaw) ? base_url($mainImgRaw) : '';
-            ?>
-            <img src="<?php echo $mainImgThumb; ?>" class="max-w-full max-h-full object-contain rounded cursor-zoom-in" onclick="openImagePopup('<?= $mainImgOrig ?>')">
+            <img src="<?php echo base_url($item['product_photo'] ?? 'assets/no-img.png'); ?>" class="max-w-full max-h-full object-contain rounded" onclick="openImagePopup('<?= !empty($item['product_photo']) ? base_url($item['product_photo']) : '' ?>')">
         </div>
         <div class="flex-grow grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-[13px] text-gray-600 content-center">
             <div><span class="block font-bold text-gray-900">Category:</span> <?php echo $item['category'] ?? '-'; ?></div>
@@ -155,11 +84,8 @@ function getThumbnail($filePath, $width = 200, $height = 200) {
                 <div class="var-card cursor-pointer bg-white border border-gray-300 rounded-lg p-3 flex gap-3 min-w-[220px] items-center shadow-sm transition-all hover:border-gray-400"
                      onclick="switchVariation(<?php echo $var['id']; ?>, this)">
                     <div class="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                        <?php if(!empty($var['variation_image'])): 
-                             // OPTIMIZED VARIATION ICON
-                             $vThumb = base_url(getThumbnail($var['variation_image']));
-                        ?>
-                            <img src="<?php echo $vThumb; ?>" class="w-full h-full object-cover">
+                        <?php if(!empty($var['variation_image'])): ?>
+                            <img src="<?php echo base_url($var['variation_image']); ?>" class="w-full h-full object-cover">
                         <?php else: ?>
                             <span class="text-[10px] text-gray-400">No IMG</span>
                         <?php endif; ?>
@@ -229,26 +155,19 @@ function renderRawImageGrid($imgs) {
         return;
     }
     foreach($imgs as $img) {
-        // OPTIMIZATION 3: Existing Grid Images
-        // Path: uploads/itm_raw_img/filename.jpg
-        $fullPath = 'uploads/itm_raw_img/' . $img['file_name'];
-        $thumbSrc = base_url(getThumbnail($fullPath));
-        $origSrc  = base_url($fullPath);
         ?>
         <div class="group relative bg-white border border-gray-200 rounded-lg p-2 shadow-sm existing-photo hover:shadow-md transition">
-            <div class="aspect-square bg-gray-100 rounded flex items-center justify-center overflow-hidden relative cursor-zoom-in"
-                 onclick="openImagePopup('<?= $origSrc ?>')">
+            <div class="aspect-square bg-gray-100 rounded flex items-center justify-center overflow-hidden relative">
+                <img src="uploads/itm_raw_img/<?php echo $img['file_name']; ?>" class="w-full h-full object-cover">
                 
-                <img src="<?= $thumbSrc ?>" class="w-full h-full object-cover">
-                
-                <button type="button" onclick="event.stopPropagation(); markForDeletion(this, <?php echo $img['id']; ?>)" 
+                <button type="button" onclick="markForDeletion(this, <?php echo $img['id']; ?>)" 
                         class="absolute top-2 right-2 bg-white/90 text-red-600 p-1.5 rounded-full shadow hover:bg-red-500 hover:text-white transition opacity-0 group-hover:opacity-100">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                 </button>
             </div>
-        </div>
+            </div>
         <?php
     }
 }
@@ -266,7 +185,7 @@ function renderRawImageGrid($imgs) {
     const currentVarInput = document.getElementById('current_variation_id');
     const activeVarNameLabel = document.getElementById('active-var-name');
     const deletedContainer = document.getElementById('deletedInputsContainer');
-    const activeFilesContainer = document.getElementById('activeFilesContainer');
+    const activeFilesContainer = document.getElementById('activeFilesContainer'); // Holds the real inputs
 
     // 1. SWITCH VARIATION LOGIC
     window.switchVariation = function(varId, cardElement) {
@@ -286,8 +205,7 @@ function renderRawImageGrid($imgs) {
         }
     }
 
-    // 2. HANDLE FILE SELECTION
-    // NOTE: We are NOT compressing to ensure ORIGINAL QUALITY.
+    // 2. HANDLE FILE SELECTION (CLONE STRATEGY)
     fileTrigger.addEventListener('change', function() {
         if (this.files.length === 0) return;
 
@@ -304,8 +222,9 @@ function renderRawImageGrid($imgs) {
             // A. Create the Preview Card
             createPreview(file, uniqueId, activeContainer, activeVarId);
 
-            // B. Create a NEW File Input to hold this specific file for upload
-            // We use DataTransfer to attach the file cleanly to a new input element
+            // B. Create a NEW File Input to hold this specific file
+            // We cannot clone the trigger input perfectly for individual files if multiple were selected at once.
+            // WORKAROUND: We use DataTransfer to create a single-file input for storage.
             const newFileInput = document.createElement('input');
             newFileInput.type = 'file';
             newFileInput.name = 'new_photos[]'; // This goes to PHP $_FILES
@@ -323,7 +242,7 @@ function renderRawImageGrid($imgs) {
             varInput.value = activeVarId;
             varInput.setAttribute('data-id', uniqueId);
 
-            // D. Append both to the hidden container for form submission
+            // D. Append both to the hidden container
             activeFilesContainer.appendChild(newFileInput);
             activeFilesContainer.appendChild(varInput);
         });
@@ -332,14 +251,14 @@ function renderRawImageGrid($imgs) {
         this.value = '';
     });
 
-    // 3. CREATE PREVIEW (Client Side - No Server Call yet)
+    // 3. CREATE PREVIEW
     function createPreview(file, uniqueId, container, varId) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onloadend = function() {
             const div = document.createElement('div');
             div.className = "relative bg-white border border-blue-300 border-dashed rounded-lg p-2 shadow-sm animate-fade-in";
-            div.setAttribute('data-preview-id', uniqueId); 
+            div.setAttribute('data-preview-id', uniqueId); // Link to inputs
 
             div.innerHTML = `
                 <div class="aspect-square bg-gray-100 rounded flex items-center justify-center overflow-hidden relative">
@@ -362,12 +281,12 @@ function renderRawImageGrid($imgs) {
         const preview = document.querySelector(`div[data-preview-id="${uniqueId}"]`);
         if(preview) preview.remove();
 
-        // Remove Hidden Inputs (So it is not uploaded)
+        // Remove Hidden Inputs
         const inputs = document.querySelectorAll(`input[data-id="${uniqueId}"]`);
         inputs.forEach(el => el.remove());
     }
 
-    // 5. DELETE EXISTING FILE
+    // 5. DELETE EXISTING FILE (Your existing logic)
     window.markForDeletion = function(btn, dbId) {
         if(!confirm("Delete this raw photo?")) return;
         const parent = btn.closest('.existing-photo');

@@ -1443,10 +1443,6 @@ class InboundingController {
         $API_data['hscode'] = $data['data']['hsn_code'];
         $API_data['date_first_added'] = date("Y-m-d", strtotime($data['data']['gate_entry_date_time']));
         $API_data['search_term'] = $data['data']['search_term'];
-        $raw_string = $data['data']['search_category_string'];
-        if (trim($raw_string, '|') !== '') {
-            $API_data['search_category'] = ltrim($raw_string, '|');            
-        }
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
         $API_data['aplus_content_ids'] = '';
@@ -1563,7 +1559,6 @@ class InboundingController {
                 $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
-                $stock_price_temp[$i]['cp'] = $value['usd_price'] ?? 0;
                 $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
