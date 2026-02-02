@@ -1,6 +1,11 @@
-<!-- ===== PAGE WRAPPER ===== -->
-<div class="min-h-screen">
 
+<!-- ===== PAGE WRAPPER ===== -->
+<style>
+.no-scrollbar:hover::-webkit-scrollbar {
+  display: block;
+}
+</style>
+<div class="min-h-screen">
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
     <div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
@@ -18,9 +23,38 @@
 
       <!-- Right -->
       <div class="ml-auto flex items-center gap-3">
-        <button class="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white">
+
+        <!-- Sold Order Button -->
+        <button class="rounded-xl bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700">
           Sold Order
         </button>
+
+        <!-- Cart Icon (clickable) -->
+        <button
+          onclick="openCart()"
+          class="flex h-10 w-10 items-center justify-center rounded-xl border hover:bg-gray-100"
+          title="Cart"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 text-gray-700"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor">
+            <path stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 3h2l.4 2M7 13h10l4-8H5.4
+                    M7 13l-1.35 2.7A1 1 0 007.55 17h8.9
+                    a1 1 0 00.9-.55L19 13
+                    M7 13L5.4 5
+                    M16 21a1 1 0 100-2
+                    1 1 0 000 2z
+                    M8 21a1 1 0 100-2
+                    1 1 0 000 2z" />
+          </svg>
+        </button>
+
+        <!-- Store / Profile -->
         <div class="flex items-center gap-2 border rounded-xl px-3 py-2">
           <div class="h-8 w-8 rounded-full bg-slate-300"></div>
           <div class="text-xs">
@@ -28,8 +62,8 @@
             <div class="text-slate-500">Sales Terminal</div>
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   </header>
 
@@ -97,165 +131,97 @@
       <!-- Products -->
       <div class="rounded-2xl bg-white border p-4">
         <h2 class="font-semibold text-sm mb-3">Products</h2>
-        <div class="mt-3 flex flex-wrap items-center gap-3">
-          <button class="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2 text-xs font-semibold text-white shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            All Products
-          </button>
-          <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2l3 7h7l-5.5 4.5L18 22l-6-4-6 4 1.5-8.5L2 9h7z" />
-            </svg>
-            Sculptures
-          </button>
-          <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-            Paintings
-          </button>
-          <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M16 4l4 4-4 4M8 4L4 8l4 4M4 8h16v12H4z" />
-            </svg>
-            Clothes &amp; More
-          </button>
-          <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 12l9-9 9 9M9 21V9h6v12" />
-            </svg>
-            Home &amp; Decore
-          </button>
-          <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-            <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v15H6.5A2.5 2.5 0 014 14.5v-10A2.5 2.5 0 016.5 2z" />
-            </svg>
-            Books
-          </button>
+          <div class="mt-3 flex flex-wrap items-center gap-3">
+            <!-- All Products -->
+            <?php $isFirst = true; ?>
+            <?php foreach ($categories as $key => $cat): ?>
+                <button
+                    data-category="<?= htmlspecialchars($key) ?>"
+                    class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold
+                          <?= $isFirst
+                                ? 'bg-orange-600 text-white'
+                                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          ?>">
+
+                    <?= $cat['icon'] ?>
+                    <?= htmlspecialchars($cat['label']) ?>
+                </button>
+                <?php $isFirst = false; ?>
+            <?php endforeach; ?>
         </div>
+
         <!-- Product Card -->
-        <div class="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="productsCards">
-          <?php /*for ($i = 0; $i <= 12; $i++): ?>
+        <div class="mt-3 h-[70vh] overflow-y-auto no-scrollbar">
           <div
-            class="
-              rounded-2xl
-              border border-gray-200
-              bg-white
-              overflow-hidden
-              shadow-sm
-              hover:shadow-md
-              transition
-            "
-          >
-            <!-- Image -->
-            <div class="bg-gray-50 p-2">
-              <img
-                src="https://cdn.exoticindia.com/images/products/original/sculptures-2019/zem062.webp"
-                alt="Product image"
-                class="mx-auto h-56 lg:h-52 xl:h-48 object-contain"
-              />
-            </div>
-
-            <!-- Content -->
-            <div class="px-3 pb-3 pt-2 text-xs">
-              <!-- Title -->
-              <div class="text-[9.5px] text-gray-800 leading-snug line-clamp-2">
-                44" Large Standing Lord Hanuman in Sindoori Color | Brass Statue
-              </div>
-
-              <!-- Bottom row -->
-              <div class="mt-2 flex flex-col gap-1">
-                <!-- SKU + Stock -->
-                <div class="flex items-center gap-1 whitespace-nowrap">
-                  <div class="flex items-center gap-1 whitespace-nowrap">
-                    <span class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[9px] font-small text-orange-700">
-                      DDS815
-                    </span>
-                    <span class="rounded-md bg-green-100 px-1.5 py-0.5 text-[9px] font-small text-green-700">
-                      Stock : 2
-                    </span>
-                    <span class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-small text-gray-700">
-                      ₹ 1,21,485
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+            id="productsCards">
           </div>
-          <?php endfor; */?>
         </div>
-
-
       </div>
     </section>
 
     <!-- ===== PAYMENT / CART ===== -->
     <aside class="col-span-12 lg:col-span-3">
-  <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
+      <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
 
-    <!-- USER -->
-    <div class="px-4 py-3 border-b">
-      <div class="text-sm font-semibold justify-center text-center">Mrs. Avita Desi</div>
-      <div class="text-[11px] text-slate-500 justify-center text-center">+91 99999 99999</div>
-    </div>
+        <!-- USER -->
+        <div class="px-4 py-3 border-b">
+          <div class="text-sm font-semibold justify-center text-center">Mrs. Avita Desi</div>
+          <div class="text-[11px] text-slate-500 justify-center text-center">+91 99999 99999</div>
+        </div>
 
-    <div class="px-4 py-3 space-y-4 text-[12px]">
+        <div class="px-4 py-3 space-y-4 text-[12px]">
 
-      <!-- PRODUCT -->
-      <div class="flex gap-3">
-        <img
-          src="https://cdn.exoticindia.com/images/products/original/sculptures-2019/zem062.webp"
-          class="h-12 w-12 rounded-lg bg-slate-50 object-contain"
-        />
+          <!-- PRODUCT -->
+          <div class="flex gap-3">
+            <img
+              src="https://cdn.exoticindia.com/images/products/original/sculptures-2019/zem062.webp"
+              class="h-12 w-12 rounded-lg bg-slate-50 object-contain"
+            />
 
-        <div class="flex-1 min-w-0">
-          <div class="text-[9px] leading-snug line-clamp-2">
-            44" Large Standing Lord Hanuman in Sindoori Color | Brass Statue
-          </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[9px] leading-snug line-clamp-2">
+                44" Large Standing Lord Hanuman in Sindoori Color | Brass Statue
+              </div>
 
-          <div class="mt-1 flex items-center justify-between">
-            <span class="text-orange-600 font-semibold">₹ 1,21,485</span>
-          </div>
-          <div class="mt-2 flex items-center justify-between">  
-            <!-- qty -->
-            <div class="flex items-center border rounded-md overflow-hidden">
-              <button class="h-6 w-6 text-slate-600">−</button>
-              <span class="h-6 w-7 flex items-center justify-center font-semibold">1</span>
-              <button class="h-6 w-6 text-slate-600">+</button>
+              <div class="mt-1 flex items-center justify-between">
+                <span class="text-orange-600 font-semibold">₹ 1,21,485</span>
+              </div>
+              <div class="mt-2 flex items-center justify-between">  
+                <!-- qty -->
+                <div class="flex items-center border rounded-md overflow-hidden">
+                  <button class="h-6 w-6 text-slate-600">−</button>
+                  <span class="h-6 w-7 flex items-center justify-center font-semibold">1</span>
+                  <button class="h-6 w-6 text-slate-600">+</button>
+                </div>
+              </div>
             </div>
           </div>
+
+          <!-- SHIPPING -->
+          <div class="flex gap-2">
+            <div class="flex gap-2">
+
+        <!-- LEFT PILL : Price -->
+        <div class="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-2">
+          <div class="flex h-6 w-6 items-center justify-center rounded-md">
+            <input type="checkbox" checked="" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-500" aria-label="Select express delivery">     
+          </div>
+          <div>
+            <div class="text-[9px] text-green-900 leading-tight">Express Shipping</div>
+            <div class="text-[11px] font-semibold text-green-900">₹ 8265</div>
+          </div>
         </div>
+
+        <!-- RIGHT PILL : Courier -->
+        <div class="flex items-center gap-2 rounded-lg bg-green-200 px-3 py-2">
+          <div class="flex h-6 w-6 items-center justify-center rounded-md bg-orange-500">
+            <div class="flex h-6 w-6 items-center justify-center rounded-md bg-yellow-600">
+        <svg class="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
       </div>
-
-      <!-- SHIPPING -->
-      <div class="flex gap-2">
-        <div class="flex gap-2">
-
-  <!-- LEFT PILL : Price -->
-  <div class="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-2">
-    <div class="flex h-6 w-6 items-center justify-center rounded-md">
-       <input type="checkbox" checked="" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-500" aria-label="Select express delivery">     
-    </div>
-    <div>
-      <div class="text-[9px] text-green-900 leading-tight">Express Shipping</div>
-      <div class="text-[11px] font-semibold text-green-900">₹ 8265</div>
-    </div>
-  </div>
-
-  <!-- RIGHT PILL : Courier -->
-  <div class="flex items-center gap-2 rounded-lg bg-green-200 px-3 py-2">
-    <div class="flex h-6 w-6 items-center justify-center rounded-md bg-orange-500">
-      <div class="flex h-6 w-6 items-center justify-center rounded-md bg-yellow-600">
-  <svg class="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none"
-       stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="20 6 9 17 4 12"></polyline>
-  </svg>
-</div>
-
     </div>
     <div class="leading-tight">
       <div class="text-[10px] font-semibold text-green-900">
@@ -267,8 +233,6 @@
     </div>
   </div>
 </div>
-    
-
 </div>
 
 
