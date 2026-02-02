@@ -8,3 +8,8 @@ Disallow: /
 
 User-agent: MJ12bot
 Disallow: /
+
+User-agent: WhatsApp
+Allow: /
+
+Disallow: /settings/
