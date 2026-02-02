@@ -918,7 +918,7 @@
                         $options = $order['options'] ?? '';
                         $optionsArr = [];
                         $bordercolor = 'border border-gray-300';
-                        $addontxt = '';
+                        $addontxt = [];
                         if (is_string($options)) {
                             $decoded = json_decode($options, true);
                             if (json_last_error() === JSON_ERROR_NONE && $decoded !== null) {
@@ -956,10 +956,10 @@
                                     $display = $opt_text;
                                     $addon_css = 'bg-gray-100 text-gray-800';
                                 }
-                                $addontxt =  '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
+                                $addontxt[] = '<span class="inline-block text-sm px-2 py-1 rounded mr-2 mb-2 ' . $addon_css . '">' . htmlspecialchars($display) . '</span>';
                             }
                         } else {
-                            $addontxt =  '<span class="data-typography mt-1 block">N/A</span>';
+                            $addontxt[] =  '<span class="data-typography mt-1 block">N/A</span>';
                         }
 
                 ?>
@@ -1119,7 +1119,7 @@
                                             <div class="w-auto flex flex-col justify-between text-left flex-shrink-0" style="min-height: calc(110px + 2.5rem );">
                                                 <div class="mt-[20px] max-w-48">
                                                     <span class="heading-typography block mb-5">Addon</span>
-                                                    <?= $addontxt ?>
+                                                    <?= implode('', $addontxt) ?>
                                                 </div>
                                                 <div>
                                                     <?= $order['po_number'] ? '<a href="?page=purchase_orders&action=view&po_id=' . $order['po_id'] . '" target="_blank" class="mx-10 icon-link create-po-btn">' . $order['po_number'] . '</a>' : '' ?>
@@ -2819,23 +2819,46 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
     })
     .then(response => response.json())
     .then(data => {
+        const msgBox = document.getElementById('bulkAddToPurchaseError');
+        msgBox.classList.remove('hidden');
+        msgBox.classList.remove('text-red-500', 'text-green-500');
+
         if (data.success) {
-            //alert(data.message);
-            document.getElementById('bulkAddToPurchaseError').classList.remove('text-red-500');
-            document.getElementById('bulkAddToPurchaseError').classList.add('text-green-500');
-            document.getElementById('bulkAddToPurchaseError').textContent = 'Purchase List created successfully.';
-            //poitem clear from localStorage
+            let html = `<strong>✅ Purchase List Created</strong><br>`;
+            html += `✔ Added: <b>${data.created}</b><br>`;
+
+            if (data.failed && data.failed.length > 0) {
+                html += `<br><strong>❌ SKU Not Found(In Products):</strong><ul class="list-disc ml-5 mt-1">`;
+
+                data.failed.forEach(item => {
+                    html += `<li>`;
+                    if (item.order_id) html += `Order: ${item.order_id}, `;
+                    if (item.sku) html += `SKU: ${item.sku}, `;
+                    html += `${item.message}`;
+                    html += `</li>`;
+                });
+
+                html += `</ul>`;
+                msgBox.classList.add('text-yellow-600');
+            } else {
+                html += `<br>🎉 All items added successfully.`;
+                msgBox.classList.add('text-green-500');
+            }
+
+            msgBox.innerHTML = html;
+
+            // clear localStorage
             localStorage.removeItem('selected_po_orders');
 
-            //timeout to close popup and reload
+            // auto close + reload
             setTimeout(() => {
                 closeBulkAddToPurchasePopup();
                 location.reload();
-            }, 3000);
-            //bulkStatusError.classList.remove('hidden');
-            //location.reload();
+            }, 6000);
+
         } else {
-            alert(data.message);
+            msgBox.classList.add('text-red-500');
+            msgBox.textContent = data.message || 'Something went wrong';
         }
     });
 });
