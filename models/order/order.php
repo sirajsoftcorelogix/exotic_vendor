@@ -142,9 +142,19 @@ class Order{
         //echo $sql;
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            //agent assignment date desc
+            if(!empty($filters['agent'])){
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']);
+            }else{
             $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+            }
         } else {
-            $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+            //agent assignment date desc
+            if(!empty($filters['agent'])){
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
+            }else{
+                $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+            }
         }
        
         $sql .= " LIMIT ? OFFSET ?";
