@@ -1093,43 +1093,48 @@ class product
 
     public function updatePurchaseListStatus($purchase_list_id, $transactionQty, $status,$purchase_type = 'purchased')
     {
+        //if ($purchase_type === 'unpurchased') {
+        /**
+         * UNPURCHASED CASE:
+         * Reverse purchases: set all rows back to pending and restore planned quantity
+         */
+            /*$sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased 
+                FROM purchase_transactions 
+                WHERE purchase_list_id = ?";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('i', $purchase_list_id);
+            $stmt->execute();
+            $purchasedTotal = (int)$stmt->get_result()->fetch_assoc()['purchased'];
+
+            // set purchase_list quantities back
+            $sql = "UPDATE purchase_list 
+                SET quantity = quantity + ?, status='pending', date_purchased=NULL, updated_at=NOW()
+                WHERE id = ? AND status='purchased'";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('ii', $purchasedTotal, $purchase_list_id);
+            $stmt->execute();
+
+            return ['success' => true, 'message' => 'Un purchased Successfully'];
+        }*/
+
 
         /** PURCHASED CASE (FIFO CONSUME) **/
 
         $remaining = $transactionQty;
 
         // Fetch purchase list rows FIFO (oldest first)
-        $sql = "SELECT 
-                pl.id,
-                pl.quantity,
-                pl.sku,
-                pl.edit_by,
-                pl.user_id,
-                o.order_number
-            FROM purchase_list AS pl
-            LEFT JOIN vp_orders AS o 
-                ON o.id = pl.order_id
-            WHERE 
-                pl.id = ?
-                AND pl.status != 'purchased'
-            ORDER BY 
-                pl.created_at ASC,
-                pl.id ASC
-            ";
-
+        $sql = "SELECT id, quantity,sku 
+            FROM purchase_list 
+            WHERE id = ? AND status != 'purchased'
+            ORDER BY created_at ASC, id ASC";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $purchase_list_id);
         $stmt->execute();
-        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); 
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
         $status = '';
-        $order_number = null;
-        $sku = null;
         foreach ($rows as $row) {
             if ($remaining <= 0) break;
-            $order_number = $rows[0]['order_number'] ?? null;
-            $sku = $rows[0]['sku'] ?? null;
-            $added_by = $rows[0]['edit_by'] ?? null;
 
             $id = $row['id'];
             $qty = (int)$row['quantity'];
@@ -1162,14 +1167,11 @@ class product
                 $u->execute();
             }
         }
-        
-        $link = base_url('index.php?page=products&action=master_purchase_list&search=' . $sku.'&status='.$status);
-        
-        require_once 'models/comman/tables.php';  
-        $commanModel = new Tables($this->db);
-        $agent_name = $commanModel->getUserNameById($added_by); 
-        
-        insertNotification($added_by, 'Product Purchased', $agent_name . ' has purchased item ' . $sku .' for order '.$order_number.' ', $link);
+
+        $agent_id = $_SESSION['user']['id'];
+        $sku = $rows[0]['sku'];
+        $link = base_url('index.php?page=products&action=master_purchase_list&search=' . $sku.'&status='.$status);    
+        insertNotification($agent_id, 'Product Purchased', 'Product has been purchased successfully.', $link);
 
         return [
             'success' => true,

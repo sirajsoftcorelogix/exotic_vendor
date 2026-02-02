@@ -29,7 +29,7 @@ function full_url(string $path): string {
     return $scheme . '://' . $host . ($dir ? $dir . '/' : '/') . ltrim($path, '/');
 }
 
-$product_id = isset($_GET['id']) ? base64_decode($_GET['id']) : 0;
+$product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($product_id <= 0) {
     http_response_code(404);
     echo "Invalid product id.";
@@ -78,12 +78,10 @@ if (!$product) {
 }
 
 // -------- Build fields --------
-/*$title = trim((string)($product['title'] ?? ''));
+$title = trim((string)($product['title'] ?? ''));
 if ($title === '') {
     $title = 'Product ' . (string)($product['sku'] ?? $product_id);
-}*/
-//$title = 'Product Details';
-
+}
 
 $item  = trim((string)($product['item_code'] ?? ''));
 $sku   = trim((string)($product['sku'] ?? ''));
@@ -93,24 +91,10 @@ $size  = trim((string)($product['size'] ?? ''));
 $qty   = isset($product['quantity']) ? (int)$product['quantity'] : '0';
 
 // Dimensions format EXACT like you asked: "HxWxL: 0 x 0 x 0"
-$h = trim((string)($product['prod_height'] ?? ''));
-$w = trim((string)($product['prod_width']  ?? ''));
-$l = trim((string)($product['prod_length'] ?? ''));
-
-// treat 0 / 0.0 as empty
-$hasDimension =
-    ($h !== '' && (float)$h > 0) ||
-    ($w !== '' && (float)$w > 0) ||
-    ($l !== '' && (float)$l > 0);
-
-if ($hasDimension) {
-    $dimensions = 
-        ($h !== '' && (float)$h > 0 ? $h : '0') . ' x ' .
-        ($w !== '' && (float)$w > 0 ? $w : '0') . ' x ' .
-        ($l !== '' && (float)$l > 0 ? $l : '0');
-} else {
-    $dimensions = '';
-}
+$h = (string)($product['prod_height'] ?? '0');
+$w = (string)($product['prod_width']  ?? '0');
+$l = (string)($product['prod_length'] ?? '0');
+$dimensions = trim(($h !== '' ? $h : '0') . " x " . ($w !== '' ? $w : '0') . " x " . ($l !== '' ? $l : '0'));
 
 // Weight text
 $weightVal = (string)($product['product_weight'] ?? '');
@@ -154,47 +138,30 @@ if (function_exists('str_ends_with')) {
  * ✅ WhatsApp preview (og:description)
  * Keep it short but include the fields you requested.
  */
-$descLines = [];
-
-if (!empty($dimensions)) {
-    $descLines[] = "Dimensions (HxWxL): $dimensions";
-}
-if (!empty($color)) {
-    $descLines[] = "Color: $color";
-}
-if (!empty($size)) {
-    $descLines[] = "Size: $size";
-}
-if (!empty($weight)) {
-    $descLines[] = "Weight: $weight";
-}
-
-$title = implode(" | ", $descLines);
-$description = ''; // intentionally empty
-
-$title = implode(" | ", $descLines);
-//$description = implode(" | ", $descLines);
-$description = '';
+$descLines = [
+    "Quantity to be Purchased: {$qty}",
+    "SKU: " . ($sku !== '' ? $sku : 'N/A'),
+    "Color: " . ($color !== '' ? $color : 'N/A'),
+    "Size: " . ($size !== '' ? $size : 'N/A'),
+    "Dimensions (HxWxL): " . ($dimensions !== '' ? $dimensions : '0 x 0 x 0'),
+    "Weight: " . ($weight !== '' ? $weight : 'N/A'),
+];
+$description = implode(" | ", $descLines);
 
 // Share text (WhatsApp)
-$waLines = [];
+$waText = $title . "\n"
+    . "Quantity to be Purchased: {$qty}\n"
+    . "SKU: " . ($sku ?: '') . "\n"
+    . "Color: " . ($color ?: '') . "\n"
+    . "Size: " . ($size ?: '') . "\n"
+    . "Dimensions (HxWxL): " . ($dimensions ?: '0 x 0 x 0') . "\n"
+    . "Weight: " . ($weight ?: '') . "\n"
+    . "View More: " . $ogUrl;
 
-if (!empty($color)) {
-    $waLines[] = "Color: $color";
-}
-if (!empty($size)) {
-    $waLines[] = "Size: $size";
-}
-if (!empty($dimensions)) {
-    $waLines[] = "Dimensions (HxWxL): $dimensions";
-}
-if (!empty($weight)) {
-    $waLines[] = "Weight: $weight";
-}
-
-$waText = $title . "\n" . implode("\n", $waLines) . "\n";
 $waHref = "https://wa.me/?text=" . urlencode($waText);
 
+// If you have a product detail page, put real URL here
+$productDetailUrl = full_url('product.php?id=' . $product_id);
 ?>
 <!doctype html>
 <html lang="en">
@@ -204,15 +171,12 @@ $waHref = "https://wa.me/?text=" . urlencode($waText);
 
     <title><?= e($title) ?></title>
     <!-- ✅ Open Graph for WhatsApp/Facebook -->
-    <meta property="og:title" content="<?= e($title) ?>">
-    <meta property="og:description" content="<?= e($description) ?>">
-    <meta name="description" content="<?= e($description) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
     <meta property="og:image:secure_url" content="<?= e($ogImage) ?>">
     <meta property="og:image:type" content="<?= e($ogImageType) ?>">
     <meta property="og:url" content="<?= e($ogUrl) ?>">
     <meta property="og:type" content="Product">
-    <meta property="og:site_name" content="Exotic India">
+    <meta property="og:site_name" content="Exotic India Art">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
@@ -326,51 +290,34 @@ $waHref = "https://wa.me/?text=" . urlencode($waText);
 
                 <!-- ✅ Requested fields (UI) -->
                 <div class="grid">
+                    <div class="tile">
+                        <div class="k">Quantity to be Purchased</div>
+                        <div class="v"><?= (int)$qty ?></div>
+                    </div>
+                    <div class="tile">
+                        <div class="k">SKU</div>
+                        <div class="v"><?= e($sku ?: 'N/A') ?></div>
+                    </div>
 
-    <?php if (!empty($product['title'])) : ?>
-        <div class="tile">
-            <div class="k">Product</div>
-            <div class="v"><?= e($product['title'] ?? '') ?></div>
-        </div>
-    <?php endif; ?>
+                    <div class="tile">
+                        <div class="k">Color</div>
+                        <div class="v muted"><?= e($color ?: 'N/A') ?></div>
+                    </div>
+                    <div class="tile">
+                        <div class="k">Size</div>
+                        <div class="v muted"><?= e($size ?: 'N/A') ?></div>
+                    </div>
 
-    <?php if (!empty($sku)) : ?>
-        <div class="tile">
-            <div class="k">SKU</div>
-            <div class="v"><?= e($sku) ?></div>
-        </div>
-    <?php endif; ?>
+                    <div class="tile" style="grid-column: 1 / -1;">
+                        <div class="k">Dimensions (HxWxL)</div>
+                        <div class="v muted"><?= e($dimensions ?: '0 x 0 x 0') ?></div>
+                    </div>
 
-    <?php if (!empty($color)) : ?>
-        <div class="tile">
-            <div class="k">Color</div>
-            <div class="v muted"><?= e($color) ?></div>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!empty($size)) : ?>
-        <div class="tile">
-            <div class="k">Size</div>
-            <div class="v muted"><?= e($size) ?></div>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!empty($dimensions)) : ?>
-        <div class="tile" style="grid-column: 1 / -1;">
-            <div class="k">Dimensions (HxWxL)</div>
-            <div class="v muted"><?= e($dimensions) ?></div>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!empty($weight)) : ?>
-        <div class="tile" style="grid-column: 1 / -1;">
-            <div class="k">Weight</div>
-            <div class="v muted"><?= e($weight) ?></div>
-        </div>
-    <?php endif; ?>
-
-</div>
-
+                    <div class="tile" style="grid-column: 1 / -1;">
+                        <div class="k">Weight</div>
+                        <div class="v muted"><?= e($weight ?: 'N/A') ?></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
