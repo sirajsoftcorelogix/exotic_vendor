@@ -1141,107 +1141,107 @@ class InboundingController {
         // 2. Process Variations
         $allVariations = array_values($_POST['variations'] ?? []);
         foreach ($allVariations as $index => &$variant) {
-            $variant['id'] = $_POST['variations'][$index]['id'] ?? '';
-            $variant['cp']              = !empty($variant['cp']) ? $variant['cp'] : 0;
-            $variant['price_india']     = !empty($variant['price_india']) ? $variant['price_india'] : 0;
-            $variant['price_india_mrp'] = !empty($variant['price_india_mrp']) ? $variant['price_india_mrp'] : 0;
-            $variant['usd_price']       = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
-            $variant['quantity']        = !empty($variant['quantity']) ? $variant['quantity'] : 0;
-            // Handle File Uploads (Same as before)
-            $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
-            if ($uploadError === UPLOAD_ERR_OK) {
-                $tmpName = $_FILES['variations']['tmp_name'][$index]['photo'];
-                $name    = $_FILES['variations']['name'][$index]['photo'];
-                $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                    $uploadDir = __DIR__ . '/../uploads/products/';
-                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                    $newFileName = "VAR_" . $record_id . "_" . $index . "_" . time() . "." . $ext;
-                    if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
-                        $variant['photo'] = "uploads/products/" . $newFileName;
-                    }
-                }
-            } else {
-                $variant['photo'] = $variant['old_photo'] ?? '';
+          $variant['id'] = $_POST['variations'][$index]['id'] ?? '';
+          $variant['cp']       = !empty($variant['cp']) ? $variant['cp'] : 0;
+          $variant['price_india']  = !empty($variant['price_india']) ? $variant['price_india'] : 0;
+          $variant['price_india_mrp'] = !empty($variant['price_india_mrp']) ? $variant['price_india_mrp'] : 0;
+          $variant['usd_price']   = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
+          $variant['quantity']    = !empty($variant['quantity']) ? $variant['quantity'] : 0;
+          // Handle File Uploads (Same as before)
+          $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
+          if ($uploadError === UPLOAD_ERR_OK) {
+            $tmpName = $_FILES['variations']['tmp_name'][$index]['photo'];
+            $name  = $_FILES['variations']['name'][$index]['photo'];
+            $ext  = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+              $uploadDir = __DIR__ . '/../uploads/products/';
+              if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+              $newFileName = "VAR_" . $record_id . "_" . $index . "_" . time() . "." . $ext;
+              if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                $variant['photo'] = "uploads/products/" . $newFileName;
+              }
             }
+          } else {
+            $variant['photo'] = $variant['old_photo'] ?? '';
+          }
         }
-        unset($variant); 
+        unset($variant);
 
         // 3. Extract Base Variant (Index 0)
-        $mainVariant = $allVariations[0] ?? []; 
+        $mainVariant = $allVariations[0] ?? [];
 
         // 4. TEMP CODE LOGIC (Same as before)
-        $existingData = $inboundingModel->getById($record_id); 
+        $existingData = $inboundingModel->getById($record_id);
         if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
-            $temp_code = $existingData['temp_code'];
+          $temp_code = $existingData['temp_code'];
         } else {
-            $categoryName = '';
-            if (!empty($existingData['group_name'])) {
-                $catData = $inboundingModel->getCategoryById($existingData['group_name']);
-                $categoryName = $catData['display_name'] ?? ''; 
-            }
-            $materialId = $_POST['material_code'] ?? '';
-            $materialName = '';
-            if (!empty($materialId)) {
-                $matData = $inboundingModel->getMaterialById($materialId);
-                $materialName = $matData['material_name'] ?? '';
-            }
-            $colorName = $mainVariant['color'] ?? '';
-            $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
-            $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
-            $char3 = !empty($colorName)    ? strtoupper(substr($colorName, 0, 1))    : 'X';
-            $prefix = $char1 . $char2 . $char3;
-            $temp_code = $inboundingModel->generateNextTempCode($prefix);
+          $categoryName = '';
+          if (!empty($existingData['group_name'])) {
+            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
+            $categoryName = $catData['display_name'] ?? '';
+          }
+          $materialId = $_POST['material_code'] ?? '';
+          $materialName = '';
+          if (!empty($materialId)) {
+            $matData = $inboundingModel->getMaterialById($materialId);
+            $materialName = $matData['material_name'] ?? '';
+          }
+          $colorName = $mainVariant['color'] ?? '';
+          $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
+          $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
+          $char3 = !empty($colorName)  ? strtoupper(substr($colorName, 0, 1))  : 'X';
+          $prefix = $char1 . $char2 . $char3;
+          $temp_code = $inboundingModel->generateNextTempCode($prefix);
         }
 
         // 5. PREPARE MAIN UPDATE DATA
         // FIX: Mapping HTML inputs to exact DB Column names here
         $gate_entry = date("Y-m-d H:i:s", strtotime($_POST['gate_entry_date_time'] ?? 'now'));
         $mainUpdateData = [
-            'gate_entry_date_time' => $gate_entry,
-            'material_code'        => $_POST['material_code'] ?? '',
-            'group_name'           => $_POST['category'] ?? '',
-            'received_by_user_id'  => $_POST['received_by_user_id'] ?? '',
-            'Item_code'             => $_POST['Item_code'] ?? '',
-            'is_variant'             => $_POST['is_variant'] ?? '',
-            'feedback'             => $_POST['feedback'] ?? '',
-            'temp_code'            => $temp_code,
-            
-            // Map Index 0 Data to DB Columns
-            'height'               => $mainVariant['height'] ?? 0,
-            'width'                => $mainVariant['width'] ?? 0,
-            'depth'                => $mainVariant['depth'] ?? 0,
-            'weight'               => $mainVariant['weight'] ?? 0,
-            'color'                => $mainVariant['color'] ?? '',
-            'size'                 => $mainVariant['size'] ?? '',
-            'cp'                   => $mainVariant['cp'] ?? 0,
-            'product_photo'        => $mainVariant['photo'] ?? '',
-            'store_location'       => $mainVariant['store_location'] ?? '',
-            'price_india'          => $mainVariant['price_india'] ?? '',
-            'price_india_mrp'      => $mainVariant['price_india_mrp'] ?? '',
+          'gate_entry_date_time' => $gate_entry,
+          'material_code'    => $_POST['material_code'] ?? '',
+          'group_name'     => $_POST['category'] ?? '',
+          'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
+          'Item_code'      => $_POST['Item_code'] ?? '',
+          'is_variant'      => $_POST['is_variant'] ?? '',
+          'feedback'      => $_POST['feedback'] ?? '',
+          'temp_code'      => $temp_code,
+         
+          // Map Index 0 Data to DB Columns
+          'height'       => $mainVariant['height'] ?? 0,
+          'width'        => $mainVariant['width'] ?? 0,
+          'depth'        => $mainVariant['depth'] ?? 0,
+          'weight'       => $mainVariant['weight'] ?? 0,
+          'color'        => $mainVariant['color'] ?? '',
+          'size'        => $mainVariant['size'] ?? '',
+          'cp'         => $mainVariant['cp'] ?? 0,
+          'product_photo'    => $mainVariant['photo'] ?? '',
+          'store_location'   => $mainVariant['store_location'] ?? '',
+          'price_india'     => $mainVariant['price_india'] ?? '',
+          'price_india_mrp'   => $mainVariant['price_india_mrp'] ?? '',
 
-            // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
-            'quantity_received'    => $mainVariant['quantity'] ?? 0, 
+          // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
+          'quantity_received'  => $mainVariant['quantity'] ?? 0,
         ];
         // 6. Update Database
         $res = $inboundingModel->updateMainInbound($record_id, $mainUpdateData);
 
         if ($res['success']) {
-            // Log logic...
-            $userid_log = $_POST['userid_log'] ?? 0;
-            if(method_exists($inboundingModel, 'stat_logs')) {
-                 $inboundingModel->stat_logs(['stat'=>'inbound', 'userid_log'=>$userid_log, 'i_id'=>$record_id]);
-            }
+          // Log logic...
+          $userid_log = $_POST['userid_log'] ?? 0;
+          if(method_exists($inboundingModel, 'stat_logs')) {
+            $inboundingModel->stat_logs(['stat'=>'inbound', 'userid_log'=>$userid_log, 'i_id'=>$record_id]);
+          }
 
-            // Save extra variations
-            $inboundingModel->saveVariations($record_id, $allVariations, $temp_code);
-            
-            header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
-            exit;
+          // Save extra variations
+          $inboundingModel->saveVariations($record_id, $allVariations, $temp_code);
+         
+          header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
+          exit;
         } else {
-            echo "Database Error: " . $res['message'];
+          echo "Database Error: " . $res['message'];
         }
-    }
+      }
     public function getNextMaterialOrderAjax() {
         global $inboundingModel;
         header('Content-Type: application/json');
