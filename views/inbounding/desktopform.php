@@ -3219,7 +3219,7 @@ function validateAndSubmit(actionType) {
 
 
     // --- 4. RESULT ---
-    /*if (errors.length > 0) {
+    if (errors.length > 0) {
         // Validation Failed - Show Popup
         let errorHtml = '<div style="text-align: left; max-height: 300px; overflow-y: auto;"><ul style="list-style-type: disc; padding-left: 20px;">';
         errors.forEach(err => {
@@ -3233,11 +3233,11 @@ function validateAndSubmit(actionType) {
             html: errorHtml,
             confirmButtonColor: '#d97824'
         });
-    } else {*/
+    } else {
         // Validation Passed - Submit
         document.getElementById('hidden_save_action').value = actionType;
         form.submit();
-    //}
+    }
 }
 </script>
 <script>
