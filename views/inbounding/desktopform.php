@@ -1329,7 +1329,7 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
             </button>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
-                Save and Draft
+                Save as Draft
             </button>
             
             <button type="button" onclick="validateAndSubmit('generate')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
@@ -3219,7 +3219,7 @@ function validateAndSubmit(actionType) {
 
 
     // --- 4. RESULT ---
-    if (errors.length > 0) {
+    /*if (errors.length > 0) {
         // Validation Failed - Show Popup
         let errorHtml = '<div style="text-align: left; max-height: 300px; overflow-y: auto;"><ul style="list-style-type: disc; padding-left: 20px;">';
         errors.forEach(err => {
@@ -3233,11 +3233,11 @@ function validateAndSubmit(actionType) {
             html: errorHtml,
             confirmButtonColor: '#d97824'
         });
-    } else {
+    } else {*/
         // Validation Passed - Submit
         document.getElementById('hidden_save_action').value = actionType;
         form.submit();
-    }
+    //}
 }
 </script>
 <script>
