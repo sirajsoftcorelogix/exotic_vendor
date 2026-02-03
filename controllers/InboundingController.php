@@ -339,86 +339,10 @@ class InboundingController {
         if (isset($id) && $id != 0) {
             $data = $inboundingModel->getform2data($id);
             $data['form2']['gecolormaps'] = $this->gecolormaps();
-            $data['form2']['Author'] = $this->GetAuthor();
-            $data['form2']['Publishers'] = $this->GetPublishers();
-            // echo "<pre>";print_r($data['form2']['Publishers']);exit;
             renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
         }else{
             header("location: " . base_url('?page=inbounding&action=list'));
         }
-    }
-    public function GetPublishers(){
-        $cacheFile = 'cache_publisger.json';
-        // If we have a cache file less than 1 hour old, use it!
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 3600)) {
-            return json_decode(file_get_contents($cacheFile), true);
-        }
-        $url = 'https://www.exoticindia.com/vendor-api/product/creatorlist?type=publishers';
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Accept: application/json'
-        ];
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_HTTPGET => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
-        ]);
-        $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            error_log("cURL Error: " . curl_error($ch));
-            curl_close($ch);
-            return false;
-        }
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($httpCode != 200) {
-            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
-            return false;
-        }
-        file_put_contents($cacheFile, $response);
-        return json_decode($response, true);
-    }
-    public function GetAuthor(){
-        $cacheFile = 'cache_authors.json';
-        // If we have a cache file less than 1 hour old, use it!
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 3600)) {
-            return json_decode(file_get_contents($cacheFile), true);
-        }
-        $url = 'https://www.exoticindia.com/vendor-api/product/creatorlist?type=author';
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Accept: application/json'
-        ];
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_HTTPGET => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false, // Disable if SSL issue occurs
-        ]);
-        $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            error_log("cURL Error: " . curl_error($ch));
-            curl_close($ch);
-            return false;
-        }
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($httpCode != 200) {
-            error_log("API HTTP Status: " . $httpCode . " - Response: " . $response);
-            return false;
-        }
-        file_put_contents($cacheFile, $response);
-        // return json_decode($response, true);
-        return json_decode($response, true);
     }
     public function saveform1() {
         global $inboundingModel;
@@ -1296,13 +1220,6 @@ class InboundingController {
             'price_india'          => $mainVariant['price_india'] ?? '',
             'price_india_mrp'      => $mainVariant['price_india_mrp'] ?? '',
 
-            // books
-            'author'               => $mainVariant['author'] ?? '',
-            'publisher'            => $mainVariant['publisher'] ?? '',
-            'isbn'                 => $mainVariant['isbn'] ?? '',
-            'language'             => $mainVariant['language'] ?? '',
-            'pages'                => $mainVariant['pages'] ?? 0,
-
             // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
             'quantity_received'    => $mainVariant['quantity'] ?? 0, 
         ];
@@ -1494,7 +1411,7 @@ class InboundingController {
         $stock_price_temp[0]['fba_us'] = '0';
         $stock_price_temp[0]['fba_eu'] = '0';
         $stock_price_temp[0]['vendor_us'] = '0';
-        $stock_price_temp[0]['price'] = (int) $data['data']['usd_price'];
+        $stock_price_temp[0]['price'] = (int) $data['data']['price_india'];
         $stock_price_temp[0]['price_india'] = (int) $data['data']['price_india'];
         $stock_price_temp[0]['price_india_suggested'] = (int) $data['data']['price_india'];
         $stock_price_temp[0]['mrp_india'] = (int) $data['data']['price_india_mrp'];
@@ -1513,6 +1430,7 @@ class InboundingController {
         $stock_price_temp[0]['leadtime'] = $data['data']['lead_time_days'];
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
+        $stock_price_temp[0]['usd'] = $data['data']['usd_price'] ?? 0;
         $stock_price_temp[0]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
@@ -1544,7 +1462,7 @@ class InboundingController {
                 $stock_price_temp[$i]['fba_us'] = '0';
                 $stock_price_temp[$i]['fba_eu'] = '0';
                 $stock_price_temp[$i]['vendor_us'] = '0';
-                $stock_price_temp[$i]['price'] = (int) $value['usd_price'];
+                $stock_price_temp[$i]['price'] = (int) $value['price_india'];
                 $stock_price_temp[$i]['price_india'] = (int) $value['price_india'];
                 $stock_price_temp[$i]['price_india_suggested'] = (int) $data['data']['price_india'];
                 $stock_price_temp[$i]['mrp_india'] = (int) $value['price_india_mrp'];
@@ -1563,6 +1481,7 @@ class InboundingController {
                 $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
+                $stock_price_temp[$i]['cp'] = $value['usd_price'] ?? 0;
                 $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
@@ -1679,37 +1598,6 @@ class InboundingController {
         } else {
             echo $response; 
         }
-        exit;
-    }
-    public function searchBookAttributes() {
-        // 1. Get query and type
-        $query = isset($_GET['q']) ? strtolower(trim($_GET['q'])) : '';
-        $type  = isset($_GET['type']) ? $_GET['type'] : 'author';
-
-        // 2. Get Full List (Using your existing cached functions)
-        $data = ($type === 'publisher') ? $this->GetPublishers() : $this->GetAuthor();
-        $list = $data['creators'] ?? [];
-
-        // 3. Filter Results
-        $results = [];
-        $count = 0;
-        $limit = 20; // Only return 20 results for speed
-
-        foreach ($list as $id => $name) {
-            // If query matches name (or if query is empty)
-            if ($query === '' || strpos(strtolower($name), $query) !== false) {
-                $results[] = [
-                    'value' => $name, // Saving the Name as the value
-                    'text'  => $name
-                ];
-                $count++;
-                if ($count >= $limit) break; // Stop after limit reached
-            }
-        }
-
-        // 4. Return JSON
-        header('Content-Type: application/json');
-        echo json_encode($results);
         exit;
     }
 }
