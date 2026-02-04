@@ -864,273 +864,282 @@ class InboundingController {
         }
     }
     public function updatedesktopform() {
-        global $inboundingModel;
+    global $inboundingModel;
 
-        // 1. Setup & Checks
-        $id = $_GET['id'] ?? 0;
-        $oldData = $inboundingModel->getform1data($id);
+    // 1. Setup & Checks
+    $id = $_GET['id'] ?? 0;
+    $oldData = $inboundingModel->getform1data($id);
+    if (!$oldData) { echo "Record not found."; exit; }
 
-        if (!$oldData) { echo "Record not found."; exit; }
-
-        // --- Main Invoice File Upload Logic ---
-        $invoicePath = $oldData['form1']['invoice_image'] ?? '';
-        if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
-            $uploadDir = __DIR__ . '/../uploads/invoice/';
-            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-            $fileExt = strtolower(pathinfo($_FILES['invoice_image']['name'], PATHINFO_EXTENSION));
-            if (in_array($fileExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                $newFile = "IMG_" . time() . "." . $fileExt;
-                if (move_uploaded_file($_FILES['invoice_image']['tmp_name'], $uploadDir . $newFile)) {
-                    $invoicePath = "uploads/invoice/" . $newFile;
-                }
-            }
+    // --- Main Invoice File Upload Logic ---
+    $invoicePath = $oldData['form1']['invoice_image'] ?? '';
+    if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
+      $uploadDir = __DIR__ . '/../uploads/invoice/';
+      if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+      $fileExt = strtolower(pathinfo($_FILES['invoice_image']['name'], PATHINFO_EXTENSION));
+      if (in_array($fileExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+        $newFile = "IMG_" . time() . "." . $fileExt;
+        if (move_uploaded_file($_FILES['invoice_image']['tmp_name'], $uploadDir . $newFile)) {
+          $invoicePath = "uploads/invoice/" . $newFile;
         }
+      }
+    }
 
-        // 2. Capture Inputs & Change Detection
-        $is_variant = $_POST['is_variant'] ?? '';
-        $item_code  = $_POST['Item_code'] ?? '';
+    // 1. Capture Inputs
+    $is_variant = $_POST['is_variant'] ?? '';
+    $item_code = $_POST['Item_code'] ?? ''; 
 
-        $old_is_variant = $oldData['form2']['is_variant'] ?? '';
-        
-        $old_group_val = $oldData['form2']['group_name'] ?? '';
-        $old_cat_val   = $oldData['form2']['category_code'] ?? '';
-        $new_group_val = $_POST['group_name'] ?? '';
-        
-        $raw_cat = $_POST['category_code'] ?? 0;
-        $category_id = is_array($raw_cat) ? $raw_cat[0] : $raw_cat;
+    // 2. Fetch Old Data
+    $old_group_val = trim((string)($oldData['form1']['group_name'] ?? ''));
+    $old_cat_val   = trim((string)($oldData['form1']['category_code'] ?? ''));
+    // 3. Fetch New Data from Post
+    $new_group_val = trim((string)($_POST['group_name'] ?? ''));
+    $raw_cat       = $_POST['category_code'] ?? 0;
+    $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
 
-        // Flag: Should we rename images?
-        $shouldRename = false; 
+    // --- DEBUGGING LINE: Remove // from the line below to see why it fails ---
+    // die("Old Group: $old_group_val | New Group: $new_group_val <br> Old Cat: $old_cat_val | New Cat: $new_cat_val");
 
-        // If Group or Category changes, reset item code to trigger generation
-        if ((($new_group_val != $old_group_val) || ($category_id != $old_cat_val)) && $is_variant === 'N') {
-             $item_code = ''; 
-        }
+    // 4. LOGIC: Should we reset the item code?
+    $shouldRegenerate = false;
 
-        // 2. Generate Prefix Logic
-        $group_val = $_POST['group_name'] ?? ''; 
-        $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
-        $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
-        $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-        $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
-        $current_prefix = $char1 . $char2; 
-
-        // 3. GENERATE NEW ITEM CODE (If needed)
-        if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
-
-            $last_code = $inboundingModel->getLastItemCodeGlobal();
-            $is_unique = false;
-            $attempts = 0;
-
-            if (empty($last_code)) {
-                $letters = 'AA'; $number = 0; 
-            } else {
-                $last_sequence = substr($last_code, 2); 
-                if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
-                    $letters = $matches[1]; $number = intval($matches[2]);
-                } else {
-                    $letters = 'AA'; $number = 0; 
-                }
-            }
-
-            do {
-                $attempts++;
-                if ($number < 99) { $number++; } else { $number = 1; $letters++; }
-                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
-                $candidate_code = $current_prefix . $new_seq;
-                $exists = $inboundingModel->checkItemCodeExists($candidate_code);
-
-                if (!$exists) {
-                    $item_code = $candidate_code;
-                    $is_unique = true;
-                    $shouldRename = true; // Trigger renaming since code changed
-                }
-                if ($attempts > 100) die("Error: Unable to generate unique item code.");
-            } while (!$is_unique);
+    // If it's a parent record...
+    if ($is_variant === 'N') {
+        // If Item Code is totally empty
+        if (empty($item_code)) {
+            $shouldRegenerate = true;
         } 
-        // IF ITEM CODE EXISTED and didn't change, we still might want to rename images 
-        // to match current colors/sizes if they were updated.
-        else if (!empty($item_code)) {
-            $shouldRename = true; 
+        // OR if Group has changed (and isn't empty)
+        if ($new_group_val !== $old_group_val && !empty($old_group_val)) {
+            $shouldRegenerate = true;
         }
-
-        // --- SKU GENERATION ---
-        $size  = trim($_POST['size'] ?? '');
-        $color = trim($_POST['color'] ?? '');
-        $generated_sku = '';
-        if ($is_variant === 'N') {
-            $generated_sku = $item_code;
-        } elseif ($is_variant === 'Y') {
-            if(!empty($item_code)) {
-                $generated_sku = $item_code . '-' . $size . '-' . $color;
-            } else {
-                echo "Error: Parent Item Code is missing."; exit;
-            }
-        }
-
-        // --- Handle Inputs ---
-        $cat_input = $_POST['category_code'] ?? '';
-        $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
-        $sub_cat_input = $_POST['sub_category_code'] ?? '';
-        $sub_cat_val   = is_array($sub_cat_input) ? implode(',', $sub_cat_input) : $sub_cat_input;
-        $sub_sub_input = $_POST['sub_sub_category_code'] ?? '';
-        $sub_sub_val   = is_array($sub_sub_input) ? implode(',', $sub_sub_input) : $sub_sub_input;
-        $icons_raw = $_POST['optionals'] ?? ''; 
-        $icons_val = is_array($icons_raw) ? implode(',', $icons_raw) : $icons_raw;
-        $back_order_input = $_POST['back_order'] ?? '0'; 
-        $percent_val = ($back_order_input == '1') ? (!empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0) : 0;
-        $day_val     = ($back_order_input == '1') ? (!empty($_POST['backorder_day'])     ? intval($_POST['backorder_day'])     : 0) : 0;
-
-        // --- Main Photo Upload ---
-        $mainProductPhoto = $_POST['old_product_photo_main'] ?? ($oldData['form2']['product_photo'] ?? ''); 
-        if (isset($_FILES['product_photo_main']) && $_FILES['product_photo_main']['error'] === UPLOAD_ERR_OK) {
-            $tmpName = $_FILES['product_photo_main']['tmp_name'];
-            $name    = $_FILES['product_photo_main']['name'];
-            $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                $uploadDir = __DIR__ . '/../uploads/products/';
-                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                $newFileName = "MAIN_" . $id . "_" . time() . "_" . rand(100,999) . "." . $ext;
-                if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
-                    $mainProductPhoto = "uploads/products/" . $newFileName;
-                }
-            }
-        }
-        
-        // Search String Logic
-        $s_group   = $_POST['search_group'] ?? '';
-        $s_cat_arr = $_POST['search_cat'] ?? [];
-        $s_cat     = is_array($s_cat_arr) ? implode(',', $s_cat_arr) : $s_cat_arr;
-        $s_sub_arr = $_POST['search_sub'] ?? [];
-        $s_sub     = is_array($s_sub_arr) ? implode(',', $s_sub_arr) : $s_sub_arr;
-        $s_subsub_arr = $_POST['search_sub_sub'] ?? [];
-        $s_subsub     = is_array($s_subsub_arr) ? implode(',', $s_subsub_arr) : $s_subsub_arr;
-        $search_category_string = $s_subsub . '|' . $s_sub . '|' . $s_cat . '|' . $s_group;
-        $search_term = $_POST['search_term'] ?? '';
-
-        // 3. Prepare Data
-        $data = [
-            'product_photo'       => $mainProductPhoto,
-            'invoice_image'       => $invoicePath,
-            'search_term'         => $search_term,
-            'search_category_string' => $search_category_string,
-            'is_variant'          => $is_variant,
-            'Item_code'           => $item_code,
-            'sku'                 => $generated_sku,
-            'group_name'          => $_POST['group_name'] ?? '', 
-            'colormaps'           => $_POST['colormaps'] ?? '',
-            'image_directory'     => $_POST['image_directory'] ?? '',
-            'category_code'       => $category_val,
-            'sub_category_code'   => $sub_cat_val, 
-            'sub_sub_category_code' => $sub_sub_val,
-            'added_date'    => $_POST['added_date'] ?? '',
-            'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
-            'updated_by_user_id'  => $_POST['updated_by_user_id'] ?? '',
-            'invoice_no'          => $_POST['invoice_no'] ?? '',
-            'material_code'       => $_POST['material_code'] ?? '',
-            'product_title'       => $_POST['product_title'] ?? '',
-            'key_words'           => $_POST['key_words'] ?? '',
-            'snippet_description' => $_POST['snippet_description'] ?? '',
-            'vendor_code'         => $_POST['vendor_code'] ?? '',
-            'cp'                  => $_POST['cp'] ?? '',
-            'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
-            'price_india'         => $_POST['price_india'] ?? '',
-            'usd_price'             => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
-            'hsn_code'            => $_POST['hsn_code'] ?? '',
-            'gst_rate'            => $_POST['gst_rate'] ?? '',
-            'height'              => $_POST['height'] ?? '',
-            'width'               => $_POST['width'] ?? '',
-            'depth'               => $_POST['depth'] ?? '',
-            'weight'              => $_POST['weight'] ?? '',
-            'size'                => $_POST['size'] ?? '',
-            'color'               => $_POST['color'] ?? '',
-            'quantity_received'   => $_POST['quantity_received'] ?? '',
-            'permanently_available'=> $_POST['permanently_available'] ?? '',
-            'ware_house_code'     => $_POST['ware_house_code'] ?? '',
-            'store_location'      => $_POST['store_location'] ?? '',
-            'marketplace'         => $_POST['marketplace'] ?? '',
-            'india_net_qty'       => $_POST['india_net_qty'] ?? '',
-            'lead_time_days'      => $_POST['lead_time_days'] ?? '',
-            'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
-            'optionals'   => $icons_val, 
-            'back_order'          => $back_order_input,
-            'backorder_percent'   => $percent_val,
-            'backorder_day'       => $day_val,
-            'us_block'            => $_POST['us_block'] ?? '',
-            'dimention_unit'      => $_POST['dimention_unit'] ?? '',
-            'weight_unit'         => $_POST['weight_unit'] ?? '',
-            'feedback'         => $_POST['feedback'] ?? '',
-        ];
-        
-        // 4. Update Main Record
-        $result = $inboundingModel->updatedesktopform($id, $data);
-
-        // --- VARIATIONS LOGIC ---
-        $allVariations = $_POST['variations'] ?? [];
-        foreach ($allVariations as $key => &$variant) {
-            $variant['id'] = $variant['id'] ?? '';
-            $uploadError = $_FILES['variations']['error'][$key]['photo'] ?? UPLOAD_ERR_NO_FILE;
-            if ($uploadError === UPLOAD_ERR_OK) {
-                 $tmpName = $_FILES['variations']['tmp_name'][$key]['photo'];
-                 $name    = $_FILES['variations']['name'][$key]['photo'];
-                 $ext     = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-                 if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                     $uploadDir = __DIR__ . '/../uploads/products/';
-                     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                     $newFileName = "VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100,999) . "." . $ext;
-                     if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
-                         $variant['photo'] = "uploads/products/" . $newFileName;
-                     }
-                 }
-            } else {
-                 $variant['photo'] = $variant['old_photo'] ?? '';
-            }
-        }
-        unset($variant);
-        $inboundingModel->saveVariations($id, $allVariations, $item_code);
-
-        // 5. Update Image Order & Assignment
-        if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
-            foreach ($_POST['photo_order'] as $img_id => $order_num) {
-                $inboundingModel->update_image_order($img_id, $order_num);
-            }
-        }
-        if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
-            foreach ($_POST['photo_variation'] as $img_id => $var_id) {
-                $inboundingModel->update_image_variation($img_id, $var_id);
-            }
-        }
-
-        if ($result['success']) {
-            
-            // =========================================================
-            // START: ADVANCED RENAMING LOGIC (4 CASES)
-            // =========================================================
-            if (!empty($item_code) && $shouldRename) {
-                // Pass current POST data to helper so we use fresh color/size values
-                $currentDataForRename = [
-                    'is_variant' => $is_variant,
-                    'color'      => $_POST['color'] ?? '',
-                    'size'       => $_POST['size'] ?? ''
-                ];
-                $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
-            }
-            // =========================================================
-            
-            $logData = ['userid_log' => $_POST['userid_log'] ?? '', 'i_id' => $id, 'stat' => 'Data Entry'];
-            $inboundingModel->stat_logs($logData);
-
-            $action_clicked = $_POST['save_action'] ?? '';
-            if ($action_clicked === 'draft') {
-                header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
-            } else {
-                header("location: " . base_url('?page=inbounding&action=list'));
-            }
-            exit;
-        } else {
-            echo "Update failed: " . $result['message'];
+        // OR if Category has changed (and isn't empty)
+        if ($new_cat_val !== $old_cat_val && !empty($old_cat_val)) {
+            $shouldRegenerate = true;
         }
     }
+
+    // 5. THE GENERATOR
+    if ($shouldRegenerate) {
+        // We clear item_code to force the loop to create a new one
+        $item_code = ''; 
+
+        $group_real_name = trim($inboundingModel->getGroupNameByCode($new_group_val));
+        $cat_real_name   = trim($inboundingModel->getCategoryName($new_cat_val));
+        
+        $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
+        $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1))   : 'X';
+        $current_prefix = $char1 . $char2;
+
+        $last_code = $inboundingModel->getLastItemCodeGlobal();
+        
+        // INCREMENT LOGIC
+        if (empty($last_code)) {
+            $letters = 'AA'; $number = 0;
+        } else {
+            $last_sequence = substr($last_code, 2); 
+            if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
+                $letters = $matches[1]; 
+                $number = intval($matches[2]);
+            } else {
+                $letters = 'AA'; $number = 0;
+            }
+        }
+
+        $attempts = 0;
+        do {
+            $attempts++;
+            if ($number < 99) { $number++; } else { $number = 1; $letters++; }
+            
+            $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
+            $candidate_code = $current_prefix . $new_seq;
+            
+            if (!$inboundingModel->checkItemCodeExists($candidate_code)) {
+                $item_code = $candidate_code;
+                $shouldRename = true;
+                break; 
+            }
+        } while ($attempts < 100);
+    }
+
+    // --- SKU GENERATION ---
+    $size = trim($_POST['size'] ?? '');
+    $color = trim($_POST['color'] ?? '');
+    $generated_sku = '';
+    if ($is_variant === 'N') {
+      $generated_sku = $item_code;
+    } elseif ($is_variant === 'Y') {
+      if(!empty($item_code)) {
+        $generated_sku = $item_code . '-' . $size . '-' . $color;
+      } else {
+        echo "Error: Parent Item Code is missing."; exit;
+      }
+    }
+
+    // --- Handle Inputs ---
+    $cat_input = $_POST['category_code'] ?? '';
+    $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
+    $sub_cat_input = $_POST['sub_category_code'] ?? '';
+    $sub_cat_val = is_array($sub_cat_input) ? implode(',', $sub_cat_input) : $sub_cat_input;
+    $sub_sub_input = $_POST['sub_sub_category_code'] ?? '';
+    $sub_sub_val = is_array($sub_sub_input) ? implode(',', $sub_sub_input) : $sub_sub_input;
+    $icons_raw = $_POST['optionals'] ?? '';
+    $icons_val = is_array($icons_raw) ? implode(',', $icons_raw) : $icons_raw;
+    $back_order_input = $_POST['back_order'] ?? '0';
+    $percent_val = ($back_order_input == '1') ? (!empty($_POST['backorder_percent']) ? intval($_POST['backorder_percent']) : 0) : 0;
+    $day_val  = ($back_order_input == '1') ? (!empty($_POST['backorder_day'])  ? intval($_POST['backorder_day'])  : 0) : 0;
+
+    // --- Main Photo Upload ---
+    $mainProductPhoto = $_POST['old_product_photo_main'] ?? ($oldData['form2']['product_photo'] ?? '');
+    if (isset($_FILES['product_photo_main']) && $_FILES['product_photo_main']['error'] === UPLOAD_ERR_OK) {
+      $tmpName = $_FILES['product_photo_main']['tmp_name'];
+      $name  = $_FILES['product_photo_main']['name'];
+      $ext  = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+      if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+        $uploadDir = __DIR__ . '/../uploads/products/';
+        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+        $newFileName = "MAIN_" . $id . "_" . time() . "_" . rand(100,999) . "." . $ext;
+        if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+          $mainProductPhoto = "uploads/products/" . $newFileName;
+        }
+      }
+    }
+   
+    // Search String Logic
+    $s_group = $_POST['search_group'] ?? '';
+    $s_cat_arr = $_POST['search_cat'] ?? [];
+    $s_cat  = is_array($s_cat_arr) ? implode(',', $s_cat_arr) : $s_cat_arr;
+    $s_sub_arr = $_POST['search_sub'] ?? [];
+    $s_sub  = is_array($s_sub_arr) ? implode(',', $s_sub_arr) : $s_sub_arr;
+    $s_subsub_arr = $_POST['search_sub_sub'] ?? [];
+    $s_subsub  = is_array($s_subsub_arr) ? implode(',', $s_subsub_arr) : $s_subsub_arr;
+    $search_category_string = $s_subsub . '|' . $s_sub . '|' . $s_cat . '|' . $s_group;
+    $search_term = $_POST['search_term'] ?? '';
+
+    // 3. Prepare Data
+    $data = [
+      'product_photo'   => $mainProductPhoto,
+      'invoice_image'   => $invoicePath,
+      'search_term'    => $search_term,
+      'search_category_string' => $search_category_string,
+      'is_variant'     => $is_variant,
+      'Item_code'     => $item_code,
+      'sku'        => $generated_sku,
+      'group_name'     => $_POST['group_name'] ?? '',
+      'colormaps'     => $_POST['colormaps'] ?? '',
+      'image_directory'  => $_POST['image_directory'] ?? '',
+      'category_code'   => $category_val,
+      'sub_category_code' => $sub_cat_val,
+      'sub_sub_category_code' => $sub_sub_val,
+      'added_date'  => $_POST['added_date'] ?? '',
+      'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
+      'updated_by_user_id' => $_POST['updated_by_user_id'] ?? '',
+      'invoice_no'     => $_POST['invoice_no'] ?? '',
+      'material_code'   => $_POST['material_code'] ?? '',
+      'product_title'   => $_POST['product_title'] ?? '',
+      'key_words'     => $_POST['key_words'] ?? '',
+      'snippet_description' => $_POST['snippet_description'] ?? '',
+      'vendor_code'    => $_POST['vendor_code'] ?? '',
+      'cp'         => $_POST['cp'] ?? '',
+      'price_india_mrp'  => $_POST['price_india_mrp'] ?? '',
+      'price_india'    => $_POST['price_india'] ?? '',
+      'usd_price'      => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
+      'hsn_code'      => $_POST['hsn_code'] ?? '',
+      'gst_rate'      => $_POST['gst_rate'] ?? '',
+      'height'       => $_POST['height'] ?? '',
+      'width'       => $_POST['width'] ?? '',
+      'depth'       => $_POST['depth'] ?? '',
+      'weight'       => $_POST['weight'] ?? '',
+      'size'        => $_POST['size'] ?? '',
+      'color'       => $_POST['color'] ?? '',
+      'quantity_received' => $_POST['quantity_received'] ?? '',
+      'permanently_available'=> $_POST['permanently_available'] ?? '',
+      'ware_house_code'  => $_POST['ware_house_code'] ?? '',
+      'store_location'   => $_POST['store_location'] ?? '',
+      'marketplace'    => $_POST['marketplace'] ?? '',
+      'india_net_qty'   => $_POST['india_net_qty'] ?? '',
+      'lead_time_days'   => $_POST['lead_time_days'] ?? '',
+      'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
+      'optionals' => $icons_val,
+      'back_order'     => $back_order_input,
+      'backorder_percent' => $percent_val,
+      'backorder_day'   => $day_val,
+      'us_block'      => $_POST['us_block'] ?? '',
+      'dimention_unit'   => $_POST['dimention_unit'] ?? '',
+      'weight_unit'    => $_POST['weight_unit'] ?? '',
+      'feedback'    => $_POST['feedback'] ?? '',
+    ];
+   
+    // 4. Update Main Record
+    $result = $inboundingModel->updatedesktopform($id, $data);
+
+    // --- VARIATIONS LOGIC ---
+    $allVariations = $_POST['variations'] ?? [];
+    foreach ($allVariations as $key => &$variant) {
+      $variant['id'] = $variant['id'] ?? '';
+      $uploadError = $_FILES['variations']['error'][$key]['photo'] ?? UPLOAD_ERR_NO_FILE;
+      if ($uploadError === UPLOAD_ERR_OK) {
+        $tmpName = $_FILES['variations']['tmp_name'][$key]['photo'];
+        $name  = $_FILES['variations']['name'][$key]['photo'];
+        $ext  = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+          $uploadDir = __DIR__ . '/../uploads/products/';
+          if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+          $newFileName = "VAR_" . $id . "_" . $key . "_" . time() . "_" . rand(100,999) . "." . $ext;
+          if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+            $variant['photo'] = "uploads/products/" . $newFileName;
+          }
+        }
+      } else {
+        $variant['photo'] = $variant['old_photo'] ?? '';
+      }
+    }
+    unset($variant);
+    $inboundingModel->saveVariations($id, $allVariations, $item_code);
+
+    // 5. Update Image Order & Assignment
+    if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
+      foreach ($_POST['photo_order'] as $img_id => $order_num) {
+        $inboundingModel->update_image_order($img_id, $order_num);
+      }
+    }
+    if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
+      foreach ($_POST['photo_variation'] as $img_id => $var_id) {
+        $inboundingModel->update_image_variation($img_id, $var_id);
+      }
+    }
+
+    if ($result['success']) {
+     
+      // =========================================================
+      // START: ADVANCED RENAMING LOGIC (4 CASES)
+      // =========================================================
+      if (!empty($item_code) && $shouldRename) {
+        // Pass current POST data to helper so we use fresh color/size values
+        $currentDataForRename = [
+          'is_variant' => $is_variant,
+          'color'   => $_POST['color'] ?? '',
+          'size'   => $_POST['size'] ?? ''
+        ];
+        $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
+      }
+      // =========================================================
+     
+      $logData = ['userid_log' => $_POST['userid_log'] ?? '', 'i_id' => $id, 'stat' => 'Data Entry'];
+      $inboundingModel->stat_logs($logData);
+
+      $action_clicked = $_POST['save_action'] ?? '';
+      if ($action_clicked === 'draft') {
+        header("location: " . base_url('?page=inbounding&action=desktopform&id=' . $id . '&msg=draft_saved'));
+      } else {
+        header("location: " . base_url('?page=inbounding&action=list'));
+      }
+      exit;
+    } else {
+      echo "Update failed: " . $result['message'];
+    }
+  }
+
     public function submitStep3() {
         global $inboundingModel;
 
