@@ -960,7 +960,7 @@ class InboundingController {
                     $shouldRename = true;
                     break; 
                 }
-            } while ($attempts < 100);
+            } while ($attempts < 100000);
         }
 
         // --- SKU GENERATION ---
