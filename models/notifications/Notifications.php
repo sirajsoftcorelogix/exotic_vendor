@@ -28,7 +28,7 @@ class Notifications {
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT vn.*, vu.name FROM vp_notifications AS vn INNER JOIN vp_users AS vu ON vu.id = vn.user_id $where LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vn.*, vu.name FROM vp_notifications AS vn INNER JOIN vp_users AS vu ON vu.id = vn.user_id $where ORDER BY vn.id DESC LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
         $data = [];

@@ -381,7 +381,7 @@ $msgCnt = $notificationController->getUnreadCount();
         let notif = notifs.shift();
 
         let notification = new Notification(notif.title, {
-            body: notif.message,
+            body: notif.message.replace(/<[^>]*>/g, ''),
             icon: "images/bell-icons.ico",
             data: { link: notif.link }
         });
