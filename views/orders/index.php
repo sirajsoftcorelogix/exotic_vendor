@@ -2820,35 +2820,43 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
     .then(response => response.json())
     .then(data => {
         const msgEl = document.getElementById('bulkAddToPurchaseError');
-
         if (data.success) {
 
-            let messages = [];
+            let html = [];
 
-            // ✅ Created count
+            // ✅ Created (GREEN)
             if (data.created && data.created > 0) {
-                messages.push(`✅ ${data.created} item(s) added to Purchase List`);
+                html.push(
+                    `<span class="text-green-500 font-semibold">
+                        ✅ ${data.created} item(s) added to Purchase List
+                    </span>`
+                );
             }
 
-            // ⚠️ Failed items
+            // ⚠️ Failed (RED)
             if (Array.isArray(data.failed) && data.failed.length > 0) {
-                messages.push(`⚠️ ${data.failed.length} item(s) failed:`);
+                html.push(
+                    `<span class="text-red-500 font-semibold">
+                        ⚠️ ${data.failed.length} item(s) failed:
+                    </span>`
+                );
 
                 data.failed.forEach(f => {
-                    messages.push(
-                        `• Order #${f.order_id} (SKU: ${f.sku}): ${f.message}`
+                    html.push(
+                        `<span class="text-red-500 ml-2 block">
+                            • Order #${f.order_id} (SKU: ${f.sku}): ${f.message}
+                        </span>`
                     );
                 });
             }
 
-            msgEl.classList.remove('text-red-500', 'hidden');
-            msgEl.classList.add('text-green-500');
-            msgEl.innerHTML = messages.join('<br>');
+            msgEl.classList.remove('hidden');
+            msgEl.innerHTML = html.join('');
 
-            // Clear local storage
+            // clear localStorage
             localStorage.removeItem('selected_po_orders');
 
-            // Close popup + reload
+            // auto close
             setTimeout(() => {
                 closeBulkAddToPurchasePopup();
                 location.reload();
