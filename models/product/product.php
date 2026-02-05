@@ -1197,7 +1197,7 @@ class product
 
                 // ✅ Log into vp_order_status_log
                 // status column: readable message
-                $statusText = "AGENT: ".$loggedUserNamePurchase." | Purchased  Qty: {$qty}";
+                $statusText = "AGENT: ".$loggedUserName." | Purchased  Qty: {$qty}";
                 $this->createOrderStatusLog(
                     $order_id_for_log,
                     $statusText,
@@ -1231,7 +1231,7 @@ class product
                 $u->execute();
 
                 // ✅ Log into vp_order_status_log
-                $statusText = "AGENT: ".$loggedUserNamePurchase." | Purchase PARTIAL | Qty: {$consumedQty}";
+                $statusText = "AGENT: ".$loggedUserName." | Purchase PARTIAL | Qty: {$consumedQty}";
                 $this->createOrderStatusLog(
                     $order_id_for_log,
                     $statusText,
