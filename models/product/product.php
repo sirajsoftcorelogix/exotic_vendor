@@ -582,6 +582,7 @@ class product
 
         $now = date('Y-m-d H:i:s');
 
+        // ✅ bind types: i i i s s s s i i s s
         $types = "iiissssiiss";
 
         $stmt->bind_param(
@@ -590,8 +591,8 @@ class product
             $data['product_id'],
             $data['order_id'],
             $data['sku'],
-            $now,                    // date_added
-            $data['date_purchased'], // nullable
+            $now,                     // date_added
+            $data['date_purchased'],  // nullable
             $data['status'],
             $data['quantity'],
             $data['edit_by'],
@@ -606,23 +607,33 @@ class product
             ];
         }
 
-        // ✅ INSERT SUCCESS → CREATE LOG
-        $purchase_list_id = $this->db->insert_id;
+        // ✅ INSERT SUCCESS
+        $purchase_list_id = (int)$this->db->insert_id;
 
-        $this->createLog(
-            $purchase_list_id,
-            $data['product_id'],
-            'CREATED',
-            null,
-            json_encode([
-                'new_qty'    => (int)$data['quantity'],
+        // ✅ Logged-in user info (prefer session, fallback to edit_by)
+        $loggedUserId = (int)($_SESSION['user']['id'] ?? $data['edit_by'] ?? 0);
+        $loggedUserName = $_SESSION['user']['name'] ?? 'Unknown';
+
+        // ✅ Create vp_order_status_log entry
+        // status column should remain human-readable
+        $statusText = "AGENT: ".$loggedUserName." | Purchase List CREATED | Qty: " . (int)$data['quantity'];
+
+        $this->createOrderStatusLog(
+            (int)$data['order_id'],         // order_id (required by vp_order_status_log)
+            $statusText,                    // status text
+            $loggedUserId,                  // changed_by
+            $loggedUserName,                // saved inside api_response JSON
+            (int)$data['quantity'],         // qty_changed saved inside api_response JSON
+            [
+                'action' => 'CREATED',
+                'purchase_list_id' => $purchase_list_id,
+                'product_id' => (int)$data['product_id'],
+                'user_id' => (int)$data['user_id'],
+                'sku' => $data['sku'],
                 'status' => $data['status'],
-                'sku'    => $data['sku'],
-                'order'  => $data['order_id']
-            ]),
-            (int)$data['quantity'],
-            $data['edit_by'],
-            'Item added to purchase list'
+                'new_qty' => (int)$data['quantity'],
+                'date_added' => $now,
+            ]
         );
 
         return [
@@ -630,6 +641,7 @@ class product
             'purchase_list_id' => $purchase_list_id
         ];
     }
+
 
     public function getPurchaseListByUser($user_id, $limit = 100, $offset = 0, $filters = [])
     {
@@ -1123,6 +1135,7 @@ class product
                     pl.edit_by,
                     pl.user_id,
                     pl.product_id,
+                    pl.order_id,
                     o.order_number
                 FROM purchase_list AS pl
                 LEFT JOIN vp_orders AS o 
@@ -1144,28 +1157,32 @@ class product
             ];
         }
 
-        $status = '';
+        // ✅ logged-in user info
+        $loggedUserId = (int)($_SESSION['user']['id'] ?? 0);
+        $loggedUserName = $_SESSION['user']['name'] ?? 'Unknown';
+
+        $finalStatus = null;
         $order_number = null;
         $sku = null;
         $added_by = null;
+        $order_id_for_log = null;
 
         foreach ($rows as $row) {
-            if ($remaining <= 0) {
-                break;
-            }
+            if ($remaining <= 0) break;
 
             $id         = (int)$row['id'];
             $qty        = (int)$row['quantity'];
             $product_id = (int)$row['product_id'];
             $added_by   = (int)$row['edit_by'];
 
+            $order_id_for_log = (int)$row['order_id']; // ✅ needed for vp_order_status_log
             $order_number = $row['order_number'] ?? $order_number;
             $sku          = $row['sku'] ?? $sku;
 
             /** FULL PURCHASE **/
             if ($qty <= $remaining) {
 
-                $status = 'purchased';
+                $finalStatus = 'purchased';
                 $remaining -= $qty;
 
                 $sql = "UPDATE purchase_list 
@@ -1178,24 +1195,29 @@ class product
                 $u->bind_param('i', $id);
                 $u->execute();
 
-                // ✅ LOG FULL PURCHASE
-                $this->createLog(
-                    $id, // IMPORTANT: row id, not method param
-                    $product_id,
-                    'FULL_PURCHASE',
-                    json_encode(['old_qty' => $qty]),
-                    json_encode(['new_qty' => 0]),
+                // ✅ Log into vp_order_status_log
+                // status column: readable message
+                $statusText = "AGENT: ".$loggedUserNamePurchase." | Purchased  Qty: {$qty}";
+                $this->createOrderStatusLog(
+                    $order_id_for_log,
+                    $statusText,
+                    $loggedUserId,
+                    $loggedUserName,
                     $qty,
-                    $_SESSION['user']['id'],
-                    'Fully purchased'
+                    [
+                        'purchase_list_id' => $id,
+                        'action' => 'FULL_PURCHASE',
+                        'old_qty' => $qty,
+                        'new_qty' => 0,
+                    ]
                 );
 
-            } 
+            }
             /** PARTIAL PURCHASE **/
             else {
 
-                $status = 'partially_purchased';
-                $consumedQty = $remaining;          // ✅ capture first
+                $finalStatus = 'partially_purchased';
+                $consumedQty = $remaining;
                 $newQty      = $qty - $consumedQty;
                 $remaining   = 0;
 
@@ -1208,25 +1230,29 @@ class product
                 $u->bind_param('ii', $newQty, $id);
                 $u->execute();
 
-                // ✅ LOG PARTIAL PURCHASE (FIXED)
-                $this->createLog(
-                    $id,
-                    $product_id,
-                    'PARTIAL_PURCHASE',
-                    json_encode(['old_qty' => $qty]),
-                    json_encode(['new_qty' => $newQty]),
+                // ✅ Log into vp_order_status_log
+                $statusText = "AGENT: ".$loggedUserNamePurchase." | Purchase PARTIAL | Qty: {$consumedQty}";
+                $this->createOrderStatusLog(
+                    $order_id_for_log,
+                    $statusText,
+                    $loggedUserId,
+                    $loggedUserName,
                     $consumedQty,
-                    $_SESSION['user']['id'],
-                    'Partially purchased'
+                    [
+                        'purchase_list_id' => $id,
+                        'action' => 'PARTIAL_PURCHASE',
+                        'old_qty' => $qty,
+                        'new_qty' => $newQty,
+                    ]
                 );
             }
         }
 
-        // ✅ Notification safety
+        // ✅ Notification safety (use $finalStatus instead of overwriting $status)
         if ($added_by && $sku) {
             $link = base_url(
                 'index.php?page=products&action=master_purchase_list&search=' .
-                $sku . '&status=' . $status
+                $sku . '&status=' . ($finalStatus ?? 'pending')
             );
 
             require_once 'models/comman/tables.php';
@@ -1249,41 +1275,47 @@ class product
         ];
     }
 
-
-    public function createLog(
-        $purchase_list_id,
-        $product_id,
-        $action,
-        $old_value,
-        $new_value,
-        $qty_changed,
-        $performed_by,
-        $remarks = null
+    public function createOrderStatusLog(
+        int $order_id,
+        string $status,
+        int $changed_by,
+        string $changed_by_name,
+        int $qty_changed,
+        ?array $api_response = null
     ) {
-        $sql = "INSERT INTO purchase_log
-            (purchase_list_id, product_id, action, old_value, new_value, qty_changed, performed_by, remarks)
-            VALUES (?,?,?,?,?,?,?,?)";
+        // Put extra details into api_response JSON (since table doesn't have username/qty columns)
+        $payload = [
+            'changed_by_name' => $changed_by_name,
+            'qty_changed' => $qty_changed,
+            'status' => $status,
+        ];
+
+        if (is_array($api_response)) {
+            $payload['api_response'] = $api_response;
+        }
+
+        $sql = "INSERT INTO vp_order_status_log
+                (order_id, status, changed_by, api_response, change_date, created_on)
+                VALUES (?,?,?,?,NOW(),NOW())";
 
         $stmt = $this->db->prepare($sql);
-
         if (!$stmt) {
             throw new Exception($this->db->error);
         }
 
+        $api_json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+
         $stmt->bind_param(
-            'iisssiis',
-            $purchase_list_id,
-            $product_id,
-            $action,
-            $old_value,
-            $new_value,
-            $qty_changed,
-            $performed_by,
-            $remarks
+            'isis',
+            $order_id,
+            $status,       // keep short readable status here
+            $changed_by,
+            $api_json      // store user name + qty here
         );
 
         return $stmt->execute();
     }
+
 
 
     public function addPurchaseTransaction($purchase_list_id, $qty, $user_id, $status, $product_id, $reason = '')
