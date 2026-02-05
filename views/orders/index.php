@@ -2819,23 +2819,45 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
     })
     .then(response => response.json())
     .then(data => {
+        const msgEl = document.getElementById('bulkAddToPurchaseError');
+
         if (data.success) {
-            //alert(data.message);
-            document.getElementById('bulkAddToPurchaseError').classList.remove('text-red-500');
-            document.getElementById('bulkAddToPurchaseError').classList.add('text-green-500');
-            document.getElementById('bulkAddToPurchaseError').textContent = 'Purchase List created successfully.';
-            //poitem clear from localStorage
+
+            let messages = [];
+
+            // ✅ Created count
+            if (data.created && data.created > 0) {
+                messages.push(`✅ ${data.created} item(s) added to Purchase List`);
+            }
+
+            // ⚠️ Failed items
+            if (Array.isArray(data.failed) && data.failed.length > 0) {
+                messages.push(`⚠️ ${data.failed.length} item(s) failed:`);
+
+                data.failed.forEach(f => {
+                    messages.push(
+                        `• Order #${f.order_id} (SKU: ${f.sku}): ${f.message}`
+                    );
+                });
+            }
+
+            msgEl.classList.remove('text-red-500', 'hidden');
+            msgEl.classList.add('text-green-500');
+            msgEl.innerHTML = messages.join('<br>');
+
+            // Clear local storage
             localStorage.removeItem('selected_po_orders');
 
-            //timeout to close popup and reload
+            // Close popup + reload
             setTimeout(() => {
                 closeBulkAddToPurchasePopup();
                 location.reload();
-            }, 3000);
-            //bulkStatusError.classList.remove('hidden');
-            //location.reload();
+            }, 3500);
+
         } else {
-            alert(data.message);
+            msgEl.classList.remove('hidden');
+            msgEl.classList.add('text-red-500');
+            msgEl.textContent = data.message || 'Something went wrong.';
         }
     });
 });
