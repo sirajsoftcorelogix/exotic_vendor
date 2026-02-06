@@ -204,7 +204,7 @@ $waHref = '';
 
     <title><?= e($title) ?></title>
     <!-- ✅ Open Graph for WhatsApp/Facebook -->
-    <meta property="og:title" content="<?= e($title) ?>">
+    <meta property="og:title" content="">
     <meta property="og:description" content="<?= e($description) ?>">
     <meta name="description" content="<?= e($description) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
