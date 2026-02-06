@@ -616,7 +616,7 @@ class product
 
         // ✅ Create vp_order_status_log entry
         // status column should remain human-readable
-        $statusText = "AGENT: ".$loggedUserName." | Purchase List CREATED | Qty: " . (int)$data['quantity'];
+        $statusText = "Purchase CREATED (SKU : ".$data['sku'].") Qty: " . (int)$data['quantity'];
 
         $this->createOrderStatusLog(
             (int)$data['order_id'],         // order_id (required by vp_order_status_log)
@@ -1197,7 +1197,8 @@ class product
 
                 // ✅ Log into vp_order_status_log
                 // status column: readable message
-                $statusText = "AGENT: ".$loggedUserName." | Purchased  Qty: {$qty}";
+                $statusText = "Purchased (SKU : ".$sku.") Qty: " . $qty;
+                
                 $this->createOrderStatusLog(
                     $order_id_for_log,
                     $statusText,
@@ -1231,7 +1232,7 @@ class product
                 $u->execute();
 
                 // ✅ Log into vp_order_status_log
-                $statusText = "AGENT: ".$loggedUserName." | Purchase PARTIAL | Qty: {$consumedQty}";
+                $statusText = "Purchase PARTIAL (SKU : ".$sku.") Qty: " . $consumedQty;
                 $this->createOrderStatusLog(
                     $order_id_for_log,
                     $statusText,
@@ -1259,10 +1260,15 @@ class product
             $commanModel = new Tables($this->db);
             $agent_name = $commanModel->getUserNameById($added_by);
 
+            $orderLink = '';
+            if (isset($order_number) && !empty($order_number)) {
+                $orderLink = base_url('index.php?order_number=' . $order_number);
+            }    
+
             insertNotification(
                 $added_by,
                 'Product Purchased',
-                $agent_name . ' has purchased item ' . $sku . ' for order ' . $order_number,
+                $agent_name . ' has purchased item ' . $sku . ' for order ' . $orderLink,
                 $link
             );
         }

@@ -80,7 +80,7 @@
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
                 
                 // Build the share URL
-                $shareUrl = full_url('share.php?id=' . (int)$pl['product_id'].'&v='.time());
+                $shareUrl = full_url('share.php?id=' . base64_encode((int)$pl['product_id']).'&v='.time());
                                 
                 // Alternative: Even simpler approach (recommended)
                 $waHrefSimple = "https://wa.me/?text=" . urlencode($shareUrl);
@@ -97,13 +97,13 @@
                     <a href="<?= $waHrefSimple ?>"
                         target="_blank"
                         rel="noopener"
-                        class="absolute top-0 right-0 w-6 h-6 flex items-center justify-center
-                                rounded-full bg-white border border-yellow-300
+                        class="absolute top-0 right-0 w-8 h-8 flex items-center justify-center
+                                rounded-full bg-white 
                                 text-amber-600 hover:bg-amber-50 hover:border-yellow-400
                                 shadow-sm transition">
 
                             <svg xmlns="http://www.w3.org/2000/svg"
-                                class="w-4 h-4"
+                                class="w-6 h-6"
                                 fill="none"
                                 stroke="currentColor"
                                 stroke-width="2"
@@ -125,7 +125,7 @@
                             <?= htmlspecialchars($title); ?>
                         </h3>
 
-                        <div class="text-xs text-gray-500">
+                        <div class="text-xs text-gray">
                             Item Code:
                             <span class="font-medium text-gray-800">
                                 <?= htmlspecialchars($item_code); ?>
@@ -155,51 +155,65 @@
                 </div>
 
                 <!-- DETAILS GRID -->
-                <div class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                <div class="mt-4 grid grid-cols-[140px_12px_1fr] gap-x-2 gap-y-2 text-xs">
+
+                    <div class="text-gray">Added By</div>
+                    <div class="text-gray">:</div>
+                    <div class="font-medium"><?= htmlspecialchars($pl['added_by']); ?></div>
+
+                    <div class="text-gray">Added On</div>
+                    <div class="text-gray">:</div>
+                    <div class="font-medium"><?= htmlspecialchars($date_added); ?></div>
+
                     <?php if (!empty($pl['vendor']) && strtoupper(trim($pl['vendor'])) !== 'N/A'): ?>
-                        <div class="text-gray-500">Vendor</div>
+                        <div class="text-gray">Vendor</div>
+                        <div class="text-gray">:</div>
                         <div class="font-medium"><?= ucwords($pl['vendor']); ?></div>
                     <?php endif; ?>
 
-                    <div class="text-gray-500">Added By</div>
-                    <div class="font-medium"><?= htmlspecialchars($pl['added_by']); ?></div>
-
-                    <div class="text-gray-500">Added On</div>
-                    <div class="font-medium"><?= htmlspecialchars($date_added); ?></div>
-
-                    <div class="text-gray-500">SKU</div>
+                    <div class="text-gray">SKU</div>
+                    <div class="text-gray">:</div>
                     <div class="font-medium"><?= htmlspecialchars($pl['sku']); ?></div>
 
-                    <div class="text-gray-500">Color</div>
-                    <div class="font-medium"><?= htmlspecialchars($pl['product']['color']); ?></div>
+                    <div class="text-gray">Color</div>
+                    <div class="text-gray">:</div>
+                    <div class="font-medium"><?= htmlspecialchars($pl['product']['color'] ?? '-'); ?></div>
 
-                    <div class="text-gray-500">Size</div>
-                    <div class="font-medium"><?= htmlspecialchars($pl['product']['size']); ?></div>
+                    <div class="text-gray">Size</div>
+                    <div class="text-gray">:</div>
+                    <div class="font-medium"><?= htmlspecialchars($pl['product']['size'] ?? '-'); ?></div>
 
-                    <div class="text-gray-500">Material</div>
+                    <div class="text-gray">Material</div>
+                    <div class="text-gray">:</div>
                     <div class="font-medium"><?= htmlspecialchars($pl['product']['material'] ?? '-'); ?></div>
 
-                    <div class="text-gray-500">Weight</div>
+                    <div class="text-gray">Weight</div>
+                    <div class="text-gray">:</div>
                     <div class="font-medium">
                         <?= htmlspecialchars($pl['product']['product_weight'] ?? ''); ?>
                         <?= htmlspecialchars($pl['product']['product_weight_unit'] ?? ''); ?>
                     </div>
 
-                    <div class="text-gray-500">Dimensions</div>
+                    <div class="text-gray">Dimensions</div>
+                    <div class="text-gray">:</div>
                     <div class="font-medium">
                         <?= htmlspecialchars($pl['product']['prod_height'] ?? ''); ?> ×
                         <?= htmlspecialchars($pl['product']['prod_width'] ?? ''); ?> ×
                         <?= htmlspecialchars($pl['product']['prod_length'] ?? ''); ?> in
                     </div>
 
-                    <?php if($status === 'purchased'): ?>
-                        <div class="text-gray-500">Purchased By</div>
+                    <?php if ($status === 'purchased'): ?>
+                        <div class="text-gray">Purchased By</div>
+                        <div class="text-gray">:</div>
                         <div class="font-medium"><?= htmlspecialchars($agent_name); ?></div>
 
-                        <div class="text-gray-500">Purchased On</div>
+                        <div class="text-gray">Purchased On</div>
+                        <div class="text-gray">:</div>
                         <div class="font-medium"><?= htmlspecialchars($date_purchased); ?></div>
                     <?php endif; ?>
                 </div>
+
+
 
                 <!-- PURCHASE CONTROLS -->
                 <?php
@@ -209,14 +223,14 @@
                 <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
 
                     <div>
-                        <label class="text-gray-500">Qty To Purchase</label>
+                        <label class="text-gray">Qty To Purchase</label>
                         <div class="mt-1 bg-gray-100 border rounded px-2 py-1 text-center font-semibold">
                             <?= $pQty; ?>
                         </div>
                     </div>
 
                     <div>
-                        <label class="text-gray-500">Qty Purchased</label>
+                        <label class="text-gray">Qty Purchased</label>
                         <input type="number" min="1" step="1"
                             onblur="checkMinStock(<?= (int)$pl['id']; ?>)"
                             id="quantity_<?= (int)$pl['id']; ?>"
@@ -227,7 +241,7 @@
                     </div>
 
                     <div class="col-span-2">
-                        <label class="text-gray-500">Status</label>
+                        <label class="text-gray">Status</label>
                         <select id="status_<?= (int)$pl['id']; ?>"
                                 class="mt-1 w-full border rounded px-2 py-1
                                     <?= $isPurchased ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : '' ?>"
