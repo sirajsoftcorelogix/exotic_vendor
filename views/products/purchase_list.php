@@ -85,7 +85,7 @@
                 $height = $product['prod_height'] ?? null;
                 $width  = $product['prod_width'] ?? null;
                 $length = $product['prod_length'] ?? null;
-
+                $details = [];
                 if (!empty($height)) {
                     $details[] = 'Height: ' . $height . ' inch';
                 }
