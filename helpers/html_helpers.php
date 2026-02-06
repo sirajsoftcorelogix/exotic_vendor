@@ -624,14 +624,25 @@
 
 	function getPurchaseStatuses(): array {
 		return [
-			'pending'          => 'Pending',
-			'item_not_available'    => 'Item not Available',
-			'alternate'        => 'Alternate Item Available',
-			'partially_purchased' => 'Partially Purchased',
-			'purchased'        => 'Purchased',
-			'ordered'          => 'Item Ordered',
+			'pending'                => 'Pending',
+			'item_not_available'     => 'Item not Available',
+			'alternate'              => 'Alternate Item Available',
+			'partially_purchased'    => 'Partially Purchased',
+			'purchased'              => 'Purchased',
+			'ordered'                => 'Item Ordered',
+			'po_sent'                => 'PO Sent',
+			'order_placed'           => 'Order Placed',
+			'on_coloring'            => 'On Coloring',
+			'alternate_available'    => 'Alternate Available',
+			'damage'                 => 'Damage',
+			'repair'                 => 'Repair',
+			'not_available_at_jm'    => 'Not Available At JM',
+			'received_at_jm'         => 'Received At JM',
+			'sent_to_office'         => 'Sent To Office',
+			'received_at_office'     => 'Received At Office',
 		];
 	}
+
 
 	if (!function_exists('full_url')) {
 		function full_url(string $path): string {

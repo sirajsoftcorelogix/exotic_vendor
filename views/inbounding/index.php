@@ -10,8 +10,7 @@ if (!isset($conn)) {
 $vendorsModel = new Vendor($conn);
 $usersModel = new User($conn);
 
-// 1. Processing Logic (Merges Vendor and User names into the array)
-// Ensure $inbounding_data exists to avoid errors
+// 1. Processing Logic
 if (isset($inbounding_data) && is_array($inbounding_data)) {
     foreach ($inbounding_data as $key => $value) {
         $vendor = $vendorsModel->getVendorById($value['vendor_code']);
@@ -27,7 +26,6 @@ if (isset($inbounding_data) && is_array($inbounding_data)) {
     $inbounding_data = [];
 }
 
-// Clean up models
 unset($usersModel);
 unset($vendorsModel);
 
@@ -39,142 +37,115 @@ function isFilled($value) {
     if ($value === "0000-00-00" || $value === "0000-00-00 00:00:00") return false;
     return true;
 }
+
+// 3. THUMBNAIL HELPER FUNCTION
+function getThumbnail($filePath, $width = 150, $height = 150) {
+    $cleanPath = ltrim($filePath, '/');
+
+    // Return placeholder if file missing
+    if (empty($cleanPath) || !file_exists($cleanPath)) {
+        return ''; 
+    }
+
+    // Auto-detect directory
+    $dirName  = dirname($cleanPath);
+    $fileName = basename($cleanPath);
+    
+    $thumbDir  = $dirName . '/thumbs/'; 
+    $thumbPath = $thumbDir . $fileName;
+
+    // Return existing thumb
+    if (file_exists($thumbPath)) return $thumbPath;
+
+    // Create directory
+    if (!is_dir($thumbDir)) mkdir($thumbDir, 0777, true);
+
+    $info = getimagesize($cleanPath);
+    if (!$info) return $cleanPath; // Not an image or unknown format
+
+    $mime = $info['mime'];
+    switch ($mime) {
+        case 'image/jpeg': $image = imagecreatefromjpeg($cleanPath); break;
+        case 'image/png':  $image = imagecreatefrompng($cleanPath); break;
+        case 'image/gif':  $image = imagecreatefromgif($cleanPath); break;
+        case 'image/webp': $image = imagecreatefromwebp($cleanPath); break;
+        default: return $cleanPath;
+    }
+
+    $oldW = imagesx($image);
+    $oldH = imagesy($image);
+    $aspectRatio = $oldW / $oldH;
+
+    if ($width / $height > $aspectRatio) {
+        $width = (int) ($height * $aspectRatio);
+    } else {
+        $height = (int) ($width / $aspectRatio);
+    }
+
+    $newImage = imagecreatetruecolor((int)$width, (int)$height);
+
+    if ($mime == 'image/png' || $mime == 'image/webp') {
+        imagecolortransparent($newImage, imagecolorallocatealpha($newImage, 0, 0, 0, 127));
+        imagealphablending($newImage, false);
+        imagesavealpha($newImage, true);
+    }
+
+    imagecopyresampled($newImage, $image, 0, 0, 0, 0, $width, $height, $oldW, $oldH);
+
+    // Save Thumbnail
+    switch ($mime) {
+        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 70); break;
+        case 'image/png':  imagepng($newImage, $thumbPath); break;
+        case 'image/gif':  imagegif($newImage, $thumbPath); break;
+        case 'image/webp': imagewebp($newImage, $thumbPath); break;
+    }
+
+    imagedestroy($image);
+    imagedestroy($newImage);
+
+    return $thumbPath;
+}
 ?>
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
 <style>
-    /* 1. Imports MUST be at the very top */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@700&display=swap');
 
     /* --- GAUGE STYLES --- */
-    .gauge-wrapper { 
-        position: relative; 
-        width: 128px; 
-        height: 80px; 
-        display: flex; 
-        justify-content: center; 
-    }
-
-    .gauge-arc-wrapper { 
-        width: 128px; 
-        height: 64px; 
-        position: absolute; 
-        top: 0; 
-        left: 0; 
-        overflow: hidden; 
-        z-index: 10; 
-    }
-
-    .gauge-arc {
-        width: 128px; 
-        height: 128px; 
-        border-radius: 50%;
-        border: 20px solid #e5e7eb; /* Default Gray Fallback */
-        /* These make it an arc instead of a circle */
-        border-bottom-color: transparent; 
-        border-left-color: transparent; 
-        border-right-color: transparent; 
-        box-sizing: border-box;
-    }
-
-    /* --- EXPANDED GAUGE COLORS --- */
-    /* 0-9%: Red */
-    .gauge-color-0   { border-color: #ef4444; } /* Red-500 */
-    
-    /* 10-39%: Orange */
-    .gauge-color-25  { border-color: #f97316; } /* Orange-500 */
-    
-    /* 40-59%: Amber/Yellow */
-    .gauge-color-50  { border-color: #eab308; } /* Yellow-500 */
-    
-    /* 60-79%: Lime */
-    .gauge-color-75  { border-color: #84cc16; } /* Lime-500 */
-    
-    /* 80-99%: Green */
-    .gauge-color-90  { border-color: #22c55e; } /* Green-500 */
-    
-    /* 100%: Dark Green */
-    .gauge-color-100 { border-color: #15803d; } /* Green-700 */
-
-    /* Needle Wrapper: Handles Rotation & Animation */
-    .gauge-needle-wrapper { 
-        position: absolute; 
-        top: 64px; 
-        left: 50%; 
-        width: 0; 
-        height: 0; 
-        z-index: 20; 
-        /* Transition for smooth movement when percentage changes */
-        transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    /* Needle Shape */
-    .gauge-needle {
-        width: 0; height: 0;
-        border-left: 8px solid transparent; 
-        border-right: 8px solid transparent; 
-        border-bottom: 64px solid black;
-        position: absolute; 
-        bottom: 0; 
-        left: -8px;
-    }
-
-    /* Needle Cap (Black Circle) */
-    .gauge-needle::after {
-        content: ''; 
-        position: absolute; 
-        width: 16px; 
-        height: 16px; 
-        background: black; 
-        border-radius: 50%; 
-        top: 56px; 
-        left: -8px;
-    }
+    .gauge-wrapper { position: relative; width: 128px; height: 80px; display: flex; justify-content: center; }
+    .gauge-arc-wrapper { width: 128px; height: 64px; position: absolute; top: 0; left: 0; overflow: hidden; z-index: 10; }
+    .gauge-arc { width: 128px; height: 128px; border-radius: 50%; border: 20px solid #e5e7eb; border-bottom-color: transparent; border-left-color: transparent; border-right-color: transparent; box-sizing: border-box; }
+    .gauge-color-0 { border-color: #ef4444; }
+    .gauge-color-25 { border-color: #f97316; }
+    .gauge-color-50 { border-color: #eab308; }
+    .gauge-color-75 { border-color: #84cc16; }
+    .gauge-color-90 { border-color: #22c55e; }
+    .gauge-color-100 { border-color: #15803d; }
+    .gauge-needle-wrapper { position: absolute; top: 64px; left: 50%; width: 0; height: 0; z-index: 20; transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1); }
+    .gauge-needle { width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 64px solid black; position: absolute; bottom: 0; left: -8px; }
+    .gauge-needle::after { content: ''; position: absolute; width: 16px; height: 16px; background: black; border-radius: 50%; top: 56px; left: -8px; }
 
     /* --- Accordion Transitions --- */
-    .accordion-content {
-        display: grid;
-        grid-template-rows: 0fr;
-        transition: grid-template-rows 0.3s ease-out, visibility 0.3s ease-out, opacity 0.3s ease-out;
-        opacity: 0;
-        visibility: hidden;
-        overflow: hidden;
-    }
-    .accordion-content.open {
-        grid-template-rows: 1fr;
-        opacity: 1;
-        visibility: visible;
-    }
-    .accordion-content:not(.open) .accordion-inner { 
-        border-top-width: 0; 
-        padding-bottom: 0; 
-    }
+    .accordion-content { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease-out, visibility 0.3s ease-out, opacity 0.3s ease-out; opacity: 0; visibility: hidden; overflow: hidden; }
+    .accordion-content.open { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
+    .accordion-content:not(.open) .accordion-inner { border-top-width: 0; padding-bottom: 0; }
     .accordion-inner { min-height: 0; }
 
     /* --- Typography & Buttons --- */
     .grid-label { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 13px; line-height: 200%; color: rgba(221, 154, 25, 1); }
     .grid-value { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 13px; line-height: 200%; color: rgba(0, 0, 0, 1); }
-
     .timeline-text { font-family: 'Inter', sans-serif; font-size: 13px; line-height: 159%; }
     @media (min-width: 1024px) { .timeline-text { text-align: center; } }
     @media (max-width: 1023px) { .timeline-text { text-align: left; } }
-
-    .timeline-label-completed { font-weight: 400; color: rgba(0, 0, 0, 1); }
-    .timeline-date-completed { font-weight: 600; color: rgba(0, 0, 0, 1); }
-    .timeline-label-pending { font-weight: 400; color: rgba(186, 186, 186, 1); }
-    .timeline-date-pending { font-weight: 600; color: rgba(186, 186, 186, 1); }
-
     .header-title { font-family: 'Instrument Sans', sans-serif; font-weight: 700; font-size: 18px; line-height: 21.6px; color: #000; }
-    
     .btn-base { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 14px; line-height: 100%; text-align: center; transition: opacity 0.2s; width: 100%; display: block; padding: 10px 24px; border-radius: 9999px; white-space: nowrap; cursor: pointer; }
     .btn-edit { background-color: rgba(208, 103, 6, 1); color: #fff; }
     .btn-upload { background-color: #000000; color: #ffffff; }
     .btn-published { background-color: rgba(18, 136, 7, 1); color: #fff; }
     .btn-base:hover { opacity: 0.9; }
-
     .custom-input::placeholder { font-size: 13px; }
 </style>
 
@@ -209,6 +180,7 @@ function isFilled($value) {
         </div>
         <hr class="border-gray-200">
     </div>
+    
     <div class="mb-6 px-1">
         <div class="bg-white border border-gray-200 rounded-[16px] shadow-sm overflow-hidden">
             
@@ -222,13 +194,11 @@ function isFilled($value) {
                     <input type="hidden" name="page" value="inbounding">
                     <input type="hidden" name="action" value="list">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                        
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Pending Status</label>
                             <select name="status_step" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
                                 <option value="">All Items</option>
                                 <?php 
-                                    // REMOVED 'inbound' from this list as requested
                                     $statuses = ['Photoshoot', 'Editing', 'Data Entry', 'Published'];
                                     $selStat = $data['filters']['status_step'] ?? '';
                                     foreach($statuses as $st) {
@@ -238,71 +208,7 @@ function isFilled($value) {
                                 ?>
                             </select>
                         </div>
-
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Vendor</label>
-                                <select name="vendor_code" id="filter_vendor" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
-                                <option value="">Select Vendor...</option>
-                                <?php 
-                                    $selVen = $data['filters']['vendor_code'] ?? '';
-                                    if(!empty($data['vendor_list'])) {
-                                        foreach($data['vendor_list'] as $v) {
-                                            // Correctly uses 'id' and 'vendor_name' from the DB query
-                                            $s = ($selVen == $v['id']) ? 'selected' : '';
-                                            echo "<option value='{$v['id']}' $s>{$v['vendor_name']}</option>";
-                                        }
-                                    }
-                                ?>
-                            </select>
                         </div>
-
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Agent (Received By)</label>
-                            <select id="filter_agent" name="agent_id" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
-                                <option value="">Select Agent...</option>
-                                <?php 
-                                    $selAgent = $data['filters']['received_by_user_id'] ?? '';
-                                    if(!empty($data['user_list'])) {
-                                        foreach($data['user_list'] as $u) {
-                                            $s = ($selAgent == $u['id']) ? 'selected' : '';
-                                            echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
-                                        }
-                                    }
-                                ?>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Feeded By</label>
-                            <select id="filter_updated_by" name="updated_by" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
-                                <option value="">Select User...</option>
-                                <?php 
-                                    $selUpd = $data['filters']['updated_by_user_id'] ?? '';
-                                    if(!empty($data['updated_user_list'])) {
-                                        foreach($data['updated_user_list'] as $u) {
-                                            $s = ($selUpd == $u['id']) ? 'selected' : '';
-                                            echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
-                                        }
-                                    }
-                                ?>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Group</label>
-                            <select id="filter_group" name="group_name" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
-                                <option value="">Select Group...</option>
-                                <?php 
-                                    $selGroup = $data['filters']['group_name'] ?? '';
-                                    if(!empty($data['group_list'])) {
-                                        foreach($data['group_list'] as $grp) {
-                                            // $grp['id'] is the stored value (category field), $grp['name'] is display_name
-                                            $s = ($selGroup == $grp['id']) ? 'selected' : '';
-                                            echo "<option value='{$grp['id']}' $s>{$grp['name']}</option>";
-                                        }
-                                    }
-                                ?>
-                            </select>
-                        </div>
-                    </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
                         <button type="button" onclick="window.location.href='?page=inbounding&action=list'" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold hover:bg-gray-300 transition">Reset</button>
@@ -312,90 +218,68 @@ function isFilled($value) {
             </div>
         </div>
     </div>
+
     <?php 
-            // Helper to manage active tab state
-            $current_step = $_GET['status_step'] ?? ''; 
+        $current_step = $_GET['status_step'] ?? ''; 
+        $tabs = [
+            ''           => 'All Orders',
+            'Photoshoot' => 'Pending Photoshoot',
+            'Editing'    => 'Pending Editing',
+            'Data Entry' => 'Pending Data Entry',
+            'Published'  => 'Pending Publish'
+        ];
+    ?>
+
+    <div class="bg-white border-b border-gray-200 mb-6 sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
             
-            // Define your tabs. Key = DB Value, Label = Display Name
-            $tabs = [
-                ''           => 'All List',
-                'Photoshoot' => 'Pending Photoshoot',
-                'Editing'    => 'Pending Editing',
-                'Data Entry' => 'Pending Data Entry', // Maps to "Edit Info" phase
-                'Published'  => 'Pending Publish'
-            ];
-        ?>
+            <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar" aria-label="Tabs">
+                <?php foreach($tabs as $key => $label): 
+                    $isActive = ($current_step == $key);
+                    $activeClass    = "border-orange-500 text-orange-600 font-bold border-b-4";
+                    $inactiveClass  = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
+                    $url = "?page=inbounding&action=list&status_step=" . urlencode($key);
+                ?>
+                <a href="<?= $url ?>" class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
+                    <?= $label ?>
+                </a>
+                <?php endforeach; ?>
+            </nav>
 
-        <div class="bg-white border-b border-gray-200 mb-6 sticky top-0 z-30">
-            <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
-                
-                <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar" aria-label="Tabs">
-                    <?php foreach($tabs as $key => $label): 
-                        $isActive = ($current_step == $key);
-                        $activeClass    = "border-orange-500 text-orange-600 font-bold border-b-4";
-                        $inactiveClass  = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
-                        $url = "?page=inbounding&action=list&status_step=" . urlencode($key);
-                    ?>
-                    <a href="<?= $url ?>" class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
-                        <?= $label ?>
-                    </a>
-                    <?php endforeach; ?>
-                </nav>
-
-                <div class="relative inline-block text-left ml-4">
-                    <button type="button" onclick="toggleActionMenu()" class="bg-[#856404] hover:bg-[#6d5203] text-white px-5 py-2 rounded-md text-sm font-bold shadow-sm flex items-center gap-2 transition-colors">
-                        Actions
-                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
-                    </button>
-
-                    <div id="action-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 transform origin-top-right">
-                        <div class="py-1">
-                            <button type="button" onclick="exportSelectedData()" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                                <i data-lucide="download" class="w-4 h-4 text-green-600"></i>
-                                Export Selected
-                            </button>
-                            
-                            <div class="border-t border-gray-100 my-1"></div>
-
-                            <button type="button" onclick="deleteSelectedData()" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                Delete Selected
-                            </button>
-                        </div>
+            <div class="relative inline-block text-left ml-4">
+                <button type="button" onclick="toggleActionMenu()" class="bg-[#856404] hover:bg-[#6d5203] text-white px-5 py-2 rounded-md text-sm font-bold shadow-sm flex items-center gap-2 transition-colors">
+                    Actions <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                </button>
+                <div id="action-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 transform origin-top-right">
+                    <div class="py-1">
+                        <button type="button" onclick="exportSelectedData()" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                            <i data-lucide="download" class="w-4 h-4 text-green-600"></i> Export Selected
+                        </button>
+                        <div class="border-t border-gray-100 my-1"></div>
+                        <button type="button" onclick="deleteSelectedData()" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Selected
+                        </button>
                     </div>
                 </div>
-                </div>
+            </div>
         </div>
+    </div>
 
     <?php if (!empty($inbounding_data)): ?>
         <?php foreach ($inbounding_data as $index => $tc): ?>
             <?php
             // Calculation Logic
-            $filled = 0;
-            $total = count($tc);
-            foreach ($tc as $key => $t) {
-                if (isset($tc[$key]) && isFilled($tc[$key])) { $filled++; }
-            }
+            $filled = 0; $total = count($tc);
+            foreach ($tc as $key => $t) { if (isset($tc[$key]) && isFilled($tc[$key])) { $filled++; } }
             $percentage = ($total > 0) ? ($filled / $total) * 100 : 0;
             $percentage = round($percentage);
 
-            // Determine Gauge Classes
             $gaugeColorClass = 'gauge-color-0';
-            $gaugeRotateClass = 'rotate-0';
-
-            if ($percentage >= 100) {
-                $gaugeColorClass = 'gauge-color-100'; // Dark Green
-            } elseif ($percentage >= 80) {
-                $gaugeColorClass = 'gauge-color-90';  // Green
-            } elseif ($percentage >= 60) {
-                $gaugeColorClass = 'gauge-color-75';  // Lime
-            } elseif ($percentage >= 40) {
-                $gaugeColorClass = 'gauge-color-50';  // Yellow/Amber
-            } elseif ($percentage >= 10) {
-                $gaugeColorClass = 'gauge-color-25';  // Orange
-            } else {
-                $gaugeColorClass = 'gauge-color-0';   // Red
-            }
+            if ($percentage >= 100) { $gaugeColorClass = 'gauge-color-100'; } 
+            elseif ($percentage >= 80) { $gaugeColorClass = 'gauge-color-90'; } 
+            elseif ($percentage >= 60) { $gaugeColorClass = 'gauge-color-75'; } 
+            elseif ($percentage >= 40) { $gaugeColorClass = 'gauge-color-50'; } 
+            elseif ($percentage >= 10) { $gaugeColorClass = 'gauge-color-25'; }
             ?>
 
             <div class="accordion-item bg-white rounded-[16px] border border-[rgba(229,229,229,1)] shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
@@ -416,23 +300,54 @@ function isFilled($value) {
                             </div>
                             
                             <div class="flex gap-3 shrink-0 justify-center md:justify-start" onclick="event.stopPropagation()">
+                                <?php 
+                                    $prodThumb = !empty($tc['product_photo']) ? base_url(getThumbnail($tc['product_photo'])) : '';
+                                    $prodFull = !empty($tc['product_photo']) ? base_url($tc['product_photo']) : '';
+                                ?>
                                 <div class="w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center overflow-hidden cursor-zoom-in hover:opacity-80 transition"
-                                     onclick="openImagePopup('<?= base_url($tc['product_photo']) ?>')">
-                                    <?php if(!empty($tc['product_photo'])): ?>
-                                        <img src="<?= base_url($tc['product_photo']) ?>" class="w-full h-full object-cover">
+                                     onclick="openImagePopup('<?= $prodFull ?>')">
+                                    <?php if(!empty($prodThumb)): ?>
+                                        <img src="<?= $prodThumb ?>" class="w-full h-full object-cover">
                                     <?php else: ?>
                                         <i data-lucide="image" class="w-8 h-8 text-gray-300"></i>
                                     <?php endif; ?>
                                 </div>
-                                <div class="relative w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center overflow-hidden cursor-zoom-in hover:opacity-80 transition"
-                                     onclick="openImagePopup('<?= base_url($tc['invoice_image']) ?>')">
-                                     <?php if(!empty($tc['invoice_image'])): ?>
-                                        <img src="<?= base_url($tc['invoice_image']) ?>" class="w-full h-full object-cover">
-                                    <?php else: ?>
-                                        <i data-lucide="file-text" class="w-8 h-8 text-gray-300"></i>
-                                    <?php endif; ?>
-                                     <div class="absolute top-1 right-1 bg-orange-400 text-white text-[8px] px-1 rounded shadow-sm">Doc</div>
-                                </div>
+
+                                <?php 
+                                    $invFile = $tc['invoice_image'] ?? '';
+                                    $isPdf = false;
+                                    $invThumb = '';
+                                    $invFull = '';
+
+                                    if(!empty($invFile)) {
+                                        $invFull = base_url($invFile);
+                                        $ext = strtolower(pathinfo($invFile, PATHINFO_EXTENSION));
+                                        if($ext === 'pdf') {
+                                            $isPdf = true;
+                                        } else {
+                                            $invThumb = base_url(getThumbnail($invFile));
+                                        }
+                                    }
+                                ?>
+                                
+                                <?php if($isPdf): ?>
+                                    <div class="relative w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition"
+                                         onclick="window.open('<?= $invFull ?>', '_blank')">
+                                        <i data-lucide="file-text" class="w-8 h-8 text-red-500 mb-1"></i>
+                                        <span class="text-[9px] font-bold text-gray-600">PDF</span>
+                                        <div class="absolute top-1 right-1 bg-red-500 text-white text-[8px] px-1 rounded shadow-sm">PDF</div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="relative w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center overflow-hidden cursor-zoom-in hover:opacity-80 transition"
+                                         onclick="openImagePopup('<?= $invFull ?>')">
+                                        <?php if(!empty($invThumb)): ?>
+                                            <img src="<?= $invThumb ?>" class="w-full h-full object-cover">
+                                        <?php else: ?>
+                                            <i data-lucide="file-text" class="w-8 h-8 text-gray-300"></i>
+                                        <?php endif; ?>
+                                        <div class="absolute top-1 right-1 bg-orange-400 text-white text-[8px] px-1 rounded shadow-sm">Doc</div>
+                                    </div>
+                                <?php endif; ?>
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-sm w-full lg:max-w-xl mx-auto md:mx-0">
@@ -471,8 +386,6 @@ function isFilled($value) {
                                     </div>
                                     
                                     <?php 
-                                        // Calculate rotation: 0% = -90deg, 100% = 90deg. Total range = 180deg.
-                                        // Formula: (Percentage * 1.8) - 90
                                         $rotation = ($percentage * 1.8) - 90;
                                     ?>
                                     <div class="gauge-needle-wrapper" style="transform: rotate(<?= $rotation ?>deg); transform-origin: bottom center;">
@@ -503,7 +416,6 @@ function isFilled($value) {
                         <div class="relative px-0 lg:px-4 lg:min-w-[700px] overflow-hidden lg:overflow-x-auto">
                             
                             <?php 
-                                // 1. SETUP STEPS & DATA
                                 $stepKeys = ['inbound', 'Photoshoot', 'Editing', 'Data Entry', 'Published'];
                                 $stepsData = [];
                                 
@@ -511,14 +423,12 @@ function isFilled($value) {
                                     $stepsData[$k] = ['active' => false, 'date' => '-', 'user' => ''];
                                 }
 
-                                // A. Handle Inbound (Base Step)
                                 if (!empty($tc['gate_entry_date_time'])) {
                                     $stepsData['inbound']['active'] = true;
                                     $stepsData['inbound']['date']   = date('d M, h:i A', strtotime($tc['gate_entry_date_time']));
                                     $stepsData['inbound']['user']   = $tc['received_name'] ?? ''; 
                                 }
 
-                                // B. Process Logs from Database
                                 if (!empty($tc['stat_logs']) && is_array($tc['stat_logs'])) {
                                     foreach ($tc['stat_logs'] as $log) {
                                         $statName = $log['stat'];
@@ -532,7 +442,6 @@ function isFilled($value) {
                                     }
                                 }
 
-                                // C. Calculate Green Line Width
                                 $lastActiveIndex = 0;
                                 foreach ($stepKeys as $index => $key) {
                                     if ($stepsData[$key]['active']) {
@@ -553,7 +462,6 @@ function isFilled($value) {
                                     $info = $stepsData[$key];
                                     $isActive = $info['active'];
                                     
-                                    // Dynamic Classes
                                     $dotBorder = $isActive ? 'border-[#22c55e]' : 'border-gray-300';
                                     $dotBg     = $isActive ? 'bg-[#22c55e]' : 'bg-gray-300';
                                     $textClass = $isActive ? 'text-black' : 'text-gray-400';
@@ -579,7 +487,9 @@ function isFilled($value) {
                             </div>
                         </div>
                     </div>
-                </div> </div> <?php endforeach; ?>
+                </div>
+            </div> 
+        <?php endforeach; ?>
     <?php else: ?>
         <div class="bg-white rounded-[16px] p-10 text-center text-gray-500 shadow-sm border border-gray-200">
             <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-4 text-gray-300"></i>
