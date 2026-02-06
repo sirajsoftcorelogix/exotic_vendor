@@ -121,8 +121,7 @@
                 );
 
                 // Combine text + link (WhatsApp-friendly)
-                $whatsappMessage = "📦 Product Details\n"
-                    . $productDetailsText
+                $whatsappMessage = "". $productDetailsText
                     . "\n\n🔗 View Product\n"
                     . $shareUrl;
 
