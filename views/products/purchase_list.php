@@ -81,6 +81,17 @@
                 
                 $product = $pl['product'] ?? [];
                 $details = [];
+
+                // Dimensions (only if at least one exists)
+                $height = $product['prod_height'] ?? null;
+                $width  = $product['prod_width'] ?? null;
+                $length = $product['prod_length'] ?? null;
+
+                if ($height || $width || $length) {
+                    $dims = array_filter([$height, $width, $length]);
+                    $details[] = 'Dimensions: ' . implode(' × ', $dims) . ' in';
+                }
+
                 if (!empty($product['color']) && $product['color'] !== '-') {
                     $details[] = 'Color: ' . $product['color'];
                 }
@@ -94,17 +105,7 @@
                     $weight = $product['product_weight'];
                     $unit   = $product['product_weight_unit'] ?? '';
                     $details[] = 'Weight: ' . trim($weight . ' ' . $unit);
-                }
-
-                // Dimensions (only if at least one exists)
-                $height = $product['prod_height'] ?? null;
-                $width  = $product['prod_width'] ?? null;
-                $length = $product['prod_length'] ?? null;
-
-                if ($height || $width || $length) {
-                    $dims = array_filter([$height, $width, $length]);
-                    $details[] = 'Dimensions: ' . implode(' × ', $dims) . ' in';
-                }
+                }                
                          
                 $productDetailsText = implode(', ', $details);
                 // Build the share URL
