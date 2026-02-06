@@ -79,11 +79,57 @@
                 $date_added = $pl['date_added_readable'] ?? ($pl['date_added'] ? date('d M Y', strtotime($pl['date_added'])) : '');
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
                 
+                $product = $pl['product'] ?? [];
+                $details = [];
+                if (!empty($product['color']) && $product['color'] !== '-') {
+                    $details[] = 'Color: ' . $product['color'];
+                }
+                if (!empty($product['size']) && $product['size'] !== '-') {
+                    $details[] = 'Size: ' . $product['size'];
+                }
+                if (!empty($product['material']) && $product['material'] !== '-') {
+                    $details[] = 'Material: ' . $product['material'];
+                }
+                if (!empty($product['product_weight'])) {
+                    $weight = $product['product_weight'];
+                    $unit   = $product['product_weight_unit'] ?? '';
+                    $details[] = 'Weight: ' . trim($weight . ' ' . $unit);
+                }
+
+                // Dimensions (only if at least one exists)
+                $height = $product['prod_height'] ?? null;
+                $width  = $product['prod_width'] ?? null;
+                $length = $product['prod_length'] ?? null;
+
+                if ($height || $width || $length) {
+                    $dims = array_filter([$height, $width, $length]);
+                    $details[] = 'Dimensions: ' . implode(' × ', $dims) . ' in';
+                }
+                         
+                $productDetailsText = implode(', ', $details);
                 // Build the share URL
-                $shareUrl = full_url('share.php?id=' . base64_encode((int)$pl['product_id']).'&v='.time());
-                                
+                //$shareUrl = full_url('share.php?id=' . base64_encode((int)$pl['product_id']).'&v='.time());                                
                 // Alternative: Even simpler approach (recommended)
-                $waHrefSimple = "https://wa.me/?text=" . urlencode($shareUrl);
+                //$waHrefSimple = "https://wa.me/?text=" . urlencode($shareUrl);
+
+                // Product details text (already built earlier)
+                $productDetailsText = trim($productDetailsText);
+
+                // Build share URL
+                $shareUrl = full_url(
+                    'share.php?id=' . base64_encode((int)$pl['product_id']) . '&v=' . time()
+                );
+
+                // Combine text + link (WhatsApp-friendly)
+                $whatsappMessage = "📦 Product Details\n"
+                    . $productDetailsText
+                    . "\n\n🔗 View Product\n"
+                    . $shareUrl;
+
+                // Encode ONCE at the end
+                $waHrefSimple = 'https://wa.me/?text=' . urlencode($whatsappMessage);
+
+
             ?>
             <div class="bg-white border border-gray-200 rounded-xl shadow-md p-4 flex flex-col h-full relative">
                 <!-- hidden fields -->
@@ -121,11 +167,11 @@
 
                     <!-- BASIC INFO -->
                     <div class="flex-1 space-y-1">
-                        <h3 class="text-sm font-semibold text-gray-900 leading-snug">
+                        <h3 class="text-base font-semibold text-gray-900 leading-snug">
                             <?= htmlspecialchars($title); ?>
                         </h3>
 
-                        <div class="text-xs text-gray">
+                        <div class="text-base text-gray">
                             Item Code:
                             <span class="font-medium text-gray-800">
                                 <?= htmlspecialchars($item_code); ?>
@@ -133,7 +179,7 @@
                         </div>
 
                         <?php if(!empty($orderLink)) { ?>
-                            <div class="text-xs">
+                            <div class="text-base">
                                 Order:
                                 <a href="<?= htmlspecialchars($orderLink); ?>" target="_blank"
                                 class="text-blue-600 font-medium hover:underline">
@@ -155,7 +201,7 @@
                 </div>
 
                 <!-- DETAILS GRID -->
-                <div class="mt-4 grid grid-cols-[140px_12px_1fr] gap-x-2 gap-y-2 text-xs">
+                <div class="mt-4 grid grid-cols-[140px_12px_1fr] gap-x-2 gap-y-2 text-base">
 
                     <div class="text-gray">Added By</div>
                     <div class="text-gray">:</div>
@@ -220,7 +266,7 @@
                     $isPurchased = $pl['status'] === 'purchased';
                     $pQty = (int)($pl['quantity'] ?? 0);
                 ?>
-                <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div class="mt-4 grid grid-cols-2 gap-3 text-base">
 
                     <div>
                         <label class="text-gray">Qty To Purchase</label>
@@ -240,7 +286,7 @@
                             <?= $isPurchased ? 'disabled' : '' ?> />
                     </div>
 
-                    <div class="col-span-2">
+                    <div class="col-span-2 text-base">
                         <label class="text-gray">Status</label>
                         <select id="status_<?= (int)$pl['id']; ?>"
                                 class="mt-1 w-full border rounded px-2 py-1
@@ -259,7 +305,7 @@
                 <!-- COMMENTS -->
                 <div class="mt-4">
                     <button type="button"
-                            class="text-xs text-blue-600 hover:underline"
+                            class="text-base text-blue-600 hover:underline"
                             onclick="toggleComments(<?= (int)$pl['id']; ?>)">
                         Comments
                     </button>
@@ -269,14 +315,14 @@
                     </div>
 
                     <input id="commentInput_<?= (int)$pl['id']; ?>"
-                        class="mt-2 w-full border rounded px-2 py-1 text-xs"
+                        class="mt-2 w-full border rounded px-2 py-1 text-base"
                         placeholder="Write a comment..." />
                 </div>
 
                 <!-- FOOTER -->
                 <div class="mt-5 flex justify-end">
                     <button onclick="savePurchaseItem(<?= (int)$pl['id']; ?>)"
-                            class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium">
+                            class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-base     font-medium">
                         Save
                     </button>
                 </div>
