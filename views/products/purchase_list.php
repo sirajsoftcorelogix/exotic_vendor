@@ -122,7 +122,7 @@
 
                 // Combine text + link (WhatsApp-friendly)
                 $whatsappMessage = "". $productDetailsText
-                    . "\n\n🔗 View Product\n"
+                    . "\n\n"
                     . $shareUrl;
 
                 // Encode ONCE at the end
