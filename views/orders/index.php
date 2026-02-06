@@ -989,6 +989,34 @@
                                                 <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
                                                 <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= $order['item_code'] ?>" target="_blank" class="icon-link text-blue-600 hover:underline"><?= $order['item_code'] ?></a></p>
                                                 <p class="quantity">Quantity: <?= $order['quantity'] ?> </p>
+                                                <?php
+                                                $dimensions = [];
+                                                // Weight
+                                                if (!empty($order['product_weight']) && (float)$order['product_weight'] > 0) {
+                                                    $unit = !empty($order['product_weight_unit']) ? $order['product_weight_unit'] : '';
+                                                    $dimensions[] = 'Weight: ' . $order['product_weight'] . ' ' . $unit;
+                                                }
+
+                                                // Length x Width x Height
+                                                $length = (float)($order['prod_length'] ?? 0);
+                                                $width  = (float)($order['prod_width'] ?? 0);
+                                                $height = (float)($order['prod_height'] ?? 0);
+
+                                                if ($length > 0 || $width > 0 || $height > 0) {
+                                                    $dimParts = [];
+
+                                                    if ($length > 0) $dimParts[] = 'L: ' . $length .' Inch';
+                                                    if ($width > 0)  $dimParts[] = 'W: ' . $width .' Inch';
+                                                    if ($height > 0) $dimParts[] = 'H: ' . $height .' Inch';
+
+                                                    $dimensions[] = 'Size: ' . implode(' × ', $dimParts);
+                                                }
+                                                ?>
+                                                <?php if (!empty($dimensions)): ?>
+                                                    <p class="quantity">
+                                                        Dimensions: <?= implode(' | ', $dimensions) ?>
+                                                    </p>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                         <!-- Col 1, Row 2: Order Details -->
@@ -2819,23 +2847,53 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
     })
     .then(response => response.json())
     .then(data => {
+        const msgEl = document.getElementById('bulkAddToPurchaseError');
         if (data.success) {
-            //alert(data.message);
-            document.getElementById('bulkAddToPurchaseError').classList.remove('text-red-500');
-            document.getElementById('bulkAddToPurchaseError').classList.add('text-green-500');
-            document.getElementById('bulkAddToPurchaseError').textContent = 'Purchase List created successfully.';
-            //poitem clear from localStorage
+
+            let html = [];
+
+            // ✅ Created (GREEN)
+            if (data.created && data.created > 0) {
+                html.push(
+                    `<span class="text-green-500 font-semibold">
+                        ✅ ${data.created} item(s) added to Purchase List
+                    </span>`
+                );
+            }
+
+            // ⚠️ Failed (RED)
+            if (Array.isArray(data.failed) && data.failed.length > 0) {
+                html.push(
+                    `<span class="text-red-500 font-semibold">
+                        ⚠️ ${data.failed.length} item(s) failed:
+                    </span>`
+                );
+
+                data.failed.forEach(f => {
+                    html.push(
+                        `<span class="text-red-500 ml-2 block">
+                            • Order #${f.order_id} (SKU: ${f.sku}): ${f.message}
+                        </span>`
+                    );
+                });
+            }
+
+            msgEl.classList.remove('hidden');
+            msgEl.innerHTML = html.join('');
+
+            // clear localStorage
             localStorage.removeItem('selected_po_orders');
 
-            //timeout to close popup and reload
+            // auto close
             setTimeout(() => {
                 closeBulkAddToPurchasePopup();
                 location.reload();
-            }, 3000);
-            //bulkStatusError.classList.remove('hidden');
-            //location.reload();
+            }, 3500);
+
         } else {
-            alert(data.message);
+            msgEl.classList.remove('hidden');
+            msgEl.classList.add('text-red-500');
+            msgEl.textContent = data.message || 'Something went wrong.';
         }
     });
 });
