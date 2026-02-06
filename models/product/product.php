@@ -1261,9 +1261,13 @@ class product
             $agent_name = $commanModel->getUserNameById($added_by);
 
             $orderLink = '';
-            if (isset($order_number) && !empty($order_number)) {
-                $orderLink = base_url('index.php?order_number=' . $order_number);
-            }    
+            if (!empty($order_number)) {
+                $url = base_url('index.php?order_number=' . urlencode($order_number));
+
+                $orderLink = '<a href="' . $url . '" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
+                                ' . htmlspecialchars($order_number) . '
+                            </a>';
+            }   
 
             insertNotification(
                 $added_by,
