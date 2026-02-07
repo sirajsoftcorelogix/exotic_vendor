@@ -3225,7 +3225,13 @@ function validateAndSubmit(actionType) {
             if (vImgCount < 1) errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
         }
     });
-
+	
+	if (actionType === 'draft') {
+		// Skip validation, directly submit
+		document.getElementById('hidden_save_action').value = actionType;
+		form.submit();
+		return; // stop further execution
+	}
 
     // --- 4. RESULT ---
     if (errors.length > 0) {
