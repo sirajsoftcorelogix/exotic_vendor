@@ -80,16 +80,20 @@
                 $date_purchased = $pl['date_purchased_readable'] ?? ($pl['date_purchased'] ? date('d M Y', strtotime($pl['date_purchased'])) : '');
                 
                 $product = $pl['product'] ?? [];
-                $details = [];
-
+                
                 // Dimensions (only if at least one exists)
                 $height = $product['prod_height'] ?? null;
                 $width  = $product['prod_width'] ?? null;
                 $length = $product['prod_length'] ?? null;
-
-                if ($height || $width || $length) {
-                    $dims = array_filter([$height, $width, $length]);
-                    $details[] = 'Dimensions: ' . implode(' × ', $dims) . ' in';
+                $details = [];
+                if (!empty($height)) {
+                    $details[] = 'Height: ' . $height . ' inch';
+                }
+                if (!empty($width)) {
+                    $details[] = 'Width: ' . $width . ' inch';
+                }
+                if (!empty($length)) {
+                    $details[] = 'Length: ' . $length . ' inch';
                 }
 
                 if (!empty($product['color']) && $product['color'] !== '-') {
@@ -105,29 +109,22 @@
                     $weight = $product['product_weight'];
                     $unit   = $product['product_weight_unit'] ?? '';
                     $details[] = 'Weight: ' . trim($weight . ' ' . $unit);
-                }                
-                         
-                $productDetailsText = implode(', ', $details);
+                }
+
+                $productDetailsText = implode("\n", $details);
+
                 // Build the share URL
                 //$shareUrl = full_url('share.php?id=' . base64_encode((int)$pl['product_id']).'&v='.time());                                
                 // Alternative: Even simpler approach (recommended)
                 //$waHrefSimple = "https://wa.me/?text=" . urlencode($shareUrl);
-
-                // Product details text (already built earlier)
-                $productDetailsText = trim($productDetailsText);
 
                 // Build share URL
                 $shareUrl = full_url(
                     'share.php?id=' . base64_encode((int)$pl['product_id']) . '&v=' . time()
                 );
 
-                // Combine text + link (WhatsApp-friendly)
-                $whatsappMessage = "". $productDetailsText
-                    . "\n\n"
-                    . $shareUrl;
-
-                // Encode ONCE at the end
-                $waHrefSimple = 'https://wa.me/?text=' . urlencode($whatsappMessage);
+                $waMessage = urlencode($productDetailsText . "\n\n" . $shareUrl);
+                $waHrefSimple = "https://wa.me/?text=" . $waMessage;
 
 
             ?>
@@ -189,7 +186,7 @@
                         <?php } ?>
 
                         <!-- STATUS -->
-                        <span class="inline-block mt-2 px-2 py-0.5 rounded-full text-[11px]
+                        <span class="inline-block mt-2 px-2 py-0.5 rounded-full text-[14px]
                             <?= $status === 'purchased'
                                 ? 'bg-green-100 text-green-700'
                                 : ($status === 'partially_purchased'

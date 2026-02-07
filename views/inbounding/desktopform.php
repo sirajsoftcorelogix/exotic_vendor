@@ -1338,7 +1338,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             </button>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
-                Save and Draft
+                Save as Draft
             </button>
             
             <button type="button" onclick="validateAndSubmit('generate')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
