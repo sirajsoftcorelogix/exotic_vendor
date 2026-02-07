@@ -740,7 +740,7 @@ public function update_image_variation($img_id, $variation_id) {
         return null; 
     }
     public function checkItemCodeExists($code) {
-        $sql = "SELECT id FROM vp_inbound WHERE item_code = '" . $this->conn->real_escape_string($code) . "'";
+        $sql = "SELECT id FROM vp_inbound WHERE Item_code = '" . $this->conn->real_escape_string($code) . "'";
         $result = $this->conn->query($sql);
         return ($result->num_rows > 0);
     }

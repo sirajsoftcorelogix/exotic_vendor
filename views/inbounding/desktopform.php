@@ -1332,10 +1332,12 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             </fieldset>
         </div> -->
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
-            <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                Publish Product
-            </button>
+            <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
+                <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    Publish Product
+                </button>
+            <?php  } ?>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save as Draft
