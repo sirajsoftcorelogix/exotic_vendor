@@ -1337,7 +1337,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 Publish Product
             </button>
 
-            <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
+            <button type="button" onclick="" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save as Draft
             </button>
             
