@@ -151,6 +151,7 @@ class InvoicesController {
         $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
         
         // Create invoice header
+        $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
         $invoiceData = [
             'invoice_number' => $invoice_number,
             'invoice_date' => $invoice_date,
@@ -228,7 +229,26 @@ class InvoicesController {
                 $itemsFailed[] = $order_number;
             }
         }
-        
+        //save international fields
+        if($isInternational){
+            $internationalData = [
+                'invoice_id' => $invoiceId,
+                'pre_carriage_by' => isset($_POST['pre_carriage_by']) ? trim($_POST['pre_carriage_by']) : '',
+                'port_of_loading' => isset($_POST['port_of_loading']) ? trim($_POST['port_of_loading']) : '',
+                'port_of_discharge' => isset($_POST['port_of_discharge']) ? trim($_POST['port_of_discharge']) : '',
+                'country_of_origin' => isset($_POST['country_of_origin']) ? trim($_POST['country_of_origin']) : '',
+                'country_of_final_destination' => isset($_POST['country_of_final_destination']) ? trim($_POST['country_of_final_destination']) : '',
+                'final_destination' => isset($_POST['final_destination']) ? trim($_POST['final_destination']) : '',
+                'usd_export_rate' => isset($_POST['usd_export_rate']) ? floatval($_POST['usd_export_rate']) : 0,
+                'ap_cost' => isset($_POST['ap_cost']) ? floatval($_POST['ap_cost']) : 0,
+                'freight_charge' => isset($_POST['freight_charge']) ? floatval($_POST['freight_charge']) : 0,
+                'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0
+            ];
+            $invoiceModel->insert_international_invoice_data($internationalData);
+        }
+        //call irisirp api to generate irn
+        //$this->generateIrnForInvoice($invoiceId);
+
         // Update order status to invoiced
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
@@ -247,7 +267,58 @@ class InvoicesController {
         ]);
         exit;
     }
-    
+    public function generateIrnForInvoice($invoiceId) {
+        is_login();
+        global $invoiceModel, $commanModel;
+        
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        $items = $invoiceModel->getInvoiceItems($invoiceId);
+        
+        if (!$invoice || empty($items)) {
+            return false;
+        }
+        
+        // Prepare data for IRN generation
+        $invoiceData = $commanModel->prepareIrisIrpInvoiceData($invoice, $items);
+        
+        require_once 'models/invoice/IrisIrpClient.php';
+        // Initialize IrisIrpClient
+        $irisClient = new IrisIrpClient(
+            IRIS_IRP_CLIENT_ID,
+            IRIS_IRP_CLIENT_SECRET,
+            IRIS_IRP_USERNAME,
+            IRIS_IRP_PASSWORD,
+            IRIS_IRP_SANDBOX
+        );
+        
+        try {
+            // Authenticate
+            $irisClient->authenticate();
+            
+            // Generate IRN
+            $response = $irisClient->generateIrn($invoiceData);
+            
+            if (isset($response['irn'])) {
+                // Update invoice with IRN details
+                $updateData = [
+                    'irn' => $response['irn'],
+                    'ack_number' => $response['ack_number'] ?? '',
+                    'ack_date' => isset($response['ack_date']) ? date('Y-m-d H:i:s', strtotime($response['ack_date'])) : null,
+                    'signed_invoice' => $response['signed_invoice'] ?? '',
+                    'qrcode_string' => $response['qr_code'] ?? '',
+                    'irn_status' => 'generated'
+                ];
+                $invoiceModel->updateInvoice($invoiceId, $updateData);
+                return true;
+            } else {
+                // Log error or handle failure
+                return false;
+            }
+        } catch (Exception $e) {
+            // Log exception or handle error
+            return false;
+        }
+    }
     public function view() {
         is_login();
         global $invoiceModel;
@@ -493,8 +564,13 @@ class InvoicesController {
                 $exchangeText = $invoice['exchange_text'] ?? '';
                 $convertedAmount = $invoice['converted_amount'] ?? 0;
             } else {
-                 $currencyRecord = $this->getCurrencyByCode($currency);
-                if ($currencyRecord) {
+                 $currencyRecord = $this->getCurrencyByCode($currency);                 
+                if (!empty($currencyRecord)) {
+                    $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
+                    $convertedAmount = $totalAmount * $exchangeRate;
+                }else{
+                    //if currancy record not found then USD exchange rate will be considered if currency is not INR
+                    $currencyRecord = $this->getCurrencyByCode('USD'); 
                     $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
                     $convertedAmount = $totalAmount * $exchangeRate;
                 }

@@ -719,6 +719,20 @@ switch ($page) {
                 $controller->index();
                 break;
         }
+    case 'globals':
+        require_once 'controllers/GlobalsController.php';
+        $controller = new GlobalsController($conn);
+        switch ($action) {
+            case 'settings':
+                $controller->settings();   
+                break;
+            case 'update_settings':
+                $controller->update_settings();
+                break;
+            default:
+                $controller->settings();   
+                break;
+        }
         break;
 }
 
