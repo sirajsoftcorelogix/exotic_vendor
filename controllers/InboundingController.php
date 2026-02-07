@@ -1040,7 +1040,7 @@ class InboundingController {
             'product_title'       => $_POST['product_title'] ?? '',
             'key_words'           => $_POST['key_words'] ?? '',
             'snippet_description' => $_POST['snippet_description'] ?? '',
-            'vendor_code'         => $_POST['vendor_code'] ?? '',
+            'vendor_code' => ($_POST['vendor_code'] === '') ? null : $_POST['vendor_code'],
             'cp'                  => $_POST['cp'] ?? '',
             'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
             'price_india'         => $_POST['price_india'] ?? '',
