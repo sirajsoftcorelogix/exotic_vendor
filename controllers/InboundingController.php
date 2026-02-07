@@ -687,7 +687,7 @@ class InboundingController {
                 
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
-                foreach ($_FILES['new_photos']['name'] as $key => $name) {
+                /*foreach ($_FILES['new_photos']['name'] as $key => $name) {
                     if ($_FILES['new_photos']['error'][$key] === 0) {
                         
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
@@ -703,7 +703,46 @@ class InboundingController {
                             $inboundingModel->add_raw_image($id, $newName, $varId);
                         }
                     }
-                }
+                }*/
+				foreach ($_FILES['new_photos']['name'] as $key => $name) {
+
+					if ($_FILES['new_photos']['error'][$key] !== UPLOAD_ERR_OK) {
+						continue;
+					}
+
+					$tmpName = $_FILES['new_photos']['tmp_name'][$key];
+
+					// ✅ Validate file size (e.g. 5MB max)
+					if ($_FILES['new_photos']['size'][$key] > 5 * 1024 * 1024) {
+						continue;
+					}
+
+					// ✅ MIME validation (fast + safe)
+					$finfo = finfo_open(FILEINFO_MIME_TYPE);
+					$mime  = finfo_file($finfo, $tmpName);
+					finfo_close($finfo);
+
+					if (!in_array($mime, ['image/jpeg','image/png'])) {
+						continue;
+					}
+
+					$ext = match($mime) {
+						'image/jpeg' => 'jpg',
+						'image/png'  => 'png',
+						default => 'bin'
+					};
+
+					// ✅ Faster unique name
+					$newName = 'raw_'.$id.'_'.bin2hex(random_bytes(8)).'.'.$ext;
+					
+					$varId = $_POST['new_image_variation_id'][$key] ?? -1;
+
+					// ✅ Atomic move
+					if (@rename($tmpName, $uploadDir . $newName)) {
+						$inboundingModel->add_raw_image($id, $newName, $varId);
+					}
+				}
+				/*for end here*/
             }
             
             $logData = [
