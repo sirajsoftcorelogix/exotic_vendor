@@ -174,4 +174,63 @@ class Invoice {
         }
         return null;
     }
+    public function insert_international_invoice_data($data) {
+        $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, irn, qrcode_string) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param(
+            'issssssddddss',
+            $data['invoice_id'],
+            $data['pre_carriage_by'],
+            $data['port_of_loading'],
+            $data['port_of_discharge'],
+            $data['country_of_origin'],
+            $data['country_of_final_destination'],
+            $data['final_destination'],
+            $data['usd_export_rate'],
+            $data['ap_cost'],
+            $data['freight_charge'],
+            $data['insurance_charge'],
+            $data['irn'],
+            $data['qrcode_string']
+        );
+
+        if ($stmt->execute()) {
+            return $this->db->insert_id;
+        }
+        return false;
+    }
+    public function getInternationalInvoiceByInvoiceId($invoice_id) {
+        $sql = "SELECT * FROM vp_international_invoices WHERE invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return null;
+
+        $stmt->bind_param('i', $invoice_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function updateInvoice($invoice_id, $data) {
+        $sql = "UPDATE vp_international_invoices SET irn = ?, ack_number = ?, ack_date = ?, signed_invoice = ?, qrcode_string = ?, irn_status = ?, updated_at = NOW() WHERE invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param(
+            'sisssdddsdssi',
+            $data['irn'],
+            $data['ack_number'],
+            $data['ack_date'],
+            $data['signed_invoice'],
+            $data['qrcode_string'],
+            $data['irn_status'],
+            $invoice_id
+        );
+
+        return $stmt->execute();
+    }
 }

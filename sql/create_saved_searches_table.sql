@@ -244,3 +244,40 @@ VALUES
 (20, 'USD', 'US Dollar', '1 USD', 83.25, 83.50, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
 (21, 'JPY', 'Japanese Yen', '100 JPY', 55.20, 55.80, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
 (22, 'KRW', 'Korean Won', '100 KRW', 6.20, 6.50, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16');
+
+Create table vp_invoices_international (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    invoice_id BIGINT UNSIGNED NOT NULL,
+
+    pre_carriage_by VARCHAR(100) NULL,
+    port_of_loading VARCHAR(100) NULL,
+    port_of_discharge VARCHAR(100) NULL,
+    country_of_origin VARCHAR(100) NULL,
+    country_of_final_destination VARCHAR(100) NULL,
+    final_destination VARCHAR(255) NULL,
+    usd_export_rate DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    ap_cost DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    freight_charge DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    insurance_charge DECIMAL(15,2) NOT NULL DEFAULT 0.00,   
+
+    irn VARCHAR(200) NULL,    
+    ack_number VARCHAR(100) NULL,
+    ack_date TIMESTAMP NULL,
+    signed_invoice TEXT NULL,
+    qrcode_string TEXT NULL,
+    irn_status VARCHAR(50) NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_invoice_id (invoice_id),
+
+    CONSTRAINT fk_invoices_international_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES vp_invoices(id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+ALTER table `vp_order_info` ADD `total` DECIMAL(15,2) NULL DEFAULT 0 AFTER `shipping_email`;
