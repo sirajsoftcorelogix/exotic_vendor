@@ -687,7 +687,7 @@ class InboundingController {
                 
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
-                /*foreach ($_FILES['new_photos']['name'] as $key => $name) {
+                foreach ($_FILES['new_photos']['name'] as $key => $name) {
                     if ($_FILES['new_photos']['error'][$key] === 0) {
                         
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
@@ -703,8 +703,8 @@ class InboundingController {
                             $inboundingModel->add_raw_image($id, $newName, $varId);
                         }
                     }
-                }*/
-				foreach ($_FILES['new_photos']['name'] as $key => $name) {
+                }
+				/*foreach ($_FILES['new_photos']['name'] as $key => $name) {
 
 					if ($_FILES['new_photos']['error'][$key] !== UPLOAD_ERR_OK) {
 						continue;
@@ -741,7 +741,7 @@ class InboundingController {
 					if (@rename($tmpName, $uploadDir . $newName)) {
 						$inboundingModel->add_raw_image($id, $newName, $varId);
 					}
-				}
+				}*/
 				/*for end here*/
             }
             
