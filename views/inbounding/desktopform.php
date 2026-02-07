@@ -3156,8 +3156,8 @@ function validateAndSubmit(actionType) {
     if (!getVal('group_name')) errors.push("Field 'Group' is required.");
     if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
     if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
-    //if (!getVal('snippet_description')) errors.push("Field 'Snippet Description' is required.");
-    //if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
+    if (!getVal('snippet_description')) errors.push("Field 'Snippet Description' is required.");
+    if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
     const isVariant = getVal('is_variant'); // Get current Variant status (Y or N)
 
     // Only validate Image Directory if this is NOT a variant (i.e., it is a Parent/Main item)
