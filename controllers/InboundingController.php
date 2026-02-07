@@ -886,72 +886,81 @@ class InboundingController {
             }
         }
 
-        // 2. Capture Inputs & Change Detection
+        // 1. Capture Inputs
         $is_variant = $_POST['is_variant'] ?? '';
-        $item_code  = $_POST['Item_code'] ?? '';
+        $item_code = $_POST['Item_code'] ?? ''; 
 
-        $old_is_variant = $oldData['form2']['is_variant'] ?? '';
-        
-        $old_group_val = $oldData['form2']['group_name'] ?? '';
-        $old_cat_val   = $oldData['form2']['category_code'] ?? '';
-        $new_group_val = $_POST['group_name'] ?? '';
-        
-        $raw_cat = $_POST['category_code'] ?? 0;
-        $category_id = is_array($raw_cat) ? $raw_cat[0] : $raw_cat;
+        // 2. Fetch Old Data
+        $old_group_val = trim((string)($oldData['form1']['group_name'] ?? ''));
+        $old_cat_val   = trim((string)($oldData['form1']['category_code'] ?? ''));
+        // 3. Fetch New Data from Post
+        $new_group_val = trim((string)($_POST['group_name'] ?? ''));
+        $raw_cat       = $_POST['category_code'] ?? 0;
+        $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
 
-        // Flag: Should we rename images?
-        $shouldRename = false; 
+        // --- DEBUGGING LINE: Remove // from the line below to see why it fails ---
+        // die("Old Group: $old_group_val | New Group: $new_group_val <br> Old Cat: $old_cat_val | New Cat: $new_cat_val");
 
-        // If Group or Category changes, reset item code to trigger generation
-        if ((($new_group_val != $old_group_val) || ($category_id != $old_cat_val)) && $is_variant === 'N') {
-             $item_code = ''; 
+        // 4. LOGIC: Should we reset the item code?
+        $shouldRegenerate = false;
+
+        // If it's a parent record...
+        if ($is_variant === 'N') {
+            // If Item Code is totally empty
+            if (empty($item_code)) {
+                $shouldRegenerate = true;
+            } 
+            // OR if Group has changed (and isn't empty)
+            if ($new_group_val !== $old_group_val && !empty($old_group_val)) {
+                $shouldRegenerate = true;
+            }
+            // OR if Category has changed (and isn't empty)
+            if ($new_cat_val !== $old_cat_val && !empty($old_cat_val)) {
+                $shouldRegenerate = true;
+            }
         }
 
-        // 2. Generate Prefix Logic
-        $group_val = $_POST['group_name'] ?? ''; 
-        $group_real_name = trim($inboundingModel->getGroupNameByCode($group_val)); 
-        $cat_real_name = trim($inboundingModel->getCategoryName($category_id));
-        $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-        $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1)) : 'X';
-        $current_prefix = $char1 . $char2; 
+        // 5. THE GENERATOR
+        if ($shouldRegenerate) {
+            // We clear item_code to force the loop to create a new one
+            $item_code = ''; 
 
-        // 3. GENERATE NEW ITEM CODE (If needed)
-        if ($is_variant === 'N' && (empty($item_code) || $old_is_variant === 'Y')) {
+            $group_real_name = trim($inboundingModel->getGroupNameByCode($new_group_val));
+            $cat_real_name   = trim($inboundingModel->getCategoryName($new_cat_val));
+            
+            $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
+            $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1))   : 'X';
+            $current_prefix = $char1 . $char2;
 
             $last_code = $inboundingModel->getLastItemCodeGlobal();
-            $is_unique = false;
-            $attempts = 0;
-
+            
+            // INCREMENT LOGIC
             if (empty($last_code)) {
-                $letters = 'AA'; $number = 0; 
+                $letters = 'AA'; $number = 0;
             } else {
                 $last_sequence = substr($last_code, 2); 
                 if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
-                    $letters = $matches[1]; $number = intval($matches[2]);
+                    $letters = $matches[1]; 
+                    $number = intval($matches[2]);
                 } else {
-                    $letters = 'AA'; $number = 0; 
+                    $letters = 'AA'; $number = 0;
                 }
             }
 
+            $attempts = 0;
             do {
                 $attempts++;
                 if ($number < 99) { $number++; } else { $number = 1; $letters++; }
+                
                 $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
                 $candidate_code = $current_prefix . $new_seq;
-                $exists = $inboundingModel->checkItemCodeExists($candidate_code);
-
-                if (!$exists) {
+                
+                if (!$inboundingModel->checkItemCodeExists($candidate_code)) {
                     $item_code = $candidate_code;
-                    $is_unique = true;
-                    $shouldRename = true; // Trigger renaming since code changed
+                    $shouldRename = true;
+                    break; 
                 }
-                if ($attempts > 100) die("Error: Unable to generate unique item code.");
-            } while (!$is_unique);
-        } 
-        // IF ITEM CODE EXISTED and didn't change, we still might want to rename images 
-        // to match current colors/sizes if they were updated.
-        else if (!empty($item_code)) {
-            $shouldRename = true; 
+            } while ($attempts < 100000);
         }
 
         // --- SKU GENERATION ---
@@ -1411,7 +1420,7 @@ class InboundingController {
         $stock_price_temp[0]['fba_us'] = '0';
         $stock_price_temp[0]['fba_eu'] = '0';
         $stock_price_temp[0]['vendor_us'] = '0';
-        $stock_price_temp[0]['price'] = (int) $data['data']['price_india'];
+        $stock_price_temp[0]['price'] = (int) $data['data']['usd_price'];
         $stock_price_temp[0]['price_india'] = (int) $data['data']['price_india'];
         $stock_price_temp[0]['price_india_suggested'] = (int) $data['data']['price_india'];
         $stock_price_temp[0]['mrp_india'] = (int) $data['data']['price_india_mrp'];
@@ -1462,7 +1471,7 @@ class InboundingController {
                 $stock_price_temp[$i]['fba_us'] = '0';
                 $stock_price_temp[$i]['fba_eu'] = '0';
                 $stock_price_temp[$i]['vendor_us'] = '0';
-                $stock_price_temp[$i]['price'] = (int) $value['price_india'];
+                $stock_price_temp[$i]['price'] = (int) $value['usd_price'];
                 $stock_price_temp[$i]['price_india'] = (int) $value['price_india'];
                 $stock_price_temp[$i]['price_india_suggested'] = (int) $data['data']['price_india'];
                 $stock_price_temp[$i]['mrp_india'] = (int) $value['price_india_mrp'];

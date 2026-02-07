@@ -557,20 +557,20 @@ class product
     public function createPurchaseList($data)
     {
         $sql = "
-        INSERT INTO purchase_list (
-            user_id,
-            product_id,
-            order_id,
-            sku,
-            date_added,
-            date_purchased,
-            status,
-            quantity,
-            edit_by,
-            updated_at,
-            created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ";
+            INSERT INTO purchase_list (
+                user_id,
+                product_id,
+                order_id,
+                sku,
+                date_added,
+                date_purchased,
+                status,
+                quantity,
+                edit_by,
+                updated_at,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ";
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
@@ -582,7 +582,8 @@ class product
 
         $now = date('Y-m-d H:i:s');
 
-        $types = "iiissssiiss"; // ✔ corrected
+        // ✅ bind types: i i i s s s s i i s s
+        $types = "iiissssiiss";
 
         $stmt->bind_param(
             $types,
@@ -590,22 +591,54 @@ class product
             $data['product_id'],
             $data['order_id'],
             $data['sku'],
-            $now,                          // date_added
-            $data['date_purchased'],       // date only is fine
-            $data['status'],               // ✔ now string
+            $now,                     // date_added
+            $data['date_purchased'],  // nullable
+            $data['status'],
             $data['quantity'],
             $data['edit_by'],
             $now,
             $now
         );
 
-        if ($stmt->execute()) {
-            return ['success' => true];
+        if (!$stmt->execute()) {
+            return [
+                'success' => false,
+                'message' => $stmt->error
+            ];
         }
 
+        // ✅ INSERT SUCCESS
+        $purchase_list_id = (int)$this->db->insert_id;
+
+        // ✅ Logged-in user info (prefer session, fallback to edit_by)
+        $loggedUserId = (int)($_SESSION['user']['id'] ?? $data['edit_by'] ?? 0);
+        $loggedUserName = $_SESSION['user']['name'] ?? 'Unknown';
+
+        // ✅ Create vp_order_status_log entry
+        // status column should remain human-readable
+        $statusText = "Purchase CREATED (SKU : ".$data['sku'].") Qty: " . (int)$data['quantity'];
+
+        $this->createOrderStatusLog(
+            (int)$data['order_id'],         // order_id (required by vp_order_status_log)
+            $statusText,                    // status text
+            $loggedUserId,                  // changed_by
+            $loggedUserName,                // saved inside api_response JSON
+            (int)$data['quantity'],         // qty_changed saved inside api_response JSON
+            [
+                'action' => 'CREATED',
+                'purchase_list_id' => $purchase_list_id,
+                'product_id' => (int)$data['product_id'],
+                'user_id' => (int)$data['user_id'],
+                'sku' => $data['sku'],
+                'status' => $data['status'],
+                'new_qty' => (int)$data['quantity'],
+                'date_added' => $now,
+            ]
+        );
+
         return [
-            'success' => false,
-            'message' => $stmt->error
+            'success' => true,
+            'purchase_list_id' => $purchase_list_id
         ];
     }
 
@@ -1091,95 +1124,208 @@ class product
     }
 
 
-    public function updatePurchaseListStatus($purchase_list_id, $transactionQty, $status,$purchase_type = 'purchased')
+    public function updatePurchaseListStatus($purchase_list_id, $transactionQty, $status, $purchase_type = 'purchased')
     {
-        //if ($purchase_type === 'unpurchased') {
-        /**
-         * UNPURCHASED CASE:
-         * Reverse purchases: set all rows back to pending and restore planned quantity
-         */
-            /*$sql = "SELECT COALESCE(SUM(qty_purchased),0) AS purchased 
-                FROM purchase_transactions 
-                WHERE purchase_list_id = ?";
-            $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('i', $purchase_list_id);
-            $stmt->execute();
-            $purchasedTotal = (int)$stmt->get_result()->fetch_assoc()['purchased'];
+        $remaining = (int)$transactionQty;
 
-            // set purchase_list quantities back
-            $sql = "UPDATE purchase_list 
-                SET quantity = quantity + ?, status='pending', date_purchased=NULL, updated_at=NOW()
-                WHERE id = ? AND status='purchased'";
-            $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('ii', $purchasedTotal, $purchase_list_id);
-            $stmt->execute();
+        $sql = "SELECT 
+                    pl.id,
+                    pl.quantity,
+                    pl.sku,
+                    pl.edit_by,
+                    pl.user_id,
+                    pl.product_id,
+                    pl.order_id,
+                    o.order_number
+                FROM purchase_list AS pl
+                LEFT JOIN vp_orders AS o 
+                    ON o.id = pl.order_id
+                WHERE 
+                    pl.id = ?
+                    AND pl.status IN ('pending', 'partially_purchased')
+                ORDER BY pl.created_at ASC, pl.id ASC";
 
-            return ['success' => true, 'message' => 'Un purchased Successfully'];
-        }*/
-
-
-        /** PURCHASED CASE (FIFO CONSUME) **/
-
-        $remaining = $transactionQty;
-
-        // Fetch purchase list rows FIFO (oldest first)
-        $sql = "SELECT id, quantity,sku 
-            FROM purchase_list 
-            WHERE id = ? AND status != 'purchased'
-            ORDER BY created_at ASC, id ASC";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $purchase_list_id);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-        $status = '';
+        if (empty($rows)) {
+            return [
+                'success' => false,
+                'message' => 'No purchasable quantity found'
+            ];
+        }
+
+        // ✅ logged-in user info
+        $loggedUserId = (int)($_SESSION['user']['id'] ?? 0);
+        $loggedUserName = $_SESSION['user']['name'] ?? 'Unknown';
+
+        $finalStatus = null;
+        $order_number = null;
+        $sku = null;
+        $added_by = null;
+        $order_id_for_log = null;
+
         foreach ($rows as $row) {
             if ($remaining <= 0) break;
 
-            $id = $row['id'];
-            $qty = (int)$row['quantity'];
+            $id         = (int)$row['id'];
+            $qty        = (int)$row['quantity'];
+            $product_id = (int)$row['product_id'];
+            $added_by   = (int)$row['edit_by'];
 
+            $order_id_for_log = (int)$row['order_id']; // ✅ needed for vp_order_status_log
+            $order_number = $row['order_number'] ?? $order_number;
+            $sku          = $row['sku'] ?? $sku;
+
+            /** FULL PURCHASE **/
             if ($qty <= $remaining) {
-                // fully consumed
-                $status = 'purchased';
+
+                $finalStatus = 'purchased';
                 $remaining -= $qty;
 
                 $sql = "UPDATE purchase_list 
-                    SET quantity = 0,
-                        status='purchased',
-                        date_purchased = NOW(),
-                        updated_at = NOW()
-                    WHERE id = ?";
+                        SET quantity = 0,
+                            status = 'purchased',
+                            date_purchased = NOW(),
+                            updated_at = NOW()
+                        WHERE id = ?";
                 $u = $this->db->prepare($sql);
                 $u->bind_param('i', $id);
                 $u->execute();
-            } else {
-                // partially consumed
-                $status = 'partially_purchased';
-                $newQty = $qty - $remaining;
-                $remaining = 0;
+
+                // ✅ Log into vp_order_status_log
+                // status column: readable message
+                $statusText = "Purchased (SKU : ".$sku.") Qty: " . $qty;
+                
+                $this->createOrderStatusLog(
+                    $order_id_for_log,
+                    $statusText,
+                    $loggedUserId,
+                    $loggedUserName,
+                    $qty,
+                    [
+                        'purchase_list_id' => $id,
+                        'action' => 'FULL_PURCHASE',
+                        'old_qty' => $qty,
+                        'new_qty' => 0,
+                    ]
+                );
+
+            }
+            /** PARTIAL PURCHASE **/
+            else {
+
+                $finalStatus = 'partially_purchased';
+                $consumedQty = $remaining;
+                $newQty      = $qty - $consumedQty;
+                $remaining   = 0;
 
                 $sql = "UPDATE purchase_list 
-                    SET quantity = ?, status='partially_purchased', updated_at = NOW()
-                    WHERE id = ?";
+                        SET quantity = ?, 
+                            status = 'partially_purchased',
+                            updated_at = NOW()
+                        WHERE id = ?";
                 $u = $this->db->prepare($sql);
                 $u->bind_param('ii', $newQty, $id);
                 $u->execute();
+
+                // ✅ Log into vp_order_status_log
+                $statusText = "Purchase PARTIAL (SKU : ".$sku.") Qty: " . $consumedQty;
+                $this->createOrderStatusLog(
+                    $order_id_for_log,
+                    $statusText,
+                    $loggedUserId,
+                    $loggedUserName,
+                    $consumedQty,
+                    [
+                        'purchase_list_id' => $id,
+                        'action' => 'PARTIAL_PURCHASE',
+                        'old_qty' => $qty,
+                        'new_qty' => $newQty,
+                    ]
+                );
             }
         }
 
-        $agent_id = $_SESSION['user']['id'];
-        $sku = $rows[0]['sku'];
-        $link = base_url('index.php?page=products&action=master_purchase_list&search=' . $sku.'&status='.$status);    
-        insertNotification($agent_id, 'Product Purchased', 'Product has been purchased successfully.', $link);
+        // ✅ Notification safety (use $finalStatus instead of overwriting $status)
+        if ($added_by && $sku) {
+            $link = base_url(
+                'index.php?page=products&action=master_purchase_list&search=' .
+                $sku . '&status=' . ($finalStatus ?? 'pending')
+            );
+
+            require_once 'models/comman/tables.php';
+            $commanModel = new Tables($this->db);
+            $agent_name = $commanModel->getUserNameById($added_by);
+
+            $orderLink = '';
+            if (!empty($order_number)) {
+                $url = base_url('index.php?order_number=' . urlencode($order_number));
+
+                $orderLink = '<a href="' . $url . '" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
+                                ' . htmlspecialchars($order_number) . '
+                            </a>';
+            }   
+
+            insertNotification(
+                $added_by,
+                'Product Purchased',
+                $agent_name . ' has purchased item ' . $sku . ' for order ' . $orderLink,
+                $link
+            );
+        }
 
         return [
             'success' => true,
-            'purchased' => $transactionQty,
-            'remaining_not_consumed' => $remaining, // should be 0 normally
+            'purchased' => (int)$transactionQty,
+            'remaining_not_consumed' => $remaining,
             'message' => 'Purchased Successfully'
         ];
     }
+
+    public function createOrderStatusLog(
+        int $order_id,
+        string $status,
+        int $changed_by,
+        string $changed_by_name,
+        int $qty_changed,
+        ?array $api_response = null
+    ) {
+        // Put extra details into api_response JSON (since table doesn't have username/qty columns)
+        $payload = [
+            'changed_by_name' => $changed_by_name,
+            'qty_changed' => $qty_changed,
+            'status' => $status,
+        ];
+
+        if (is_array($api_response)) {
+            $payload['api_response'] = $api_response;
+        }
+
+        $sql = "INSERT INTO vp_order_status_log
+                (order_id, status, changed_by, api_response, change_date, created_on)
+                VALUES (?,?,?,?,NOW(),NOW())";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception($this->db->error);
+        }
+
+        $api_json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+
+        $stmt->bind_param(
+            'isis',
+            $order_id,
+            $status,       // keep short readable status here
+            $changed_by,
+            $api_json      // store user name + qty here
+        );
+
+        return $stmt->execute();
+    }
+
 
 
     public function addPurchaseTransaction($purchase_list_id, $qty, $user_id, $status, $product_id, $reason = '')
@@ -1373,4 +1519,6 @@ class product
         }
         return null;
     }
+
+    
 }
