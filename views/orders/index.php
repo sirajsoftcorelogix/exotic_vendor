@@ -1132,6 +1132,8 @@
                                                         <hr class="my-1 mx-2">
                                                         </hr>
                                                         <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                        <hr class="my-1 mx-2"></hr>
+                                                        <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                                                     </div>
                                                 </span>
                                             </div>
@@ -3005,5 +3007,17 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
 function clearSelectedOrders() {
     localStorage.removeItem('selected_po_orders');
     window.location.reload();
+}
+//addOrderToInvoice function
+function addOrderToInvoice(id) {
+    const form = document.getElementById('orders-form');
+    const orderIdInput = document.createElement('input');
+    orderIdInput.type = 'hidden';
+    orderIdInput.name = 'poitem[]';
+    orderIdInput.value = id;
+    form.appendChild(orderIdInput);
+    form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
+    form.method = 'POST';
+    form.submit();
 }
 </script>
