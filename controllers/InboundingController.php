@@ -1420,7 +1420,7 @@ class InboundingController {
         $stock_price_temp[0]['fba_us'] = '0';
         $stock_price_temp[0]['fba_eu'] = '0';
         $stock_price_temp[0]['vendor_us'] = '0';
-        $stock_price_temp[0]['price'] = (int) $data['data']['price_india'];
+        $stock_price_temp[0]['price'] = (int) $data['data']['usd_price'];
         $stock_price_temp[0]['price_india'] = (int) $data['data']['price_india'];
         $stock_price_temp[0]['price_india_suggested'] = (int) $data['data']['price_india'];
         $stock_price_temp[0]['mrp_india'] = (int) $data['data']['price_india_mrp'];
@@ -1471,7 +1471,7 @@ class InboundingController {
                 $stock_price_temp[$i]['fba_us'] = '0';
                 $stock_price_temp[$i]['fba_eu'] = '0';
                 $stock_price_temp[$i]['vendor_us'] = '0';
-                $stock_price_temp[$i]['price'] = (int) $value['price_india'];
+                $stock_price_temp[$i]['price'] = (int) $value['usd_price'];
                 $stock_price_temp[$i]['price_india'] = (int) $value['price_india'];
                 $stock_price_temp[$i]['price_india_suggested'] = (int) $data['data']['price_india'];
                 $stock_price_temp[$i]['mrp_india'] = (int) $value['price_india_mrp'];
