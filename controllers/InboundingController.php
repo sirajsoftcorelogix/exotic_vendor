@@ -962,7 +962,9 @@ class InboundingController {
                 }
             } while ($attempts < 100000);
         }
-
+        if (!empty($item_code)) {
+            $shouldRename = true; 
+        }
         // --- SKU GENERATION ---
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
