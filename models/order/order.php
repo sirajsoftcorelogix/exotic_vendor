@@ -1024,7 +1024,7 @@ class Order{
             'shipping_first_name','shipping_last_name','shipping_company',
             'shipping_address_line1','shipping_address_line2','shipping_city','shipping_state',
             'shipping_state_iso','shipping_state_code','shipping_country','shipping_zipcode',
-            'shipping_mobile','shipping_email'
+            'shipping_mobile','shipping_email','total'
         ];
 
         $insertCols   = [];
@@ -1054,6 +1054,14 @@ class Order{
             $placeholders[] = '?';
             $values[]       = $customer_id;
             $types         .= 'i'; // integer
+        }
+        
+        //total add
+        if (isset($data['total'])) {
+            $insertCols[]   = 'total';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['total']);
+            $types         .= 'd'; // decimal
         }
         
 

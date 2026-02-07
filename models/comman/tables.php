@@ -273,5 +273,62 @@ class Tables {
         }
         return null;
     }
+    public function prepareIrisIrpInvoiceData($invoice, $items) {
+        $data = [
+            // Map invoice fields to Iris IRP API fields
+            "invoice_number" => $invoice['invoice_number'],
+            "invoice_date" => $invoice['invoice_date'],
+            "customer_gstin" => $invoice['customer_gstin'],
+            "total_amount" => $invoice['total_amount'],
+            // Add other necessary fields
+            "items" => []
+        ];
+
+        foreach ($items as $item) {
+            $data['items'][] = [
+                "description" => $item['description'],
+                "hsn_code" => $item['hsn_code'],
+                "quantity" => $item['quantity'],
+                "unit_price" => $item['unit_price'],
+                "total_price" => $item['total_price'],
+                // Add other necessary item fields
+            ];
+        }
+
+        return $data;
+    }
+    public function updateGlobalSettings($data, $id) {
+        //print_r($data); Array ( [setting_key] => invoice_prefix [setting_value] => inv/2025-26/ )
+        $setClause = [];
+        $types = '';
+        $values = [];
+        foreach ($data as $key => $value) {
+            $setClause[] = "$key = ?";
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_double($value) || is_float($value)) {
+                $types .= 'd';
+            } else {
+                $types .= 's';
+            }
+            $values[] = $value;
+        }
+        $values[] = $id;
+        $types .= 'i';
+
+        $sql = "UPDATE global_settings SET " . implode(', ', $setClause) . " WHERE id = ?";
+        $stmt = $this->ci->prepare($sql);
+        if (!$stmt) return false; 
+        $stmt->bind_param($types, ...$values);
+        return $stmt->execute();
+    }
+    public function getAllGlobalSettings() {
+        $sql = "SELECT * FROM global_settings";
+        $stmt = $this->ci->prepare($sql);        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = $result->fetch_assoc();
+        return $data;
+    }
 }
 ?>
