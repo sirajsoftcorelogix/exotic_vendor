@@ -164,6 +164,12 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'update_note_ajax':
+                $controller->updateNoteAjax();
+                break;
+            case 'update_name_email_ajax':
+                $controller->updateNameEmailAjax();
+                break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
                 break;
