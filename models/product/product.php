@@ -495,7 +495,10 @@ class product
             $stmt2 = $this->db->prepare($sql);
             if (!$stmt2) return false;
             $stmt2->bind_param('sisss', $item_code, $vendor_id, $vendor_code, $now, $now);
-            return $stmt2->execute();
+            if ($stmt2->execute()) {
+                return $vendor_id;
+            }
+            return false;
         }
     }
     public function deleteProductVendor($id)
@@ -1519,6 +1522,69 @@ class product
         }
         return null;
     }
+    
+    public function getStockSummaryBySku($sku)
+    {
+        $sql = "SELECT * FROM vp_stock
+                WHERE sku = ?";
 
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+        $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return ['total_added' => 0, 'total_deducted' => 0];
+    }
+    public function getStockMovementBySku($sku)
+    {
+        //product_id, sku, warehouse_id, movement_type, quantity, running_stock, ref_type, ref_id
+        $sql = "SELECT 
+            SUM(CASE WHEN movement_type = 'IN' THEN quantity ELSE 0 END) AS total_added,
+            SUM(CASE WHEN movement_type = 'OUT' THEN quantity ELSE 0 END) AS total_deducted,
+            MAX(CASE WHEN movement_type = 'IN' THEN created_at ELSE NULL END) AS last_added_at,
+            MAX(CASE WHEN movement_type = 'OUT' THEN created_at ELSE NULL END) AS last_deducted_at,
+            running_stock                    
+                FROM vp_stock_movements
+                WHERE sku = ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return ['total_added' => 0, 'total_deducted' => 0];
+        $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return ['total_added' => 0, 'total_deducted' => 0];
+    }
+    public function stock_history($sku, $limit = 100, $offset = 0)
+    {
+        //join exotic_address on exotic_address.id = vp_stock_movements.warehouse_id
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name FROM vp_stock_movements sm LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id WHERE sm.sku = ? ORDER BY sm.created_at DESC LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+        $stmt->bind_param('sii', $sku, $limit, $offset);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+    public function updateProductNotes($product_id, $notes)
+    {
+        $sql = "UPDATE vp_products SET notes = ?, updated_at = NOW() WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        $id = (int)$product_id;
+        $stmt->bind_param('si', $notes, $id);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Notes updated successfully'];
+        }
+        return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+    }
     
 }

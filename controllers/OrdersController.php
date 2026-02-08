@@ -3,10 +3,12 @@ require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
 require_once 'models/order/po_invoice.php';
+require_once 'models/product/product.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
 $poInvoiceModel = new POInvoice($conn);
+$productModel = new Product($conn);
 global $root_path;
 global $domain;
 class OrdersController { 
@@ -174,6 +176,7 @@ class OrdersController {
     public function importOrders() {
         //is_login();
         global $ordersModel;
+        global $productModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
             die('Unauthorized access.');
@@ -373,11 +376,22 @@ class OrdersController {
                     $result[] = $data;
                     //add products
                     $pdata[] = $ordersModel->addProducts($rdata);                   
-                    //$vdata = $ordersModel->addVendorIfNotExists($rdata['vendor']);
+                    
                     if (isset($data['success']) && $data['success'] == 1) {                        
                         $imported++;
                     } 
-                    //print_array($rdata);                   
+                    //print_array($rdata);   
+                    //insert vendor if not exists and get vendor id
+                    $maped = [];
+                    $vendorexplode = explode(',', $item['vendor']);
+                    foreach($vendorexplode as $vendorname){
+                        $vendorsuccess = $ordersModel->addVendorIfNotExists($vendorname); 
+                        $vendor_id = $vendorsuccess['vendor_id'] ?? 0;
+                        //map product with vendor
+                        //$maped[] = $ordersModel->mapVendorToProduct($vendor_id, $rdata['item_code']);
+                        $maped[] = $productModel->saveProductVendor($rdata['item_code'], $vendor_id, '');
+                    }  
+                    //print_array($maped);             
             }
             //add address info
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
