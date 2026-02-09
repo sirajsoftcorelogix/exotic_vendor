@@ -128,14 +128,14 @@
                         <?php foreach ($vendors as $index => $vendor): ?>
                             <tr class="table-content-text">
                                 <td class="px-6 py-4 whitespace-wrap"><?= ++$counter ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name']) ?></td>
-                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name']) ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_name'] ?? '') ?></td>
+                                <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['contact_name'] ?? '') ?></td>
                                 <td class="px-6 py-4 whitespace-wrap"><?= ($vendor['agent_name']!="") ? htmlspecialchars($vendor['agent_name']) : "" ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone']) ?></td>
-                                <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email']) ?></td> -->
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['city']) ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['state']) ?></td>
-                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'])) ?>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_phone'] ?? '') ?></td>
+                                <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars($vendor['state'] ?? '') ?></td>
+                                <td class="px-6 py-3 whitespace-wrap"><?= htmlspecialchars(ucfirst($vendor['is_active'] ?? '')) ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <!-- Three-dot menu container -->
