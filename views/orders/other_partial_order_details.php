@@ -1,292 +1,506 @@
 <?php 
 $total_price = 0;
 $currency = '';
+// echo "<pre>";print_r($order); die;
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
     $currency = $item['currency'];
 endforeach;
 ?>
-<div class="flex-grow space-4 bg-white p-6">
-<div class="max-w-4xl mx-auto text-white rounded-lg grid grid-cols-2 p-4 mt-6" style="background-color: rgba(208, 103, 6, 1);">
-    <div>
-        <p><span class="font-bold">Order number : </span><span class=""><?php echo $order[0]['order_number']; ?></span></p>
-        <p><span class="font-bold">Order Date : </span><span class=""><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
-        </p>
+
+<div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <h1 class="text-xl font-bold"><?php echo $order[0]['order_number']; ?></h1>
+            <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
+            <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
+            <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
+            <span class="rounded-full bg-gray-400 px-3 py-1 text-xs font-semibold text-white">Unfulfilled</span>
+            <span class="rounded-full bg-orange-600 px-3 py-1 text-xs font-semibold text-white">Fulfilled</span>
+            <span class="rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">Archived</span> -->
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
+            <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Return</button>
+            <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
+            <div class="relative">
+                <button class="flex items-center gap-2 rounded bg-black px-4 py-1.5 text-sm font-medium text-white">
+                    Print
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
     </div>
-    <div>
-        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($total_price, 2); ?> <?php echo $currency; ?></span></p>
-        <p><span class="font-bold">Payment Mode : </span><span class=""><?php echo $order[0]['payment_type']; ?></span></p>
-    </div>
-</div>
-</div>
-<div class="flex-grow space-4 p-4 bg-white">
-<?php
-    //print_array($order);
-	$countries = country_array();
-	//print_array($countries);
-    
-    foreach ($order as $items => $item):
-    //calculate total price
-    $total_price += $item['finalprice'] * $item['quantity'];
-    ?>
-            <!-- Accordion Item 1 -->
-                <div class="max-w-4xl mx-auto mb-6 mb-6 bg-white shadow-md rounded-lg overflow-hidden">
-                    <div class="accordion-trigger cursor-pointer border-b p-4">
-                        <div class="flex items-start space-x-4">
-                            <div class="flex-shrink-0 w-36 h-36">
-                                <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image"
-                                     class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0">
-                            </div>
-                            <div class="flex-grow">
-                                <div>
-                                    <p> <span class="section-value"><?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?></span></p>
-                                </div>
-                                <div class="flex justify-between items-start">
-                                    
-                                    <h3 class="item-title pr-4"><?php echo $item['title']; ?></h3>
-                                    <div class="flex flex-col items-center space-y-2 flex-shrink-0 ml-4">
-                                        <!-- <button class="text-gray-500 hover:text-gray-800">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                                 viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                      d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
-                                            </svg>
-                                        </button>
-                                        <button class="text-gray-500 hover:text-gray-800">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
-                                                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                                            </svg>
-                                        </button> -->
-                                    </div>
-                                </div>
-                                <p class="item-meta mt-0">Item Code: <?php echo $item['item_code']; ?></p>
-                                <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
-                                <p class="vendor-text mt-2"><strong class="vendor-title">Vendor :</strong> <span
-                                        class="vendor-name"><?php echo $item['vendor']; ?></span></p>
-                                <div class="flex justify-between items-center mt-3">
-                                    <div class="status-box flex items-center justify-center">
-                                        <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
-                                    </div>
-                                    <div class="status-box w-48 flex items-center justify-center">
-                                        <span class="status-text">Ship <?php echo $item['status'] == 'shipped' ? 'on' : ' by'; ?> : <?php echo $item['esd'] ? date('d M Y', strtotime($item['esd'])) : ' -'; ?></span>
-                                    </div>
-                                    <div class="flex space-x-3 justify-end">  
-                                        <?php if($item['po_number']): ?>
-                                        <span class="po-button"><a href="<?php echo base_url('?page=purchase_orders&action=view&po_id=' . $item['po_id']); ?>"><?php echo $item['po_number']; ?></a></span>
-                                        <?php else: ?>
-                                        <form action="<?php echo base_url('?page=purchase_orders&action=create'); ?>" method="post">
-                                        <input type="hidden" name="poitem[]" id="poitem_order_id" value="<?php echo $item['id']?>">                                    
-                                        <button type="submit" class="po-button">Create PO</button>
-                                        </form>
-                                        <?php endif; ?>
-                                        <!-- <span class="shipping-button">Express Shipping</span> -->                                    
-                                    </div>
-                                </div>
-                                
-                                
-                            </div>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2 space-y-4 font-sans text-[#333]">
+            <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div class="mb-6 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                stroke-width="1.5">
+                                <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            <span>Fulfilled (32)</span>
+                        </div>
+                        <div
+                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                stroke-width="1.5">
+                                <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path
+                                    d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                            </svg>
+                            <span><?php echo $order[0]['city']; ?>, <?php echo $order[0]['state']; ?></span>
                         </div>
                     </div>
-                    <!-- Accordion Content -->
-                    <div class="accordion-content-details p-4 rounded-b-lg space-y-4">
-                        <!-- Item Details -->
-                        <div class="p-1 rounded-lg" style="background-color: rgba(245, 245, 245, 1);">
-                            <div class="grid grid-cols-2 gap-x-1 items-end">
-                                <!-- <div class="space-y-1">
-                                    <p><span class="item-detail-title">Item Code : </span><span
-                                            class="item-detail-value"><?php //echo $item['item_code']; ?></span></p>
-                                    <p><span class="item-detail-title">Material : </span><span
-                                            class="item-detail-value"><?php //echo $item['material']; ?></span></p>
-                                    <p><span class="item-detail-title">Color : </span><span class="item-detail-value"><?php echo $item['color']; ?></span>
-                                    </p>
-                                    <p><span class="item-detail-title">Size : </span><span
-                                            class="item-detail-value"><?php //echo $item['size']; ?></span></p>
-                                    <p><span class="item-detail-title">Shipping Country : </span><span
-                                            class="item-detail-value"><?php //echo $item['shipping_country']; ?></span></p>
-                                    <p><span class="item-detail-title">EST : </span><span class="item-detail-value"><?php echo $item['esd']; ?></span>
-                                    </p>
-                                </div> -->
-                                
-                            </div>
-                        </div>
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div>
-                                <p><strong class="section-title">Shipping Country : </strong><span class="section-value"><?php echo $countries[$item['shipping_country']] ?? ''; ?></span>
-                                </p>                                
-                            </div>
-                            <div>
-                                <p><strong class="section-title">Billing Country : </strong><span class="section-value"><?php echo $countries[$item['country']] ?? ''; ?></span>
-                                </p>
-                            </div>
-                        </div>
-                        
-                        <!-- Marketplace -->
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div><p><span class="section-title">Marketplace : </span><span
-                                    class="section-value"><?php echo $item['marketplace_vendor']; ?></span></p>
-                            </div>
-                            <div>
-                                    <p><span class="section-title">Vendor : </span><span class="section-value"><?php echo $item['vendor']; ?></span></p>
-                            </div>
-                        </div>
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <?php if (!empty($order['author'])){ ?>
-                            <div>
-                                <p><strong class="section-title">Author : </strong><span class="section-value"><?php echo $item['author']; ?></span>
-                                </p>
-                                <p><strong class="section-title">Publisher : </strong><span class="section-value"><?php echo $item['publisher']; ?></span>
-                                </p>
-                            </div>
-                            <div>
-                                <p><strong class="section-title">shippingfee : </strong><span class="section-value"><?php echo $item['shippingfee'] ?? 'N/A'; ?></span>
-                                </p>
-                                <p><strong class="section-title">sourcingfee : </strong><span class="section-value"><?php echo $item['sourcingfee'] ?? 'N/A'; ?></span>
-                                </p>
-                            </div>
-                            <?php } else{?>
-                            <div>
-                                <p><strong class="section-title">Color : </strong><span class="section-value"><?php echo $item['color']; ?></span>
-                                </p>
-                                <p><strong class="section-title">Size : </strong><span class="section-value"><?php echo $item['size']; ?></span>
-                                </p>
-                            </div>
-                            <div>
-                                <p><strong class="section-title">Material : </strong><span class="section-value"><?php echo $item['material']; ?></span>
-                                </p>
-                            </div>
-                            <?php } ?>
-                        </div>
-                        <div class="bg-green-200 p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div>
-                                <p><span class="section-title">Addons : </span><span class="section-value"><?php $options = json_decode($item['options'], true); echo implode(', ', $options); ?></span>
-                                </p>
-                            </div>
-                        </div>
-                        <!-- Stock -->
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div>
-                                <p><span class="section-title">Local Stock : </span><span
-                                        class="section-value"><?php echo $item['local_stock']; ?></span></p>
-                                <p><span class="section-title">Location : </span><span class="section-value"><?php echo $item['location']; ?></span>
-                                </p>
-                            </div>
-                            <div>
-                                <p><span class="section-title">Sold Quantity : </span><span
-                                        class="section-value"><?php echo $item['numsold']; ?></span></p>
-                                <p><span class="section-title">Order Quantity : </span><span
-                                        class="section-value"><?php echo $item['quantity']; ?></span></p>
-                            </div>
-                        </div>
-                        <!-- Pricing -->
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div>
-                                
-                                <p><span class="section-title">Item Price : </span><span
-                                        class="section-value"><?php echo $item['itemprice']; ?></span></p>
-                                <p><span class="section-title">Final Price : </span><span
-                                        class="section-value"><?php echo $item['finalprice']; ?></span></p>
-                                <p><span class="section-title">Cost Price : </span><span
-                                        class="section-value"><?php echo $item['cost_price']; ?></span></p>
-                                <p><span class="section-title">Currency : </span><span 
-                                        class="section-value"><?php echo $item['currency']; ?></span></p>
-                                <p><span class="section-title">item Total(<?php echo $item['finalprice'] ?> x <?php echo $item['quantity']; ?>) : </span><span 
-                                        class="section-value"><?php echo $item['finalprice'] * $item['quantity']; ?></span></p>
-                            </div>
-                            <div>
-                                <p><span class="section-title">HSN Code : </span><span
-                                        class="section-value"><?php echo $item['hsn']; ?></span></p>
-                                <p><span class="section-title">GST : </span><span class="section-value"><?php echo $item['gst']; ?></span></p>
-                                <p><span class="section-title">Credit : </span><span class="section-value"><?php echo $item['credit']; ?></span></p>
-                                <p><span class="section-title">Payment Type : </span><span 
-                                        class="section-value"><?php echo $item['payment_type']; ?></span></p>
-                                <p><span class="section-title">Credit : </span><span 
-                                        class="section-value"><?php echo $item['credit']; ?></span></p>
-                            </div>
-                        </div>
-                        <!-- Coupon -->
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div>
-                                <p><span class="section-title">Coupon : </span><span class="section-value"><?php echo $item['coupon']; ?></span>
-                                </p>
-                                <p><span class="section-title">Coupon Reduce : </span><span
-                                        class="section-value"><?php echo $item['coupon_reduce']; ?></span></p>
-                            </div>
-                            <div>
-                                <p><span class="section-title">Gift Voucher : </span><span
-                                        class="section-value"><?php echo $item['giftvoucher']; ?></span></p>
-                                <p><span class="section-title">Gift Voucher Reduce : </span><span class="section-value"><?php echo $item['giftvoucher_reduce']; ?></span>
-                                </p>
-                            </div>
-                        </div>
-                        <!-- Backorder -->
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div>
-                                <p><span class="section-title">Backorder Status : </span><span
-                                        class="section-value"><?php echo $item['backorder_status']; ?></span></p>
-                                <p><span class="section-title">Backorder Percentage : </span><span
-                                        class="section-value"><?php echo $item['backorder_percent']; ?></span></p>
-                            </div>
-                            <div>
-                                <p><span class="section-title">Backorder Delay : </span><span class="section-value"><?php echo $item['backorder_delay']; ?></span>
-                                </p>
-                                <p><span class="section-title">Expected Delivery Date : </span><span
-                                        class="section-value"><?php echo $item['delivery_due_date']; ?></span></p>
-                            </div>
-                        </div>
-                        <!-- Dimensions -->
-                        <div class="bg-white p-4 rounded-lg grid grid-cols-2 gap-x-8">
-                            <div>
-                                <p><span class="section-title">Product Weight : </span><span class="section-value"><?php echo $item['product_weight'] . $item['product_weight_unit']; ?></span>
-                                </p>
-                                <p><span class="section-title">Product Height : </span><span class="section-value"><?php echo $item['prod_height']; ?></span>
-                                </p>
-                            </div>
-                            <div>
-                                <p><span class="section-title">Product Length : </span><span class="section-value"><?php echo $item['prod_length'] . $item['length_unit']; ?></span>
-                                </p>
-								<p><span class="section-title">Product Width : </span><span class="section-value"><?php echo $item['prod_width'] . $item['length_unit']; ?></span>
-                                </p>
-                            </div>
-                        </div>                       
-                        
-                        <!-- Notes -->
-                        <div class="bg-white p-4 rounded-lg">
-                            <p class="notes-title">Notes :</p>
-                            <p class="notes-text mt-1"><?php echo $item['remarks']; ?>  </p>
-                        </div>
+
+                    <div class="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                        <svg class="h-5 w-5 text-black-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            stroke-width="1.5">
+                            <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                        <span
+                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
                     </div>
-                    <!-- /Accordion Content -->
                 </div>
-<?php endforeach; ?>  
-</div>  
+
+                <div class="space-y-4">
+                    <?php foreach ($order as $item): ?>
+                    <div class="flex items-center gap-4">
+                        <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
+
+                        <div class="flex flex-1 items-start gap-5 rounded-2xl border border-gray-200 p-4">
+                            <div class="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
+                                <img src="<?php echo $item['image']; ?>" class="h-full w-full object-cover"
+                                    alt="product">
+                            </div>
+
+                            <div class="flex-1">
+                                <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
+                                    <?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?>
+                                </h4>
+                                <h4 class="mb-3 text-[14px] leading-tight text-black-900">
+                                    <?php echo $item['title']; ?>
+                                </h4>
+
+                                <div class="flex justify-between items-start">
+                                    <div class="space-y-1.5 text-[13px]">
+                                        <p>
+                                            <span class="inline-block w-12 font-bold text-black">SKU</span>
+                                            <span class="text-black">:</span>
+                                            <span class="ml-2 text-black-700"><?php echo $item['sku']; ?></span>
+                                        </p>
+                                        <p>
+                                            <span class="inline-block w-12 font-bold text-black">Color</span>
+                                            <span class="text-black">:</span>
+                                            <span class="ml-2 text-black-700"><?php echo $item['color']; ?></span>
+                                        </p>
+                                        <div class="flex items-center pt-1">
+                                            <span class="inline-block w-12 font-bold text-black">Qty.</span>
+                                            <span class="text-black">:</span>
+                                            <span
+                                                class="ml-4 rounded-full border border-gray-200 bg-gray-50 px-5 py-0.5 text-black-800">
+                                                <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-12">
+                                        <div class="flex items-center gap-2 text-[13px] text-black-500">
+                                            <span>₹<?php echo $item['finalprice']; ?> x</span>
+                                            <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
+                                        </div>
+
+                                        <div class="w-20 text-right text-[14px] font-bold text-black-900">
+                                            ₹<?php echo $item['finalprice'] * $item['quantity']; ?>
+                                        </div>
+                                        <div class="w-20 text-right text-[14px] font-bold text-black-900">
+                                            <span
+                                                class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white"><?php echo $item['status']; ?></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php
+                    $tax_rate = 0.05; // 5%
+                    $calculated_subtotal = $total_price / (1 + $tax_rate);
+                    $calculated_tax = $total_price - $calculated_subtotal;
+                ?>
+                <div class="mt-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+    
+                    <div class="mb-5">
+                        <span class="inline-flex items-center gap-2 bg-[#E5E7EB] text-[#5C5F62] px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-[#5C5F62]">
+                                <path d="M19 3H5C3.89543 3 3 3.89543 3 5V21L5.5 18.5L8 21L10.5 18.5L13 21L15.5 18.5L18 21L21 18V5C21 3.89543 20.1046 3 19 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M9 11L11 13L15 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Paid
+                        </span>
+                    </div>
+
+                    <div class="border border-gray-200 rounded-xl overflow-hidden">
+                        
+                        <div class="p-6 space-y-5">
+                            <div class="grid grid-cols-12 items-start text-sm">
+                                <div class="col-span-3 font-bold text-black-800">Subtotal</div>
+                                <div class="col-span-6 text-black-500"><?php echo count($order); ?> items</div>
+                                <div class="col-span-3 text-right font-bold text-black-900">
+                                    ₹<?php echo number_format($calculated_subtotal, 2); ?>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-12 items-start text-sm">
+                                <div class="col-span-3 font-bold text-black-800">Taxes</div>
+                                <div class="col-span-6 text-black-500">SGST CGST 5% (Included)</div>
+                                <div class="col-span-3 text-right font-bold text-black-900">
+                                    ₹<?php echo number_format($calculated_tax, 2); ?>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-12 items-start text-sm pt-1">
+                                <div class="col-span-3 font-bold text-black-800">Total</div>
+                                <div class="col-span-6"></div> 
+                                <div class="col-span-3 text-right font-bold text-black-900">
+                                    ₹<?php echo number_format($total_price, 2); ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
+                            <span class="text-sm font-bold text-black-800">Paid</span>
+                            <span class="text-sm font-bold text-black-900">
+                                ₹<?php echo number_format($total_price, 2); ?> <?php echo $currency; ?>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="space-y-6">
+            <!-- Note Section -->
+            <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>">
+                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>','<?= htmlspecialchars($order[0]['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                </button>
+                <h3 class="mb-2 text-sm font-bold text-black-700">Note</h3>
+                <?php if(!empty($order[0]['remarks'])): ?>
+                <div id="note-display-<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <?php echo ($order[0]['remarks']); ?>
+                </div>
+                <?php endif; ?>
+            </div>
+            <!-- address Section -->
+            <div class="rounded-lg border bg-white p-5 shadow-sm relative">
+                <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                </button>
+                <h3 class="mb-3 text-sm font-bold">Customer</h3>
+                <p class="text-sm font-medium text-blue-600" id="display-customer-name"><?php echo $order[0]['customer_name'] ?? 'N/A'; ?></p>
+                <p class="text-sm text-black-500">12 orders</p>
+
+                <div class="mt-6">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Contact information</h4>
+                    <p class="mt-1 text-sm text-blue-600"><?php echo $order[0]['customer_email'] ?? 'N/A'; ?></p>
+                    <p class="text-sm" id="display-customer-phone"><?php echo $order[0]['customer_phone'] ?? 'N/A'; ?></p>
+                </div>
+
+                <div class="mt-6">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
+                    <address class="text-sm not-italic text-black-800 leading-relaxed">
+                        <span class="block font-medium"><?php echo $order[0]['customer_name'] ?? 'N/A'; ?></span>
+                        <span id="address1"><?php echo $order[0]['address_line1'] ?? ''; ?></span>
+                        <span id="address2"><?php echo $order[0]['address_line2'] ?? ''; ?></span>
+                        <br>
+                        <span id="city"><?php echo $order[0]['city'] ?? ''; ?></span> -
+                        <span id="zipcode"><?php echo $order[0]['zipcode'] ?? ''; ?></span>,
+                        <span id="country"><?php echo $order[0]['country'] ?? ''; ?></span>
+                        <br>
+                        <span id="customer_phone" class="mt-1 block"><?php echo $order[0]['customer_phone'] ?? ''; ?></span>
+                    </address>
+                </div>
+
+                <div class="mt-6">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing Address</h4>
+                    <address class="text-sm not-italic text-black-800 leading-relaxed">
+                        <span id="billing_address1"><?php echo $order[0]['shipping_address_line1'] ?? ''; ?></span>
+                        <span id="billing_address2"><?php echo $order[0]['shipping_address_line2'] ?? ''; ?></span>
+                        <br>
+                        <span id="billing_city_city"><?php echo $order[0]['shipping_city'] ?? ''; ?></span> -
+                        <span id="billing_city_zip"><?php echo $order[0]['shipping_zipcode'] ?? ''; ?></span>, 
+                        <span id="billing_country"><?php echo $order[0]['shipping_country'] ?? ''; ?></span><br>
+                        <span id="billing_mobile" class="mt-1 block"><?php echo $order[0]['shipping_mobile'] ?? ''; ?></span>
+                    </address>
+                </div>
+
+                <div class="mt-6 border-t pt-4">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Conversion summary</h4>
+                    <p class="mt-1 text-sm">This is their 11th order</p>
+                    <button class="mt-2 text-sm text-blue-600 hover:underline">View map</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 relative">
+        <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-black-500 hover:text-black-800">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h2 class="text-xl font-bold mb-4 text-black-800">Edit Customer Note</h2>
+
+        <form id="noteEditForm">
+            <input type="hidden" id="note_order_number" name="order_number">
+
+            <textarea id="note_remarks" name="remarks" rows="6"
+                class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                placeholder="Enter note / remarks here..."></textarea>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeNotePopup()" class="rounded-full px-5 py-2.5 bg-gray-200 text-black-800 rounded-md hover:bg-gray-300">
+                    Cancel
+                </button>
+                <button type="submit" class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
+                    Save Note
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="nameEmailPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto flex flex-col max-h-[90vh] relative">
+        
+        <div class="p-6 pb-0">
+            <button onclick="closeNameEmailPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            <h2 class="text-lg font-bold mb-4 text-gray-800">Edit Customer Name & Email</h2>
+        </div>
+
+        <div class="overflow-y-auto p-6 pt-2 custom-scrollbar">
+            <form id="nameEmailForm">
+                <input type="hidden" id="edit_order_number" name="order_number">
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                        <input type="text" id="edit_name" name="customer_name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                        <input type="text" id="edit_phone" name="customer_phone" oninput="this.value = this.value.replace(/[^0-9]/g, '')" maxlength="12" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
+                    </div>
+                    
+                    <hr class="border-gray-100">
+                    
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Shipping Address</label>
+                        <div class="space-y-2">
+                            <input type="text" id="edit_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="edit_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_zipcode" name="zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <input type="text" id="edit_country" name="country" placeholder="Country" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-100">
+
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Billing Address</label>
+                        <div class="space-y-2">
+                            <input type="text" id="edit_billing_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_billing_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="edit_billing_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <input type="text" id="edit_billing_country" name="billing_country" placeholder="Country" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-lg">
+            <button type="button" onclick="closeNameEmailPopup()"
+                    class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 hover:bg-gray-300 text-sm font-medium">
+                Cancel
+            </button>
+            <button type="submit" form="nameEmailForm"
+                    class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
+                Save
+            </button>
+        </div>
+    </div>
+</div>
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const accordionTriggers = document.querySelectorAll('.accordion-trigger');
-            accordionTriggers.forEach(trigger => {
-                // Remove previous handler if stored to avoid duplicate handlers
-                if (trigger.__accordionClick__) {
-                    trigger.removeEventListener('click', trigger.__accordionClick__);
-                }
+    function openNoteEditPopup(orderNumber, currentRemarks) {
+        document.getElementById('note_order_number').value = orderNumber;
+        document.getElementById('note_remarks').value = currentRemarks || '';
+        document.getElementById('noteEditPopup').classList.remove('hidden');
+    }
 
-                const handler = function () {
-                    const content = this.nextElementSibling;
-                    const isOpening = !content.classList.contains('open');
+    function closeNotePopup() {
+        document.getElementById('noteEditPopup').classList.add('hidden');
+        // Optional: clear form
+        document.getElementById('note_remarks').value = '';
+    }
 
-                    // Open or close the clicked one
-                    if (isOpening) {
-                        content.classList.add('open');
-                        this.classList.add('active');
-                    } else {
-                        content.classList.remove('open');
-                        this.classList.remove('active');
+    document.getElementById('noteEditForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const orderNumber = document.getElementById('note_order_number').value;
+        const remarks = document.getElementById('note_remarks').value.trim();
+
+        if (!orderNumber) {
+            alert("Order number is missing.");
+            return;
+        }
+
+        fetch('index.php?page=orders&action=update_note_ajax', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `order_number=${encodeURIComponent(orderNumber)}&remarks=${encodeURIComponent(remarks)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update displayed note
+                    const displayEl = document.getElementById('note-display-' + orderNumber);
+                    if (displayEl) {
+                        if (remarks.trim()) {
+                            displayEl.innerHTML = nl2br(escapeHtml(remarks));
+                        } else {
+                            displayEl.innerHTML = '<em class="text-black-400">No notes from customer</em>';
+                        }
                     }
-                };
 
-                // store the handler reference so it can be removed later
-                trigger.__accordionClick__ = handler;
-                trigger.addEventListener('click', handler);
+                    // Optional success feedback
+                    alert("Note updated successfully!");
+                    closeNotePopup();
+                    window.location.reload();
+                } else {
+                    alert("Failed to update note: " + (data.message || "Unknown error"));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Error communicating with server.");
             });
+    });
+
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    function nl2br(str) {
+        return (str + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, '$1<br>');
+    }
+
+    function openNameEmailPopup(orderNumber) {
+        document.getElementById('edit_order_number').value = orderNumber;
+        document.getElementById('edit_name').value  = document.getElementById('display-customer-name')?.textContent.trim()  || '';
+        document.getElementById('edit_phone').value = document.getElementById('display-customer-phone')?.textContent.trim() || '';
+        document.getElementById('edit_address_line1').value = document.getElementById('address1')?.textContent.trim() || '';
+        document.getElementById('edit_address_line2').value = document.getElementById('address2')?.textContent.trim() || '';
+        document.getElementById('edit_city').value = document.getElementById('city')?.textContent.trim() || '';
+        document.getElementById('edit_zipcode').value = document.getElementById('zipcode')?.textContent.trim() || '';
+        document.getElementById('edit_country').value = document.getElementById('country')?.textContent.trim() || '';
+        document.getElementById('edit_billing_address_line1').value = document.getElementById('billing_address1')?.textContent.trim() || '';
+        document.getElementById('edit_billing_address_line2').value = document.getElementById('billing_address2')?.textContent.trim() || '';
+        document.getElementById('edit_billing_city').value = document.getElementById('billing_city_city')?.textContent.trim() || '';
+        document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_city_zip')?.textContent.trim() || '';
+        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.textContent.trim() || '';
+        document.getElementById('nameEmailPopup').classList.remove('hidden');
+    }
+
+    function closeNameEmailPopup() {
+        document.getElementById('nameEmailPopup').classList.add('hidden');
+    }
+
+    document.getElementById('nameEmailForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const orderNumber = document.getElementById('edit_order_number').value;
+        const name  = document.getElementById('edit_name').value.trim();
+        const phone = document.getElementById('edit_phone').value.trim();
+        const address_line1 = document.getElementById('edit_address_line1').value.trim();
+        const address_line2 = document.getElementById('edit_address_line2').value.trim();
+        const city = document.getElementById('edit_city').value.trim();
+        const zipcode = document.getElementById('edit_zipcode').value.trim();
+        const country = document.getElementById('edit_country').value.trim();
+        const billing_address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
+        const billing_address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
+        const billing_city = document.getElementById('edit_billing_city').value.trim();
+        const billing_zipcode = document.getElementById('edit_billing_zipcode').value.trim();
+        const billing_country = document.getElementById('edit_billing_country').value.trim();
+
+        if (!name || !phone) {
+            alert("All fields (Name, Email, Phone) are required.");
+            return;
+        }
+
+        fetch('index.php?page=orders&action=update_name_email_ajax', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}`
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('display-customer-name').textContent  = name;
+                document.getElementById('display-customer-phone').textContent = phone;
+                document.getElementById('address1').textContent = address_line1;
+                document.getElementById('address2').textContent = address_line2;
+                document.getElementById('city').textContent = city;
+                document.getElementById('zipcode').textContent = zipcode;
+                document.getElementById('country').textContent = country;
+                document.getElementById('billing_address1').textContent = billing_address_line1;
+                document.getElementById('billing_address2').textContent = billing_address_line2;
+                document.getElementById('billing_city_city').textContent = billing_city;
+                document.getElementById('billing_city_zip').textContent = billing_zipcode;
+                document.getElementById('billing_country').textContent = billing_country;
+
+                alert("Customer information updated successfully!");
+                closeNameEmailPopup();
+
+                // Optional – safer for consistency with other parts of the page
+                window.location.reload();
+            } else {
+                alert("Failed to save: " + (data.message || "Unknown error"));
+            }
+        })
+        .catch(() => {
+            alert("Connection problem. Please try again.");
+        });
     });
 </script>

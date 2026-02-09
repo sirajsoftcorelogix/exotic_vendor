@@ -3289,7 +3289,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isNaN(cp)) return; 
 
         // Formula: CP + (CP * Percentage / 100)
-        const sellPrice = cp + (cp * currentMarkupPercent / 100);
+        const sellPrice = (cp * (currentMarkupPercent / 100));
 
         const container = cpInput.closest('.grid') || cpInput.closest('.calculation-card') || cpInput.closest('.variation-card');
         

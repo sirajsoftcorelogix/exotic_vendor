@@ -1305,7 +1305,49 @@ class OrdersController {
         $total_payments = $poInvoiceModel->getTotalPayments(0, 0, $filters);
         //print_array($payments);
         renderTemplate('views/purchase_orders/payment_list.php', ['payments' => $payments, 'total_payments' => $total_payments], 'Payments List');
-    }    
+    }   
+    
+    public function updateNoteAjax() {
+        is_login();
+        global $ordersModel;
+        // ob_end_clean();
+        // header('Content-Type: application/json; charset=utf-8');
+
+
+        $order_number = trim($_POST['order_number'] ?? '');
+        $remarks      = trim($_POST['remarks'] ?? '');
+        // Use the model (assuming $this->model is set in constructor)
+        $result = $ordersModel->updateOrderRemarks($order_number, $remarks);
+        echo json_encode($result);
+        exit;
+    }
+    public function updateNameEmailAjax() {
+        is_login();
+        global $ordersModel;
+        $order_number   = trim($_POST['order_number']   ?? '');
+        $customer_name  = trim($_POST['customer_name']  ?? '');
+        $customer_phone = trim($_POST['customer_phone'] ?? '');
+        $address_line1 = trim($_POST['address_line1'] ?? '');
+        $address_line2 = trim($_POST['address_line2'] ?? '');
+        $city = trim($_POST['city'] ?? '');
+        $zipcode = trim($_POST['zipcode'] ?? '');
+        $country = trim($_POST['country'] ?? '');
+        $billing_address_line1 = trim($_POST['billing_address_line1'] ?? '');
+        $billing_address_line2 = trim($_POST['billing_address_line2'] ?? '');
+        $billing_city = trim($_POST['billing_city'] ?? '');
+        $billing_zipcode = trim($_POST['billing_zipcode'] ?? '');
+        $billing_country = trim($_POST['billing_country'] ?? '');
+        if (empty($order_number) || empty($customer_name) || empty($customer_phone)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Order number, name, email and phone are required'
+            ]);
+            exit;
+        }
+        $result = $ordersModel->updateCustomerNameAndEmail($order_number,$customer_name,$customer_phone,$address_line1,$address_line2,$city,$zipcode,$country,$billing_address_line1,$billing_address_line2,$billing_city,$billing_zipcode,$billing_country);
+        echo json_encode($result);
+        exit;
+    }
 }
 ?>
 
