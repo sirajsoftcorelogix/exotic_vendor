@@ -286,5 +286,59 @@
 </aside>
   </main>
 </div>
+
+<!-- Product Modal -->
+<div id="productModal" class="fixed inset-0 z-[9999] hidden">
+  <!-- overlay -->
+  <div id="productModalOverlay" class="absolute inset-0 bg-black/50"></div>
+
+  <!-- modal box -->
+  <div class="relative mx-auto mt-10 w-[95%] max-w-3xl rounded-2xl bg-white shadow-xl">
+    <div class="flex items-center justify-between border-b px-5 py-3">
+      <div class="text-sm font-semibold text-gray-800" id="pmTitle">Product</div>
+      <button id="productModalClose"
+        class="rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
+        ✕
+      </button>
+    </div>
+
+    <div class="p-5">
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-[220px_1fr]">
+        <div class="rounded-xl border bg-gray-50 p-3">
+          <img id="pmImage" src="" alt=""
+               class="mx-auto h-56 w-full object-contain" />
+        </div>
+
+        <div>
+          <div class="flex flex-wrap gap-2" id="pmBadges"></div>
+
+          <div class="mt-4 grid grid-cols-[140px_10px_1fr] gap-x-2 gap-y-2 text-xs" id="pmDetails">
+            <!-- rows injected here -->
+          </div>
+
+          <div class="mt-6 flex items-center justify-end gap-2">
+  <div class="mr-auto flex items-center gap-2">
+    <label class="text-xs text-gray-600">Qty</label>
+    <input id="pmQty" type="number" min="1" value="1"
+      class="w-20 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-200">
+  </div>
+
+  <button id="pmAddToCart"
+    class="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
+    Add to Cart
+  </button>
+
+  <button id="pmCloseBtn"
+    class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+    Close
+  </button>
+</div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== END PAGE WRAPPER ===== -->
 <script src="<?php echo base_url(); ?>/assets/js/pos.js"></script> 

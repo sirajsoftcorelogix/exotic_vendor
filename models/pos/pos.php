@@ -104,16 +104,25 @@ class pos {
     /* =========================
      * 5) Data query
      * ========================= */
-    $dataSql = "
+    $dataSql = " 
         SELECT
             id,
             item_code,
             sku,
+            material,
             title,
             groupname,
             size,
             color,
             image,
+            hsn,
+            product_weight,
+            product_weight_unit,
+            prod_height,
+            prod_width,
+            prod_length,
+            length_unit,
+            cost_price,
             local_stock AS stock_qty,
             itemprice AS price
         FROM vp_products
