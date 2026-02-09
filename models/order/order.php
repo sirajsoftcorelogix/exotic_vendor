@@ -716,7 +716,35 @@ class Order{
         }
     }
     function getOrderByOrderNumber($order_number) {
-        $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
+        // $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
+        $sql = "
+            SELECT 
+                o.*,
+                oi.city,
+                oi.state,
+                oi.remarks,
+                oi.address_line1,
+                oi.address_line2,
+                oi.country,
+                oi.zipcode,
+                oi.shipping_address_line1,
+                oi.shipping_address_line2,
+                oi.shipping_city,
+                oi.shipping_zipcode,
+                oi.shipping_mobile,
+                oi.shipping_country,
+                oi.total,
+                c.name       AS customer_name,
+                c.phone      AS customer_phone,
+                c.email      AS customer_email
+            FROM vp_orders o
+            LEFT JOIN vp_order_info oi 
+                ON o.order_number = oi.order_number
+            LEFT JOIN vp_customers c
+                ON o.customer_id = c.id
+            WHERE o.order_number = ?
+            ORDER BY o.id ASC
+        ";
         $stmt = $this->db->prepare($sql);   
         $stmt->bind_param('s', $order_number);
         $stmt->execute();
@@ -730,6 +758,103 @@ class Order{
             return $result->fetch_all(MYSQLI_ASSOC);
         }
         return null;
+    }
+    public function updateOrderRemarks($order_number, $remarks) {
+        $order_number = trim($order_number);
+        $remarks      = trim($remarks);
+
+        if (empty($order_number)) {
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'Order number is required'
+            ];
+        }
+        // Optional: Check if record exists first (similar to your get method)
+        $checkSql = "SELECT order_number FROM vp_order_info WHERE order_number = ?";
+        $checkStmt = $this->db->prepare($checkSql);
+        $checkStmt->bind_param("s", $order_number);
+        $checkStmt->execute();
+        $result = $checkStmt->get_result();
+        $exists = $result->num_rows > 0;
+        $checkStmt->close();
+
+        if (!$exists) {
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'No order found with order_number: ' . $order_number
+            ];
+        }
+
+        // Perform the update (same style as your other queries)
+        $sql = "UPDATE vp_order_info SET remarks = ? WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'Prepare failed: ' . $this->db->error
+            ];
+        }
+
+        $stmt->bind_param("ss", $remarks, $order_number);
+        $executed = $stmt->execute();
+
+        if (!$executed) {
+            $error = $stmt->error;
+            $stmt->close();
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'Execute failed: ' . $error
+            ];
+        }
+
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        return [
+            'success'       => true,
+            'affected_rows' => $affected,
+            'message'       => $affected > 0 ? 'Remarks updated successfully' : 'No changes made (value was already the same)'
+        ];
+    }
+    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '') {
+
+        // Update customer (main operation)
+        $sql = "
+            UPDATE vp_customers c
+            INNER JOIN vp_orders o ON o.customer_id = c.id
+            SET c.name = ?, c.phone = ?
+            WHERE o.order_number = ?
+        ";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => $this->db->error];
+        }
+        $stmt->bind_param('sss', $name, $phone, $order_number);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => $stmt->error];
+        }
+
+        // Update address – don't fail the whole operation if this fails
+        $sql_addr = "
+            UPDATE vp_order_info 
+            SET address_line1 = ?, address_line2 = ? , city = ?, zipcode = ?, country = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_zipcode = ?, shipping_country = ?
+            WHERE order_number = ?
+        ";
+        $stmt_addr = $this->db->prepare($sql_addr);
+        if ($stmt_addr) {
+            $stmt_addr->bind_param('sssssssssss', $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $order_number);
+            $stmt_addr->execute();  // ← ignore result
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Customer information updated successfully!'
+        ];
     }
     function adminOrderStatusList($admin = true) {
         $sql = "SELECT * FROM vp_order_status WHERE admin_id != 0 ORDER BY id ASC";
