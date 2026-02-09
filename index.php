@@ -545,6 +545,18 @@ switch ($page) {
                 break;
         }
         break;
+    case 'category':        
+        require_once 'controllers/CategoryController.php';
+        $controller = new CategoryController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
      case 'inbounding':        
         require_once 'controllers/InboundingController.php';
         $controller = new InboundingController();
