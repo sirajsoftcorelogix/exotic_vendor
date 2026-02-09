@@ -1586,5 +1586,18 @@ class product
         }
         return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
     }
+    public function getVariantsByItemCode($item_code)
+    {
+        $sql = "SELECT id, item_code, title, sku FROM vp_products WHERE item_code = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+        $stmt->bind_param('s', $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
     
 }

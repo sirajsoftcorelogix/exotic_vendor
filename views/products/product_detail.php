@@ -8,16 +8,18 @@
       <div>
         <span class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">
           <?php echo $products['groupname'] ?? 'Default Group'; ?>
-        </span>
+        </span> 
+        <span class="text-sm ml-2"> <?php echo $products['item_code'] ?? ''; ?></span>
+        
         <h2 class="font-semibold mt-2 text-lg">
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
         </h2>
         <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
 
         <div class="flex flex-wrap gap-2 mt-2">
-          <span class="px-2 py-1 border rounded text-xs">Yellow</span>
-          <span class="px-2 py-1 border rounded text-xs">Blue</span>
-          <span class="px-2 py-1 border rounded text-xs">Red</span>
+          <?php foreach ($products['variants'] as $variant): ?>
+            <span class="px-2 py-1 border rounded text-xs"><?php echo htmlspecialchars($variant['sku'] ?? ''); ?></span>
+          <?php endforeach; ?>
         </div>
       </div>
     </div>
@@ -26,9 +28,9 @@
     <div class="bg-orange-50 rounded-lg p-4">
       <h3 class="font-semibold mb-2">Measures</h3>
       <div class="grid grid-cols-2 gap-2 text-sm">
-        <div>Length: <b><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : ''); ?> Inch</b></div>
-        <div>Height: <b><?php echo htmlspecialchars($products['prod_height'] ?? ''); ?></b></div>
-        <div>Width: <b><?php echo htmlspecialchars($products['prod_width'] ?? ''); ?></b></div>
+        <div>Length: <b><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : ''); ?> </b></div>
+        <div>Height: <b><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : ''); ?></b></div>
+        <div>Width: <b><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : ''); ?></b></div>
         <div>Weight: <b><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : ''); ?></b></div>
       </div>
     </div>

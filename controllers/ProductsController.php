@@ -838,6 +838,8 @@ class ProductsController {
             //stock summary across warehouses
             $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
             //print_array($order['stocks']);
+            //product veriant details
+            $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
             if ($order) {
                 renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
             } else {
