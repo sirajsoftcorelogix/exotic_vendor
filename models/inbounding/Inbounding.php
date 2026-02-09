@@ -493,7 +493,12 @@ public function update_image_variation($img_id, $variation_id) {
         $id = (int)$id;
 
         // 1. Get Main Inbound Data
-        $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
+        $sql = "SELECT vi.*, vv.vendor_name, va.author AS author_name, vp.publishers AS publisher_name 
+                FROM vp_inbound AS vi 
+                LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id 
+                LEFT JOIN vp_author AS va ON vi.author = va.author_id
+                LEFT JOIN vp_publishers AS vp ON vi.publisher = vp.publishers_id
+                WHERE vi.id = $id";
         $result = $this->conn->query($sql);
         $inbounding = $result ? $result->fetch_assoc() : [];
 
@@ -534,6 +539,22 @@ public function update_image_variation($img_id, $variation_id) {
     }
     public function getAllInbounding() {
         $result = $this->conn->query("SELECT * FROM `vp_inbound` ORDER BY id ASC");
+        $inbounding = [];
+        while ($row = $result->fetch_assoc()) {
+            $inbounding[] = $row;
+        }
+        return $inbounding;
+    }
+    public function getPubliserData() {
+        $result = $this->conn->query("SELECT * FROM `vp_publishers` ORDER BY id ASC");
+        $inbounding = [];
+        while ($row = $result->fetch_assoc()) {
+            $inbounding[] = $row;
+        }
+        return $inbounding;
+    }
+    public function getAuthorData() {
+        $result = $this->conn->query("SELECT * FROM `vp_author` ORDER BY id ASC");
         $inbounding = [];
         while ($row = $result->fetch_assoc()) {
             $inbounding[] = $row;
@@ -820,64 +841,79 @@ public function update_image_variation($img_id, $variation_id) {
         $width   = (float) ($data['width'] ?? 0);
         $depth   = (float) ($data['depth'] ?? 0);
         $weight  = (float) ($data['weight'] ?? 0);
-       
-        $color   = $data['color'] ?? '';
-        $size   = $data['size'] ?? '';
-        $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
-        $Item_code = $data['Item_code'] ?? '';
-        $feedback = $data['feedback'] ?? '';
-       
-        $qty    = (int) ($data['quantity_received'] ?? 0);
-        $cp    = (float) ($data['cp'] ?? 0);
-        $photo   = $data['product_photo'] ?? '';
-        $wh    = $data['store_location'] ?? '';
-       
-        $p_ind   = (float) ($data['price_india'] ?? 0);
-        $p_mrp   = (float) ($data['price_india_mrp'] ?? 0);
-        $colormaps = $data['colormaps'] ?? ''; // Default to empty string, not 0
+        
+        $color      = $data['color'] ?? '';
+        $size       = $data['size'] ?? '';
+        $is_variant = $data['is_variant'] ?? 'N';
+        $Item_code  = $data['Item_code'] ?? '';
+        $feedback   = $data['feedback'] ?? '';
+        
+        // --- BOOK FIELDS EXTRACTION ---
+        $author    = $data['author'] ?? '';
+        $publisher = $data['publisher'] ?? '';
+        $isbn      = $data['isbn'] ?? '';
+        $language  = $data['language'] ?? ''; // <--- Explicitly define this
+        $pages     = (int) ($data['pages'] ?? 0);
+        
+        $qty       = (int) ($data['quantity_received'] ?? 0);
+        $cp        = (float) ($data['cp'] ?? 0);
+        $photo     = $data['product_photo'] ?? '';
+        $wh        = $data['store_location'] ?? '';
+        $colormaps = $data['colormaps'] ?? '';
 
-        // 2. Correct SQL Syntax (Use column names, not PHP variables)
-        $sql = "UPDATE vp_inbound
-            SET feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
-              height = ?, width = ?, depth = ?, weight = ?,
-              color = ?, size = ?, cp = ?, quantity_received = ?,
-              received_by_user_id = ?, temp_code = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?
-            WHERE id = ?";
+
+
+        // 2. SQL String
+        $sql = "UPDATE vp_inbound 
+                SET feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
+                  height = ?, width = ?, depth = ?, weight = ?,
+                  color = ?, size = ?, cp = ?, quantity_received = ?,
+                  received_by_user_id = ?, temp_code = ?, product_photo = ?,
+                  store_location = ?, colormaps = ?,
+                  author = ?, publisher = ?, isbn = ?, language = ?, pages = ?
+                WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
-          return ['success' => false, 'message' => $this->conn->error];
+            return ['success' => false, 'message' => $this->conn->error];
         }
 
-        // 3. Correct Bind Param Types
-        // s = string, d = double (float), i = integer
-        // String map: sssss dddd ss d i i sss d d s i
+        // 3. Bind Parameters (Ensure the order matches the SQL exactly)
         $stmt->bind_param(
-          'ssssssddddssdiisssddsi',
-          $feedback,
-          $Item_code,
-          $is_variant,
-          $data['gate_entry_date_time'],
-          $data['material_code'],
-          $data['group_name'],
-          $height,$width,$depth,
-          $weight,$color,$size,
-          $cp,$qty,
-          $data['received_by_user_id'],
-          $data['temp_code'],   
-          $photo,$wh,$p_ind,
-          $p_mrp,
-          $colormaps,
-          $id
+            'ssssssddddssdiissssssssii', 
+            $feedback,                   // 1
+            $Item_code,                  // 2
+            $is_variant,                 // 3
+            $data['gate_entry_date_time'],// 4
+            $data['material_code'],      // 5
+            $data['group_name'],         // 6
+            $height,                     // 7
+            $width,                      // 8
+            $depth,                      // 9
+            $weight,                     // 10
+            $color,                      // 11
+            $size,                       // 12
+            $cp,                         // 13
+            $qty,                        // 14
+            $data['received_by_user_id'],// 15
+            $data['temp_code'],          // 16
+            $photo,                      // 17
+            $wh,                         // 18
+            $colormaps,                  // 19
+            $author,                     // 20
+            $publisher,                  // 21
+            $isbn,                       // 22
+            $language,                   // 23 <--- Use the local variable
+            $pages,                      // 24
+            $id                          // 25
         );
 
         if ($stmt->execute()) {
-          return ['success' => true];
+            return ['success' => true];
         }
-       
+        
         return ['success' => false, 'message' => $stmt->error];
-      }
+    }
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $temp_code) {

@@ -338,11 +338,36 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         if (isset($id) && $id != 0) {
             $data = $inboundingModel->getform2data($id);
+            $data['publiser'] = $inboundingModel->getPubliserData();
+            $data['author'] = $inboundingModel->getAuthorData();
+            // echo "<pre>";print_r($data['publiser']);exit;
             $data['form2']['gecolormaps'] = $this->gecolormaps();
             renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
         }else{
             header("location: " . base_url('?page=inbounding&action=list'));
         }
+    }
+    public function getAuthorsJson() {
+        global $inboundingModel;
+        $searchTerm = $_GET['q'] ?? ''; 
+        $authors = $inboundingModel->getAuthorData($searchTerm); 
+        
+        // Ensure no previous output breaks the JSON
+        if (ob_get_length()) ob_clean(); 
+        header('Content-Type: application/json');
+        echo json_encode($authors);
+        exit;
+    }
+
+    public function getPublishersJson() {
+        global $inboundingModel;
+        $searchTerm = $_GET['q'] ?? ''; 
+        $publishers = $inboundingModel->getPubliserData($searchTerm); 
+        
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+        echo json_encode($publishers);
+        exit;
     }
     public function saveform1() {
         global $inboundingModel;
@@ -1197,6 +1222,14 @@ class InboundingController {
           $variant['price_india_mrp'] = !empty($variant['price_india_mrp']) ? $variant['price_india_mrp'] : 0;
           $variant['usd_price']   = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
           $variant['quantity']    = !empty($variant['quantity']) ? $variant['quantity'] : 0;
+
+          // books
+          $variant['author']    = $variant['author'] ?? '';
+        $variant['publisher'] = $variant['publisher'] ?? '';
+        $variant['isbn']      = $variant['isbn'] ?? '';
+        $variant['language']  = $variant['language'] ?? '';
+        $variant['pages']     = !empty($variant['pages']) ? (int)$variant['pages'] : 0;
+
           // Handle File Uploads (Same as before)
           $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
           if ($uploadError === UPLOAD_ERR_OK) {
@@ -1270,6 +1303,12 @@ class InboundingController {
           'price_india'     => $mainVariant['price_india'] ?? '',
           'price_india_mrp'   => $mainVariant['price_india_mrp'] ?? '',
 
+          'author'              => $mainVariant['author'] ?? '',
+        'publisher'           => $mainVariant['publisher'] ?? '',
+        'isbn'                => $mainVariant['isbn'] ?? '',
+        'language'            => $mainVariant['language'] ?? '',
+        'pages'               => $mainVariant['pages'] ?? 0,
+
           // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
           'quantity_received'  => $mainVariant['quantity'] ?? 0,
         ];
@@ -1291,7 +1330,7 @@ class InboundingController {
         } else {
           echo "Database Error: " . $res['message'];
         }
-      }
+    }
     public function getNextMaterialOrderAjax() {
         global $inboundingModel;
         header('Content-Type: application/json');

@@ -611,6 +611,10 @@ switch ($page) {
                 $controller->getItamcode();
             case 'search_book_attr':
                 $controller->searchBookAttributes();
+            case 'getPublishersJson':
+                $controller->getPublishersJson();
+            case 'getAuthorsJson':
+                $controller->getAuthorsJson();
             default:
                 $controller->index();
                 break;
