@@ -828,7 +828,7 @@ class ProductsController {
             //fetch product_vendor_map for this product
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
             //stock_movements for this product
-            $order['stock_summary'] = $productModel->getStockMovementBySku($order['sku']);
+            //$order['stock_summary'] = $productModel->getStockMovementBySku($order['sku']);
             //purchase history for this product
             //$order['purchase_history'] = $productModel->getPurchaseHistoryByProductId($order['id']);
             //stock_movements list
