@@ -151,6 +151,7 @@ class InvoicesController {
         $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
         
         // Create invoice header
+        $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
         $invoiceData = [
             'invoice_number' => $invoice_number,
             'invoice_date' => $invoice_date,
@@ -165,7 +166,18 @@ class InvoicesController {
             'created_by' => $_SESSION['user']['id'] ?? 0,
             'created_at' => date('Y-m-d H:i:s')
         ];
-        
+        if ($currency[0] && $currency[0] !== 'INR') {
+            $currencyRecord = $this->getCurrencyByCode($currency[0]);
+            if ($currencyRecord) {
+                $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
+                $convertedAmount = $total_amount * $exchangeRate;
+                $invoiceData['converted_amount'] = $convertedAmount;
+                $invoiceData['exchange_text'] = 'Exchange Rate ('. $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
+            }
+        }else{
+            $invoiceData['exchange_text'] = '';
+            $invoiceData['converted_amount'] = 0.00;
+        }
         $invoiceId = $invoiceModel->createInvoice($invoiceData);
         
         if (!$invoiceId) {
@@ -217,7 +229,26 @@ class InvoicesController {
                 $itemsFailed[] = $order_number;
             }
         }
-        
+        //save international fields
+        if($isInternational){
+            $internationalData = [
+                'invoice_id' => $invoiceId,
+                'pre_carriage_by' => isset($_POST['pre_carriage_by']) ? trim($_POST['pre_carriage_by']) : '',
+                'port_of_loading' => isset($_POST['port_of_loading']) ? trim($_POST['port_of_loading']) : '',
+                'port_of_discharge' => isset($_POST['port_of_discharge']) ? trim($_POST['port_of_discharge']) : '',
+                'country_of_origin' => isset($_POST['country_of_origin']) ? trim($_POST['country_of_origin']) : '',
+                'country_of_final_destination' => isset($_POST['country_of_final_destination']) ? trim($_POST['country_of_final_destination']) : '',
+                'final_destination' => isset($_POST['final_destination']) ? trim($_POST['final_destination']) : '',
+                'usd_export_rate' => isset($_POST['usd_export_rate']) ? floatval($_POST['usd_export_rate']) : 0,
+                'ap_cost' => isset($_POST['ap_cost']) ? floatval($_POST['ap_cost']) : 0,
+                'freight_charge' => isset($_POST['freight_charge']) ? floatval($_POST['freight_charge']) : 0,
+                'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0
+            ];
+            $invoiceModel->insert_international_invoice_data($internationalData);
+        }
+        //call irisirp api to generate irn
+        //$this->generateIrnForInvoice($invoiceId);
+
         // Update order status to invoiced
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
@@ -236,7 +267,58 @@ class InvoicesController {
         ]);
         exit;
     }
-    
+    public function generateIrnForInvoice($invoiceId) {
+        is_login();
+        global $invoiceModel, $commanModel;
+        
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        $items = $invoiceModel->getInvoiceItems($invoiceId);
+        
+        if (!$invoice || empty($items)) {
+            return false;
+        }
+        
+        // Prepare data for IRN generation
+        $invoiceData = $commanModel->prepareIrisIrpInvoiceData($invoice, $items);
+        
+        require_once 'models/invoice/IrisIrpClient.php';
+        // Initialize IrisIrpClient
+        $irisClient = new IrisIrpClient(
+            IRIS_IRP_CLIENT_ID,
+            IRIS_IRP_CLIENT_SECRET,
+            IRIS_IRP_USERNAME,
+            IRIS_IRP_PASSWORD,
+            IRIS_IRP_SANDBOX
+        );
+        
+        try {
+            // Authenticate
+            $irisClient->authenticate();
+            
+            // Generate IRN
+            $response = $irisClient->generateIrn($invoiceData);
+            
+            if (isset($response['irn'])) {
+                // Update invoice with IRN details
+                $updateData = [
+                    'irn' => $response['irn'],
+                    'ack_number' => $response['ack_number'] ?? '',
+                    'ack_date' => isset($response['ack_date']) ? date('Y-m-d H:i:s', strtotime($response['ack_date'])) : null,
+                    'signed_invoice' => $response['signed_invoice'] ?? '',
+                    'qrcode_string' => $response['qr_code'] ?? '',
+                    'irn_status' => 'generated'
+                ];
+                $invoiceModel->updateInvoice($invoiceId, $updateData);
+                return true;
+            } else {
+                // Log error or handle failure
+                return false;
+            }
+        } catch (Exception $e) {
+            // Log exception or handle error
+            return false;
+        }
+    }
     public function view() {
         is_login();
         global $invoiceModel;
@@ -301,7 +383,7 @@ class InvoicesController {
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
             
             // Generate HTML for PDF
-            $html = $this->generateInvoiceHtml($invoice, $items);
+            $html = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');
             
             if (empty($html)) {
                 throw new Exception('Failed to generate invoice HTML');
@@ -351,7 +433,7 @@ class InvoicesController {
         }
     }
     
-    private function generateInvoiceHtml($invoice, $items) {
+    private function generateInvoiceHtml($invoice, $items, $type = '') {
         global $commanModel;
         
         // Initialize variables
@@ -478,21 +560,33 @@ class InvoicesController {
         $convertedAmount = $totalAmount;
         
         if ($currency && $currency !== 'INR') {
-            $currencyRecord = $this->getCurrencyByCode($currency);
-            if ($currencyRecord) {
-                $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
-                $convertedAmount = $totalAmount * $exchangeRate;
-                
-                $summaryrows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="13" style="padding: 20px;" class="right bold">Exchange Rate (' . htmlspecialchars($currency) . ' to INR): '. number_format($exchangeRate, 6) .'</td>
-                        
-                    </tr>
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="12" class="right bold" style="text-align: right;">Converted Amount (INR)</td>
-                        <td class="right bold">' . number_format($convertedAmount, 2) . '</td>
-                    </tr>';
+            if($type === 'tax_invoice'){
+                $exchangeText = $invoice['exchange_text'] ?? '';
+                $convertedAmount = $invoice['converted_amount'] ?? 0;
+            } else {
+                 $currencyRecord = $this->getCurrencyByCode($currency);                 
+                if (!empty($currencyRecord)) {
+                    $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
+                    $convertedAmount = $totalAmount * $exchangeRate;
+                }else{
+                    //if currancy record not found then USD exchange rate will be considered if currency is not INR
+                    $currencyRecord = $this->getCurrencyByCode('USD'); 
+                    $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
+                    $convertedAmount = $totalAmount * $exchangeRate;
+                }
+                $exchangeText = 'Exchange Rate ('. $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
             }
+               
+            $summaryrows .= '
+                <tr style="background: #f9f9f9;">
+                    <td colspan="13" style="padding: 20px;" class="right bold">' . htmlspecialchars($exchangeText) .'</td>
+                    
+                </tr>
+                <tr style="background: #f9f9f9;">
+                    <td colspan="12" class="right bold" style="text-align: right;">Converted Amount (INR)</td>
+                    <td class="right bold">' . number_format($convertedAmount, 2) . '</td>
+                </tr>';
+            
         }
         
         $summaryrows .= '
@@ -626,7 +720,7 @@ class InvoicesController {
             }
             
             // Generate the invoice HTML using the tax invoice template
-            $html = $this->generateInvoiceHtml($invoice, $invoiceItems);
+            $html = $this->generateInvoiceHtml($invoice, $invoiceItems, 'preview');
             
             if (empty($html)) {
                 echo json_encode(['success' => false, 'message' => 'Failed to generate preview HTML']);

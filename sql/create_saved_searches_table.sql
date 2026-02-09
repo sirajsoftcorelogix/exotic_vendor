@@ -215,4 +215,69 @@ CREATE TABLE currency_rate_history (
 
 ALTER TABLE `vp_orders` ADD `agent_assign_date` DATETIME NULL AFTER `agent_id`;
 
+ALTER TABLE `vp_invoices` ADD `exchange_text` VARCHAR(100) NULL AFTER `currency`,
+ADD `converted_amount` DECIMAL(15,2) NULL DEFAULT 0.00 AFTER `exchange_text`;
 
+
+INSERT INTO `currency_master`
+(`id`, `currency_code`, `currency_name`, `currency_unit`, `rate_import`, `rate_export`, `is_active`, `created_at`, `updated_at`)
+VALUES
+(1, 'AUD', 'Australian Dollar', '1 AUD', 54.20, 54.80, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(2, 'BHD', 'Bahraini Dinar', '1 BHD', 220.50, 222.00, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(3, 'CAD', 'Canadian Dollar', '1 CAD', 61.80, 62.40, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(4, 'CNY', 'Chinese Yuan', '1 CNY', 11.40, 11.60, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(5, 'DKK', 'Danish Krone', '1 DKK', 12.10, 12.30, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(6, 'EUR', 'Euro', '1 EUR', 89.50, 90.20, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(7, 'HKD', 'Hong Kong Dollar', '1 HKD', 10.60, 10.80, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(8, 'KWD', 'Kuwaiti Dinar', '1 KWD', 270.00, 272.00, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(9, 'NZD', 'New Zealand Dollar', '1 NZD', 50.10, 50.70, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(10, 'NOK', 'Norwegian Krone', '1 NOK', 7.70, 7.90, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(11, 'GBP', 'Pound Sterling', '1 GBP', 104.20, 105.00, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(12, 'QAR', 'Qatari Riyal', '1 QAR', 22.70, 23.00, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(13, 'SAR', 'Saudi Arabian Riyal', '1 SAR', 22.10, 22.40, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(14, 'SGD', 'Singapore Dollar', '1 SGD', 61.90, 62.50, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(15, 'ZAR', 'South African Rand', '1 ZAR', 4.40, 4.60, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(16, 'SEK', 'Swedish Kroner', '1 SEK', 7.90, 8.10, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(17, 'CHF', 'Swiss Franc', '1 CHF', 94.50, 95.20, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(18, 'TRY', 'Turkish Lira', '1 TRY', 2.60, 2.80, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(19, 'AED', 'UAE Dirham', '1 AED', 22.60, 22.90, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(20, 'USD', 'US Dollar', '1 USD', 83.25, 83.50, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(21, 'JPY', 'Japanese Yen', '100 JPY', 55.20, 55.80, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16'),
+(22, 'KRW', 'Korean Won', '100 KRW', 6.20, 6.50, 1, '2026-01-28 14:26:16', '2026-01-28 14:26:16');
+
+Create table vp_invoices_international (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    invoice_id BIGINT UNSIGNED NOT NULL,
+
+    pre_carriage_by VARCHAR(100) NULL,
+    port_of_loading VARCHAR(100) NULL,
+    port_of_discharge VARCHAR(100) NULL,
+    country_of_origin VARCHAR(100) NULL,
+    country_of_final_destination VARCHAR(100) NULL,
+    final_destination VARCHAR(255) NULL,
+    usd_export_rate DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    ap_cost DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    freight_charge DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    insurance_charge DECIMAL(15,2) NOT NULL DEFAULT 0.00,   
+
+    irn VARCHAR(200) NULL,    
+    ack_number VARCHAR(100) NULL,
+    ack_date TIMESTAMP NULL,
+    signed_invoice TEXT NULL,
+    qrcode_string TEXT NULL,
+    irn_status VARCHAR(50) NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_invoice_id (invoice_id),
+
+    CONSTRAINT fk_invoices_international_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES vp_invoices(id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+ALTER table `vp_order_info` ADD `total` DECIMAL(15,2) NULL DEFAULT 0 AFTER `shipping_email`;

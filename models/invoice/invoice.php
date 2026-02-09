@@ -32,14 +32,14 @@ class Invoice {
     }
 
     public function createInvoice($data) {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $invoice_number = 'INV-' . date('Ymd') . '-' . mt_rand(1000, 9999);
         $stmt->bind_param(
-            'ssisssdddsds',
+            'ssisssdddsdssd',
             $data['invoice_number'],
             $data['invoice_date'],
             $data['customer_id'],
@@ -51,7 +51,9 @@ class Invoice {
             $data['total_amount'],
             $data['status'],
             $data['created_by'],
-            $data['created_at']
+            $data['created_at'],
+            $data['exchange_text'],
+            $data['converted_amount']
         );
 
         if ($stmt->execute()) {
@@ -171,5 +173,64 @@ class Invoice {
             return $result->fetch_assoc();
         }
         return null;
+    }
+    public function insert_international_invoice_data($data) {
+        $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, irn, qrcode_string) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param(
+            'issssssddddss',
+            $data['invoice_id'],
+            $data['pre_carriage_by'],
+            $data['port_of_loading'],
+            $data['port_of_discharge'],
+            $data['country_of_origin'],
+            $data['country_of_final_destination'],
+            $data['final_destination'],
+            $data['usd_export_rate'],
+            $data['ap_cost'],
+            $data['freight_charge'],
+            $data['insurance_charge'],
+            $data['irn'],
+            $data['qrcode_string']
+        );
+
+        if ($stmt->execute()) {
+            return $this->db->insert_id;
+        }
+        return false;
+    }
+    public function getInternationalInvoiceByInvoiceId($invoice_id) {
+        $sql = "SELECT * FROM vp_international_invoices WHERE invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return null;
+
+        $stmt->bind_param('i', $invoice_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function updateInvoice($invoice_id, $data) {
+        $sql = "UPDATE vp_international_invoices SET irn = ?, ack_number = ?, ack_date = ?, signed_invoice = ?, qrcode_string = ?, irn_status = ?, updated_at = NOW() WHERE invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param(
+            'sisssdddsdssi',
+            $data['irn'],
+            $data['ack_number'],
+            $data['ack_date'],
+            $data['signed_invoice'],
+            $data['qrcode_string'],
+            $data['irn_status'],
+            $invoice_id
+        );
+
+        return $stmt->execute();
     }
 }

@@ -194,7 +194,7 @@ if (!empty($weight)) {
 
 $waText = $title . "\n" . implode("\n", $waLines) . "\n";
 $waHref = "https://wa.me/?text=" . urlencode($waText);
-
+$waHref = '';
 ?>
 <!doctype html>
 <html lang="en">
@@ -204,7 +204,7 @@ $waHref = "https://wa.me/?text=" . urlencode($waText);
 
     <title><?= e($title) ?></title>
     <!-- ✅ Open Graph for WhatsApp/Facebook -->
-    <meta property="og:title" content="<?= e($title) ?>">
+    <meta property="og:title" content="">
     <meta property="og:description" content="<?= e($description) ?>">
     <meta name="description" content="<?= e($description) ?>">
     <meta property="og:image" content="<?= e($ogImage) ?>">
@@ -326,20 +326,7 @@ $waHref = "https://wa.me/?text=" . urlencode($waText);
 
                 <!-- ✅ Requested fields (UI) -->
                 <div class="grid">
-
-    <?php if (!empty($product['title'])) : ?>
-        <div class="tile">
-            <div class="k">Product</div>
-            <div class="v"><?= e($product['title'] ?? '') ?></div>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!empty($sku)) : ?>
-        <div class="tile">
-            <div class="k">SKU</div>
-            <div class="v"><?= e($sku) ?></div>
-        </div>
-    <?php endif; ?>
+ 
 
     <?php if (!empty($color)) : ?>
         <div class="tile">

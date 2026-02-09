@@ -164,6 +164,12 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'update_note_ajax':
+                $controller->updateNoteAjax();
+                break;
+            case 'update_name_email_ajax':
+                $controller->updateNameEmailAjax();
+                break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
                 break;
@@ -609,6 +615,8 @@ switch ($page) {
                 $controller->getDetails();
             case 'getItamcode':
                 $controller->getItamcode();
+            case 'search_book_attr':
+                $controller->searchBookAttributes();
             default:
                 $controller->index();
                 break;
@@ -715,6 +723,20 @@ switch ($page) {
                 break;
             default:
                 $controller->index();
+                break;
+        }
+    case 'globals':
+        require_once 'controllers/GlobalsController.php';
+        $controller = new GlobalsController($conn);
+        switch ($action) {
+            case 'settings':
+                $controller->settings();   
+                break;
+            case 'update_settings':
+                $controller->update_settings();
+                break;
+            default:
+                $controller->settings();   
                 break;
         }
         break;

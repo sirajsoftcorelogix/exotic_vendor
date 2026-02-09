@@ -740,7 +740,7 @@ public function update_image_variation($img_id, $variation_id) {
         return null; 
     }
     public function checkItemCodeExists($code) {
-        $sql = "SELECT id FROM vp_inbound WHERE item_code = '" . $this->conn->real_escape_string($code) . "'";
+        $sql = "SELECT id FROM vp_inbound WHERE Item_code = '" . $this->conn->real_escape_string($code) . "'";
         $result = $this->conn->query($sql);
         return ($result->num_rows > 0);
     }
@@ -816,68 +816,68 @@ public function update_image_variation($img_id, $variation_id) {
     // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
     public function updateMainInbound($id, $data) {
         // 1. Prepare Variables with correct casting
-        $height     = (float) ($data['height'] ?? 0);
-        $width      = (float) ($data['width']  ?? 0);
-        $depth      = (float) ($data['depth']  ?? 0);
-        $weight     = (float) ($data['weight'] ?? 0);
-        
-        $color      = $data['color'] ?? '';
-        $size       = $data['size'] ?? '';
+        $height  = (float) ($data['height'] ?? 0);
+        $width   = (float) ($data['width'] ?? 0);
+        $depth   = (float) ($data['depth'] ?? 0);
+        $weight  = (float) ($data['weight'] ?? 0);
+       
+        $color   = $data['color'] ?? '';
+        $size   = $data['size'] ?? '';
         $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
-        $Item_code  = $data['Item_code'] ?? '';
-        $feedback  = $data['feedback'] ?? '';
-        
-        $qty        = (int)   ($data['quantity_received'] ?? 0);
-        $cp         = (float) ($data['cp'] ?? 0);
-        $photo      = $data['product_photo'] ?? '';
-        $wh         = $data['store_location'] ?? '';
-        
-        $p_ind      = (float) ($data['price_india'] ?? 0);
-        $p_mrp      = (float) ($data['price_india_mrp'] ?? 0);
-        $colormaps  = $data['colormaps'] ?? ''; // Default to empty string, not 0
+        $Item_code = $data['Item_code'] ?? '';
+        $feedback = $data['feedback'] ?? '';
+       
+        $qty    = (int) ($data['quantity_received'] ?? 0);
+        $cp    = (float) ($data['cp'] ?? 0);
+        $photo   = $data['product_photo'] ?? '';
+        $wh    = $data['store_location'] ?? '';
+       
+        $p_ind   = (float) ($data['price_india'] ?? 0);
+        $p_mrp   = (float) ($data['price_india_mrp'] ?? 0);
+        $colormaps = $data['colormaps'] ?? ''; // Default to empty string, not 0
 
         // 2. Correct SQL Syntax (Use column names, not PHP variables)
-        $sql = "UPDATE vp_inbound 
-                SET feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?, 
-                    height = ?, width = ?, depth = ?, weight = ?, 
-                    color = ?, size = ?, cp = ?, quantity_received = ?, 
-                    received_by_user_id = ?, temp_code = ?, product_photo = ?,
-                    store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?
-                WHERE id = ?";
+        $sql = "UPDATE vp_inbound
+            SET feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
+              height = ?, width = ?, depth = ?, weight = ?,
+              color = ?, size = ?, cp = ?, quantity_received = ?,
+              received_by_user_id = ?, temp_code = ?, product_photo = ?,
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?
+            WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
-            return ['success' => false, 'message' => $this->conn->error];
+          return ['success' => false, 'message' => $this->conn->error];
         }
 
         // 3. Correct Bind Param Types
         // s = string, d = double (float), i = integer
         // String map: sssss dddd ss d i i sss d d s i
         $stmt->bind_param(
-            'ssssssddddssdiisssddsi', 
-            $feedback,
-            $Item_code,
-            $is_variant,
-            $data['gate_entry_date_time'], 
-            $data['material_code'], 
-            $data['group_name'], 
-            $height,$width,$depth, 
-            $weight,$color,$size, 
-            $cp,$qty, 
-            $data['received_by_user_id'], 
-            $data['temp_code'],        
-            $photo,$wh,$p_ind, 
-            $p_mrp, 
-            $colormaps,
-            $id
+          'ssssssddddssdiisssddsi',
+          $feedback,
+          $Item_code,
+          $is_variant,
+          $data['gate_entry_date_time'],
+          $data['material_code'],
+          $data['group_name'],
+          $height,$width,$depth,
+          $weight,$color,$size,
+          $cp,$qty,
+          $data['received_by_user_id'],
+          $data['temp_code'],   
+          $photo,$wh,$p_ind,
+          $p_mrp,
+          $colormaps,
+          $id
         );
 
         if ($stmt->execute()) {
-            return ['success' => true];
+          return ['success' => true];
         }
-        
+       
         return ['success' => false, 'message' => $stmt->error];
-    }
+      }
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $temp_code) {

@@ -126,42 +126,46 @@ function renderSizeField($fieldName, $currentValue, $isClothing, $options, $cust
     return $html;
 }
 $currentSize = $data['form2']['size'] ?? '';
-function getThumbnail($fileName, $width = 150, $height = 150) {
-    // 1. Define Paths
-    $sourceDir = 'uploads/itm_img/';
-    $thumbDir  = 'uploads/itm_img/thumbs/'; // We will create this folder
-    
-    $sourcePath = $sourceDir . $fileName;
-    $thumbPath  = $thumbDir . $fileName;
+function getThumbnail($filePath, $width = 150, $height = 150) {
+    // 1. Sanitize Path (remove leading slash for file system check)
+    $cleanPath = ltrim($filePath, '/');
 
-    // 2. Return cached thumbnail if it exists
+    // 2. Check if original file exists
+    if (empty($cleanPath) || !file_exists($cleanPath)) {
+        return 'assets/images/placeholder.png'; // Make sure this placeholder file exists!
+    }
+
+    // 3. Determine Directories automatically
+    $dirName  = dirname($cleanPath); // Gets "products" or "uploads/itm_img"
+    $fileName = basename($cleanPath); // Gets "image.jpg"
+    
+    $thumbDir  = $dirName . '/thumbs/'; 
+    $thumbPath = $thumbDir . $fileName;
+
+    // 4. Return cached thumbnail if it exists
     if (file_exists($thumbPath)) {
         return $thumbPath;
     }
 
-    // 3. If original doesn't exist, return placeholder or empty
-    if (!file_exists($sourcePath)) {
-        return 'assets/images/placeholder.png'; // Update with your placeholder path
-    }
-
-    // 4. Create Thumb Directory if not exists
+    // 5. Create Thumb Directory if it doesn't exist
     if (!is_dir($thumbDir)) {
         mkdir($thumbDir, 0777, true);
     }
 
-    // 5. Generate Thumbnail (Resize Logic)
-    $info = getimagesize($sourcePath);
-    $mime = $info['mime'];
+    // 6. Generate Thumbnail
+    $info = getimagesize($cleanPath);
+    if (!$info) return $cleanPath; // Return original if not an image
 
+    $mime = $info['mime'];
+    
     switch ($mime) {
-        case 'image/jpeg': $image = imagecreatefromjpeg($sourcePath); break;
-        case 'image/png':  $image = imagecreatefrompng($sourcePath); break;
-        case 'image/gif':  $image = imagecreatefromgif($sourcePath); break;
-        case 'image/webp': $image = imagecreatefromwebp($sourcePath); break;
-        default: return $sourcePath; // Return original if format not supported
+        case 'image/jpeg': $image = imagecreatefromjpeg($cleanPath); break;
+        case 'image/png':  $image = imagecreatefrompng($cleanPath); break;
+        case 'image/gif':  $image = imagecreatefromgif($cleanPath); break;
+        case 'image/webp': $image = imagecreatefromwebp($cleanPath); break;
+        default: return $cleanPath;
     }
 
-    // Calculate Aspect Ratio
     $oldW = imagesx($image);
     $oldH = imagesy($image);
     $aspectRatio = $oldW / $oldH;
@@ -174,7 +178,6 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
 
     $newImage = imagecreatetruecolor((int)$width, (int)$height);
 
-    // Maintain transparency for PNG/WEBP
     if ($mime == 'image/png' || $mime == 'image/webp') {
         imagecolortransparent($newImage, imagecolorallocatealpha($newImage, 0, 0, 0, 127));
         imagealphablending($newImage, false);
@@ -183,15 +186,13 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
 
     imagecopyresampled($newImage, $image, 0, 0, 0, 0, $width, $height, $oldW, $oldH);
 
-    // Save Thumbnail
     switch ($mime) {
-        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 80); break; // 80% quality
+        case 'image/jpeg': imagejpeg($newImage, $thumbPath, 80); break;
         case 'image/png':  imagepng($newImage, $thumbPath); break;
         case 'image/gif':  imagegif($newImage, $thumbPath); break;
         case 'image/webp': imagewebp($newImage, $thumbPath); break;
     }
 
-    // Free memory
     imagedestroy($image);
     imagedestroy($newImage);
 
@@ -208,10 +209,13 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                     <?php 
                         $mainPhoto = $data['form2']['product_photo'] ?? ''; 
                         $hasMainPhoto = !empty($mainPhoto);
+
+                        // FIX: Just pass the full path. The function will find the folder.
+                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($mainPhoto)) : '';
                     ?>
                     <img id="main_photo_preview" 
-                         src="<?= $hasMainPhoto ? base_url($mainPhoto) : '' ?>" 
-                         onclick="openImagePopup(this.src)"
+                         src="<?= $mainPhotoThumb ?>" 
+                         onclick="openImagePopup('<?= $hasMainPhoto ? base_url($mainPhoto) : '' ?>')"
                          class="w-full h-full object-contain cursor-zoom-in absolute inset-0 z-10"
                          style="<?= $hasMainPhoto ? '' : 'display: none;' ?>">
                     <div id="main_photo_placeholder"
@@ -515,11 +519,13 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
                             <label class="cursor-pointer block w-full aspect-square bg-white border border-gray-300 border-dashed rounded flex items-center justify-center hover:border-[#d97824] overflow-hidden relative transition-colors">
                                 
                                 <?php 
-                                    // 1. Strict check: Must not be empty and must not be a "0" string
                                     $rawPhoto = $var['variation_image'] ?? '';
                                     $hasPhoto = (!empty($rawPhoto) && $rawPhoto !== '0');
+                                    
+                                    // Pass FULL path to generator
+                                    $varThumbSrc = $hasPhoto ? base_url(getThumbnail($rawPhoto)) : '#';
                                 ?>
-                                <img src="<?= $hasPhoto ? base_url($rawPhoto) : '#' ?>" 
+                                <img src="<?= $varThumbSrc ?>" 
                                      class="preview-img w-full h-full object-cover absolute inset-0 z-10"
                                      style="<?= $hasPhoto ? '' : 'display: none;' ?>">
                                 
@@ -721,10 +727,13 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
     // ... inside your existing renderPhotoCard function ...
 
     function renderPhotoCard($img, $varId) {
-        // GENERATE THUMBNAIL PATH
-        // This will create the thumb on first load, then reuse it
-        $thumbSrc = getThumbnail($img['file_name']); 
-        $originalSrc = "uploads/itm_img/" . $img['file_name'];
+        $fullPath = "uploads/itm_img/" . $img['file_name'];
+
+        // 2. Pass the FULL PATH to the generator
+        $thumbSrc = getThumbnail($fullPath); 
+        
+        // 3. Keep original for the popup
+        $originalSrc = $fullPath; 
     ?>
         <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group cursor-grab active:cursor-grabbing shadow-sm" 
              draggable="true" 
@@ -1323,13 +1332,15 @@ function getThumbnail($fileName, $width = 150, $height = 150) {
             </fieldset>
         </div> -->
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
-            <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                Publish Product
-            </button>
+            <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
+                <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    Publish Product
+                </button>
+            <?php  } ?>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
-                Save and Draft
+                Save as Draft
             </button>
             
             <button type="button" onclick="validateAndSubmit('generate')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
@@ -3216,7 +3227,13 @@ function validateAndSubmit(actionType) {
             if (vImgCount < 1) errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
         }
     });
-
+	
+	if (actionType === 'draft') {
+		// Skip validation, directly submit
+		document.getElementById('hidden_save_action').value = actionType;
+		form.submit();
+		return; // stop further execution
+	}
 
     // --- 4. RESULT ---
     if (errors.length > 0) {
@@ -3272,7 +3289,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isNaN(cp)) return; 
 
         // Formula: CP + (CP * Percentage / 100)
-        const sellPrice = cp + (cp * currentMarkupPercent / 100);
+        const sellPrice = (cp * (currentMarkupPercent / 100));
 
         const container = cpInput.closest('.grid') || cpInput.closest('.calculation-card') || cpInput.closest('.variation-card');
         

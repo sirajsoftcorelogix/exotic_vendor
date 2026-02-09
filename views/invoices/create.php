@@ -1,6 +1,51 @@
 <div class="bg-white p-4 md:p-8">
     <form action="<?php echo base_url('?page=invoices&action=create_post'); ?>" id="create_invoice" method="post">
-    <div class="flex flex-col md:flex-row justify-between mb-8">
+    <!--international section add fields  -->
+    <?php if($data[0]['currency'] && $data[0]['currency'] != 'INR'){ ?>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6" id="internationalSection">
+        <div>
+            <label for="pre_carriage_by" class="block text-gray-700 form-label text-sm">Pre Carriage By</label>
+            <input type="text" name="pre_carriage_by" id="pre_carriage_by" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="port_of_loading" class="block text-gray-700 form-label text-sm">Port of Loading</label>
+            <input type="text" name="port_of_loading" id="port_of_loading" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="port_of_discharge" class="block text-gray-700 form-label text-sm">Port of Discharge</label>
+            <input type="text" name="port_of_discharge" id="port_of_discharge" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="country_of_origin" class="block text-gray-700 form-label text-sm">Country of Origin</label>
+            <input type="text" name="country_of_origin" id="country_of_origin" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="country_of_final_destination" class="block text-gray-700 form-label text-sm">Country of Final Destination</label>
+            <input type="text" name="country_of_final_destination" id="country_of_final_destination" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="final_destination" class="block text-gray-700 form-label text-sm">Final Destination</label>
+            <input type="text" name="final_destination" id="final_destination" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="usd_export_rate" class="block text-gray-700 form-label text-sm">USD Export Rate</label>
+            <input type="number" name="usd_export_rate" id="usd_export_rate" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="ap_cost" class="block text-gray-700 form-label text-sm">AP Cost</label>
+            <input type="number" name="ap_cost" id="ap_cost" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="freight_charge" class="block text-gray-700 form-label text-sm">Freight Charge</label>
+            <input type="number" name="freight_charge" id="freight_charge" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+        <div>
+            <label for="insurance_charge" class="block text-gray-700 form-label text-sm">Insurance Charge</label>
+            <input type="number" name="insurance_charge" id="insurance_charge" step="0.01" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+        </div>
+    </div>
+    <?php } ?>
+    <div class="flex flex-col md:flex-row justify-between mb-8">    
         <!-- Left Column -->
         <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
             <div class="flex items-center">
