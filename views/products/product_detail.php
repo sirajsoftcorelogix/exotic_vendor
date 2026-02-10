@@ -86,12 +86,18 @@
     <div class="bg-white rounded-lg p-4 md:col-span-2">
       <h3 class="font-semibold mb-3">Vendors</h3>
       <div class="space-y-3 text-sm">
-        <?php foreach ($products['vendors'] as $vendor): ?>
+        <?php 
+          if(empty($products['vendors'])) {
+            echo '<p class="text-gray-500">No vendors associated with this product.</p>';
+          }
+          else{
+          foreach ($products['vendors'] as $vendor): ?>
           <div class="border rounded p-3">
             <b><?php echo htmlspecialchars($vendor['vendor_name'] ?? ''); ?></b>
             <p class="text-gray-500"><?php echo htmlspecialchars($vendor['city'] ?? ''); ?>, <?php echo htmlspecialchars($vendor['state'] ?? ''); ?></p>
           </div>
-        <?php endforeach; ?>
+        <?php endforeach;
+        } ?>
       </div>
     </div>
 
