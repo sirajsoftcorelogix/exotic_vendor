@@ -734,6 +734,18 @@ switch ($page) {
                 $controller->index();
                 break;
         }
+    case 'category':        
+        require_once 'controllers/CategoryController.php';
+        $controller = new CategoryController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'globals':
         require_once 'controllers/GlobalsController.php';
         $controller = new GlobalsController($conn);
