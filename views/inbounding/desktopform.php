@@ -3603,16 +3603,44 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initRemoteBookSelects() {
+        // Author List
         document.querySelectorAll('.author-remote-select:not(.tomselected)').forEach(el => {
             new TomSelect(el, {
-                valueField: 'author_id', labelField: 'author', searchField: 'author',
-                load: (q, cb) => fetch(`index.php?page=inbounding&action=getAuthorsJson&q=${q}`).then(r => r.json()).then(j => cb(j)).catch(() => cb())
+                valueField: 'author_id',
+                labelField: 'author',
+                searchField: 'author',
+                preload: 'focus', // IMPORTANT: Loads data when clicked
+                placeholder: 'Search Author...',
+                load: function(query, callback) {
+                    // If query is empty, we still fetch to show the initial list
+                    fetch(`index.php?page=inbounding&action=getAuthorsJson&q=${encodeURIComponent(query)}`)
+                        .then(r => r.json())
+                        .then(j => callback(j))
+                        .catch(() => callback());
+                },
+                onInitialize: function() {
+                    this.wrapper.classList.add('w-full');
+                }
             });
         });
+
+        // Publisher List
         document.querySelectorAll('.publisher-remote-select:not(.tomselected)').forEach(el => {
             new TomSelect(el, {
-                valueField: 'publishers_id', labelField: 'publishers', searchField: 'publishers',
-                load: (q, cb) => fetch(`index.php?page=inbounding&action=getPublishersJson&q=${q}`).then(r => r.json()).then(j => cb(j)).catch(() => cb())
+                valueField: 'publishers_id',
+                labelField: 'publishers',
+                searchField: 'publishers',
+                preload: 'focus', // IMPORTANT: Loads data when clicked
+                placeholder: 'Search Publisher...',
+                load: function(query, callback) {
+                    fetch(`index.php?page=inbounding&action=getPublishersJson&q=${encodeURIComponent(query)}`)
+                        .then(r => r.json())
+                        .then(j => callback(j))
+                        .catch(() => callback());
+                },
+                onInitialize: function() {
+                    this.wrapper.classList.add('w-full');
+                }
             });
         });
     }
