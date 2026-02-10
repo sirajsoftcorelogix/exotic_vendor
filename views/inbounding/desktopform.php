@@ -384,21 +384,21 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                     
-                    <div class="w-full min-w-0">
+                    <div class="w-full min-w-0" data-group="physical">
                         <label class="block text-xs font-bold text-[#555] mb-1">Height:</label>
                         <div class="relative w-full">
                             <input type="text" id="dim_height" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['height'] ?? '') ?>" name="height">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
+                    <div class="w-full min-w-0" data-group="physical">
                         <label class="block text-xs font-bold text-[#555] mb-1">Width:</label>
                         <div class="relative w-full">
                             <input type="text" id="dim_width" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['width'] ?? '') ?>" name="width">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0">
+                    <div class="w-full min-w-0" data-group="physical">
                         <label class="block text-xs font-bold text-[#555] mb-1">Depth:</label>
                         <div class="relative w-full">
                             <input type="text" id="dim_depth" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['depth'] ?? '') ?>" name="depth">
@@ -412,19 +412,48 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
+                    <div class="w-full min-w-0" data-group="physical">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
+                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
+                    </div>
+                    <div class="w-full min-w-0" data-group="physical">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
+                        <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
+                    </div>
+                    <!-- books field -->
+                    <div class="w-full min-w-0" data-group="book" style="display:none;">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Author:</label>
+                        <select name="author" class="author-remote-select w-full h-10">
+                            <?php if(!empty($data['form2']['author'])): ?>
+                                <option value="<?= $data['form2']['author'] ?>" selected><?= htmlspecialchars($data['form2']['author_name'] ?? 'ID: '.$data['form2']['author']) ?></option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div class="w-full min-w-0" data-group="book" style="display:none;">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Publisher:</label>
+                        <select name="publisher" class="publisher-remote-select w-full h-10">
+                             <?php if(!empty($data['form2']['publisher'])): ?>
+                                <option value="<?= $data['form2']['publisher'] ?>" selected><?= htmlspecialchars($data['form2']['publisher_name'] ?? 'ID: '.$data['form2']['publisher']) ?></option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div class="w-full min-w-0" data-group="book" style="display:none;">
+                        <label class="block text-xs font-bold text-[#555] mb-1">ISBN:</label>
+                        <input type="text" name="isbn" value="<?= htmlspecialchars($data['form2']['isbn'] ?? '') ?>" class="w-full h-10 border border-[#ccc] rounded px-3 text-[13px]">
+                    </div>
+                    <div class="w-full min-w-0" data-group="book" style="display:none;">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Language:</label>
+                        <input type="text" name="language" value="<?= htmlspecialchars($data['form2']['language'] ?? '') ?>" class="w-full h-10 border border-[#ccc] rounded px-3 text-[13px]">
+                    </div>
+                    <div class="w-full min-w-0" data-group="book" style="display:none;">
+                        <label class="block text-xs font-bold text-[#555] mb-1">Pages:</label>
+                        <input type="number" name="pages" value="<?= $data['form2']['pages'] ?? '' ?>" class="w-full h-10 border border-[#ccc] rounded px-3 text-[13px]">
+                    </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
                         <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
                                value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" 
                                name="store_location">
-                    </div>
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
-                        <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
-                    </div>
-                    <div class="w-full min-w-0">
-                        <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                        <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
                     </div>
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label>
@@ -3535,5 +3564,70 @@ document.addEventListener('DOMContentLoaded', function() {
     if(imgDirInput.value === "") {
         setTimeout(updateImageDirectory, 500); // Small delay to let TomSelect load
     }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const groupSelect = document.getElementById('group_select');
+    const addVarBtn = document.querySelector('button[onclick="addNewVariation()"]');
+
+    function toggleBookFields() {
+        const tsControl = document.getElementById('group_select-ts-control');
+        const groupValue = groupSelect.value;
+        const selectedText = tsControl ? tsControl.innerText.toLowerCase() : "";
+
+        // Condition: Is it a book? (Value -8 or text contains 'book')
+        const isBook = (groupValue === "-8" || selectedText.includes('book'));
+
+        // Select all elements by their data-group
+        const physicalElements = document.querySelectorAll('[data-group="physical"]');
+        const bookElements = document.querySelectorAll('[data-group="book"]');
+
+        if (isBook) {
+            // Hide Physical Attributes
+            physicalElements.forEach(el => el.style.setProperty('display', 'none', 'important'));
+            // Show Book Attributes
+            bookElements.forEach(el => el.style.setProperty('display', 'block', 'important'));
+            // Hide Add Variant Button
+            if (addVarBtn) addVarBtn.style.display = 'none';
+            
+            initRemoteBookSelects();
+        } else {
+            // Show Physical Attributes
+            physicalElements.forEach(el => el.style.setProperty('display', 'block', 'important'));
+            // Hide Book Attributes
+            bookElements.forEach(el => el.style.setProperty('display', 'none', 'important'));
+            // Show Add Variant Button
+            if (addVarBtn) addVarBtn.style.display = 'flex';
+        }
+    }
+
+    function initRemoteBookSelects() {
+        document.querySelectorAll('.author-remote-select:not(.tomselected)').forEach(el => {
+            new TomSelect(el, {
+                valueField: 'author_id', labelField: 'author', searchField: 'author',
+                load: (q, cb) => fetch(`index.php?page=inbounding&action=getAuthorsJson&q=${q}`).then(r => r.json()).then(j => cb(j)).catch(() => cb())
+            });
+        });
+        document.querySelectorAll('.publisher-remote-select:not(.tomselected)').forEach(el => {
+            new TomSelect(el, {
+                valueField: 'publishers_id', labelField: 'publishers', searchField: 'publishers',
+                load: (q, cb) => fetch(`index.php?page=inbounding&action=getPublishersJson&q=${q}`).then(r => r.json()).then(j => cb(j)).catch(() => cb())
+            });
+        });
+    }
+
+    // Listen for changes
+    if (groupSelect.tomselect) {
+        groupSelect.tomselect.on('change', toggleBookFields);
+    }
+
+    // Handle initial load
+    let checkTS = setInterval(() => {
+        if (document.querySelector('#group_select-ts-control .item')) {
+            toggleBookFields();
+            clearInterval(checkTS);
+        }
+    }, 100);
 });
 </script>

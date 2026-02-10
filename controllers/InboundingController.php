@@ -1135,6 +1135,13 @@ class InboundingController {
             'dimention_unit'      => $_POST['dimention_unit'] ?? '',
             'weight_unit'         => $_POST['weight_unit'] ?? '',
             'feedback'         => $_POST['feedback'] ?? '',
+            // books field
+            // --- ADD THE BOOK FIELDS HERE ---
+            'author'                => $_POST['author'] ?? '',
+            'publisher'             => $_POST['publisher'] ?? '',
+            'isbn'                  => $_POST['isbn'] ?? '',
+            'language'              => $_POST['language'] ?? '',
+            'pages'                 => !empty($_POST['pages']) ? (int)$_POST['pages'] : 1,
         ];
         
         // 4. Update Main Record
