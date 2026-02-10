@@ -208,7 +208,70 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 ?>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Vendor</label>
+                                <select name="vendor_code" id="filter_vendor" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">Select Vendor...</option>
+                                <?php 
+                                    $selVen = $data['filters']['vendor_code'] ?? '';
+                                    if(!empty($data['vendor_list'])) {
+                                        foreach($data['vendor_list'] as $v) {
+                                            // Correctly uses 'id' and 'vendor_name' from the DB query
+                                            $s = ($selVen == $v['id']) ? 'selected' : '';
+                                            echo "<option value='{$v['id']}' $s>{$v['vendor_name']}</option>";
+                                        }
+                                    }
+                                ?>
+                            </select>
                         </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Agent (Received By)</label>
+                            <select id="filter_agent" name="agent_id" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">Select Agent...</option>
+                                <?php 
+                                    $selAgent = $data['filters']['received_by_user_id'] ?? '';
+                                    if(!empty($data['user_list'])) {
+                                        foreach($data['user_list'] as $u) {
+                                            $s = ($selAgent == $u['id']) ? 'selected' : '';
+                                            echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
+                                        }
+                                    }
+                                ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Feeded By</label>
+                            <select id="filter_updated_by" name="updated_by" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">Select User...</option>
+                                <?php 
+                                    $selUpd = $data['filters']['updated_by_user_id'] ?? '';
+                                    if(!empty($data['updated_user_list'])) {
+                                        foreach($data['updated_user_list'] as $u) {
+                                            $s = ($selUpd == $u['id']) ? 'selected' : '';
+                                            echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
+                                        }
+                                    }
+                                ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Group</label>
+                            <select id="filter_group" name="group_name" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">Select Group...</option>
+                                <?php 
+                                    $selGroup = $data['filters']['group_name'] ?? '';
+                                    if(!empty($data['group_list'])) {
+                                        foreach($data['group_list'] as $grp) {
+                                            // $grp['id'] is the stored value (category field), $grp['name'] is display_name
+                                            $s = ($selGroup == $grp['id']) ? 'selected' : '';
+                                            echo "<option value='{$grp['id']}' $s>{$grp['name']}</option>";
+                                        }
+                                    }
+                                ?>
+                            </select>
+                        </div>
+                    </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
                         <button type="button" onclick="window.location.href='?page=inbounding&action=list'" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold hover:bg-gray-300 transition">Reset</button>
