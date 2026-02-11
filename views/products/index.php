@@ -181,7 +181,7 @@
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="typo-sku-label w-[70px]">SKU :</span>
-                                <span class="typo-sku-value"><?php echo $product['sku']; ?></span>
+                                <span class="typo-sku-value"><a href="<?php echo base_url('?page=products&action=detail&id='.$product['id'] ?? '#'); ?>" target="_blank" class="typo-sf-column text-details-link mt-1"><?php echo $product['sku']; ?></a></span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="typo-sku-label w-[70px]">ASIN :</span>

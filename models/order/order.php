@@ -1320,5 +1320,26 @@ class Order{
         }
         return null;
     }
+    public function mapVendorToProduct($vendor_id, $item_code) {
+        // Check if mapping already exists
+        $sql = "SELECT id FROM vp_vendor_product_mapping WHERE vendor_id = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $vendor_id, $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return ['success' => true, 'message' => 'Mapping already exists.'];
+        }
+
+        // Insert new mapping
+        $sql = "INSERT INTO vp_vendor_product_mapping (vendor_id, item_code) VALUES (?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $vendor_id, $item_code);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Vendor mapped to product successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
 }
 ?>

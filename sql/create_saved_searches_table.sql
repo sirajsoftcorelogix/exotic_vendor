@@ -281,3 +281,5 @@ Create table vp_invoices_international (
   COLLATE=utf8mb4_unicode_ci;
 
 ALTER table `vp_order_info` ADD `total` DECIMAL(15,2) NULL DEFAULT 0 AFTER `shipping_email`;
+
+ALTER TABLE `vp_products` ADD `notes` TEXT NULL AFTER `discount_india`;
