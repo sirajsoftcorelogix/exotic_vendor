@@ -140,7 +140,7 @@
           <span><i class="fas fa-chart-line px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Potential Sales Value</span><span>₹<?php echo htmlspecialchars($products['potential_sales_value'] ?? '0'); ?></span>  
         </div>
         <hr class="border-t">
-        <div class="text-xs text-gray-500 mt-2">
+        <div class="text-xs text-gray-500 mt-2 text-center">
           HSN: <?php echo htmlspecialchars($products['hsn'] ?? ''); ?> | GST: <?php echo htmlspecialchars($products['gst'] ?? ''); ?>%
         </div>
       </div>
