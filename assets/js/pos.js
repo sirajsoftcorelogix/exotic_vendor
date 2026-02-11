@@ -7,11 +7,54 @@ $(function () {
   let hasMore = true;
 
   let loadedKeys = new Set();
-  let productsByKey = new Map(); // ✅ store full product object by key (no API call)
+  let productsByKey = new Map(); // cache product by key
 
   const $cards = $('#productsCards');
   const $scrollWrapper = $cards.parent();
 
+  // =========================
+  // CART PANEL HOOKS (your aside)
+  // =========================
+  // REQUIRED HTML IDs:
+  // #cartItems
+  // #cartSubTotal, #cartGST, #cartTotal
+  // #couponInput, #applyCouponBtn, #couponMessage
+  // #addonSelect
+  // #shippingCheckbox (optional; if missing shipping always applied)
+  const $cartItems = $('#cartItems');
+  const $cartSubTotal = $('#cartSubTotal');
+  const $cartGST = $('#cartGST');
+  const $cartTotal = $('#cartTotal');
+
+  const $couponInput = $('#couponInput');
+  const $applyCouponBtn = $('#applyCouponBtn');
+  const $couponMessage = $('#couponMessage');
+
+  const $addonSelect = $('#addonSelect');
+  const $shippingCheckbox = $('#shippingCheckbox');
+
+  // --- constants ---
+  const GST_RATE = 0.18;
+  const SHIPPING_CHARGE = 8265;
+
+  // --- coupon state ---
+  // supported coupons: percent/flat
+  const COUPONS = {
+    SAVE10: { type: 'percent', value: 10 },
+    FLAT500: { type: 'flat', value: 500 },
+    SAVE5: { type: 'percent', value: 5 }
+  };
+
+  let appliedCoupon = null; // {code,type,value} or null
+  let addonCharge = 0;
+
+  // --- cart state ---
+  // key -> { product, qty }
+  const cart = new Map();
+
+  // =========================
+  // HELPERS
+  // =========================
   function formatPrice(price) {
     const p = parseFloat(price || 0);
     return '₹ ' + p.toLocaleString('en-IN', {
@@ -36,26 +79,6 @@ $(function () {
     return (p.id != null && p.id !== '') ? `id:${p.id}` : `code:${p.item_code || ''}`;
   }
 
-  // ---------- Modal helpers ----------
-  const $modal = $('#productModal');
-  const $overlay = $('#productModalOverlay');
-  const $close = $('#productModalClose');
-  const $closeBtn = $('#pmCloseBtn');
-
-  function openModal() {
-    $modal.removeClass('hidden');
-    $('body').addClass('overflow-hidden');
-  }
-
-  function closeModal() {
-    $modal.addClass('hidden');
-    $('body').removeClass('overflow-hidden');
-  }
-
-  $overlay.on('click', closeModal);
-  $close.on('click', closeModal);
-  $closeBtn.on('click', closeModal);
-
   // treat "", null, undefined, "N/A", 0, "0", "0.00" as empty
   function isMeaningful(val) {
     if (val === null || val === undefined) return false;
@@ -77,7 +100,57 @@ $(function () {
     `;
   }
 
-  function renderProductModal(p) {
+  // =========================
+  // MODAL HELPERS
+  // =========================
+  const $modal = $('#productModal');
+  const $overlay = $('#productModalOverlay');
+  const $close = $('#productModalClose');
+  const $closeBtn = $('#pmCloseBtn');
+
+  // Modal controls (must exist in modal HTML)
+  const $pmAddToCart = $('#pmAddToCart');
+  const $pmQtyDec = $('#pmQtyDec');
+  const $pmQtyInc = $('#pmQtyInc');
+  const $pmQtyVal = $('#pmQtyVal');
+
+  let activeModalKey = null;
+
+  function openModal() {
+    $modal.removeClass('hidden');
+    $('body').addClass('overflow-hidden');
+  }
+
+  function closeModal() {
+    $modal.addClass('hidden');
+    $('body').removeClass('overflow-hidden');
+    activeModalKey = null;
+  }
+
+  $overlay.on('click', closeModal);
+  $close.on('click', closeModal);
+  $closeBtn.on('click', closeModal);
+
+  function setModalQty(qty) {
+    const q = Math.max(1, parseInt(qty || 1, 10));
+    $pmQtyVal.text(q);
+  }
+
+  function getModalQty() {
+    return Math.max(1, parseInt($pmQtyVal.text() || '1', 10));
+  }
+
+  $pmQtyDec.on('click', function () {
+    setModalQty(getModalQty() - 1);
+  });
+
+  $pmQtyInc.on('click', function () {
+    setModalQty(getModalQty() + 1);
+  });
+
+  function renderProductModal(p, key) {
+    activeModalKey = key;
+
     const title = (p.title || '').replace(/\s+/g, ' ').trim();
     $('#pmTitle').text(title || 'Product');
 
@@ -104,17 +177,14 @@ $(function () {
     }
 
     if (isMeaningful(p.hsn)) html += addRow('HSN', p.hsn);
-
     if (isMeaningful(p.color)) html += addRow('Color', p.color);
     if (isMeaningful(p.size)) html += addRow('Size', p.size);
     if (isMeaningful(p.material)) html += addRow('Material', p.material);
 
-    // weight
     const wt = isMeaningful(p.product_weight) ? p.product_weight : null;
     const wtu = isMeaningful(p.product_weight_unit) ? p.product_weight_unit : '';
     if (wt) html += addRow('Weight', `${wt} ${wtu}`.trim());
 
-    // dimensions
     const h = isMeaningful(p.prod_height) ? p.prod_height : null;
     const w = isMeaningful(p.prod_width) ? p.prod_width : null;
     const l = isMeaningful(p.prod_length) ? p.prod_length : null;
@@ -130,13 +200,217 @@ $(function () {
     }
 
     $('#pmDetails').html(html);
+    setModalQty(1);
   }
 
+  // =========================
+  // CART UI + CALCULATION
+  // =========================
+  function cartItemTemplate(p, qty, key) {
+    const imgSrc = p.image || 'https://dummyimage.com/200x200/e5e7eb/6b7280&text=No+Image';
+    const title = (p.title || '').replace(/\s+/g, ' ').trim();
+    const unitPrice = Number(p.price || 0);
+
+    return `
+      <div class="cart-item flex gap-3" data-pkey="${key}">
+        <img
+          src="${imgSrc}"
+          class="h-12 w-12 rounded-lg bg-slate-50 object-contain"
+          alt="${title.replace(/"/g, '&quot;')}"
+        />
+
+        <div class="flex-1 min-w-0">
+          <div class="text-[9px] leading-snug line-clamp-2">
+            ${title}
+          </div>
+
+          <div class="mt-1 flex items-center justify-between">
+            <span class="text-orange-600 font-semibold">${formatPrice(unitPrice)}</span>
+          </div>
+
+          <div class="mt-2 flex items-center justify-between">
+            <div class="flex items-center border rounded-md overflow-hidden">
+              <button type="button" class="cart-dec h-6 w-6 text-slate-600">−</button>
+              <span class="h-6 w-7 flex items-center justify-center font-semibold">${qty}</span>
+              <button type="button" class="cart-inc h-6 w-6 text-slate-600">+</button>
+            </div>
+
+            <button type="button" class="cart-remove text-[10px] text-red-600 hover:underline">
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function calcSubTotal() {
+    let sub = 0;
+    cart.forEach(({ product, qty }) => {
+      sub += Number(product.price || 0) * Number(qty || 0);
+    });
+    return sub;
+  }
+
+  function calcDiscount(subTotal) {
+    if (!appliedCoupon) return 0;
+
+    let d = 0;
+    if (appliedCoupon.type === 'percent') {
+      d = (subTotal * appliedCoupon.value) / 100;
+    } else if (appliedCoupon.type === 'flat') {
+      d = appliedCoupon.value;
+    }
+
+    if (d > subTotal) d = subTotal;
+    return d;
+  }
+
+  function calcShipping() {
+    // if checkbox not present, assume shipping applies
+    if (!$shippingCheckbox.length) return SHIPPING_CHARGE;
+    return $shippingCheckbox.is(':checked') ? SHIPPING_CHARGE : 0;
+  }
+
+  function updateTotals() {
+    const sub = calcSubTotal();
+    const discount = calcDiscount(sub);
+    const shipping = calcShipping();
+
+    const base = Math.max(0, sub - discount) + Number(addonCharge || 0) + Number(shipping || 0);
+    const gst = base * GST_RATE;
+    const total = base + gst;
+
+    if ($cartSubTotal.length) $cartSubTotal.text(formatPrice(sub));
+    if ($cartGST.length) $cartGST.text(formatPrice(gst));
+    if ($cartTotal.length) $cartTotal.text(formatPrice(total));
+  }
+
+  function renderCartItem(key) {
+    const item = cart.get(key);
+    if (!item) return;
+
+    const $existing = $cartItems.find(`.cart-item[data-pkey="${key}"]`);
+    const html = cartItemTemplate(item.product, item.qty, key);
+
+    if ($existing.length) $existing.replaceWith(html);
+    else $cartItems.append(html);
+
+    updateTotals();
+  }
+
+  function removeFromCart(key) {
+    cart.delete(key);
+    $cartItems.find(`.cart-item[data-pkey="${key}"]`).remove();
+    updateTotals();
+  }
+
+  function changeQty(key, delta) {
+    const item = cart.get(key);
+    if (!item) return;
+
+    item.qty = Number(item.qty || 0) + Number(delta || 0);
+
+    if (item.qty <= 0) {
+      removeFromCart(key);
+      return;
+    }
+    renderCartItem(key);
+  }
+
+  function addToCartByKey(key, qtyToAdd = 1) {
+    const p = productsByKey.get(key);
+    if (!p) return;
+
+    const addQty = Math.max(1, parseInt(qtyToAdd, 10) || 1);
+
+    const existing = cart.get(key);
+    if (existing) existing.qty += addQty;
+    else cart.set(key, { product: p, qty: addQty });
+
+    renderCartItem(key);
+  }
+
+  // cart events
+  $cartItems.on('click', '.cart-inc', function () {
+    const key = $(this).closest('.cart-item').data('pkey');
+    changeQty(key, +1);
+  });
+
+  $cartItems.on('click', '.cart-dec', function () {
+    const key = $(this).closest('.cart-item').data('pkey');
+    changeQty(key, -1);
+  });
+
+  $cartItems.on('click', '.cart-remove', function () {
+    const key = $(this).closest('.cart-item').data('pkey');
+    removeFromCart(key);
+  });
+
+  // modal add to cart
+  $pmAddToCart.on('click', function () {
+    if (!activeModalKey) return;
+    addToCartByKey(activeModalKey, getModalQty());
+    closeModal();
+  });
+
+  // =========================
+  // COUPON + ADDON + SHIPPING EVENTS
+  // =========================
+  function setCouponMessage(text, ok) {
+    if (!$couponMessage.length) return;
+    $couponMessage
+      .removeClass('text-red-600 text-green-600')
+      .addClass(ok ? 'text-green-600' : 'text-red-600')
+      .text(text || '');
+  }
+
+  if ($applyCouponBtn.length) {
+    $applyCouponBtn.on('click', function () {
+      const code = ($couponInput.val() || '').trim().toUpperCase();
+
+      if (!code) {
+        appliedCoupon = null;
+        setCouponMessage('Please enter a coupon code.', false);
+        updateTotals();
+        return;
+      }
+
+      const c = COUPONS[code];
+      if (!c) {
+        appliedCoupon = null;
+        setCouponMessage('Invalid coupon code.', false);
+        updateTotals();
+        return;
+      }
+
+      appliedCoupon = { code, type: c.type, value: c.value };
+      setCouponMessage(`Coupon applied: ${code}`, true);
+      updateTotals();
+    });
+  }
+
+  if ($addonSelect.length) {
+    $addonSelect.on('change', function () {
+      addonCharge = Number($(this).val() || 0);
+      updateTotals();
+    });
+  }
+
+  if ($shippingCheckbox.length) {
+    $shippingCheckbox.on('change', function () {
+      updateTotals();
+    });
+  }
+
+  // =========================
+  // PRODUCTS RENDERING + FETCH
+  // =========================
   function renderProducts(products, append = false) {
     if (!append) {
       $cards.empty();
       loadedKeys.clear();
-      productsByKey.clear(); // ✅ reset cache on fresh load
+      productsByKey.clear();
     }
 
     if (!products || products.length === 0) {
@@ -152,20 +426,19 @@ $(function () {
 
     products.forEach(function (p) {
       const key = getProductKey(p);
-
       if (loadedKeys.has(key)) return;
-      loadedKeys.add(key);
 
-      // ✅ cache entire product object for modal
+      loadedKeys.add(key);
       productsByKey.set(key, p);
 
       const imgSrc = p.image || 'https://dummyimage.com/200x200/e5e7eb/6b7280&text=No+Image';
+      const safeTitle = (p.title || 'Product').replace(/"/g, '&quot;');
 
       const cardHtml = `
         <div class="product-card cursor-pointer rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition"
              data-pkey="${key}">
           <div class="bg-gray-50 p-2">
-            <img src="${imgSrc}" alt="${(p.title || 'Product').replace(/"/g, '&quot;')}"
+            <img src="${imgSrc}" alt="${safeTitle}"
                  class="mx-auto h-56 lg:h-52 xl:h-48 object-contain" />
           </div>
 
@@ -193,9 +466,7 @@ $(function () {
       appendedCount++;
     });
 
-    if (append && appendedCount === 0) {
-      hasMore = false;
-    }
+    if (append && appendedCount === 0) hasMore = false;
   }
 
   function fetchProducts(page = 1, append = false) {
@@ -249,18 +520,17 @@ $(function () {
     $scrollWrapper.scrollTop(0);
   }
 
-  // ✅ CLICK CARD => OPEN MODAL USING CACHED PRODUCT JSON
+  // click card => open modal
   $cards.on('click', '.product-card', function () {
     const key = $(this).data('pkey');
     const p = productsByKey.get(key);
-
     if (!p) return;
 
-    renderProductModal(p);
+    renderProductModal(p, key);
     openModal();
   });
 
-  // Category click
+  // category click
   $('[data-category]').on('click', function () {
     $('[data-category]')
       .removeClass('bg-orange-600 text-white')
@@ -280,7 +550,7 @@ $(function () {
     resetAndLoad();
   });
 
-  // Search debounce
+  // search debounce
   let searchTimeout = null;
   $('#searchCode, #searchName').on('keyup change', function () {
     clearTimeout(searchTimeout);
@@ -289,7 +559,7 @@ $(function () {
     }, 400);
   });
 
-  // Infinite scroll
+  // infinite scroll
   $scrollWrapper.on('scroll', function () {
     const scrollTop = $(this).scrollTop();
     const scrollHeight = this.scrollHeight;
@@ -302,6 +572,9 @@ $(function () {
     }
   });
 
-  // Initial load
+  // initial totals
+  updateTotals();
+
+  // initial load
   resetAndLoad();
 });
