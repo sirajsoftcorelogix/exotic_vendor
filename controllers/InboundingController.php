@@ -1499,7 +1499,14 @@ class InboundingController {
             $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($input_date));
         } else {
             $stock_price_temp[0]['date_added'] = date('Y-m-d');
-        } 
+        }
+        if ($data['data']['groupname'] == 'book') {
+            $stock_price_temp[0]['isbn'] = $data['data']['isbn'];
+            $stock_price_temp[0]['author'] = $data['data']['author'];
+            $stock_price_temp[0]['publisher'] = $data['data']['publisher'];
+            $stock_price_temp[0]['language'] = $data['data']['language'];
+            $stock_price_temp[0]['pages'] = $data['data']['pages'];
+        }
         $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
         $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
         $stock_price_temp[0]['flex_status'] = '0';
@@ -1627,7 +1634,7 @@ class InboundingController {
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
