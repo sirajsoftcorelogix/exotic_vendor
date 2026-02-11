@@ -1,7 +1,7 @@
 <div class="max-w-7xl mx-auto p-4 space-y-6">
 
   <!-- PRODUCT HEADER -->
-  <div class="bg-white rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="bg-white rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="flex gap-4">
       <div class="w-24 h-32"><img onclick="openImagePopup('<?php echo $products['image']; ?>')" src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="rounded border w-full h-32 object-cover cursor-pointer" /></div>
       
@@ -28,38 +28,21 @@
     <div class="bg-orange-50 rounded-lg p-4">
       <h3 class="font-semibold mb-2">Measures</h3>
       <div class="grid grid-cols-2 gap-2 text-sm">
-        <div>Length: <b><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : ''); ?> </b></div>
-        <div>Height: <b><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : ''); ?></b></div>
-        <div>Width: <b><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : ''); ?></b></div>
-        <div>Weight: <b><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : ''); ?></b></div>
+        <div><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length: <b><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : ''); ?> </b></div>
+        <div><i class="fas fa-ruler-vertical mr-1 text-orange-600"></i>Height: <b><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : ''); ?></b></div>
+        <div><i class="fas fa-arrows-alt-h mr-1 text-orange-600"></i>Width: <b><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : ''); ?></b></div>
+        <div><i class="fas fa-weight mr-1 text-orange-600"></i>Weight: <b><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : ''); ?></b></div>
       </div>
     </div>
 
-    <!-- Price -->
-    <div class="bg-white border rounded-lg p-4">
-      <h3 class="font-semibold mb-3">Price</h3>
-      <div class="space-y-2 text-sm">
-        <div class="flex justify-between">
-          <span>Cost Price</span><span>₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
-        </div>
-        <div class="flex justify-between">
-          <span>Item Price</span><span>₹<?php echo htmlspecialchars($products['item_price'] ?? '0'); ?></span>
-        </div>
-        <div class="flex justify-between">
-          <span>Stock Value</span><span><?php //echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
-        </div>
-        <div class="text-xs text-gray-500 mt-2">
-          HSN: <?php echo htmlspecialchars($products['hsn'] ?? ''); ?> | GST: <?php echo htmlspecialchars($products['gst'] ?? ''); ?>%
-        </div>
-      </div>
-    </div>
+    
   </div>
 
   <!-- INVENTORY -->
-  <div class="bg-white rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+  <!-- <div class="bg-white rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
     <div>
       <p class="text-gray-500 text-sm">Local Stock</p>
-      <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
+      <p class="text-xl font-semibold"><?php //echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
     </div>
     <div>
       <p class="text-gray-500 text-sm">Committed</p>
@@ -67,7 +50,7 @@
     </div>
     <div>
       <p class="text-gray-500 text-sm">Available</p>
-      <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['stocks']['current_stock'] ?? '0'); ?></p>
+      <p class="text-xl font-semibold"><?php //echo htmlspecialchars($products['stocks']['current_stock'] ?? '0'); ?></p>
     </div>
     <div>
       <p class="text-gray-500 text-sm">In Purchase</p>
@@ -75,9 +58,95 @@
     </div>
     <div>
       <p class="text-gray-500 text-sm">Sold</p>
-      <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></p>
+      <p class="text-xl font-semibold"></p>
     </div>
+  </div> -->
+  <!-- Inventory -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="bg-white rounded-xl p-4 shadow-sm space-y-4 col-span-2">
+
+    <h3 class="font-semibold text-gray-700">Inventory</h3>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+        <!-- Local Stock -->
+        <div class="flex items-center justify-between border rounded-lg p-4">
+          <div>
+            <p class="text-sm text-gray-500">Local Stock</p>
+            <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['stocks']['local_stock'] ?? '0'); ?></p>
+          </div>
+          <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">
+            📦
+          </div>
+        </div>
+
+        <!-- Committed -->
+        <div class="flex items-center justify-between border rounded-lg p-4">
+          <div>
+            <p class="text-sm text-gray-500">Committed</p>
+            <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['stocks']['committed'] ?? '0'); ?></p>
+          </div>
+          <div class="bg-purple-100 text-purple-600 p-2 rounded-lg">
+            ⏱️
+          </div>
+        </div>
+
+        <!-- Available -->
+        <div class="flex items-center justify-between border rounded-lg p-4">
+          <div>
+            <p class="text-sm text-gray-500">Available</p>
+            <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['stocks']['current_stock'] ?? '0'); ?></p>
+          </div>
+          <div class="bg-green-100 text-green-600 p-2 rounded-lg">
+            📈
+          </div>
+        </div>
+
+        <!-- In Purchase -->
+        <div class="flex items-center justify-between border rounded-lg p-4">
+          <div>
+            <p class="text-sm text-gray-500">In Purchase</p>
+            <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['in_purchase'] ?? '0'); ?></p>
+          </div>
+          <div class="bg-orange-100 text-orange-600 p-2 rounded-lg">
+            🛒
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Number Sold -->
+      <div class="flex justify-between items-center border rounded-lg p-4">
+        <span class="text-sm text-gray-500">Number Sold</span>
+        <span class="font-semibold text-lg"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></span>
+      </div>
+
   </div>
+  <!-- Price -->
+    <div class="bg-white border rounded-lg p-4">
+      <h3 class="font-semibold mb-3">Price</h3>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span><i class="fas fa-dollar px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Cost Price</span><span>₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
+        </div>
+        <div class="flex justify-between">
+          <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Item Price</span><span>₹<?php echo htmlspecialchars($products['item_price'] ?? '0'); ?></span>
+        </div>
+        <div class="flex justify-between">
+          <span><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span>₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
+        </div>
+        <div class="flex justify-between">
+          <span><i class="fas fa-chart-line px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Potential Sales Value</span><span>₹<?php echo htmlspecialchars($products['potential_sales_value'] ?? '0'); ?></span>  
+        </div>
+        <hr class="border-t">
+        <div class="text-xs text-gray-500 mt-2">
+          HSN: <?php echo htmlspecialchars($products['hsn'] ?? ''); ?> | GST: <?php echo htmlspecialchars($products['gst'] ?? ''); ?>%
+        </div>
+      </div>
+    </div>
+   </div>
+
 
   <!-- VENDORS + NOTES -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
