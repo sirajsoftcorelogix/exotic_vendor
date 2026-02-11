@@ -4,8 +4,8 @@ $currency = '';
 // echo "<pre>";print_r($order); die;
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
-    $currency = $item['currency'];
 endforeach;
+$currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥', 'CNY' => '¥', 'KRW' => '₩', 'RUB' => '₽', 'AUD' => '$', 'CAD' => '$', 'NZD' => '$', 'SGD' => '$', 'HKD' => '$', 'CHF' => 'CHF', 'SEK' => 'kr', 'NOK' => 'kr', 'DKK' => 'kr', 'ZAR' => 'R', 'BRL' => 'R$', 'MXN' => '$', 'ARS' => '$', 'CLP' => '$', 'COP' => '$', 'PEN' => 'S/', 'AED' => 'د.إ', 'SAR' => '﷼', 'QAR' => '﷼', 'OMR' => '﷼', 'KWD' => 'د.ك', 'BHD' => '.د.ب', 'ILS' => '₪', 'TRY' => '₺', 'THB' => '฿', 'IDR' => 'Rp', 'MYR' => 'RM', 'PHP' => '₱', 'VND' => '₫', 'PKR' => '₨', 'BDT' => '৳', 'LKR' => 'Rs', 'NPR' => 'Rs', 'EGP' => '£', 'KES' => 'KSh', 'NGN' => '₦', 'GHS' => '₵', 'TZS' => 'TSh', 'UGX' => 'USh', 'MAD' => 'د.م.', 'TND' => 'د.ت', 'DZD' => 'دج', 'CZK' => 'Kč', 'HUF' => 'Ft', 'PLN' => 'zł', 'RON' => 'lei', 'BGN' => 'лв', 'UAH' => '₴', ];
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
@@ -71,7 +71,14 @@ endforeach;
                 </div>
 
                 <div class="space-y-4">
-                    <?php foreach ($order as $item): ?>
+                    <?php foreach ($order as $item): 
+                        $currencyCode = strtoupper(trim($item['currency'] ?? ''));
+                        if (isset($currencyIcons[$currencyCode]) && $currencyIcons[$currencyCode] !== '') {
+                            $currencysymbol = $currencyIcons[$currencyCode] ?? $currencyCode;
+                        } else {
+                            $currencysymbol = $currencyCode.' ';
+                        }
+                    ?>
                     <div class="flex items-center gap-4">
                         <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
 
@@ -112,12 +119,12 @@ endforeach;
                                     </div>
                                     <div class="flex items-center gap-12">
                                         <div class="flex items-center gap-2 text-[13px] text-black-500">
-                                            <span>₹<?php echo $item['finalprice']; ?> x</span>
+                                            <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
                                             <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
                                         </div>
 
                                         <div class="w-20 text-right text-[14px] font-bold text-black-900">
-                                            ₹<?php echo $item['finalprice'] * $item['quantity']; ?>
+                                            <?php echo $currencysymbol; ?><?php echo $item['finalprice'] * $item['quantity']; ?>
                                         </div>
                                         <div class="w-20 text-right text-[14px] font-bold text-black-900">
                                             <span
@@ -154,7 +161,7 @@ endforeach;
                                 <div class="col-span-3 font-bold text-black-800">Subtotal</div>
                                 <div class="col-span-6 text-black-500"><?php echo count($order); ?> items</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    ₹<?php echo number_format($calculated_subtotal, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($calculated_subtotal, 2); ?>
                                 </div>
                             </div>
 
@@ -162,7 +169,7 @@ endforeach;
                                 <div class="col-span-3 font-bold text-black-800">Taxes</div>
                                 <div class="col-span-6 text-black-500">SGST CGST 5% (Included)</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    ₹<?php echo number_format($calculated_tax, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($calculated_tax, 2); ?>
                                 </div>
                             </div>
 
@@ -170,7 +177,7 @@ endforeach;
                                 <div class="col-span-3 font-bold text-black-800">Total</div>
                                 <div class="col-span-6"></div> 
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    ₹<?php echo number_format($total_price, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($total_price, 2); ?>
                                 </div>
                             </div>
                         </div>
@@ -178,7 +185,7 @@ endforeach;
                         <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
                             <span class="text-sm font-bold text-black-800">Paid</span>
                             <span class="text-sm font-bold text-black-900">
-                                ₹<?php echo number_format($total_price, 2); ?> <?php echo $currency; ?>
+                                <?php echo $currencysymbol; ?><?php echo number_format($total_price, 2); ?>
                             </span>
                         </div>
                     </div>
@@ -201,7 +208,7 @@ endforeach;
                 <?php endif; ?>
             </div>
             <!-- address Section -->
-            <div class="rounded-lg border bg-white p-5 shadow-sm relative">
+            <!-- <div class="rounded-lg border bg-white p-5 shadow-sm relative">
                 <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -250,7 +257,7 @@ endforeach;
                     <p class="mt-1 text-sm">This is their 11th order</p>
                     <button class="mt-2 text-sm text-blue-600 hover:underline">View map</button>
                 </div>
-            </div>
+            </div> -->
         </div>
     </div>
 </div>
