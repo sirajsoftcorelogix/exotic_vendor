@@ -825,6 +825,12 @@ class ProductsController {
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
+            //stock_value for this product
+            $order['stock_value'] = $order['local_stock'] * $order['cost_price'];
+            $order['committed_stock'] = $commanModel->getCommittedStockBySku($order['sku']);
+            $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
+            $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
+            //print_r($order['in_purchase_list']);
             //fetch product_vendor_map for this product
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
             //stock_movements for this product
