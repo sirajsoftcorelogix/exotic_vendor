@@ -180,7 +180,7 @@ class GrnsController {
                 $movementType = 'IN';
                 $pidBind = $productId ? $productId : 0;
                 $refType = 'GRN';
-                $insertMovementStmt->bind_param('isissdid', $pidBind, $sku, $warehouseId, $movementType, $qtyReceived, $runningStock, $refType, $grnId);
+                $insertMovementStmt->bind_param('isissdsd', $pidBind, $sku, $warehouseId, $movementType, $qtyReceived, $runningStock, $refType, $grnId);
                 if (!$insertMovementStmt->execute()) {
                     throw new Exception('Failed to insert vp_stock_movements for item ' . $sku);
                 }

@@ -285,7 +285,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     <?php 
         $current_step = $_GET['status_step'] ?? ''; 
         $tabs = [
-            ''           => 'All Orders',
+            ''           => 'All List',
             'Photoshoot' => 'Pending Photoshoot',
             'Editing'    => 'Pending Editing',
             'Data Entry' => 'Pending Data Entry',
