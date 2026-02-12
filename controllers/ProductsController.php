@@ -818,4 +818,53 @@ class ProductsController {
         //renderTemplateClean('views/products/partial_purchase_item_details.php', ['purchaseItem' => $purchaseItem, 'product' => $product], 'Purchase Item Details');
         exit;
     }
+    public function detail() {
+        is_login();
+        global $productModel;
+        global $commanModel;
+        $id = isset($_GET['id']) ? $_GET['id'] : 0;
+        if ($id != 0) {
+            $order = $productModel->getProduct($id);
+            //fetch product_vendor_map for this product
+            $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
+            //stock_movements for this product
+            //$order['stock_summary'] = $productModel->getStockMovementBySku($order['sku']);
+            //purchase history for this product
+            //$order['purchase_history'] = $productModel->getPurchaseHistoryByProductId($order['id']);
+            //stock_movements list
+            $order['stock_history'] = $productModel->stock_history($order['sku']);
+            //echo $order['sku'];
+            
+            //stock summary across warehouses
+            $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
+            //print_array($order['stocks']);
+            //product veriant details
+            $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
+            if ($order) {
+                renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
+            } else {
+              echo '<p>Product details not found.</p>';
+            }
+        } else {
+            echo '<p>Invalid Product Item Code.</p>';
+        }
+        exit;
+    }
+    public function saveProductNotes() {
+        is_login();
+        global $productModel;
+        //echo json_encode(['success' => false, 'message' => 'Invalid request']);
+        //exit;
+        header('Content-Type: application/json');
+        $input = json_decode(file_get_contents('php://input'), true);
+        $product_id = isset($input['product_id']) ? (int)$input['product_id'] : 0;
+        $notes = isset($input['notes']) ? trim($input['notes']) : '';
+        if ($product_id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid product id']);
+            exit;
+        }
+        $res = $productModel->updateProductNotes($product_id, $notes);
+        echo json_encode($res);
+        exit;
+    }
 }

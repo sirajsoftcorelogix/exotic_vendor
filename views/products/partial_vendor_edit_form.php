@@ -13,26 +13,26 @@
                 <div class="flex-grow">
                     <!-- Vendor Name (Orange) -->
                     <div class="text-brand-orange font-bold text-md mb-1">
-                        <?php echo htmlspecialchars($vendor['vendor_name']); ?>
+                        <?php echo htmlspecialchars($vendor['vendor_name'] ?? ''); ?>
                     </div>
                     <!-- Vendor Details Grid -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-y-2 gap-x-2 text-sm text-gray-600">
                         <div>
                             <!-- Removed 'uppercase' class -->
                             <span class="block text-xs font-bold text-gray-400">Contact Person</span>
-                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['contact_name']); ?></span>
+                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['contact_name'] ?? ''); ?></span>
                         </div>
                         <div>
                             <span class="block text-xs font-bold text-gray-400">Phone</span>
-                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['vendor_phone']); ?></span>
+                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['vendor_phone'] ?? ''); ?></span>
                         </div>
                         <div>
                             <span class="block text-xs font-bold text-gray-400">City</span>
-                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['city']); ?></span>
+                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['city'] ?? ''); ?></span>
                         </div>
                         <div>
                             <span class="block text-xs font-bold text-gray-400">State</span>
-                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['state']); ?></span>
+                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($vendor['state'] ?? ''); ?></span>
                         </div>
                         <div>
                             <span class="block text-xs font-bold text-gray-400">Agent</span>

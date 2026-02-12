@@ -458,6 +458,15 @@ switch ($page) {
                 $controller = new PurchaseListCommentController($conn);
                 $controller->add();
             break;
+            
+            case 'detail':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->detail();
+                break;
+            case 'save_product_notes':
+                $controller->saveProductNotes();
+                break;
                 
             default:
                 $controller->product_list();
@@ -725,6 +734,18 @@ switch ($page) {
                 $controller->index();
                 break;
         }
+    case 'category':        
+        require_once 'controllers/CategoryController.php';
+        $controller = new CategoryController();
+        switch ($action) {
+            case 'list':
+                $controller->index();   
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'globals':
         require_once 'controllers/GlobalsController.php';
         $controller = new GlobalsController($conn);

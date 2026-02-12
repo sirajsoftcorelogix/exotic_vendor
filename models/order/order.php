@@ -716,35 +716,35 @@ class Order{
         }
     }
     function getOrderByOrderNumber($order_number) {
-        // $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
-        $sql = "
-            SELECT 
-                o.*,
-                oi.city,
-                oi.state,
-                oi.remarks,
-                oi.address_line1,
-                oi.address_line2,
-                oi.country,
-                oi.zipcode,
-                oi.shipping_address_line1,
-                oi.shipping_address_line2,
-                oi.shipping_city,
-                oi.shipping_zipcode,
-                oi.shipping_mobile,
-                oi.shipping_country,
-                oi.total,
-                c.name       AS customer_name,
-                c.phone      AS customer_phone,
-                c.email      AS customer_email
-            FROM vp_orders o
-            LEFT JOIN vp_order_info oi 
-                ON o.order_number = oi.order_number
-            LEFT JOIN vp_customers c
-                ON o.customer_id = c.id
-            WHERE o.order_number = ?
-            ORDER BY o.id ASC
-        ";
+        $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
+        // $sql = "
+        //     SELECT 
+        //         o.*,
+        //         oi.city,
+        //         oi.state,
+        //         oi.remarks,
+        //         oi.address_line1,
+        //         oi.address_line2,
+        //         oi.country,
+        //         oi.zipcode,
+        //         oi.shipping_address_line1,
+        //         oi.shipping_address_line2,
+        //         oi.shipping_city,
+        //         oi.shipping_zipcode,
+        //         oi.shipping_mobile,
+        //         oi.shipping_country,
+        //         oi.total,
+        //         c.name       AS customer_name,
+        //         c.phone      AS customer_phone,
+        //         c.email      AS customer_email
+        //     FROM vp_orders o
+        //     LEFT JOIN vp_order_info oi 
+        //         ON o.order_number = oi.order_number
+        //     LEFT JOIN vp_customers c
+        //         ON o.customer_id = c.id
+        //     WHERE o.order_number = ?
+        //     ORDER BY o.id ASC
+        // ";
         $stmt = $this->db->prepare($sql);   
         $stmt->bind_param('s', $order_number);
         $stmt->execute();
@@ -1319,6 +1319,27 @@ class Order{
             return $row['change_date'];
         }
         return null;
+    }
+    public function mapVendorToProduct($vendor_id, $item_code) {
+        // Check if mapping already exists
+        $sql = "SELECT id FROM vp_vendor_product_mapping WHERE vendor_id = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $vendor_id, $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return ['success' => true, 'message' => 'Mapping already exists.'];
+        }
+
+        // Insert new mapping
+        $sql = "INSERT INTO vp_vendor_product_mapping (vendor_id, item_code) VALUES (?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $vendor_id, $item_code);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Vendor mapped to product successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
     }
 }
 ?>
