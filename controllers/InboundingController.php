@@ -960,7 +960,8 @@ class InboundingController {
         // 3. Fetch New Data from Post
         $new_group_val = trim((string)($_POST['group_name'] ?? ''));
         $raw_cat       = $_POST['category_code'] ?? 0;
-        $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
+        // $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
+        $new_cat_val   = implode(',', $raw_cat);
 
         // --- DEBUGGING LINE: Remove // from the line below to see why it fails ---
         // die("Old Group: $old_group_val | New Group: $new_group_val <br> Old Cat: $old_cat_val | New Cat: $new_cat_val");
@@ -975,11 +976,11 @@ class InboundingController {
                 $shouldRegenerate = true;
             } 
             // OR if Group has changed (and isn't empty)
-            if ($new_group_val !== $old_group_val && !empty($old_group_val)) {
+            if ($new_group_val !== $old_group_val) {
                 $shouldRegenerate = true;
             }
             // OR if Category has changed (and isn't empty)
-            if ($new_cat_val !== $old_cat_val && !empty($old_cat_val)) {
+            if ($new_cat_val !== $old_cat_val) {
                 $shouldRegenerate = true;
             }
         }
