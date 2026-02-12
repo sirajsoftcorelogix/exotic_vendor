@@ -551,24 +551,24 @@ class InboundingController {
             }
 
             // 3. Handle NEW File Uploads with Variation ID
-            if (!empty($_FILES['new_photos']['name'][0])) {
+            if (!empty($_FILES['new_photos']['name'])) {
                 $uploadDir = __DIR__ . '/../uploads/itm_img/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
-                // Iterate over uploaded files
                 foreach ($_FILES['new_photos']['name'] as $key => $name) {
-                    if ($_FILES['new_photos']['error'][$key] === 0) {
+                    // Only process if the file exists and has no errors
+                    if (isset($_FILES['new_photos']['error'][$key]) && $_FILES['new_photos']['error'][$key] === 0) {
                         
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
                         $ext = pathinfo($name, PATHINFO_EXTENSION);
                         $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
                         
-                        // Retrieve Caption AND Variation ID for this specific file index
+                        // In your JS, new_image_variation_id[] and new_captions[] are 
+                        // appended to the DOM, so they will follow the same index order as new_photos[]
                         $newCaption = $_POST['new_captions'][$key] ?? '';
-                        $varId = $_POST['new_image_variation_id'][$key] ?? -1; // Default to Base (-1)
+                        $varId = $_POST['new_image_variation_id'][$key] ?? -1;
 
                         if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
-                            // Pass Variation ID to Model
                             $inboundingModel->add_image($id, $newName, $newCaption, 0, $varId);
                         }
                     }

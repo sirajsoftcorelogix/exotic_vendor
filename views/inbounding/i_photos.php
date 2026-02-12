@@ -388,11 +388,18 @@ function renderImageGrid($imgs) {
 
     function updateFileInput() {
         const newDt = new DataTransfer();
-        document.querySelectorAll('.draggable-item[data-key]').forEach(item => {
-            const key = item.getAttribute('data-key');
-            if (globalFiles.has(key)) newDt.items.add(globalFiles.get(key));
+        
+        // Instead of just relying on the DOM, let's sync directly from our Map
+        // We iterate through the globalFiles Map which is the "Source of Truth"
+        globalFiles.forEach((fileObject, key) => {
+            newDt.items.add(fileObject);
         });
+
+        // Sync the actual input element with our processed/compressed files
         fileInput.files = newDt.files;
+        
+        // Debugging: This will show you in the console if files are actually attached
+        console.log("Files attached to input:", fileInput.files.length);
     }
 
     window.markForDeletion = function(btn, dbId) {
