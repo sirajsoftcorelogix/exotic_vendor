@@ -935,7 +935,8 @@ class InboundingController {
         // 3. Fetch New Data from Post
         $new_group_val = trim((string)($_POST['group_name'] ?? ''));
         $raw_cat       = $_POST['category_code'] ?? 0;
-        $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
+        // $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
+        $new_cat_val   = implode(',', $raw_cat);
 
         // --- DEBUGGING LINE: Remove // from the line below to see why it fails ---
         // die("Old Group: $old_group_val | New Group: $new_group_val <br> Old Cat: $old_cat_val | New Cat: $new_cat_val");
