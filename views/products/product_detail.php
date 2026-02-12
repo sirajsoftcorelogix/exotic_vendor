@@ -1,3 +1,6 @@
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <div class="max-w-7xl mx-auto p-4 space-y-6">
 
   <!-- PRODUCT HEADER -->
@@ -132,7 +135,7 @@
           <span><i class="fas fa-dollar px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Cost Price</span><span>₹<?php echo htmlspecialchars($products['cost_price'] ?? '0'); ?></span>
         </div>
         <div class="flex justify-between bg-green-50 p-2 rounded">
-          <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Item Price</span><span>₹<?php echo htmlspecialchars($products['item_price'] ?? '0'); ?></span>
+          <span><i class="fas fa-tag  mr-1 px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Item Price</span><span>₹<?php echo htmlspecialchars($products['itemprice'] ?? '0'); ?></span>
         </div>
         <div class="flex justify-between bg-green-50 p-2 rounded">
           <span><i class="fas fa-rupee-sign px-2 py-1 rounded text-xs mr-1 text-green-600 bg-green-100"></i>Stock Value</span><span>₹<?php echo htmlspecialchars($products['stock_value'] ?? '0'); ?></span>
@@ -183,7 +186,7 @@
             <?php endforeach; ?>   
             </div>        
           <?php else: ?>
-            <p class="text-gray-500">This product is not currently in any purchase orders.</p>
+            <p class="text-gray-500">No purchases are currently in progress for this product.</p>
           <?php endif; ?>
             
         </div>
@@ -203,7 +206,62 @@
   <!-- STOCK TRANSACTIONS -->
   <div class="bg-white rounded-lg p-4 overflow-x-auto">
     <h3 class="font-semibold mb-3">Stock Transactions</h3>
-    <table class="min-w-full text-sm border">
+    
+    <!--search fileds-->
+    <div class="flex flex-wrap gap-4 mb-4">
+      <!-- <input type="text" id="searchRefId" placeholder="Search by Ref ID" class="border rounded p-2 text-sm"> -->
+       <div>
+            <label for="date" class="block text-sm font-medium text-gray-600 mb-1">Date Range</label>
+            <input type="text" id="dateRange" name="dateRange" class="border rounded p-2 text-sm" placeholder="Select date range">
+       </div>
+        <script>
+            $(function() {
+                // Initialize date range picker: display format 'DD MMM YYYY' (e.g., 25 Dec 2015)
+                $('#dateRange').daterangepicker({
+                    autoUpdateInput: false,
+                    locale: {
+                        cancelLabel: 'Clear',
+                        format: 'DD MMM YYYY'
+                    }
+                });
+                $('#dateRange').on('apply.daterangepicker', function(ev, picker) {
+                    $(this).val(picker.startDate.format('DD MMM YYYY') + ' - ' + picker.endDate.format('DD MMM YYYY'));
+                });
+                $('#dateRange').on('cancel.daterangepicker', function(ev, picker) {
+                    $(this).val('');
+                });
+            });
+        </script>
+
+       <div>
+          <label for="searchType" class="block text-sm font-medium text-gray-600 mb-1">Transaction Type</label>  
+          <select id="searchType" class="border rounded p-2 text-sm">
+            <option value="">All Types</option>
+            <option value="IN">Purchase</option>
+            <option value="OUT">Sale</option>
+            <option value="TRANSFER_IN">Transfer In</option>
+            <option value="TRANSFER_OUT">Transfer Out</option>
+          </select>
+      </div>   
+      <div> 
+          <label for="searchWarehouse" class="block text-sm font-medium text-gray-600 mb-1">Warehouse</label>  
+          <select id="searchWarehouse" class="border rounded p-2 text-sm">
+            <option value="">All Warehouses</option>
+            <?php 
+              if(!empty($products['warehouses'])) {
+                foreach($products['warehouses'] as $warehouse) {
+                  echo '<option value="' . htmlspecialchars($warehouse['id']) . '">' . htmlspecialchars($warehouse['name']) . '</option>';
+                }
+              }
+            ?>
+          </select>
+      </div>
+      <div class="flex items-end">
+        <label for="searchType" class="block text-sm font-medium text-gray-600 mb-1 invisible"> </label>
+        <button class="px-4 py-2 bg-orange-500 hover:bg-orange-700 text-white rounded text-sm" onclick="filterStockHistory()">Search</button>
+      </div>
+    </div>
+    <table id="stockHistoryTable" class="min-w-full text-sm border">
       <thead class="bg-gray-100">
         <tr>
           <th class="p-2 border">Date</th>
@@ -242,9 +300,14 @@
         }
         ?>
         
-        
       </tbody>
     </table>
+    <!-- Pagination -->
+    <div id="paginationContainer" class="flex justify-center items-center gap-2 mt-4">
+      <button id="prevBtn" class="px-3 py-1 bg-gray-300 text-gray-700 rounded disabled:opacity-50" onclick="previousPage()">Previous</button>
+      <span id="pageInfo" class="text-sm text-gray-600">Page 1</span>
+      <button id="nextBtn" class="px-3 py-1 bg-gray-300 text-gray-700 rounded disabled:opacity-50" onclick="nextPage()">Next</button>
+    </div>
   </div>
 
 </div>
@@ -284,4 +347,124 @@
       alert('An error occurred while saving notes.');
     });
   }
+  let currentPage = 1;
+  let totalPages = 1;
+  const itemsPerPage = 10;
+  let lastFilterParams = {};
+
+  function filterStockHistory(page = 1) {
+    const dateRange = document.getElementById('dateRange').value;
+    const type = document.getElementById('searchType').value;
+    const warehouse = document.getElementById('searchWarehouse').value;
+
+    // Parse date range
+    let startDate = '';
+    let endDate = '';
+    if (dateRange) {
+      const [start, end] = dateRange.split(' - ');
+      // Convert 'DD MMM YYYY' to 'YYYY-MM-DD'
+      const startMoment = moment(start, 'DD MMM YYYY');
+      const endMoment = moment(end, 'DD MMM YYYY');
+      startDate = startMoment.format('YYYY-MM-DD');
+      endDate = endMoment.format('YYYY-MM-DD');
+    }
+
+    // Store filter params for pagination (use page_no to avoid colliding with router 'page')
+    lastFilterParams = {
+      product_id: <?php echo htmlspecialchars($products['id'] ?? 0); ?>,
+      sku: '<?php echo htmlspecialchars($products['sku'] ?? ''); ?>',
+      start_date: startDate,
+      end_date: endDate,
+      type: type,
+      warehouse: warehouse,
+      page_no: page,
+      limit: itemsPerPage
+    };
+
+    const params = new URLSearchParams(lastFilterParams);
+    const url = `index.php?page=products&action=get_filtered_stock_history&${params.toString()}`;
+    console.log('Fetching stock history from:', url);
+
+    fetch(url)
+      .then(response => {
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.text().then(text => {
+          console.log('Raw response:', text);
+          return JSON.parse(text);
+        });
+      })
+      .then(data => {
+        if (data.success && data.records) {
+          const tbody = document.querySelector('#stockHistoryTable tbody');
+          tbody.innerHTML = '';
+
+          if (data.records.length > 0) {
+            data.records.forEach(history => {
+              const row = document.createElement('tr');
+              row.className = 'text-center';
+              
+              row.innerHTML = `
+                <td class="p-2 border">${history.formatted_date || history.created_at}</td>
+                <td class="p-2 border">${history.ref_id || ''}</td>
+                <td class="p-2 border ${history.textColor}">
+                  <i class="fas ${history.icon}"></i>
+                  ${history.type}
+                </td>
+                <td class="p-2 border">${history.movement_type === 'IN' ? history.quantity : ''}</td>
+                <td class="p-2 border">${history.movement_type === 'OUT' ? history.quantity : ''}</td>
+                <td class="p-2 border">${history.running_stock || '0'}</td>
+                <td class="p-2 border">${history.warehouse_name || ''}</td>
+              `;
+              tbody.appendChild(row);
+            });
+          } else {
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
+          }
+
+          // Update pagination
+          currentPage = page;
+          totalPages = Math.ceil((data.total || 0) / itemsPerPage);
+          updatePaginationButtons();
+          document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+        } else {
+          console.error('API Error:', data);
+          alert('Error fetching data: ' + (data.message || 'Unknown error'));
+        }
+      })
+      .catch(error => {
+        //console.error('Error fetching filtered stock history:', error);
+        alert('Failed to fetch stock history: ' + error.message);
+      });
+  }
+
+  function updatePaginationButtons() {
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    
+    prevBtn.disabled = currentPage === 1;
+    nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+  }
+
+  function previousPage() {
+    if (currentPage > 1) {
+      filterStockHistory(currentPage - 1);
+    }
+  }
+
+  function nextPage() {
+    if (currentPage < totalPages) {
+      filterStockHistory(currentPage + 1);
+    }
+  }
+
+  // Load initial data on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    filterStockHistory(1);
+  });
+
+  
 </script>
