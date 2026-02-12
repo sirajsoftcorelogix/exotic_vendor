@@ -950,11 +950,11 @@ class InboundingController {
                 $shouldRegenerate = true;
             } 
             // OR if Group has changed (and isn't empty)
-            if ($new_group_val !== $old_group_val && !empty($old_group_val)) {
+            if ($new_group_val !== $old_group_val) {
                 $shouldRegenerate = true;
             }
             // OR if Category has changed (and isn't empty)
-            if ($new_cat_val !== $old_cat_val && !empty($old_cat_val)) {
+            if ($new_cat_val !== $old_cat_val) {
                 $shouldRegenerate = true;
             }
         }
