@@ -873,4 +873,37 @@ class ProductsController {
         echo json_encode($res);
         exit;
     }
+    public function getFilteredStockHistory() {
+        is_login();
+        global $productModel;
+        //header('Content-Type: application/json');
+        //$input = json_decode(file_get_contents('php://input'), true);
+        //print_array($input);
+        $_GET = array_map('trim', $_GET);
+        //print_array($_GET);exit;
+        $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
+        $date_range = isset($_GET['date_range']) ? trim($_GET['date_range']) : '';
+        $date_from = '';
+        $date_to = '';
+        if ($date_range !== '') {
+            $dates = explode(' - ', $date_range);
+            if (count($dates) == 2) {
+                $date_from = date('Y-m-d', strtotime($dates[0]));
+                $date_to = date('Y-m-d', strtotime($dates[1]));
+            }
+        }
+        if ($sku === '') {
+            echo json_encode(['success' => false, 'message' => 'Invalid SKU']);
+            exit;
+        }
+        $filters = [
+            'sku' => $sku,
+            'date_from' => $date_from,
+            'date_to' => $date_to
+        ];
+        //echo "Fetching stock history for SKU: $sku from $date_from to $date_to\n";
+        $history = $productModel->getFilteredStockHistory($filters,$limit=100,$offset=0);
+        echo json_encode(['success' => true, 'history' => $history]);
+        exit;
+    }
 }

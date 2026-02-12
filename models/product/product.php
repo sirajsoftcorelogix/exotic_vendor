@@ -1599,5 +1599,76 @@ class product
         }
         return [];
     }
-    
+    public function getFilteredStockHistory($filters = [], $limit = 100, $offset = 0)
+    {
+        $where = [];
+        $params = [];
+        $types = '';
+        //print_r($filters);
+        if (!empty($filters['sku'])) {
+            $where[] = 'sm.sku = ?';
+            $params[] = $filters['sku'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['movement_type']) && in_array($filters['movement_type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+            $where[] = 'sm.movement_type = ?';
+            $params[] = $filters['movement_type'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['date_from'])) {
+            $where[] = 'sm.created_at >= ?';
+            $params[] = $filters['date_from'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['date_to'])) {
+            $where[] = 'sm.created_at <= ?';
+            $params[] = $filters['date_to'];
+            $types .= 's';
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name 
+                FROM vp_stock_movements sm 
+                LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id 
+                $whereSql 
+                ORDER BY sm.created_at DESC 
+                LIMIT ? OFFSET ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+
+        // bind dynamic params followed by limit and offset
+        if (!empty($params)) {
+            $types_all = $types . 'ii';
+            $bindParams = [$types_all];
+            foreach ($params as $k => $v) {
+                $bindParams[] = &$params[$k];
+            }
+            $bindParams[] = &$limit;
+            $bindParams[] = &$offset;
+            // convert to references for call_user_func_array
+            $refs = [];
+            foreach ($bindParams as $key => $val) {
+                $refs[$key] = &$bindParams[$key];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $refs);
+        } else {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        echo $sql; // Debug: check final SQL
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+           
 }

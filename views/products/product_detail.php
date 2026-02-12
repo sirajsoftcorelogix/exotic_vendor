@@ -1,3 +1,6 @@
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <div class="max-w-7xl mx-auto p-4 space-y-6">
 
   <!-- PRODUCT HEADER -->
@@ -203,6 +206,60 @@
   <!-- STOCK TRANSACTIONS -->
   <div class="bg-white rounded-lg p-4 overflow-x-auto">
     <h3 class="font-semibold mb-3">Stock Transactions</h3>
+    <!--search fileds-->
+    <div class="flex flex-wrap gap-4 mb-4">
+      <!-- <input type="text" id="searchRefId" placeholder="Search by Ref ID" class="border rounded p-2 text-sm"> -->
+       <div>
+            <label for="date" class="block text-sm font-medium text-gray-600 mb-1">Date Range</label>
+            <input type="text" id="dateRange" name="dateRange" class="border rounded p-2 text-sm" placeholder="Select date range">
+       </div>
+        <script>
+            $(function() {
+                // Initialize date range picker: display format 'DD MMM YYYY' (e.g., 25 Dec 2015)
+                $('#dateRange').daterangepicker({
+                    autoUpdateInput: false,
+                    locale: {
+                        cancelLabel: 'Clear',
+                        format: 'DD MMM YYYY'
+                    }
+                });
+                $('#dateRange').on('apply.daterangepicker', function(ev, picker) {
+                    $(this).val(picker.startDate.format('DD MMM YYYY') + ' - ' + picker.endDate.format('DD MMM YYYY'));
+                });
+                $('#dateRange').on('cancel.daterangepicker', function(ev, picker) {
+                    $(this).val('');
+                });
+            });
+        </script>
+
+       <div>
+          <label for="searchType" class="block text-sm font-medium text-gray-600 mb-1">Transaction Type</label>  
+          <select id="searchType" class="border rounded p-2 text-sm">
+            <option value="">All Types</option>
+            <option value="IN">Purchase</option>
+            <option value="OUT">Sale</option>
+            <option value="TRANSFER_IN">Transfer In</option>
+            <option value="TRANSFER_OUT">Transfer Out</option>
+          </select>
+      </div>   
+      <div> 
+          <label for="searchWarehouse" class="block text-sm font-medium text-gray-600 mb-1">Warehouse</label>  
+          <select id="searchWarehouse" class="border rounded p-2 text-sm">
+            <option value="">All Warehouses</option>
+            <?php 
+              if(!empty($products['warehouses'])) {
+                foreach($products['warehouses'] as $warehouse) {
+                  echo '<option value="' . htmlspecialchars($warehouse['id']) . '">' . htmlspecialchars($warehouse['name']) . '</option>';
+                }
+              }
+            ?>
+          </select>
+      </div>
+      <div class="flex items-end">
+        <label for="searchType" class="block text-sm font-medium text-gray-600 mb-1 invisible"> </label>
+        <button class="px-4 py-2 bg-blue-600 text-white rounded text-sm" onclick="filterStockHistory()">Search</button>
+      </div>
+    </div>
     <table class="min-w-full text-sm border">
       <thead class="bg-gray-100">
         <tr>
@@ -284,4 +341,52 @@
       alert('An error occurred while saving notes.');
     });
   }
+  function filterStockHistory() {
+    const dateRange = document.getElementById('dateRange').value;
+    const type = document.getElementById('searchType').value;
+    const warehouse = document.getElementById('searchWarehouse').value;
+    // Implement AJAX call to fetch filtered stock history based on selected criteria
+    // For demonstration, we'll just log the selected values
+    console.log('Filtering stock history:', { dateRange, type, warehouse });
+    //Ajax call
+    const params = new URLSearchParams({
+      product_id: <?php echo htmlspecialchars($products['id'] ?? 0); ?>,
+      sku: '<?php echo htmlspecialchars($products['sku'] ?? ''); ?>',
+      date_range: dateRange,
+      type: type,
+      warehouse: warehouse
+    });
+
+    fetch(`index.php?page=products&action=get_filtered_stock_history&${params.toString()}`)
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.querySelector('#stockHistoryTable tbody');
+        tbody.innerHTML = '';
+        if (data.length > 0) {
+          data.forEach(history => {
+            const row = document.createElement('tr');
+            row.className = 'text-center';
+            row.innerHTML = `
+              <td class="p-2 border">${history.created_at}</td>
+              <td class="p-2 border">${history.ref_id}</td>
+              <td class="p-2 border ${history.textColor}">
+                <i class="fas ${history.icon}"></i>
+                ${history.type}
+              </td>
+              <td class="p-2 border">${history.movement_type === 'IN' ? history.quantity : ''}</td>
+              <td class="p-2 border">${history.movement_type === 'OUT' ? history.quantity : ''}</td>
+              <td class="p-2 border">${history.running_stock}</td>
+              <td class="p-2 border">${history.warehouse_name}</td>
+            `;
+            tbody.appendChild(row);
+          });
+        } else {
+          tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching filtered stock history:', error);
+      });
+  }
+  
 </script>

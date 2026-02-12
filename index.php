@@ -467,6 +467,9 @@ switch ($page) {
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
+            case 'get_filtered_stock_history':
+                $controller->getFilteredStockHistory();
+                break;
                 
             default:
                 $controller->product_list();
