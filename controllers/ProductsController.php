@@ -963,10 +963,10 @@ class ProductsController {
         }
         $stock_history = $productModel->stock_history($sku);
         //print_array($ledger);
-        if (!$stock_history) {
-            echo '<p>Product not found for SKU: ' . htmlspecialchars($sku) . '</p>';
-            exit;
-        }
+        // if (!$stock_history) {
+        //     echo '<p>Product not found for SKU: ' . htmlspecialchars($sku) . '</p>';
+        //     exit;
+        // }
         $order['warehouses'] = $productModel->getAllWarehouses();
         $data = [
             'stock_history' => $stock_history,
