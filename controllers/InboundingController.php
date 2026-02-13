@@ -1159,12 +1159,18 @@ class InboundingController {
             // =========================================================
             if (!empty($item_code) && $shouldRename) {
                 // Pass current POST data to helper so we use fresh color/size values
-                $currentDataForRename = [
-                    'is_variant' => $is_variant,
-                    'color'      => $_POST['color'] ?? '',
-                    'size'       => $_POST['size'] ?? ''
-                ];
-                $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
+                // $currentDataForRename = [
+                //     'is_variant' => $is_variant,
+                //     'color'      => $_POST['color'] ?? '',
+                //     'size'       => $_POST['size'] ?? ''
+                // ];
+                $this->ensureImagesAreRenamed(
+                    $id, 
+                    $item_code, 
+                    $is_variant, 
+                    $_POST['color'] ?? '', 
+                    $_POST['size'] ?? ''
+                );
             }
             // =========================================================
             
@@ -1383,12 +1389,35 @@ class InboundingController {
         header("Location: " . base_url('?page=inbounding&action=list&msg=no_selection'));
         exit;
     }
+    private function ensureImagesAreRenamed($id, $item_code, $is_variant, $color = '', $size = '') {
+        
+        if (empty($item_code)) return;
+
+        // Prepare the naming context
+        $currentDataForRename = [
+            'is_variant' => $is_variant,
+            'color'      => $color,
+            'size'       => $size
+        ];
+
+        // Call your existing renaming logic
+        // This ensures that even if renaming was skipped before, it happens now
+        $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
+    }
     public function inbound_product_publish(){
         global $inboundingModel;
         $API_data = array();
 
         // top level data
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $data1 = $inboundingModel->getpublishdata($id);
+        $this->ensureImagesAreRenamed(
+            $id, 
+            $data1['data']['Item_code'], 
+            $data1['data']['is_variant'], 
+            $data1['data']['color'], 
+            $data1['data']['size']
+        );
         $data = $inboundingModel->getpublishdata($id);
 
         // --- HELPER: Get Current Date in Y-m-d format ---
