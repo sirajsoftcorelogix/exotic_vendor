@@ -6,8 +6,12 @@
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="flex gap-4">
-      <div class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 "><img onclick="openImagePopup('<?php echo $products['image']; ?>')" src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="w-full h-full px-3 py-3 cursor-pointer" /></div>
-      
+      <!-- <div class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 ">
+        <img onclick="openImagePopup('<?php //echo $products['image']; ?>')" src="<?php //echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="w-full h-full px-3 py-3 cursor-pointer" />
+      </div> -->
+      <div onclick="openImagePopup('<?php echo $products['image']; ?>')" class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
+        <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="max-w-full max-h-full px-3 py-3 object-contain cursor-pointer" />
+      </div>
       <div>
         <span class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">
           <?php echo $products['groupname'] ?? 'Default Group'; ?>
@@ -205,7 +209,11 @@
 
   <!-- STOCK TRANSACTIONS -->
   <div class="bg-white rounded-lg p-4 overflow-x-auto">
-    <h3 class="font-semibold mb-3">Stock Transactions</h3>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold">Stock Transactions</h3>
+          <a target="_blank" href="<?php echo base_url('?page=products&action=inventory_ledger&sku=' . htmlspecialchars($products['sku'] ?? '')); ?>"><i title="View stock movement history for this product" class="fas fa-exchange-alt text-orange-500"></i></a>
+        </div>
+    
     
     <!--search fileds-->
     <div class="flex flex-wrap gap-4 mb-4">
@@ -312,18 +320,28 @@
 
 </div>
 <!-- Image Popup -->
-<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
+<!-- <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
   <div class="bg-white p-4 rounded max-h-screen max-w-lg flex flex-col items-center">
     <img id="popupImage" src="" alt="Product Image" class="max-w-full h-full object-contain" />
     <button onclick="document.getElementById('imagePopup').classList.add('hidden')" class="mt-2 px-4 py-2 bg-red-600 text-white rounded">Close</button>
   </div>
-</div>
+</div> -->
 <script>
-  function openImagePopup(imageUrl) {
+function openImagePopup(imageUrl) {
     const popup = document.getElementById('imagePopup');
     const popupImage = document.getElementById('popupImage');
     popupImage.src = imageUrl;
     popup.classList.remove('hidden');
+}
+function closeImagePopup() {
+    const popup = document.getElementById('imagePopup');
+    popup.classList.add('hidden');
 }
   function saveProductNotes(productId) {
     const notes = document.getElementById('product-notes').value;
