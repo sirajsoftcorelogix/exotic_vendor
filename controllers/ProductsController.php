@@ -825,6 +825,12 @@ class ProductsController {
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
+            //stock_value for this product
+            $order['stock_value'] = $order['local_stock'] * $order['cost_price'];
+            $order['committed_stock'] = $commanModel->getCommittedStockBySku($order['sku']);
+            $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
+            $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
+            //print_r($order['in_purchase_list']);
             //fetch product_vendor_map for this product
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
             //stock_movements for this product
@@ -840,6 +846,8 @@ class ProductsController {
             //print_array($order['stocks']);
             //product veriant details
             $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
+            //get all warehouses
+            $order['warehouses'] = $productModel->getAllWarehouses();
             if ($order) {
                 renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
             } else {
@@ -866,5 +874,104 @@ class ProductsController {
         $res = $productModel->updateProductNotes($product_id, $notes);
         echo json_encode($res);
         exit;
+    }
+    public function getFilteredStockHistory() {
+        // Start output buffering to catch any accidental output
+        ob_start();
+        
+        // Set headers first
+        header('Content-Type: application/json');
+        header('X-Requested-With: XMLHttpRequest');
+        
+        // Check login (but won't output on AJAX)
+        is_login();
+        
+        // Clear any buffered output
+        ob_end_clean();
+        
+        global $productModel;
+        
+        try {
+            $_GET = array_map('trim', $_GET);
+            
+            $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
+            $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
+            $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : '';
+            $type = isset($_GET['type']) ? trim($_GET['type']) : '';
+            $warehouse = isset($_GET['warehouse']) ? trim($_GET['warehouse']) : '';
+            // Read pagination from 'page_no' to avoid collision with router 'page' param
+            if (isset($_GET['page_no'])) {
+                $page = max(1, (int)$_GET['page_no']);
+            } else {
+                $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            }
+            $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
+            
+            if ($sku === '') {
+                echo json_encode(['success' => false, 'message' => 'Invalid SKU']);
+                exit;
+            }
+            
+            $offset = ($page - 1) * $limit;
+            
+            $filters = [
+                'sku' => $sku,
+                'start_date' => $start_date,
+                'end_date' => $end_date,
+                'type' => $type,
+                'warehouse' => $warehouse
+            ];
+            
+            $history = $productModel->getFilteredStockHistory($filters, $limit, $offset);
+            $total = $productModel->getFilteredStockHistoryCount($filters);
+            
+            // Format the response
+            $records = [];
+            if (!empty($history)) {
+                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out'];
+                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt'];
+                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600'];
+                
+                foreach ($history as $record) {
+                    $record['formatted_date'] = date('d M Y', strtotime($record['created_at'] ?? ''));
+                    $record['type'] = $typeMap[$record['movement_type']] ?? $record['movement_type'];
+                    $record['icon'] = $iconMap[$record['movement_type']] ?? '';
+                    $record['textColor'] = $colorMap[$record['movement_type']] ?? '';
+                    $records[] = $record;
+                }
+            }
+            
+            echo json_encode([
+                'success' => true, 
+                'records' => $records,
+                'total' => $total,
+                'page' => $page,
+                'limit' => $limit
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+    public function inventoryLedger() {
+        is_login();
+        global $productModel;
+        $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
+        if ($sku === '') {
+            echo '<p>Invalid SKU.</p>';
+            exit;
+        }
+        $stock_history = $productModel->stock_history($sku);
+        //print_array($ledger);
+        // if (!$stock_history) {
+        //     echo '<p>Product not found for SKU: ' . htmlspecialchars($sku) . '</p>';
+        //     exit;
+        // }
+        $order['warehouses'] = $productModel->getAllWarehouses();
+        $data = [
+            'stock_history' => $stock_history,
+            'warehouses' => $order['warehouses']
+        ];
+        renderTemplate('views/products/inventory_ledger.php', $data, 'Inventory Ledger');
     }
 }

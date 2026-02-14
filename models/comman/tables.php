@@ -330,5 +330,33 @@ class Tables {
         $data = $result->fetch_assoc();
         return $data;
     }
+    public function getCommittedStockBySku($sku) {
+        //$sql = "SELECT SUM(quantity) AS committed_stock FROM vp_po_items WHERE sku = ? AND purchase_orders_id IN (SELECT id FROM purchase_orders WHERE status IN ('pending', 'processing'))";
+        $sql = "SELECT SUM(quantity) AS committed_stock FROM vp_orders WHERE sku = ? AND status NOT IN ('delivered', 'cancelled', 'returned', 'shipped')";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return $row['committed_stock'] ?? 0;
+        }
+        return 0;
+    }
+    public function isInPurchaseList($sku) {
+        //$sql = "SELECT id, po_number FROM vp_po_items WHERE sku = ? AND purchase_orders_id IN (SELECT id FROM purchase_orders WHERE status IN ('pending', 'ordered'))";
+        $sql = "SELECT po.id, po.po_number FROM purchase_orders po join vp_po_items p on po.id = p.purchase_orders_id WHERE p.sku = ? AND po.status IN ('pending', 'ordered')";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+           while ($row = $result->fetch_assoc()) {
+                $data[$row['id']] = $row['po_number'];
+            }
+        }
+        return $data;
+    }
 }
 ?>

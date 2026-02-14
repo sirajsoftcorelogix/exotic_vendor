@@ -383,14 +383,14 @@ class OrdersController {
                     //print_array($rdata);   
                     //insert vendor if not exists and get vendor id
                     $maped = [];
-                    $vendorexplode = explode(',', $item['vendor']);
-                    foreach($vendorexplode as $vendorname){
-                        $vendorsuccess = $ordersModel->addVendorIfNotExists($vendorname); 
+                    //$vendorexplode = explode(',', $item['vendor']);
+                    //foreach($vendorexplode as $vendorname){
+                        $vendorsuccess = $ordersModel->addVendorIfNotExists($item['vendor'] ?? ''); 
                         $vendor_id = $vendorsuccess['vendor_id'] ?? 0;
                         //map product with vendor
                         //$maped[] = $ordersModel->mapVendorToProduct($vendor_id, $rdata['item_code']);
                         $maped[] = $productModel->saveProductVendor($rdata['item_code'], $vendor_id, '');
-                    }  
+                    //}  
                     //print_array($maped);             
             }
             //add address info
