@@ -935,7 +935,8 @@ class InboundingController {
         // 3. Fetch New Data from Post
         $new_group_val = trim((string)($_POST['group_name'] ?? ''));
         $raw_cat       = $_POST['category_code'] ?? 0;
-        $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
+        // $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
+        $new_cat_val   = implode(',', $raw_cat);
 
         // --- DEBUGGING LINE: Remove // from the line below to see why it fails ---
         // die("Old Group: $old_group_val | New Group: $new_group_val <br> Old Cat: $old_cat_val | New Cat: $new_cat_val");
@@ -950,11 +951,11 @@ class InboundingController {
                 $shouldRegenerate = true;
             } 
             // OR if Group has changed (and isn't empty)
-            if ($new_group_val !== $old_group_val && !empty($old_group_val)) {
+            if ($new_group_val !== $old_group_val) {
                 $shouldRegenerate = true;
             }
             // OR if Category has changed (and isn't empty)
-            if ($new_cat_val !== $old_cat_val && !empty($old_cat_val)) {
+            if ($new_cat_val !== $old_cat_val) {
                 $shouldRegenerate = true;
             }
         }
@@ -1158,12 +1159,18 @@ class InboundingController {
             // =========================================================
             if (!empty($item_code) && $shouldRename) {
                 // Pass current POST data to helper so we use fresh color/size values
-                $currentDataForRename = [
-                    'is_variant' => $is_variant,
-                    'color'      => $_POST['color'] ?? '',
-                    'size'       => $_POST['size'] ?? ''
-                ];
-                $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
+                // $currentDataForRename = [
+                //     'is_variant' => $is_variant,
+                //     'color'      => $_POST['color'] ?? '',
+                //     'size'       => $_POST['size'] ?? ''
+                // ];
+                $this->ensureImagesAreRenamed(
+                    $id, 
+                    $item_code, 
+                    $is_variant, 
+                    $_POST['color'] ?? '', 
+                    $_POST['size'] ?? ''
+                );
             }
             // =========================================================
             
@@ -1382,12 +1389,35 @@ class InboundingController {
         header("Location: " . base_url('?page=inbounding&action=list&msg=no_selection'));
         exit;
     }
+    private function ensureImagesAreRenamed($id, $item_code, $is_variant, $color = '', $size = '') {
+        
+        if (empty($item_code)) return;
+
+        // Prepare the naming context
+        $currentDataForRename = [
+            'is_variant' => $is_variant,
+            'color'      => $color,
+            'size'       => $size
+        ];
+
+        // Call your existing renaming logic
+        // This ensures that even if renaming was skipped before, it happens now
+        $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
+    }
     public function inbound_product_publish(){
         global $inboundingModel;
         $API_data = array();
 
         // top level data
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $data1 = $inboundingModel->getpublishdata($id);
+        $this->ensureImagesAreRenamed(
+            $id, 
+            $data1['data']['Item_code'], 
+            $data1['data']['is_variant'], 
+            $data1['data']['color'], 
+            $data1['data']['size']
+        );
         $data = $inboundingModel->getpublishdata($id);
 
         // --- HELPER: Get Current Date in Y-m-d format ---
