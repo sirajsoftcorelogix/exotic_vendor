@@ -384,21 +384,21 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             <div class="bg-gray-50 p-5 rounded border border-gray-200 w-full">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 w-full">
                     
-                    <div class="w-full min-w-0" data-group="physical">
+                    <div class="w-full min-w-0" >
                         <label class="block text-xs font-bold text-[#555] mb-1">Height:</label>
                         <div class="relative w-full">
                             <input type="text" id="dim_height" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['height'] ?? '') ?>" name="height">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0" data-group="physical">
+                    <div class="w-full min-w-0" >
                         <label class="block text-xs font-bold text-[#555] mb-1">Width:</label>
                         <div class="relative w-full">
                             <input type="text" id="dim_width" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['width'] ?? '') ?>" name="width">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span>
                         </div>
                     </div>
-                    <div class="w-full min-w-0" data-group="physical">
+                    <div class="w-full min-w-0" >
                         <label class="block text-xs font-bold text-[#555] mb-1">Depth:</label>
                         <div class="relative w-full">
                             <input type="text" id="dim_depth" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['depth'] ?? '') ?>" name="depth">

@@ -659,9 +659,9 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                 const physicalFields = [
                     card.querySelector('input[name*="[color]"]')?.closest('div'),
                     card.querySelector('.size-container'),
-                    card.querySelector('input[name*="[height]"]')?.closest('div'),
-                    card.querySelector('input[name*="[width]"]')?.closest('div'),
-                    card.querySelector('input[name*="[depth]"]')?.closest('div'),
+                    // card.querySelector('input[name*="[height]"]')?.closest('div'),
+                    // card.querySelector('input[name*="[width]"]')?.closest('div'),
+                    // card.querySelector('input[name*="[depth]"]')?.closest('div'),
                     card.querySelector('.colormap-wrapper')
                 ];
 
