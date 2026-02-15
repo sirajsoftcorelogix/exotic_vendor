@@ -1140,13 +1140,12 @@ class InboundingController {
         if (empty($record_id)) { echo "Record ID missing"; exit; }
 
         // Use existing code if it's a variant, otherwise generate a new one
-        if (($_POST['is_variant'] ?? 'N') == 'Y') {
+        if ($_POST['is_variant']== 'Y') {
             $item_code = $_POST['Item_code'];
         } else {
             // Get group name to determine the first letter
             $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['category']));
             $item_code = $this->generateItemcode($group_real_name);
-            echo "<pre>item_code: ";print_r($item_code);exit;
         }
 
         // i want to genrate item_code here
