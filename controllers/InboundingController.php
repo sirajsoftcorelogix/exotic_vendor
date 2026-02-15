@@ -1612,43 +1612,10 @@ class InboundingController {
 
         header('Content-Type: application/json');
         if (isset($result) && $result->status == 'success') {
-            // $ProductsController = new ProductsController();
-
+            $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
-            $apiUrl1 = "http://localhost/exotic/index.php?page=products&action=import_api_call";
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $apiUrl1);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['itemCodes' => [$itemCode]]));
-
-            // FORCE DISABLE ALL SSL CHECKS
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0); 
-
-            $response1 = curl_exec($ch);
-            
-            if (curl_errno($ch)) {
-                $error_msg = curl_error($ch);
-            }
-            curl_close($ch);
-
-            if (isset($error_msg)) {
-                echo "Internal API Error: " . $error_msg;
-            } else {
-                echo "API Response: " . $response1;
-            }
-
-            // Check for errors
-            if (curl_errno($ch)) {
-                error_log('cURL Error: ' . curl_error($ch));
-            }
-
-            curl_close($ch);
-
-            echo "<pre>";print_r($response1);exit;
+            $import_response = $ProductsController->importApiCall([$itemCode]);
+            echo "<pre>";print_r($import_response);exit;
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
