@@ -1127,22 +1127,22 @@ class InboundingController {
     }
     private function generateItemcode($group_real_name) {
         global $inboundingModel;
-        $prefix = strtoupper(substr($group_real_name, 0, 1));
+        $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
         $last_code = $inboundingModel->getLastItemCode($prefix);
         if (!$last_code) {
-            return $prefix . "AA001";
+            return $prefix . "AA0001";
         }
         $chars = substr($last_code, 1, 2); // Extracts "AA"
-        $num = (int)substr($last_code, 3); // Extracts 999
+        $num = (int)substr($last_code, 3); // Extracts the numeric part (0001 onwards)
         $num++;
-        if ($num > 999) {
+        if ($num > 9999) {
             $num = 1;
-            $chars++; 
+            $chars++; // Increment letters (e.g., AA -> AB)
             if (strlen($chars) > 2) {
                 die("Error: Maximum item code limit reached for prefix $prefix");
             }
         }
-        return $prefix . $chars . str_pad($num, 3, '0', STR_PAD_LEFT);
+        return $prefix . $chars . str_pad((string)$num, 4, '0', STR_PAD_LEFT);
     }
     public function submitStep3() {
         global $inboundingModel;
@@ -1618,7 +1618,6 @@ class InboundingController {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
-            echo "<pre>";print_r($import_response);exit;
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
