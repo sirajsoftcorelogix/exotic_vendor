@@ -1,5 +1,6 @@
  <?php
 require_once 'models/inbounding/Inbounding.php';
+require_once 'controllers/ProductsController.php';
 
 $inboundingModel = new Inbounding($conn);
 
@@ -1549,11 +1550,11 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
-        echo "<pre>";print_r($jsonString);
+        // echo "<pre>";print_r($jsonString);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
@@ -1591,8 +1592,7 @@ class InboundingController {
         ]);
 
         $response = curl_exec($ch);
-        
-        // echo "<pre>";print_r($response);
+        $result = json_decode($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
@@ -1611,14 +1611,50 @@ class InboundingController {
         }
 
         header('Content-Type: application/json');
+        if (isset($result) && $result->status == 'success') {
+            // $ProductsController = new ProductsController();
 
-        if (empty($response) || trim($response) === '') {
+            $itemCode = $data['data']['Item_code'];
+            $apiUrl1 = "http://localhost/exotic/index.php?page=products&action=import_api_call";
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $apiUrl1);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['itemCodes' => [$itemCode]]));
+
+            // FORCE DISABLE ALL SSL CHECKS
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0); 
+
+            $response1 = curl_exec($ch);
+            
+            if (curl_errno($ch)) {
+                $error_msg = curl_error($ch);
+            }
+            curl_close($ch);
+
+            if (isset($error_msg)) {
+                echo "Internal API Error: " . $error_msg;
+            } else {
+                echo "API Response: " . $response1;
+            }
+
+            // Check for errors
+            if (curl_errno($ch)) {
+                error_log('cURL Error: ' . curl_error($ch));
+            }
+
+            curl_close($ch);
+
+            echo "<pre>";print_r($response1);exit;
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            echo $response; 
+            echo $result; 
         }
         exit;
     }
