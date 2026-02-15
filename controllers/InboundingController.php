@@ -927,7 +927,17 @@ class InboundingController {
 
         // 1. Capture Inputs
         $is_variant = $_POST['is_variant'] ?? '';
-        $item_code = $_POST['Item_code'] ?? '';         
+
+        if ($oldData['form1']['is_variant'] == 'Y') {
+            if ($_POST['is_variant'] != $oldData['form1']['is_variant']) {
+                $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name']));
+                $item_code = $this->generateItemcode($group_real_name);
+            }else{
+                $item_code = $_POST['Item_code'] ?? '';
+            }
+        }else{
+            $item_code = $_POST['Item_code'] ?? '';         
+        }
         if (!empty($item_code)) {
             $shouldRename = true; 
         }
@@ -1025,7 +1035,7 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
-            'marketplace'         => $_POST['marketplace'] ?? '',
+            'marketplace'         => $_POST['marketplace'] ?? ' ',
             'india_net_qty'       => $_POST['india_net_qty'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
@@ -1543,7 +1553,7 @@ class InboundingController {
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
