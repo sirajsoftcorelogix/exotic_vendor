@@ -1146,6 +1146,7 @@ class InboundingController {
             // Get group name to determine the first letter
             $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['category']));
             $item_code = $this->generateItemcode($group_real_name);
+            echo "<pre>item_code: ";print_r($item_code);exit;
         }
 
         // i want to genrate item_code here
