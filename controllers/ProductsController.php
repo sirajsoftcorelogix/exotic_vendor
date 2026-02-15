@@ -122,16 +122,23 @@ class ProductsController {
         //     renderTemplateClean('views/errors/error.php', ['message' => $updatedCount['message']], 'Update Failed');
         // }
     }
-    public function importApiCall() {
+    public function importApiCall($manualCodes = null) {
         global $productModel;
         // Accept JSON body or form-data
-        $raw = file_get_contents('php://input');
-        $payload = json_decode($raw, true);
-        if (!$payload || !isset($payload['itemCodes'])) {
-            echo json_encode(['success' => false, 'message' => 'Invalid request.']);
-            exit;
+        if ($manualCodes !== null) {
+            // Called from PHP: $ProductsController->importApiCall([$itemCode])
+            $itemCodes = $manualCodes;
+        } else {
+            // Called from JavaScript fetch
+            $raw = file_get_contents('php://input');
+            $payload = json_decode($raw, true);
+            
+            if (!$payload || !isset($payload['itemCodes'])) {
+                echo json_encode(['success' => false, 'message' => 'Invalid request.']);
+                exit;
+            }
+            $itemCodes = $payload['itemCodes'];
         }
-        $itemCodes = $payload['itemCodes'];
         if (!is_array($itemCodes)) {
             echo json_encode(['success' => false, 'message' => 'Invalid itemCodes.']);
             exit;

@@ -1,5 +1,6 @@
  <?php
 require_once 'models/inbounding/Inbounding.php';
+require_once 'controllers/ProductsController.php';
 
 $inboundingModel = new Inbounding($conn);
 
@@ -1549,11 +1550,11 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
-        echo "<pre>";print_r($jsonString);
+        // echo "<pre>";print_r($jsonString);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
@@ -1591,8 +1592,7 @@ class InboundingController {
         ]);
 
         $response = curl_exec($ch);
-        
-        // echo "<pre>";print_r($response);
+        $result = json_decode($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
@@ -1611,14 +1611,17 @@ class InboundingController {
         }
 
         header('Content-Type: application/json');
-
-        if (empty($response) || trim($response) === '') {
+        if (isset($result) && $result->status == 'success') {
+            $ProductsController = new ProductsController();
+            $itemCode = $data['data']['Item_code'];
+            $import_response = $ProductsController->importApiCall([$itemCode]);
+            echo "<pre>";print_r($import_response);exit;
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            echo $response; 
+            echo $result; 
         }
         exit;
     }
