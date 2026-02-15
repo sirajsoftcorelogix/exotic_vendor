@@ -352,7 +352,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <label class="block text-xs font-bold text-black mb-1">Quantity:</label>
                                     <input type="number" min="0" 
                                      name="variations[<?php echo $index; ?>][quantity]" 
-                                     value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '') ? $var['quantity'] : 1; ?>" 
+                                     value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '' && $var['quantity'] != 0) ? $var['quantity'] : 1; ?>" 
                                      class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
                                 
