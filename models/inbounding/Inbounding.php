@@ -315,10 +315,10 @@ class Inbounding {
         // Execute and return result
         return $stmt->execute();
     }
-    public function get_temp_code($item_id){
-        $result = $this->conn->query("SELECT temp_code FROM `vp_inbound` WHERE id = $item_id");
+    public function get_item_code($item_id){
+        $result = $this->conn->query("SELECT Item_code FROM `vp_inbound` WHERE id = $item_id");
         $id = intval($item_id);
-        $sql = "SELECT temp_code FROM vp_inbound WHERE id = $id";
+        $sql = "SELECT Item_code FROM vp_inbound WHERE id = $id";
         $result = $this->conn->query($sql);
         if ($result && $result->num_rows > 0) {
             return $result->fetch_assoc();
@@ -726,18 +726,29 @@ public function update_image_variation($img_id, $variation_id) {
         return ''; // Return empty if not found
     }
 
-    // In InboundingModel.php
-    public function getLastItemCodeGlobal() {
-        // We do NOT use "WHERE item_code LIKE...". 
-        // We want the last code from the WHOLE table.
-        $sql = "SELECT item_code FROM vp_inbound where is_variant = 'N' ORDER BY id DESC LIMIT 1";
+    public function getLastItemCode($prefix) {
+        // 1. Corrected $this->db to $this->conn
+        // 2. Kept the REGEXP to ignore old 2-digit item codes
+        $sql = "SELECT item_code FROM vp_inbound 
+                WHERE item_code LIKE ? 
+                AND item_code REGEXP '^[A-Z][A-Z]{2}[0-9]{3}$'
+                ORDER BY item_code DESC LIMIT 1";
+                
+        $stmt = $this->conn->prepare($sql); 
         
-        $result = $this->conn->query($sql);
-        
-        if ($row = $result->fetch_assoc()) {
-            return $row['item_code'];
+        if (!$stmt) {
+            // Log error if prepare fails
+            error_log("Prepare failed: " . $this->conn->error);
+            return null;
         }
-        return null; 
+
+        $search = $prefix . '%';
+        $stmt->bind_param("s", $search);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        return $row ? $row['item_code'] : null;
     }
     public function checkItemCodeExists($code) {
         $sql = "SELECT id FROM vp_inbound WHERE Item_code = '" . $this->conn->real_escape_string($code) . "'";
@@ -785,34 +796,6 @@ public function update_image_variation($img_id, $variation_id) {
         return $result->fetch_assoc();
     }
 
-    // 3. Generate Incremental Temp Code
-    public function generateNextTempCode($prefix) {
-        // Search for codes like 'BSB%'
-        // Order by length first (to sort 10 after 9), then value DESC
-        $sql = "SELECT temp_code FROM vp_inbound 
-                WHERE temp_code LIKE '$prefix%' 
-                AND temp_code REGEXP '^{$prefix}[0-9]+$' 
-                ORDER BY LENGTH(temp_code) DESC, temp_code DESC LIMIT 1";
-                
-        $result = $this->conn->query($sql);
-        
-        if ($result && $result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            $lastCode = $row['temp_code'];
-            
-            // Extract number (Remove prefix)
-            $numberStr = substr($lastCode, 3); 
-            $number = (int)$numberStr;
-            $nextNumber = $number + 1;
-        } else {
-            // No existing code found, start at 1
-            $nextNumber = 1;
-        }
-
-        // Pad with zeros (e.g., 1 -> 001)
-        return $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
-    }
-
     // 1. UPDATE MAIN TABLE (Includes Variant 1 Data)
     public function updateMainInbound($id, $data) {
         // 1. Prepare Variables with correct casting
@@ -853,23 +836,32 @@ public function update_image_variation($img_id, $variation_id) {
         // 3. Correct Bind Param Types
         // s = string, d = double (float), i = integer
         // String map: sssss dddd ss d i i sss d d s i
+        $types = "ssssssddddssdissssddsi";
+
         $stmt->bind_param(
-          'ssssssddddssdiisssddsi',
-          $feedback,
-          $Item_code,
-          $is_variant,
-          $data['gate_entry_date_time'],
-          $data['material_code'],
-          $data['group_name'],
-          $height,$width,$depth,
-          $weight,$color,$size,
-          $cp,$qty,
-          $data['received_by_user_id'],
-          $data['temp_code'],   
-          $photo,$wh,$p_ind,
-          $p_mrp,
-          $colormaps,
-          $id
+            $types,
+            $feedback,            // 1
+            $Item_code,           // 2
+            $is_variant,          // 3
+            $data['gate_entry_date_time'], // 4
+            $data['material_code'], // 5
+            $data['group_name'],    // 6
+            $height,              // 7
+            $width,               // 8
+            $depth,               // 9
+            $weight,              // 10
+            $color,               // 11
+            $size,                // 12
+            $cp,                  // 13
+            $qty,                 // 14
+            $data['received_by_user_id'], // 15
+            $temp_code,           // 16 (WAS MISSING)
+            $photo,               // 17
+            $wh,                  // 18
+            $p_ind,               // 19
+            $p_mrp,               // 20
+            $colormaps,           // 21
+            $id                   // 22
         );
 
         if ($stmt->execute()) {
@@ -880,106 +872,81 @@ public function update_image_variation($img_id, $variation_id) {
       }
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
-    public function saveVariations($it_id, $variations, $temp_code) {
-        // 1. Filter out IDs to Keep
-        // We strictly check for existing DB IDs to know what NOT to delete.
+    public function saveVariations($it_id, $variations) {
         $submittedIds = [];
-        
-        // Ensure variations is an array (in case it was empty/null from controller)
-        if (!is_array($variations)) {
-            $variations = [];
-        }
+        if (!is_array($variations)) { $variations = []; }
 
         foreach ($variations as $key => $var) {
-            // STRICT CHECK: Use === to ensure string keys like "new_0" don't trigger this
             if ($key === 0) continue; 
-            
-            // If the variation has a numeric ID, we keep it.
             if (!empty($var['id']) && is_numeric($var['id'])) {
                 $submittedIds[] = (int)$var['id'];
             }
         }
 
-        // 2. DELETE old variations
-        // Logic: If we have submitted IDs, delete everything EXCEPT those.
-        // If we have NO submitted IDs, delete EVERYTHING for this item.
-         $safe_it_id = (int)$it_id;
+        $safe_it_id = (int)$it_id;
         if (!empty($submittedIds)) {
             $idsStr = implode(',', $submittedIds);
-            
-            $sqlImg = "DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id NOT IN ($idsStr) AND variation_id > 0";
-            $this->conn->query($sqlImg);
-
-            // Then Delete the Variations
-            $sqlVar = "DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)";
-            $this->conn->query($sqlVar);
-
+            $this->conn->query("DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id NOT IN ($idsStr) AND variation_id > 0");
+            $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)");
         } else {
-            // Case: User deleted ALL variations
-            
-            // --- NEW: Delete All Variation Images ---
             $this->conn->query("DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id > 0");
-            
-            // Delete All Variations
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
         }
 
-        // 3. INSERT & UPDATE QUERIES
+        // --- FIX 1: Column Count vs Value Count ---
+        // Listed columns: 19 | Question marks: 19
         $insertSql = "INSERT INTO vp_variations 
-                      (it_id, temp_code, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                      (it_id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
+        // Listed SET columns: 18 | WHERE id: 1 | Total ?: 19
         $updateSql = "UPDATE vp_variations 
-                      SET temp_code=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=?
+                      SET color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=?
                       WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
         $stmtUpdate = $this->conn->prepare($updateSql);
 
         foreach ($variations as $key => $var) {
-            if ($key === 0) continue; // Strict check here too
+            if ($key === 0) continue;
 
             $id = $var['id'] ?? '';
             $img = $var['photo'] ?? '';
             
-            // Defaults
-            $h = !empty($var['height']) ? $var['height'] : 0.00;
-            $w = !empty($var['width']) ? $var['width'] : 0.00;
-            $d = !empty($var['depth']) ? $var['depth'] : 0.00;
-            $wt = !empty($var['weight']) ? $var['weight'] : 0.00;
-            
-            $wh = !empty($var['store_location']) ? (string)$var['store_location'] : '';
-            $qty = !empty($var['quantity']) ? (int)$var['quantity'] : 0;
-            
-            $pi = !empty($var['price_india']) ? (float)$var['price_india'] : 0.00;
-            $pm = !empty($var['price_india_mrp']) ? (float)$var['price_india_mrp'] : 0.00;
-            $inr = !empty($var['inr_pricing']) ? (float)$var['inr_pricing'] : 0.00;
-            $amz = !empty($var['amazon_price']) ? (float)$var['amazon_price'] : 0.00;
-            $usd = !empty($var['usd_price']) ? (float)$var['usd_price'] : 0.00;
-            
-            $hsn = !empty($var['hsn_code']) ? $var['hsn_code'] : '';
-            $gst = !empty($var['gst_rate']) ? (int)$var['gst_rate'] : 0;
-            $colm = !empty($var['colormaps']) ? $var['colormaps'] : '';
+            // Data Formatting
+            $h   = (float)(!empty($var['height']) ? $var['height'] : 0);
+            $w   = (float)(!empty($var['width']) ? $var['width'] : 0);
+            $d   = (float)(!empty($var['depth']) ? $var['depth'] : 0);
+            $wt  = (float)(!empty($var['weight']) ? $var['weight'] : 0);
+            $wh  = (string)(!empty($var['store_location']) ? $var['store_location'] : '');
+            $qty = (int)(!empty($var['quantity']) ? $var['quantity'] : 0);
+            $cp  = (float)(!empty($var['cp']) ? $var['cp'] : 0);
+            $pi  = (float)(!empty($var['price_india']) ? $var['price_india'] : 0);
+            $pm  = (float)(!empty($var['price_india_mrp']) ? $var['price_india_mrp'] : 0);
+            $inr = (float)(!empty($var['inr_pricing']) ? $var['inr_pricing'] : 0);
+            $amz = (float)(!empty($var['amazon_price']) ? $var['amazon_price'] : 0);
+            $usd = (float)(!empty($var['usd_price']) ? $var['usd_price'] : 0);
+            $hsn = (string)(!empty($var['hsn_code']) ? $var['hsn_code'] : '');
+            $gst = (int)(!empty($var['gst_rate']) ? $var['gst_rate'] : 0);
+            $colm = (string)(!empty($var['colormaps']) ? $var['colormaps'] : '');
 
-            // Check if ID exists AND is numeric to decide Update vs Insert
             if (!empty($id) && is_numeric($id)) {
-                // UPDATE
-                $stmtUpdate->bind_param("sssidsddddsdddddsisi", 
-                    $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
+                // UPDATE: ssids dddd s ddddd s i s i (19 parameters)
+                // types: color(s), size(s), qty(i), cp(d), img(s), h(d), w(d), d(d), wt(d), wh(s), pi(d), pm(d), inr(d), amz(d), usd(d), hsn(s), gst(i), colm(s), id(i)
+                $stmtUpdate->bind_param("ssidsddddsdddddsisi", 
+                    $var['color'], $var['size'], $qty, $cp, $img, 
                     $h, $w, $d, $wt, 
-                    $wh, 
-                    $pi, $pm, $inr, $amz, $usd, 
-                    $hsn, $gst, $colm,
-                    $id
+                    $wh, $pi, $pm, $inr, $amz, $usd, 
+                    $hsn, $gst, $colm, $id
                 );
                 $stmtUpdate->execute();
             } else {
-                // INSERT
-                $stmtInsert->bind_param("isssidsddddsdddddsis", 
-                    $it_id, $temp_code, $var['color'], $var['size'], $qty, $var['cp'], $img, 
+                // INSERT: i ssids dddd s ddddd s i s (19 parameters)
+                // types: it_id(i), color(s), size(s), qty(i), cp(d), img(s), h(d), w(d), d(d), wt(d), wh(s), pi(d), pm(d), inr(d), amz(d), usd(d), hsn(s), gst(i), colm(s)
+                $stmtInsert->bind_param("issidsddddsdddddsis", 
+                    $it_id, $var['color'], $var['size'], $qty, $cp, $img, 
                     $h, $w, $d, $wt, 
-                    $wh, 
-                    $pi, $pm, $inr, $amz, $usd, 
+                    $wh, $pi, $pm, $inr, $amz, $usd, 
                     $hsn, $gst, $colm
                 );
                 $stmtInsert->execute();
