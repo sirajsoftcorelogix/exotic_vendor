@@ -7,7 +7,6 @@ if (isset($variations) && !empty($variations)) {
         $key++;    
         $label_data[$key] = $value;
         $label_data[$key]['product_photo'] = $value['variation_image'];
-        $label_data[$key]['temp_code'] = $label_data[0]['temp_code'];
         $label_data[$key]['Item_code'] = $label_data[0]['Item_code'];
         $label_data[$key]['material_name'] = $label_data[0]['material_name'];
         $label_data[$key]['vendor_name'] = $label_data[0]['vendor_name'];
@@ -95,7 +94,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
             // 2. Prepare Data Variables
             $thisPhotoUrl = base_url(safe($current_label['product_photo'] ?? 'assets/images/placeholder.png'));
-            $itemCode = safe($current_label['Item_code'] ?? $current_label['temp_code']);
+            $itemCode = $current_label['Item_code'];
             
             $w = safeInt($current_label['width']);
             $h = safeInt($current_label['height']);

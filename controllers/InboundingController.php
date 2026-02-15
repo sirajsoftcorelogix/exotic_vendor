@@ -590,7 +590,7 @@ class InboundingController {
         
         // 1. Get images from DB
         $images = $inboundingModel->get_raw_item_imgs($id);
-        $item_code = $inboundingModel->get_temp_code($id);
+        $item_code = $inboundingModel->get_item_code($id);
         if(empty($images)) {
             echo "<script>alert('No images found for this item.'); history.back();</script>";
             exit;
@@ -598,7 +598,7 @@ class InboundingController {
 
         // 2. Setup Zip
         $zip = new ZipArchive();
-        $zipName = "Item_{$item_code['temp_code']}_Photos_" . date('Ymd_His') . ".zip";
+        $zipName = "Item_{$item_code['Item_code']}_Photos_" . date('Ymd_His') . ".zip";
         $tmp_file = sys_get_temp_dir() . '/' . $zipName;
 
         if ($zip->open($tmp_file, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
@@ -927,80 +927,16 @@ class InboundingController {
 
         // 1. Capture Inputs
         $is_variant = $_POST['is_variant'] ?? '';
-        $item_code = $_POST['Item_code'] ?? ''; 
 
-        // 2. Fetch Old Data
-        $old_group_val = trim((string)($oldData['form1']['group_name'] ?? ''));
-        $old_cat_val   = trim((string)($oldData['form1']['category_code'] ?? ''));
-        // 3. Fetch New Data from Post
-        $new_group_val = trim((string)($_POST['group_name'] ?? ''));
-        $raw_cat       = $_POST['category_code'] ?? 0;
-        // $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
-        $new_cat_val   = implode(',', $raw_cat);
-
-        // --- DEBUGGING LINE: Remove // from the line below to see why it fails ---
-        // die("Old Group: $old_group_val | New Group: $new_group_val <br> Old Cat: $old_cat_val | New Cat: $new_cat_val");
-
-        // 4. LOGIC: Should we reset the item code?
-        $shouldRegenerate = false;
-
-        // If it's a parent record...
-        if ($is_variant === 'N') {
-            // If Item Code is totally empty
-            if (empty($item_code)) {
-                $shouldRegenerate = true;
-            } 
-            // OR if Group has changed (and isn't empty)
-            if ($new_group_val !== $old_group_val) {
-                $shouldRegenerate = true;
+        if ($oldData['form1']['is_variant'] == 'Y') {
+            if ($_POST['is_variant'] != $oldData['form1']['is_variant']) {
+                $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name']));
+                $item_code = $this->generateItemcode($group_real_name);
+            }else{
+                $item_code = $_POST['Item_code'] ?? '';
             }
-            // OR if Category has changed (and isn't empty)
-            if ($new_cat_val !== $old_cat_val) {
-                $shouldRegenerate = true;
-            }
-        }
-
-        // 5. THE GENERATOR
-        if ($shouldRegenerate) {
-            // We clear item_code to force the loop to create a new one
-            $item_code = ''; 
-
-            $group_real_name = trim($inboundingModel->getGroupNameByCode($new_group_val));
-            $cat_real_name   = trim($inboundingModel->getCategoryName($new_cat_val));
-            
-            $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-            $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1))   : 'X';
-            $current_prefix = $char1 . $char2;
-
-            $last_code = $inboundingModel->getLastItemCodeGlobal();
-            
-            // INCREMENT LOGIC
-            if (empty($last_code)) {
-                $letters = 'AA'; $number = 0;
-            } else {
-                $last_sequence = substr($last_code, 2); 
-                if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
-                    $letters = $matches[1]; 
-                    $number = intval($matches[2]);
-                } else {
-                    $letters = 'AA'; $number = 0;
-                }
-            }
-
-            $attempts = 0;
-            do {
-                $attempts++;
-                if ($number < 99) { $number++; } else { $number = 1; $letters++; }
-                
-                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
-                $candidate_code = $current_prefix . $new_seq;
-                
-                if (!$inboundingModel->checkItemCodeExists($candidate_code)) {
-                    $item_code = $candidate_code;
-                    $shouldRename = true;
-                    break; 
-                }
-            } while ($attempts < 100000);
+        }else{
+            $item_code = $_POST['Item_code'] ?? '';         
         }
         if (!empty($item_code)) {
             $shouldRename = true; 
@@ -1099,7 +1035,7 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
-            'marketplace'         => $_POST['marketplace'] ?? '',
+            'marketplace'         => $_POST['marketplace'] ?? ' ',
             'india_net_qty'       => $_POST['india_net_qty'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
@@ -1188,13 +1124,41 @@ class InboundingController {
             echo "Update failed: " . $result['message'];
         }
     }
+    private function generateItemcode($group_real_name) {
+        global $inboundingModel;
+        $prefix = strtoupper(substr($group_real_name, 0, 1));
+        $last_code = $inboundingModel->getLastItemCode($prefix);
+        if (!$last_code) {
+            return $prefix . "AA001";
+        }
+        $chars = substr($last_code, 1, 2); // Extracts "AA"
+        $num = (int)substr($last_code, 3); // Extracts 999
+        $num++;
+        if ($num > 999) {
+            $num = 1;
+            $chars++; 
+            if (strlen($chars) > 2) {
+                die("Error: Maximum item code limit reached for prefix $prefix");
+            }
+        }
+        return $prefix . $chars . str_pad($num, 3, '0', STR_PAD_LEFT);
+    }
     public function submitStep3() {
         global $inboundingModel;
-
         // 1. Basic Setup
         $record_id = $_POST['record_id'] ?? '';
         if (empty($record_id)) { echo "Record ID missing"; exit; }
 
+        // Use existing code if it's a variant, otherwise generate a new one
+        if ($_POST['is_variant']== 'Y') {
+            $item_code = $_POST['Item_code'];
+        } else {
+            // Get group name to determine the first letter
+            $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['category']));
+            $item_code = $this->generateItemcode($group_real_name);
+        }
+
+        // i want to genrate item_code here
         // 2. Process Variations
         $allVariations = array_values($_POST['variations'] ?? []);
         foreach ($allVariations as $index => &$variant) {
@@ -1229,27 +1193,6 @@ class InboundingController {
 
         // 4. TEMP CODE LOGIC (Same as before)
         $existingData = $inboundingModel->getById($record_id);
-        if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
-          $temp_code = $existingData['temp_code'];
-        } else {
-          $categoryName = '';
-          if (!empty($existingData['group_name'])) {
-            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
-            $categoryName = $catData['display_name'] ?? '';
-          }
-          $materialId = $_POST['material_code'] ?? '';
-          $materialName = '';
-          if (!empty($materialId)) {
-            $matData = $inboundingModel->getMaterialById($materialId);
-            $materialName = $matData['material_name'] ?? '';
-          }
-          $colorName = $mainVariant['color'] ?? '';
-          $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
-          $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
-          $char3 = !empty($colorName)  ? strtoupper(substr($colorName, 0, 1))  : 'X';
-          $prefix = $char1 . $char2 . $char3;
-          $temp_code = $inboundingModel->generateNextTempCode($prefix);
-        }
 
         // 5. PREPARE MAIN UPDATE DATA
         // FIX: Mapping HTML inputs to exact DB Column names here
@@ -1259,10 +1202,9 @@ class InboundingController {
           'material_code'    => $_POST['material_code'] ?? '',
           'group_name'     => $_POST['category'] ?? '',
           'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
-          'Item_code'      => $_POST['Item_code'] ?? '',
+          'Item_code'      => $item_code ?? '',
           'is_variant'      => $_POST['is_variant'] ?? '',
           'feedback'      => $_POST['feedback'] ?? '',
-          'temp_code'      => $temp_code,
          
           // Map Index 0 Data to DB Columns
           'height'       => $mainVariant['height'] ?? 0,
@@ -1291,7 +1233,7 @@ class InboundingController {
           }
 
           // Save extra variations
-          $inboundingModel->saveVariations($record_id, $allVariations, $temp_code);
+          $inboundingModel->saveVariations($record_id, $allVariations);
          
           header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
           exit;
@@ -1611,7 +1553,7 @@ class InboundingController {
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
