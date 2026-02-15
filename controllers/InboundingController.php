@@ -1,5 +1,6 @@
  <?php
 require_once 'models/inbounding/Inbounding.php';
+require_once 'controllers/ProductsController.php';
 
 $inboundingModel = new Inbounding($conn);
 
@@ -1024,7 +1025,7 @@ class InboundingController {
             'price_india'         => $_POST['price_india'] ?? '',
             'usd_price'             => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
-            'gst_rate'            => $_POST['gst_rate'] ?? '',
+            'gst_rate'            => $_POST['gst_rate'] ?? '0',
             'height'              => $_POST['height'] ?? '',
             'width'               => $_POST['width'] ?? '',
             'depth'               => $_POST['depth'] ?? '',
@@ -1126,22 +1127,22 @@ class InboundingController {
     }
     private function generateItemcode($group_real_name) {
         global $inboundingModel;
-        $prefix = strtoupper(substr($group_real_name, 0, 1));
+        $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
         $last_code = $inboundingModel->getLastItemCode($prefix);
         if (!$last_code) {
-            return $prefix . "AA001";
+            return $prefix . "AA0001";
         }
         $chars = substr($last_code, 1, 2); // Extracts "AA"
-        $num = (int)substr($last_code, 3); // Extracts 999
+        $num = (int)substr($last_code, 3); // Extracts the numeric part (0001 onwards)
         $num++;
-        if ($num > 999) {
+        if ($num > 9999) {
             $num = 1;
-            $chars++; 
+            $chars++; // Increment letters (e.g., AA -> AB)
             if (strlen($chars) > 2) {
                 die("Error: Maximum item code limit reached for prefix $prefix");
             }
         }
-        return $prefix . $chars . str_pad($num, 3, '0', STR_PAD_LEFT);
+        return $prefix . $chars . str_pad((string)$num, 4, '0', STR_PAD_LEFT);
     }
     public function submitStep3() {
         global $inboundingModel;
@@ -1383,8 +1384,11 @@ class InboundingController {
         $API_data['date_first_added'] = date("Y-m-d", strtotime($data['data']['gate_entry_date_time']));
         $API_data['search_term'] = $data['data']['search_term'];
         $raw_string = $data['data']['search_category_string'];
-        if (trim($raw_string, '|') !== '') {
-            $API_data['search_category'] = ltrim($raw_string, '|');            
+        // if (trim($raw_string, '|') !== '') {
+        //     $API_data['search_category'] = ltrim($raw_string, '|');            
+        // }
+        if (trim($raw_string ?? '', '|') !== '') {
+            $API_data['search_category'] = ltrim($raw_string ?? '', '|');            
         }
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
@@ -1549,11 +1553,11 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
-        echo "<pre>";print_r($jsonString);
+        // echo "<pre>";print_r($jsonString);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
@@ -1591,8 +1595,7 @@ class InboundingController {
         ]);
 
         $response = curl_exec($ch);
-        
-        // echo "<pre>";print_r($response);
+        $result = json_decode($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
@@ -1611,14 +1614,16 @@ class InboundingController {
         }
 
         header('Content-Type: application/json');
-
-        if (empty($response) || trim($response) === '') {
+        if (isset($result) && $result->status == 'success') {
+            $ProductsController = new ProductsController();
+            $itemCode = $data['data']['Item_code'];
+            $import_response = $ProductsController->importApiCall([$itemCode]);
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            echo $response; 
+            echo $result; 
         }
         exit;
     }
