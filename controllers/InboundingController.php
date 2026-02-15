@@ -1384,8 +1384,11 @@ class InboundingController {
         $API_data['date_first_added'] = date("Y-m-d", strtotime($data['data']['gate_entry_date_time']));
         $API_data['search_term'] = $data['data']['search_term'];
         $raw_string = $data['data']['search_category_string'];
-        if (trim($raw_string, '|') !== '') {
-            $API_data['search_category'] = ltrim($raw_string, '|');            
+        // if (trim($raw_string, '|') !== '') {
+        //     $API_data['search_category'] = ltrim($raw_string, '|');            
+        // }
+        if (trim($raw_string ?? '', '|') !== '') {
+            $API_data['search_category'] = ltrim($raw_string ?? '', '|');            
         }
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
