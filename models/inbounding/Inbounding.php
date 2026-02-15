@@ -727,17 +727,15 @@ public function update_image_variation($img_id, $variation_id) {
     }
 
     public function getLastItemCode($prefix) {
-        // 1. Corrected $this->db to $this->conn
-        // 2. Kept the REGEXP to ignore old 2-digit item codes
+        // UPDATED REGEXP: [0-9]{4}$ ensures we look for codes with exactly 4 digits at the end
         $sql = "SELECT item_code FROM vp_inbound 
                 WHERE item_code LIKE ? 
-                AND item_code REGEXP '^[A-Z][A-Z]{2}[0-9]{3}$'
+                AND item_code REGEXP '^[A-Z][A-Z]{2}[0-9]{4}$'
                 ORDER BY item_code DESC LIMIT 1";
                 
         $stmt = $this->conn->prepare($sql); 
         
         if (!$stmt) {
-            // Log error if prepare fails
             error_log("Prepare failed: " . $this->conn->error);
             return null;
         }
