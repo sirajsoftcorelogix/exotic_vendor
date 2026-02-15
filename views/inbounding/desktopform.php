@@ -2454,12 +2454,12 @@ document.addEventListener('DOMContentLoaded', function() {
         let d = parseFloat(dInput.value) || 0;
         let actualWt = parseFloat(wtInput.value) || 0;
         // Logic: Add 4 inches buffer + Volumetric Divisor 5000
-         h = h / 2.54;
-         w = w / 2.54;
-         d = d / 2.54;
-        let h_in = h + 4;
-        let w_in = w + 4;
-        let d_in = d + 4;
+         h = h + 4;
+         w = w + 4;
+         d = d + 4;
+        let h_in = h / 2.54;
+        let w_in = w / 2.54;
+        let d_in = d / 2.54;
         // Volumetric Weight
         const volWt = (h_in * w_in * d_in) / 5000;
         // Chargeable Weight = Max(Volumetric, Actual * 1.5)
