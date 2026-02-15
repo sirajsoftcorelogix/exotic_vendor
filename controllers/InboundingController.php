@@ -1025,7 +1025,7 @@ class InboundingController {
             'price_india'         => $_POST['price_india'] ?? '',
             'usd_price'             => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
-            'gst_rate'            => $_POST['gst_rate'] ?? '',
+            'gst_rate'            => $_POST['gst_rate'] ?? '0',
             'height'              => $_POST['height'] ?? '',
             'width'               => $_POST['width'] ?? '',
             'depth'               => $_POST['depth'] ?? '',
