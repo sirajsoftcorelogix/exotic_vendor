@@ -350,15 +350,13 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                      value="<?php echo (isset($var['quantity']) && $var['quantity'] !== '' && $var['quantity'] != 0) ? $var['quantity'] : 1; ?>" 
                                      class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
-                                
-                                <div class="size-container">
-                                    <label class="block text-xs font-bold text-black mb-1">Size:</label>
-                                    <?php echo renderSizeField($index, $var['size'], $saved_category_code, $sizeOptions); ?>
-                                </div>
-
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Cost Price(INR):</label>
                                     <input type="number" step="any" min="0" name="variations[<?php echo $index; ?>][cp]" value="<?php echo $var['cp']; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div class="size-container">
+                                    <label class="block text-xs font-bold text-black mb-1">Size:</label>
+                                    <?php echo renderSizeField($index, $var['size'], $saved_category_code, $sizeOptions); ?>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
