@@ -2099,9 +2099,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
         // if (dimUnit === 'cm') {
-             h = h / 2.54;
-             w = w / 2.54;
-             d = d / 2.54;
+             h = h * 2.54;
+             w = w * 2.54;
+             d = d * 2.54;
         // }
         // --- STEP B: ADD BUFFER (4 inches) ---
         let h_in = h;
