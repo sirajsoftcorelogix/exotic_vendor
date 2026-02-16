@@ -118,6 +118,8 @@ $mainVar = [
     'depth'           => $form2['depth'] ?? '',
     'weight'          => $form2['weight'] ?? '',
     'store_location'  => $form2['store_location'] ?? '',
+    'hsn_code'        => $form2['hsn_code'] ?? '',
+    'gst_rate'        => $form2['gst_rate'] ?? 0,
     'colormaps'       => $form2['colormaps'] ?? '',
 ];
 
@@ -140,6 +142,8 @@ foreach ($extraVars as $ex) {
         'depth'           => $ex['depth'] ?? '',
         'weight'          => $ex['weight'] ?? '',
         'store_location'  => $ex['store_location'] ?? '',
+        'hsn_code'        => $ex['hsn_code'] ?? '',
+        'gst_rate'        => $ex['gst_rate'] ?? 0,
         'colormaps'       => $ex['colormaps'] ?? '',
     ];
 }
@@ -375,6 +379,14 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Location:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][store_location]" value="<?php echo $var['store_location'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">HSN Code:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][hsn_code]" value="<?php echo $var['hsn_code'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">GST:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][gst_rate]" value="<?php echo $var['gst_rate'] ?? 0; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
 
                                 <div>
@@ -653,6 +665,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">HSN Code <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][hsn_code]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">GST: <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][gst_rate]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                         </div>
                     </div>
                 </div>
@@ -692,6 +706,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     depth: getData('depth'),
                     weight: getData('weight'),
                     store_location: getData('store_location'),
+                    hsn_code: getData('hsn_code'),
+                    gst_rate: getData('gst_rate'),
                     old_photo: getData('old_photo') 
                 };
 
@@ -719,6 +735,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     setData('depth', data.depth);
                     setData('weight', data.weight);
                     setData('store_location', data.store_location);
+                    setData('hsn_code', data.hsn_code);
+                    setData('gst_rate', data.gst_rate);
                     setData('old_photo', data.old_photo); 
                     
                     // --- SPECIFIC CLONE LOGIC FOR COLOR MAP ---

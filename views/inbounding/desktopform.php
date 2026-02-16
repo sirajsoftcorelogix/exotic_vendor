@@ -337,8 +337,12 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-[#222] mb-1 pt-[10px]">Enter Remarks:</label>
-                    <input type="text" id="feedback" name="feedback" 
-                           value="<?= htmlspecialchars($data['form2']['feedback'] ?? '') ?>" autocomplete="off" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                    <textarea 
+                        id="feedback" 
+                        name="feedback" 
+                        autocomplete="off" 
+                        class="w-full min-h-[100px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?= htmlspecialchars($data['form2']['feedback'] ?? '') ?></textarea>
                 </div>
             </fieldset>
         </div>
@@ -471,8 +475,14 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>" name="gst_rate">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? 0) ?>" name="gst_rate">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Dimensions:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['dimensions'] ?? '') ?>" name="dimensions">
                         </div>
                     </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
@@ -592,7 +602,8 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 </div>
                             </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['hsn_code'] ?? '') ?>" name="variations[<?= $var['id'] ?>][hsn_code]"></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? 0) ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Dimensions:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['dimensions'] ?? '') ?>" name="variations[<?= $var['id'] ?>][dimensions]"></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                             
                             <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
@@ -702,6 +713,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Dimensions:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][dimensions]"></div></div>
                 <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
                     <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
                     <select name="variations[INDEX][colormaps]" class="colormap-select w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">
@@ -1046,18 +1058,22 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
-                    <input type="text" id="keywords_input" 
-                           class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                           value="<?= htmlspecialchars($data['form2']['key_words'] ?? '') ?>" 
-                           name="key_words"
-                           placeholder="Type keyword and press Enter or Comma...">
+                    <textarea 
+                        id="keywords_input" 
+                        name="key_words"
+                        placeholder="Type keyword and press Enter or Comma..."
+                        class="w-full min-h-[60px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?= htmlspecialchars($data['form2']['key_words'] ?? '') ?></textarea>
+                    
                     <div class="text-[10px] text-gray-500 mt-1">
                         Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
                     </div>
                 </div>
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
-                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name="snippet_description">
+                    <textarea 
+                        class="w-full min-h-[80px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y" 
+                        name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
                 </div>
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
@@ -1327,16 +1343,6 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
             </fieldset>
         </div>
-        <!-- <div class="mt-[15px] md:mx-5">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Remarks</legend>
-                <div>
-                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Remarks:</label>
-                    <input type="text" id="feedback" name="feedback" 
-                           value="<?= htmlspecialchars($data['form2']['feedback'] ?? '') ?>" autocomplete="off" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                </div>
-            </fieldset>
-        </div> -->
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
             <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
                 <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
@@ -2099,9 +2105,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
         // if (dimUnit === 'cm') {
-             h = h / 2.54;
-             w = w / 2.54;
-             d = d / 2.54;
+             h = h * 2.54;
+             w = w * 2.54;
+             d = d * 2.54;
         // }
         // --- STEP B: ADD BUFFER (4 inches) ---
         let h_in = h;
