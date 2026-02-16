@@ -807,8 +807,10 @@ public function update_image_variation($img_id, $variation_id) {
         $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
         $Item_code = $data['Item_code'] ?? '';
         $feedback = $data['feedback'] ?? '';
+        $hsn_code = $data['hsn_code'] ?? '';
        
         $qty    = (int) ($data['quantity_received'] ?? 0);
+        $gst_rate    = (int) ($data['gst_rate'] ?? 0);
         $cp    = (float) ($data['cp'] ?? 0);
         $photo   = $data['product_photo'] ?? '';
         $wh    = $data['store_location'] ?? '';
@@ -819,7 +821,7 @@ public function update_image_variation($img_id, $variation_id) {
 
         // 2. Correct SQL Syntax (Use column names, not PHP variables)
         $sql = "UPDATE vp_inbound
-            SET feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
+            SET gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, temp_code = ?, product_photo = ?,
@@ -834,10 +836,12 @@ public function update_image_variation($img_id, $variation_id) {
         // 3. Correct Bind Param Types
         // s = string, d = double (float), i = integer
         // String map: sssss dddd ss d i i sss d d s i
-        $types = "ssssssddddssdissssddsi";
+        $types = "isssssssddddssdissssddsi";
 
         $stmt->bind_param(
             $types,
+            $gst_rate,
+            $hsn_code,
             $feedback,            // 1
             $Item_code,           // 2
             $is_variant,          // 3
@@ -894,12 +898,12 @@ public function update_image_variation($img_id, $variation_id) {
         // --- FIX 1: Column Count vs Value Count ---
         // Listed columns: 19 | Question marks: 19
         $insertSql = "INSERT INTO vp_variations 
-                      (it_id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                      (it_id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps,dimensions) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
         
         // Listed SET columns: 18 | WHERE id: 1 | Total ?: 19
         $updateSql = "UPDATE vp_variations 
-                      SET color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=?
+                      SET color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=? ,dimensions =?
                       WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
@@ -927,25 +931,26 @@ public function update_image_variation($img_id, $variation_id) {
             $hsn = (string)(!empty($var['hsn_code']) ? $var['hsn_code'] : '');
             $gst = (int)(!empty($var['gst_rate']) ? $var['gst_rate'] : 0);
             $colm = (string)(!empty($var['colormaps']) ? $var['colormaps'] : '');
+            $dim = (string)(!empty($var['dimensions']) ? $var['dimensions'] : '');
 
             if (!empty($id) && is_numeric($id)) {
                 // UPDATE: ssids dddd s ddddd s i s i (19 parameters)
                 // types: color(s), size(s), qty(i), cp(d), img(s), h(d), w(d), d(d), wt(d), wh(s), pi(d), pm(d), inr(d), amz(d), usd(d), hsn(s), gst(i), colm(s), id(i)
-                $stmtUpdate->bind_param("ssidsddddsdddddsisi", 
+                $stmtUpdate->bind_param("ssidsddddsdddddsissi", 
                     $var['color'], $var['size'], $qty, $cp, $img, 
                     $h, $w, $d, $wt, 
                     $wh, $pi, $pm, $inr, $amz, $usd, 
-                    $hsn, $gst, $colm, $id
+                    $hsn, $gst, $colm,$dim ,$id
                 );
                 $stmtUpdate->execute();
             } else {
                 // INSERT: i ssids dddd s ddddd s i s (19 parameters)
                 // types: it_id(i), color(s), size(s), qty(i), cp(d), img(s), h(d), w(d), d(d), wt(d), wh(s), pi(d), pm(d), inr(d), amz(d), usd(d), hsn(s), gst(i), colm(s)
-                $stmtInsert->bind_param("issidsddddsdddddsis", 
+                $stmtInsert->bind_param("issidsddddsdddddsiss", 
                     $it_id, $var['color'], $var['size'], $qty, $cp, $img, 
                     $h, $w, $d, $wt, 
                     $wh, $pi, $pm, $inr, $amz, $usd, 
-                    $hsn, $gst, $colm
+                    $hsn, $gst, $colm,$dim
                 );
                 $stmtInsert->execute();
             }
@@ -955,8 +960,7 @@ public function update_image_variation($img_id, $variation_id) {
 
     public function getVariations($it_id) {
         // Added 'quantity_received as quantity' for HTML compatibility
-        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, 
-                inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps
+        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp,dimensions,inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps
                 FROM vp_variations WHERE it_id = ?";
                 
         $stmt = $this->conn->prepare($sql);
