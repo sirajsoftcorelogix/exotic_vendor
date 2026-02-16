@@ -7,8 +7,7 @@ require_once 'models/user/user.php';
 $usersModel = new User($conn);
 $currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
 unset($usersModel);
-$authors = $data['author'] ?? [];
-$publishers = $data['publiser'] ?? [];
+
 $record_id = $_GET['id'] ?? '';
 $form2 = $data['form2'] ?? []; 
 $saved_category_code = $form2['group_name'] ?? ''; 
@@ -119,14 +118,9 @@ $mainVar = [
     'depth'           => $form2['depth'] ?? '',
     'weight'          => $form2['weight'] ?? '',
     'store_location'  => $form2['store_location'] ?? '',
+    'hsn_code'        => $form2['hsn_code'] ?? '',
+    'gst_rate'        => $form2['gst_rate'] ?? 0,
     'colormaps'       => $form2['colormaps'] ?? '',
-    'author'    => $form2['author'] ?? '',
-    'author_name'    => $form2['author_name'] ?? '',
-    'publisher' => $form2['publisher'] ?? '',
-    'publisher_name' => $form2['publisher_name'] ?? '',
-    'isbn'      => $form2['isbn'] ?? '',
-    'language'  => $form2['language'] ?? '',
-    'pages'     => $form2['pages'] ?? '',
 ];
 
 global $inboundingModel;
@@ -148,6 +142,8 @@ foreach ($extraVars as $ex) {
         'depth'           => $ex['depth'] ?? '',
         'weight'          => $ex['weight'] ?? '',
         'store_location'  => $ex['store_location'] ?? '',
+        'hsn_code'        => $ex['hsn_code'] ?? '',
+        'gst_rate'        => $ex['gst_rate'] ?? '',
         'colormaps'       => $ex['colormaps'] ?? '',
     ];
 }
@@ -165,7 +161,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 <style>
     /* CSS to make TomSelect look like the other inputs */
-    .ts-dropdown { z-index: 9999 !important; }
     .ts-control {
         border: 1px solid #9ca3af; /* Matches border-gray-400 */
         border-radius: 0.25rem;
@@ -385,40 +380,13 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                     <label class="block text-xs font-bold text-black mb-1">Location:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][store_location]" value="<?php echo $var['store_location'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
-                                <div class="book-fields contents">
-                                    <div>
-                                        <label class="block text-xs font-bold text-black mb-1">Author:</label>
-                                        <select name="variations[<?php echo $index; ?>][author]" class="author-remote-select w-full">
-                                            <?php if(!empty($var['author'])): ?>
-                                                <option value="<?= $var['author'] ?>" selected>
-                                                    <?= htmlspecialchars($var['author_name'] ?? 'ID: ' . $var['author']) ?>
-                                                </option>
-                                            <?php endif; ?>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-xs font-bold text-black mb-1">Publisher:</label>
-                                        <select name="variations[<?php echo $index; ?>][publisher]" class="publisher-remote-select w-full">
-                                            <?php if(!empty($var['publisher'])): ?>
-                                                <option value="<?= $var['publisher'] ?>" selected>
-                                                    <?= htmlspecialchars($var['publisher_name'] ?? 'ID: ' . $var['publisher']) ?>
-                                                </option>
-                                            <?php endif; ?>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-black mb-1">ISBN:</label>
-                                        <input type="text" name="variations[<?php echo $index; ?>][isbn]" value="<?php echo $var['isbn'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-black mb-1">Language:</label>
-                                        <input type="text" name="variations[<?php echo $index; ?>][language]" value="<?php echo $var['language'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-black mb-1">Pages:</label>
-                                        <input type="number" name="variations[<?php echo $index; ?>][pages]" value="<?php echo $var['pages'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
-                                    </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">HSN Code:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][hsn_code]" value="<?php echo $var['hsn_code'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">GST:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][gst_rate]" value="<?php echo $var['gst_rate'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
 
                                 <div>
@@ -526,25 +494,24 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         // 2. HELPER: Detect Category Type
         function getCategoryType() {
             const selectedRadio = document.querySelector('input[name="category"]:checked');
-            let info = { isClothing: false, isBook: false, mapKey: null };
+            let info = { isClothing: false, mapKey: null };
 
             if (selectedRadio) {
                 const parentLabel = selectedRadio.closest('label');
                 const labelText = parentLabel ? parentLabel.innerText.toLowerCase().trim() : '';
                 const val = selectedRadio.value.toLowerCase().trim();
 
-                // Book Check
-                if (labelText.includes('book') || val.includes('book')) {
-                    info.isBook = true;
-                }
                 // Clothing Check
                 if (labelText.includes('textile') || labelText.includes('clothing') || val.includes('textile') || val.includes('clothing')) {
                     info.isClothing = true;
-                    info.mapKey = 'textiles';
                 }
-                // Jewelry Check
-                if (labelText.includes('jewelry') || val.includes('jewelry')) {
-                    info.mapKey = 'jewelry';
+
+                // Map Key Check
+                if (labelText.includes('textile') || labelText.includes('clothing') || val.includes('textile') || val.includes('clothing')) {
+                    info.mapKey = 'textiles'; 
+                } 
+                else if (labelText.includes('jewelry') || labelText.includes('jewellery') || val.includes('jewelry') || val.includes('jewellery')) {
+                    info.mapKey = 'jewelry'; 
                 }
             }
             return info;
@@ -635,52 +602,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         }
 
         function updateAllFields() {
-            const { isClothing, isBook } = getCategoryType();
-            const addVariationBtn = document.getElementById('add-variation-btn');
-            const cards = document.querySelectorAll('.variation-card');
-
-            // 1. Handle "Add Variation" Button
-            if (isBook) {
-                addVariationBtn.style.display = 'none';
-                // If it's a book, remove any variations beyond the first one
-                cards.forEach((card, idx) => {
-                    if (idx > 0) card.remove();
-                });
-                initSearchableDropdowns();
-            } else {
-                addVariationBtn.style.display = 'block';
-            }
-
-            // 2. Handle Fields visibility within cards
-            cards.forEach(card => {
-                const index = card.getAttribute('data-index');
-                
-                // Selectors for fields to hide/show
-                const physicalFields = [
-                    card.querySelector('input[name*="[color]"]')?.closest('div'),
-                    card.querySelector('.size-container'),
-                    // card.querySelector('input[name*="[height]"]')?.closest('div'),
-                    // card.querySelector('input[name*="[width]"]')?.closest('div'),
-                    // card.querySelector('input[name*="[depth]"]')?.closest('div'),
-                    card.querySelector('.colormap-wrapper')
-                ];
-
-                const bookFields = card.querySelectorAll('.book-fields > div');
-
-                if (isBook) {
-                    // Hide Dimensions/Color, Show Book details
-                    physicalFields.forEach(el => { if(el) el.style.display = 'none'; });
-                    bookFields.forEach(el => { if(el) el.style.display = 'block'; });
-                } else {
-                    // Show Dimensions/Color, Hide Book details
-                    physicalFields.forEach(el => { if(el) el.style.display = 'block'; });
-                    bookFields.forEach(el => { if(el) el.style.display = 'none'; });
-                    
-                    // Re-run the specific size/colormap logic for non-books
-                    toggleSizeFields(); 
-                    toggleColorMapFields();
-                }
-            });
+            toggleSizeFields();
+            toggleColorMapFields();
         }
 
         radioButtons.forEach(radio => {
@@ -690,14 +613,6 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         // 5. ADD NEW VARIATION
         function createVariationCardHTML(index, count) {
             const { isClothing } = getCategoryType();
-            const authorOptionsHTML = `
-                <option value="">Select Author</option>
-                <?php foreach ($authors as $auth) { echo '<option value="'.$auth['author_id'].'">'.addslashes($auth['author']).'</option>'; } ?>
-            `;
-            const publisherOptionsHTML = `
-                <option value="">Select Publisher</option>
-                <?php foreach ($publishers as $pub) { echo '<option value="'.$pub['publishers_id'].'">'.addslashes($pub['publishers']).'</option>'; } ?>
-            `;
 
             let sizeFieldHTML;
             if (isClothing) {
@@ -750,6 +665,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div><label class="block text-xs font-bold text-black mb-1">Depth (inch):</label><input type="number" step="any" min="0" name="variations[${index}][depth]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Weight (kg):</label><input type="number" step="any" min="0" name="variations[${index}][weight]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">HSN Code <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][hsn_code]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">GST: <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][gst_rate]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                         </div>
                     </div>
                 </div>
@@ -760,9 +677,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
             variationCount++;
             const html = createVariationCardHTML(variationCount - 1, variationCount);
             container.insertAdjacentHTML('beforeend', html);
-            setTimeout(() => {
-                initRemoteSelects(container.lastElementChild);
-            }, 100);
+            setTimeout(updateAllFields, 50);
         });
 
         // 6. EVENT DELEGATION
@@ -791,6 +706,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     depth: getData('depth'),
                     weight: getData('weight'),
                     store_location: getData('store_location'),
+                    hsn_code: getData('hsn_code'),
+                    gst_rate: getData('gst_rate'),
                     old_photo: getData('old_photo') 
                 };
 
@@ -818,6 +735,8 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     setData('depth', data.depth);
                     setData('weight', data.weight);
                     setData('store_location', data.store_location);
+                    setData('hsn_code', data.hsn_code);
+                    setData('gst_rate', data.gst_rate);
                     setData('old_photo', data.old_photo); 
                     
                     // --- SPECIFIC CLONE LOGIC FOR COLOR MAP ---
@@ -942,52 +861,4 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
         document.getElementById('imagePopup').classList.add('hidden');
         document.getElementById('popupImage').src = '';
     } 
-    function initSearchableDropdowns(container = document) {
-    container.querySelectorAll('.author-select, .publisher-select').forEach(el => {
-        if (!el.classList.contains('tomselected')) {
-            new TomSelect(el, {
-                create: false,
-                sortField: { field: "text", direction: "asc" },
-                placeholder: "Search..."
-            });
-        }
-    });
-}
-</script>
-<script>
-    function initRemoteSelects(container = document) {
-        container.querySelectorAll('.author-remote-select:not(.tomselected)').forEach(el => {
-            new TomSelect(el, {
-                valueField: 'author_id',
-                labelField: 'author',
-                searchField: 'author',
-                preload: true,
-                copyClassesToDropdown: true, 
-                load: function(query, callback) {
-                    fetch(`index.php?page=inbounding&action=getAuthorsJson&q=${encodeURIComponent(query)}`)
-                        .then(response => response.json())
-                        .then(json => callback(json))
-                        .catch(() => callback());
-                }
-            });
-        });
-
-        container.querySelectorAll('.publisher-remote-select:not(.tomselected)').forEach(el => {
-            new TomSelect(el, {
-                valueField: 'publishers_id',
-                labelField: 'publishers',
-                searchField: 'publishers',
-                preload: true,
-                load: function(query, callback) {
-                    fetch(`index.php?page=inbounding&action=getPublishersJson&q=${encodeURIComponent(query)}`)
-                        .then(response => response.json())
-                        .then(json => callback(json))
-                        .catch(() => callback());
-                }
-            });
-        });
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-        initRemoteSelects(); // Initial load
-    });
 </script>
