@@ -905,7 +905,6 @@ class InboundingController {
     }
     public function updatedesktopform() {
         global $inboundingModel;
-
         // 1. Setup & Checks
         $id = $_GET['id'] ?? 0;
         $oldData = $inboundingModel->getform1data($id);
@@ -1026,6 +1025,7 @@ class InboundingController {
             'usd_price'             => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
             'gst_rate'            => $_POST['gst_rate'] ?? '0',
+            'dimensions'          => $_POST['dimensions'] ?? '',
             'height'              => $_POST['height'] ?? '',
             'width'               => $_POST['width'] ?? '',
             'depth'               => $_POST['depth'] ?? '',
@@ -1133,7 +1133,7 @@ class InboundingController {
             return $prefix . "AA0001";
         }
         $chars = substr($last_code, 1, 2); // Extracts "AA"
-        $num = (int)substr($last_code, 3); // Extracts the numeric part (0001 onwards)
+        $num = (int)substr($last_code, 2); // Extracts the numeric part (0001 onwards)
         $num++;
         if ($num > 9999) {
             $num = 1;
@@ -1169,6 +1169,7 @@ class InboundingController {
           $variant['price_india_mrp'] = !empty($variant['price_india_mrp']) ? $variant['price_india_mrp'] : 0;
           $variant['usd_price']   = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
           $variant['quantity']    = !empty($variant['quantity']) ? $variant['quantity'] : 0;
+          $variant['hsn_code']    = !empty($variant['hsn_code']) ? $variant['hsn_code'] : '';
           // Handle File Uploads (Same as before)
           $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
           if ($uploadError === UPLOAD_ERR_OK) {
@@ -1219,6 +1220,8 @@ class InboundingController {
           'store_location'   => $mainVariant['store_location'] ?? '',
           'price_india'     => $mainVariant['price_india'] ?? '',
           'price_india_mrp'   => $mainVariant['price_india_mrp'] ?? '',
+          'hsn_code'   => $mainVariant['hsn_code'] ?? '',
+          'gst_rate'   => $mainVariant['gst_rate'] ?? 0,
 
           // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
           'quantity_received'  => $mainVariant['quantity'] ?? 0,
