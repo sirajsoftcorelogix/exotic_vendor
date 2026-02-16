@@ -1133,7 +1133,7 @@ class InboundingController {
             return $prefix . "AA0001";
         }
         $chars = substr($last_code, 1, 2); // Extracts "AA"
-        $num = (int)substr($last_code, 3); // Extracts the numeric part (0001 onwards)
+        $num = (int)substr($last_code, 2); // Extracts the numeric part (0001 onwards)
         $num++;
         if ($num > 9999) {
             $num = 1;
