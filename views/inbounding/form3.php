@@ -143,7 +143,7 @@ foreach ($extraVars as $ex) {
         'weight'          => $ex['weight'] ?? '',
         'store_location'  => $ex['store_location'] ?? '',
         'hsn_code'        => $ex['hsn_code'] ?? '',
-        'gst_rate'        => $ex['gst_rate'] ?? '',
+        'gst_rate'        => $ex['gst_rate'] ?? 0,
         'colormaps'       => $ex['colormaps'] ?? '',
     ];
 }
@@ -386,7 +386,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">GST:</label>
-                                    <input type="text" name="variations[<?php echo $index; ?>][gst_rate]" value="<?php echo $var['gst_rate'] ?? ''; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                    <input type="text" name="variations[<?php echo $index; ?>][gst_rate]" value="<?php echo $var['gst_rate'] ?? 0; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
 
                                 <div>
