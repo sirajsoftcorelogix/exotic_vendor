@@ -640,12 +640,14 @@ class OrdersController {
         $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
         if ($order_number > 0) {
             $order = $ordersModel->getOrderByOrderNumber($order_number);
+            $orderremarks = $ordersModel->getRemarksByOrderNumber($order_number);
+            $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($order_number);
             $statusList = $commanModel->get_order_status_list();
             if ($order) {
                 if ($type === 'inner')
                     renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
                 else
-                    renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList], 'Order Details');
+                    renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'customerdetails' => $customerdetails], 'Order Details');
             } else {
                 echo '<p>Order details not found.</p>';
             }

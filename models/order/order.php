@@ -759,6 +759,38 @@ class Order{
         }
         return null;
     }
+    function getRemarksByOrderNumber($order_number) {
+        $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    function getCustomerNameAndEmailByOrderNumber($order_number) {
+        $sql = "
+            SELECT 
+                c.name  AS customer_name,
+                c.phone AS customer_phone,
+                c.email AS customer_email
+            FROM vp_order_info o
+            LEFT JOIN vp_customers c ON o.customer_id = c.id
+            WHERE o.order_number = ?";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
     public function updateOrderRemarks($order_number, $remarks) {
         $order_number = trim($order_number);
         $remarks      = trim($remarks);

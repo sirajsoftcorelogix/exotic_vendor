@@ -1,7 +1,7 @@
 <?php 
 $total_price = 0;
 $currency = '';
-// echo "<pre>";print_r($order); die;
+
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
 endforeach;
@@ -11,7 +11,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold"><?php echo $order[0]['order_number']; ?></h1>
+            <h1 class="text-xl font-bold"><?php echo $orderremarks['order_number']; ?></h1>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -56,7 +56,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                 <path
                                     d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                             </svg>
-                            <span><?php echo $order[0]['city']; ?>, <?php echo $order[0]['state']; ?></span>
+                            <span><?php echo $orderremarks['city']; ?>, <?php echo $orderremarks['state']; ?></span>
                         </div>
                     </div>
 
@@ -66,7 +66,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                         <span
-                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
+                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'])); ?></span>
                     </div>
                 </div>
 
@@ -139,8 +139,8 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                 </div>
                 <?php
                     $tax_rate = 0.05; // 5%
-                    $calculated_subtotal = $total_price / (1 + $tax_rate);
-                    $calculated_tax = $total_price - $calculated_subtotal;
+                    $calculated_subtotal = $orderremarks['total'] / (1 + $tax_rate);
+                    $calculated_tax = $orderremarks['total'] - $calculated_subtotal;
                 ?>
                 <div class="mt-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
     
@@ -177,7 +177,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                 <div class="col-span-3 font-bold text-black-800">Total</div>
                                 <div class="col-span-6"></div> 
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($total_price, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($orderremarks['total'], 2); ?>
                                 </div>
                             </div>
                         </div>
@@ -185,7 +185,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                         <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
                             <span class="text-sm font-bold text-black-800">Paid</span>
                             <span class="text-sm font-bold text-black-900">
-                                <?php echo $currencysymbol; ?><?php echo number_format($total_price, 2); ?>
+                                <?php echo $currencysymbol; ?><?php echo number_format($orderremarks['total'], 2); ?>
                             </span>
                         </div>
                     </div>
@@ -194,61 +194,61 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
         </div>
         <div class="space-y-6">
             <!-- Note Section -->
-            <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>">
-                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>','<?= htmlspecialchars($order[0]['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
+            <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
+                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
                 <h3 class="mb-2 text-sm font-bold text-black-700">Note</h3>
-                <?php if(!empty($order[0]['remarks'])): ?>
-                <div id="note-display-<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
-                    <?php echo ($order[0]['remarks']); ?>
+                <?php if(!empty($orderremarks['remarks'])): ?>
+                <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <?php echo ($orderremarks['remarks']); ?>
                 </div>
                 <?php endif; ?>
             </div>
             <!-- address Section -->
             <!-- <div class="rounded-lg border bg-white p-5 shadow-sm relative">
-                <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
+                <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
                 <h3 class="mb-3 text-sm font-bold">Customer</h3>
-                <p class="text-sm font-medium text-blue-600" id="display-customer-name"><?php echo $order[0]['customer_name'] ?? 'N/A'; ?></p>
+                <p class="text-sm font-medium text-blue-600" id="display-customer-name"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></p>
                 <p class="text-sm text-black-500">12 orders</p>
 
                 <div class="mt-6">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Contact information</h4>
-                    <p class="mt-1 text-sm text-blue-600"><?php echo $order[0]['customer_email'] ?? 'N/A'; ?></p>
-                    <p class="text-sm" id="display-customer-phone"><?php echo $order[0]['customer_phone'] ?? 'N/A'; ?></p>
+                    <p class="mt-1 text-sm text-blue-600"><?php echo $customerdetails['customer_email'] ?? 'N/A'; ?></p>
+                    <p class="text-sm" id="display-customer-phone"><?php echo $customerdetails['customer_phone'] ?? 'N/A'; ?></p>
                 </div>
 
                 <div class="mt-6">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
                     <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span class="block font-medium"><?php echo $order[0]['customer_name'] ?? 'N/A'; ?></span>
-                        <span id="address1"><?php echo $order[0]['address_line1'] ?? ''; ?></span>
-                        <span id="address2"><?php echo $order[0]['address_line2'] ?? ''; ?></span>
+                        <span class="block font-medium"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></span>
+                        <span id="address1"><?php echo $orderremarks['address_line1'] ?? ''; ?></span>
+                        <span id="address2"><?php echo $orderremarks['address_line2'] ?? ''; ?></span>
                         <br>
-                        <span id="city"><?php echo $order[0]['city'] ?? ''; ?></span> -
-                        <span id="zipcode"><?php echo $order[0]['zipcode'] ?? ''; ?></span>,
-                        <span id="country"><?php echo $order[0]['country'] ?? ''; ?></span>
+                        <span id="city"><?php echo $orderremarks['city'] ?? ''; ?></span> -
+                        <span id="zipcode"><?php echo $orderremarks['zipcode'] ?? ''; ?></span>,
+                        <span id="country"><?php echo $orderremarks['country'] ?? ''; ?></span>
                         <br>
-                        <span id="customer_phone" class="mt-1 block"><?php echo $order[0]['customer_phone'] ?? ''; ?></span>
+                        <span id="customer_phone" class="mt-1 block"><?php echo $customerdetails['customer_phone'] ?? ''; ?></span>
                     </address>
                 </div>
 
                 <div class="mt-6">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing Address</h4>
                     <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span id="billing_address1"><?php echo $order[0]['shipping_address_line1'] ?? ''; ?></span>
-                        <span id="billing_address2"><?php echo $order[0]['shipping_address_line2'] ?? ''; ?></span>
+                        <span id="billing_address1"><?php echo $orderremarks['shipping_address_line1'] ?? ''; ?></span>
+                        <span id="billing_address2"><?php echo $orderremarks['shipping_address_line2'] ?? ''; ?></span>
                         <br>
-                        <span id="billing_city_city"><?php echo $order[0]['shipping_city'] ?? ''; ?></span> -
-                        <span id="billing_city_zip"><?php echo $order[0]['shipping_zipcode'] ?? ''; ?></span>, 
-                        <span id="billing_country"><?php echo $order[0]['shipping_country'] ?? ''; ?></span><br>
-                        <span id="billing_mobile" class="mt-1 block"><?php echo $order[0]['shipping_mobile'] ?? ''; ?></span>
+                        <span id="billing_city_city"><?php echo $orderremarks['shipping_city'] ?? ''; ?></span> -
+                        <span id="billing_city_zip"><?php echo $orderremarks['shipping_zipcode'] ?? ''; ?></span>, 
+                        <span id="billing_country"><?php echo $orderremarks['shipping_country'] ?? ''; ?></span><br>
+                        <span id="billing_mobile" class="mt-1 block"><?php echo $orderremarks['shipping_mobile'] ?? ''; ?></span>
                     </address>
                 </div>
 
