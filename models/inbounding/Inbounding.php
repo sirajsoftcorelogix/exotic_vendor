@@ -721,7 +721,7 @@ public function update_image_variation($img_id, $variation_id) {
         $result = $stmt->get_result();
 
         if ($row = $result->fetch_assoc()) {
-            return $row['display_name'];
+            return $row['initial'];
         }
         return ''; // Return empty if not found
     }
@@ -747,29 +747,6 @@ public function update_image_variation($img_id, $variation_id) {
         
         return $row ? $row['item_code'] : null;
     }
-	
-	public function getLastInboundCode(int $group_id): ?string
-	{
-		$sql = "SELECT Item_code 
-				FROM vp_inbound 
-				WHERE group_id = ?
-				ORDER BY id DESC
-				LIMIT 1";
-
-		$stmt = $this->conn->prepare($sql);
-		if (!$stmt) return null;
-
-		$stmt->bind_param("i", $group_id);
-		$stmt->execute();
-
-		$result = $stmt->get_result();
-		$row = $result->fetch_assoc();
-
-		$stmt->close();
-
-		return $row['Item_code'] ?? null;
-	}
-
 	
     public function checkItemCodeExists($code) {
         $sql = "SELECT id FROM vp_inbound WHERE Item_code = '" . $this->conn->real_escape_string($code) . "'";
