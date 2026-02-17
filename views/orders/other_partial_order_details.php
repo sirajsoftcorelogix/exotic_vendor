@@ -208,7 +208,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                 <?php endif; ?>
             </div>
             <!-- address Section -->
-            <!-- <div class="rounded-lg border bg-white p-5 shadow-sm relative">
+            <?php /* <div class="rounded-lg border bg-white p-5 shadow-sm relative">
                 <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -257,8 +257,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                     <p class="mt-1 text-sm">This is their 11th order</p>
                     <button class="mt-2 text-sm text-blue-600 hover:underline">View map</button>
                 </div>
-            </div> -->
-        </div>
+            </div> */ ?>
     </div>
 </div>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
