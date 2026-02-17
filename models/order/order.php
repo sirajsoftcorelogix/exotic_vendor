@@ -717,34 +717,6 @@ class Order{
     }
     function getOrderByOrderNumber($order_number) {
         $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
-        // $sql = "
-        //     SELECT 
-        //         o.*,
-        //         oi.city,
-        //         oi.state,
-        //         oi.remarks,
-        //         oi.address_line1,
-        //         oi.address_line2,
-        //         oi.country,
-        //         oi.zipcode,
-        //         oi.shipping_address_line1,
-        //         oi.shipping_address_line2,
-        //         oi.shipping_city,
-        //         oi.shipping_zipcode,
-        //         oi.shipping_mobile,
-        //         oi.shipping_country,
-        //         oi.total,
-        //         c.name       AS customer_name,
-        //         c.phone      AS customer_phone,
-        //         c.email      AS customer_email
-        //     FROM vp_orders o
-        //     LEFT JOIN vp_order_info oi 
-        //         ON o.order_number = oi.order_number
-        //     LEFT JOIN vp_customers c
-        //         ON o.customer_id = c.id
-        //     WHERE o.order_number = ?
-        //     ORDER BY o.id ASC
-        // ";
         $stmt = $this->db->prepare($sql);   
         $stmt->bind_param('s', $order_number);
         $stmt->execute();
@@ -756,6 +728,38 @@ class Order{
                 return $result->fetch_assoc();
             }*/
             return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return null;
+    }
+    function getRemarksByOrderNumber($order_number) {
+        $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    function getCustomerNameAndEmailByOrderNumber($order_number) {
+        $sql = "
+            SELECT 
+                c.name  AS customer_name,
+                c.phone AS customer_phone,
+                c.email AS customer_email
+            FROM vp_order_info o
+            LEFT JOIN vp_customers c ON o.customer_id = c.id
+            WHERE o.order_number = ?";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
         }
         return null;
     }

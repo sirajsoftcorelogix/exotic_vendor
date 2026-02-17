@@ -712,7 +712,7 @@ public function update_image_variation($img_id, $variation_id) {
         if (empty($code)) return '';
 
         // Search by the 'category' column, NOT 'id'
-        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE category = ?");
+        $stmt = $this->conn->prepare("SELECT initial FROM category WHERE category = ?");
         if (!$stmt) return '';
 
         // Use 's' (string) because your codes might be "-2" or "10002"
@@ -721,16 +721,15 @@ public function update_image_variation($img_id, $variation_id) {
         $result = $stmt->get_result();
 
         if ($row = $result->fetch_assoc()) {
-            return $row['display_name'];
+            return $row['initial'];
         }
         return ''; // Return empty if not found
     }
 
     public function getLastItemCode($prefix) {
-        // UPDATED REGEXP: [0-9]{4}$ ensures we look for codes with exactly 4 digits at the end
         $sql = "SELECT item_code FROM vp_inbound 
                 WHERE item_code LIKE ? 
-                AND item_code REGEXP '^[A-Z][A-Z]{2}[0-9]{4}$'
+                AND item_code REGEXP '^[A-Z]{4}[0-9]{2}$'
                 ORDER BY item_code DESC LIMIT 1";
                 
         $stmt = $this->conn->prepare($sql); 
@@ -740,7 +739,7 @@ public function update_image_variation($img_id, $variation_id) {
             return null;
         }
 
-        $search = $prefix . '%';
+        $search = $prefix . '%'; // e.g., 'B%'
         $stmt->bind_param("s", $search);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -748,6 +747,7 @@ public function update_image_variation($img_id, $variation_id) {
         
         return $row ? $row['item_code'] : null;
     }
+	
     public function checkItemCodeExists($code) {
         $sql = "SELECT id FROM vp_inbound WHERE Item_code = '" . $this->conn->real_escape_string($code) . "'";
         $result = $this->conn->query($sql);
