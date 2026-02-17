@@ -208,11 +208,17 @@
                     <div class="text-gray">:</div>
                     <div class="font-medium"><?= htmlspecialchars($date_added); ?></div>
 
-                    <?php if (!empty($pl['vendor']) && strtoupper(trim($pl['vendor'])) !== 'N/A'): ?>
-                        <div class="text-gray">Vendor</div>
-                        <div class="text-gray">:</div>
-                        <div class="font-medium"><?= ucwords($pl['vendor']); ?></div>
-                    <?php endif; ?>
+                    <div class="text-gray">Vendor</div>
+                    <div class="text-gray">:</div>
+                    <div class="font-medium">
+                    <?php
+                        $vendor = trim($pl['vendor'] ?? '');
+                        echo (!empty($vendor) && strtoupper($vendor) !== 'N/A')
+                        ? ucwords(htmlspecialchars($vendor))
+                        : 'N/A';
+                    ?>
+                    </div>
+
 
                     <div class="text-gray">SKU</div>
                     <div class="text-gray">:</div>
