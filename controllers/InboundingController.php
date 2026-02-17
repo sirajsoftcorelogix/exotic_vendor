@@ -1129,7 +1129,8 @@ class InboundingController {
         global $inboundingModel;
         
         $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
-        $last_code = $inboundingModel->getLastItemCode($prefix);
+        //$last_code = $inboundingModel->getLastItemCode($prefix);
+		$last_code = $inboundingModel->getLastInboundCode($group_real_name);
 
         if (!$last_code) {
             return $prefix . "AAA01"; // Result: BAAA01
