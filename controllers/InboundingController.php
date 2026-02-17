@@ -1600,6 +1600,7 @@ class InboundingController {
         ]);
 
         $response = curl_exec($ch);
+        echo "<pre>";print_r($response);
         $result = json_decode($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
