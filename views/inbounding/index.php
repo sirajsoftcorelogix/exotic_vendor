@@ -271,6 +271,30 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 ?>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">CP Status</label>
+                            <select name="cp_filter" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="filled" <?= ($data['filters']['cp_filter'] ?? '') == 'filled' ? 'selected' : '' ?>>Filled</option>
+                                <option value="not_filled" <?= ($data['filters']['cp_filter'] ?? '') == 'not_filled' ? 'selected' : '' ?>>Not Filled</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Price India Status</label>
+                            <select name="priceindia_filter" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="filled" <?= ($data['filters']['priceindia_filter'] ?? '') == 'filled' ? 'selected' : '' ?>>Filled</option>
+                                <option value="not_filled" <?= ($data['filters']['priceindia_filter'] ?? '') == 'not_filled' ? 'selected' : '' ?>>Not Filled</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">USD Price Status</label>
+                            <select name="usd_filter" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="filled" <?= ($data['filters']['usd_filter'] ?? '') == 'filled' ? 'selected' : '' ?>>Filled</option>
+                                <option value="not_filled" <?= ($data['filters']['usd_filter'] ?? '') == 'not_filled' ? 'selected' : '' ?>>Not Filled</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -289,7 +313,8 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             'Photoshoot' => 'Pending Photoshoot',
             'Editing'    => 'Pending Editing',
             'Data Entry' => 'Pending Data Entry',
-            'Published'  => 'Pending Publish'
+            'Published'  => 'Pending Publish',
+            'FinalPublished' => 'Published'
         ];
     ?>
 
@@ -343,6 +368,24 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             elseif ($percentage >= 60) { $gaugeColorClass = 'gauge-color-75'; } 
             elseif ($percentage >= 40) { $gaugeColorClass = 'gauge-color-50'; } 
             elseif ($percentage >= 10) { $gaugeColorClass = 'gauge-color-25'; }
+            
+            $hasEditedPhotos = false;
+            $hasRawPhotos = false;
+
+            if (!empty($tc['stat_logs'])) {
+                foreach ($tc['stat_logs'] as $log) {
+                    if ($log['stat'] === 'Editing' || $log['stat'] === 'Published') {
+                        $hasEditedPhotos = true;
+                    }
+                    if ($log['stat'] === 'Photoshoot') {
+                        $hasRawPhotos = true;
+                    }
+                }
+            }
+
+            // Define classes
+            $editedBtnClass = $hasEditedPhotos ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
+            $rawBtnClass    = $hasRawPhotos    ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
             ?>
 
             <div class="accordion-item bg-white rounded-[16px] border border-[rgba(229,229,229,1)] shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
@@ -465,8 +508,15 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                     <a href="<?php echo base_url('?page=inbounding&action=desktopform&id=' . $tc['id']); ?>" class="btn-base btn-edit">Edit Information</a>
                                 <?php endif; ?>
                                 
-                                <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" class="btn-base btn-upload">Edited Photos</a>
-                                <a href="<?php echo base_url('?page=inbounding&action=i_raw_photos&id=' . $tc['id']); ?>" class="btn-base btn-upload">Raw Photos</a>
+                                <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" 
+                                   class="btn-base text-white <?= $editedBtnClass ?> transition-colors">
+                                   Edited Photos
+                                </a>
+                                
+                                <a href="<?php echo base_url('?page=inbounding&action=i_raw_photos&id=' . $tc['id']); ?>" 
+                                   class="btn-base text-white <?= $rawBtnClass ?> transition-colors">
+                                   Raw Photos
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -560,12 +610,20 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         </div>
     <?php endif; ?>
 
-    <?php            
+    <?php           
         $page_no = $data["page_no"] ?? 1;
         $limit = $data["limit"] ?? 10;
         $total_records = $data["totalRecords"] ?? 0;
         $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
-        $search_query = isset($data['search']) ? urlencode($data['search']) : '';
+
+        // Capture all current GET parameters
+        $current_params = $_GET;
+
+        // Helper to generate a URL with a specific page number
+        function getPaginationUrl($params, $newPage) {
+            $params['page_no'] = $newPage;
+            return '?' . http_build_query($params);
+        }
     ?>
     <?php if ($total_records > 0): ?>
         <div class="bg-white rounded-[16px] border border-gray-200 p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
@@ -576,27 +634,26 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             <div class="flex items-center gap-4 text-sm text-gray-600">
                 <div class="flex items-center gap-2">
                     <span class="font-bold text-gray-700">Rows:</span>
-                    <select onchange="window.location.href='?page=inbounding&action=list&page_no=1&search_text=<?= $search_query ?>&limit=' + this.value"
-                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block p-1.5 cursor-pointer outline-none">
-                        <option value="10" <?= $limit == 10 ? 'selected' : '' ?>>10</option>
-                        <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25</option>
-                        <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50</option>
-                        <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100</option>
+                    <select onchange="const p = new URLSearchParams(window.location.search); p.set('limit', this.value); p.set('page_no', '1'); window.location.search = p.toString();"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-orange-500 block p-1.5 outline-none">
+                        <?php foreach([10, 25, 50, 100] as $l): ?>
+                            <option value="<?= $l ?>" <?= $limit == $l ? 'selected' : '' ?>><?= $l ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
                 <?php if ($total_pages > 1): ?>
                     <div class="flex items-center gap-2">
-                         <a <?php if($page_no > 1) { ?> href="?page=inbounding&action=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>&search_text=<?= $search_query ?>" <?php } else { ?> href="javascript:void(0)" <?php } ?>
+                        <a href="<?= ($page_no > 1) ? getPaginationUrl($current_params, $page_no - 1) : 'javascript:void(0)' ?>"
                            class="p-2 rounded-full border hover:bg-gray-100 transition <?= $page_no <= 1 ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'bg-white' ?>">
-                             <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
                         </a>
                         
                         <span class="bg-black text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold shadow-md">
                             <?= $page_no ?>
                         </span>
                         
-                        <a <?php if($page_no < $total_pages) { ?> href="?page=inbounding&action=list&page_no=<?= $page_no+1 ?>&limit=<?= $limit ?>&search_text=<?= $search_query ?>" <?php } else { ?> href="javascript:void(0)" <?php } ?>
+                        <a href="<?= ($page_no < $total_pages) ? getPaginationUrl($current_params, $page_no + 1) : 'javascript:void(0)' ?>"
                            class="p-2 rounded-full border hover:bg-gray-100 transition <?= $page_no >= $total_pages ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'bg-white' ?>">
                             <i data-lucide="chevron-right" class="w-4 h-4"></i>
                         </a>

@@ -20,7 +20,10 @@ class InboundingController {
             'received_by_user_id' => $_GET['agent_id'] ?? '',
             'group_name'          => $_GET['group_name'] ?? '',
             'status_step'         => $_GET['status_step'] ?? '',
-            'updated_by_user_id'  => $_GET['updated_by'] ?? ''
+            'updated_by_user_id'  => $_GET['updated_by'] ?? '',
+            'cp_filter'           => $_GET['cp_filter'] ?? '',
+            'priceindia_filter'   => $_GET['priceindia_filter'] ?? '',
+            'usd_filter'          => $_GET['usd_filter'] ?? ''
         ];
 
         // 2. Pagination Logic
@@ -1026,6 +1029,7 @@ class InboundingController {
             'hsn_code'            => $_POST['hsn_code'] ?? '',
             'gst_rate'            => $_POST['gst_rate'] ?? '0',
             'dimensions'          => $_POST['dimensions'] ?? '',
+            'upc'                 => $_POST['upc'] ?? '',
             'height'              => $_POST['height'] ?? '',
             'width'               => $_POST['width'] ?? '',
             'depth'               => $_POST['depth'] ?? '',
@@ -1172,6 +1176,8 @@ class InboundingController {
           $variant['usd_price']   = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
           $variant['quantity']    = !empty($variant['quantity']) ? $variant['quantity'] : 0;
           $variant['hsn_code']    = !empty($variant['hsn_code']) ? $variant['hsn_code'] : '';
+          $variant['gst_rate']    = !empty($variant['gst_rate']) ? $variant['gst_rate'] : 0;
+          $variant['dimensions']    = !empty($variant['dimensions']) ? $variant['dimensions'] : '';
           // Handle File Uploads (Same as before)
           $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
           if ($uploadError === UPLOAD_ERR_OK) {
@@ -1224,6 +1230,7 @@ class InboundingController {
           'price_india_mrp'   => $mainVariant['price_india_mrp'] ?? '',
           'hsn_code'   => $mainVariant['hsn_code'] ?? '',
           'gst_rate'   => $mainVariant['gst_rate'] ?? 0,
+          'dimensions'   => $mainVariant['dimensions'] ?? 0,
 
           // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
           'quantity_received'  => $mainVariant['quantity'] ?? 0,
@@ -1624,6 +1631,10 @@ class InboundingController {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
+
+            $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
+            $inboundingModel->stat_logs($logData);
+
             echo "<pre>import response: ";print_r($import_response);
             echo json_encode([
                 'status' => 'success', 
