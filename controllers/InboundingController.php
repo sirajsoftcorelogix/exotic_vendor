@@ -1125,18 +1125,17 @@ class InboundingController {
             echo "Update failed: " . $result['message'];
         }
     }
+
     private function generateItemcode($group_real_name) {
         global $inboundingModel;
-        
-        $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
+        $prefix = $group_real_name;
         $last_code = $inboundingModel->getLastItemCode($prefix);
 
         if (!$last_code) {
             return $prefix . "AAA01"; // Result: BAAA01
         }
-
-        $alphaPart = substr($last_code, 1, 3); 
-        $numPart   = (int)substr($last_code, 4);
+        $alphaPart = substr($last_code, 1, 3); //AAA
+        $numPart   = (int)substr($last_code, 4); //02
         $numPart++;
         if ($numPart > 99) {
             $numPart = 1;
