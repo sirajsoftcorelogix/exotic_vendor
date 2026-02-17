@@ -1601,6 +1601,7 @@ class InboundingController {
 
         $response = curl_exec($ch);
         $result = json_decode($response);
+        echo "<pre>publish response: ";print_r($result);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
@@ -1623,6 +1624,7 @@ class InboundingController {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
+            echo "<pre>import response: ";print_r($import_response);
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
