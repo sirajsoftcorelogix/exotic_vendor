@@ -160,6 +160,7 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 <button class="flex items-center gap-2 hover:text-gray-700"
                                     onclick="sortTableByDate()">
@@ -234,6 +235,15 @@
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <?php echo htmlspecialchars($pl['agent_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php
+                                        $vendor = trim($pl['vendor'] ?? '');
+                                        echo (!empty($vendor) && strtoupper($vendor) !== 'N/A')
+                                        ? ucwords(htmlspecialchars($vendor))
+                                        : 'N/A';
+                                    ?>
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
