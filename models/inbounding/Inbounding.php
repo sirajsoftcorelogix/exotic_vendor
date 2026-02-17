@@ -712,7 +712,7 @@ public function update_image_variation($img_id, $variation_id) {
         if (empty($code)) return '';
 
         // Search by the 'category' column, NOT 'id'
-        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE category = ?");
+        $stmt = $this->conn->prepare("SELECT initial FROM category WHERE category = ?");
         if (!$stmt) return '';
 
         // Use 's' (string) because your codes might be "-2" or "10002"
