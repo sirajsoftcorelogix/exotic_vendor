@@ -295,6 +295,14 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 <option value="not_filled" <?= ($data['filters']['usd_filter'] ?? '') == 'not_filled' ? 'selected' : '' ?>>Not Filled</option>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">IN-House</label>
+                            <select name="in_house" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['in_house'] ?? '') == 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['in_house'] ?? '') == 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">

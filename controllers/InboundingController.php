@@ -23,7 +23,8 @@ class InboundingController {
             'updated_by_user_id'  => $_GET['updated_by'] ?? '',
             'cp_filter'           => $_GET['cp_filter'] ?? '',
             'priceindia_filter'   => $_GET['priceindia_filter'] ?? '',
-            'usd_filter'          => $_GET['usd_filter'] ?? ''
+            'usd_filter'          => $_GET['usd_filter'] ?? '',
+            'in_house'            => $_GET['in_house'] ?? ''
         ];
 
         // 2. Pagination Logic
@@ -52,7 +53,7 @@ class InboundingController {
             'filters'         => $filters,
             'vendor_list'     => $dropdowns['vendors'],
             'user_list'       => $dropdowns['users'],
-            'group_list'      => $dropdowns['groups']
+            'group_list'      => $dropdowns['groups'],
         ];
         
         renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');

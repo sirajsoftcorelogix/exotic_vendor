@@ -88,6 +88,13 @@ class Inbounding {
                 $where[] = "(vi.usd_price <= 0 OR vi.usd_price IS NULL)";
             }
         }
+        if (!empty($filters['in_house'])) {
+            if ($filters['in_house'] == 'yes') {
+                $where[] = "vi.Marketplace = 'exoticindia'";
+            } else {
+                $where[] = "(vi.Marketplace != 'exoticindia' OR vi.Marketplace IS NULL)";
+            }
+        }
 
         // feeder by
         if (!empty($filters['updated_by_user_id'])) {
