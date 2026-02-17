@@ -1127,22 +1127,25 @@ class InboundingController {
     }
     private function generateItemcode($group_real_name) {
         global $inboundingModel;
+        
         $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
         $last_code = $inboundingModel->getLastItemCode($prefix);
+
         if (!$last_code) {
-            return $prefix . "AA0001";
+            return $prefix . "AAA01"; // Result: BAAA01
         }
-        $chars = substr($last_code, 1, 2); // Extracts "AA"
-        $num = (int)substr($last_code, 2); // Extracts the numeric part (0001 onwards)
-        $num++;
-        if ($num > 9999) {
-            $num = 1;
-            $chars++; // Increment letters (e.g., AA -> AB)
-            if (strlen($chars) > 2) {
+
+        $alphaPart = substr($last_code, 1, 3); 
+        $numPart   = (int)substr($last_code, 4);
+        $numPart++;
+        if ($numPart > 99) {
+            $numPart = 1;
+            $alphaPart++;
+            if (strlen($alphaPart) > 3) {
                 die("Error: Maximum item code limit reached for prefix $prefix");
             }
         }
-        return $prefix . $chars . str_pad((string)$num, 4, '0', STR_PAD_LEFT);
+        return $prefix . $alphaPart . str_pad((string)$numPart, 2, '0', STR_PAD_LEFT);
     }
     public function submitStep3() {
         global $inboundingModel;

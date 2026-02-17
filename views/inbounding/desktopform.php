@@ -482,7 +482,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Dimensions:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['dimensions'] ?? '') ?>" name="dimensions">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['dimensions'] ?? '') ?>" name="dimensions" placeholder="Dimensions">
                         </div>
                     </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
@@ -1351,7 +1351,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </button>
             <?php  } ?>
 
-            <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
+            <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#db8235] transition">
                 Save as Draft
             </button>
             
