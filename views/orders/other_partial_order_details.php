@@ -1,3 +1,19 @@
+<style>
+    .scrollbar-visible::-webkit-scrollbar {
+        height: 6px;
+    }
+    .scrollbar-visible::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    .scrollbar-visible::-webkit-scrollbar-thumb {
+        background: #D1D5DB;
+        border-radius: 10px;
+    }
+    .scrollbar-visible::-webkit-scrollbar-thumb:hover {
+        background: #9CA3AF;
+    }
+</style>
 <?php 
 $total_price = 0;
 $currency = '';
@@ -79,9 +95,8 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             $currencysymbol = $currencyCode.' ';
                         }
                     ?>
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-4 accordion-trigger">
                         <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
-
                         <div class="flex flex-1 items-start gap-5 rounded-2xl border border-gray-200 p-4">
                             <div class="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
                                 <img src="<?php echo $item['image']; ?>" class="h-full w-full object-cover"
@@ -131,6 +146,52 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                                 class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white"><?php echo $item['status']; ?></span>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-content-details max-h-0 overflow-hidden transition-all duration-300 ease-in-out [&:has(>input:checked)]:max-h-[1200px]">
+                        <div class="py-8 bg-[#F9FAFB] border-t border-gray-100">
+                            <div class="overflow-x-auto pb-6 scrollbar-visible">
+                                <div class="relative flex items-start min-w-max">
+                                    <div class="relative z-10 flex flex-col items-center w-[120px]">
+                                        <div class="w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white z-20"></div>
+                                        
+                                        <?php if (!empty($item['status_log'])): ?>
+                                            <div class="absolute top-[8px] left-1/2 w-full h-[2px] bg-[#27AE60] z-0"></div>
+                                        <?php endif; ?>
+
+                                        <div class="mt-4 text-center px-2">
+                                            <p class="text-[12px] font-bold text-gray-900 leading-tight">Created</p>
+                                            <p class="text-[10px] text-gray-500 mt-1"><?= date('d M, Y', strtotime($item['order_date'] ?? 'now')) ?></p>
+                                            <p class="text-[9px] text-gray-400 italic">System</p>
+                                        </div>
+                                    </div>
+
+                                    <?php if (!empty($item['status_log'])): 
+                                        $totalSteps = count($item['status_log']);
+                                        foreach ($item['status_log'] as $index => $log): 
+                                            $isLast = ($index === $totalSteps - 1);
+                                    ?>
+                                        <div class="relative z-10 flex flex-col items-center w-[120px]">
+                                            <div class="w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white z-20"></div>
+                                            
+                                            <?php if (!$isLast): ?>
+                                                <div class="absolute top-[8px] left-1/2 w-full h-[2px] bg-[#27AE60] z-0"></div>
+                                            <?php endif; ?>
+
+                                            <div class="mt-4 text-center px-2">
+                                                <p class="text-[11px] font-bold text-gray-900 leading-tight">
+                                                    Agent: <?= htmlspecialchars($log['changed_by_username']) ?>
+                                                </p>
+                                                <p class="text-[10px] text-gray-500 mt-0.5"><?= date('d M, Y', strtotime($log['change_date'])) ?></p>
+                                                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-tighter mt-1">
+                                                    <?= str_replace('_', ' ', $log['status']) ?>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; endif; ?>
+
                                 </div>
                             </div>
                         </div>
@@ -508,5 +569,32 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
         .catch(() => {
             alert("Connection problem. Please try again.");
         });
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        const accordionTriggers = document.querySelectorAll('.accordion-trigger');
+            accordionTriggers.forEach(trigger => {
+                // Remove previous handler if stored to avoid duplicate handlers
+                if (trigger.__accordionClick__) {
+                    trigger.removeEventListener('click', trigger.__accordionClick__);
+                }
+
+                const handler = function () {
+                    const content = this.nextElementSibling;
+                    const isOpening = !content.classList.contains('open');
+
+                    // Open or close the clicked one
+                    if (isOpening) {
+                        content.classList.add('open');
+                        this.classList.add('active');
+                    } else {
+                        content.classList.remove('open');
+                        this.classList.remove('active');
+                    }
+                };
+
+                // store the handler reference so it can be removed later
+                trigger.__accordionClick__ = handler;
+                trigger.addEventListener('click', handler);
+            });
     });
 </script>

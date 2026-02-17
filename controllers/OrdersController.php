@@ -643,6 +643,11 @@ class OrdersController {
             $orderremarks = $ordersModel->getRemarksByOrderNumber($order_number);
             $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($order_number);
             $statusList = $commanModel->get_order_status_list();
+            $assignmentDates = [];          
+            foreach ($order as $key => $orders) {
+                $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);  
+                $assignmentDates[$orders['id']] =  $orders[$key]['status_log']['change_date'] ?? '';
+            }
             if ($order) {
                 if ($type === 'inner')
                     renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
