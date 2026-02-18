@@ -1133,23 +1133,23 @@ class InboundingController {
 
     private function generateItemcode($group_real_name) {
         global $inboundingModel;
-        $prefix = $group_real_name;
+        $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
         $last_code = $inboundingModel->getLastItemCode($prefix);
 
         if (!$last_code) {
-            return $prefix . "AAA01"; // Result: BAAA01
+            return $prefix . "A0001"; 
         }
-        $alphaPart = substr($last_code, 1, 3); //AAA
-        $numPart   = (int)substr($last_code, 4); //02
+        $alphaPart = substr($last_code, 1, 1); // Get 'A'
+        $numPart   = (int)substr($last_code, 2); // Get 1
         $numPart++;
-        if ($numPart > 99) {
+        if ($numPart > 9999) {
             $numPart = 1;
-            $alphaPart++;
-            if (strlen($alphaPart) > 3) {
+            $alphaPart++; // PHP increments 'A' to 'B' automatically            
+            if (strlen($alphaPart) > 1) {
                 die("Error: Maximum item code limit reached for prefix $prefix");
             }
         }
-        return $prefix . $alphaPart . str_pad((string)$numPart, 2, '0', STR_PAD_LEFT);
+        return $prefix . $alphaPart . str_pad((string)$numPart, 4, '0', STR_PAD_LEFT);
     }
     public function submitStep3() {
         global $inboundingModel;
