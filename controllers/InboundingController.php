@@ -24,7 +24,8 @@ class InboundingController {
             'cp_filter'           => $_GET['cp_filter'] ?? '',
             'priceindia_filter'   => $_GET['priceindia_filter'] ?? '',
             'usd_filter'          => $_GET['usd_filter'] ?? '',
-            'in_house'            => $_GET['in_house'] ?? ''
+            'in_house'            => $_GET['in_house'] ?? '',
+            'item_code'           => $_GET['filter_item_code'] ?? ''
         ];
 
         // 2. Pagination Logic

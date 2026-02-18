@@ -303,6 +303,16 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 <option value="no" <?= ($data['filters']['in_house'] ?? '') == 'no' ? 'selected' : '' ?>>No</option>
                             </select>
                         </div>
+                        <div class="block text-xs font-bold text-gray-500 uppercase mb-1">
+                            <div class="w-full">
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Item Code</label>
+                                <input type="text" 
+                                       name="filter_item_code" 
+                                       placeholder="e.g. CA0001" 
+                                       value="<?php echo $data['filters']['item_code'] ?? '' ?>"
+                                       class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                            </div>
+                        </div>
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
