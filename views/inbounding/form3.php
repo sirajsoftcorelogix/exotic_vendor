@@ -120,6 +120,7 @@ $mainVar = [
     'store_location'  => $form2['store_location'] ?? '',
     'hsn_code'        => $form2['hsn_code'] ?? '',
     'gst_rate'        => $form2['gst_rate'] ?? 0,
+    'dimensions'        => $form2['dimensions'] ?? '',
     'colormaps'       => $form2['colormaps'] ?? '',
 ];
 
@@ -144,6 +145,7 @@ foreach ($extraVars as $ex) {
         'store_location'  => $ex['store_location'] ?? '',
         'hsn_code'        => $ex['hsn_code'] ?? '',
         'gst_rate'        => $ex['gst_rate'] ?? 0,
+        'dimensions'        => $ex['dimensions'] ?? '',
         'colormaps'       => $ex['colormaps'] ?? '',
     ];
 }
@@ -385,6 +387,10 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">GST:</label>
                                     <input type="text" name="variations[<?php echo $index; ?>][gst_rate]" value="<?php echo $var['gst_rate'] ?? 0; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-black mb-1">Dimensions:</label>
+                                    <input type="text" name="variations[<?php echo $index; ?>][dimensions]" value="<?php echo $var['dimensions'] ?? 0; ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                                 </div>
 
                                 <div>
@@ -665,6 +671,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                             <div><label class="block text-xs font-bold text-black mb-1">Location <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][store_location]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">HSN Code <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][hsn_code]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                             <div><label class="block text-xs font-bold text-black mb-1">GST: <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][gst_rate]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
+                            <div><label class="block text-xs font-bold text-black mb-1">Dimensions: <span class="text-red-500">*</span>:</label><input type="text" name="variations[${index}][dimensions]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none required-field"></div>
                         </div>
                     </div>
                 </div>
@@ -706,6 +713,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     store_location: getData('store_location'),
                     hsn_code: getData('hsn_code'),
                     gst_rate: getData('gst_rate'),
+                    dimensions: getData('dimensions'),
                     old_photo: getData('old_photo') 
                 };
 
@@ -735,6 +743,7 @@ $formAction = base_url('?page=inbounding&action=submitStep3');
                     setData('store_location', data.store_location);
                     setData('hsn_code', data.hsn_code);
                     setData('gst_rate', data.gst_rate);
+                    setData('dimensions', data.dimensions);
                     setData('old_photo', data.old_photo); 
                     
                     // --- SPECIFIC CLONE LOGIC FOR COLOR MAP ---
