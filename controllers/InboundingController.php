@@ -9,7 +9,6 @@ global $domain;
 class InboundingController {
 
     public function index() {
-        echo '123'; exit;
         is_login();
         global $inboundingModel;
         
