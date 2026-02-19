@@ -766,6 +766,18 @@ switch ($page) {
                 break;
         }
         break;
+    case 'dispatch':
+        require_once 'controllers/DispatchController.php';
+        $controller = new DispatchController($conn);
+        switch ($action) {
+            case 'create':
+                $controller->create();   
+                break;
+            default:
+                $controller->create();   
+                break;
+        }
+        break;
 }
 
 

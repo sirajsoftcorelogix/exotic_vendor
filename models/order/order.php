@@ -1153,7 +1153,8 @@ class Order{
             'shipping_first_name','shipping_last_name','shipping_company',
             'shipping_address_line1','shipping_address_line2','shipping_city','shipping_state',
             'shipping_state_iso','shipping_state_code','shipping_country','shipping_zipcode',
-            'shipping_mobile','shipping_email','total'
+            'shipping_mobile','shipping_email','total','giftvoucher','giftvoucher_reduce','transid','currency',
+            'payment_type','coupon','coupon_reduce','credit'
         ];
 
         $insertCols   = [];
@@ -1190,6 +1191,62 @@ class Order{
             $insertCols[]   = 'total';
             $placeholders[] = '?';
             $values[]       = floatval($data['total']);
+            $types         .= 'd'; // decimal
+        }
+        //giftvoucher add
+        if (isset($data['giftvoucher'])) {
+            $insertCols[]   = 'giftvoucher';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['giftvoucher']);
+            $types         .= 'd'; // decimal
+        }
+        //giftvoucher_reduce add
+        if (isset($data['giftvoucher_reduce'])) {
+            $insertCols[]   = 'giftvoucher_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['giftvoucher_reduce']);
+            $types         .= 'd'; // decimal
+        }
+        //transid add
+        if (isset($data['transid'])) {
+            $insertCols[]   = 'transid';
+            $placeholders[] = '?';
+            $values[]       = $data['transid'];
+            $types         .= 's'; // string
+        }
+        //currency add
+        if (isset($data['currency'])) {
+            $insertCols[]   = 'currency';
+            $placeholders[] = '?';
+            $values[]       = $data['currency'];
+            $types         .= 's'; // string
+        }
+        //payment_type add
+        if (isset($data['payment_type'])) {
+            $insertCols[]   = 'payment_type';
+            $placeholders[] = '?';
+            $values[]       = $data['payment_type'];
+            $types         .= 's'; // string
+        }
+        //coupon add
+        if (isset($data['coupon'])) {
+            $insertCols[]   = 'coupon';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['coupon']);
+            $types         .= 'd'; // decimal
+        }
+        //coupon_reduce add
+        if (isset($data['coupon_reduce'])) {
+            $insertCols[]   = 'coupon_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['coupon_reduce']);
+            $types         .= 'd'; // decimal
+        }
+        //credit add
+        if (isset($data['credit'])) {
+            $insertCols[]   = 'credit';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['credit']);
             $types         .= 'd'; // decimal
         }
         
