@@ -1353,18 +1353,14 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         </div>
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
             <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
-                <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
+                <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
                 </button>
-            <?php  } ?>
+            <?php } ?>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#db8235] transition">
                 Save as Draft
-            </button>
-            
-            <button type="button" onclick="validateAndSubmit('generate')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
-                Save and Generate Item Code
             </button>
         </div>
     </form>
@@ -2213,94 +2209,139 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    // 1. Open Popup
-    function openPublishPopup() {
-        const popup = document.getElementById('publishConfirmPopup');
-        if(popup) {
-            popup.classList.remove('hidden');
-        } else {
-            console.error("Popup element 'publishConfirmPopup' not found!");
-        }
-    }
-    // 2. Close Popup
-    function closePublishPopup() {
-        const popup = document.getElementById('publishConfirmPopup');
-        if(popup) {
-            popup.classList.add('hidden');
-        }
-    }
-    // 3. Trigger Controller Function
-    function triggerPublishController() {
-        // Get the current ID
-        const urlParams = new URLSearchParams(window.location.search);
-        const recordId = urlParams.get('id');
-        // CHECK: Is the library loaded?
-        if (typeof Swal === 'undefined') {
-            alert("Error: SweetAlert2 library not loaded. Please check Fix 1.");
-            return;
-        }
-        if (!recordId) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Record ID not found in URL.' });
-            closePublishPopup();
-            return;
-        }
-        // Visual Feedback
-        const confirmBtn = document.querySelector('#publishConfirmPopup button.confirm-btn') || document.querySelector('#publishConfirmPopup button:last-child');
-        let originalText = "Yes, Publish";
+    // 1. New function to bridge Validation and Publishing
+    function handlePublishClick() {
+        // Run the same validation used for 'generate'
+        // We pass a dummy action 'check_only' to see if it passes
+        const isValid = performValidationOnly(); 
         
-        if (confirmBtn) {
-            originalText = confirmBtn.innerText;
-            confirmBtn.innerText = "Processing...";
-            confirmBtn.disabled = true;
+        if(isValid) {
+            openPublishPopup();
         }
-        const targetUrl = `index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`;
-        fetch(targetUrl)
-        .then(response => {
-            if (!response.ok) throw new Error('Network error: ' + response.status);
-            return response.text(); 
-        })
-        .then(text => {
-            // Handle Blank = Success
-            if (!text || text.trim() === '') {
-                return { status: 'success', message: 'Published Successfully!' };
+    }
+
+    // 2. Helper to run validation without submitting
+    function performValidationOnly() {
+        let errors = [];
+        const form = document.getElementById('product_form');
+        
+        const getVal = (name) => {
+            const el = form.querySelector(`[name="${name}"]`);
+            return el ? el.value.trim() : '';
+        };
+
+        const isInvalidPrice = (val) => {
+            const num = parseFloat(val);
+            return !val || isNaN(num) || num <= 0;
+        };
+
+        // --- 1. GENERAL FIELDS ---
+        if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
+        if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
+        if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
+        if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
+        if (!getVal('material_code')) errors.push("Field 'Material' is required.");
+        if (!getVal('group_name')) errors.push("Field 'Group' is required.");
+        if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
+        if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
+        if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
+
+        // Category Check (Checkboxes)
+        const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
+        if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+
+        // Lead Time
+        const leadTime = parseFloat(getVal('lead_time_days')) || 0;
+        if (leadTime < 1) errors.push("'Lead Time' must be at least 1 day.");
+
+        // --- 2. MAIN ITEM ---
+        const mainQty = parseFloat(getVal('quantity_received')) || 0;
+        if (mainQty < 1) errors.push("Main Item: 'Quantity' must be at least 1.");
+
+        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+        if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
+        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
+        if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
+
+        // Gallery Check (Main)
+        const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
+        if (!mainGrid || mainGrid.querySelectorAll('.draggable-item').length < 1) {
+            errors.push("Main Item: Please add at least 1 photo to the Gallery.");
+        }
+
+        // --- 3. VARIATIONS LOOP ---
+        const variations = document.querySelectorAll('.variation-card');
+        variations.forEach((card, index) => {
+            const cardTitle = `Variation #${index + 1}`;
+            const getCardVal = (partialName) => {
+                const input = card.querySelector(`input[name*="[${partialName}]"], select[name*="[${partialName}]"]`);
+                return input ? input.value.trim() : '';
+            };
+
+            const vQty = parseFloat(getCardVal('quantity')) || 0;
+            if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
+
+            if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('usd_price'))) errors.push(`${cardTitle}: 'USD Price' must be greater than 0.`);
+            if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);
+
+            const vGrid = card.querySelector('.photo-group-grid');
+            if (vGrid && vGrid.querySelectorAll('.draggable-item').length < 1) {
+                errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
             }
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                if (text.toLowerCase().includes('error')) throw new Error('Server Error: ' + text);
-                return { status: 'success', message: 'Published Successfully!' };
-            }
+        });
+
+        // --- 4. SHOW ERRORS IF ANY ---
+        if (errors.length > 0) {
+            let errorHtml = '<div style="text-align: left; max-height: 300px; overflow-y: auto;"><ul style="list-style-type: disc; padding-left: 20px;">';
+            errors.forEach(err => { errorHtml += `<li style="margin-bottom: 5px; color: #d33;">${err}</li>`; });
+            errorHtml += '</ul></div>';
+
+            Swal.fire({
+                icon: 'error',
+                title: 'Validation Failed',
+                html: errorHtml,
+                confirmButtonColor: '#d97824'
+            });
+            return false;
+        }
+        return true;
+    }
+
+    // 3. Update Publish Controller to Save Form + Publish
+    function triggerPublishController() {
+        const form = document.getElementById('product_form');
+        const formData = new FormData(form);
+        const recordId = new URLSearchParams(window.location.search).get('id');
+
+        const confirmBtn = document.querySelector('#publishConfirmPopup button:last-child');
+        confirmBtn.innerText = "Saving & Publishing...";
+        confirmBtn.disabled = true;
+
+        // First: Save the current form data so changes aren't lost
+        fetch(form.action + '&save_action=generate', {
+            method: 'POST',
+            body: formData
         })
+        .then(() => {
+            // Second: Call the Publish API after save is successful
+            return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`);
+        })
+        .then(response => response.json())
         .then(data => {
-            if (data.status === 'error') throw new Error(data.message);
-            
             closePublishPopup();
-            // SUCCESS POPUP
             Swal.fire({
                 title: 'Published!',
-                text: data.message || "Product has been published.",
-                icon: 'success',
-                confirmButtonColor: '#3085d6',
-                confirmButtonText: 'Great!'
-            }).then((result) => {
-                if (result.isConfirmed) window.location.reload();
-            });
+                text: 'Form saved and product published successfully.',
+                icon: 'success'
+            }).then(() => window.location.reload());
         })
         .catch(error => {
             closePublishPopup();
-            // ERROR POPUP
-            Swal.fire({
-                icon: 'error',
-                title: 'Failed',
-                text: error.message,
-                confirmButtonColor: '#d33'
-            });
-        })
-        .finally(() => {
-            if (confirmBtn) {
-                confirmBtn.innerText = originalText;
-                confirmBtn.disabled = false;
-            }
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Publishing failed: ' + error.message });
         });
     }
 </script>
