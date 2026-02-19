@@ -1,0 +1,4 @@
+2026-02-18 23:46:20 - Box 1 - Shipment ID: 1188383652 - Label Info Response: {"message":"404 Not Found","status_code":404}
+2026-02-18 23:46:20 - Box 1 - Shipment ID: 1188383652 - Label URL not found in response
+2026-02-19 13:24:47 - Box 1 - Shipment ID: 1189118254 - Label Info Response: {"label_created":0,"response":"error while creating label"}
+2026-02-19 13:24:47 - Box 1 - Shipment ID: 1189118254 - Label URL not found in response

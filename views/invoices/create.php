@@ -235,6 +235,7 @@
                 <input type="hidden" name="gst[]" value="<?= $item['gst'] ?>">
                 <input type="hidden" name="tax_rate[]" value="<?= $item['gst'] ?>">
                 <input type="hidden" name="currency[]" value="<?php echo $item['currency'] ?? 'INR'; ?>">
+                <input type="hidden" name="image_url[]" value="<?= $item['image'] ?? '' ?>">
                 <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
                 <td class="p-2">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
@@ -497,7 +498,8 @@ function previewInvoice() {
             igst: row.querySelector('input[name="igst[]"]')?.value || 0,
             tax_amount: row.querySelector('input[name="tax_amount[]"]')?.value || 0,
             line_total: row.querySelector('input[name="line_total[]"]')?.value || 0,
-            currency: row.querySelector('input[name="currency[]"]')?.value || 'INR'
+            currency: row.querySelector('input[name="currency[]"]')?.value || 'INR',
+            image_url: row.querySelector('input[name="image_url[]"]')?.value || ''
         });
     });
     
@@ -902,6 +904,8 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
                 <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
                 <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
                 <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
+                <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
+                <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
                 <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
                 <td class="p-2">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>

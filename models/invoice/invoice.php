@@ -63,13 +63,13 @@ class Invoice {
     }
 
     public function createInvoiceItem($data) {
-        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total, image_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $stmt->bind_param(
-            'isssssidddddddd',
+            'isssssidddddddds',
             $data['invoice_id'],
             $data['order_number'],
             $data['item_code'],
@@ -84,7 +84,8 @@ class Invoice {
             $data['sgst'],
             $data['igst'],
             $data['tax_amount'],
-            $data['line_total']
+            $data['line_total'],           
+            $data['image_url']
         );
 
         if ($stmt->execute()) {

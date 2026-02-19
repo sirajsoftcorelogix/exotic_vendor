@@ -283,3 +283,47 @@ Create table vp_invoices_international (
 ALTER table `vp_order_info` ADD `total` DECIMAL(15,2) NULL DEFAULT 0 AFTER `shipping_email`;
 
 ALTER TABLE `vp_products` ADD `notes` TEXT NULL AFTER `discount_india`;
+
+--create dispatch details table
+CREATE TABLE vp_dispatch_details (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_number VARCHAR(100) NOT NULL,
+    invoice_id BIGINT UNSIGNED NULL, 
+    box_no VARCHAR(50) NULL,
+    length DECIMAL(15,2) NULL DEFAULT 0.00,
+    width DECIMAL(15,2) NULL DEFAULT 0.00,
+    height DECIMAL(15,2) NULL DEFAULT 0.00,
+    weight DECIMAL(15,2) NULL DEFAULT 0.00,
+    volumetric_weight DECIMAL(15,2) NULL DEFAULT 0.00,
+    billing_weight DECIMAL(15,2) NULL DEFAULT 0.00,
+    shipping_charges DECIMAL(15,2) NULL DEFAULT 0.00,      
+    dispatch_date DATE NOT NULL,
+    courier_name VARCHAR(255) NOT NULL,
+    tracking_number VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+-- Add foreign key constraint to link dispatch details with invoices
+ALTER TABLE vp_dispatch_details
+    ADD CONSTRAINT fk_dispatch_details_invoice
+        FOREIGN KEY (invoice_id)
+        REFERENCES vp_invoices(id)
+        ON DELETE CASCADE;
+-- Add index on order_number for faster lookups
+CREATE INDEX idx_order_number ON vp_dispatch_details(order_number);
+-- Add index on invoice_id for faster lookups
+CREATE INDEX idx_invoice_id ON vp_dispatch_details(invoice_id);
+ALTER TABLE vp_dispatch_details ADD `shiprocket_order_id` VARCHAR(100) NULL AFTER `tracking_number`,
+ADD `shiprocket_shipment_id` VARCHAR(100) NULL AFTER `shiprocket_order_id`,
+ADD `shiprocket_tracking_url` VARCHAR(255) NULL AFTER `shiprocket_shipment_id`,
+ADD `awb_code` VARCHAR(100) NULL AFTER `shiprocket_tracking_url`,
+ADD `shipment_status` VARCHAR(50) NULL AFTER `awb_code`,
+ADD `label_url` VARCHAR(255) NULL AFTER `shipment_status`;
+
+ALTER TABLE `vp_invoice_items` ADD `image_url` VARCHAR(255) NULL AFTER `item_code`;
+ALTER TABLE `vp_dispatch_details` ADD `box_items` TEXT NULL AFTER `weight`;
+ALTER TABLE `vp_dispatch_details` ADD `created_by` INT NULL AFTER `label_url`;
+
+ALTER TABLE `vp_order_info` ADD `giftvoucher` VARCHAR(100) NULL AFTER `updated_at`, ADD `giftvoucher_reduce` VARCHAR(100) NULL AFTER `giftvoucher`, ADD `transid` VARCHAR(100) NULL AFTER `giftvoucher_reduce`, ADD `currency` VARCHAR(100) NULL AFTER `transid`, ADD `payment_type` VARCHAR(100) NULL AFTER `currency`, ADD `coupon` VARCHAR(100) NULL AFTER `payment_type`, ADD `coupon_reduce` VARCHAR(100) NULL AFTER `coupon`;
