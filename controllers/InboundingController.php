@@ -22,6 +22,7 @@ class InboundingController {
             'status_step'         => $_GET['status_step'] ?? '',
             'updated_by_user_id'  => $_GET['updated_by'] ?? ''
         ];
+$sort = $_GET['sort'] ?? '';
 
         // 2. Pagination Logic
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -32,7 +33,7 @@ class InboundingController {
             $loggedUserId = $_SESSION['user']['id'];
         // 3. Fetch Main Data
         $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters ,$isMyInbound,
-    $loggedUserId); 
+    $loggedUserId,$sort); 
         
         // 4. Fetch Dynamic Dropdown Data (The function we just updated)
         $dropdowns = $inboundingModel->getFilterDropdowns();
@@ -1563,7 +1564,7 @@ class InboundingController {
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'

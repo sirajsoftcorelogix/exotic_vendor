@@ -501,6 +501,64 @@ $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
     </a>
 <?php endforeach; ?>
 </nav>
+<div class="relative inline-block">
+
+    <!-- SORT BUTTON -->
+    <button
+        id="sortToggle"
+        type="button"
+        class="flex items-center gap-1 text-sm font-medium text-gray-600
+               hover:text-orange-600 focus:outline-none">
+        <span>⇅</span>
+        <span>Sort</span>
+    </button>
+
+    <!-- SORT DROPDOWN -->
+    <div
+        id="sortMenu"
+        class="hidden absolute right-0 mt-2 w-56 bg-white
+               border border-gray-200 rounded-lg shadow-lg z-50">
+
+        <ul class="text-sm text-gray-700">
+            <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+    data-sort="inbound_desc">
+    Inbound Date — New to Old
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+    data-sort="inbound_asc">
+    Inbound Date — Old to New
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+    data-sort="edited_desc">
+    Edited Date — New to Old
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+    data-sort="edited_asc">
+    Edited Date — Old to New
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+    data-sort="cp_desc">
+    CP — High to Low
+</li>
+
+<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+    data-sort="cp_asc">
+    CP — Low to High
+</li>
+
+        </ul>
+    </div>
+
+</div>
+
+
+
+
+
 
 
             <div class="relative inline-block text-left ml-4">
@@ -1224,3 +1282,49 @@ $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
         form.submit();
     }
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const toggle = document.getElementById('sortToggle');
+    const menu   = document.getElementById('sortMenu');
+
+    if (!toggle || !menu) return;
+
+    // Toggle dropdown
+    toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        menu.classList.toggle('hidden');
+    });
+
+    // Close on outside click
+    document.addEventListener('click', function () {
+        menu.classList.add('hidden');
+    });
+
+    // Prevent closing when clicking inside menu
+    menu.addEventListener('click', function (e) {
+        e.stopPropagation();
+    });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    const sortItems = document.querySelectorAll('.sort-item');
+
+    sortItems.forEach(item => {
+        item.addEventListener('click', function () {
+
+            const sortValue = this.getAttribute('data-sort');
+
+            const params = new URLSearchParams(window.location.search);
+
+            params.set('sort', sortValue);      // set sort
+            params.set('page_no', 1);           // reset to page 1
+
+            window.location.search = params.toString();
+        });
+    });
+
+});
+</script>
+
