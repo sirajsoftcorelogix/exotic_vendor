@@ -327,3 +327,4 @@ ALTER TABLE `vp_dispatch_details` ADD `box_items` TEXT NULL AFTER `weight`;
 ALTER TABLE `vp_dispatch_details` ADD `created_by` INT NULL AFTER `label_url`;
 
 ALTER TABLE `vp_order_info` ADD `giftvoucher` VARCHAR(100) NULL AFTER `updated_at`, ADD `giftvoucher_reduce` VARCHAR(100) NULL AFTER `giftvoucher`, ADD `transid` VARCHAR(100) NULL AFTER `giftvoucher_reduce`, ADD `currency` VARCHAR(100) NULL AFTER `transid`, ADD `payment_type` VARCHAR(100) NULL AFTER `currency`, ADD `coupon` VARCHAR(100) NULL AFTER `payment_type`, ADD `coupon_reduce` VARCHAR(100) NULL AFTER `coupon`;
+ALTER TABLE `vp_order_info` ADD `credit` DECIMAL(10,0) NULL AFTER `coupon_reduce`;
