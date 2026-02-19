@@ -33,13 +33,14 @@ class InboundingController {
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
         $valid_limits = [10, 25, 50, 100]; 
         if (!in_array($limit, $valid_limits)) $limit = 10;
-
+        $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
+        $loggedUserId = $_SESSION['user']['id'];
         // 3. Fetch Main Data
-        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters); 
+        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters ,$isMyInbound,$loggedUserId); 
         
         // 4. Fetch Dynamic Dropdown Data (The function we just updated)
         $dropdowns = $inboundingModel->getFilterDropdowns();
-
+        $alluser_list = $inboundingModel->getAllActiveUsers();
         $data = [
             'inbounding_data' => $pt_data["inbounding"],
             'page_no'         => $page_no,
@@ -55,12 +56,45 @@ class InboundingController {
             'vendor_list'     => $dropdowns['vendors'],
             'user_list'       => $dropdowns['users'],
             'group_list'      => $dropdowns['groups'],
+            'alluser_list'      => $alluser_list
         ];
         
         renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
     // In your Inbounding Controller
-
+    public function bulk_assign_action(){
+        is_login();
+        global $inboundingModel;
+        if (!isset($_POST['ids'], $_POST['user_id'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Missing parameters'
+            ]);
+            exit;
+        }
+        $ids_string = trim($_POST['ids']);      // "12,15,22"
+        $user_id    = (int) $_POST['user_id'];
+        if ($ids_string === '' || $user_id <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid data'
+            ]);
+            exit;
+        }
+        $ids = array_filter(array_map('intval', explode(',', $ids_string)));
+        if (empty($ids)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No valid IDs found'
+            ]);
+            exit;
+        }
+        $result = $inboundingModel->bulkAssign($ids, $user_id);
+        echo json_encode([
+            'success' => $result ? true : false
+        ]);
+        exit;
+    }
     public function exportSelected() {
         global $inboundingModel; // Use the global model instance
 

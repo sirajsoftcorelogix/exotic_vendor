@@ -332,14 +332,15 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             'Editing'    => 'Pending Editing',
             'Data Entry' => 'Pending Data Entry',
             'Published'  => 'Pending Publish',
-            'FinalPublished' => 'Published'
+            'FinalPublished' => 'Published',
+            'my_inbound'  => 'My Inbound'
         ];
     ?>
 
     <div class="bg-white border-b border-gray-200 mb-6 sticky top-0 z-30">
         <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
             
-            <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar" aria-label="Tabs">
+            <!-- <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar" aria-label="Tabs">
                 <?php foreach($tabs as $key => $label): 
                     $isActive = ($current_step == $key);
                     $activeClass    = "border-orange-500 text-orange-600 font-bold border-b-4";
@@ -350,6 +351,29 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <?= $label ?>
                 </a>
                 <?php endforeach; ?>
+            </nav> -->
+            <?php 
+                $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
+            ?>
+            <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar">
+                <?php foreach ($tabs as $key => $label): 
+                    if ($key === 'my_inbound') {
+                        $url = "?page=inbounding&action=list&my_inbound=1";
+                    } else {
+                        $url = "?page=inbounding&action=list&status_step=" . urlencode($key);
+                    }
+                    $isActive = (
+                        ($key === 'my_inbound' && $isMyInbound) ||
+                        ($key !== 'my_inbound' && $current_step == $key && !$isMyInbound)
+                    );
+                    $activeClass   = "border-orange-500 text-orange-600 font-bold border-b-4";
+                    $inactiveClass = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
+                ?>
+                    <a href="<?= $url ?>"
+                       class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
+                        <?= $label ?>
+                    </a>
+                <?php endforeach; ?>
             </nav>
 
             <div class="relative inline-block text-left ml-4">
@@ -358,6 +382,12 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </button>
                 <div id="action-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 transform origin-top-right">
                     <div class="py-1">
+                        <button type="button"
+                            onclick="openAssignPopupFromActions()"
+                            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                            <i data-lucide="user-plus" class="w-4 h-4 text-blue-600"></i>
+                            Assign Selected
+                        </button>
                         <button type="button" onclick="exportSelectedData()" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
                             <i data-lucide="download" class="w-4 h-4 text-green-600"></i> Export Selected
                         </button>
@@ -689,6 +719,156 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         <img id="popupImage" class="max-w-full max-h-[85vh] rounded-lg object-contain" src="" alt="Image Preview">
     </div>
 </div>
+<!-- ASSIGN POPUP -->
+<div id="assignModal">
+
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <!-- Sliding Container -->
+            <div id="modal-slider-assign"
+                class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50"
+                style="width: 35%; min-width: 400px;">
+
+                <!-- Close Button -->
+                <div class="flex-shrink-0 flex items-start pt-5">
+                    <button id="close-assign-popup-btn"
+                        class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg"
+                        style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Popup Panel -->
+                <div class="h-full bg-white shadow-2xl" style="width: 100%;">
+                    <div class="h-full w-full overflow-y-auto">
+                        <div class="p-8">
+
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">
+                                Assign Inbound Items
+                            </h2>
+
+                            <div id="assignMsg" style="margin-top:10px;"></div>
+
+                            <form id="assignForm">
+
+                                <!-- Hidden IDs -->
+                                <input type="hidden" name="inbound_ids" id="assign_inbound_ids">
+
+                                <!-- User Dropdown -->
+                                <div class="pt-4">
+                                    <label class="text-sm font-medium text-gray-700">
+                                        Select User <span class="text-red-500">*</span>
+                                    </label>
+
+                                    <select id="assign_user_id"
+                                        name="assign_user_id"
+                                        class="form-input w-full mt-1" required>
+                                        <option value="">-- Select User --</option>
+                                        <?php foreach ($alluser_list as $user): ?>
+                                            <option value="<?= $user['id'] ?>">
+                                                <?= $user['name'] ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <!-- Buttons -->
+                                <div class="flex justify-center items-center gap-4 pt-6 border-t mt-6">
+                                    <button type="button"
+                                        id="cancel-assign-btn"
+                                        class="action-btn cancel-btn">
+                                        Back
+                                    </button>
+
+                                    <button type="submit"
+                                        class="action-btn save-btn">
+                                        Save Assignment
+                                    </button>
+                                </div>
+
+                            </form>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    function openAssignPopupFromActions() {
+        const ids = getSelectedIds();
+
+        if (ids.length === 0) {
+            alert("Please select at least one inbound item.");
+            return;
+        }
+
+        document.getElementById('assign_inbound_ids').value = ids.join(',');
+
+        // Slide popup in
+        document.getElementById('modal-slider-assign')
+            .classList.remove('translate-x-full');
+
+        document.getElementById('action-menu').classList.add('hidden');
+    }
+</script>
+<script>
+    function closeAssignPopup() {
+        document.getElementById('modal-slider-assign')
+            .classList.add('translate-x-full');
+    }
+
+
+
+    // Close button
+    document.getElementById('close-assign-popup-btn')
+        .addEventListener('click', closeAssignPopup);
+
+    // Back button
+    document.getElementById('cancel-assign-btn')
+        .addEventListener('click', closeAssignPopup);
+</script>
+
+<script>
+    document.getElementById('assignForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const userId = document.getElementById('assign_user_id').value;
+        const ids = document.getElementById('assign_inbound_ids').value;
+
+        if (!userId) {
+            alert("Please select a user");
+            return;
+        }
+
+        fetch('?page=inbounding&action=bulkAssign', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `ids=${ids}&user_id=${userId}`
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log(data);
+                if (data.success) {
+                    alert('Items assigned successfully');
+                    localStorage.removeItem('selected_inbound_ids');
+                    location.reload();
+                } else {
+                    alert(data.message || 'Assignment failed');
+                }
+            })
+            .catch(() => alert('Server error'));
+    });
+</script>
 <script>
     function toggleFilterPanel() {
         const panel = document.getElementById('filter-panel');

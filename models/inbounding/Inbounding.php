@@ -6,7 +6,7 @@ class Inbounding {
     }
     // models/inbounding/InboundingModel.php (or wherever your getAll is defined)
 
-    public function getAll($page = 1, $limit = 10, $search = '', $filters = []) {
+    public function getAll($page = 1, $limit = 10, $search = '', $filters = [],$isMyInbound = false, $userId = 0) {
         $page = (int)$page;
         if ($page < 1) $page = 1;
 
@@ -99,7 +99,10 @@ class Inbounding {
             $i_code = $this->conn->real_escape_string($filters['item_code']);
             $where[] = "vi.Item_code LIKE '%$i_code%'"; 
         }
-
+        if ($isMyInbound && $userId > 0) {
+            $userId = (int)$userId;
+            $where[] = "vi.assigned_to_user_id = $userId";
+        }
         // feeder by
         if (!empty($filters['updated_by_user_id'])) {
             $upd_id = (int)$filters['updated_by_user_id'];
@@ -111,7 +114,10 @@ class Inbounding {
         if (!empty($where)) {
             $whereSql = "WHERE " . implode(' AND ', $where);
         }
-
+        $orderBy = "vi.id DESC";
+        if ($isMyInbound) {
+            $orderBy = "vi.assigned_at DESC, vi.id DESC";
+        }
         // Total Count (using alias vi)
         $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound as vi $whereSql");
         $rowCount = $resultCount->fetch_assoc();
@@ -216,7 +222,32 @@ class Inbounding {
 
         return $data;
     }
-   
+    public function getAllActiveUsers(){
+        $sql = "SELECT id, name
+                FROM vp_users
+                WHERE is_active = 1
+                ORDER BY name ASC";
+
+        $stmt = $this->conn->prepare($sql);
+        $stmt->execute();
+
+        $result = $stmt->get_result(); // MySQLi result
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function bulkAssign(array $ids, int $user_id){
+        if (empty($ids)) {
+            return false;
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = "UPDATE vp_inbound
+            SET assigned_to_user_id = ?, assigned_at = NOW()
+            WHERE id IN ($placeholders)";
+        $stmt = $this->conn->prepare($sql);
+        $types = str_repeat('i', count($ids) + 1);
+        $params = array_merge([$user_id], $ids);
+        $stmt->bind_param($types, ...$params);
+        return $stmt->execute();
+    }
     public function getItamcode(){
         $result1 = $this->conn->query("SELECT `item_code`,`title` FROM `vp_products`");
         if ($result1) {
