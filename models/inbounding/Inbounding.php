@@ -95,6 +95,10 @@ class Inbounding {
                 $where[] = "(vi.Marketplace != 'exoticindia' OR vi.Marketplace IS NULL)";
             }
         }
+        if (!empty($filters['item_code'])) {
+            $i_code = $this->conn->real_escape_string($filters['item_code']);
+            $where[] = "vi.Item_code LIKE '%$i_code%'"; 
+        }
 
         // feeder by
         if (!empty($filters['updated_by_user_id'])) {
@@ -762,7 +766,7 @@ public function update_image_variation($img_id, $variation_id) {
         if (empty($code)) return '';
 
         // Search by the 'category' column, NOT 'id'
-        $stmt = $this->conn->prepare("SELECT initial FROM category WHERE category = ?");
+        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE category = ?");
         if (!$stmt) return '';
 
         // Use 's' (string) because your codes might be "-2" or "10002"
@@ -771,15 +775,16 @@ public function update_image_variation($img_id, $variation_id) {
         $result = $stmt->get_result();
 
         if ($row = $result->fetch_assoc()) {
-            return $row['initial'];
+            return $row['display_name'];
         }
         return ''; // Return empty if not found
     }
 
     public function getLastItemCode($prefix) {
+        // REGEXP '^[A-Z]{2}[0-9]{4}$' matches: 2 letters, 4 digits
         $sql = "SELECT item_code FROM vp_inbound 
                 WHERE item_code LIKE ? 
-                AND item_code REGEXP '^[A-Z]{4}[0-9]{2}$'
+                AND item_code REGEXP '^[A-Z]{2}[0-9]{4}$'
                 ORDER BY item_code DESC LIMIT 1";
                 
         $stmt = $this->conn->prepare($sql); 
@@ -789,7 +794,7 @@ public function update_image_variation($img_id, $variation_id) {
             return null;
         }
 
-        $search = $prefix . '%'; // e.g., 'B%'
+        $search = $prefix . '%'; 
         $stmt->bind_param("s", $search);
         $stmt->execute();
         $result = $stmt->get_result();
