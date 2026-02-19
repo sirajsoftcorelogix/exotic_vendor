@@ -387,5 +387,26 @@ function checkMinStock(id) {
 function closeErrorModal() {
     document.getElementById('errorModal').classList.add('hidden');
 }
-// End of purchase_list.js
 
+function initMasterPurchaseTable() {
+    const tableEl = document.getElementById('master-purchase-table');
+    if (!tableEl) return;
+
+    tableEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button.details-btn');
+        if (!btn) return;
+
+        const tr = btn.closest('tr');
+        const detailRow = tr ? tr.nextElementSibling : null;
+        if (!detailRow || !detailRow.classList.contains('detail-row')) return;
+
+        detailRow.classList.toggle('hidden');
+        const icon = btn.querySelector('.details-icon');
+        if (icon) icon.textContent = detailRow.classList.contains('hidden') ? '+' : '-';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initMasterPurchaseTable();
+});
+// End of purchase_list.js

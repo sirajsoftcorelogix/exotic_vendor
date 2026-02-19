@@ -148,9 +148,10 @@
     <div class="bg-white rounded-xl shadow-md ">
         <div class="p-6 ">
             <div class="w-full max-w-full overflow-x-auto block">
-                <table class="min-w-max w-full divide-y divide-gray-200">
+                <table id="master-purchase-table" class="min-w-max w-full divide-y divide-gray-200">
                     <thead>
                         <tr>
+                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order Number</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
@@ -160,25 +161,8 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                <button class="flex items-center gap-2 hover:text-gray-700"
-                                    onclick="sortTableByDate()">
-                                    Added Date
-                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                        class="h-8 w-8 text-gray-400"
-                                        viewBox="0 0 20 20"
-                                        fill="currentColor">
-                                        <path d="M5 8l5-5 5 5H5z" />
-                                        <path d="M5 12l5 5 5-5H5z" />
-                                    </svg>
-                                </button>
-                            </th>
-
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchased Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weight</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Measurements</th>
-                            <th class="px-0 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -186,6 +170,32 @@
                             $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
                         ?>
                             <tr>
+                                <?php
+                                $date_purchased = $pl['date_purchased_readable']
+                                    ?? (!empty($pl['date_purchased']) ? date('d M Y', strtotime($pl['date_purchased'])) : 'N/A');
+
+                                $weight = 'N/A';
+                                if (!empty($pl['product_weight']) && $pl['product_weight'] !== 'N/A') {
+                                    $weight = htmlspecialchars($pl['product_weight'] . ' ' . ($pl['product_weight_unit'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                }
+
+                                $dims = [];
+                                if (!empty($pl['prod_height']) && $pl['prod_height'] !== 'N/A') {
+                                    $dims[] = 'H: ' . $pl['prod_height'];
+                                }
+                                if (!empty($pl['prod_width']) && $pl['prod_width'] !== 'N/A') {
+                                    $dims[] = 'W: ' . $pl['prod_width'];
+                                }
+                                if (!empty($pl['prod_length']) && $pl['prod_length'] !== 'N/A') {
+                                    $dims[] = 'L: ' . $pl['prod_length'];
+                                }
+                                $measurements = htmlspecialchars(implode(' x ', $dims), ENT_QUOTES, 'UTF-8');
+                                ?>
+                                <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-900 details-control">
+                                    <button type="button" class="details-btn bg-amber-500 text-white w-7 h-7 rounded-full flex items-center justify-center" aria-label="Toggle details">
+                                        <span class="details-icon text-lg leading-none">+</span>
+                                    </button>
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer"
                                     onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')">
                                     <?php echo htmlspecialchars($pl['item_code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
@@ -195,7 +205,7 @@
                                 if (isset($pl['order_number']) && !empty($pl['order_number'])) {
                                     $orderLink = base_url('index.php?order_number=' . $pl['order_number']);
                                 ?>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td class="px-4 py-4 whitespace-normal break-words text-sm text-gray-900 max-w-[200px]">
                                     <a href="<?php echo htmlspecialchars($orderLink); ?>" 
                                     target="_blank" 
                                     class="text-yellow-500 hover:text-yellow-600">
@@ -203,7 +213,7 @@
                                     </a>
                                 </td>
                                 <?php } else {?>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                     N/A
                                 </td>    
                                 <?php } ?>
@@ -239,81 +249,36 @@
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <?php
-                                        $vendor = trim($pl['vendor'] ?? '');
-                                        echo (!empty($vendor) && strtoupper($vendor) !== 'N/A')
-                                        ? ucwords(htmlspecialchars($vendor))
-                                        : 'N/A';
-                                    ?>
-                                </td>
-
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php
                                     $date_added = $pl['date_added_readable']
                                         ?? (!empty($pl['date_added']) ? date('d M Y', strtotime($pl['date_added'])) : 'N/A');
 
                                     echo htmlspecialchars($date_added, ENT_QUOTES, 'UTF-8');
                                     ?>
                                 </td>
-
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php
-                                    $date_purchased = $pl['date_purchased_readable']
-                                        ?? (!empty($pl['date_purchased']) ? date('d M Y', strtotime($pl['date_purchased'])) : 'N/A');
-
-                                    echo htmlspecialchars($date_purchased, ENT_QUOTES, 'UTF-8');
-                                    ?>
+                                    <button type="button"
+                                        class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                                        onclick="deletePurchaseListItem('<?php echo $pl['id']; ?>')"
+                                        aria-label="Delete">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M6 7a1 1 0 011 1v7a1 1 0 11-2 0V8a1 1 0 011-1zm4 0a1 1 0 011 1v7a1 1 0 11-2 0V8a1 1 0 011-1zm4-3h-3.5l-1-1h-3l-1 1H2a1 1 0 100 2h1v11a2 2 0 002 2h10a2 2 0 002-2V6h1a1 1 0 100-2z" />
+                                        </svg>
+                                    </button>
                                 </td>
 
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php
-                                    if (!empty($pl['product_weight']) && $pl['product_weight'] !== 'N/A') {
-                                        echo htmlspecialchars($pl['product_weight'] . ' ' . ($pl['product_weight_unit'] ?? ''), ENT_QUOTES, 'UTF-8');
-                                    } else {
-                                        echo 'N/A';
-                                    }
-                                ?>
-                                </td>
-                                <?php
-                                $dims = [];
-
-                                if (!empty($pl['prod_height']) && $pl['prod_height'] !== 'N/A') {
-                                    $dims[] = 'H: ' . $pl['prod_height'];
-                                }
-
-                                if (!empty($pl['prod_width']) && $pl['prod_width'] !== 'N/A') {
-                                    $dims[] = 'W: ' . $pl['prod_width'];
-                                }
-
-                                if (!empty($pl['prod_length']) && $pl['prod_length'] !== 'N/A') {
-                                    $dims[] = 'L: ' . $pl['prod_length'];
-                                }
-                                ?>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?= htmlspecialchars(implode(' x ', $dims), ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-
-                                <!-- action dropdown -->
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
-                                    <div class="menu-wrapper">
-                                        <button class="menu-button text-gray-500 hover:text-gray-700" onclick="toggleMenu(this)">
-                                            &#x22EE;
-                                        </button>
-                                        <ul class="menu-popup text-left">
-                                            <li>
-                                                <a href="javascript:void(0);"
-                                                    onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')"
-                                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                                    View / Edit Details
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="javascript:void(0);"
-                                                    class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                                                    onclick="deletePurchaseListItem('<?php echo $pl['id']; ?>')">
-                                                    Delete
-                                                </a>
-                                            </li>
-                                        </ul>
+                            </tr>
+                            <tr class="detail-row hidden">
+                                <td colspan="10">
+                                    <div class="flex flex-wrap items-center gap-6 text-sm text-gray-700 px-4 py-3 bg-gray-50 rounded-md">
+                                        <div><span class="font-semibold">Vendor:</span> <?php
+                                            $vendor = trim($pl['vendor'] ?? '');
+                                            echo (!empty($vendor) && strtoupper($vendor) !== 'N/A')
+                                            ? ucwords(htmlspecialchars($vendor))
+                                            : 'N/A';
+                                        ?></div>
+                                        <div><span class="font-semibold">Purchased Date:</span> <?= htmlspecialchars($date_purchased, ENT_QUOTES, 'UTF-8'); ?></div>
+                                        <div><span class="font-semibold">Weight:</span> <?= $weight; ?></div>
+                                        <div><span class="font-semibold">Measurements:</span> <?= $measurements ?: 'N/A'; ?></div>
                                     </div>
                                 </td>
                             </tr>
@@ -693,24 +658,6 @@
         document.getElementById('modal-slider-bd').classList.add('translate-x-full');
     });
 
-    //toggleMenu
-    function toggleMenu(button) {
-        const popup = button.nextElementSibling;
-        popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
-
-        // Close other open menus
-        document.querySelectorAll('.menu-popup').forEach(menu => {
-            if (menu !== popup) menu.style.display = 'none';
-        });
-    }
-    // Close menu when clicking outside
-    document.addEventListener('click', function(event) {
-        if (!event.target.closest('.menu-wrapper')) {
-            document.querySelectorAll('.menu-popup').forEach(menu => {
-                menu.style.display = 'none';
-            });
-        }
-    });
     // Delete purchase list item
     /*function deletePurchaseListItem(plId) {
         if (confirm('Are you sure you want to delete this purchase list item?')) {
@@ -792,16 +739,6 @@
         accordionContent.classList.toggle('hidden');
         accordionIcon.classList.toggle('rotate-180');
     });
-
-    function sortTableByDate() {
-        const url = new URL(window.location.href);
-        const current = url.searchParams.get('sort_by_date') || 'desc';
-        const next = current === 'asc' ? 'desc' : 'asc';
-
-        url.searchParams.set('sort_by_date', next);
-        window.location.href = url.toString();
-    }
-
 
     $('#daterange').daterangepicker({
         autoUpdateInput: false,
