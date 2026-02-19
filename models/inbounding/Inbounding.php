@@ -6,12 +6,12 @@ class Inbounding {
     }
     // models/inbounding/InboundingModel.php (or wherever your getAll is defined)
 
-    public function getAll($page = 1, $limit = 10, $search = '', $filters = [],$isMyInbound = false, $userId = 0,$sort = '') {
+    public function getAll($page = 1, $limit = 50, $search = '', $filters = [],$isMyInbound = false, $userId = 0,$sort = '') {
         $page = (int)$page;
         if ($page < 1) $page = 1;
 
         $limit = (int)$limit;
-        if ($limit < 1) $limit = 10;
+        if ($limit < 1) $limit = 50;
 
         $offset = ($page - 1) * $limit;
         $where = [];

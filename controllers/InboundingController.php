@@ -30,9 +30,9 @@ class InboundingController {
         $sort = $_GET['sort'] ?? '';
         // 2. Pagination Logic
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
         $valid_limits = [10, 25, 50, 100]; 
-        if (!in_array($limit, $valid_limits)) $limit = 10;
+        if (!in_array($limit, $valid_limits)) $limit = 50;
         $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
         $loggedUserId = $_SESSION['user']['id'];
         // 3. Fetch Main Data
