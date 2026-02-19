@@ -95,6 +95,10 @@ class Inbounding {
                 $where[] = "(vi.Marketplace != 'exoticindia' OR vi.Marketplace IS NULL)";
             }
         }
+        if (!empty($filters['item_code'])) {
+            $i_code = $this->conn->real_escape_string($filters['item_code']);
+            $where[] = "vi.Item_code LIKE '%$i_code%'"; 
+        }
 
         // feeder by
         if (!empty($filters['updated_by_user_id'])) {

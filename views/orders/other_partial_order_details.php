@@ -21,7 +21,7 @@ $currency = '';
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
 endforeach;
-$currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥', 'CNY' => '¥', 'KRW' => '₩', 'RUB' => '₽', 'AUD' => '$', 'CAD' => '$', 'NZD' => '$', 'SGD' => '$', 'HKD' => '$', 'CHF' => 'CHF', 'SEK' => 'kr', 'NOK' => 'kr', 'DKK' => 'kr', 'ZAR' => 'R', 'BRL' => 'R$', 'MXN' => '$', 'ARS' => '$', 'CLP' => '$', 'COP' => '$', 'PEN' => 'S/', 'AED' => 'د.إ', 'SAR' => '﷼', 'QAR' => '﷼', 'OMR' => '﷼', 'KWD' => 'د.ك', 'BHD' => '.د.ب', 'ILS' => '₪', 'TRY' => '₺', 'THB' => '฿', 'IDR' => 'Rp', 'MYR' => 'RM', 'PHP' => '₱', 'VND' => '₫', 'PKR' => '₨', 'BDT' => '৳', 'LKR' => 'Rs', 'NPR' => 'Rs', 'EGP' => '£', 'KES' => 'KSh', 'NGN' => '₦', 'GHS' => '₵', 'TZS' => 'TSh', 'UGX' => 'USh', 'MAD' => 'د.م.', 'TND' => 'د.ت', 'DZD' => 'دج', 'CZK' => 'Kč', 'HUF' => 'Ft', 'PLN' => 'zł', 'RON' => 'lei', 'BGN' => 'лв', 'UAH' => '₴', ];
+$currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
