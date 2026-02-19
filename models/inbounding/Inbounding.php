@@ -6,7 +6,7 @@ class Inbounding {
     }
     // models/inbounding/InboundingModel.php (or wherever your getAll is defined)
 
-    public function getAll($page = 1, $limit = 10, $search = '', $filters = [],$isMyInbound = false, $userId = 0) {
+    public function getAll($page = 1, $limit = 10, $search = '', $filters = [],$isMyInbound = false, $userId = 0,$sort = '') {
         $page = (int)$page;
         if ($page < 1) $page = 1;
 
@@ -118,6 +118,26 @@ class Inbounding {
         if ($isMyInbound) {
             $orderBy = "vi.assigned_at DESC, vi.id DESC";
         }
+        switch ($sort) {
+            case 'inbound_desc':
+                $orderBy = "vi.created_at DESC";
+                break;
+            case 'inbound_asc':
+                $orderBy = "vi.created_at ASC";
+                break;
+            case 'edited_desc':
+                $orderBy = "vi.modified_at DESC";
+                break;
+            case 'edited_asc':
+                $orderBy = "vi.modified_at ASC";
+                break;
+            case 'cp_desc':
+                $orderBy = "vi.cp DESC";
+                break;
+            case 'cp_asc':
+                $orderBy = "vi.cp ASC";
+                break;
+        }
         // Total Count (using alias vi)
         $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound as vi $whereSql");
         $rowCount = $resultCount->fetch_assoc();
@@ -131,7 +151,7 @@ class Inbounding {
                 FROM vp_inbound as vi
                 LEFT JOIN category as c ON vi.group_name = c.category
                 $whereSql 
-                ORDER BY vi.id DESC 
+                ORDER BY $orderBy
                 LIMIT $limit OFFSET $offset";
                 
         $result = $this->conn->query($sql);

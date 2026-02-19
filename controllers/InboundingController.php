@@ -27,7 +27,7 @@ class InboundingController {
             'in_house'            => $_GET['in_house'] ?? '',
             'item_code'           => $_GET['filter_item_code'] ?? ''
         ];
-
+        $sort = $_GET['sort'] ?? '';
         // 2. Pagination Logic
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
@@ -36,7 +36,7 @@ class InboundingController {
         $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
         $loggedUserId = $_SESSION['user']['id'];
         // 3. Fetch Main Data
-        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters ,$isMyInbound,$loggedUserId); 
+        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters ,$isMyInbound,$loggedUserId,$sort); 
         
         // 4. Fetch Dynamic Dropdown Data (The function we just updated)
         $dropdowns = $inboundingModel->getFilterDropdowns();
