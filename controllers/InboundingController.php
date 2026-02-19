@@ -1644,7 +1644,6 @@ class InboundingController {
 
         $response = curl_exec($ch);
         $result = json_decode($response);
-        echo "<pre>publish response: ";print_r($result);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
@@ -1670,8 +1669,6 @@ class InboundingController {
 
             $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
             $inboundingModel->stat_logs($logData);
-
-            echo "<pre>import response: ";print_r($import_response);
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'

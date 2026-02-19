@@ -2209,6 +2209,19 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+    function openPublishPopup() {
+        const popup = document.getElementById('publishConfirmPopup');
+        if(popup) {
+            popup.classList.remove('hidden');
+        } else {
+            console.error("Popup element 'publishConfirmPopup' not found!");
+        }
+    }function closePublishPopup() {
+        const popup = document.getElementById('publishConfirmPopup');
+        if(popup) {
+            popup.classList.add('hidden');
+        }
+    }
     // 1. New function to bridge Validation and Publishing
     function handlePublishClick() {
         // Run the same validation used for 'generate'
