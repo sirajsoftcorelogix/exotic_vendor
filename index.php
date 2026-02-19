@@ -579,6 +579,10 @@ switch ($page) {
             case 'deleteSelected': 
                 $controller->deleteSelected();
                 break;
+                case 'bulkAssign':
+    $controller->bulk_assign_action();
+    break;
+
             case 'form1':
                 $controller->getform1();
                 break;
@@ -777,6 +781,7 @@ switch ($page) {
                 break;
         }
         break;
+        
 }
 
 
