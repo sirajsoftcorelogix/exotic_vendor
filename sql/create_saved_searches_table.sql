@@ -328,3 +328,5 @@ ALTER TABLE `vp_dispatch_details` ADD `created_by` INT NULL AFTER `label_url`;
 
 ALTER TABLE `vp_order_info` ADD `giftvoucher` VARCHAR(100) NULL AFTER `updated_at`, ADD `giftvoucher_reduce` VARCHAR(100) NULL AFTER `giftvoucher`, ADD `transid` VARCHAR(100) NULL AFTER `giftvoucher_reduce`, ADD `currency` VARCHAR(100) NULL AFTER `transid`, ADD `payment_type` VARCHAR(100) NULL AFTER `currency`, ADD `coupon` VARCHAR(100) NULL AFTER `payment_type`, ADD `coupon_reduce` VARCHAR(100) NULL AFTER `coupon`;
 ALTER TABLE `vp_order_info` ADD `credit` DECIMAL(10,0) NULL AFTER `coupon_reduce`;
+ALTER TABLE `vp_vendors` CHANGE `vendor_code` `vendor_code` VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL;
+
