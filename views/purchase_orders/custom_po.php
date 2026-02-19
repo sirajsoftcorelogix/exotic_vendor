@@ -1156,50 +1156,61 @@ document.getElementById('addRowBtn').addEventListener('click', function() {
 // image handling
 function handleImageUpload(input) {
     const tr = input.closest('tr');
+    const td = input.closest('td');
     const imgHidden = tr.querySelector('input[name="img[]"]');
-    const imgTag = tr.querySelector('img');
-    const file = input.files[0];
-    
+    // target the preview image inside the same cell (more reliable than generic querySelector('img'))
+    const imgTag = td ? td.querySelector('img') : tr.querySelector('td:nth-child(4) img');
+    const file = input.files && input.files[0];
+
+    if (!imgTag) {
+        console.error('Preview <img> not found for the uploaded file.');
+        return;
+    }
+
     if (file) {
-        // Validate file type
         if (!file.type.startsWith('image/')) {
             alert('Please select a valid image file');
             return;
         }
-        
-        // Validate file size (max 5MB)
         if (file.size > 5 * 1024 * 1024) {
             alert('Image size should not exceed 5MB');
             return;
         }
-        
+
         const reader = new FileReader();
         reader.onload = function(e) {
             const imgData = e.target.result;
+            // set preview
+            imgTag.src = imgData;
+            imgTag.style.display = 'block';
+            imgTag.onclick = function() { openImagePopup(imgData); };
+
+            // store base64 (or change to filename if backend expects file upload separately)
             if (imgHidden) imgHidden.value = imgData;
-            if (imgTag) {
-                imgTag.src = imgData;
-                imgTag.style.display = 'block';
-                imgTag.onclick = function() { openImagePopup(imgData); };
+
+            // ensure wrapper is positioned for absolute remove button
+            const wrapper = imgTag.parentElement;
+            if (wrapper && window.getComputedStyle(wrapper).position === 'static') {
+                wrapper.style.position = 'relative';
             }
-            // Add remove icon to the image
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold hover:bg-red-700';
-            removeBtn.innerHTML = '✕';
-            removeBtn.onclick = function(e) {
-                e.preventDefault();
-                imgTag.src = 'https://placehold.co/100x100/e2e8f0/4a5568?text=Upload';
-                imgHidden.value = '';
-                input.value = '';
-                imgTag.parentElement.removeChild(removeBtn);
-                //upload on click again
-                imgTag.onclick = function() {
-                    input.click();
+
+            // add single remove button (avoid duplicates)
+            let removeBtn = wrapper.querySelector('.remove-img-btn');
+            if (!removeBtn) {
+                removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'remove-img-btn absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold hover:bg-red-700';
+                removeBtn.innerHTML = '✕';
+                removeBtn.onclick = function(e) {
+                    e.preventDefault();
+                    imgTag.src = 'https://placehold.co/100x100/e2e8f0/4a5568?text=Upload';
+                    if (imgHidden) imgHidden.value = '';
+                    input.value = '';
+                    if (removeBtn.parentElement) removeBtn.parentElement.removeChild(removeBtn);
+                    imgTag.onclick = function() { input.click(); };
                 };
-            };
-            imgTag.parentElement.style.position = 'relative';
-            imgTag.parentElement.appendChild(removeBtn);
+                wrapper.appendChild(removeBtn);
+            }
         };
         reader.onerror = function() {
             alert('Error reading file');
@@ -1207,6 +1218,66 @@ function handleImageUpload(input) {
         reader.readAsDataURL(file);
     }
 }
+// function handleImageUpload(input) {
+//     const tr = input.closest('tr');
+//     const imgHidden = tr.querySelector('input[name="img[]"]');
+//     const imgTag = tr.querySelector('img');
+    
+//     const file = input.files[0];
+    
+//     if (file) {
+//         // Validate file type
+//         if (!file.type.startsWith('image/')) {
+//             alert('Please select a valid image file');
+//             return;
+//         }
+        
+//         // Validate file size (max 5MB)
+//         if (file.size > 5 * 1024 * 1024) {
+//             alert('Image size should not exceed 5MB');
+//             return;
+//         }
+//         console.log('Selected img1:', imgTag.src);
+//         const reader = new FileReader();
+//         reader.onload = function(e) {
+//             const imgData = e.target.result;
+//             if (imgHidden) imgHidden.value = imgData;
+//             if (imgTag) {               
+//                 imgTag.src = imgData;
+//                 imgTag.style.display = 'block';
+//                 imgTag.onclick = function() { openImagePopup(imgData); };
+//                 //alert(imgTag.src);
+//             }
+//             console.log('Selected img2:', imgTag.src);
+//             // Store file reference for form submission, not base64
+//             //if (imgHidden) imgHidden.value = file.name;
+            
+//             // Add remove icon to the image
+//             const removeBtn = document.createElement('button');
+//             removeBtn.type = 'button';
+//             removeBtn.className = 'absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold hover:bg-red-700';
+//             removeBtn.innerHTML = '✕';
+//             removeBtn.onclick = function(e) {
+//                 e.preventDefault();
+//                 imgTag.src = 'https://placehold.co/100x100/e2e8f0/4a5568?text=Upload';
+//                 imgHidden.value = '';
+//                 input.value = '';
+//                 imgTag.parentElement.removeChild(removeBtn);
+//                 //upload on click again
+//                 imgTag.onclick = function() {
+//                     input.click();
+//                 };
+//             };
+//             imgTag.parentElement.style.position = 'relative';
+//             imgTag.parentElement.appendChild(removeBtn);
+//             console.log('Selected img3:', imgTag.src);
+//         };
+//         reader.onerror = function() {
+//             alert('Error reading file');
+//         };
+//         reader.readAsDataURL(file);
+//     }
+// }
 function closeSuccessPopup() {
     document.getElementById("successPopup").classList.add("hidden");
 }
