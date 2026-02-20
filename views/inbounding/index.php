@@ -271,6 +271,48 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 ?>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">CP Status</label>
+                            <select name="cp_filter" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="filled" <?= ($data['filters']['cp_filter'] ?? '') == 'filled' ? 'selected' : '' ?>>Filled</option>
+                                <option value="not_filled" <?= ($data['filters']['cp_filter'] ?? '') == 'not_filled' ? 'selected' : '' ?>>Not Filled</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Price India Status</label>
+                            <select name="priceindia_filter" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="filled" <?= ($data['filters']['priceindia_filter'] ?? '') == 'filled' ? 'selected' : '' ?>>Filled</option>
+                                <option value="not_filled" <?= ($data['filters']['priceindia_filter'] ?? '') == 'not_filled' ? 'selected' : '' ?>>Not Filled</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">USD Price Status</label>
+                            <select name="usd_filter" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="filled" <?= ($data['filters']['usd_filter'] ?? '') == 'filled' ? 'selected' : '' ?>>Filled</option>
+                                <option value="not_filled" <?= ($data['filters']['usd_filter'] ?? '') == 'not_filled' ? 'selected' : '' ?>>Not Filled</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">IN-House</label>
+                            <select name="in_house" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['in_house'] ?? '') == 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['in_house'] ?? '') == 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div class="block text-xs font-bold text-gray-500 uppercase mb-1">
+                            <div class="w-full">
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Item Code</label>
+                                <input type="text" 
+                                       name="filter_item_code" 
+                                       placeholder="e.g. CA0001" 
+                                       value="<?php echo $data['filters']['item_code'] ?? '' ?>"
+                                       class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                            </div>
+                        </div>
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -289,14 +331,16 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             'Photoshoot' => 'Pending Photoshoot',
             'Editing'    => 'Pending Editing',
             'Data Entry' => 'Pending Data Entry',
-            'Published'  => 'Pending Publish'
+            'Published'  => 'Pending Publish',
+            'FinalPublished' => 'Published',
+            'my_inbound'  => 'My Inbound'
         ];
     ?>
 
     <div class="bg-white border-b border-gray-200 mb-6 sticky top-0 z-30">
         <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
             
-            <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar" aria-label="Tabs">
+            <!-- <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar" aria-label="Tabs">
                 <?php foreach($tabs as $key => $label): 
                     $isActive = ($current_step == $key);
                     $activeClass    = "border-orange-500 text-orange-600 font-bold border-b-4";
@@ -307,14 +351,76 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <?= $label ?>
                 </a>
                 <?php endforeach; ?>
+            </nav> -->
+            <?php 
+                $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
+            ?>
+            <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar">
+                <?php foreach ($tabs as $key => $label): 
+                    if ($key === 'my_inbound') {
+                        $url = "?page=inbounding&action=list&my_inbound=1";
+                    } else {
+                        $url = "?page=inbounding&action=list&status_step=" . urlencode($key);
+                    }
+                    $isActive = (
+                        ($key === 'my_inbound' && $isMyInbound) ||
+                        ($key !== 'my_inbound' && $current_step == $key && !$isMyInbound)
+                    );
+                    $activeClass   = "border-orange-500 text-orange-600 font-bold border-b-4";
+                    $inactiveClass = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
+                ?>
+                    <a href="<?= $url ?>"
+                       class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
+                        <?= $label ?>
+                    </a>
+                <?php endforeach; ?>
             </nav>
-
+            <div class="relative inline-block">
+                <!-- SORT BUTTON -->
+                <button
+                    id="sortToggle"
+                    type="button"
+                    class="flex items-center gap-1 text-sm font-medium text-gray-600
+                           hover:text-orange-600 focus:outline-none">
+                    <span>⇅</span>
+                    <span>Sort</span>
+                </button>
+                <!-- SORT DROPDOWN -->
+                <div id="sortMenu" class="hidden absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                    <ul class="text-sm text-gray-700">
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="inbound_desc">
+                            Inbound Date — New to Old
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="inbound_asc">
+                            Inbound Date — Old to New
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="edited_desc">
+                            Edited Date — New to Old
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="edited_asc">
+                            Edited Date — Old to New
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="cp_desc">
+                            CP — High to Low
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="cp_asc">
+                            CP — Low to High
+                        </li>
+                    </ul>
+                </div>
+            </div>
             <div class="relative inline-block text-left ml-4">
                 <button type="button" onclick="toggleActionMenu()" class="bg-[#856404] hover:bg-[#6d5203] text-white px-5 py-2 rounded-md text-sm font-bold shadow-sm flex items-center gap-2 transition-colors">
                     Actions <i data-lucide="chevron-down" class="w-4 h-4"></i>
                 </button>
                 <div id="action-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 transform origin-top-right">
                     <div class="py-1">
+                        <button type="button"
+                            onclick="openAssignPopupFromActions()"
+                            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                            <i data-lucide="user-plus" class="w-4 h-4 text-blue-600"></i>
+                            Assign Selected
+                        </button>
                         <button type="button" onclick="exportSelectedData()" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
                             <i data-lucide="download" class="w-4 h-4 text-green-600"></i> Export Selected
                         </button>
@@ -343,6 +449,24 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             elseif ($percentage >= 60) { $gaugeColorClass = 'gauge-color-75'; } 
             elseif ($percentage >= 40) { $gaugeColorClass = 'gauge-color-50'; } 
             elseif ($percentage >= 10) { $gaugeColorClass = 'gauge-color-25'; }
+            
+            $hasEditedPhotos = false;
+            $hasRawPhotos = false;
+
+            if (!empty($tc['stat_logs'])) {
+                foreach ($tc['stat_logs'] as $log) {
+                    if ($log['stat'] === 'Editing' || $log['stat'] === 'Published') {
+                        $hasEditedPhotos = true;
+                    }
+                    if ($log['stat'] === 'Photoshoot') {
+                        $hasRawPhotos = true;
+                    }
+                }
+            }
+
+            // Define classes
+            $editedBtnClass = $hasEditedPhotos ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
+            $rawBtnClass    = $hasRawPhotos    ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
             ?>
 
             <div class="accordion-item bg-white rounded-[16px] border border-[rgba(229,229,229,1)] shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
@@ -465,8 +589,15 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                     <a href="<?php echo base_url('?page=inbounding&action=desktopform&id=' . $tc['id']); ?>" class="btn-base btn-edit">Edit Information</a>
                                 <?php endif; ?>
                                 
-                                <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" class="btn-base btn-upload">Edited Photos</a>
-                                <a href="<?php echo base_url('?page=inbounding&action=i_raw_photos&id=' . $tc['id']); ?>" class="btn-base btn-upload">Raw Photos</a>
+                                <a href="<?php echo base_url('?page=inbounding&action=i_photos&id=' . $tc['id']); ?>" 
+                                   class="btn-base text-white <?= $editedBtnClass ?> transition-colors">
+                                   Edited Photos
+                                </a>
+                                
+                                <a href="<?php echo base_url('?page=inbounding&action=i_raw_photos&id=' . $tc['id']); ?>" 
+                                   class="btn-base text-white <?= $rawBtnClass ?> transition-colors">
+                                   Raw Photos
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -560,12 +691,20 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         </div>
     <?php endif; ?>
 
-    <?php            
+    <?php           
         $page_no = $data["page_no"] ?? 1;
         $limit = $data["limit"] ?? 10;
         $total_records = $data["totalRecords"] ?? 0;
         $total_pages = $limit > 0 ? ceil($total_records / $limit) : 1;
-        $search_query = isset($data['search']) ? urlencode($data['search']) : '';
+
+        // Capture all current GET parameters
+        $current_params = $_GET;
+
+        // Helper to generate a URL with a specific page number
+        function getPaginationUrl($params, $newPage) {
+            $params['page_no'] = $newPage;
+            return '?' . http_build_query($params);
+        }
     ?>
     <?php if ($total_records > 0): ?>
         <div class="bg-white rounded-[16px] border border-gray-200 p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
@@ -576,27 +715,26 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             <div class="flex items-center gap-4 text-sm text-gray-600">
                 <div class="flex items-center gap-2">
                     <span class="font-bold text-gray-700">Rows:</span>
-                    <select onchange="window.location.href='?page=inbounding&action=list&page_no=1&search_text=<?= $search_query ?>&limit=' + this.value"
-                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block p-1.5 cursor-pointer outline-none">
-                        <option value="10" <?= $limit == 10 ? 'selected' : '' ?>>10</option>
-                        <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25</option>
-                        <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50</option>
-                        <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100</option>
+                    <select onchange="const p = new URLSearchParams(window.location.search); p.set('limit', this.value); p.set('page_no', '1'); window.location.search = p.toString();"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-orange-500 block p-1.5 outline-none">
+                        <?php foreach([10, 25, 50, 100] as $l): ?>
+                            <option value="<?= $l ?>" <?= $limit == $l ? 'selected' : '' ?>><?= $l ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
                 <?php if ($total_pages > 1): ?>
                     <div class="flex items-center gap-2">
-                         <a <?php if($page_no > 1) { ?> href="?page=inbounding&action=list&page_no=<?= $page_no-1 ?>&limit=<?= $limit ?>&search_text=<?= $search_query ?>" <?php } else { ?> href="javascript:void(0)" <?php } ?>
+                        <a href="<?= ($page_no > 1) ? getPaginationUrl($current_params, $page_no - 1) : 'javascript:void(0)' ?>"
                            class="p-2 rounded-full border hover:bg-gray-100 transition <?= $page_no <= 1 ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'bg-white' ?>">
-                             <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
                         </a>
                         
                         <span class="bg-black text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold shadow-md">
                             <?= $page_no ?>
                         </span>
                         
-                        <a <?php if($page_no < $total_pages) { ?> href="?page=inbounding&action=list&page_no=<?= $page_no+1 ?>&limit=<?= $limit ?>&search_text=<?= $search_query ?>" <?php } else { ?> href="javascript:void(0)" <?php } ?>
+                        <a href="<?= ($page_no < $total_pages) ? getPaginationUrl($current_params, $page_no + 1) : 'javascript:void(0)' ?>"
                            class="p-2 rounded-full border hover:bg-gray-100 transition <?= $page_no >= $total_pages ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'bg-white' ?>">
                             <i data-lucide="chevron-right" class="w-4 h-4"></i>
                         </a>
@@ -614,6 +752,156 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         <img id="popupImage" class="max-w-full max-h-[85vh] rounded-lg object-contain" src="" alt="Image Preview">
     </div>
 </div>
+<!-- ASSIGN POPUP -->
+<div id="assignModal">
+
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <!-- Sliding Container -->
+            <div id="modal-slider-assign"
+                class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50"
+                style="width: 35%; min-width: 400px;">
+
+                <!-- Close Button -->
+                <div class="flex-shrink-0 flex items-start pt-5">
+                    <button id="close-assign-popup-btn"
+                        class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg"
+                        style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Popup Panel -->
+                <div class="h-full bg-white shadow-2xl" style="width: 100%;">
+                    <div class="h-full w-full overflow-y-auto">
+                        <div class="p-8">
+
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">
+                                Assign Inbound Items
+                            </h2>
+
+                            <div id="assignMsg" style="margin-top:10px;"></div>
+
+                            <form id="assignForm">
+
+                                <!-- Hidden IDs -->
+                                <input type="hidden" name="inbound_ids" id="assign_inbound_ids">
+
+                                <!-- User Dropdown -->
+                                <div class="pt-4">
+                                    <label class="text-sm font-medium text-gray-700">
+                                        Select User <span class="text-red-500">*</span>
+                                    </label>
+
+                                    <select id="assign_user_id"
+                                        name="assign_user_id"
+                                        class="form-input w-full mt-1" required>
+                                        <option value="">-- Select User --</option>
+                                        <?php foreach ($alluser_list as $user): ?>
+                                            <option value="<?= $user['id'] ?>">
+                                                <?= $user['name'] ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <!-- Buttons -->
+                                <div class="flex justify-center items-center gap-4 pt-6 border-t mt-6">
+                                    <button type="button"
+                                        id="cancel-assign-btn"
+                                        class="action-btn cancel-btn">
+                                        Back
+                                    </button>
+
+                                    <button type="submit"
+                                        class="action-btn save-btn">
+                                        Save Assignment
+                                    </button>
+                                </div>
+
+                            </form>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    function openAssignPopupFromActions() {
+        const ids = getSelectedIds();
+
+        if (ids.length === 0) {
+            alert("Please select at least one inbound item.");
+            return;
+        }
+
+        document.getElementById('assign_inbound_ids').value = ids.join(',');
+
+        // Slide popup in
+        document.getElementById('modal-slider-assign')
+            .classList.remove('translate-x-full');
+
+        document.getElementById('action-menu').classList.add('hidden');
+    }
+</script>
+<script>
+    function closeAssignPopup() {
+        document.getElementById('modal-slider-assign')
+            .classList.add('translate-x-full');
+    }
+
+
+
+    // Close button
+    document.getElementById('close-assign-popup-btn')
+        .addEventListener('click', closeAssignPopup);
+
+    // Back button
+    document.getElementById('cancel-assign-btn')
+        .addEventListener('click', closeAssignPopup);
+</script>
+
+<script>
+    document.getElementById('assignForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const userId = document.getElementById('assign_user_id').value;
+        const ids = document.getElementById('assign_inbound_ids').value;
+
+        if (!userId) {
+            alert("Please select a user");
+            return;
+        }
+
+        fetch('?page=inbounding&action=bulkAssign', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `ids=${ids}&user_id=${userId}`
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log(data);
+                if (data.success) {
+                    alert('Items assigned successfully');
+                    localStorage.removeItem('selected_inbound_ids');
+                    location.reload();
+                } else {
+                    alert(data.message || 'Assignment failed');
+                }
+            })
+            .catch(() => alert('Server error'));
+    });
+</script>
 <script>
     function toggleFilterPanel() {
         const panel = document.getElementById('filter-panel');
@@ -850,4 +1138,38 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         document.body.appendChild(form);
         form.submit();
     }
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const toggle = document.getElementById('sortToggle');
+        const menu   = document.getElementById('sortMenu');
+        if (!toggle || !menu) return;
+        // Toggle dropdown
+        toggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            menu.classList.toggle('hidden');
+        });
+        // Close on outside click
+        document.addEventListener('click', function () {
+            menu.classList.add('hidden');
+        });
+        // Prevent closing when clicking inside menu
+        menu.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const sortItems = document.querySelectorAll('.sort-item');
+        sortItems.forEach(item => {
+            item.addEventListener('click', function () {
+                const sortValue = this.getAttribute('data-sort');
+                const params = new URLSearchParams(window.location.search);
+                params.set('sort', sortValue);      // set sort
+                params.set('page_no', 1);           // reset to page 1
+                window.location.search = params.toString();
+            });
+        });
+    });
 </script>

@@ -6,12 +6,12 @@ class Inbounding {
     }
     // models/inbounding/InboundingModel.php (or wherever your getAll is defined)
 
-    public function getAll($page = 1, $limit = 10, $search = '', $filters = []) {
+    public function getAll($page = 1, $limit = 50, $search = '', $filters = [],$isMyInbound = false, $userId = 0,$sort = '') {
         $page = (int)$page;
         if ($page < 1) $page = 1;
 
         $limit = (int)$limit;
-        if ($limit < 1) $limit = 10;
+        if ($limit < 1) $limit = 50;
 
         $offset = ($page - 1) * $limit;
         $where = [];
@@ -42,9 +42,66 @@ class Inbounding {
         }
 
         // 5. Status Filter (PENDING Logic)
+        // if (!empty($filters['status_step'])) {
+        //     $step = $this->conn->real_escape_string($filters['status_step']);
+        //     $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
+        // }
+
+        // 5. Status Filter Logic
         if (!empty($filters['status_step'])) {
             $step = $this->conn->real_escape_string($filters['status_step']);
-            $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
+            
+            if ($step === 'FinalPublished') {
+                // Show only items that HAVE BEEN published
+                // We look for items that EXIST in the logs with 'Published' status
+                $where[] = "vi.id IN (SELECT i_id FROM inbound_logs WHERE stat = 'Published')";
+            } else {
+                // Existing PENDING logic: Show items that have NOT reached this step yet
+                $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$step')";
+            }
+        }
+        // Inside getAll() function, after existing filters:
+
+        // 6. CP Filter
+        if (!empty($filters['cp_filter'])) {
+            if ($filters['cp_filter'] == 'filled') {
+                $where[] = "vi.cp > 0";
+            } else {
+                $where[] = "(vi.cp <= 0 OR vi.cp IS NULL)";
+            }
+        }
+
+        // 7. Price India Filter
+        if (!empty($filters['priceindia_filter'])) {
+            if ($filters['priceindia_filter'] == 'filled') {
+                $where[] = "vi.price_india > 0";
+            } else {
+                $where[] = "(vi.price_india <= 0 OR vi.price_india IS NULL)";
+            }
+        }
+
+        // 8. USD Price Filter
+        if (!empty($filters['usd_filter'])) {
+            if ($filters['usd_filter'] == 'filled') {
+                $where[] = "vi.usd_price > 0";
+            } else {
+                $where[] = "(vi.usd_price <= 0 OR vi.usd_price IS NULL)";
+            }
+        }
+        if (!empty($filters['in_house'])) {
+            if ($filters['in_house'] == 'yes') {
+                $where[] = "vi.Marketplace = 'exoticindia'";
+            } else {
+                $where[] = "(vi.Marketplace != 'exoticindia' OR vi.Marketplace IS NULL)";
+            }
+        }
+        if (!empty($filters['item_code'])) {
+            $i_code = $this->conn->real_escape_string($filters['item_code']);
+            $where[] = "vi.Item_code LIKE '%$i_code%'"; 
+        }
+        if ($isMyInbound && $userId > 0) {
+            $userId = (int)$userId;
+            $where[] = "vi.assigned_to_user_id = $userId";
         }
         // feeder by
         if (!empty($filters['updated_by_user_id'])) {
@@ -57,7 +114,30 @@ class Inbounding {
         if (!empty($where)) {
             $whereSql = "WHERE " . implode(' AND ', $where);
         }
-
+        $orderBy = "vi.id DESC";
+        if ($isMyInbound) {
+            $orderBy = "vi.assigned_at DESC, vi.id DESC";
+        }
+        switch ($sort) {
+            case 'inbound_desc':
+                $orderBy = "vi.created_at DESC";
+                break;
+            case 'inbound_asc':
+                $orderBy = "vi.created_at ASC";
+                break;
+            case 'edited_desc':
+                $orderBy = "vi.modified_at DESC";
+                break;
+            case 'edited_asc':
+                $orderBy = "vi.modified_at ASC";
+                break;
+            case 'cp_desc':
+                $orderBy = "vi.cp DESC";
+                break;
+            case 'cp_asc':
+                $orderBy = "vi.cp ASC";
+                break;
+        }
         // Total Count (using alias vi)
         $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound as vi $whereSql");
         $rowCount = $resultCount->fetch_assoc();
@@ -71,7 +151,7 @@ class Inbounding {
                 FROM vp_inbound as vi
                 LEFT JOIN category as c ON vi.group_name = c.category
                 $whereSql 
-                ORDER BY vi.id DESC 
+                ORDER BY $orderBy
                 LIMIT $limit OFFSET $offset";
                 
         $result = $this->conn->query($sql);
@@ -162,7 +242,32 @@ class Inbounding {
 
         return $data;
     }
-   
+    public function getAllActiveUsers(){
+        $sql = "SELECT id, name
+                FROM vp_users
+                WHERE is_active = 1
+                ORDER BY name ASC";
+
+        $stmt = $this->conn->prepare($sql);
+        $stmt->execute();
+
+        $result = $stmt->get_result(); // MySQLi result
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+    public function bulkAssign(array $ids, int $user_id){
+        if (empty($ids)) {
+            return false;
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = "UPDATE vp_inbound
+            SET assigned_to_user_id = ?, assigned_at = NOW()
+            WHERE id IN ($placeholders)";
+        $stmt = $this->conn->prepare($sql);
+        $types = str_repeat('i', count($ids) + 1);
+        $params = array_merge([$user_id], $ids);
+        $stmt->bind_param($types, ...$params);
+        return $stmt->execute();
+    }
     public function getItamcode(){
         $result1 = $this->conn->query("SELECT `item_code`,`title` FROM `vp_products`");
         if ($result1) {
@@ -712,7 +817,7 @@ public function update_image_variation($img_id, $variation_id) {
         if (empty($code)) return '';
 
         // Search by the 'category' column, NOT 'id'
-        $stmt = $this->conn->prepare("SELECT initial FROM category WHERE category = ?");
+        $stmt = $this->conn->prepare("SELECT display_name FROM category WHERE category = ?");
         if (!$stmt) return '';
 
         // Use 's' (string) because your codes might be "-2" or "10002"
@@ -727,9 +832,10 @@ public function update_image_variation($img_id, $variation_id) {
     }
 
     public function getLastItemCode($prefix) {
+        // REGEXP '^[A-Z]{2}[0-9]{4}$' matches: 2 letters, 4 digits
         $sql = "SELECT item_code FROM vp_inbound 
                 WHERE item_code LIKE ? 
-                AND item_code REGEXP '^[A-Z]{4}[0-9]{2}$'
+                AND item_code REGEXP '^[A-Z]{2}[0-9]{4}$'
                 ORDER BY item_code DESC LIMIT 1";
                 
         $stmt = $this->conn->prepare($sql); 
@@ -739,7 +845,7 @@ public function update_image_variation($img_id, $variation_id) {
             return null;
         }
 
-        $search = $prefix . '%'; // e.g., 'B%'
+        $search = $prefix . '%'; 
         $stmt->bind_param("s", $search);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -747,6 +853,7 @@ public function update_image_variation($img_id, $variation_id) {
         
         return $row ? $row['item_code'] : null;
     }
+	
     public function checkItemCodeExists($code) {
         $sql = "SELECT id FROM vp_inbound WHERE Item_code = '" . $this->conn->real_escape_string($code) . "'";
         $result = $this->conn->query($sql);
@@ -807,6 +914,7 @@ public function update_image_variation($img_id, $variation_id) {
         $Item_code = $data['Item_code'] ?? '';
         $feedback = $data['feedback'] ?? '';
         $hsn_code = $data['hsn_code'] ?? '';
+        $dimensions = $data['dimensions'] ?? '';
        
         $qty    = (int) ($data['quantity_received'] ?? 0);
         $gst_rate    = (int) ($data['gst_rate'] ?? 0);
@@ -820,7 +928,7 @@ public function update_image_variation($img_id, $variation_id) {
 
         // 2. Correct SQL Syntax (Use column names, not PHP variables)
         $sql = "UPDATE vp_inbound
-            SET gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
+            SET dimensions=?,gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, temp_code = ?, product_photo = ?,
@@ -835,10 +943,11 @@ public function update_image_variation($img_id, $variation_id) {
         // 3. Correct Bind Param Types
         // s = string, d = double (float), i = integer
         // String map: sssss dddd ss d i i sss d d s i
-        $types = "isssssssddddssdissssddsi";
+        $types = "sisssssssddddssdissssddsi";
 
         $stmt->bind_param(
             $types,
+            $dimensions,
             $gst_rate,
             $hsn_code,
             $feedback,            // 1
@@ -894,15 +1003,12 @@ public function update_image_variation($img_id, $variation_id) {
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
         }
 
-        // --- FIX 1: Column Count vs Value Count ---
-        // Listed columns: 19 | Question marks: 19
         $insertSql = "INSERT INTO vp_variations 
-                      (it_id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps,dimensions) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)";
+                      (it_id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps, dimensions, upc) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
-        // Listed SET columns: 18 | WHERE id: 1 | Total ?: 19
         $updateSql = "UPDATE vp_variations 
-                      SET color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=? ,dimensions =?
+                      SET color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=?, dimensions=?, upc=?
                       WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
@@ -911,47 +1017,50 @@ public function update_image_variation($img_id, $variation_id) {
         foreach ($variations as $key => $var) {
             if ($key === 0) continue;
 
-            $id = $var['id'] ?? '';
-            $img = $var['photo'] ?? '';
-            
-            // Data Formatting
-            $h   = (float)(!empty($var['height']) ? $var['height'] : 0);
-            $w   = (float)(!empty($var['width']) ? $var['width'] : 0);
-            $d   = (float)(!empty($var['depth']) ? $var['depth'] : 0);
-            $wt  = (float)(!empty($var['weight']) ? $var['weight'] : 0);
-            $wh  = (string)(!empty($var['store_location']) ? $var['store_location'] : '');
-            $qty = (int)(!empty($var['quantity']) ? $var['quantity'] : 0);
-            $cp  = (float)(!empty($var['cp']) ? $var['cp'] : 0);
-            $pi  = (float)(!empty($var['price_india']) ? $var['price_india'] : 0);
-            $pm  = (float)(!empty($var['price_india_mrp']) ? $var['price_india_mrp'] : 0);
-            $inr = (float)(!empty($var['inr_pricing']) ? $var['inr_pricing'] : 0);
-            $amz = (float)(!empty($var['amazon_price']) ? $var['amazon_price'] : 0);
-            $usd = (float)(!empty($var['usd_price']) ? $var['usd_price'] : 0);
-            $hsn = (string)(!empty($var['hsn_code']) ? $var['hsn_code'] : '');
-            $gst = (int)(!empty($var['gst_rate']) ? $var['gst_rate'] : 0);
-            $colm = (string)(!empty($var['colormaps']) ? $var['colormaps'] : '');
-            $dim = (string)(!empty($var['dimensions']) ? $var['dimensions'] : '');
+            $id   = $var['id'] ?? null;
+            $img  = $var['photo'] ?? '';
+            $qty  = (int)($var['quantity'] ?? 0);
+            $cp   = (float)($var['cp'] ?? 0);
+            $h    = (float)($var['height'] ?? 0);
+            $w    = (float)($var['width'] ?? 0);
+            $d    = (float)($var['depth'] ?? 0);
+            $wt   = (float)($var['weight'] ?? 0);
+            $wh   = (string)($var['store_location'] ?? '');
+            $pi   = (float)($var['price_india'] ?? 0);
+            $pm   = (float)($var['price_india_mrp'] ?? 0);
+            $inr  = (float)($var['inr_pricing'] ?? 0);
+            $amz  = (float)($var['amazon_price'] ?? 0);
+            $usd  = (float)($var['usd_price'] ?? 0);
+            $hsn  = (string)($var['hsn_code'] ?? '');
+            $gst  = (int)($var['gst_rate'] ?? 0);
+            $colm = (string)($var['colormaps'] ?? '');
+            $dim  = (string)($var['dimensions'] ?? '');
+            $upc  = (string)($var['upc'] ?? '');
 
             if (!empty($id) && is_numeric($id)) {
-                // UPDATE: ssids dddd s ddddd s i s i (19 parameters)
-                // types: color(s), size(s), qty(i), cp(d), img(s), h(d), w(d), d(d), wt(d), wh(s), pi(d), pm(d), inr(d), amz(d), usd(d), hsn(s), gst(i), colm(s), id(i)
-                $stmtUpdate->bind_param("ssidsddddsdddddsissi", 
+                // UPDATE: 20 SET fields + 1 WHERE id = 21 parameters
+                // Types: ssids dddd s ddddd s i s s s i (Total 21)
+                $stmtUpdate->bind_param("ssidsddddsdddddsisssi", 
                     $var['color'], $var['size'], $qty, $cp, $img, 
-                    $h, $w, $d, $wt, 
-                    $wh, $pi, $pm, $inr, $amz, $usd, 
-                    $hsn, $gst, $colm,$dim ,$id
+                    $h, $w, $d, $wt, $wh, 
+                    $pi, $pm, $inr, $amz, $usd, 
+                    $hsn, $gst, $colm, $dim, $upc, $id
                 );
-                $stmtUpdate->execute();
+                if (!$stmtUpdate->execute()) {
+                    error_log("Update Error: " . $stmtUpdate->error);
+                }
             } else {
-                // INSERT: i ssids dddd s ddddd s i s (19 parameters)
-                // types: it_id(i), color(s), size(s), qty(i), cp(d), img(s), h(d), w(d), d(d), wt(d), wh(s), pi(d), pm(d), inr(d), amz(d), usd(d), hsn(s), gst(i), colm(s)
-                $stmtInsert->bind_param("issidsddddsdddddsiss", 
+                // INSERT: 21 fields
+                // Types: i ssids dddd s ddddd s i s s s (Total 21)
+                $stmtInsert->bind_param("issidsddddsdddddsisss", 
                     $it_id, $var['color'], $var['size'], $qty, $cp, $img, 
-                    $h, $w, $d, $wt, 
-                    $wh, $pi, $pm, $inr, $amz, $usd, 
-                    $hsn, $gst, $colm,$dim
+                    $h, $w, $d, $wt, $wh, 
+                    $pi, $pm, $inr, $amz, $usd, 
+                    $hsn, $gst, $colm, $dim, $upc
                 );
-                $stmtInsert->execute();
+                if (!$stmtInsert->execute()) {
+                    error_log("Insert Error: " . $stmtInsert->error);
+                }
             }
         }
         return true;
@@ -959,7 +1068,7 @@ public function update_image_variation($img_id, $variation_id) {
 
     public function getVariations($it_id) {
         // Added 'quantity_received as quantity' for HTML compatibility
-        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp,dimensions,inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps
+        $sql = "SELECT id, color, size, quantity_received, quantity_received as quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp,dimensions,inr_pricing, amazon_price, usd_price, hsn_code, gst_rate,colormaps,upc
                 FROM vp_variations WHERE it_id = ?";
                 
         $stmt = $this->conn->prepare($sql);

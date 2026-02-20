@@ -383,14 +383,14 @@ class OrdersController {
                     //print_array($rdata);   
                     //insert vendor if not exists and get vendor id
                     $maped = [];
-                    $vendorexplode = explode(',', $item['vendor']);
-                    foreach($vendorexplode as $vendorname){
-                        $vendorsuccess = $ordersModel->addVendorIfNotExists($vendorname); 
+                    //$vendorexplode = explode(',', $item['vendor']);
+                    //foreach($vendorexplode as $vendorname){
+                        $vendorsuccess = $ordersModel->addVendorIfNotExists($item['vendor'] ?? ''); 
                         $vendor_id = $vendorsuccess['vendor_id'] ?? 0;
                         //map product with vendor
                         //$maped[] = $ordersModel->mapVendorToProduct($vendor_id, $rdata['item_code']);
                         $maped[] = $productModel->saveProductVendor($rdata['item_code'], $vendor_id, '');
-                    }  
+                    //}  
                     //print_array($maped);             
             }
             //add address info
@@ -641,6 +641,7 @@ class OrdersController {
         if ($order_number > 0) {
             $order = $ordersModel->getOrderByOrderNumber($order_number);
             $orderremarks = $ordersModel->getRemarksByOrderNumber($order_number);
+            $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($order_number);
             $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($order_number);
             $statusList = $commanModel->get_order_status_list();
             $assignmentDates = [];          
@@ -652,7 +653,7 @@ class OrdersController {
                 if ($type === 'inner')
                     renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
                 else
-                    renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'customerdetails' => $customerdetails], 'Order Details');
+                    renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
             } else {
                 echo '<p>Order details not found.</p>';
             }

@@ -20,21 +20,27 @@ class InboundingController {
             'received_by_user_id' => $_GET['agent_id'] ?? '',
             'group_name'          => $_GET['group_name'] ?? '',
             'status_step'         => $_GET['status_step'] ?? '',
-            'updated_by_user_id'  => $_GET['updated_by'] ?? ''
+            'updated_by_user_id'  => $_GET['updated_by'] ?? '',
+            'cp_filter'           => $_GET['cp_filter'] ?? '',
+            'priceindia_filter'   => $_GET['priceindia_filter'] ?? '',
+            'usd_filter'          => $_GET['usd_filter'] ?? '',
+            'in_house'            => $_GET['in_house'] ?? '',
+            'item_code'           => $_GET['filter_item_code'] ?? ''
         ];
-
+        $sort = $_GET['sort'] ?? '';
         // 2. Pagination Logic
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
         $valid_limits = [10, 25, 50, 100]; 
-        if (!in_array($limit, $valid_limits)) $limit = 10;
-
+        if (!in_array($limit, $valid_limits)) $limit = 50;
+        $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
+        $loggedUserId = $_SESSION['user']['id'];
         // 3. Fetch Main Data
-        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters); 
+        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters ,$isMyInbound,$loggedUserId,$sort); 
         
         // 4. Fetch Dynamic Dropdown Data (The function we just updated)
         $dropdowns = $inboundingModel->getFilterDropdowns();
-
+        $alluser_list = $inboundingModel->getAllActiveUsers();
         $data = [
             'inbounding_data' => $pt_data["inbounding"],
             'page_no'         => $page_no,
@@ -49,13 +55,46 @@ class InboundingController {
             'filters'         => $filters,
             'vendor_list'     => $dropdowns['vendors'],
             'user_list'       => $dropdowns['users'],
-            'group_list'      => $dropdowns['groups']
+            'group_list'      => $dropdowns['groups'],
+            'alluser_list'      => $alluser_list
         ];
         
         renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
     // In your Inbounding Controller
-
+    public function bulk_assign_action(){
+        is_login();
+        global $inboundingModel;
+        if (!isset($_POST['ids'], $_POST['user_id'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Missing parameters'
+            ]);
+            exit;
+        }
+        $ids_string = trim($_POST['ids']);      // "12,15,22"
+        $user_id    = (int) $_POST['user_id'];
+        if ($ids_string === '' || $user_id <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid data'
+            ]);
+            exit;
+        }
+        $ids = array_filter(array_map('intval', explode(',', $ids_string)));
+        if (empty($ids)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No valid IDs found'
+            ]);
+            exit;
+        }
+        $result = $inboundingModel->bulkAssign($ids, $user_id);
+        echo json_encode([
+            'success' => $result ? true : false
+        ]);
+        exit;
+    }
     public function exportSelected() {
         global $inboundingModel; // Use the global model instance
 
@@ -1026,6 +1065,7 @@ class InboundingController {
             'hsn_code'            => $_POST['hsn_code'] ?? '',
             'gst_rate'            => $_POST['gst_rate'] ?? '0',
             'dimensions'          => $_POST['dimensions'] ?? '',
+            'upc'                 => $_POST['upc'] ?? '',
             'height'              => $_POST['height'] ?? '',
             'width'               => $_POST['width'] ?? '',
             'depth'               => $_POST['depth'] ?? '',
@@ -1125,27 +1165,26 @@ class InboundingController {
             echo "Update failed: " . $result['message'];
         }
     }
+
     private function generateItemcode($group_real_name) {
         global $inboundingModel;
-        
         $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
         $last_code = $inboundingModel->getLastItemCode($prefix);
 
         if (!$last_code) {
-            return $prefix . "AAA01"; // Result: BAAA01
+            return $prefix . "A0001"; 
         }
-
-        $alphaPart = substr($last_code, 1, 3); 
-        $numPart   = (int)substr($last_code, 4);
+        $alphaPart = substr($last_code, 1, 1); // Get 'A'
+        $numPart   = (int)substr($last_code, 2); // Get 1
         $numPart++;
-        if ($numPart > 99) {
+        if ($numPart > 9999) {
             $numPart = 1;
-            $alphaPart++;
-            if (strlen($alphaPart) > 3) {
+            $alphaPart++; // PHP increments 'A' to 'B' automatically            
+            if (strlen($alphaPart) > 1) {
                 die("Error: Maximum item code limit reached for prefix $prefix");
             }
         }
-        return $prefix . $alphaPart . str_pad((string)$numPart, 2, '0', STR_PAD_LEFT);
+        return $prefix . $alphaPart . str_pad((string)$numPart, 4, '0', STR_PAD_LEFT);
     }
     public function submitStep3() {
         global $inboundingModel;
@@ -1173,6 +1212,8 @@ class InboundingController {
           $variant['usd_price']   = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
           $variant['quantity']    = !empty($variant['quantity']) ? $variant['quantity'] : 0;
           $variant['hsn_code']    = !empty($variant['hsn_code']) ? $variant['hsn_code'] : '';
+          $variant['gst_rate']    = !empty($variant['gst_rate']) ? $variant['gst_rate'] : 0;
+          $variant['dimensions']    = !empty($variant['dimensions']) ? $variant['dimensions'] : '';
           // Handle File Uploads (Same as before)
           $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
           if ($uploadError === UPLOAD_ERR_OK) {
@@ -1225,6 +1266,7 @@ class InboundingController {
           'price_india_mrp'   => $mainVariant['price_india_mrp'] ?? '',
           'hsn_code'   => $mainVariant['hsn_code'] ?? '',
           'gst_rate'   => $mainVariant['gst_rate'] ?? 0,
+          'dimensions'   => $mainVariant['dimensions'] ?? 0,
 
           // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
           'quantity_received'  => $mainVariant['quantity'] ?? 0,
@@ -1624,6 +1666,9 @@ class InboundingController {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
+
+            $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
+            $inboundingModel->stat_logs($logData);
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'

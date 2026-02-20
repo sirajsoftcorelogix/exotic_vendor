@@ -396,7 +396,7 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();         
                 break;
-            case 'get_product_details_html';
+            case 'get_product_details_html':
                 $controller->getProductDetailsHTML();         
                 break;  
             case 'get_vendor_edit_form':
@@ -467,7 +467,12 @@ switch ($page) {
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
-                
+            case 'get_filtered_stock_history':
+                $controller->getFilteredStockHistory();
+                break;
+            case 'inventory_ledger':
+                 $controller->inventoryLedger();                
+                break;    
             default:
                 $controller->product_list();
                 break;
@@ -626,6 +631,8 @@ switch ($page) {
                 $controller->getItamcode();
             case 'search_book_attr':
                 $controller->searchBookAttributes();
+            case 'bulkAssign':
+                $controller->bulk_assign_action();
             default:
                 $controller->index();
                 break;

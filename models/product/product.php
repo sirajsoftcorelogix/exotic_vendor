@@ -1636,5 +1636,152 @@ class product
         }
         return [];
     }
-    
+    public function getFilteredStockHistory($filters = [], $limit = 100, $offset = 0)
+    {
+        $where = [];
+        $params = [];
+        $types = '';
+
+        if (!empty($filters['sku'])) {
+            $where[] = 'sm.sku = ?';
+            $params[] = $filters['sku'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+            $where[] = 'sm.movement_type = ?';
+            $params[] = $filters['type'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['start_date'])) {
+            $where[] = 'DATE(sm.created_at) >= ?';
+            $params[] = $filters['start_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['end_date'])) {
+            $where[] = 'DATE(sm.created_at) <= ?';
+            $params[] = $filters['end_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['warehouse'])) {
+            $where[] = 'sm.warehouse_id = ?';
+            $params[] = $filters['warehouse'];
+            $types .= 's';
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name 
+                FROM vp_stock_movements sm 
+                LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id 
+                $whereSql 
+                ORDER BY sm.created_at DESC 
+                LIMIT ? OFFSET ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+
+        // bind dynamic params followed by limit and offset
+        if (!empty($params)) {
+            $types_all = $types . 'ii';
+            // Build the bind_param arguments correctly
+            $bindArgs = [$types_all];
+            foreach ($params as &$param) {
+                $bindArgs[] = &$param;
+            }
+            $bindArgs[] = &$limit;
+            $bindArgs[] = &$offset;
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+        } else {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+
+    public function getFilteredStockHistoryCount($filters = [])
+    {
+        $where = [];
+        $params = [];
+        $types = '';
+
+        if (!empty($filters['sku'])) {
+            $where[] = 'sm.sku = ?';
+            $params[] = $filters['sku'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+            $where[] = 'sm.movement_type = ?';
+            $params[] = $filters['type'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['start_date'])) {
+            $where[] = 'DATE(sm.created_at) >= ?';
+            $params[] = $filters['start_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['end_date'])) {
+            $where[] = 'DATE(sm.created_at) <= ?';
+            $params[] = $filters['end_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['warehouse'])) {
+            $where[] = 'sm.warehouse_id = ?';
+            $params[] = $filters['warehouse'];
+            $types .= 's';
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        $sql = "SELECT COUNT(*) as count FROM vp_stock_movements sm $whereSql";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return 0;
+
+        if (!empty($params)) {
+            $bindArgs = [$types];
+            foreach ($params as &$param) {
+                $bindArgs[] = &$param;
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $row = $result->fetch_assoc()) {
+            return $row['count'];
+        }
+        return 0;
+    }
+
+    public function getAllWarehouses()
+    {
+        $sql = "SELECT id, address_title as name FROM exotic_address WHERE is_active = 1 ORDER BY address_title";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+           
 }
