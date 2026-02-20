@@ -38,8 +38,7 @@
 	}
 	function base_url($path = '') {
 		global $domain;
-		//return $domain . '/' . ltrim($path, '/');
-		return 'http://localhost:8082/' . ltrim($path, '/');
+		return $domain . '/' . ltrim($path, '/');
 	}
 	function print_array($data){
 		echo "<pre>";
