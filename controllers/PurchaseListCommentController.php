@@ -64,6 +64,15 @@ class PurchaseListCommentController
             ? trim($_POST['comment'])
             : '';
 
+        $sku = isset($_POST['sku'])
+            ? trim($_POST['sku'])
+            : '';
+
+        $order_id = isset($_POST['orderID'])
+            ? trim($_POST['orderID'])
+            : '';
+               
+
         $parentId = isset($_POST['parent_id']) && $_POST['parent_id'] !== ''
             ? (int)$_POST['parent_id']
             : null;
@@ -93,7 +102,9 @@ class PurchaseListCommentController
             $purchaseListId,
             $_SESSION['user']['id'],
             $comment,
-            $parentId
+            $parentId,
+            $sku,
+            $order_id 
         );
 
         if (!$row) {

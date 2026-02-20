@@ -743,6 +743,18 @@ class Order{
         }
         return null;
     }
+    function getfullOrderJournyByNumber($order_number) {
+        $sql = "SELECT * FROM vp_order_journey_log WHERE order_number = ? ORDER BY created_on ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $journey = [];
+        while ($row = $result->fetch_assoc()) {
+            $journey[] = $row;
+        }
+        return $journey;
+    }
     function getCustomerNameAndEmailByOrderNumber($order_number) {
         $sql = "
             SELECT 
