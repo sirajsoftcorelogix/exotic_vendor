@@ -160,7 +160,6 @@
                             <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added Date</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                         </tr>
@@ -244,10 +243,6 @@
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php echo htmlspecialchars($pl['agent_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <?php
                                     $date_added = $pl['date_added_readable']
                                         ?? (!empty($pl['date_added']) ? date('d M Y', strtotime($pl['date_added'])) : 'N/A');
@@ -270,6 +265,8 @@
                             <tr class="detail-row hidden">
                                 <td colspan="10">
                                     <div class="flex flex-wrap items-center gap-6 text-sm text-gray-700 px-4 py-3 bg-gray-50 rounded-md">
+
+                                        <div><span class="font-semibold">Assigned To:</span> <?php echo htmlspecialchars($pl['agent_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
                                         <div><span class="font-semibold">Vendor:</span> <?php
                                             $vendor = trim($pl['vendor'] ?? '');
                                             echo (!empty($vendor) && strtoupper($vendor) !== 'N/A')
@@ -483,7 +480,7 @@
             .then(data => {
                 if (data.success) {
                     const plDetails = data.purchaseItem;
-                    //console.log(plDetails);
+                    console.log(plDetails);
                     const fieldsContainer = document.getElementById('pl-detail-fields');
                     //fieldsContainer.innerHTML = ''; // Clear previous fields
 
@@ -500,52 +497,52 @@
                     const isPurchased = (plDetails.status === "purchased");
 
                     fieldsContainer.innerHTML = `
-                        <!-- Product Image -->
-                        <input type="hidden" id="productId" value="${plDetails.id}" />
-                        <div class="col-span-2">
-                            <strong>Product Image : </strong>
-                            ${
-                                plDetails.image
-                                    ? `<div class="mt-2">
-                                        <img src="${plDetails.image}" alt="Product Image"
-                                            class="h-32 w-32 object-cover rounded border" />
-                                    </div>`
-                                    : `<span>N/A</span>`
-                            }
-                        </div>
-                        <div><strong>Assigned Agent : </strong> ${plDetails.agent_name || 'N/A'}</div>
-                        <div><strong>Vendor : </strong> ${plDetails.vendor || 'N/A'}</div>
-                        <div><strong>Date Added : </strong> ${plDetails.date_added_readable || 'N/A'}</div>
-                        <div><strong>Add By : </strong> ${plDetails.added_by_name || 'N/A'}</div>
-                        <div><strong>Purchased By: </strong> ${plDetails.agent_name || 'N/A'}</div>
-                        <div><strong>Purchased Date: </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
-                        <div><strong>SKU : </strong> ${plDetails.sku || 'N/A'}</div>
-                        <div><strong>Color : </strong> ${plDetails.color || 'N/A'}</div>
-                        <div><strong>Size : </strong> ${plDetails.size || 'N/A'}</div>
-                        <div><strong>Material : </strong> ${plDetails.material || 'N/A'}</div>
-                        <div><strong>Measurements : </strong> ${dims}</div>
-                        <div><strong>Dimensions : </strong> </div>
-                        <div><strong>Weight : </strong> ${plDetails.weight ? plDetails.weight + ' kg' : 'N/A'}</div>`;
+                                    <!-- Hidden Fields -->
+                                    <input type="hidden" id="productId_${plDetails.id}" value="${plDetails.product_id || ''}" />
+                                    <input type="hidden" id="minStock_${plDetails.id}" value="${plDetails.min_stock || ''}" />
+                                    <input type="hidden" id="sku_${plDetails.id}" value="${plDetails.sku || ''}" />
+                                    <input type="hidden" id="orderId_${plDetails.id}" value="${plDetails.order_id || ''}" />
 
-                        fieldsContainer.innerHTML += `
-                            <div>
-                                <strong>Quantity to be Purchased: </strong>
-                                <span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-20 text-center">
-                                    ${plDetails.quantity || 0}
-                                </span>
-                            </div>
+                                    <input type="hidden" id="quantity_${plDetails.id}" 
+                                        value="${plDetails.quantity || ''}" 
+                                        data-original="${plDetails.quantity || ''}" />
 
-                            <div>
-                                <strong>Quantity Purchased: </strong>
-                                ${
-                                    isPurchased
-                                        ? `<span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-20 text-center">
-                                                ${plDetails.quantity || 0}
-                                        </span>`
-                                        : `<input type="number" id="pl-quantity" value="" class="no-negative border rounded px-2 py-1 mt-1 w-20" />`
-                                }
-                            </div>
-                        `;                       
+                                    <input type="hidden" id="edd_${plDetails.id}" 
+                                        value="${plDetails.expected_time_of_delivery || ''}" 
+                                        data-original="${plDetails.expected_time_of_delivery || ''}" />
+
+                                    <input type="hidden" id="status_${plDetails.id}" 
+                                        value="${plDetails.status || ''}" 
+                                        data-original="${plDetails.status || ''}" />
+
+                                    <!-- Product Image -->
+                                    <div class="col-span-2">
+                                        <strong>Product Image :</strong>
+                                        ${
+                                            plDetails.image
+                                                ? `<div class="mt-2">
+                                                        <img src="${plDetails.image}" 
+                                                             alt="Product Image"
+                                                             class="h-32 w-32 object-cover rounded border" />
+                                                   </div>`
+                                                : `<span>N/A</span>`
+                                        }
+                                    </div>
+
+                                    <div><strong>Assigned Agent :</strong> ${plDetails.agent_name || 'N/A'}</div>
+                                    <div><strong>Vendor :</strong> ${plDetails.vendor || 'N/A'}</div>
+                                    <div><strong>Date Added :</strong> ${plDetails.date_added_readable || 'N/A'}</div>
+                                    <div><strong>Added By :</strong> ${plDetails.added_by_name || 'N/A'}</div>
+                                    <div><strong>Purchased By :</strong> ${plDetails.agent_name || 'N/A'}</div>
+                                    <div><strong>Purchased Date :</strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
+                                    <div><strong>SKU :</strong> ${plDetails.sku || 'N/A'}</div>
+                                    <div><strong>Color :</strong> ${plDetails.color || 'N/A'}</div>
+                                    <div><strong>Size :</strong> ${plDetails.size || 'N/A'}</div>
+                                    <div><strong>Material :</strong> ${plDetails.material || 'N/A'}</div>
+                                    <div><strong>Measurements :</strong> ${dims || 'N/A'}</div>
+                                    <div><strong>Weight :</strong> ${plDetails.weight ? plDetails.weight + ' kg' : 'N/A'}</div>
+                                `;
+
 
                         fieldsContainer.innerHTML += `
                         <div class="col-span-1 md:col-span-2">
@@ -596,55 +593,103 @@
             });
     }
     // Handle form submission for editing purchase list details
-    document.getElementById('plDetailForm').addEventListener('submit', function(event) {
-        event.preventDefault();
+    document.getElementById("plDetailForm").addEventListener("submit", async function (event) {
+      event.preventDefault();
 
-        const plId = document.getElementById('purchase_list_id').value;
-        let q = document.getElementById('pl-quantity')?.value;
-        if (q === undefined || q === null || q.trim() === "") {
-            q = 0;
+      const plId = document.getElementById("purchase_list_id")?.value;
+      if (!plId) return;
+
+      // --- Read editable fields from form ---
+      let qRaw = document.getElementById("pl-quantity")?.value ?? "";
+      qRaw = String(qRaw).trim();
+      const quantity = qRaw === "" ? 0 : Number(qRaw);
+
+      const status = String(document.getElementById("pl-status")?.value ?? "");
+
+      // If you have EDD field in modal/form, read it; otherwise comment this out
+      const eddInput = document.getElementById("pl-edd");
+      const eddRaw = eddInput ? String(eddInput.value ?? "").trim() : "";
+      const expected_time_of_delivery = eddRaw !== "" ? eddRaw : null;
+
+      // --- Read hidden fields (originals + ids) ---
+      const qtyHidden = document.getElementById(`quantity_${plId}`);
+      const statusHidden = document.getElementById(`status_${plId}`); // IMPORTANT: id should be status_<id>
+      const eddHidden = document.getElementById(`edd_${plId}`);
+
+      const originalQty = qtyHidden?.dataset?.original ?? "";
+      const originalStatus = statusHidden?.dataset?.original ?? "";
+      const originalEddRaw = eddHidden?.dataset?.original ?? "";
+      const originalEdd = originalEddRaw.trim() !== "" ? originalEddRaw : null;
+
+      const productId = document.getElementById(`productId_${plId}`)?.value ?? "";
+      const sku = document.getElementById(`sku_${plId}`)?.value ?? "";
+      const orderID = document.getElementById(`orderId_${plId}`)?.value ?? "";
+
+      // --- Determine what changed ---
+      const changed =
+        String(quantity) !== String(originalQty) ||
+        String(status) !== String(originalStatus) ||
+        expected_time_of_delivery !== originalEdd;
+
+      // --- Comment handling ---
+      const commentEl = document.getElementById(`commentInput_${plId}`);
+      const commentText = commentEl ? String(commentEl.value ?? "").trim() : "";
+
+      const msgDiv = document.getElementById("plDetailMsg");
+
+      try {
+        // 1) If comment exists, save it first
+        if (commentText !== "") {
+          // assuming addComment(plId) exists and handles saving
+          // if addComment returns a promise, await it; otherwise remove await
+          await addComment(plId,orderID);
+        }
+
+        // 2) If nothing changed (and comment was empty or saved), don't call update API
+        if (!changed) {
+          msgDiv.innerHTML = `<span class="text-green-600">Saved. No item changes detected.</span>`;
+          return;
+        }
+
+        // 3) Call update API only if fields changed
+        const payload = {
+          page: "products",
+          action: "update_purchase_item",
+          id: plId,
+          quantity: quantity,
+          expected_time_of_delivery,
+          status,
+          product_id: productId,
+          sku,
+          orderID
+        };
+
+        const res = await fetch("?page=products&action=update_purchase_item", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (data?.success) {
+          // update originals so it won't re-trigger next time
+          if (qtyHidden) qtyHidden.dataset.original = String(quantity);
+          if (statusHidden) statusHidden.dataset.original = String(status);
+          if (eddHidden) eddHidden.dataset.original = expected_time_of_delivery ?? "";
+
+          msgDiv.innerHTML = `<span class="text-green-600">Purchase list details updated successfully.</span>`;
+          // optional reload:
+          // setTimeout(() => location.reload(), 800);
         } else {
-            q = Number(q);
+          msgDiv.innerHTML = `<span class="text-red-600">Failed: ${data?.message ?? "Error"}</span>`;
         }
+      } catch (error) {
+        console.error("Error updating purchase list details:", error);
+        msgDiv.innerHTML = `<span class="text-red-600">An error occurred while updating purchase list details.</span>`;
+      }
+});
 
-        const quantity = q;
-        //const remark = document.getElementById('pl-remark').value;
-        const status = document.getElementById('pl-status').value;
-
-        // Prepare data to send
-        const formData = new FormData();
-        formData.append('page', 'products');
-        formData.append('action', 'editPlDetails');
-        formData.append('id', plId);
-        formData.append('quantity', quantity);
-        formData.append('status', status);
-        formData.append('product_id', productId);
-
-        // ✅ 1) Save comment first (if any)
-        if (`commentInput_${plId}`.value !== '') {
-            addComment(plId);
-        }
-
-        // Send AJAX request to update details
-        fetch(`<?php echo base_url('?page=products&action=update_purchase_item'); ?>`, {
-                method: 'POST',
-                body: JSON.stringify(Object.fromEntries(formData))
-            })
-            .then(response => response.json())
-            .then(data => {
-                const msgDiv = document.getElementById('plDetailMsg');
-                if (data.success) {
-                    msgDiv.innerHTML = '<span class="text-green-600">Purchase list details updated successfully.</span>';
-                } else {
-                    msgDiv.innerHTML = '<span class="text-red-600">Failed to update purchase list details.</span>';
-                }
-            })
-            .catch(error => {
-                console.error('Error updating purchase list details:', error);
-                const msgDiv = document.getElementById('plDetailMsg');
-                msgDiv.innerHTML = '<span class="text-red-600">An error occurred while updating purchase list details.</span>';
-            });
-    });
 
     // show/hide popup
     document.getElementById('close-pl-modal').addEventListener('click', function() {

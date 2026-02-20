@@ -132,6 +132,13 @@
                 <!-- hidden fields -->
                 <input type="hidden" id="productId_<?= (int)$pl['id']; ?>" value="<?= (int)$pl['product_id']; ?>"/>
                 <input type="hidden" id="minStock_<?= (int)$pl['id']; ?>" value="<?= $pl['product']['min_stock'] ?? ''; ?>" />
+                <input type="hidden" id="sku_<?= (int)$pl['id']; ?>" value="<?= $item_code; ?>" />
+                <input type="hidden" id="orderId_<?= (int)$pl['id']; ?>" value="<?= $pl['order_id']; ?>" />
+
+                <input type="hidden" id="quantity_<?= (int)$pl['id']; ?>" value="<?= $pl['order_id']; ?>" data-original = "<?= $pl['order_id']; ?>"/>
+                <input type="hidden" id="edd_<?= (int)$pl['id']; ?>" value="<?= $pl['expected_time_of_delivery']; ?>" data-original = "<?= $pl['expected_time_of_delivery']; ?>"/>
+                <input type="hidden" id="statusOrg_<?= (int)$pl['id']; ?>" value="<?= $status; ?>" data-original = "<?= $status; ?>"/>
+
 
                 <!-- HEADER -->
                 <div class="flex gap-4 relative">
