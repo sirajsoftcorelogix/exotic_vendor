@@ -55,7 +55,7 @@ class PurchaseListCommentController
     public function add(): void
     {
         is_login();
-        
+
         $purchaseListId = isset($_POST['purchase_list_id'])
             ? (int)$_POST['purchase_list_id']
             : 0;
