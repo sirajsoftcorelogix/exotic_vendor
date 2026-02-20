@@ -359,7 +359,7 @@ async function addComment(purchaseListId, parentId = null, page = 'mpl',orderID=
     const input = document.getElementById(inputId);
     if (!input) return; // input missing (UI closed etc.)
 
-    const text = (input.value || "").trim();
+    const text = (input.value || "").trim();   console.log(text); 
 
     // 🚫 If comment is empty or whitespace → cancel
     if (!text.length) return;
