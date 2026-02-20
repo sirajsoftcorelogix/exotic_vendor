@@ -54,12 +54,16 @@ class Inbounding
             $upd_id = (int)$filters['updated_by_user_id'];
             $where[] = "vi.updated_by_user_id = $upd_id";
         }
-// 6. MY INBOUND FILTER (Assigned to logged-in user)
-if ($isMyInbound && $userId > 0) {
-    $userId = (int)$userId;
-    $where[] = "vi.assigned_to_user_id = $userId";
-}
-
+        // 6. MY INBOUND FILTER (Assigned to logged-in user)
+        if ($isMyInbound && $userId > 0) {
+            $userId = (int)$userId;
+            $where[] = "vi.assigned_to_user_id = $userId";
+        }
+        // Assigned User Filter (Dynamic My Inbound)
+        if (!empty($filters['assigned_user_id'])) {
+            $assignedId = (int)$filters['assigned_user_id'];
+            $where[] = "vi.assigned_to_user_id = $assignedId";
+        }
         // Combine WHERE clauses
         $whereSql = "";
         if (!empty($where)) {
@@ -606,8 +610,8 @@ switch ($sort) {
 
         // UPDATED SQL: Added 'gate_entry_date_time' with NOW()
         $sql = "INSERT INTO vp_inbound 
-                (vendor_code, invoice_image, invoice_no, gate_entry_date_time) 
-                VALUES (?, ?, ?, NOW())";
+                (vendor_code, invoice_image, invoice_no, gate_entry_date_time,created_at) 
+                VALUES (?, ?, ?, NOW(), NOW())";
 
         $stmt = $this->conn->prepare($sql);
 
@@ -732,7 +736,7 @@ switch ($sort) {
         }
 
         if (empty($cols)) return ['success' => true, 'message' => "No changes detected."];
-
+            $cols[] = "modified_at = NOW()";
         // Add ID for the WHERE clause
         $types .= "i";
         $values[] = $id;
@@ -895,7 +899,7 @@ switch ($sort) {
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, temp_code = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, modified_at = NOW()
             WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -1287,6 +1291,19 @@ switch ($sort) {
     $result = $stmt->get_result(); // MySQLi result
     return $result->fetch_all(MYSQLI_ASSOC);
 }
+public function hasInboundLog($inboundId)
+{
+    $inboundId = (int)$inboundId;
 
+    $sql = "SELECT id 
+            FROM inbound_logs 
+            WHERE i_id = $inboundId 
+            AND stat = 'published'
+            LIMIT 1";
+
+    $result = $this->conn->query($sql);
+
+    return ($result && $result->num_rows > 0);
+}
 
 }

@@ -1372,6 +1372,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
             </fieldset>
         </div>
+        <?php if (empty($data['hasInboundLog'])): ?>
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
             <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
                 <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
@@ -1380,7 +1381,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </button>
             <?php  } ?>
 
-            <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
+            <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
                 Save as Draft
             </button>
             
@@ -1388,6 +1389,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 Save and Generate Item Code
             </button>
         </div>
+        <?php endif; ?>
     </form>
 </div>
 <div id="publishConfirmPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[80]">

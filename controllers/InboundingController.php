@@ -20,9 +20,10 @@ class InboundingController {
             'received_by_user_id' => $_GET['agent_id'] ?? '',
             'group_name'          => $_GET['group_name'] ?? '',
             'status_step'         => $_GET['status_step'] ?? '',
-            'updated_by_user_id'  => $_GET['updated_by'] ?? ''
+            'updated_by_user_id'  => $_GET['updated_by'] ?? '',
+            'assigned_user_id'    => $_GET['assigned_user_id'] ?? '',
         ];
-$sort = $_GET['sort'] ?? '';
+        $sort = $_GET['sort'] ?? '';
 
         // 2. Pagination Logic
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
@@ -244,6 +245,8 @@ $sort = $_GET['sort'] ?? '';
         $data['form2']['getimgdir'] = $this->getimgdir();
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
+        $hasInboundLog = $inboundingModel->hasInboundLog($id);
+        $data['hasInboundLog'] = $hasInboundLog;
         // echo "<pre>";print_r($data['getimgdir']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }

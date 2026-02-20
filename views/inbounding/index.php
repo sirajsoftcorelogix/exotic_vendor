@@ -448,6 +448,28 @@ function getThumbnail($filePath, $width = 150, $height = 150)
                                 ?>
                             </select>
                         </div>
+                        <div>
+    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">
+        Assigned To
+    </label>
+
+    <select name="assigned_user_id"
+        id="filter_assigned_user"
+        class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+
+        <option value="">Select Assigned User...</option>
+
+        <?php
+        $selAssigned = $_GET['assigned_user_id'] ?? '';
+        if (!empty($alluser_list)) {
+            foreach ($alluser_list as $u) {
+                $s = ($selAssigned == $u['id']) ? 'selected' : '';
+                echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
+            }
+        }
+        ?>
+    </select>
+</div>
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
