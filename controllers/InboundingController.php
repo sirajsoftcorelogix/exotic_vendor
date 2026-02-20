@@ -1320,7 +1320,12 @@ class InboundingController {
             $ids_array = explode(',', $ids_string);
             $ids_array = array_map('intval', $ids_array); // Security: Force integers
             $ids_array = array_filter($ids_array); // Remove empty values
-
+            //for
+             $blockedIds = $inboundingModel->checkPublishedBeforeDelete($ids_array);
+            if (!empty($blockedIds)) {
+               header("Location: ?page=inbounding&action=list&msg=published_blocked");
+                exit;
+             }
             if (!empty($ids_array)) {
                 // 4. Call Model using the global variable
                 // Ensure you added the 'deleteInboundItems' function to your Model class!

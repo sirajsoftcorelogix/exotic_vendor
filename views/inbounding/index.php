@@ -1349,4 +1349,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
 });
 </script>
+<!-- //for delete -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    const params = new URLSearchParams(window.location.search);
+    const msg = params.get('msg');
+
+    if (!msg) return;
+
+    if (msg === 'published_blocked') {
+        alert(" Some selected items are already published and cannot be deleted.");
+    }
+
+    
+
+});
+</script>
 

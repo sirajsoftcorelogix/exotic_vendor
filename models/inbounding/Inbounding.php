@@ -1305,5 +1305,31 @@ public function hasInboundLog($inboundId)
 
     return ($result && $result->num_rows > 0);
 }
+//for delete
+public function checkPublishedBeforeDelete(array $ids)
+{
+    if (empty($ids)) return [];
 
+    $ids = array_map('intval', $ids);
+    $idList = implode(',', $ids);
+
+    $sql = "
+        SELECT DISTINCT i_id
+        FROM inbound_logs
+        WHERE i_id IN ($idList)
+        AND stat = 'published'
+    ";
+
+    $result = $this->conn->query($sql);
+
+    $blocked = [];
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $blocked[] = $row['i_id'];
+        }
+    }
+
+    return $blocked;
+}
 }
