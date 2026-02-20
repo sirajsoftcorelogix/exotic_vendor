@@ -780,7 +780,7 @@ class ProductsController {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        //$res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery);
+        
         if($quantity>0){
             $res = $productModel->addPurchaseTransaction($purchase_list_id, $quantity, $_SESSION['user']['id'], $status, $product_id);            
             echo json_encode($res);

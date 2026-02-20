@@ -55,7 +55,7 @@ function clearMainComment(purchaseListId) {
     if (el) el.value = "";
 }
 
-async function saveMainCommentIfAny(purchaseListId) {
+async function saveMainCommentIfAny(purchaseListId,sku,orderID) {
     const text = getMainCommentText(purchaseListId);
     if (!text) return { success: true, skipped: true };
 
@@ -69,8 +69,10 @@ async function saveMainCommentIfAny(purchaseListId) {
     }
 
     const payload = new URLSearchParams();
+    payload.set("sku", sku);
     payload.set("purchase_list_id", purchaseListId);
     payload.set("comment", text);
+    payload.set("orderID", orderID);
 
     let res;
     try {
@@ -106,58 +108,88 @@ async function saveMainCommentIfAny(purchaseListId) {
 }
 
 async function savePurchaseItem(id, btn) {
-    const qtyEl = document.getElementById('quantity_' + id);
-    const qty = qtyEl ? qtyEl.value : "";
+  const qtyEl = document.getElementById('quantity_' + id);
+  const qty = qtyEl ? String(qtyEl.value ?? "") : "";
 
-    const eddEl = document.getElementById('edd_' + id);
-    const edd = (eddEl && eddEl.value && eddEl.value.trim() !== '') ? eddEl.value : null;
+  const eddEl = document.getElementById('edd_' + id);
+  const eddRaw = eddEl ? String(eddEl.value ?? "") : "";
+  const edd = eddRaw.trim() !== "" ? eddRaw : null;
 
-    const statusEl = document.getElementById('status_' + id);
-    const status = statusEl ? statusEl.value : "";
+  const statusEl = document.getElementById('status_' + id);
+  const status = statusEl ? String(statusEl.value ?? "") : "";
 
-    const prodcutEl = document.getElementById('productId_' + id);
-    const productId = prodcutEl ? prodcutEl.value : "";
+  const prodcutEl = document.getElementById('productId_' + id);
+  const productId = prodcutEl ? String(prodcutEl.value ?? "") : "";
 
-    if (!btn) btn = {};
-    btn.disabled = true;
-    const originalText = btn.innerHTML || '';
-    btn.innerHTML = 'Saving...';
+  const skuEl = document.getElementById('sku_' + id);
+  const sku = skuEl ? String(skuEl.value ?? "") : "";
 
-    try {
-        // ✅ 1) Save comment first (if any)
-        const c = await saveMainCommentIfAny(id);
-        if (!c.success) {
-            showAlertP("Comment not saved: " + (c.message || "Error"), "error");
-            return;
-        }
+  const orderIDEl = document.getElementById('orderId_' + id);
+  const orderID = orderIDEl ? String(orderIDEl.value ?? "") : "";
 
-        // ✅ 2) Save purchase item
-        const r = await fetch('?page=products&action=update_purchase_item', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: id,
-                quantity: qty,
-                expected_time_of_delivery: edd,
-                status: status,
-                product_id: productId
-            })
-        });
+  // ✅ Compare against original values (stored in data-original)
+  const originalQty = qtyEl?.dataset?.original ?? "";
+  const originalEddRaw = eddEl?.dataset?.original ?? "";
+  const originalEdd = originalEddRaw.trim() !== "" ? originalEddRaw : null;
+  const originalStatus = statusEl?.dataset?.original ?? "";
 
-        const data = await r.json();
-        if (data && data.success) {
-            //showAlertP('Saved successfully', 'success');
-            setTimeout(() => location.reload(), 800);
-        } else {
-            showAlertP('Failed: ' + (data.message || 'Error'), 'error');
-        }
-    } catch (err) {
-        showAlertP('Network error', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+  const changed =
+    qty !== String(originalQty) ||
+    edd !== originalEdd ||
+    status !== String(originalStatus);
+
+  if (!btn) btn = {};
+  btn.disabled = true;
+  const originalText = btn.innerHTML || '';
+  btn.innerHTML = 'Saving...';
+
+  try {
+    // ✅ 1) Save comment first (if any)
+    const c = await saveMainCommentIfAny(id, sku, orderID);
+    if (!c.success) {
+      showAlertP("Comment not saved: " + (c.message || "Error"), "error");
+      return;
     }
+
+    // ✅ 2) Only call API if qty/edd/status changed
+    if (!changed) {
+      showAlertP("No changes to save.", "success");
+      return;
+    }
+
+    const r = await fetch('?page=products&action=update_purchase_item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: id,
+        quantity: qty,
+        expected_time_of_delivery: edd,
+        status: status,
+        product_id: productId,
+        sku: sku,
+        orderID: orderID
+      })
+    });
+
+    const data = await r.json();
+    if (data && data.success) {
+      // update originals so next save doesn't re-fire unnecessarily
+      if (qtyEl) qtyEl.dataset.original = qty;
+      if (eddEl) eddEl.dataset.original = (edd ?? "");
+      if (statusEl) statusEl.dataset.original = status;
+
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showAlertP('Failed: ' + (data.message || 'Error'), 'error');
+    }
+  } catch (err) {
+    showAlertP('Network error', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
 }
+
 
 
 async function markAsPurchased(id) {
@@ -318,7 +350,7 @@ async function loadComments(purchaseListId) {
     thread.innerHTML = data.comments.map(commentHtml).join("");
 }
 
-async function addComment(purchaseListId, parentId = null, page = 'mpl') {
+async function addComment(purchaseListId, parentId = null, page = 'mpl',orderID=null) {
 
     let inputId = parentId
         ? `replyInput_${purchaseListId}_${parentId}`
@@ -337,6 +369,8 @@ async function addComment(purchaseListId, parentId = null, page = 'mpl') {
     const payload = new URLSearchParams();
     payload.set("purchase_list_id", purchaseListId);
     payload.set("comment", text);
+    payload.set("orderID", orderID);
+    
     if (parentId) payload.set("parent_id", parentId);
 
     const res = await fetch("?page=products&action=addComment", {
@@ -387,5 +421,26 @@ function checkMinStock(id) {
 function closeErrorModal() {
     document.getElementById('errorModal').classList.add('hidden');
 }
-// End of purchase_list.js
 
+function initMasterPurchaseTable() {
+    const tableEl = document.getElementById('master-purchase-table');
+    if (!tableEl) return;
+
+    tableEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button.details-btn');
+        if (!btn) return;
+
+        const tr = btn.closest('tr');
+        const detailRow = tr ? tr.nextElementSibling : null;
+        if (!detailRow || !detailRow.classList.contains('detail-row')) return;
+
+        detailRow.classList.toggle('hidden');
+        const icon = btn.querySelector('.details-icon');
+        if (icon) icon.textContent = detailRow.classList.contains('hidden') ? '+' : '-';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initMasterPurchaseTable();
+});
+// End of purchase_list.js
