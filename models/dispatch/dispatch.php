@@ -169,7 +169,7 @@ class Dispatch {
                 curl_close($ch);
                 $data = json_decode($response, true);
                 $token = $data['shiprocket_token'] ?? '';
-                $expire_at = $data['shiprocket_expiry'] ? date('Y-m-d H:i:s', strtotime($data['shiprocket_expiry'])) : date('Y-m-d H:i:s', time() + 3600); // default 1 hour expiry
+                $expire_at = $data['shiprocket_expiry'] ? date('Y-m-d H:i:s', $data['shiprocket_expiry']) : date('Y-m-d H:i:s', time() + 3600); // default 1 hour expiry
                 if($token) {
                     $sql = "UPDATE shiprocket_api_tokens SET token = '$token', expires_at = '$expire_at', updated_at = NOW() ORDER BY id DESC LIMIT 1";
                     $this->db->query($sql);
