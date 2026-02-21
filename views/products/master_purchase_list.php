@@ -579,112 +579,112 @@
 }
 
     document.getElementById("plDetailForm").addEventListener("submit", async function (event) {
-  event.preventDefault();
+        event.preventDefault();
 
-  const plId = document.getElementById("purchase_list_id")?.value;
-  if (!plId) return;
+        const plId = document.getElementById("purchase_list_id")?.value;
+        if (!plId) return;
 
-  const msgDiv = document.getElementById("plDetailMsg");
-  msgDiv.innerHTML = "";
+        const msgDiv = document.getElementById("plDetailMsg");
+        msgDiv.innerHTML = "";
 
-  // ----- Editable fields -----
-  let qRaw = String(document.getElementById("pl-quantity")?.value ?? "").trim();
-  const quantity = qRaw === "" ? 0 : Number(qRaw);
+        // ----- Editable fields -----
+        let qRaw = String(document.getElementById("pl-quantity")?.value ?? "").trim();
+        const quantity = qRaw === "" ? 0 : Number(qRaw);
 
-  const status = String(document.getElementById("pl-status")?.value ?? "");
+        const status = String(document.getElementById("pl-status")?.value ?? "");
 
-  const eddRaw = String(document.getElementById("pl-edd")?.value ?? "").trim();
-  const expected_time_of_delivery = eddRaw !== "" ? eddRaw : null;
+        const eddRaw = String(document.getElementById("pl-edd")?.value ?? "").trim();
+        const expected_time_of_delivery = eddRaw !== "" ? eddRaw : null;
 
-  // ----- Hidden fields / originals -----
-  const qtyHidden = document.getElementById(`quantity_${plId}`);
-  const statusHidden = document.getElementById(`status_${plId}`);
-  const eddHidden = document.getElementById(`edd_${plId}`);
+        // ----- Hidden fields / originals -----
+        const qtyHidden = document.getElementById(`quantity_${plId}`);
+        const statusHidden = document.getElementById(`status_${plId}`);
+        const eddHidden = document.getElementById(`edd_${plId}`);
 
-  const originalQty = String(qtyHidden?.dataset?.original ?? "");
-  const originalStatus = String(statusHidden?.dataset?.original ?? "");
-  const originalEddRaw = String(eddHidden?.dataset?.original ?? "");
-  const originalEdd = originalEddRaw.trim() !== "" ? originalEddRaw : null;
+        const originalQty = String(qtyHidden?.dataset?.original ?? "");
+        const originalStatus = String(statusHidden?.dataset?.original ?? "");
+        const originalEddRaw = String(eddHidden?.dataset?.original ?? "");
+        const originalEdd = originalEddRaw.trim() !== "" ? originalEddRaw : null;
 
-  const productId = String(document.getElementById(`productId_${plId}`)?.value ?? "");
-  const sku = String(document.getElementById(`sku_${plId}`)?.value ?? "");
-  const orderID = String(document.getElementById(`orderId_${plId}`)?.value ?? "");
+        const productId = String(document.getElementById(`productId_${plId}`)?.value ?? "");
+        const sku = String(document.getElementById(`sku_${plId}`)?.value ?? "");
+        const orderID = String(document.getElementById(`orderId_${plId}`)?.value ?? "");
 
-  // ----- Comment -----
-  const commentEl = document.getElementById(`commentInput_${plId}`);
-  const commentText = commentEl ? String(commentEl.value ?? "").trim() : "";
+        // ----- Comment -----
+        const commentEl = document.getElementById(`commentInput_${plId}`);
+        const commentText = commentEl ? String(commentEl.value ?? "").trim() : "";
 
-  // ----- Determine item changes -----
-  const changed =
-    String(quantity) !== originalQty ||
-    status !== originalStatus ||
-    expected_time_of_delivery !== originalEdd;
+        // ----- Determine item changes -----
+        const changed =
+            //String(quantity) !== originalQty ||
+            status !== originalStatus ||
+            expected_time_of_delivery !== originalEdd;
 
-  let commentSaved = false;
-  let itemSaved = false;
+        let commentSaved = false;
+        let itemSaved = false;
 
-  try {
-    // 1) Save comment first (if any)
-    if (commentText !== "") { 
-      // If addComment needs commentText param, change to: await addComment(plId, orderID, commentText)
-      const commentRes = await addComment(plId, '','',orderID);
+        try {
+            // 1) Save comment first (if any)
+            if (commentText !== "") { 
+            // If addComment needs commentText param, change to: await addComment(plId, orderID, commentText)
+            const commentRes = await addComment(plId, '','',orderID);
 
-      // Treat "no explicit false" as success (works even if addComment returns nothing)
-      if (commentRes?.success !== false) {
-        commentSaved = true;
-        if (commentEl) commentEl.value = "";
-      }
-    }
+            // Treat "no explicit false" as success (works even if addComment returns nothing)
+            if (commentRes?.success !== false) {
+                commentSaved = true;
+                if (commentEl) commentEl.value = "";
+            }
+            }
 
-    // 2) Update purchase item only if fields changed
-    if (changed) {
-      const payload = {
-        page: "products",
-        action: "update_purchase_item",
-        id: plId,
-        quantity,
-        expected_time_of_delivery,
-        status,
-        product_id: productId,
-        sku,
-        orderID
-      };
+            // 2) Update purchase item only if fields changed
+            if (changed) {
+            const payload = {
+                page: "products",
+                action: "update_purchase_item",
+                id: plId,
+                quantity,
+                expected_time_of_delivery,
+                status,
+                product_id: productId,
+                sku,
+                orderID
+            };
 
-      const res = await fetch("?page=products&action=update_purchase_item", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+            const res = await fetch("?page=products&action=update_purchase_item", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
 
-      const data = await res.json();
+            const data = await res.json();
 
-      if (data?.success) {
-        itemSaved = true;
+            if (data?.success) {
+                itemSaved = true;
 
-        // update originals so next save doesn't re-trigger
-        if (qtyHidden) qtyHidden.dataset.original = String(quantity);
-        if (statusHidden) statusHidden.dataset.original = status;
-        if (eddHidden) eddHidden.dataset.original = expected_time_of_delivery ?? "";
-      } else {
-        msgDiv.innerHTML = `<span class="text-red-600">Failed: ${data?.message ?? "Error"}</span>`;
-        return;
-      }
-    }
+                // update originals so next save doesn't re-trigger
+                if (qtyHidden) qtyHidden.dataset.original = String(quantity);
+                if (statusHidden) statusHidden.dataset.original = status;
+                if (eddHidden) eddHidden.dataset.original = expected_time_of_delivery ?? "";
+            } else {
+                msgDiv.innerHTML = `<span class="text-red-600">Failed: ${data?.message ?? "Error"}</span>`;
+                return;
+            }
+            }
 
-    // 3) Final success message
-    if (commentSaved && itemSaved) {
-      msgDiv.innerHTML = `<span class="text-green-600">Comment and item updated successfully.</span>`;
-    } else if (commentSaved) {
-      msgDiv.innerHTML = `<span class="text-green-600">Comment added successfully.</span>`;
-    } else if (itemSaved) {
-      msgDiv.innerHTML = `<span class="text-green-600">Purchase item updated successfully.</span>`;
-    } else {
-      msgDiv.innerHTML = `<span class="text-gray-600">No changes detected.</span>`;
-    }
-  } catch (error) {
-    console.error("Save error:", error);
-    msgDiv.innerHTML = `<span class="text-red-600">An error occurred while saving.</span>`;
-  }
+            // 3) Final success message
+            if (commentSaved && itemSaved) {
+            msgDiv.innerHTML = `<span class="text-green-600">Comment and item updated successfully.</span>`;
+            } else if (commentSaved) {
+            msgDiv.innerHTML = `<span class="text-green-600">Comment added successfully.</span>`;
+            } else if (itemSaved) {
+            msgDiv.innerHTML = `<span class="text-green-600">Purchase item updated successfully.</span>`;
+            } else {
+            msgDiv.innerHTML = `<span class="text-gray-600">No changes detected.</span>`;
+            }
+        } catch (error) {
+            console.error("Save error:", error);
+            msgDiv.innerHTML = `<span class="text-red-600">An error occurred while saving.</span>`;
+        }
 });
 
 
