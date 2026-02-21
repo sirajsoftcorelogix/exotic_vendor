@@ -129,6 +129,12 @@ function getThumbnail($filePath, $width = 150, $height = 150)
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@700&display=swap');
@@ -324,6 +330,27 @@ function getThumbnail($filePath, $width = 150, $height = 150)
     .custom-input::placeholder {
         font-size: 13px;
     }
+
+    .date-field {
+        position: relative;
+        display: inline-block;
+    }
+
+    .date-field input {
+        padding-right: 35px;
+
+        padding: 8px;
+    }
+
+    .date-field i {
+        position: absolute;
+        right: 10px;
+        top: 70%;
+        transform: translateY(-50%);
+        color: #d06706;
+        pointer-events: none;
+        /* icon won't block clicks */
+    }
 </style>
 
 <div class="w-full max-w-6xl space-y-4 mx-auto">
@@ -449,27 +476,60 @@ function getThumbnail($filePath, $width = 150, $height = 150)
                             </select>
                         </div>
                         <div>
-    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">
-        Assigned To
-    </label>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                Assigned To
+                            </label>
 
-    <select name="assigned_user_id"
-        id="filter_assigned_user"
-        class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                            <select name="assigned_user_id"
+                                id="filter_assigned_user"
+                                class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
 
-        <option value="">Select Assigned User...</option>
+                                <option value="">Select Assigned User...</option>
 
-        <?php
-        $selAssigned = $_GET['assigned_user_id'] ?? '';
-        if (!empty($alluser_list)) {
-            foreach ($alluser_list as $u) {
-                $s = ($selAssigned == $u['id']) ? 'selected' : '';
-                echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
-            }
-        }
-        ?>
-    </select>
-</div>
+                                <?php
+                                $selAssigned = $_GET['assigned_user_id'] ?? '';
+                                if (!empty($alluser_list)) {
+                                    foreach ($alluser_list as $u) {
+                                        $s = ($selAssigned == $u['id']) ? 'selected' : '';
+                                        echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
+                                    }
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="w-full date-field">
+                            <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1"> Created Date Range</label>
+                            <input type="text" autocomplete="off" value="<?= $data['date_range'] ?? '' ?>" name="daterange" id="daterange" placeholder="Select date range" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer" />
+                            <i class="fa fa-calendar"></i>
+                            <input type="hidden" name="created_from" value="<?= htmlspecialchars($_GET['created_from'] ?? '') ?>" id="from_date">
+                            <input type="hidden" name="created_to" value="<?= htmlspecialchars($_GET['created_to'] ?? '') ?>" id="to_date">
+
+                        </div>
+                        <div class="w-full date-field">
+                            <label class="block text-sm font-medium text-gray-600 mb-1">
+                                Published Date Range
+                            </label>
+
+                            <input type="text"
+                                autocomplete="off"
+                                value="<?= $data['published_date_range'] ?? '' ?>"
+                                name="published_daterange"
+                                id="published_daterange"
+                                placeholder="Select published date range"
+                                class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer" />
+
+                            <i class="fa fa-calendar"></i>
+
+                            <input type="hidden"
+                                name="published_from"
+                                value="<?= htmlspecialchars($_GET['published_from'] ?? '') ?>"
+                                id="published_from">
+
+                            <input type="hidden"
+                                name="published_to"
+                                value="<?= htmlspecialchars($_GET['published_to'] ?? '') ?>"
+                                id="published_to">
+                        </div>
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -496,86 +556,94 @@ function getThumbnail($filePath, $width = 150, $height = 150)
     <div class="bg-white border-b border-gray-200 mb-6 sticky top-0 z-30">
         <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
 
-           <?php 
-$isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
-?>
+            <?php
+            $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
+            ?>
 
-<nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar">
-<?php foreach ($tabs as $key => $label): 
+            <nav class="-mb-px flex space-x-8 overflow-x-auto no-scrollbar">
+                <?php foreach ($tabs as $key => $label):
 
-    if ($key === 'my_inbound') {
-        $url = "?page=inbounding&action=list&my_inbound=1";
-    } else {
-        $url = "?page=inbounding&action=list&status_step=" . urlencode($key);
-    }
+                    if ($key === 'my_inbound') {
+                        $url = "?page=inbounding&action=list&my_inbound=1";
+                    } else {
+                        $url = "?page=inbounding&action=list&status_step=" . urlencode($key);
+                    }
 
-    $isActive = (
-        ($key === 'my_inbound' && $isMyInbound) ||
-        ($key !== 'my_inbound' && $current_step == $key && !$isMyInbound)
-    );
+                    $isActive = (
+                        ($key === 'my_inbound' && $isMyInbound) ||
+                        ($key !== 'my_inbound' && $current_step == $key && !$isMyInbound)
+                    );
 
-    $activeClass   = "border-orange-500 text-orange-600 font-bold border-b-4";
-    $inactiveClass = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
-?>
-    <a href="<?= $url ?>"
-       class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
-        <?= $label ?>
-    </a>
-<?php endforeach; ?>
-</nav>
-<div class="relative inline-block">
+                    $activeClass   = "border-orange-500 text-orange-600 font-bold border-b-4";
+                    $inactiveClass = "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium border-b-2";
+                ?>
+                    <a href="<?= $url ?>"
+                        class="<?= $isActive ? $activeClass : $inactiveClass ?> whitespace-nowrap py-4 px-1 text-sm transition-colors duration-200">
+                        <?= $label ?>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+            <div class="relative inline-block">
 
-    <!-- SORT BUTTON -->
-    <button
-        id="sortToggle"
-        type="button"
-        class="flex items-center gap-1 text-sm font-medium text-gray-600
+                <!-- SORT BUTTON -->
+                <button
+                    id="sortToggle"
+                    type="button"
+                    class="flex items-center gap-1 text-sm font-medium text-gray-600
                hover:text-orange-600 focus:outline-none">
-        <span>⇅</span>
-        <span>Sort</span>
-    </button>
+                    <span>⇅</span>
+                    <span>Sort</span>
+                </button>
 
-    <!-- SORT DROPDOWN -->
-    <div
-        id="sortMenu"
-        class="hidden absolute right-0 mt-2 w-56 bg-white
+                <!-- SORT DROPDOWN -->
+                <div
+                    id="sortMenu"
+                    class="hidden absolute right-0 mt-2 w-56 bg-white
                border border-gray-200 rounded-lg shadow-lg z-50">
 
-        <ul class="text-sm text-gray-700">
-            <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
-    data-sort="inbound_desc">
-    Inbound Date — New to Old
-</li>
+                    <ul class="text-sm text-gray-700">
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="inbound_desc">
+                            Inbound Date — New to Old
+                        </li>
 
-<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
-    data-sort="inbound_asc">
-    Inbound Date — Old to New
-</li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="inbound_asc">
+                            Inbound Date — Old to New
+                        </li>
 
-<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
-    data-sort="edited_desc">
-    Edited Date — New to Old
-</li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="edited_desc">
+                            Edited Date — New to Old
+                        </li>
 
-<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
-    data-sort="edited_asc">
-    Edited Date — Old to New
-</li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="edited_asc">
+                            Edited Date — Old to New
+                        </li>
 
-<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
-    data-sort="cp_desc">
-    CP — High to Low
-</li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="cp_desc">
+                            CP — High to Low
+                        </li>
 
-<li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
-    data-sort="cp_asc">
-    CP — Low to High
-</li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="cp_asc">
+                            CP — Low to High
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="weight_desc">
+                            Weight — High to Low
+                        </li>
 
-        </ul>
-    </div>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item"
+                            data-sort="weight_asc">
+                            Weight — Low to High
+                        </li>
+                    </ul>
+                </div>
 
-</div>
+            </div>
 
 
 
@@ -1305,65 +1373,141 @@ $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
     }
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const toggle = document.getElementById('sortToggle');
-    const menu   = document.getElementById('sortMenu');
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggle = document.getElementById('sortToggle');
+        const menu = document.getElementById('sortMenu');
 
-    if (!toggle || !menu) return;
+        if (!toggle || !menu) return;
 
-    // Toggle dropdown
-    toggle.addEventListener('click', function (e) {
-        e.stopPropagation();
-        menu.classList.toggle('hidden');
-    });
+        // Toggle dropdown
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            menu.classList.toggle('hidden');
+        });
 
-    // Close on outside click
-    document.addEventListener('click', function () {
-        menu.classList.add('hidden');
-    });
+        // Close on outside click
+        document.addEventListener('click', function() {
+            menu.classList.add('hidden');
+        });
 
-    // Prevent closing when clicking inside menu
-    menu.addEventListener('click', function (e) {
-        e.stopPropagation();
-    });
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-
-    const sortItems = document.querySelectorAll('.sort-item');
-
-    sortItems.forEach(item => {
-        item.addEventListener('click', function () {
-
-            const sortValue = this.getAttribute('data-sort');
-
-            const params = new URLSearchParams(window.location.search);
-
-            params.set('sort', sortValue);      // set sort
-            params.set('page_no', 1);           // reset to page 1
-
-            window.location.search = params.toString();
+        // Prevent closing when clicking inside menu
+        menu.addEventListener('click', function(e) {
+            e.stopPropagation();
         });
     });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
 
-});
+        const sortItems = document.querySelectorAll('.sort-item');
+
+        sortItems.forEach(item => {
+            item.addEventListener('click', function() {
+
+                const sortValue = this.getAttribute('data-sort');
+
+                const params = new URLSearchParams(window.location.search);
+
+                params.set('sort', sortValue); // set sort
+                params.set('page_no', 1); // reset to page 1
+
+                window.location.search = params.toString();
+            });
+        });
+
+    });
 </script>
 <!-- //for delete -->
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
 
-    const params = new URLSearchParams(window.location.search);
-    const msg = params.get('msg');
+        const params = new URLSearchParams(window.location.search);
+        const msg = params.get('msg');
 
-    if (!msg) return;
+        if (!msg) return;
 
-    if (msg === 'published_blocked') {
-        alert(" Some selected items are already published and cannot be deleted.");
-    }
+        if (msg === 'published_blocked') {
+            alert(" Some selected items are already published and cannot be deleted.");
+        }
 
-    
+
+
+    });
+</script>
+<script>
+    $(function() {
+        // Initialize date range picker: display format 'DD MMM YYYY' (e.g., 25 Dec 2015)
+        $('#daterange').daterangepicker({
+            autoUpdateInput: false, // keep field blank until Apply
+            showDropdowns: true, // optional: month/year dropdowns
+            locale: {
+                format: 'DD MMM YYYY'
+            },
+            alwaysShowCalendars: true, // ensures only calendars show
+            drops: 'down', // position of calendar
+            opens: 'right', // alignment
+            autoApply: false
+        }, function(start, end) {
+            // Update hidden fields whenever a range is selected (ISO for server)
+            $('#from_date').val(start.format('YYYY-MM-DD'));
+            $('#to_date').val(end.format('YYYY-MM-DD'));
+        });
+
+        // When user selects a range, update the input using 'DD MMM YYYY' format
+        $('#daterange').on('apply.daterangepicker', function(ev, picker) {
+            $(this).val(picker.startDate.format('DD MMM YYYY') + ' - ' + picker.endDate.format('DD MMM YYYY'));
+            // ensure hidden fields are updated too (in case callback didn't run)
+            $('#from_date').val(picker.startDate.format('YYYY-MM-DD'));
+            $('#to_date').val(picker.endDate.format('YYYY-MM-DD'));
+        });
+
+        // If user clears, reset to placeholder and clear hidden fields
+        $('#daterange').on('cancel.daterangepicker', function(ev, picker) {
+            $(this).val('');
+            $('#from_date').val('');
+            $('#to_date').val('');
+        });
+
+        // If page already has from/to values (e.g., after a search), format and show them
+        var existingFrom = $('#from_date').val();
+        var existingTo = $('#to_date').val();
+        if (existingFrom && existingTo) {
+            try {
+                var fromFormatted = moment(existingFrom, 'YYYY-MM-DD').format('DD MMM YYYY');
+                var toFormatted = moment(existingTo, 'YYYY-MM-DD').format('DD MMM YYYY');
+                $('#daterange').val(fromFormatted + ' - ' + toFormatted);
+            } catch (e) {
+                // ignore formatting errors
+            }
+        }
+
+    });
+</script>
+<script>
+$(function() {
+
+    $('#published_daterange').daterangepicker({
+        autoUpdateInput: false,
+        locale: {
+            cancelLabel: 'Clear'
+        }
+    });
+
+    $('#published_daterange').on('apply.daterangepicker', function(ev, picker) {
+        $(this).val(
+            picker.startDate.format('DD/MM/YYYY') + ' - ' +
+            picker.endDate.format('DD/MM/YYYY')
+        );
+
+        $('#published_from').val(picker.startDate.format('YYYY-MM-DD'));
+        $('#published_to').val(picker.endDate.format('YYYY-MM-DD'));
+    });
+
+    $('#published_daterange').on('cancel.daterangepicker', function(ev, picker) {
+        $(this).val('');
+        $('#published_from').val('');
+        $('#published_to').val('');
+    });
 
 });
 </script>
-

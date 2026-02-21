@@ -22,6 +22,10 @@ class InboundingController {
             'status_step'         => $_GET['status_step'] ?? '',
             'updated_by_user_id'  => $_GET['updated_by'] ?? '',
             'assigned_user_id'    => $_GET['assigned_user_id'] ?? '',
+            'created_from'        => $_GET['created_from'] ?? '',
+            'created_to'          => $_GET['created_to'] ?? '',
+            'published_from' => $_GET['published_from'] ?? '',
+            'published_to'   => $_GET['published_to'] ?? '',
         ];
         $sort = $_GET['sort'] ?? '';
 

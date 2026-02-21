@@ -59,6 +59,34 @@ class Inbounding
             $userId = (int)$userId;
             $where[] = "vi.assigned_to_user_id = $userId";
         }
+        // 7. Created Date Range Filter
+        if (!empty($filters['created_from']) && !empty($filters['created_to'])) {
+
+            $from = $this->conn->real_escape_string($filters['created_from']);
+            $to   = $this->conn->real_escape_string($filters['created_to']);
+
+            // Ensure full day coverage
+            $from .= " 00:00:00";
+             $to   .= " 23:59:59";
+
+            $where[] = "vi.created_at BETWEEN '$from' AND '$to'";
+        }
+        // 8. Published Date Range Filter (from inbound_logs)
+    if (!empty($filters['published_from']) && !empty($filters['published_to'])) {
+
+        $from = $this->conn->real_escape_string($filters['published_from']);
+        $to   = $this->conn->real_escape_string($filters['published_to']);
+
+         $from .= " 00:00:00";
+        $to   .= " 23:59:59";
+
+        $where[] = "vi.id IN (
+        SELECT il.i_id
+        FROM inbound_logs as il
+        WHERE il.stat = 'published'
+        AND il.created_at BETWEEN '$from' AND '$to'
+        )";
+        }
         // Assigned User Filter (Dynamic My Inbound)
         if (!empty($filters['assigned_user_id'])) {
             $assignedId = (int)$filters['assigned_user_id'];
@@ -69,37 +97,44 @@ class Inbounding
         if (!empty($where)) {
             $whereSql = "WHERE " . implode(' AND ', $where);
         }
-$orderBy = "vi.id DESC";
+        $orderBy = "vi.id DESC";
 
-if ($isMyInbound) {
-    $orderBy = "vi.assigned_at DESC, vi.id DESC";
-}
-switch ($sort) {
+     if ($isMyInbound) {
+        $orderBy = "vi.assigned_at DESC, vi.id DESC";
+    }
+        switch ($sort) {
 
-    case 'inbound_desc':
-        $orderBy = "vi.created_at DESC";
-        break;
+            case 'inbound_desc':
+                $orderBy = "vi.created_at DESC";
+                break;
 
-    case 'inbound_asc':
-        $orderBy = "vi.created_at ASC";
-        break;
+            case 'inbound_asc':
+                $orderBy = "vi.created_at ASC";
+                break;
 
-    case 'edited_desc':
-        $orderBy = "vi.modified_at DESC";
-        break;
+            case 'edited_desc':
+                $orderBy = "vi.modified_at DESC";
+                break;
 
-    case 'edited_asc':
-        $orderBy = "vi.modified_at ASC";
-        break;
+            case 'edited_asc':
+                $orderBy = "vi.modified_at ASC";
+                break;
 
-    case 'cp_desc':
-        $orderBy = "vi.cp DESC";
-        break;
+            case 'cp_desc':
+                $orderBy = "vi.cp DESC";
+                break;
 
-    case 'cp_asc':
-        $orderBy = "vi.cp ASC";
-        break;
-}
+            case 'cp_asc':
+                $orderBy = "vi.cp ASC";
+                break;
+             case 'weight_desc':
+                $orderBy = "vi.weight DESC";
+                break;
+
+             case 'weight_asc':
+                 $orderBy = "vi.weight ASC";
+                break;
+        }
 
         // Total Count (using alias vi)
         $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_inbound as vi $whereSql");
