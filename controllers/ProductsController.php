@@ -681,6 +681,21 @@ class ProductsController {
         $filters['user_id'] = $_SESSION['user']['id'];
         $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'pending';
         $filters['category'] = isset($_GET['category']) ? $_GET['category'] : 'all';
+        
+        //search
+        if (!empty($_GET['search'])) {
+            $filters['search'] = trim($_GET['search']);
+        }
+
+        //added By filter
+        if (!empty($_GET['added_by'])) {
+            $filters['added_by'] = (int)$_GET['added_by'];
+        }
+
+        //asigned to filter
+        if (!empty($_GET['assigned_to'])) {
+            $filters['assigned_to'] = (int)$_GET['assigned_to'];
+        }
 
         // fetch purchase list and count with filters
         $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters); 
@@ -711,7 +726,8 @@ class ProductsController {
             'total_records' => $total_records,
             'limit' => $limit,
             'categories' => getCategories(),
-            'selected_filters' => $filters
+            'selected_filters' => $filters,
+            'staff_list' => $commanModel->get_staff_list(),
         ];
         // render clean for mobile users
         if (isMobile()){
