@@ -172,7 +172,7 @@ class DispatchController {
                 //save response in log file for debugging
                 
                 file_put_contents('shiprocket_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Payload: " . json_encode($shiprocketPayload) . " - Response: " . json_encode($shiprocketResponse) . "\n", FILE_APPEND);
-                chmod('shiprocket_response_log.txt', 0666); // make log file writable
+                //chmod('shiprocket_response_log.txt', 0666); // make log file writable
                 //print_array($shiprocketResponse);
                 //exit;
                 // Validate API response

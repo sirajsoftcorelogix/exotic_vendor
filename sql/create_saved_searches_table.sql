@@ -330,11 +330,39 @@ ALTER TABLE `vp_order_info` ADD `giftvoucher` VARCHAR(100) NULL AFTER `updated_a
 ALTER TABLE `vp_order_info` ADD `credit` DECIMAL(10,0) NULL AFTER `coupon_reduce`;
 ALTER TABLE `vp_vendors` CHANGE `vendor_code` `vendor_code` VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL;
 
---create table for token and token expiry for shiprocket api
-CREATE TABLE shiprocket_api_tokens (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    token VARCHAR(255) NOT NULL,
-    expires_at DATETIME NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+CREATE TABLE `shiprocket_api_tokens` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `token` text NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-ALTER TABLE `shiprocket_api_tokens` ADD `updated_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP AFTER `created_at`;
+
+--
+-- Dumping data for table `shiprocket_api_tokens`
+--
+
+INSERT INTO `shiprocket_api_tokens` (`id`, `token`, `expires_at`, `created_at`, `updated_at`) VALUES
+(1, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjI1NjAxMjUsInNvdXJjZSI6InNyLWF1dGgtaW50IiwiZXhwIjoxNzcyNDQxODU3LCJqdGkiOiJ0MHQ5OGVra0hVcDkxQWxuIiwiaWF0IjoxNzcxNTc3ODU3LCJpc3MiOiJodHRwczovL3NyLWF1dGguc2hpcHJvY2tldC5pbi9hdXRob3JpemUvdXNlciIsIm5iZiI6MTc3MTU3Nzg1NywiY2lkIjoyOTg1MDcsInRjIjozNjAsInZlcmJvc2UiOmZhbHNlLCJ2ZW5kb3JfaWQiOjAsInZlbmRvcl9jb2RlIjoiIn0.DcsXO_szP7se17CuZE1nHMNIfvjOxLotI7zqSNHYLZM', '2026-03-02 14:27:27', '2026-02-20 18:36:06', '2026-02-21 12:22:25');
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `shiprocket_api_tokens`
+--
+ALTER TABLE `shiprocket_api_tokens`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `shiprocket_api_tokens`
+--
+ALTER TABLE `shiprocket_api_tokens`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+COMMIT;
