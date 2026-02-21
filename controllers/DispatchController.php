@@ -233,7 +233,7 @@ class DispatchController {
                 //awb api call getShiprocketAwbInfo
                 $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
                 file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB Info Response: " . json_encode($awbInfoResponse) . "\n", FILE_APPEND);
-                chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
+                //chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
                 if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
                     // Update dispatch record with AWB code
                     $awbCode = $awbInfoResponse['response']['data']['awb_code'];
@@ -241,12 +241,12 @@ class DispatchController {
                     $dispatchRecords['awb'][$boxNo] = $awbCode;
                 } else {
                     file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB code not found in response\n", FILE_APPEND);
-                    chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
+                    //chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
                 }
                 //label api call getShiprocketLabelInfo
                 $labelInfoResponse = $dispatchModel->getShiprocketLabels($shiprocketResponse['json']['shipment_id']);
                 file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label Info Response: " . json_encode($labelInfoResponse) . "\n", FILE_APPEND);
-                chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
+                //chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
                 $lableAdd = false;
                 if($labelInfoResponse && $labelInfoResponse['label_created'] == 1) {
                     // Update dispatch record with label URL
@@ -255,7 +255,7 @@ class DispatchController {
                     $dispatchRecords['labelUrl'][$boxNo] = $labelUrl;
                 } else {
                     file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label URL ***not found*** in response\n", FILE_APPEND);
-                    chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
+                    //chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
                 }
                 //echo "Label URL update status for Box $boxNo: " . ($lableAdd ? 'Success' : 'Failed') . "\n";
                 
