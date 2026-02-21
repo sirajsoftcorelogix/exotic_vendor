@@ -109,7 +109,7 @@ async function saveMainCommentIfAny(purchaseListId,sku,orderID) {
 
 async function savePurchaseItem(id, btn) {
   const qtyEl = document.getElementById('quantity_' + id);
-  const qty = qtyEl ? String(qtyEl.value ?? "") : "";
+  const qty = qtyEl ? String(qtyEl.value ?? "") : ""; 
 
   const eddEl = document.getElementById('edd_' + id);
   const eddRaw = eddEl ? String(eddEl.value ?? "") : "";
@@ -128,13 +128,12 @@ async function savePurchaseItem(id, btn) {
   const orderID = orderIDEl ? String(orderIDEl.value ?? "") : "";
 
   // ✅ Compare against original values (stored in data-original)
-  const originalQty = qtyEl?.dataset?.original ?? "";
+  //const originalQty = qtyEl?.dataset?.original ?? "";
   const originalEddRaw = eddEl?.dataset?.original ?? "";
   const originalEdd = originalEddRaw.trim() !== "" ? originalEddRaw : null;
   const originalStatus = statusEl?.dataset?.original ?? "";
 
-  const changed =
-    qty !== String(originalQty) ||
+  const changed = 
     edd !== originalEdd ||
     status !== String(originalStatus);
 
