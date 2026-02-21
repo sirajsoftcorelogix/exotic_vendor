@@ -679,7 +679,7 @@ class ProductsController {
         // Filters: category and status
         $filters = [];
         $filters['user_id'] = $_SESSION['user']['id'];
-        $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'pending';
+        $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'all';
         $filters['category'] = isset($_GET['category']) ? $_GET['category'] : 'all';
         
         //search
