@@ -10,6 +10,8 @@ class DispatchController {
     public function create() {
         global $commanModel, $invoiceModel, $dispatchModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+            
             $data = $_POST;
             $data['created_by'] = 1;
             $data['created_at'] = date('Y-m-d H:i:s');
@@ -17,7 +19,13 @@ class DispatchController {
             // Validate invoice_id exists
             $invoice = $invoiceModel->getInvoiceById($data['invoice_id']);
             if (!$invoice) {
-                header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=Invoice not found'));
+                $errorMsg = 'Invoice not found';
+                //if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['status' => 'error', 'message' => $errorMsg]);
+                // } else {
+                //     header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=' . urlencode($errorMsg)));
+                // }
                 exit();
             }
             
@@ -43,7 +51,13 @@ class DispatchController {
             $requiredFields = ['delivery_partner', 'shipment_type', 'pickup_location', 'exotic_gst_no'];
             foreach ($requiredFields as $field) {
                 if (empty($data[$field])) {
-                    header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=' . ucfirst(str_replace('_', ' ', $field)) . ' is required'));
+                    $errorMsg = ucfirst(str_replace('_', ' ', $field)) . ' is required';
+                    //if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['status' => 'error', 'message' => $errorMsg]);
+                    // } else {
+                    //     header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=' . urlencode($errorMsg)));
+                    // }
                     exit();
                 }
             }
@@ -162,9 +176,25 @@ class DispatchController {
                 //print_array($shiprocketResponse);
                 //exit;
                 // Validate API response
+                if($shiprocketResponse['json']['status'] != 'NEW') {
+                    $errorMsg = $shiprocketResponse['json']['status'] ?? 'Failed to create shipment for Box ' . $boxNo . ' on Shiprocket';
+                    //if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['status' => 'error', 'message' => $errorMsg]);
+                    // } else {
+                    //     header('Location: ' . base_url('?page=dispatch&action=create&invoice_id=' . $data['invoice_id'] . '&status=error&message=' . urlencode($errorMsg)));
+                    // }
+                    exit();
+
+                }
                 if (!$shiprocketResponse || !isset($shiprocketResponse['json']['order_id'])) {
                     $errorMsg = $shiprocketResponse['error'] ?? 'Failed to create shipment for Box ' . $boxNo . ' on Shiprocket';
-                    header('Location: ' . base_url('?page=dispatch&action=create&invoice_id=' . $data['invoice_id'] . '&status=error&message=' . urlencode($errorMsg)));
+                    //if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['status' => 'error', 'message' => $errorMsg]);
+                    // } else {
+                    //     header('Location: ' . base_url('?page=dispatch&action=create&invoice_id=' . $data['invoice_id'] . '&status=error&message=' . urlencode($errorMsg)));
+                    // }
                     exit();
                 }
                 
@@ -204,10 +234,11 @@ class DispatchController {
                 $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
                 file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB Info Response: " . json_encode($awbInfoResponse) . "\n", FILE_APPEND);
                 chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
-                if($awbInfoResponse && $awbInfoResponse['awb_assign_status'] == 1) {
+                if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
                     // Update dispatch record with AWB code
                     $awbCode = $awbInfoResponse['response']['data']['awb_code'];
                     $dispatchModel->updateDispatchAwbCode($shiprocketResponse['json']['shipment_id'], $awbCode);
+                    $dispatchRecords['awb'][$boxNo] = $awbCode;
                 } else {
                     file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB code not found in response\n", FILE_APPEND);
                     chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
@@ -216,24 +247,45 @@ class DispatchController {
                 $labelInfoResponse = $dispatchModel->getShiprocketLabels($shiprocketResponse['json']['shipment_id']);
                 file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label Info Response: " . json_encode($labelInfoResponse) . "\n", FILE_APPEND);
                 chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
+                $lableAdd = false;
                 if($labelInfoResponse && $labelInfoResponse['label_created'] == 1) {
                     // Update dispatch record with label URL
                     $labelUrl = $labelInfoResponse['label_url'];
-                    $dispatchModel->updateDispatchLabelUrl($shiprocketResponse['json']['shipment_id'], $labelUrl);
+                    $lableAdd = $dispatchModel->updateDispatchLabelUrl($shiprocketResponse['json']['shipment_id'], $labelUrl);
+                    $dispatchRecords['labelUrl'][$boxNo] = $labelUrl;
                 } else {
-                    file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label URL not found in response\n", FILE_APPEND);
+                    file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label URL ***not found*** in response\n", FILE_APPEND);
                     chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
                 }
+                //echo "Label URL update status for Box $boxNo: " . ($lableAdd ? 'Success' : 'Failed') . "\n";
                 
-                // if (!$dispatchId) {
-                //     header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=Failed to save dispatch record for Box ' . $boxNo));
-                //     exit();
-                // }
-                $dispatchRecords[$boxNo] = $dispatchId;
+                if (!$dispatchId) {
+                    $errorMsg = 'Failed to save dispatch record for Box ' . $boxNo;
+                    //if ($isAjax) {
+                        header('Content-Type: application/json');
+                        echo json_encode(['status' => 'error', 'message' => $errorMsg,'labelUrl' => $shiprocketResponse['json']['label_url'] ?? '','shipmentId' => $shiprocketResponse['json']['shipment_id'] ?? '','labelUpdateStatus' => $lableAdd,'awb' => $shiprocketResponse['json']['awb_code'] ?? '']);
+                    // } else {
+                    //     header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=' . urlencode($errorMsg)));
+                    // }
+                    exit();
+                }
+                $dispatchRecords['ids'][$boxNo] = $dispatchId;
+                //add label URL in dispatch record                
+                
             }
-
+            
             // All boxes processed successfully
-            header('Location: ' . base_url('?page=dispatch&action=create&status=success'));
+            //if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => 'Dispatch created successfully!',
+                    'dispatches' => $dispatchRecords,
+                    'invoice_id' => $data['invoice_id']                    
+                ]);
+            // } else {
+            //     header('Location: ' . base_url('?page=dispatch&action=create&status=success&dispatch_ids=' . implode(',', $dispatchRecords['ids']) . '&invoice_id=' . $data['invoice_id']));
+            // }
             exit();
         } else {
             // Get list of invoices for dropdown
