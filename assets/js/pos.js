@@ -36,6 +36,7 @@ $(function () {
   // --- constants ---
   const GST_RATE = 0.18;
   const SHIPPING_CHARGE = 8265;
+  const CART_API_ENDPOINT = '?page=pos_register&action=cart-add';
 
   // --- coupon state ---
   // supported coupons: percent/flat
@@ -316,6 +317,10 @@ $(function () {
       return;
     }
     renderCartItem(key);
+
+    if (Number(delta || 0) > 0) {
+      callAddToCartApi(item.product, Number(delta || 0));
+    }
   }
 
   function addToCartByKey(key, qtyToAdd = 1) {
@@ -329,6 +334,49 @@ $(function () {
     else cart.set(key, { product: p, qty: addQty });
 
     renderCartItem(key);
+    callAddToCartApi(p, addQty);
+  }
+
+  function getGiftVoucherValue() {
+    const $gift = $('#giftVoucherInput');
+    if (!$gift.length) return '';
+    return String($gift.val() || '').trim();
+  }
+
+  function callAddToCartApi(p, qtyToAdd) {
+    if (!p || !p.item_code) return;
+
+    const discountCode = appliedCoupon ? appliedCoupon.code : '';
+    const giftVoucher = getGiftVoucherValue();
+
+    const payload = {
+      code: p.item_code,
+      qty: Math.max(1, parseInt(qtyToAdd || 1, 10))
+    };
+
+    if (discountCode) payload.discountcoupondetails = discountCode;
+    if (giftVoucher) payload.giftvoucherdetails = giftVoucher;
+
+    console.log('Add to cart request', {
+      url: CART_API_ENDPOINT,
+      method: 'POST',
+      payload: payload
+    });
+
+    $.ajax({
+      url: CART_API_ENDPOINT,
+      type: 'POST',
+      dataType: 'json',
+      data: payload,
+      success: function (res) {
+        if (res && res.error) {
+          console.error('Cart add error', res.error);
+        }
+      },
+      error: function (xhr, status, err) {
+        console.error('Cart add API failed', err);
+      }
+    });
   }
 
   // cart events

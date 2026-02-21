@@ -6,7 +6,7 @@ return [
     //'name' => 'exotic_vendor_portal',
     'user' => 'vendor_user',
     'pass' => 'eXotic@123',
-    'port' => 3306,
+    'port' => 3307,
     'charset' => 'utf8mb4'
   ],
   'token_secret' => 'a1b2c3d4e5f678901234567890abcdef',
@@ -21,6 +21,6 @@ return [
   'LIVE_API_BASE'  => 'https://seller.exoticindia.com/api',
   'LIVE_WS_URL'    => 'wss://seller.exoticindia.com/ws/',
 
-  'WS_PORT' => 8080
+  'WS_PORT' => 8082
 
  ];
