@@ -42,7 +42,7 @@
 
       <!-- DYNAMIC BOXES -->
       <?php foreach($groupedItems as $boxNo => $boxItems): ?>
-      <div class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow overflow-hidden box-section mb-6" data-box-no="<?php echo $boxNo; ?>">
+      <div id="box-section-<?php echo $boxNo; ?>" class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow overflow-hidden box-section mb-6" data-box-no="<?php echo $boxNo; ?>">
 
         <div class="bg-orange-500 p-6 text-white">
 
@@ -168,6 +168,10 @@
             <?php endforeach; ?>
           </div>
         </div>
+        <div id="labels-container-<?php echo $boxNo; ?>" class="p-4">
+          <iframe id="label-frame-<?php echo $boxNo; ?>" src="" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe>
+          <!-- <iframe id="label-frame-" src="https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
+        </div>
       </div>
       <?php endforeach; ?>
 
@@ -236,7 +240,7 @@
               class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
           </div>
 
-          <button type="submit"
+          <button type="button" onclick="submitDispatchForm(event)"
             class="h-12 px-8 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
             <img src="<?php echo base_url('images/track_order.svg'); ?>" alt="">
             Create Order
@@ -317,6 +321,116 @@ function calculateShippingCharges(weight) {
     if (weight <= 5) return 347;
     return 347 + Math.ceil((weight - 5) / 5) * 100; // Additional ₹100 for every extra 5kg
 }
+// Calculate weight on page load
+document.querySelectorAll('.box-section').forEach(section => {
+    calculateWeight(section.querySelector('input'));
+});
+</script>
+
+<script>
+function submitDispatchForm(event) {
+    event.preventDefault();
+    
+    const form = document.getElementById('dispatchForm');
+    const submitBtn = event.target;
+    const originalBtnText = submitBtn.innerHTML;
+    //validation
+    const boxSections = document.querySelectorAll('.box-section');
+    let isValid = true;
+    boxSections.forEach(section => {
+        const length = parseFloat(section.querySelector('.box-length').value) || 0;
+        const width = parseFloat(section.querySelector('.box-width').value) || 0;
+        const height = parseFloat(section.querySelector('.box-height').value) || 0;
+        const actualWeight = parseFloat(section.querySelector('.box-actual-weight').value) || 1;
+        
+        if (length <= 0 || width <= 0 || height <= 0 || actualWeight <= 0) {
+            isValid = false;
+            showAlert('All box dimensions and weights must be greater than zero.','error');
+            return false; // Stop processing further sections
+        }
+    });
+    if (!isValid) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+        return; // Stop form submission if validation fails
+    }
+    // Disable button and show loading state
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
+    
+    // Prepare form data
+    const formData = new FormData(form);
+    
+    // Make AJAX request
+    fetch('<?php echo base_url('?page=dispatch&action=create'); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .catch(() => {
+        // If JSON parsing fails, assume form submission (redirect case)
+       // return { status: 'redirect' };
+       showAlert('Unexpected response from server. Please try again.','error');
+    })
+    .then(data => {
+        if (data.status === 'success') {
+            // Show success message
+            showAlert('success', 'Dispatch created successfully!');
+            // handle nested dispatches structure: { awb: {...}, labelUrl: {...}, ids: {...} }
+            if (data.dispatches) {
+                const ids = data.dispatches.ids || {};
+                const labelUrls = data.dispatches.labelUrl || {};
+                const awbs = data.dispatches.awb || {};
+                Object.keys(ids).forEach(boxNo => {
+                    const labelUrl = labelUrls[boxNo];
+                    if (labelUrl) {
+                        const labelFrame = document.getElementById('label-frame-' + boxNo);
+                        if (labelFrame) {
+                            labelFrame.src = labelUrl;
+                            labelFrame.style.display = 'block';
+                        }
+                    }
+                    const awbCode = awbs[boxNo];
+                    if (awbCode) {
+                        const container = document.getElementById('labels-container-' + boxNo);
+                        if (container) {
+                            let awbEl = document.getElementById('awb-' + boxNo);
+                            if (!awbEl) {
+                                awbEl = document.createElement('p');
+                                awbEl.id = 'awb-' + boxNo;
+                                awbEl.className = 'mt-2 text-sm text-gray-700';
+                                container.appendChild(awbEl);
+                            }
+                            awbEl.textContent = 'AWB: ' + awbCode;
+                        }
+                    }
+                });
+            }
+             // Optionally redirect after a delay
+            //  setTimeout(() => {
+            //     window.location.href = '<?php //echo base_url("?page=dispatch"); ?>';
+            // }, 3000);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+        } else if (data.status === 'error') {
+            showAlert(data.message || 'An error occurred','error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+        } else if (data.status === 'redirect') {
+            showAlert('Dispatch created successfully! Redirecting...','success');
+            // Handle redirect response
+          //  window.location.href = data.redirect || '<?php //echo base_url("?page=dispatch"); ?>';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('Failed to submit form','error');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+    });
+}
+
+
 // Calculate weight on page load
 document.querySelectorAll('.box-section').forEach(section => {
     calculateWeight(section.querySelector('input'));
