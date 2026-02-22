@@ -47,8 +47,8 @@ class DispatchController {
             }
             $data['boxes'] = $boxes;
             
-            // Validate required delivery fields
-            $requiredFields = ['delivery_partner', 'shipment_type', 'pickup_location', 'exotic_gst_no'];
+            // Validate required delivery fields  'shipment_type',
+            $requiredFields = ['delivery_partner', 'pickup_location', 'exotic_gst_no'];
             foreach ($requiredFields as $field) {
                 if (empty($data[$field])) {
                     $errorMsg = ucfirst(str_replace('_', ' ', $field)) . ' is required';
