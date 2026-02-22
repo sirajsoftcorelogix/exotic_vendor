@@ -169,8 +169,13 @@
           </div>
         </div>
         <div id="labels-container-<?php echo $boxNo; ?>" class="p-4">
-          <iframe id="label-frame-<?php echo $boxNo; ?>" src="" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe>
+          <!-- <iframe src="https://docs.google.com/gview?url=https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf&embedded=true" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
           <!-- <iframe id="label-frame-" src="https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
+        <iframe id="label-frame-<?php echo $boxNo; ?>"
+src=""
+width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;">
+</iframe>
+          
         </div>
       </div>
       <?php endforeach; ?>
@@ -199,9 +204,9 @@
               class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 text-[#0A0A0A]">
           </div>
 
-          <div class="flex flex-col gap-2">
+          <!-- <div class="flex flex-col gap-2">
             <label class="flex items-center gap-2 text-[#364153] font-bold text-sm">
-              <img src="<?php echo base_url('images/cart.svg'); ?>" alt="">
+              <img src="<?php //echo base_url('images/cart.svg'); ?>" alt="">
               Shipment Type
             </label>
 
@@ -210,9 +215,9 @@
               <option value="Standard">Standard</option>
               <option value="Express">Express</option>
             </select>
-          </div>
+          </div> -->
 
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-2 col-span-2">
             <label class="flex items-center gap-2 text-[#364153] font-bold text-sm">
               <img src="<?php echo base_url('images/location.svg'); ?>" alt="">
               Pickup Location
@@ -221,7 +226,7 @@
             <select name="pickup_location" class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
               <option value="">Select Pickup Location</option>
               <?php foreach($pickupLocations as $location): ?>
-                <option value="<?php echo htmlspecialchars($location['pickup_location'] ?? ''); ?>">
+                <option value="<?php echo htmlspecialchars($location['pickup_location'] ?? ''); ?>" <?php echo (isset($location['pickup_location']) && 'Head Off' == $location['pickup_location']) ? 'selected' : ''; ?>>
                   <?php echo htmlspecialchars($location['address'] ?? ''); ?>
                 </option>
               <?php endforeach; ?>
@@ -230,20 +235,20 @@
               class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200"> -->
           </div>
 
-          <div class="flex flex-col gap-2">
+          <!-- <div class="flex flex-col gap-2">
             <label class="flex items-center gap-2 text-[#364153] font-bold text-sm">
-              <img src="<?php echo base_url('images/notes.svg'); ?>" alt="">
+              <img src="<?php //echo base_url('images/notes.svg'); ?>" alt="">
               GST No.
             </label>
 
-            <input type="text" name="exotic_gst_no" value="<?php echo $invoice['firm_details']['gst'] ?? ''; ?>"
+            <input type="text" name="exotic_gst_no" value="<?php //echo $invoice['firm_details']['gst'] ?? ''; ?>"
               class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
-          </div>
+          </div> -->
 
           <button type="button" onclick="submitDispatchForm(event)"
-            class="h-12 px-8 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
+            class="h-12 px-4 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
             <img src="<?php echo base_url('images/track_order.svg'); ?>" alt="">
-            Create Order
+            Create Dispatch
           </button>
 
         </div>
@@ -386,7 +391,16 @@ function submitDispatchForm(event) {
                     if (labelUrl) {
                         const labelFrame = document.getElementById('label-frame-' + boxNo);
                         if (labelFrame) {
-                            labelFrame.src = labelUrl;
+                            labelFrame.src = 'https://docs.google.com/gview?url=' + labelUrl + '&embedded=true';
+                            //Open / Print Label
+                           
+                            const newBtn = document.createElement('button');
+                            newBtn.id = 'open-label-btn-' + boxNo;
+                            newBtn.className = 'mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg';
+                            newBtn.textContent = 'Open Label';
+                            newBtn.onclick = () => window.open(labelUrl, '_blank');
+                            labelFrame.parentNode.appendChild(newBtn);
+                            
                             labelFrame.style.display = 'block';
                         }
                     }
