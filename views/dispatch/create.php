@@ -380,7 +380,7 @@ function submitDispatchForm(event) {
     .then(data => {
         if (data.status === 'success') {
             // Show success message
-            showAlert('success', 'Dispatch created successfully!');
+            showAlert('' + (data.message ? ' ' + data.message : ' Dispatch created successfully!'),'success');
             // handle nested dispatches structure: { awb: {...}, labelUrl: {...}, ids: {...} }
             if (data.dispatches) {
                 const ids = data.dispatches.ids || {};
