@@ -391,15 +391,26 @@ function submitDispatchForm(event) {
                     if (labelUrl) {
                         const labelFrame = document.getElementById('label-frame-' + boxNo);
                         if (labelFrame) {
-                            labelFrame.src = 'https://docs.google.com/gview?url=' + labelUrl + '&embedded=true';
-                            //Open / Print Label
-                           
-                            const newBtn = document.createElement('button');
-                            newBtn.id = 'open-label-btn-' + boxNo;
-                            newBtn.className = 'mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg';
-                            newBtn.textContent = 'Open Label';
-                            newBtn.onclick = () => window.open(labelUrl, '_blank');
-                            labelFrame.parentNode.appendChild(newBtn);
+                            labelFrame.src = 'https://docs.google.com/gview?url=' + encodeURIComponent(labelUrl) + '&embedded=true';
+                            
+                            // Create print button
+                            const container = labelFrame.parentNode;
+                            let printBtn = document.getElementById('print-btn-' + boxNo);
+                            if (!printBtn) {
+                                printBtn = document.createElement('button');
+                                printBtn.id = 'print-btn-' + boxNo;
+                                printBtn.type = 'button';
+                                printBtn.className = 'mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 print-label-btn';
+                                printBtn.innerHTML = '🖨️ Print Label';
+                                printBtn.onclick = function(e) {
+                                    e.preventDefault();
+                                    const printWindow = window.open(labelUrl, '_blank');
+                                    printWindow.onload = function() {
+                                        setTimeout(() => printWindow.print(), 500);
+                                    };
+                                };
+                                container.appendChild(printBtn);
+                            }
                             
                             labelFrame.style.display = 'block';
                         }
@@ -449,4 +460,7 @@ function submitDispatchForm(event) {
 document.querySelectorAll('.box-section').forEach(section => {
     calculateWeight(section.querySelector('input'));
 });
+//print-label-btn
+
+
 </script>
