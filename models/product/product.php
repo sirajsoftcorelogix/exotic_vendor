@@ -1109,7 +1109,7 @@ class product
     }*/
 
     public function updatePurchaseListStatusValue($purchase_list_id, $status)
-    {
+    {        
         $sql = "UPDATE purchase_list SET status = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
@@ -1119,7 +1119,44 @@ class product
         $id = (int)$purchase_list_id;
         $stmt->bind_param('si', $status, $id);
 
-        if ($stmt->execute()) {
+        if ($stmt->execute()) {            
+
+            // ✅ logged-in user info
+            $loggedUserId = (int)($_SESSION['user']['id'] ?? 0);
+            $loggedUserName = $_SESSION['user']['name'] ?? 'Unknown';
+            $sql = "SELECT 
+                    pl.id,
+                    pl.sku,
+                    pl.edit_by,
+                    pl.user_id,
+                    pl.product_id,
+                    pl.order_id
+                FROM purchase_list AS pl
+                WHERE 
+                    pl.id = ?";
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('i', $purchase_list_id);
+            $stmt->execute();
+            $data = $stmt->get_result()->fetch_all(MYSQLI_ASSOC)[0];            
+            $statusText = "Purchase STATUS UPDATE (SKU : ".$data['sku'].")";
+
+            $this->createOrderStatusLog(
+                (int)$data['order_id'],         // order_id (required by vp_order_status_log)
+                $statusText,                    // status text
+                $loggedUserId,                  // changed_by
+                $loggedUserName,                // saved inside api_response JSON
+                0,         
+                [
+                    'action' => 'STATUS UPDATE',
+                    'purchase_list_id' => $purchase_list_id,
+                    'product_id' => (int)$data['product_id'],
+                    'user_id' => (int)$data['user_id'],
+                    'sku' => $data['sku'],
+                    'status' => $status,
+                    'date_added' => date('Y/m/d h:i:s'),
+                ]
+            );
             return ['success' => true, 'message' => 'Status updated'];
         }
 

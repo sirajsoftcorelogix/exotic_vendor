@@ -631,6 +631,8 @@ switch ($page) {
                 $controller->getItamcode();
             case 'search_book_attr':
                 $controller->searchBookAttributes();
+            case 'bulkAssign':
+                $controller->bulk_assign_action();
             default:
                 $controller->index();
                 break;

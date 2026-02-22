@@ -580,7 +580,12 @@ class POInvoice
     }
     public function getTotalInvoices($limit = 0, $offset = 0, $filters = [])
     {
-        $sql = "SELECT COUNT(*) as total FROM vp_po_invoice";
+        $sql = "SELECT COUNT(*) as total FROM vp_po_invoice p
+                LEFT JOIN vp_po_invoice_map m ON m.invoice_id = p.id
+                LEFT JOIN purchase_orders po ON po.id = m.po_id
+                LEFT JOIN vp_vendors v ON v.id = po.vendor_id
+                LEFT JOIN vp_invoice_payments pay ON pay.invoice_id = p.id
+                WHERE 1=1";
         // Apply filters if provided
         if (!empty($filters)) {
             if (!empty($filters['po_number'])) {
@@ -607,7 +612,71 @@ class POInvoice
         }
         $stmt = $this->db->prepare($sql);
         if ($limit > 0) {
-            $stmt->bind_param('ii', $limit, $offset);
+            $types = '';
+            $params = [];
+            // Bind filter parameters
+            if (!empty($filters['po_number'])) {
+                $types .= 's';
+                $params[] = $filters['po_number'];
+            }
+            if (!empty($filters['amount_min'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_min'];
+            }
+            if (!empty($filters['amount_max'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_max'];
+            }
+            if (!empty($filters['utr_number'])) {
+                $types .= 's';
+                $params[] = $filters['utr_number'];
+            }
+            if (!empty($filters['invoice_date_from'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_from'];
+            }
+            if (!empty($filters['invoice_date_to'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_to'];
+            }
+            // Add limit and offset
+            $types .= 'ii';
+            $params[] = $limit;
+            $params[] = $offset;
+
+            $stmt->bind_param($types, ...$params);
+        } else {
+            // Bind only filter parameters
+            $types = '';
+            $params = [];
+            if (!empty($filters['po_number'])) {
+                $types .= 's';
+                $params[] = $filters['po_number'];
+            }
+            if (!empty($filters['amount_min'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_min'];
+            }
+            if (!empty($filters['amount_max'])) {
+                $types .= 'd';
+                $params[] = $filters['amount_max'];
+            }
+            if (!empty($filters['utr_number'])) {
+                $types .= 's';
+                $params[] = $filters['utr_number'];
+            }
+            if (!empty($filters['invoice_date_from'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_from'];
+            }
+            if (!empty($filters['invoice_date_to'])) {
+                $types .= 's';
+                $params[] = $filters['invoice_date_to'];
+            }
+            
+            if (!empty($types)) {
+                $stmt->bind_param($types, ...$params);
+            }
         }
         $stmt->execute();
         $result = $stmt->get_result();

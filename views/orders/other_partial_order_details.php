@@ -27,7 +27,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold"><?php echo $orderremarks['order_number']; ?></h1>
+            <h1 class="text-xl font-bold"><?php echo $orderremarks['order_number'] ?? ''; ?></h1>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -40,13 +40,25 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Return</button>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
-            <div class="relative">
-                <button class="flex items-center gap-2 rounded bg-black px-4 py-1.5 text-sm font-medium text-white">
+            <div class="relative inline-block text-left">
+                <input type="checkbox" id="dropdown-toggle" class="peer hidden">
+                <label for="dropdown-toggle" class="flex cursor-pointer items-center gap-2 rounded bg-black px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors select-none">
                     Print
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 transition-transform duration-200 peer-checked:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
-                </button>
+                </label>
+                <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
+                    <div class="py-1">
+                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
+                            Print Invoice
+                        </a>
+                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
+                            print order
+                        </a>
+                    </div>
+                </div>
+                <label for="dropdown-toggle" class="fixed inset-0 h-full w-full cursor-default hidden peer-checked:block z-40"></label>
             </div>
         </div>
     </div>
@@ -72,7 +84,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                 <path
                                     d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                             </svg>
-                            <span><?php echo $orderremarks['city']; ?>, <?php echo $orderremarks['state']; ?></span>
+                            <span><?php echo $orderremarks['city'] ?? ''; ?>, <?php echo $orderremarks['state'] ?? ''; ?></span>
                         </div>
                     </div>
 
@@ -82,7 +94,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                         <span
-                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'])); ?></span>
+                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')) ; ?></span>
                     </div>
                 </div>
 
@@ -104,9 +116,9 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             </div>
 
                             <div class="flex-1">
-                                <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
+                                <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
                                     <?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?>
-                                </h4>
+                                </h4> -->
                                 <h4 class="mb-3 text-[14px] leading-tight text-black-900">
                                     <?php echo $item['title']; ?>
                                 </h4>
@@ -175,7 +187,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                     ?>
                                         <div class="relative z-10 flex flex-col items-center w-[120px]">
                                             <div class="w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white z-20"></div>
-                                            
+
                                             <?php if (!$isLast): ?>
                                                 <div class="absolute top-[8px] left-1/2 w-full h-[2px] bg-[#27AE60] z-0"></div>
                                             <?php endif; ?>
@@ -199,13 +211,30 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                     <?php endforeach; ?>
                 </div>
                 <?php
-                    $tax_rate = 0.05; // 5%
-                    $calculated_subtotal = $orderremarks['total'] / (1 + $tax_rate);
-                    $calculated_tax = $orderremarks['total'] - $calculated_subtotal;
+                    $tax_rate = 0.05; // 5% (SGST + CGST combined)
+
+                    // Individual reduction values (use 0 if not set)
+                    $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
+                    $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
+                    $credit             = floatval($orderremarks['credit']             ?? 0);
+                    // $custom_reduce   = floatval($orderremarks['custom_reduce']      ?? 0); // add if needed
+
+                    $all_reductions = $coupon_reduce + $giftvoucher_reduce + $credit; // + $custom_reduce ...
+
+                    // Final amount customer paid
+                    $final_paid = floatval($orderremarks['total'] ?? 0);
+
+                    // Amount before tax = taxable amount (after discounts)
+                    $amount_before_tax = $final_paid / (1 + $tax_rate);
+
+                    // Tax amount
+                    $tax_amount = $final_paid - $amount_before_tax;
+
+                    // Original subtotal before discounts
+                    $subtotal_before_discounts = $amount_before_tax + $all_reductions;
                 ?>
                 <div class="mt-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    
-                    <div class="mb-5">
+                    <!-- <div class="mb-5">
                         <span class="inline-flex items-center gap-2 bg-[#E5E7EB] text-[#5C5F62] px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-[#5C5F62]">
                                 <path d="M19 3H5C3.89543 3 3 3.89543 3 5V21L5.5 18.5L8 21L10.5 18.5L13 21L15.5 18.5L18 21L21 18V5C21 3.89543 20.1046 3 19 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -213,44 +242,116 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             </svg>
                             Paid
                         </span>
-                    </div>
+                    </div> -->
 
                     <div class="border border-gray-200 rounded-xl overflow-hidden">
-                        
+
                         <div class="p-6 space-y-5">
                             <div class="grid grid-cols-12 items-start text-sm">
                                 <div class="col-span-3 font-bold text-black-800">Subtotal</div>
                                 <div class="col-span-6 text-black-500"><?php echo count($order); ?> items</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($calculated_subtotal, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($subtotal_before_discounts, 2); ?>
                                 </div>
                             </div>
-
+                            <!-- Individual discount rows -->
+                            <?php if ($all_reductions > 0): ?>
+                                <?php if ($coupon_reduce > 0 && !empty($orderremarks['coupon'])): ?>
+                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                        <div class="col-span-3 font-medium">Coupon </div>
+                                        <div class="col-span-6 text-gray-600">
+                                            <?php echo htmlspecialchars($orderremarks['coupon']); ?></div>
+                                        <div class="col-span-3 text-right font-medium">
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($coupon_reduce, 2); ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($giftvoucher_reduce > 0 && !empty($orderremarks['giftvoucher'])): ?>
+                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                        <div class="col-span-3 font-medium">Gift Voucher </div>
+                                        <div class="col-span-6 text-gray-600">
+                                            <?php echo htmlspecialchars($orderremarks['giftvoucher']); ?></div>
+                                        <div class="col-span-3 text-right font-medium">
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($giftvoucher_reduce, 2); ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($credit > 0): ?>
+                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                        <div class="col-span-3 font-medium">Credit / Wallet</div>
+                                        <div class="col-span-6 text-gray-600"></div>
+                                        <div class="col-span-3 text-right font-medium">
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($credit, 2); ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            <!-- Taxes -->
                             <div class="grid grid-cols-12 items-start text-sm">
                                 <div class="col-span-3 font-bold text-black-800">Taxes</div>
-                                <div class="col-span-6 text-black-500">SGST CGST 5% (Included)</div>
+                                <div class="col-span-6 text-black-500">SGST + CGST 5% (Included)</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($calculated_tax, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($tax_amount, 2); ?>
                                 </div>
                             </div>
-
-                            <div class="grid grid-cols-12 items-start text-sm pt-1">
+                            <!-- Final Total -->
+                            <div class="grid grid-cols-12 items-start text-sm pt-1 border-t border-gray-200 pt-3">
                                 <div class="col-span-3 font-bold text-black-800">Total</div>
-                                <div class="col-span-6"></div> 
-                                <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($orderremarks['total'], 2); ?>
+                                <div class="col-span-6"></div>
+                                <div class="col-span-3 text-right font-bold text-black-900 text-lg">
+                                    <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
                                 </div>
                             </div>
                         </div>
-
                         <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
                             <span class="text-sm font-bold text-black-800">Paid</span>
                             <span class="text-sm font-bold text-black-900">
-                                <?php echo $currencysymbol; ?><?php echo number_format($orderremarks['total'], 2); ?>
+                                <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
                             </span>
                         </div>
                     </div>
                 </div>
+                <?php if(!empty($fullOrderJourny)){ ?>
+                    <div class="space-y-4 mt-8">
+                        <div class="py-6 bg-[#F9FAFB] border border-gray-100 rounded-xl">
+                            <h5 class="text-[10px] font-bold uppercase tracking-widest text-[#8E959F] mb-8 px-8">ORDER JOURNEY</h5>
+
+                            <div class="relative flex flex-col px-8 space-y-0">
+                                <?php 
+                                    $totalItems = count($fullOrderJourny);
+                                    $currentIteration = 0;
+                                    
+                                    foreach($fullOrderJourny as $journey){ 
+                                        $currentIteration++;
+                                        $isLast = ($currentIteration === $totalItems);
+                                ?>
+                                <div class="relative flex gap-x-4 pb-8">
+                                    <?php if (!$isLast): ?>
+                                        <div class="absolute top-2 left-[7px] w-[2px] h-full bg-[#27AE60] z-0"></div>
+                                    <?php endif; ?>
+
+                                    <div
+                                        class="relative z-10 w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white shadow-sm flex-shrink-0">
+                                    </div>
+
+                                    <div class="flex flex-col">
+                                        <p class="text-[12px] font-bold text-gray-900 leading-none">
+                                            <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $journey['status']))); ?>
+                                        </p>
+                                        <p class="text-[10px] text-gray-500 mt-1">
+                                            <span class="font-medium text-gray-700">By:</span>
+                                            <?php echo htmlspecialchars($journey['changed_by']); ?>
+                                        </p>
+                                        <p class="text-[9px] text-[#8E959F] italic mt-0.5">
+                                            <?php echo date('d M, Y | h:i A', strtotime($journey['created_on'])); ?>
+                                        </p>
+                                    </div>
+                                </div>
+                                <?php } ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php } ?>
             </div>
         </div>
         <div class="space-y-6">
@@ -268,6 +369,20 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                 </div>
                 <?php endif; ?>
             </div>
+            <!-- Conversion Summary -->
+            <?php if(!empty($orderremarks['payment_type']) || !empty($orderremarks['country'])): ?>
+                <div class="rounded-lg border bg-white p-5 shadow-sm relative">
+                    <h3 class="mb-2 text-sm font-bold text-black-700">Conversion Summary</h3>
+                    <div
+                        class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                        <b>Payment Type:</b> <?php echo ($orderremarks['payment_type'] ?? 'N/A'); ?>
+                        <br>
+                        <b>Payment ID:</b> N/A
+                        <br>
+                        <b>Country:</b> <?php echo ($orderremarks['country'] ?? 'N/A'); ?>
+                    </div>
+                </div>
+            <?php endif; ?>
             <!-- address Section -->
             <?php /* <div class="rounded-lg border bg-white p-5 shadow-sm relative">
                 <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
@@ -319,6 +434,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                     <button class="mt-2 text-sm text-blue-600 hover:underline">View map</button>
                 </div>
             </div> */ ?>
+        </div>
     </div>
 </div>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">

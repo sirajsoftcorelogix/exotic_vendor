@@ -37,9 +37,12 @@ class purchaseListComment
         return $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
     }
 
-    public function add(int $purchaseListId, int $userId, string $comment, ?int $parentId = null): ?array
+    public function add(int $purchaseListId, int $userId, string $comment, ?int $parentId = null,$sku = null,$order_id=null): ?array
     {
       
+      require_once ($_SERVER['DOCUMENT_ROOT']."/models/product/product.php");
+      $objProduct =  new product($this->db);
+
       $sql = "
             INSERT INTO purchase_list_comments
               (purchase_list_id, parent_id, user_id, comment, created_at)
@@ -81,6 +84,32 @@ class purchaseListComment
         $stmt2->execute();
         $res = $stmt2->get_result();
 
-        return $res ? $res->fetch_assoc() : null;
+        if($res){
+            $data = $res->fetch_assoc();
+            // ✅ logged-in user info
+            $loggedUserId = (int)($_SESSION['user']['id'] ?? 0);
+            $loggedUserName = $_SESSION['user']['name'] ?? 'Unknown';
+
+            $statusText = "Comment Added  (".$comment.")";
+
+            $objProduct->createOrderStatusLog(
+                $order_id,         // order_id (required by vp_order_status_log)
+                $statusText,                    // status text
+                $loggedUserId,                  // changed_by
+                $loggedUserName,                // saved inside api_response JSON
+                0,         
+                [
+                    'action' => 'Comment Added',
+                    'purchase_list_id' => $purchaseListId,
+                    'user_id' => (int)$data['user_id'],
+                    'sku' => $sku,
+                    'date_added' => date('Y/m/d h:i:s'),
+                ]
+            );
+
+            return $data;
+        } else {
+            return null;
+        }    
     }
 }
