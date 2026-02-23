@@ -128,7 +128,7 @@
 
             <p class="text-gray-600 text-sm pl-3.5 text-[#1E2939]">
               <span class="font-bold">Ship To:</span>
-              <?php echo $invoice['address']['shipping_first_name'] ?? ''; ?><?php echo $invoice['address']['shipping_last_name'] ?? ''; ?>, <?php echo substr($invoice['address']['shipping_address_line1'] ?? '', 0, 50); ?>...
+              <?php echo $invoice['address']['shipping_first_name'] ?? ''; ?><?php echo $invoice['address']['shipping_last_name'] ?? ''; ?>, <?php echo $invoice['address']['shipping_address_line1'].' '.$invoice['address']['shipping_address_line2']; ?>, <?php echo $invoice['address']['shipping_city']; ?>, <?php echo $invoice['address']['shipping_state']; ?> - <?php echo $invoice['address']['shipping_pincode']; ?>
             </p>
 
             <p class="text-gray-600 text-sm mt-1.5 pl-3.5 text-[#1E2939]">
@@ -244,11 +244,12 @@ width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="displa
             <input type="text" name="exotic_gst_no" value="<?php //echo $invoice['firm_details']['gst'] ?? ''; ?>"
               class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
           </div> -->
-
+        <div class="flex flex-col gap-2">
+        </div>
           <button type="button" onclick="submitDispatchForm(event)"
             class="h-12 px-4 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
             <img src="<?php echo base_url('images/track_order.svg'); ?>" alt="">
-            Create Dispatch
+            Dispatch
           </button>
 
         </div>
