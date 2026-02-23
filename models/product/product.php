@@ -791,9 +791,9 @@ class product
             $plTypes   .= 'i';
         }
 
-        if (!empty($filters['asigned_to'])) {
+        if (!empty($filters['assigned_to'])) {
             $plWhere[]  = 'user_id = ?';
-            $plParams[] = (int)$filters['asigned_to'];
+            $plParams[] = (int)$filters['assigned_to'];
             $plTypes   .= 'i';
         }
 
@@ -832,11 +832,12 @@ class product
         }
 
         if (!empty($filters['search'])) {
-            $outerWhere[]  = '(p.item_code LIKE ? OR p.title LIKE ?)';
+            $outerWhere[]  = '(p.item_code LIKE ? OR p.title LIKE ? OR o.order_number LIKE ?)';
             $searchTerm    = '%' . $filters['search'] . '%';
             $outerParams[] = $searchTerm;
             $outerParams[] = $searchTerm;
-            $outerTypes   .= 'ss';
+            $outerParams[] = $searchTerm;   // ✅ MISSING ONE
+            $outerTypes   .= 'sss';
         }
 
         $outerWhereSql = '';
