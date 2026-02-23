@@ -248,7 +248,7 @@ width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="displa
           <button type="button" onclick="submitDispatchForm(event)"
             class="h-12 px-4 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
             <img src="<?php echo base_url('images/track_order.svg'); ?>" alt="">
-            Create Dispatch
+            Dispatch
           </button>
 
         </div>
