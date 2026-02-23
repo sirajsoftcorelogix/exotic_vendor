@@ -128,12 +128,14 @@
 
             <p class="text-gray-600 text-sm pl-3.5 text-[#1E2939]">
               <span class="font-bold">Ship To:</span>
-              <?php echo $invoice['address']['shipping_first_name'] ?? ''; ?><?php echo $invoice['address']['shipping_last_name'] ?? ''; ?>, <?php echo $invoice['address']['shipping_address_line1'].' '.$invoice['address']['shipping_address_line2']; ?>, <?php echo $invoice['address']['shipping_city']; ?>, <?php echo $invoice['address']['shipping_state']; ?> - <?php echo $invoice['address']['shipping_pincode']; ?>
+              <?php echo $invoice['address']['shipping_first_name'] ?? ''; ?><?php echo $invoice['address']['shipping_last_name'] ?? ''; ?>, <?php echo $invoice['address']['shipping_address_line1'].' '.$invoice['address']['shipping_address_line2']; ?>, <?php echo $invoice['address']['shipping_city']; ?>, <?php echo $invoice['address']['shipping_state']; ?> - <?php echo $invoice['address']['shipping_zipcode']; ?>
             </p>
 
             <p class="text-gray-600 text-sm mt-1.5 pl-3.5 text-[#1E2939]">
+                <?php if(isset($invoice['address']['gstin']) && !empty($invoice['address']['gstin'])): ?>
               <span class="font-bold">GST:</span>
               <?php echo $invoice['address']['gstin'] ?? 'N/A'; ?>
+              <?php endif; ?>
             </p>
           </div>
 
@@ -168,15 +170,17 @@
             <?php endforeach; ?>
           </div>
         </div>
-        <div id="labels-container-<?php echo $boxNo; ?>" class="p-4">
-          <!-- <iframe src="https://docs.google.com/gview?url=https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf&embedded=true" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
-          <!-- <iframe id="label-frame-" src="https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
-        <iframe id="label-frame-<?php echo $boxNo; ?>"
-src=""
-width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;">
-</iframe>
-          
-        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
+            <div id="labels-container-<?php echo $boxNo; ?>" class="p-4">
+            <!-- <iframe src="https://docs.google.com/gview?url=https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf&embedded=true" class="w-full h-96 border border-gray-300 rounded-lg" ></iframe> -->
+            <!-- <iframe id="label-frame-" src="https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
+            <iframe id="label-frame-<?php echo $boxNo; ?>" src=""
+    width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;">
+    </iframe>
+            
+            </div>
+            <div id="invoice-container-<?php echo $boxNo; ?>" class="p-4 invoice-container" style="display:none;">
+            </div>
       </div>
       <?php endforeach; ?>
 
@@ -430,12 +434,57 @@ function submitDispatchForm(event) {
                             awbEl.textContent = 'AWB: ' + awbCode;
                         }
                     }
+                    const invoiceContainer = document.getElementById('invoice-container-' + boxNo);
+                    if (invoiceContainer) {
+                        invoiceContainer.style.display = 'block';
+                        
+                        // Create invoice iframe
+                        const invoiceFrame = document.createElement('iframe');
+                        invoiceFrame.id = 'invoice-frame-' + boxNo;
+                        invoiceFrame.className = 'w-full h-96 border border-gray-300 rounded-lg';
+                        invoiceFrame.style.display = 'block';
+                        invoiceContainer.appendChild(invoiceFrame);
+                        
+                        // Generate and load invoice PDF
+                        setTimeout(() => {                
+                            fetch('<?php echo base_url('?page=invoices&action=generate_pdf'); ?>', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({invoice_id: data.invoice_id})
+                            })
+                            .then(response => response.blob())
+                            .then(blob => {
+                                const url = window.URL.createObjectURL(blob);
+                                invoiceFrame.src = encodeURIComponent(url);
+                                
+                                // Create invoice print button
+                                let invoicePrintBtn = document.getElementById('invoice-print-btn-' + boxNo);
+                                if (!invoicePrintBtn) {
+                                    invoicePrintBtn = document.createElement('button');
+                                    invoicePrintBtn.id = 'invoice-print-btn-' + boxNo;
+                                    invoicePrintBtn.type = 'button';
+                                    invoicePrintBtn.className = 'mt-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700';
+                                    invoicePrintBtn.innerHTML = '🖨️ Print Invoice';
+                                    invoicePrintBtn.onclick = function(e) {
+                                        e.preventDefault();
+                                        const printWindow = window.open(url, '_blank');
+                                        printWindow.onload = function() {
+                                            setTimeout(() => printWindow.print(), 500);
+                                        };
+                                    };
+                                    invoiceContainer.appendChild(invoicePrintBtn);
+                                }
+                            })
+                            .catch(err => {
+                                console.error('PDF generation error:', err);
+                                invoiceContainer.innerHTML = '<p class="text-red-600">Failed to load invoice</p>';
+                            });
+                        }, 1000);
+                    }
                 });
             }
-             // Optionally redirect after a delay
-            //  setTimeout(() => {
-            //     window.location.href = '<?php //echo base_url("?page=dispatch"); ?>';
-            // }, 3000);
+             
+             
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
         } else if (data.status === 'error') {
