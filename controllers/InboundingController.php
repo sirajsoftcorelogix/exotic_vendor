@@ -16,16 +16,21 @@ class InboundingController {
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         
         $filters = [
-            'vendor_code'         => $_GET['vendor_code'] ?? '',
-            'received_by_user_id' => $_GET['agent_id'] ?? '',
-            'group_name'          => $_GET['group_name'] ?? '',
-            'status_step'         => $_GET['status_step'] ?? '',
-            'updated_by_user_id'  => $_GET['updated_by'] ?? '',
-            'cp_filter'           => $_GET['cp_filter'] ?? '',
-            'priceindia_filter'   => $_GET['priceindia_filter'] ?? '',
-            'usd_filter'          => $_GET['usd_filter'] ?? '',
-            'in_house'            => $_GET['in_house'] ?? '',
-            'item_code'           => $_GET['filter_item_code'] ?? ''
+            'vendor_code'           => $_GET['vendor_code'] ?? '',
+            'received_by_user_id'   => $_GET['agent_id'] ?? '',
+            'group_name'            => $_GET['group_name'] ?? '',
+            'status_step'           => $_GET['status_step'] ?? '',
+            'updated_by_user_id'    => $_GET['updated_by'] ?? '',
+            'cp_filter'             => $_GET['cp_filter'] ?? '',
+            'priceindia_filter'     => $_GET['priceindia_filter'] ?? '',
+            'usd_filter'            => $_GET['usd_filter'] ?? '',
+            'in_house'              => $_GET['in_house'] ?? '',
+            'item_code'             => $_GET['filter_item_code'] ?? '',
+            'assigned_user_id'      => $_GET['assigned_user_id'] ?? '',
+            'created_from'          => $_GET['created_from'] ?? '',
+            'created_to'            => $_GET['created_to'] ?? '',
+            'published_from'        => $_GET['published_from'] ?? '',
+            'published_to'          => $_GET['published_to'] ?? ''
         ];
         $sort = $_GET['sort'] ?? '';
         // 2. Pagination Logic
@@ -58,7 +63,6 @@ class InboundingController {
             'group_list'      => $dropdowns['groups'],
             'alluser_list'      => $alluser_list
         ];
-        
         renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
     // In your Inbounding Controller
@@ -1338,46 +1342,36 @@ class InboundingController {
         exit;
     }
     public function deleteSelected() {
-        // 1. Use the Global variable (Like in your sample code)
-        // Make sure this matches the variable name defined in your index.php
-        global $inboundingModel; 
-        global $conn; // Sometimes needed if the model relies on it implicitly
-
-        // 2. Security Check
-        if (!isset($_SESSION['user']['id'])) {
-            // Redirect to login or show error
-            header("Location: " . base_url('?page=inbounding&action=list&msg=unauthorized'));
+        global $inboundingModel;
+        
+        $ids_string = $_POST['ids'] ?? '';
+        if (empty($ids_string)) {
+            header("Location: ?page=inbounding&action=list&msg=no_selection");
             exit;
         }
 
-        // 3. Get IDs from POST
-        $ids_string = $_POST['ids'] ?? '';
-
-        if (!empty($ids_string)) {
-            // Convert string "1,2,3" into array
-            $ids_array = explode(',', $ids_string);
-            $ids_array = array_map('intval', $ids_array); // Security: Force integers
-            $ids_array = array_filter($ids_array); // Remove empty values
-
-            if (!empty($ids_array)) {
-                // 4. Call Model using the global variable
-                // Ensure you added the 'deleteInboundItems' function to your Model class!
-                $result = $inboundingModel->deleteInboundItems($ids_array);
-
-                if ($result) {
-                    // Success: Redirect back to the list
-                    header("Location: " . base_url('?page=inbounding&action=list&msg=deleted_success'));
-                    exit;
-                } else {
-                    // Database Error
-                    header("Location: " . base_url('?page=inbounding&action=list&msg=error_db'));
-                    exit;
-                }
-            }
-        }
+        $ids_array = array_filter(array_map('intval', explode(',', $ids_string)));
         
-        // Fallback: No IDs selected or other error
-        header("Location: " . base_url('?page=inbounding&action=list&msg=no_selection'));
+        // Find which ones are published
+        $blockedIds = $inboundingModel->checkPublishedBeforeDelete($ids_array);
+        
+        // Filter the array to only include IDs NOT in the blocked list
+        $allowedToDelete = array_diff($ids_array, $blockedIds);
+
+        if (empty($allowedToDelete)) {
+            // Everything selected was published
+            header("Location: ?page=inbounding&action=list&msg=all_blocked");
+            exit;
+        }
+
+        $result = $inboundingModel->deleteInboundItems($allowedToDelete);
+
+        if ($result) {
+            $msg = (!empty($blockedIds)) ? 'deleted_partial' : 'deleted_success';
+            header("Location: ?page=inbounding&action=list&msg=$msg");
+        } else {
+            header("Location: ?page=inbounding&action=list&msg=error_db");
+        }
         exit;
     }
     private function ensureImagesAreRenamed($id, $item_code, $is_variant, $color = '', $size = '') {

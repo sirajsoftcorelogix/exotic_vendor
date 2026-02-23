@@ -109,7 +109,10 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-
+<script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@700&display=swap');
@@ -147,6 +150,26 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     .btn-published { background-color: rgba(18, 136, 7, 1); color: #fff; }
     .btn-base:hover { opacity: 0.9; }
     .custom-input::placeholder { font-size: 13px; }
+    .date-field {
+        position: relative;
+        display: inline-block;
+    }
+
+    .date-field input {
+        padding-right: 35px;
+
+        padding: 8px;
+    }
+
+    .date-field i {
+        position: absolute;
+        right: 10px;
+        top: 70%;
+        transform: translateY(-50%);
+        color: #d06706;
+        pointer-events: none;
+        /* icon won't block clicks */
+    }
 </style>
 
 <div class="w-full max-w-6xl space-y-4 mx-auto">
@@ -313,6 +336,61 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                        class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
                             </div>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                Assigned To
+                            </label>
+
+                            <select name="assigned_user_id"
+                                id="filter_assigned_user"
+                                class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+
+                                <option value="">Select Assigned User...</option>
+
+                                <?php
+                                $selAssigned = $_GET['assigned_user_id'] ?? '';
+                                if (!empty($alluser_list)) {
+                                    foreach ($alluser_list as $u) {
+                                        $s = ($selAssigned == $u['id']) ? 'selected' : '';
+                                        echo "<option value='{$u['id']}' $s>{$u['name']}</option>";
+                                    }
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="w-full date-field">
+                            <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1"> Created Date Range</label>
+                            <input type="text" autocomplete="off" value="<?= $data['date_range'] ?? '' ?>" name="daterange" id="daterange" placeholder="Select date range" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer" />
+                            <i class="fa fa-calendar"></i>
+                            <input type="hidden" name="created_from" value="<?= htmlspecialchars($_GET['created_from'] ?? '') ?>" id="from_date">
+                            <input type="hidden" name="created_to" value="<?= htmlspecialchars($_GET['created_to'] ?? '') ?>" id="to_date">
+
+                        </div>
+                        <div class="w-full date-field">
+                            <label class="block text-sm font-medium text-gray-600 mb-1">
+                                Published Date Range
+                            </label>
+
+                            <input type="text"
+                                autocomplete="off"
+                                value="<?= $data['published_date_range'] ?? '' ?>"
+                                name="published_daterange"
+                                id="published_daterange"
+                                placeholder="Select published date range"
+                                class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer" />
+
+                            <i class="fa fa-calendar"></i>
+
+                            <input type="hidden"
+                                name="published_from"
+                                value="<?= htmlspecialchars($_GET['published_from'] ?? '') ?>"
+                                id="published_from">
+
+                            <input type="hidden"
+                                name="published_to"
+                                value="<?= htmlspecialchars($_GET['published_to'] ?? '') ?>"
+                                id="published_to">
+                        </div>
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -405,6 +483,12 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                         </li>
                         <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="cp_asc">
                             CP — Low to High
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="weight_desc">
+                            Weight — High to Low
+                        </li>
+                        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer sort-item" data-sort="weight_asc">
+                            Weight — Low to High
                         </li>
                     </ul>
                 </div>
@@ -1109,35 +1193,6 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             menu.classList.add('hidden');
         }
     });
-
-    // Logic for Deleting
-    function deleteSelectedData() {
-        const ids = getSelectedIds(); // Uses your existing selection logic
-        
-        if (ids.length === 0) {
-            alert("Please select at least one item to delete.");
-            return;
-        }
-
-        if (!confirm(`Are you sure you want to PERMANENTLY DELETE ${ids.length} selected item(s)?`)) {
-            return;
-        }
-
-        // Create a hidden form to submit securely via POST
-        const form = document.createElement('form');
-        form.method = 'POST';
-        // Ensure this matches your route case 'deleteSelected'
-        form.action = '?page=inbounding&action=deleteSelected'; 
-
-        const inputIds = document.createElement('input');
-        inputIds.type = 'hidden';
-        inputIds.name = 'ids';
-        inputIds.value = ids.join(',');
-
-        form.appendChild(inputIds);
-        document.body.appendChild(form);
-        form.submit();
-    }
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -1172,4 +1227,102 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             });
         });
     });
+</script>
+<!-- //for delete -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+    const url = new URL(window.location.href);
+    const msg = url.searchParams.get('msg');
+
+    if (msg) {
+        if (msg === 'published_blocked' || msg === 'all_blocked') {
+            alert("Items already published cannot be deleted.");
+        } else if (msg === 'deleted_partial') {
+            alert("Unpublished items were deleted, but published items were skipped.");
+        } else if (msg === 'deleted_success') {
+            // Optional: alert("Deleted successfully");
+        }
+
+        // CLEANUP: Remove the msg from URL without refreshing the page
+        url.searchParams.delete('msg');
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+    }
+});
+</script>
+<script>
+    $(function() {
+        // Initialize date range picker: display format 'DD MMM YYYY' (e.g., 25 Dec 2015)
+        $('#daterange').daterangepicker({
+            autoUpdateInput: false, // keep field blank until Apply
+            showDropdowns: true, // optional: month/year dropdowns
+            locale: {
+                format: 'DD MMM YYYY'
+            },
+            alwaysShowCalendars: true, // ensures only calendars show
+            drops: 'down', // position of calendar
+            opens: 'right', // alignment
+            autoApply: false
+        }, function(start, end) {
+            // Update hidden fields whenever a range is selected (ISO for server)
+            $('#from_date').val(start.format('YYYY-MM-DD'));
+            $('#to_date').val(end.format('YYYY-MM-DD'));
+        });
+
+        // When user selects a range, update the input using 'DD MMM YYYY' format
+        $('#daterange').on('apply.daterangepicker', function(ev, picker) {
+            $(this).val(picker.startDate.format('DD MMM YYYY') + ' - ' + picker.endDate.format('DD MMM YYYY'));
+            // ensure hidden fields are updated too (in case callback didn't run)
+            $('#from_date').val(picker.startDate.format('YYYY-MM-DD'));
+            $('#to_date').val(picker.endDate.format('YYYY-MM-DD'));
+        });
+
+        // If user clears, reset to placeholder and clear hidden fields
+        $('#daterange').on('cancel.daterangepicker', function(ev, picker) {
+            $(this).val('');
+            $('#from_date').val('');
+            $('#to_date').val('');
+        });
+
+        // If page already has from/to values (e.g., after a search), format and show them
+        var existingFrom = $('#from_date').val();
+        var existingTo = $('#to_date').val();
+        if (existingFrom && existingTo) {
+            try {
+                var fromFormatted = moment(existingFrom, 'YYYY-MM-DD').format('DD MMM YYYY');
+                var toFormatted = moment(existingTo, 'YYYY-MM-DD').format('DD MMM YYYY');
+                $('#daterange').val(fromFormatted + ' - ' + toFormatted);
+            } catch (e) {
+                // ignore formatting errors
+            }
+        }
+
+    });
+</script>
+<script>
+$(function() {
+
+    $('#published_daterange').daterangepicker({
+        autoUpdateInput: false,
+        locale: {
+            cancelLabel: 'Clear'
+        }
+    });
+
+    $('#published_daterange').on('apply.daterangepicker', function(ev, picker) {
+        $(this).val(
+            picker.startDate.format('DD/MM/YYYY') + ' - ' +
+            picker.endDate.format('DD/MM/YYYY')
+        );
+
+        $('#published_from').val(picker.startDate.format('YYYY-MM-DD'));
+        $('#published_to').val(picker.endDate.format('YYYY-MM-DD'));
+    });
+
+    $('#published_daterange').on('cancel.daterangepicker', function(ev, picker) {
+        $(this).val('');
+        $('#published_from').val('');
+        $('#published_to').val('');
+    });
+
+});
 </script>
