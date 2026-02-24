@@ -238,7 +238,7 @@
                 <input type="hidden" name="image_url[]" value="<?= $item['image'] ?? '' ?>">
                 <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
                 <td class="p-2">
-                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
+                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input " value="1" required>
                 </td>
                 <td class="p-2"><span><?= $item['sku'] ?></span></td>
                 <td class="p-2 " colspan="2"><span><?= htmlspecialchars($item['title'] ?? '') ?></span>
