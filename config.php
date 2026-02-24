@@ -22,5 +22,7 @@ return [
   'LIVE_WS_URL'    => 'wss://seller.exoticindia.com/ws/',
 
   'WS_PORT' => 8082
+  //'WS_PORT' => 8081
+
 
  ];
