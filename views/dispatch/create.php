@@ -412,7 +412,7 @@ function submitDispatchForm(event) {
                                     e.preventDefault();
                                     const printWindow = window.open('https://docs.google.com/gview?url=' + encodeURIComponent(labelUrl), '_blank');
                                     printWindow.onload = function() {
-                                        setTimeout(() => printWindow.print(), 500);
+                                        setTimeout(() => printWindow.print(), 2000);
                                     };
                                 };
                                 container.appendChild(printBtn);
@@ -454,7 +454,7 @@ function submitDispatchForm(event) {
                         e.preventDefault();
                         const printWindow = window.open(invoiceUrl, '_blank');
                         printWindow.onload = function() {
-                            setTimeout(() => printWindow.print(), 500);
+                            setTimeout(() => printWindow.print(), 2000);
                         };
                     };
                     invoiceContainer.appendChild(invoicePrintBtn);
