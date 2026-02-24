@@ -179,8 +179,7 @@
     </iframe>
             
             </div>
-            <div id="invoice-container-<?php echo $boxNo; ?>" class="p-4 invoice-container" style="display:none;">
-            </div>
+            
       </div>
       <?php endforeach; ?>
 
@@ -249,6 +248,8 @@
               class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
           </div> -->
         <div class="flex flex-col gap-2">
+            <div id="invoice-container" class="p-4 invoice-container" style="display:none;">
+            </div>
         </div>
           <button type="button" onclick="submitDispatchForm(event)"
             class="h-12 px-4 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
@@ -409,9 +410,9 @@ function submitDispatchForm(event) {
                                 printBtn.innerHTML = '🖨️ Print Label';
                                 printBtn.onclick = function(e) {
                                     e.preventDefault();
-                                    const printWindow = window.open(labelUrl, '_blank');
+                                    const printWindow = window.open('https://docs.google.com/gview?url=' + encodeURIComponent(labelUrl), '_blank');
                                     printWindow.onload = function() {
-                                        setTimeout(() => printWindow.print(), 500);
+                                        setTimeout(() => printWindow.print(), 2000);
                                     };
                                 };
                                 container.appendChild(printBtn);
@@ -434,56 +435,49 @@ function submitDispatchForm(event) {
                             awbEl.textContent = 'AWB: ' + awbCode;
                         }
                     }
-                    const invoiceContainer = document.getElementById('invoice-container-' + boxNo);
-                    if (invoiceContainer) {
-                        invoiceContainer.style.display = 'block';
-                        
-                        // Create invoice iframe
-                        const invoiceFrame = document.createElement('iframe');
-                        invoiceFrame.id = 'invoice-frame-' + boxNo;
-                        invoiceFrame.className = 'w-full h-96 border border-gray-300 rounded-lg';
-                        invoiceFrame.style.display = 'block';
-                        invoiceContainer.appendChild(invoiceFrame);
-                        
-                        // Generate and load invoice PDF
-                        setTimeout(() => {                
-                            fetch('<?php echo base_url('?page=invoices&action=generate_pdf'); ?>', {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({invoice_id: data.invoice_id})
-                            })
-                            .then(response => response.blob())
-                            .then(blob => {
-                                const url = window.URL.createObjectURL(blob);
-                                invoiceFrame.src = encodeURIComponent(url);
-                                
-                                // Create invoice print button
-                                let invoicePrintBtn = document.getElementById('invoice-print-btn-' + boxNo);
-                                if (!invoicePrintBtn) {
-                                    invoicePrintBtn = document.createElement('button');
-                                    invoicePrintBtn.id = 'invoice-print-btn-' + boxNo;
-                                    invoicePrintBtn.type = 'button';
-                                    invoicePrintBtn.className = 'mt-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700';
-                                    invoicePrintBtn.innerHTML = '🖨️ Print Invoice';
-                                    invoicePrintBtn.onclick = function(e) {
-                                        e.preventDefault();
-                                        const printWindow = window.open(url, '_blank');
-                                        printWindow.onload = function() {
-                                            setTimeout(() => printWindow.print(), 500);
-                                        };
-                                    };
-                                    invoiceContainer.appendChild(invoicePrintBtn);
-                                }
-                            })
-                            .catch(err => {
-                                console.error('PDF generation error:', err);
-                                invoiceContainer.innerHTML = '<p class="text-red-600">Failed to load invoice</p>';
-                            });
-                        }, 1000);
-                    }
+                    
                 });
             }
-             
+            const invoiceContainer = document.getElementById('invoice-container');
+            if (invoiceContainer) {
+                invoiceContainer.style.display = 'block';
+                const invoiceUrl = '<?php echo base_url('?page=invoices&action=generate_pdf'); ?>' + '&invoice_id=' + formData.get('invoice_id') + '&dispatch=true';
+                // Generate and load invoice PDF
+                setTimeout(() => {                
+                    fetch('<?php echo base_url('?page=invoices&action=generate_pdf'); ?>', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({invoice_id: formData.get('invoice_id')})
+                    })
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const url = window.URL.createObjectURL(blob);                       
+                
+                        // Create invoice print button
+                        let invoicePrintBtn = document.getElementById('invoice-print-btn');
+                        if (!invoicePrintBtn) {
+                            invoicePrintBtn = document.createElement('button');
+                            invoicePrintBtn.id = 'invoice-print-btn';
+                            invoicePrintBtn.type = 'button';
+                            invoicePrintBtn.className = 'mt-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700';
+                            invoicePrintBtn.innerHTML = '🖨️ Print Invoice';
+                            invoicePrintBtn.onclick = function(e) {
+                                e.preventDefault();
+                                const printWindow = window.open(url, '_blank');
+                                printWindow.onload = function() {
+                                    setTimeout(() => printWindow.print(), 2000);
+                                };
+                            };
+                            invoiceContainer.appendChild(invoicePrintBtn);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error generating invoice PDF:', error);
+                        showAlert('Failed to generate invoice PDF','error');
+                    });
+                }, 1000);
+                
+            }     
              
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
