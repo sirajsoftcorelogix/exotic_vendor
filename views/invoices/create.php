@@ -318,7 +318,7 @@
         <button type="button" onclick="previewInvoice()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Preview</button>
         <button type="submit" id="createInvoiceButton" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button>
         <!-- Create and dispatch-->
-        <button type="button" onclick="createAndDispatch()" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create & Dispatch</button>
+        <button type="button" id="createAndDispatchButton" onclick="createAndDispatch()" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create & Dispatch</button>
     </div>
     </form>
 </div>
@@ -695,6 +695,10 @@ document.addEventListener('DOMContentLoaded', function() {
 document.getElementById('create_invoice').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    // Disable button and show loading state
+    const submitBtn = document.getElementById('createInvoiceButton');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
 
     // Validate customer name
     const customerNameElement = document.querySelector('input[name="customer_id"]');
@@ -712,6 +716,8 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Create Invoice';
             // if (window.showGlobalToast) {
             //     window.showGlobalToast('Invoice created successfully!', 'success');
             // } else {
@@ -891,15 +897,16 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
             
             if (existingItemCode === itemData.item_code && existingOrderNumber === itemData.order_number) {
                 itemExists = true;
+                showAlert('Item already added to invoice', 'warning');
                 // Increase quantity if item already exists
-                const quantityInput = row.querySelector('input[name="quantity[]"]');
-                const quantitySpan = quantityInput.parentElement.querySelector('span');
-                const currentQty = parseFloat(quantityInput.value) || 1;
-                const newQty = currentQty + (parseFloat(itemData.quantity) || 1);
-                quantityInput.value = newQty;
-                if (quantitySpan) {
-                    quantitySpan.textContent = newQty;
-                }
+                // const quantityInput = row.querySelector('input[name="quantity[]"]');
+                // const quantitySpan = quantityInput.parentElement.querySelector('span');
+                // const currentQty = parseFloat(quantityInput.value) || 1;
+                // const newQty = currentQty + (parseFloat(itemData.quantity) || 1);
+                // quantityInput.value = newQty;
+                // if (quantitySpan) {
+                //     quantitySpan.textContent = newQty;
+                // }
             }
         });
         
@@ -971,6 +978,9 @@ function createAndDispatch() {
     const formData = new FormData(form);
     formData.append('dispatch_after_creation', '1'); // Add a flag to indicate dispatch after creation
     
+    const submitBtn = document.getElementById('createAndDispatchButton');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
     fetch(form.action, {
         method: 'POST',
         body: formData
@@ -992,6 +1002,7 @@ function createAndDispatch() {
         console.error('Error:', error);
         alert('An error occurred while creating invoice and dispatching');
     });
-   
+   submitBtn.disabled = false;
+    submitBtn.innerHTML = 'Create & Dispatch';
 }
 </script>
