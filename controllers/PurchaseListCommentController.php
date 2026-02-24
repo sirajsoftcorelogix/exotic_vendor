@@ -55,7 +55,7 @@ class PurchaseListCommentController
     public function add(): void
     {
         is_login();
-        
+
         $purchaseListId = isset($_POST['purchase_list_id'])
             ? (int)$_POST['purchase_list_id']
             : 0;
@@ -63,6 +63,15 @@ class PurchaseListCommentController
         $comment = isset($_POST['comment'])
             ? trim($_POST['comment'])
             : '';
+
+        $sku = isset($_POST['sku'])
+            ? trim($_POST['sku'])
+            : '';
+
+        $order_id = isset($_POST['orderID'])
+            ? trim($_POST['orderID'])
+            : '';
+               
 
         $parentId = isset($_POST['parent_id']) && $_POST['parent_id'] !== ''
             ? (int)$_POST['parent_id']
@@ -93,7 +102,9 @@ class PurchaseListCommentController
             $purchaseListId,
             $_SESSION['user']['id'],
             $comment,
-            $parentId
+            $parentId,
+            $sku,
+            $order_id 
         );
 
         if (!$row) {

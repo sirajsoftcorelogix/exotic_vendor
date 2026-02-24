@@ -358,5 +358,17 @@ class Tables {
         }
         return $data;
     }
+    public function getDispatchAddress($id) {       
+        $sql = "SELECT * FROM vp_order_info WHERE id = ? LIMIT 1";
+        $stmt = $this->ci->prepare($sql);
+        $stmt->bind_param('s', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    
+    }
 }
 ?>
