@@ -923,7 +923,7 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
                 <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
                 <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
                 <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
-                <td class="p-2">
+                <td class="p-0">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
                 </td>
                 <td class="p-2"><span>${itemData.sku || ''}</span></td>
