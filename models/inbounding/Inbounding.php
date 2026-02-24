@@ -88,6 +88,7 @@ class Inbounding {
                 $where[] = "(vi.usd_price <= 0 OR vi.usd_price IS NULL)";
             }
         }
+        // 9. In House Filter
         if (!empty($filters['in_house'])) {
             if ($filters['in_house'] == 'yes') {
                 $where[] = "vi.Marketplace = 'exoticindia'";
@@ -95,20 +96,42 @@ class Inbounding {
                 $where[] = "(vi.Marketplace != 'exoticindia' OR vi.Marketplace IS NULL)";
             }
         }
+        // 10. Item Code Filter
         if (!empty($filters['item_code'])) {
             $i_code = $this->conn->real_escape_string($filters['item_code']);
             $where[] = "vi.Item_code LIKE '%$i_code%'"; 
         }
+        // 11. MY INBOUND FILTER
         if ($isMyInbound && $userId > 0) {
             $userId = (int)$userId;
             $where[] = "vi.assigned_to_user_id = $userId";
         }
-        // feeder by
+        // 12. Feeder by
         if (!empty($filters['updated_by_user_id'])) {
             $upd_id = (int)$filters['updated_by_user_id'];
             $where[] = "vi.updated_by_user_id = $upd_id";
         }
-
+        // 13. Created Date Range Fillter
+        if (!empty($filters['created_from']) && !empty($filters['created_to'])) {
+            $from = $this->conn->real_escape_string($filters['created_from']);
+            $to   = $this->conn->real_escape_string($filters['created_to']);
+            $from .= " 00:00:00";
+            $to   .= " 23:59:59";
+            $where[] = "vi.created_at BETWEEN '$from' AND '$to'";
+        }
+        // 14. Published Date Range Filter (from inbound_logs)
+        if (!empty($filters['published_from']) && !empty($filters['published_to'])) {
+            $from = $this->conn->real_escape_string($filters['published_from']);
+            $to   = $this->conn->real_escape_string($filters['published_to']);
+            $from .= " 00:00:00";
+            $to   .= " 23:59:59";
+            $where[] = "vi.id IN ( SELECT il.i_id FROM inbound_logs as il WHERE il.stat = 'published' AND il.created_at BETWEEN '$from' AND '$to')";
+        }
+        // 15. Assigned User Filter
+        if (!empty($filters['assigned_user_id'])) {
+            $assignedId = (int)$filters['assigned_user_id'];
+            $where[] = "vi.assigned_to_user_id = $assignedId";
+        }
         // Combine WHERE clauses
         $whereSql = "";
         if (!empty($where)) {
@@ -136,6 +159,12 @@ class Inbounding {
                 break;
             case 'cp_asc':
                 $orderBy = "vi.cp ASC";
+                break;
+            case 'weight_desc':
+                $orderBy = "vi.weight DESC";
+                break;
+             case 'weight_asc':
+                 $orderBy = "vi.weight ASC";
                 break;
         }
         // Total Count (using alias vi)
@@ -652,8 +681,8 @@ public function update_image_variation($img_id, $variation_id) {
 
         // UPDATED SQL: Added 'gate_entry_date_time' with NOW()
         $sql = "INSERT INTO vp_inbound 
-                (vendor_code, invoice_image, invoice_no, gate_entry_date_time) 
-                VALUES (?, ?, ?, NOW())";
+                (vendor_code, invoice_image, invoice_no, gate_entry_date_time,created_at) 
+                VALUES (?, ?, ?, NOW(), NOW())";
         
         $stmt = $this->conn->prepare($sql);
 
@@ -728,29 +757,18 @@ public function update_image_variation($img_id, $variation_id) {
         $sql = "UPDATE vp_inbound 
                 SET vendor_code = ?, 
                     invoice_image = ?, 
-                    invoice_no = ? 
+                    invoice_no = ? ,
+                    modified_at = now()
                 WHERE id = ?";
-
-        // 2. Prepare statement
         $stmt = $this->conn->prepare($sql);
-
         if (!$stmt) {
-            // Optional: Error handling
-            // echo "Prepare failed: (" . $this->conn->errno . ") " . $this->conn->error;
             return false;
         }
-
-        // 3. Extract and cast variables
         $id = intval($data['id']);
         $vendor_code = $data['vendor_id'];
         $invoice_img = $data['invoice'];
         $invoice_no  = $data['invoice_no'];
-
-        // 4. Bind Parameters
-        // "sssi" means: String, String, String, Integer
         $stmt->bind_param("sssi", $vendor_code, $invoice_img, $invoice_no, $id);
-
-        // 5. Execute and return result
         return $stmt->execute();
     }
     public function updatedesktopform($id, $data) {
@@ -774,7 +792,7 @@ public function update_image_variation($img_id, $variation_id) {
                 else $types .= "s"; 
             }
         }
-
+        $cols[] = "modifydate = NOW()";
         if (empty($cols)) return ['success' => true, 'message' => "No changes detected."];
 
         // Add ID for the WHERE clause
@@ -932,7 +950,7 @@ public function update_image_variation($img_id, $variation_id) {
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, temp_code = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, modified_at = NOW()
             WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -1132,14 +1150,18 @@ public function update_image_variation($img_id, $variation_id) {
             return false;
         }
 
+        // IMPORTANT: Reset keys to ensure it's a sequential list [0, 1, 2...]
+        // This fixes the "Argument #1 ($params) must be a list" error
+        $ids_array = array_values($ids_array);
+
         // Prepare placeholders (?,?,?)
         $placeholders = implode(',', array_fill(0, count($ids_array), '?'));
         
-        // Use your actual table name here (e.g., vp_inbound)
         $sql = "DELETE FROM vp_inbound WHERE id IN ($placeholders)";
         
         $stmt = $this->conn->prepare($sql);
         
+        // In MySQLi, execute() with an array requires PHP 8.1+
         return $stmt->execute($ids_array);
     }
     public function getpublishdata($id) {
@@ -1233,6 +1255,20 @@ public function update_image_variation($img_id, $variation_id) {
             }
         }
         return $markups;
+    }
+    public function checkPublishedBeforeDelete(array $ids){
+        if (empty($ids)) return [];
+        $ids = array_map('intval', $ids);
+        $idList = implode(',', $ids);
+        $sql = "SELECT DISTINCT i_id FROM inbound_logs WHERE i_id IN ($idList) AND stat = 'published'";
+        $result = $this->conn->query($sql);
+        $blocked = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $blocked[] = $row['i_id'];
+            }
+        }
+        return $blocked;
     }
 }
 ?>
