@@ -76,7 +76,7 @@
             <div class="flex flex-col gap-2">
               <label class="text-white text-sm font-medium">Box Size</label>
               <select name="box_size[<?php echo $boxNo; ?>]" class="h-10 rounded-lg px-3 bg-gray-100 text-gray-700 outline-none box-size-select" onchange="populateDimensions(this)">              
-                  <option value="">Select Size</option>
+                  <option value="">Custom Size</option>
                   <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
                   <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
                   <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
@@ -481,6 +481,7 @@ function submitDispatchForm(event) {
              
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
+        submitBtn.style.display = 'none'; // Hide the dispatch button after successful submission
         } else if (data.status === 'error') {
             showAlert(data.message || 'An error occurred','error');
             submitBtn.disabled = false;

@@ -612,7 +612,7 @@
                             alert('No filters to save.');
                             return;
                         }
-                        let defaultName = 'Search - ' + new Date().toLocaleString();
+                        let defaultName = 'Search - ' . new Date().toLocaleString();
                         let name = prompt('Enter a name for this search:', defaultName);
                         if (name === null) return; // cancelled
                         const formData = new URLSearchParams();
@@ -1014,7 +1014,7 @@
                                                 <a href="#" onclick="openStatusPopup(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</a>
                                                 <a href="<?php //echo base_url('?page=purchase_orders&action=create&order_id=' . $order['order_id']); 
                                                             ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
-                                               
+                                                
                                             </div>
                                         </div> -->
                                             <div class="w-auto flex flex-col items-center space-y-2">
@@ -1030,8 +1030,10 @@
                                                         <hr class="my-1 mx-2">
                                                         </hr>
                                                         <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
+                                                        <?php if (empty($order['invoice_id'])): ?>
                                                         <hr class="my-1 mx-2"></hr>
                                                         <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </span>
                                             </div>
@@ -1094,8 +1096,8 @@
                                                     <p><?php echo $log['changed_by_username']; ?></p>
                                                 </div>
                                             </div>
-                                    <?php }
-                                    } ?>
+                                        <?php }
+                                        } ?>
 
                                 </div>
                             </div>
@@ -1171,7 +1173,7 @@
         <div class="flex-shrink-0 flex items-start pt-5">
             <button id="close-vendor-popup-btn" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
         </div>
@@ -1259,87 +1261,87 @@
                                 <span class="text-gray-600" id="location"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Order Addons: </label>
+                                <label for="order_addons" class="text-sm font-bold text-gray-700">Order Addons: </label>
                                 <span id="order_addons" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Backorder Status: </label>
+                                <label for="backorder_status" class="text-sm font-bold text-gray-700">Backorder Status: </label>
                                 <span id="backorder_status" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Backorder Percentage: </label>
+                                <label for="backorder_percent" class="text-sm font-bold text-gray-700">Backorder Percentage: </label>
                                 <span id="backorder_percent" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Backorder Delay: </label>
+                                <label for="backorder_delay" class="text-sm font-bold text-gray-700">Backorder Delay: </label>
                                 <span id="backorder_delay" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Sold Quantity (numsold): </label>
+                                <label for="numsold" class="text-sm font-bold text-gray-700">Sold Quantity (numsold): </label>
                                 <span id="numsold" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">PO Number: </label>
+                                <label for="po_number" class="text-sm font-bold text-gray-700">PO Number: </label>
                                 <span id="po_number" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">PO Date: </label>
+                                <label for="po_date" class="text-sm font-bold text-gray-700">PO Date: </label>
                                 <span id="po_date" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Expected Delivery Date: </label>
+                                <label for="expected_delivery_date" class="text-sm font-bold text-gray-700">Expected Delivery Date: </label>
                                 <span id="expected_delivery_date" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Product Weight: </label>
+                                <label for="product_weight" class="text-sm font-bold text-gray-700">Product Weight: </label>
                                 <span id="product_weight" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Product Weight Unit: </label>
+                                <label for="product_weight_unit" class="text-sm font-bold text-gray-700">Product Weight Unit: </label>
                                 <span id="product_weight_unit" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Product Height: </label>
+                                <label for="prod_height" class="text-sm font-bold text-gray-700">Product Height: </label>
                                 <span id="prod_height" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Product Width: </label>
+                                <label for="prod_width" class="text-sm font-bold text-gray-700">Product Width: </label>
                                 <span id="prod_width" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Product Length: </label>
+                                <label for="prod_length" class="text-sm font-bold text-gray-700">Product Length: </label>
                                 <span id="prod_length" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Length Unit: </label>
+                                <label for="length_unit" class="text-sm font-bold text-gray-700">Length Unit: </label>
                                 <span id="length_unit" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Payment Type: </label>
+                                <label for="payment_type" class="text-sm font-bold text-gray-700">Payment Type: </label>
                                 <span id="payment_type" class="text-gray-600"></span>
                             </div>
                             <div>
-                                <label class="text-sm font-bold text-gray-700">Coupon: </label>
+                                <label for="coupon" class="text-sm font-bold text-gray-700">Coupon: </label>
                                 <span id="coupon" class="text-gray-600"></span>
                             </div>
                             <div> 
-                                <label class="text-sm font-bold text-gray-700">Coupon Reduce: </label>
+                                <label for="coupon_reduce" class="text-sm font-bold text-gray-700">Coupon Reduce: </label>
                                 <span id="coupon_reduce" class="text-gray-600"></span>
                             </div>
                             <div> 
-                                <label class="text-sm font-bold text-gray-700">Gift Voucher: </label>
+                                <label for="giftvoucher" class="text-sm font-bold text-gray-700">Gift Voucher: </label>
                                 <span id="giftvoucher" class="text-gray-600"></span>
                             </div>
                             <div> 
-                                <label class="text-sm font-bold text-gray-700">Gift Voucher Reduce: </label>
+                                <label for="giftvoucher_reduce" class="text-sm font-bold text-gray-700">Gift Voucher Reduce: </label>
                                 <span id="giftvoucher_reduce" class="text-gray-600"></span>
                             </div>
                             <div> 
-                                <label class="text-sm font-bold text-gray-700">Credit: </label>
+                                <label for="credit" class="text-sm font-bold text-gray-700">Credit: </label>
                                 <span id="credit" class="text-gray-600"></span>
                             </div>
                             <div> 
-                                <label class="text-sm font-bold text-gray-700">Vendor: </label>
+                                <label for="vendor" class="text-sm font-bold text-gray-700">Vendor: </label>
                                 <span id="vendor" class="text-gray-600"></span>
                             </div>
                             
@@ -1656,7 +1658,6 @@
         </form>
     </div>
 </div>
-
 <!-- Bulk Assign To Modal -->
 <div id="bulkAssignPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAssignPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
@@ -1927,56 +1928,56 @@
         const formData = new FormData(form);
 
         fetch('index.php?page=orders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801&orderid=' + orderId, {
-                method: 'GET',
-            })
-            .then(response => response.text())
-            .then(text => {
-                // Try to parse JSON; if parsing fails, treat response as HTML/text
-                try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    return {
-                        message: null,
-                        html: text
-                    };
-                }
-            })
-            .then(data => {
-                // Remove loading image and enable submit button
-                loadingImage.remove();
-                submitButton.disabled = false;
-                //increment gradually to show activity
+            method: 'GET',
+        })
+        .then(response => response.text())
+        .then(text => {
+            // Try to parse JSON; if parsing fails, treat response as HTML/text
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return {
+                    message: null,
+                    html: text
+                };
+            }
+        })
+        .then(data => {
+            // Remove loading image and enable submit button
+            loadingImage.remove();
+            submitButton.disabled = false;
+            //increment gradually to show activity
 
-                const interval = setInterval(() => {
-                    progress += 10;
-                    document.getElementById('importProgress').style.width = `${progress}%`;
-                    document.getElementById('importProgress').textContent = `${progress}%`;
-                    if (progress >= 100) {
-                        clearInterval(interval);
-                    }
-                }, 100);
-
-                document.getElementById('errorMessage').classList.add('text-green-500');
-                document.getElementById('errorMessage').textContent = 'Import completed successfully.';
-                if (data && data.message) {
-                    alert(data.message || 'Import completed.');
-                } else if (data && data.html) {
-                    // Server returned HTML; log it for debugging and show a generic success message
-                    document.getElementById('importStatus').innerHTML = data.html;
-                    //console.log('Server response (HTML):', data.html);
-                    //alert('Import completed. Server returned HTML response.');
-                } else {
-                    alert('Import completed.');
+            const interval = setInterval(() => {
+                progress += 10;
+                document.getElementById('importProgress').style.width = `${progress}%`;
+                document.getElementById('importProgress').textContent = `${progress}%`;
+                if (progress >= 100) {
+                    clearInterval(interval);
                 }
-                //closeImportPopup();
-                // Optionally, refresh the page or update the order list
-                //location.reload();
-            })
-            .catch(error => {
-                console.error('Error during import:', error);
-                alert('An error occurred during import.');
-                closeImportPopup();
-            });
+            }, 100);
+
+            document.getElementById('errorMessage').classList.add('text-green-500');
+            document.getElementById('errorMessage').textContent = 'Import completed successfully.';
+            if (data && data.message) {
+                alert(data.message || 'Import completed.');
+            } else if (data && data.html) {
+                // Server returned HTML; log it for debugging and show a generic success message
+                document.getElementById('importStatus').innerHTML = data.html;
+                //console.log('Server response (HTML):', data.html);
+                //alert('Import completed. Server returned HTML response.');
+            } else {
+                alert('Import completed.');
+            }
+            //closeImportPopup();
+            // Optionally, refresh the page or update the order list
+            //location.reload();
+        })
+        .catch(error => {
+            console.error('Error during import:', error);
+            alert('An error occurred during import.');
+            closeImportPopup();
+        });
     });
     //toggle order number input
     function toggleOrderNumberInput() {
@@ -2413,7 +2414,9 @@
         //     input.className = 'poitem_hidden';
         //     form.appendChild(input);
         // });
-        // clear persisted selection after submit (optional), but we'll let server handle
+        // clear persisted selection in localStorage
+        try { localStorage.removeItem('selected_po_orders'); } catch(e){}
+        // submit the form
         form.submit();
     });
 
@@ -2909,11 +2912,25 @@ function clearSelectedOrders() {
 //addOrderToInvoice function
 function addOrderToInvoice(id) {
     const form = document.getElementById('orders-form');
+    // Uncheck visible checkboxes to avoid duplicates
+    document.querySelectorAll('input[type="checkbox"][name="poitem[]"]').forEach(cb => cb.checked = false);
+
+    // Remove previously added hidden inputs for poitem[] (including poitem_hidden)
+    form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
+        if (el.type === 'hidden' || el.classList.contains('poitem_hidden')) el.remove();
+    });
+    form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+
+    // Clear persisted selections in localStorage
+    try { localStorage.removeItem('selected_po_orders'); } catch(e){}
+
+    // Add the selected order as a single hidden input and submit
     const orderIdInput = document.createElement('input');
     orderIdInput.type = 'hidden';
     orderIdInput.name = 'poitem[]';
     orderIdInput.value = id;
     form.appendChild(orderIdInput);
+
     form.action = '<?php echo base_url('?page=invoices&action=create'); ?>';
     form.method = 'POST';
     form.submit();
