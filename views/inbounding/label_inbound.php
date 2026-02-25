@@ -1,37 +1,47 @@
 <?php
 // 1. PHP Logic & Data Fetching
-$label_data[0] = $data['form2'] ?? [];
-$variations = $data['variation'];
+$label_data[0] = $data["form2"] ?? [];
+$variations = $data["variation"] ?? [];
+// $variations = $data['variation'];
 if (isset($variations) && !empty($variations)) {
     foreach ($variations as $key => $value) {
         $key++;
         $label_data[$key] = $value;
-        $label_data[$key]['product_photo'] = $value['variation_image'];
-        $label_data[$key]['Item_code'] = $label_data[0]['Item_code'];
-        $label_data[$key]['material_name'] = $label_data[0]['material_name'];
-        $label_data[$key]['vendor_name'] = $label_data[0]['vendor_name'];
-        $label_data[$key]['gate_entry_date_time'] = $label_data[0]['gate_entry_date_time'];
+        $label_data[$key]["product_photo"] = $value["variation_image"];
+        $label_data[$key]["Item_code"] = $label_data[0]["Item_code"];
+        $label_data[$key]["material_name"] = $label_data[0]["material_name"];
+        $label_data[$key]["vendor_name"] = $label_data[0]["vendor_name"];
+        $label_data[$key]["gate_entry_date_time"] =
+            $label_data[0]["gate_entry_date_time"];
     }
 }
 
-if (empty($label_data) && isset($_GET['id'])) {
+if (empty($label_data) && isset($_GET["id"])) {
     is_login();
-    require_once 'settings/database/database.php';
+    require_once "settings/database/database.php";
     $conn = Database::getConnection();
 }
 
 if (!isset($userDetails)) {
-    require_once 'models/user/user.php';
-    if (!isset($conn)) $conn = Database::getConnection();
+    require_once "models/user/user.php";
+    if (!isset($conn)) {
+        $conn = Database::getConnection();
+    }
     $usersModel = new User($conn);
-    $user_id = $label_data['received_by_user_id'] ?? $_SESSION['user']['id'] ?? 0;
+    $user_id =
+        $label_data["received_by_user_id"] ?? ($_SESSION["user"]["id"] ?? 0);
     $userDetails = $usersModel->getUserById($user_id);
     unset($usersModel);
 }
 
 function safe($value)
 {
-    return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars($value ?? "", ENT_QUOTES, "UTF-8");
+}
+
+function safeInt($value)
+{
+    return intval($value ?? 0);
 }
 $categoryName = "";
 if (!empty($label_data[0]["group_name"])) {
@@ -40,12 +50,12 @@ if (!empty($label_data[0]["group_name"])) {
     $categoryData = $categoryModel->getById($label_data[0]["group_name"]);
     $categoryName = strtolower($categoryData["name"] ?? "");
 }
-function safeInt($value)
-{
-    return intval($value ?? 0);
-}
+// echo '<pre>' ; print_r($categoryName);exit;
 
-$currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
+$currentUrl =
+    (isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] === "on"
+        ? "https"
+        : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 ?>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -70,8 +80,10 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         // UPDATED: Calculate total label count based on quantity sum
         $total_labels_to_print = 0;
         foreach ($label_data as $l) {
-            $q = safeInt($l['quantity_received'] ?? 1);
-            if ($q < 1) $q = 1;
+            $q = safeInt($l["quantity_received"] ?? 1);
+            if ($q < 1) {
+                $q = 1;
+            }
             $total_labels_to_print += $q;
         }
         // 200px visual height per label in preview
@@ -101,16 +113,23 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
         <?php
         // 1. Get Quantity for this specific variation
-        $qtyToPrint = safeInt($current_label['quantity_received'] ?? 1);
-        if ($qtyToPrint < 1) $qtyToPrint = 1;
+        $qtyToPrint = safeInt($current_label["quantity_received"] ?? 1);
+        if ($qtyToPrint < 1) {
+            $qtyToPrint = 1;
+        }
 
         // 2. Prepare Data Variables
-        $thisPhotoUrl = base_url(safe($current_label['product_photo'] ?? 'assets/images/placeholder.png'));
-        $itemCode = $current_label['Item_code'];
+        $thisPhotoUrl = base_url(
+            safe(
+                $current_label["product_photo"] ??
+                    "assets/images/placeholder.png"
+            )
+        );
+        $itemCode = $current_label["Item_code"];
 
-        $w = safeInt($current_label['width']);
-        $h = safeInt($current_label['height']);
-        $d = safeInt($current_label['depth']);
+        $w = safeInt($current_label["width"]);
+        $h = safeInt($current_label["height"]);
+        $d = safeInt($current_label["depth"]);
         $dims = "{$w}x{$h}x{$d}";
 
         // 3. Loop: Print the label N times
@@ -137,18 +156,18 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                                 </span>
                             </div>
                             <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-2">Publisher:</span>
-                                <span class="text-[42px] font-black text-black">
+                                <span class="text-[32px] font-bold text-black uppercase mb-2">QTY:</span>
+                                <span class="text-[54px] font-black text-black">
                                     <?php echo safe(
-                                        $current_label["publisher"] ?? "N/A"
+                                        $current_label["quantity_received"] ?? "1"
                                     ); ?>
                                 </span>
                             </div>
                             <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-2">author:</span>
-                                <span class="text-[42px] font-black text-black">
+                                <span class="text-[32px] font-bold text-black uppercase mb-2">LANGUAGE:</span>
+                                <span class="text-[42px] font-bold text-black leading-tight">
                                     <?php echo safe(
-                                        $current_label["author"] ?? "N/A"
+                                        $current_label["language"] ?? "N/A"
                                     ); ?>
                                 </span>
                             </div>
@@ -170,35 +189,9 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         </div>
 
 
-                        <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
-                            <span class="text-[30px] font-bold uppercase text-black">Pages:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
-                                <?php echo safe(
-                                    $current_label["page"] ?? "N/A"
-                                ); ?>
 
-                            </span>
-                        </div>
 
-                        <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
-                            <span class="text-[30px] font-bold uppercase text-black">cover:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
-                                <?php echo safe(
-                                    $current_label["cover"] ?? "N/A"
-                                ); ?>
 
-                            </span>
-                        </div>
-
-                        <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
-                            <span class="text-[30px] font-bold uppercase text-black">ISBN:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
-                                <?php echo safe(
-                                    $current_label["ISBN"] ?? "N/A"
-                                ); ?>
-
-                            </span>
-                        </div>
                     </div>
 
                     <!-- Row 2 -->
@@ -206,9 +199,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
-                            <?php echo safe(
-                                $current_label["PUBLISHER"] ?? "N/A"
-                            ); ?>
+
                         </span>
                     </div>
 
@@ -303,7 +294,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
 
                 <?php } elseif ($categoryName == 'jewelry' || $categoryName == 'textile') { ?>
-                  <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
+                    <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
                         <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
                             <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
                         </div>
@@ -312,91 +303,44 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         </div>
                         <div class="flex-1 h-full flex flex-col justify-center pl-10 pr-6 pt-6 space-y-6">
                             <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-3">CP:</span>
-                                <span class="text-[54px] font-black text-black tracking-tight">
-                                    ₹ <?php echo safe($current_label['cp'] ?? '0'); ?>
-                                </span>
-                            </div>
-                            <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-2">QTY:  <span class="text-[38px] font-black text-black">
-                                    <?php echo safe(
-                                        $current_label["quantity_received"] ?? "1"
-                                    ); ?>
-                                </span></span>
-                               
-                            </div>
-                            <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-2">COLOR:</span>
+                                <span class="text-[32px] font-bold text-black uppercase mb-3">COLOR:</span>
                                 <span class="text-[42px] font-bold text-black leading-tight">
                                     <?php echo safe(
                                         $current_label["color"] ?? "N/A"
                                     ); ?>
                                 </span>
                             </div>
-
                             <div class="flex flex-col leading-none">
-                            <span class="text-[30px] font-bold uppercase text-black">SIZE:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
-                                <?php if (!empty($current_label["size"])) {
-                                    echo safe($current_label["size"]);
-                                } ?>
-                            </span>
-                        </div>
+                                <span class="text-[32px] font-bold text-black uppercase mb-3">DIMENSIONS:</span>
+                                <span class="text-[54px] font-black text-black tracking-tight">
+                                    <?php echo safe(
+                                        $current_label["dimensions"] ?? " "
+                                    ); ?>
+                                </span>
+                            </div>
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[32px] font-bold text-black uppercase mb-2">LOCATION:</span>
+                                <span class="text-[54px] font-black text-black">
+                                    <?php echo safe(
+                                        $current_label["store_location"] ?? " "
+                                    ); ?>
+                                </span>
+                            </div>
                         </div>
                     </div>
-                    <div class="flex flex-row w-full h-[160px] items-center border-b-[3px] border-black">
+                    <div class="flex flex-row w-full h-[160px] items-center ">
 
                         <div class="w-[380px] pl-8 flex flex-col justify-center h-full">
-                            <div class="text-[50px] font-black tracking-tight leading-none mb-3 text-black">
+                            <div class="text-[50px] font-black tracking-tight leading-none text-black">
                                 <?php echo safe($current_label["Item_code"]); ?>
                             </div>
                             <div class="text-[30px] font-bold text-black leading-none">
                                 <?php
-                                $dt =
-                                    $current_label["gate_entry_date_time"] ??
-                                    "";
-                                echo $dt
-                                    ? date("dS M Y", strtotime($dt))
-                                    : date("dS M Y");
+                                $dt = $current_label['gate_entry_date_time'] ?? '';
+                                echo ($dt) ? date('dS M Y', strtotime($dt)) : date('dS M Y');
                                 ?>
                             </div>
                         </div>
-                        <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
-                            <span class="text-[30px] font-bold uppercase text-black">WEIGHT:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
-                                <?php echo safe(
-                                    $current_label["weight"] ?? "-"
-                                ); ?>
-                                <?php echo safe(
-                                    $current_label["weight_unit"] ?? "kg"
-                                ); ?>
-                            </span>
-                        </div>
-                        <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
-                            <span class="text-[30px] font-bold uppercase text-black">material:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
-                                <?php if (!empty($current_label["material_name"])) {
-                                    echo safe($current_label["material_name"]);
-                                } ?>
-                            </span>
-                        </div>
-
-                        <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
-                            <span class="text-[30px] font-bold uppercase text-black">DIMENSIONS:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
-                                <?php 
-                                    echo safe($current_label["dimensions"]);
-                                 ?>
-                            </span>
-                        </div>
-                    </div>
-
-
-                    <div class="flex-1 w-full flex flex-col justify-center pl-8">
-                        <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">VENDOR:</span>
-                        <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
-                            <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts & Crafts'); ?>
-                        </span>
                     </div>
 
 
@@ -477,15 +421,19 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 <?php  } ?>
             </div>
 
-        <?php endfor; ?>
+        <?php endfor;
 
-    <?php endforeach; // End Loop for Variations 
+        // End Loop for Printing N Copies
+        ?>
+
+    <?php endforeach;
+    // End Loop for Variations
     ?>
 
 </div>
 
 <script>
-    const recordId = "<?php echo isset($_GET['id']) ? $_GET['id'] : ''; ?>";
+    const recordId = "<?php echo isset($_GET["id"]) ? $_GET["id"] : ""; ?>";
 
     document.getElementById("back-btn").addEventListener("click", () => {
         window.history.back();
@@ -589,7 +537,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                 const imgData = canvas.toDataURL("image/jpeg", 1.0);
                 pdf.addImage(imgData, "JPEG", 0, 0, 76.2, 50.8);
             }
-            pdf.save("Labels_Print_Batch.pdf");
+            pdf.save("Inbound_Labels.pdf");
         } catch (err) {
             console.error("PDF Error:", err);
             alert("An error occurred while generating the PDF.");

@@ -633,6 +633,9 @@ switch ($page) {
             case 'label':
                 $controller->label();
                 break;
+                case 'printInboundLabel':
+                $controller->printInboundLabel();
+                break;
             case 'deleteRecord':
                 $controller->delete();
                 break;

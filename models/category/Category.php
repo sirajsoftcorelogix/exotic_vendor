@@ -35,5 +35,13 @@ class Category{
         }
         return true;
     }
+public function getById($categoryRef)
+{
+    $stmt = $this->conn->prepare("SELECT * FROM category WHERE category = ?");
+    $stmt->bind_param("i", $categoryRef);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result->fetch_assoc();
+}
 }
 ?>

@@ -1420,19 +1420,23 @@ function getThumbnail($filePath, $width = 150, $height = 150)
 <!-- //for delete -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+    const url = new URL(window.location.href);
+    const msg = url.searchParams.get('msg');
 
-        const params = new URLSearchParams(window.location.search);
-        const msg = params.get('msg');
-
-        if (!msg) return;
-
-        if (msg === 'published_blocked') {
-            alert(" Some selected items are already published and cannot be deleted.");
+    if (msg) {
+        if (msg === 'published_blocked' || msg === 'all_blocked') {
+            alert("Items already published cannot be deleted.");
+        } else if (msg === 'deleted_partial') {
+            alert("Unpublished items were deleted, but published items were skipped.");
+        } else if (msg === 'deleted_success') {
+            // Optional: alert("Deleted successfully");
         }
 
-
-
-    });
+        // CLEANUP: Remove the msg from URL without refreshing the page
+        url.searchParams.delete('msg');
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+    }
+});
 </script>
 <script>
     $(function() {

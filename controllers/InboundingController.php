@@ -255,7 +255,7 @@ class InboundingController {
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
     function getimgdir() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/image-directories';
+        $url = 'https://wp.exoticindia.com/vendor-api/product/image-directories';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
@@ -285,7 +285,7 @@ class InboundingController {
         return json_decode($response, true);
     }
     function gecolormaps() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/colormaps';
+        $url = 'https://wp.exoticindia.com/vendor-api/product/colormaps';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
@@ -315,7 +315,7 @@ class InboundingController {
         return json_decode($response, true);
     }
     function getoptionals() {
-        $url = 'https://www.exoticindia.com/vendor-api/product/optionals';
+        $url = 'https://wp.exoticindia.com/vendor-api/product/optionals';
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
@@ -1553,7 +1553,7 @@ class InboundingController {
         if (!empty($data['data']['img'])) {
             $images_payload['image_directory'] = $data['data']['image_directory'] ?? '';
             
-            // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
+            // WARNING: __DIR__ creates a server file path (e.g., /var/wp/html/...). 
             // If you need a clickable URL for a browser, change this to your website URL.
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $domain = $_SERVER['HTTP_HOST'];
@@ -1694,6 +1694,24 @@ public function bulk_assign_action()
         'success' => $result ? true : false
     ]);
     exit;
+}
+public function printInboundLabel()
+{
+    is_login();
+    global $inboundingModel;
+
+    $id = $_GET['id'] ?? 0;
+    if (!$id) {
+        die("Invalid ID");
+    }
+
+    $data = $inboundingModel->getForm2Data($id);
+ include 'views/inbounding/label_inbound.php';
+    // renderTemplate(
+    //     'views/inbounding/label_inbound.php',
+    //     $data,
+    //     'Print Inbound Label'
+    // );
 }
 
 }

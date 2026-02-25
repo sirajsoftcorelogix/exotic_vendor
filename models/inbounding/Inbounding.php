@@ -588,7 +588,16 @@ class Inbounding
         $id = (int)$id;
 
         // 1. Get Main Inbound Data
-        $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
+        // $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
+        $sql = "SELECT 
+            vi.*, 
+            vv.vendor_name,
+            m.material_name
+        FROM vp_inbound AS vi 
+        LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id 
+        LEFT JOIN material AS m ON vi.material_code = m.id
+        WHERE vi.id = $id";
+
         $result = $this->conn->query($sql);
         $inbounding = $result ? $result->fetch_assoc() : [];
 
@@ -1168,20 +1177,23 @@ class Inbounding
 
         return false;
     }
-    public function deleteInboundItems($ids_array)
-    {
+   public function deleteInboundItems($ids_array) {
         if (empty($ids_array)) {
             return false;
         }
 
+        // IMPORTANT: Reset keys to ensure it's a sequential list [0, 1, 2...]
+        // This fixes the "Argument #1 ($params) must be a list" error
+        $ids_array = array_values($ids_array);
+
         // Prepare placeholders (?,?,?)
         $placeholders = implode(',', array_fill(0, count($ids_array), '?'));
-
-        // Use your actual table name here (e.g., vp_inbound)
+        
         $sql = "DELETE FROM vp_inbound WHERE id IN ($placeholders)";
-
+        
         $stmt = $this->conn->prepare($sql);
-
+        
+        // In MySQLi, execute() with an array requires PHP 8.1+
         return $stmt->execute($ids_array);
     }
     public function getpublishdata($id)
