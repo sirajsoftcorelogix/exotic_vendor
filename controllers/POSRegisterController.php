@@ -149,6 +149,110 @@ class POSRegisterController
         exit;
     }
 
+    /**
+     * Proxy: Add to cart (Exotic India API)
+     */
+    public function cartAdd()
+    {
+        $code = isset($_POST['code']) ? trim($_POST['code']) : '';
+        if ($code === '') {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Missing product code.']);
+            exit;
+        }
+
+        $qty = isset($_POST['qty']) ? (int)$_POST['qty'] : 1;
+        if ($qty < 1) $qty = 1;
+
+        $discountCoupon = isset($_POST['discountcoupondetails']) ? trim($_POST['discountcoupondetails']) : '';
+        $giftVoucher = isset($_POST['giftvoucherdetails']) ? trim($_POST['giftvoucherdetails']) : '';
+        $variation = isset($_POST['variation']) ? trim($_POST['variation']) : '';
+        $options = isset($_POST['options']) ? trim($_POST['options']) : '';
+
+        $query = [];
+        if ($discountCoupon !== '') $query['discountcoupondetails'] = $discountCoupon;
+        if ($giftVoucher !== '') $query['giftvoucherdetails'] = $giftVoucher;
+
+        $url = 'https://www.exoticindia.com/cart/add';
+        if (!empty($query)) {
+            $url .= '?' . http_build_query($query);
+        }
+
+        $postData = [
+            'code' => $code,
+            'qty'  => $qty
+        ];
+
+        if ($variation !== '') $postData['variation'] = $variation;
+        if ($options !== '') $postData['options'] = $options;
+
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'Content-Type: application/x-www-form-urlencoded',
+            'x-adminapitest: 1',
+        ];
+
+        if (!empty($_SESSION['x_api_euid'])) {
+            $headers[] = 'x-api-euid: ' . $_SESSION['x_api_euid'];
+        }
+
+        // Debug: log equivalent curl request
+        $curlParts = [];
+        $curlParts[] = 'curl -X POST';
+        foreach ($headers as $h) {
+            $curlParts[] = '-H ' . escapeshellarg($h);
+        }
+        $curlParts[] = escapeshellarg($url);
+        $curlParts[] = '--data ' . escapeshellarg(http_build_query($postData));
+        print('[POS cart-add] ' . implode(' ', $curlParts)); die;
+
+
+        $capturedEuid = null;
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$capturedEuid) {
+            $len = strlen($headerLine);
+            $header = explode(':', $headerLine, 2);
+            if (count($header) < 2) {
+                return $len;
+            }
+
+            $name = strtolower(trim($header[0]));
+            if ($name === 'x-api-euid') {
+                $capturedEuid = trim($header[1]);
+            }
+            return $len;
+        });
+
+        $response = curl_exec($ch); print_r($response); die; 
+        $error = curl_error($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if (!empty($capturedEuid)) {
+            $_SESSION['x_api_euid'] = $capturedEuid;
+        }
+
+        header('Content-Type: application/json');
+
+        if ($error) {
+            http_response_code(502);
+            echo json_encode(['error' => $error]);
+            exit;
+        }
+
+        if ($status) {
+            http_response_code($status);
+        }
+
+        // Pass-through response (expected to be JSON)
+        echo $response;
+        exit;
+    }
 
     /**
      * Helper method to fetch registers
