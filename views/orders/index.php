@@ -612,7 +612,7 @@
                             alert('No filters to save.');
                             return;
                         }
-                        let defaultName = 'Search - ' . new Date().toLocaleString();
+                        let defaultName = 'Search - ' + new Date().toLocaleString();
                         let name = prompt('Enter a name for this search:', defaultName);
                         if (name === null) return; // cancelled
                         const formData = new URLSearchParams();
