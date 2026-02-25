@@ -335,12 +335,12 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             </div>
 
                             <div class="flex flex-col leading-none">
-                            <span class="text-[30px] font-bold uppercase text-black">SIZE:</span>
-                            <span class="text-[42px] font-black text-black leading-none">
+                            <span class="text-[30px] font-bold uppercase text-black">SIZE: <span class="text-[42px] font-black text-black leading-none">
                                 <?php if (!empty($current_label["size"])) {
                                     echo safe($current_label["size"]);
                                 } ?>
-                            </span>
+                            </span></span>
+                            
                         </div>
                         </div>
                     </div>
