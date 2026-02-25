@@ -223,10 +223,10 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         </div>
                         <div class="flex-1 h-full flex flex-col justify-center pl-10 pr-6 pt-6 space-y-6">
                             <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-3">CP:</span>
-                                <span class="text-[54px] font-black text-black tracking-tight">
+                                <span class="text-[32px] font-bold text-black uppercase mb-3">CP:  <span class="text-[54px] font-black text-black tracking-tight">
                                     ₹ <?php echo safe($current_label['cp'] ?? '0'); ?>
-                                </span>
+                                </span></span>
+                               
                             </div>
                             <div class="flex flex-col leading-none">
                                 <span class="text-[32px] font-bold text-black uppercase mb-2">QTY:</span>
@@ -312,10 +312,10 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         </div>
                         <div class="flex-1 h-full flex flex-col justify-center pl-10 pr-6 pt-6 space-y-6">
                             <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-3">CP:</span>
-                                <span class="text-[54px] font-black text-black tracking-tight">
+                                <span class="text-[32px] font-bold text-black uppercase mb-3">CP: <span class="text-[54px] font-black text-black tracking-tight">
                                     ₹ <?php echo safe($current_label['cp'] ?? '0'); ?>
-                                </span>
+                                </span></span>
+                                
                             </div>
                             <div class="flex flex-col leading-none">
                                 <span class="text-[32px] font-bold text-black uppercase mb-2">QTY:  <span class="text-[38px] font-black text-black">
