@@ -345,7 +345,7 @@ class DispatchController {
         global $invoiceModel;
         $invoice_dispatch = [];
         //fetch all invoices with dispatch records
-        $invoices = $invoiceModel->getAllInvoices();
+        $invoices = $invoiceModel->getAllInvoices(100, 1);
         foreach ($invoices as $invoice) {
             $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
         }

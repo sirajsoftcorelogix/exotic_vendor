@@ -280,7 +280,7 @@
                             <p class="text-green-600 font-semibold text-lg">✓ Dispatch Already Created</p>
                             <p class="text-green-600 text-sm mt-1">Below are the dispatch details and labels for this invoice.</p>
                         </div>
-                        <a href="<?php echo base_url('?page=dispatch'); ?>" class="text-green-600 hover:text-green-700 underline font-semibold">← Back to Dispatch List</a>
+                        <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-green-600 hover:text-green-700 underline font-semibold">← Back to Dispatch List</a>
                     </div>
                 </div>
 
