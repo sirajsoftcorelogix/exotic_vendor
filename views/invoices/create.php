@@ -978,9 +978,9 @@ function createAndDispatch() {
     const formData = new FormData(form);
     formData.append('dispatch_after_creation', '1'); // Add a flag to indicate dispatch after creation
     
-    const submitBtn = document.getElementById('createAndDispatchButton');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
+    const submitBtn2 = document.getElementById('createAndDispatchButton');
+    submitBtn2.disabled = true;
+    submitBtn2.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
     fetch(form.action, {
         method: 'POST',
         body: formData
@@ -997,12 +997,13 @@ function createAndDispatch() {
         } else {
             alert('Failed to create invoice and dispatch');
         }
+        submitBtn2.disabled = false;
+        submitBtn2.innerHTML = 'Create & Dispatch';
     })
     .catch(error => {
         console.error('Error:', error);
         alert('An error occurred while creating invoice and dispatching');
     });
-   submitBtn.disabled = false;
-    submitBtn.innerHTML = 'Create & Dispatch';
+   
 }
 </script>

@@ -285,5 +285,48 @@ class Dispatch {
         $stmt->close();
         return $result;
     }
-        
+      
+    public function getDispatchRecordsByInvoiceId($invoiceId) {
+        $sql = "SELECT * FROM vp_dispatch_details WHERE invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param('i', $invoiceId);
+        if ($stmt->execute()) {
+            return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        }
+        return false;
+    }
+    public function retryShiprocketApiCalls($dispatchId) {
+        //fetch dispatch record
+        $dispatchRecord = $this->getDispatchById($dispatchId);
+        if(!$dispatchRecord) {
+            return ['success' => false, 'message' => 'Dispatch record not found'];
+        }
+        $shipmentId = $dispatchRecord['shiprocket_shipment_id'];
+        if(!$shipmentId) {
+            return ['success' => false, 'message' => 'No Shiprocket shipment ID associated with this dispatch record'];
+        }
+        //retry AWB info API call
+        $awbInfoResponse = $this->getShiprocketAwbInfo($shipmentId);
+        //retry label info API call
+        $labelInfoResponse = $this->getShiprocketLabels($shipmentId);
+        //update dispatch record with new AWB code and label URL if available
+        if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
+            $awbCode = $awbInfoResponse['awb_code'] ?? null;
+            if($awbCode == null) {
+                $awbCode = $awbInfoResponse['response']['data']['awb_code'] ?? null;
+            }
+            if($awbCode) {
+                $this->updateDispatchAwbCode($shipmentId, $awbCode);
+            }
+        }
+        if($labelInfoResponse && isset($labelInfoResponse['label_created']) && $labelInfoResponse['label_created'] == 1) {
+            $labelUrl = $labelInfoResponse['label_url'] ?? null;
+            if($labelUrl) {
+                $this->updateDispatchLabelUrl($shipmentId, $labelUrl);
+            }
+        }
+        return ['success' => true,'labelUrl' => $labelUrl ?? null, 'awbCode' => $awbCode ?? null, 'data' => ['awb_info_response' => $awbInfoResponse, 'label_info_response' => $labelInfoResponse], 'message' => 'API calls retried and dispatch record updated if new data was available'];
+    }
 }
