@@ -203,14 +203,14 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
                     <!-- Row 2 -->
 
-                    <div class="flex-1 w-full flex flex-col justify-center pl-8">
+                    <!-- <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe(
                                 $current_label["PUBLISHER"] ?? "N/A"
                             ); ?>
                         </span>
-                    </div>
+                    </div> -->
 
 
                 <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving') { ?>
