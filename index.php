@@ -775,6 +775,12 @@ switch ($page) {
             case 'create':
                 $controller->create();   
                 break;
+            case 'retry_dispatch':
+                $controller->retryDispatch();
+                break;
+            case 'list':
+                $controller->index();
+                break;
             default:
                 $controller->create();   
                 break;
