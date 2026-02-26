@@ -451,7 +451,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black mb-2">WEIGHT:</span>
                             <span class="text-[42px] font-black text-black">
                                 <?php echo safe($current_label['weight'] ?? '0');
-                                echo safe($current_label['weight_unit']); ?>
+                                echo safe($current_label['weight_unit'] ?? 'kg'); ?>
                             </span>
                         </div>
                         <div class="w-[320px] pl-4 flex flex-col justify-center h-full leading-none">
