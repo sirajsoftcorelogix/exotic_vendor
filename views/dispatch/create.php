@@ -19,7 +19,11 @@
             <p class="text-green-600 font-semibold">Dispatch created successfully!</p>
         </div>
     <?php endif; ?>
-
+     <?php 
+    //if dispatch records not found for this invoice, show form to create dispatch, else show dispatch details and labels
+    if(isset($dispatchRecords) && count($dispatchRecords) == 0) {
+        //dispatch records not found, show form to create dispatch
+    ?>
     <form id="dispatchForm" method="POST" action="">
       <input type="hidden" name="invoice_id" value="<?php echo htmlspecialchars($_GET['invoice_id'] ?? ''); ?>">
 
@@ -39,7 +43,7 @@
           
           ksort($groupedItems);
       ?>
-
+  
       <!-- DYNAMIC BOXES -->
       <?php foreach($groupedItems as $boxNo => $boxItems): ?>
       <div id="box-section-<?php echo $boxNo; ?>" class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow overflow-hidden box-section mb-6" data-box-no="<?php echo $boxNo; ?>">
@@ -76,7 +80,7 @@
             <div class="flex flex-col gap-2">
               <label class="text-white text-sm font-medium">Box Size</label>
               <select name="box_size[<?php echo $boxNo; ?>]" class="h-10 rounded-lg px-3 bg-gray-100 text-gray-700 outline-none box-size-select" onchange="populateDimensions(this)">              
-                  <option value="">Select Size</option>
+                  <option value="">Custom Size</option>
                   <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
                   <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
                   <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
@@ -174,9 +178,8 @@
             <div id="labels-container-<?php echo $boxNo; ?>" class="p-4">
             <!-- <iframe src="https://docs.google.com/gview?url=https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf&embedded=true" class="w-full h-96 border border-gray-300 rounded-lg" ></iframe> -->
             <!-- <iframe id="label-frame-" src="https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
-            <iframe id="label-frame-<?php echo $boxNo; ?>" src=""
-    width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;">
-    </iframe>
+            <iframe id="label-frame-<?php echo $boxNo; ?>" src="" width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;">
+            </iframe>
             
             </div>
             
@@ -251,12 +254,13 @@
             <div id="invoice-container" class="p-4 invoice-container" style="display:none;">
             </div>
         </div>
+        
           <button type="button" onclick="submitDispatchForm(event)"
             class="h-12 px-4 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
             <img src="<?php echo base_url('images/track_order.svg'); ?>" alt="">
             Dispatch
           </button>
-
+       
         </div>
       </div>
 
@@ -268,7 +272,183 @@
       <?php } ?>
 
     </form>
+    <?php }else{ ?>
+            <div class="col-span-full">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-green-600 font-semibold text-lg">✓ Dispatch Already Created</p>
+                            <p class="text-green-600 text-sm mt-1">Below are the dispatch details and labels for this invoice.</p>
+                        </div>
+                        <a href="<?php echo base_url('?page=dispatch'); ?>" class="text-green-600 hover:text-green-700 underline font-semibold">← Back to Dispatch List</a>
+                    </div>
+                </div>
 
+                <!-- Dispatch Records Grid -->
+                <div class="grid grid-cols-1 gap-6 mt-6">
+                    <?php foreach($dispatchRecords as $dispatch): ?>
+                    <div class="bg-white rounded-2xl shadow-[0px_10px_15px_-3px_#0000001A] overflow-hidden">
+                        
+                        <!-- Dispatch Header -->
+                        <div class="bg-orange-500 p-6 text-white">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div>
+                                    <h3 class="text-lg font-bold mb-1">Box <?php echo htmlspecialchars($dispatch['box_no'] ?? 'N/A'); ?></h3>
+                                    <p class="text-blue-100 text-sm">Dispatch ID: <?php echo htmlspecialchars($dispatch['id'] ?? 'N/A'); ?></p>
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <?php if(isset($dispatch['awb_number'])): ?>
+                                    <div class="bg-white bg-opacity-20 rounded-lg px-4 py-2">
+                                        <p class="text-xs text-blue-100">AWB Number</p>
+                                        <p class="font-bold text-white"><?php echo htmlspecialchars($dispatch['awb_number']); ?></p>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dispatch Details -->
+                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 border-b border-gray-200">
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Box Size</label>
+                                <p class="text-gray-800 font-medium mt-1"><?php echo $dispatch['length'] ?> x <?php echo $dispatch['width'] ?> x <?php echo $dispatch['height'] ?> INCH</p>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Billable Weight</label>
+                                <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars($dispatch['billing_weight'] ?? 'N/A'); ?> kg</p>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Volumetric Weight</label>
+                                <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars($dispatch['volumetric_weight'] ?? '0'); ?> kg</p>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
+                                <p class="text-gray-800 font-medium mt-1">
+                                    <?php 
+                                        $status = isset($dispatch['status']) ? strtolower($dispatch['status']) : 'pending';
+                                        $statusClass = $status === 'completed' ? 'bg-green-100 text-green-700' : ($status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700');
+                                    ?>
+                                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold <?php echo $statusClass; ?>">
+                                        <?php echo htmlspecialchars(ucfirst($status)); ?>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Box Dimensions -->
+                        <div class="p-6 bg-gray-50 border-b border-gray-200">
+                            <h4 class="font-bold text-gray-800 mb-4">Box Dimensions & Weight</h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                <div class="bg-white rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">Length</p>
+                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['length'] ?? '0'); ?> in</p>
+                                </div>
+                                <div class="bg-white rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">Width</p>
+                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['width'] ?? '0'); ?> in</p>
+                                </div>
+                                <div class="bg-white rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">Height</p>
+                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['height'] ?? '0'); ?> in</p>
+                                </div>
+                                <div class="bg-white rounded-lg p-3">
+                                    <p class="text-xs text-gray-500">Actual Weight</p>
+                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['weight'] ?? '0'); ?> kg</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Label Display -->
+                        <?php if(isset($dispatch['label_url']) && !empty($dispatch['label_url'])): ?>
+                        <div class="p-6 bg-white">
+                            <h4 class="font-bold text-gray-800 mb-4">Shipping Label</h4>
+                            <div class="flex flex-col gap-4">
+                                <iframe 
+                                    src="https://docs.google.com/gview?url=<?php echo urlencode($dispatch['label_url']); ?>&embedded=true" 
+                                    class="w-full h-96 border-2 border-gray-300 rounded-lg" 
+                                    frameborder="0">
+                                </iframe>
+                                
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <button type="button" onclick="printLabel('<?php echo htmlspecialchars($dispatch['label_url']); ?>')" 
+                                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2">
+                                        🖨️ Print Label
+                                    </button>
+                                    <a href="<?php echo htmlspecialchars($dispatch['label_url']); ?>" target="_blank" 
+                                        class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-semibold flex items-center justify-center gap-2">
+                                        📥 Download Label
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <?php else: 
+                          // button to retry
+                          ?>
+                        <div class="p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p class="text-yellow-700 font-semibold">Label not generated yet.</p>
+                            <button id="retryLabelBtn" onclick="genLabel('<?php echo htmlspecialchars($dispatch['id']); ?>')" class="mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold">
+                                Retry Label Generation
+                            </button>
+                        </div>
+                        <?php endif; ?>
+
+                        <!-- Items in Dispatch -->
+                        <?php if(isset($dispatch['items']) && count($dispatch['items']) > 0): ?>
+                        <div class="p-6 bg-gray-50 border-t border-gray-200">
+                            <h4 class="font-bold text-gray-800 mb-4">Items in Dispatch</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <?php foreach($dispatch['items'] as $itemIndex => $item): ?>
+                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                    <div class="flex gap-3">
+                                        <?php if(isset($item['image_url'])): ?>
+                                        <img src="<?php echo htmlspecialchars($item['image_url']); ?>" alt="product" class="w-16 h-20 object-cover rounded border border-gray-200">
+                                        <?php endif; ?>
+                                        <div class="flex-1">
+                                            <p class="text-xs text-gray-500 font-semibold">SKU</p>
+                                            <p class="font-medium text-gray-800"><?php echo htmlspecialchars($item['sku'] ?? 'N/A'); ?></p>
+                                            <p class="text-xs text-gray-600 mt-2">Qty: <span class="font-semibold"><?php echo htmlspecialchars($item['quantity'] ?? '1'); ?></span></p>
+                                            <p class="text-xs text-gray-600">Wt: <span class="font-semibold"><?php echo htmlspecialchars($item['weight'] ?? '0'); ?> kg</span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <!-- Delivery Info -->
+                        <div class="p-6 border-t border-gray-200">
+                            <h4 class="font-bold text-gray-800 mb-4">Delivery Information</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Courier name</p>
+                                    <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars($dispatch['courier_name'] ?? 'N/A'); ?></p>
+                                </div>
+                                <!-- <div>
+                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Pickup Location</p>
+                                    <p class="text-gray-800 font-medium mt-1"><?php //echo htmlspecialchars($dispatch['pickup_location'] ?? 'N/A'); ?></p>
+                                </div> -->
+                                <?php if(isset($dispatch['created_at'])): ?>
+                                <div>
+                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Created Date</p>
+                                    <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars(date('d M Y, H:i', strtotime($dispatch['created_at']))); ?></p>
+                                </div>
+                                <?php endif; ?>
+                                <?php if(isset($dispatch['tracking_url'])): ?>
+                                <div>
+                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Tracking</p>
+                                    <a href="<?php echo htmlspecialchars($dispatch['tracking_url']); ?>" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium mt-1 inline-block">
+                                        Track Shipment →
+                                    </a>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php } ?>
 </div>
 
 <script>
@@ -422,8 +602,8 @@ function submitDispatchForm(event) {
                         }
                     }
                     const awbCode = awbs[boxNo];
-                    if (awbCode) {
-                        const container = document.getElementById('labels-container-' + boxNo);
+                    const container = document.getElementById('labels-container-' + boxNo);
+                    if (awbCode) {                       
                         if (container) {
                             let awbEl = document.getElementById('awb-' + boxNo);
                             if (!awbEl) {
@@ -435,7 +615,52 @@ function submitDispatchForm(event) {
                             awbEl.textContent = 'AWB: ' + awbCode;
                         }
                     }
-                    
+                    //awb_assign_status and label_created is 0 then show warning message and link to retry api call for that box
+                      const awbAssignStatus = data.dispatches.awb_assign_status ? data.dispatches.awb_assign_status[boxNo] : null;
+                      const labelCreated = data.dispatches.label_created ? data.dispatches.label_created[boxNo] : null;
+                      if (awbAssignStatus === 0 || labelCreated === 0) {
+                          showAlert('AWB assignment or label creation failed for Box ' + boxNo + '. Please retry.','error');
+                          // Optionally, you can add a retry button here that calls an API to retry the failed step for this box
+                      }
+                      //button to retry failed api calls for this box
+                      const retryBtn = document.createElement('button');
+                      retryBtn.type = 'button';
+                      retryBtn.className = 'mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700';
+                      retryBtn.innerHTML = 'Retry API Call';
+                      retryBtn.onclick = function(e) {
+                          e.preventDefault();
+                          // Call API to retry failed dispatch for this box
+                          fetch('<?php echo base_url('?page=dispatch&action=retry_dispatch'); ?>', {
+                              method: 'POST',
+                              headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify({
+                                  invoice_id: formData.get('invoice_id'),
+                                  box_no: boxNo,
+                                  dispatch_id: ids[boxNo] || null
+                              })
+                          })
+                          .then(response => response.json())
+                          .then(retryData => {
+                              if (retryData.status === 'success') {
+                                  showAlert('Retry successful for Box ' + boxNo, 'success');
+                                  //upadte label and awb on page without refreshing
+                                  if (retryData.labelUrl) {
+                                      const labelFrame = document.getElementById('label-frame-' + boxNo);
+                                      if (labelFrame) {
+                                          labelFrame.src = 'https://docs.google.com/gview?url=' + encodeURIComponent(retryData.labelUrl) + '&embedded=true';
+                                      }
+                                  }
+                              } else {
+                                  showAlert('Retry failed for Box ' + boxNo + ': ' + (retryData.message || ''), 'error');
+                              }
+                          })
+                          .catch(error => {
+                              console.error('Error retrying dispatch:', error);
+                              showAlert('Error retrying dispatch for Box ' + boxNo, 'error');
+                          });
+                      };
+                      container.appendChild(retryBtn);
+
                 });
             }
             const invoiceContainer = document.getElementById('invoice-container');
@@ -481,6 +706,7 @@ function submitDispatchForm(event) {
              
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
+        submitBtn.style.display = 'none'; // Hide the dispatch button after successful submission
         } else if (data.status === 'error') {
             showAlert(data.message || 'An error occurred','error');
             submitBtn.disabled = false;
@@ -506,5 +732,41 @@ document.querySelectorAll('.box-section').forEach(section => {
 });
 //print-label-btn
 
+// Function to print label
+function printLabel(labelUrl) {
+    const printWindow = window.open('https://docs.google.com/gview?url=' + encodeURIComponent(labelUrl) + '&embedded=true', '_blank');
+    printWindow.onload = function() {
+        setTimeout(() => printWindow.print(), 2000);
+    };
+}
+function genLabel(dispatchId) {
+    const retryLabelBtn = document.getElementById('retryLabelBtn');
+    retryLabelBtn.disabled = true;
+    retryLabelBtn.innerHTML = '<span class="animate-spin">⏳</span> Regenerating...';
+    // Call API to regenerate label for this dispatch
+    fetch('<?php echo base_url('?page=dispatch&action=retry_dispatch'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            dispatch_id: dispatchId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success === true) {
+            showAlert('Label regeneration successful!', 'success');
+            // Update label URL on page if provided
+            location.reload(); // Reload the page to reflect updated label and AWB info
+        } else {
+            showAlert('Label regeneration failed: ' + (data.message || ''), 'error');
+        }
+        retryLabelBtn.disabled = false;
+        retryLabelBtn.innerHTML = 'Retry Label Generation';
+    })
+    .catch(error => {
+        console.error('Error regenerating label:', error);
+        showAlert('Error regenerating label', 'error');
+    });
+}
 
 </script>

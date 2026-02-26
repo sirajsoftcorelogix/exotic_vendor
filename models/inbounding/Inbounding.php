@@ -610,24 +610,38 @@ class Inbounding {
             'category' => $category
         ];
     }
-public function update_image_variation($img_id, $variation_id) {
-    // Updates the variation_id for a specific image
-    $sql = "UPDATE item_images SET variation_id = ? WHERE id = ?";
-    $stmt = $this->conn->prepare($sql);
-    
-    if (!$stmt) return false;
+    public function update_image_variation($img_id, $variation_id) {
+        // Updates the variation_id for a specific image
+        $sql = "UPDATE item_images SET variation_id = ? WHERE id = ?";
+        $stmt = $this->conn->prepare($sql);
+        
+        if (!$stmt) return false;
 
-    // "ii" = Integer, Integer
-    $stmt->bind_param("ii", $variation_id, $img_id);
-    
-    return $stmt->execute();
-}
-
+        // "ii" = Integer, Integer
+        $stmt->bind_param("ii", $variation_id, $img_id);
+        
+        return $stmt->execute();
+    }
+    public function getBycateId($categoryRef){
+        $stmt = $this->conn->prepare("SELECT * FROM category WHERE category = ?");
+        $stmt->bind_param("i", $categoryRef);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_assoc();
+    }
     public function getform2data($id) {
         $id = (int)$id;
 
         // 1. Get Main Inbound Data
-        $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
+        // $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
+        $sql = "SELECT 
+            vi.*, 
+            vv.vendor_name,
+            m.material_name
+        FROM vp_inbound AS vi 
+        LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id 
+        LEFT JOIN material AS m ON vi.material_code = m.id
+        WHERE vi.id = $id";
         $result = $this->conn->query($sql);
         $inbounding = $result ? $result->fetch_assoc() : [];
 
@@ -792,7 +806,7 @@ public function update_image_variation($img_id, $variation_id) {
                 else $types .= "s"; 
             }
         }
-        $cols[] = "modifydate = NOW()";
+        // $cols[] = "modifydate = "NOW();
         if (empty($cols)) return ['success' => true, 'message' => "No changes detected."];
 
         // Add ID for the WHERE clause

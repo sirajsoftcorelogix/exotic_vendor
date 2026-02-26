@@ -633,6 +633,9 @@ switch ($page) {
                 $controller->searchBookAttributes();
             case 'bulkAssign':
                 $controller->bulk_assign_action();
+            case 'printInboundLabel':
+                $controller->printInboundLabel();
+                break;
             default:
                 $controller->index();
                 break;
@@ -774,6 +777,12 @@ switch ($page) {
         switch ($action) {
             case 'create':
                 $controller->create();   
+                break;
+            case 'retry_dispatch':
+                $controller->retryDispatch();
+                break;
+            case 'list':
+                $controller->index();
                 break;
             default:
                 $controller->create();   

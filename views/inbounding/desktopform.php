@@ -1362,6 +1362,19 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#db8235] transition">
                 Save as Draft
             </button>
+            <?php if (!empty($data['form2']['id'])): ?>
+                <a href="<?= base_url('index.php?page=inbounding&action=printInboundLabel&id=' . $record_id) ?>"
+                   target="_blank"
+                   class="hidden md:inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2.5 rounded-full text-sm font-semibold shadow-md transition duration-200">
+                   
+                   <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                             d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/>
+                   </svg>
+
+                   Print Inbound Label
+                </a>
+            <?php endif; ?>
         </div>
     </form>
 </div>

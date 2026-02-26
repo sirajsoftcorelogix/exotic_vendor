@@ -234,17 +234,19 @@ class DispatchController {
                 $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
                 //file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB Info Response: " . json_encode($awbInfoResponse) . "\n", FILE_APPEND);
                 //chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
+                $dispatchRecords['awb_assign_status'][$boxNo] = $awbInfoResponse['awb_assign_status'] ?? null;
                 if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
                     // Update dispatch record with AWB code
                     $awbCode = $awbInfoResponse['response']['data']['awb_code'];
                     $dispatchModel->updateDispatchAwbCode($shiprocketResponse['json']['shipment_id'], $awbCode);
                     $dispatchRecords['awb'][$boxNo] = $awbCode;
-                } else {
+                } else {                   
                     //file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB code not found in response\n", FILE_APPEND);
                     //chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
                 }
                 //label api call getShiprocketLabelInfo
                 $labelInfoResponse = $dispatchModel->getShiprocketLabels($shiprocketResponse['json']['shipment_id']);
+                $dispatchRecords['label_created'][$boxNo] = $labelInfoResponse['label_created'] ?? null;
                 //file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label Info Response: " . json_encode($labelInfoResponse) . "\n", FILE_APPEND);
                 //chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
                 $lableAdd = false;
@@ -301,10 +303,53 @@ class DispatchController {
                 if ($invoice && isset($invoice['vp_order_info_id'])) {
                     $invoice['address'] = $commanModel->getDispatchAddress($invoice['vp_order_info_id']);
                 }                
-                $invoices[] = $invoice;                
+                $invoices[] = $invoice;
+                //fetch dispatch records for this invoice   
+                $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoice_id);
+                //print_array($dispatchRecords);
             }
-            renderTemplate('views/dispatch/create.php', ['invoices' => $invoices]);
+            renderTemplate('views/dispatch/create.php', ['invoices' => $invoices, 'dispatchRecords' => $dispatchRecords]);
         }
+    }
+    public function retryDispatch() {
+        global $dispatchModel;
+        //print_array($_POST);
+        $input = json_decode(file_get_contents('php://input'), true);
+        
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $dispatchId = $input['dispatch_id'] ?? null;
+            if (!$dispatchId) {
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 'error', 'message' => 'Dispatch ID is required']);
+                exit();
+            }
+            $result = $dispatchModel->retryShiprocketApiCalls($dispatchId);
+                // if ($result['success']) {
+                //     header('Content-Type: application/json');
+                //     echo json_encode(['status' => 'success', 'message' => 'Retry successful', 'data' => $result['data']]);
+                // } else {
+                //     header('Content-Type: application/json');
+                //     echo json_encode(['status' => 'error', 'message' => $result['message']]);
+            // }
+             header('Content-Type: application/json');
+             echo json_encode($result);
+            exit();
+        } else {
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'error', 'message' => 'Invalid request method']);
+            exit();
+        }
+    }
+    public function index() {
+        global $dispatchModel;
+        global $invoiceModel;
+        $invoice_dispatch = [];
+        //fetch all invoices with dispatch records
+        $invoices = $invoiceModel->getAllInvoices();
+        foreach ($invoices as $invoice) {
+            $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
+        }
+        renderTemplate('views/dispatch/index.php', ['invoice_dispatch' => $invoice_dispatch]);
     }
 }
 ?>
