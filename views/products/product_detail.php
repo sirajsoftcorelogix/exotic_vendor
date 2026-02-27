@@ -335,7 +335,108 @@
     <button onclick="document.getElementById('imagePopup').classList.add('hidden')" class="mt-2 px-4 py-2 bg-red-600 text-white rounded">Close</button>
   </div>
 </div> -->
+
+<!-- Stock Adjustment Card -->
+<div id="stockAdjustmentCard" class="max-w-3xl mx-auto bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
+
+  <!-- Header -->
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
+    <p class="text-sm text-gray-500 mt-1">Adjust product inventory for selected warehouse and location</p>
+  </div>
+
+  <!-- Form Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+
+    <!-- Adjustment Type -->
+    <div>
+      <label class="block text-sm font-medium text-gray-600 mb-1">
+        Adjustment Type
+      </label>
+      <select class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        <option>Decrease</option>
+        <option>Increase</option>
+      </select>
+    </div>
+
+    <!-- Warehouse -->
+    <div>
+      <label class="block text-sm font-medium text-gray-600 mb-1">
+        Warehouse
+      </label>
+      <select class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        <option>Wazirpur</option>
+        <option>Delhi</option>
+      </select>
+    </div>
+
+    <!-- Location -->
+    <div>
+      <label class="block text-sm font-medium text-gray-600 mb-1">
+        Location
+      </label>
+      <input type="text" value="LYT8765"
+        class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm
+               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"/>
+    </div>
+
+    <!-- Quantity -->
+    <div>
+      <label class="block text-sm font-medium text-gray-600 mb-1">
+        Quantity
+      </label>
+      <input type="number" value="5"
+        class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm
+               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"/>
+    </div>
+
+  </div>
+
+  <!-- Reason -->
+  <div class="mt-6">
+    <label class="block text-sm font-medium text-gray-600 mb-1">
+      Reason
+    </label>
+    <textarea rows="4"
+      class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm
+             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+             resize-none"></textarea>
+  </div>
+
+  <!-- Divider -->
+  <div class="border-t border-gray-200 my-6"></div>
+
+  <!-- Action Buttons -->
+  <div class="flex justify-end gap-4">
+    <button
+      class="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-medium
+             hover:bg-gray-100 transition">
+      Cancel
+    </button>
+
+    <button
+      class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600
+             text-white text-sm font-semibold shadow-md
+             hover:from-orange-600 hover:to-orange-700
+             active:scale-95 transition transform">
+      Save Adjustment
+    </button>
+  </div>
+
+</div>
+<--- Stock Adjustment Card Ends -->
 <script>
+  function openStockAdjustmentForm() {
+    const card = document.getElementById('stockAdjustmentCard');
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    card.classList.add('ring-2', 'ring-orange-500');
+    setTimeout(() => {
+      card.classList.remove('ring-2', 'ring-orange-500');
+    }, 2000);
+  }
+
 function openImagePopup(imageUrl) {
     const popup = document.getElementById('imagePopup');
     const popupImage = document.getElementById('popupImage');
