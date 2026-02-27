@@ -437,17 +437,9 @@ function closeStockModal() {
   document.getElementById('stockModal').classList.add('hidden');
 }
 </script>
-</script>
 
 <script>
-  function openStockAdjustmentForm() {
-    const card = document.getElementById('stockAdjustmentCard');
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    card.classList.add('ring-2', 'ring-orange-500');
-    setTimeout(() => {
-      card.classList.remove('ring-2', 'ring-orange-500');
-    }, 2000);
-  }
+
 
 function openImagePopup(imageUrl) {
     const popup = document.getElementById('imagePopup');
