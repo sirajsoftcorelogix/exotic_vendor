@@ -87,7 +87,7 @@
           <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">
             📦
           </div>
-          <button class="absolute top-0 right-1 text-gray-500 hover:text-blue-600">
+          <button class="absolute top-0 right-1 text-gray-500 hover:text-blue-600" onclick="openStockAdjustmentForm()">
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
