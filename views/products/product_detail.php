@@ -427,8 +427,8 @@
 
 </div>
 <!-- Stock Adjustment Modal -->
-<div id="stockAdjustmentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
-  <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+<div id="stockAdjustmentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeStockAdjustmentModal(event)">
+  <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
     
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
