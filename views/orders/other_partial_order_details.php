@@ -387,7 +387,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                         class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
                         <b>Payment Type:</b> <?php echo ($orderremarks['payment_type'] ?? 'N/A'); ?>
                         <br>
-                        <b>Payment ID:</b> N/A
+                        <b>Payment ID:</b> <?php echo ($orderremarks['transid'] ?? 'N/A'); ?>
                         <br>
                         <b>Country:</b> <?php echo ($orderremarks['country'] ?? 'N/A'); ?>
                     </div>
