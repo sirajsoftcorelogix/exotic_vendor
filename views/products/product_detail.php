@@ -426,6 +426,77 @@
   </div>
 
 </div>
+<!-- Stock Adjustment Modal -->
+<div id="stockAdjustmentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
+  <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
+        <p class="text-sm text-gray-500 mt-1">Adjust product inventory for selected warehouse and location</p>
+      </div>
+      <button onclick="closeStockAdjustmentModal()" class="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+    </div>
+
+    <!-- Form Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">Adjustment Type</label>
+        <select class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option>Decrease</option>
+          <option>Increase</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">Warehouse</label>
+        <select class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option>Wazirpur</option>
+          <option>Delhi</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">Location</label>
+        <input type="text" value="LYT8765" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+        <input type="number" value="5" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"/>
+      </div>
+    </div>
+
+    <!-- Reason -->
+    <div class="mt-6">
+      <label class="block text-sm font-medium text-gray-600 mb-1">Reason</label>
+      <textarea rows="4" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"></textarea>
+    </div>
+
+    <!-- Divider -->
+    <div class="border-t border-gray-200 my-6"></div>
+
+    <!-- Action Buttons -->
+    <div class="flex justify-end gap-4">
+      <button onclick="closeStockAdjustmentModal()" class="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-100 transition">Cancel</button>
+      <button class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-semibold shadow-md hover:from-orange-600 hover:to-orange-700 active:scale-95 transition transform">Save Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openStockAdjustmentForm() {
+    document.getElementById('stockAdjustmentModal').classList.remove('hidden');
+  }
+
+  function closeStockAdjustmentModal() {
+    document.getElementById('stockAdjustmentModal').classList.add('hidden');
+  }
+
+  document.getElementById('stockAdjustmentModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeStockAdjustmentModal();
+    }
+  });
+</script>
 <--- Stock Adjustment Card Ends -->
 <script>
   function openStockAdjustmentForm() {
