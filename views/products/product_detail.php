@@ -481,7 +481,7 @@
     </div>
   </div>
 </div>
-
+<!--Stock Adjustment Card Ends -->
 <script>
   function openStockAdjustmentForm() {
     document.getElementById('stockAdjustmentModal').classList.remove('hidden');
@@ -497,7 +497,7 @@
     }
   });
 </script>
-<--- Stock Adjustment Card Ends -->
+
 <script>
   function openStockAdjustmentForm() {
     const card = document.getElementById('stockAdjustmentCard');
