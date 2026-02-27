@@ -79,7 +79,7 @@
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
 
         <!-- Local Stock -->
-        <div class="flex items-center justify-between border rounded-lg p-4">
+        <div class="flex items-center justify-between border rounded-lg p-4 relative">
           <div>
             <p class="text-sm text-gray-500">Local Stock</p>
             <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
@@ -87,6 +87,9 @@
           <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">
             📦
           </div>
+          <button class="absolute top-2 right-2 text-gray-500 hover:text-blue-600">
+            <i class="fas fa-edit text-sm"></i>
+          </button>
         </div>
 
         <!-- Committed -->
