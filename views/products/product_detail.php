@@ -427,18 +427,15 @@
 </div>
 
 <!--Stock Adjustment Card Ends -->
-<script>
-  <script>
-function openStockModal() {
-  document.getElementById('stockModal').classList.remove('hidden');
-}
-
-function closeStockModal() {
-  document.getElementById('stockModal').classList.add('hidden');
-}
-</script>
 
 <script>
+  function openStockModal() {
+    document.getElementById('stockModal').classList.remove('hidden');
+  }
+
+  function closeStockModal() {
+    document.getElementById('stockModal').classList.add('hidden');
+  }
 
 
 function openImagePopup(imageUrl) {
