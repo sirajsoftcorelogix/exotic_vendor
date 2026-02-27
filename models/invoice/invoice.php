@@ -234,4 +234,26 @@ class Invoice {
 
         return $stmt->execute();
     }
+    public function getInvoicesCount() {
+        $sql = "SELECT COUNT(*) AS cnt FROM vp_invoices";
+        $result = $this->db->query($sql);
+        if ($result) {
+            $row = $result->fetch_assoc();
+            return isset($row['cnt']) ? (int)$row['cnt'] : 0;
+        }
+        return 0;
+    }
+    public function getAllInvoicesPaginated($limit, $offset) {
+        $sql = "SELECT i.*, c.id AS customer_id, c.name, c.email, c.phone FROM vp_invoices i 
+                LEFT JOIN vp_customers c ON i.customer_id = c.id 
+                ORDER BY i.invoice_date DESC LIMIT $limit OFFSET $offset";
+        $result = $this->db->query($sql);
+        $invoices = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $invoices[] = $row;
+            }
+        }
+        return $invoices;
+    }
 }
