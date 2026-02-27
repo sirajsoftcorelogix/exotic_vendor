@@ -162,9 +162,20 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             </div>
                         </div>
                     </div>
-                    <div class="accordion-content-details max-h-0 overflow-hidden transition-all duration-300 ease-in-out [&:has(>input:checked)]:max-h-[1200px]">
-                        <div class="py-8 bg-[#F9FAFB] border-t border-gray-100">
-                            <div class="overflow-x-auto pb-6 scrollbar-visible">
+                    <div class="accordion-content-details max-h-0 overflow-hidden transition-all duration-300 ease-in-out [&:has(>input:checked)]:max-h-[1200px] bg-gray-50">
+                        <div class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
+                            <p class="flex flex-wrap items-center gap-2">
+                                <span class="section-title font-bold text-gray-700 text-sm italic">Addons : </span>
+                                <span class="section-value text-green-700 font-semibold text-sm bg-green-50 px-2.5 py-1 rounded-lg border border-green-100">
+                                    <?php 
+                                        $options = json_decode($item['options'], true); 
+                                        echo !empty($options) ? implode(', ', $options) : 'None'; 
+                                    ?>
+                                </span>
+                            </p>
+                        </div>
+                        <div class="py-6 bg-white border-t border-b border-gray-100">
+                            <div class="overflow-x-auto pb-4 px-4">
                                 <div class="relative flex items-start min-w-max">
                                     <div class="relative z-10 flex flex-col items-center w-[120px]">
                                         <div class="w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white z-20"></div>
@@ -187,7 +198,6 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                     ?>
                                         <div class="relative z-10 flex flex-col items-center w-[120px]">
                                             <div class="w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white z-20"></div>
-
                                             <?php if (!$isLast): ?>
                                                 <div class="absolute top-[8px] left-1/2 w-full h-[2px] bg-[#27AE60] z-0"></div>
                                             <?php endif; ?>
@@ -377,7 +387,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                         class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
                         <b>Payment Type:</b> <?php echo ($orderremarks['payment_type'] ?? 'N/A'); ?>
                         <br>
-                        <b>Payment ID:</b> N/A
+                        <b>Payment ID:</b> <?php echo ($orderremarks['transid'] ?? 'N/A'); ?>
                         <br>
                         <b>Country:</b> <?php echo ($orderremarks['country'] ?? 'N/A'); ?>
                     </div>

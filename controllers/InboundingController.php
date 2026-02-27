@@ -1389,6 +1389,17 @@ class InboundingController {
         // This ensures that even if renaming was skipped before, it happens now
         $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
     }
+    public function printInboundLabel(){
+        is_login();
+        global $inboundingModel;
+
+        $id = $_GET['id'] ?? 0;
+        if (!$id) {
+            die("Invalid ID");
+        }
+        $data = $inboundingModel->getForm2Data($id);
+        include 'views/inbounding/label_inbound.php';
+    }
     public function inbound_product_publish(){
         global $inboundingModel;
         $API_data = array();

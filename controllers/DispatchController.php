@@ -344,12 +344,29 @@ class DispatchController {
         global $dispatchModel;
         global $invoiceModel;
         $invoice_dispatch = [];
-        //fetch all invoices with dispatch records
-        $invoices = $invoiceModel->getAllInvoices(100, 1);
+        // Pagination params
+        $page = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
+        $perPage = isset($_GET['per_page']) ? max(1, intval($_GET['per_page'])) : 10;
+        $offset = ($page - 1) * $perPage;
+
+        // Get total count for pagination
+        $totalInvoices = $invoiceModel->getInvoicesCount();
+        $totalPages = ceil($totalInvoices / $perPage);
+
+        // Fetch paginated invoices
+        $invoices = $invoiceModel->getAllInvoicesPaginated($perPage, $offset);
         foreach ($invoices as $invoice) {
             $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
         }
-        renderTemplate('views/dispatch/index.php', ['invoice_dispatch' => $invoice_dispatch]);
+
+        renderTemplate('views/dispatch/index.php', [
+            'invoice_dispatch' => $invoice_dispatch,
+            'invoices' => $invoices,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => $totalPages,
+            'totalInvoices' => $totalInvoices
+        ]);
     }
 }
 ?>

@@ -1155,7 +1155,24 @@ class Order{
     {
         //print_array($data);
         //print_array($data['address_info']);
-        
+        // order_number is required for this function to work, as it's the primary key for address_info table
+        if (empty($data['orderid'])) {
+            return ['success' => false, 'message' => 'Order ID is required to insert address info'];
+        }
+        //duplicate check
+        $sql_check = "SELECT order_number FROM vp_order_info WHERE order_number = ?";
+        $stmt_check = $this->db->prepare($sql_check);
+        if (!$stmt_check) {
+            //throw new Exception("Prepare failed for duplicate check: " . $this->db->error);
+            return ['success' => false, 'message' => 'Database error: ' . $this->db->error];
+        }
+        $stmt_check->bind_param('s', $data['orderid']);
+        $stmt_check->execute();
+        $result = $stmt_check->get_result();
+        if ($result && $result->num_rows > 0) {
+            //throw new Exception("Address info already exists for order ID: " . $data['orderid']);
+            return ['success' => false, 'message' => 'Address info already exists for order ID: ' . $data['orderid']];
+        }
         // Allowed columns (safety whitelist)
         $columns = [
             'order_number','customer_id',
