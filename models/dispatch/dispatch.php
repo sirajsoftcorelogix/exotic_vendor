@@ -18,8 +18,8 @@ class Dispatch {
             // Dispatch already exists for this invoice and box_no
             return false;
         }
-        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, created_by, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, groupname, created_by, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
@@ -47,11 +47,12 @@ class Dispatch {
         $awb_code = $data['awb_code'] ?? null;
         $shipment_status = $data['shipment_status'] ?? null;
         $label_url = $data['label_url'] ?? null;
+        $groupname = $data['groupname'] ?? null;
         $created_by = (int)$data['created_by'];
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iisssssdddddddsssssis',
+            'iisssssdddddddssssssis',
             $invoice_id,
             $box_no,
             $order_number,
@@ -71,6 +72,7 @@ class Dispatch {
             $awb_code,
             $shipment_status,
             $label_url,
+            $groupname,
             $created_by,
             $created_at
         );

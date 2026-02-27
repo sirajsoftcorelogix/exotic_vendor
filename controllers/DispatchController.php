@@ -41,7 +41,8 @@ class DispatchController {
                         'box_height' => (float)($_POST['box_height'][$boxNo] ?? 0),
                         'box_weight' => (float)($_POST['box_weight'][$boxNo] ?? 0),
                         'items' => $_POST['box_items'][$boxNo] ?? [],
-                        'order_numbers' => $_POST['order_numbers'][$boxNo] ?? []
+                        'order_numbers' => $_POST['order_numbers'][$boxNo] ?? [],
+                        'groupname' => $_POST['item_groupnames'][$boxNo][0] ?? '' // assuming all items in box have same groupname, take first one
                     ];
                 }
             }
@@ -100,7 +101,7 @@ class DispatchController {
                         $hsnVal = substr(preg_replace('/\D/','', $hsnVal), 0, 4);
                     }
                     $orderItems[] = [
-                        'name' => $it['item_name'] ?? $it['sku'] ?? 'Item',
+                        'name' => $it['groupname'] ?? $it['sku'] ?? 'Item',
                         'sku' => $it['item_code'] ?? '',
                         'units' => $units,
                         'selling_price' => $price,
@@ -222,6 +223,7 @@ class DispatchController {
                     'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
                     'shipment_status' => $shiprocketResponse['json']['status'] ?? null,
                     'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+                    'groupname' => $box['groupname'] ?? null,
                     'created_by' => $_SESSION['user_id'] ?? 0,
                     'created_at' => date('Y-m-d H:i:s')
                 ];
@@ -272,7 +274,10 @@ class DispatchController {
                     exit();
                 }
                 $dispatchRecords['ids'][$boxNo] = $dispatchId;
-                //add label URL in dispatch record                
+                //update invoice with dispatch status
+                //$invoiceModel->updateInvoiceDispatchStatus($data['invoice_id'], 'Dispatched');
+                //update orders table with dispatch status using order numbers from this box
+                            
                 
             }
             
@@ -348,17 +353,75 @@ class DispatchController {
         $page = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
         $perPage = isset($_GET['per_page']) ? max(1, intval($_GET['per_page'])) : 10;
         $offset = ($page - 1) * $perPage;
+        $filters = [];
+        
+        // Filter by date range
+        if (!empty($_GET['date_range'])) {
+            $dateRange = explode(' to ', $_GET['date_range']);
+            if (count($dateRange) == 2) {
+                $filters['start_date'] = trim($dateRange[0]);
+                $filters['end_date'] = trim($dateRange[1]);
+            }
+        }
+
+        // Filter by AWB number
+        if (!empty($_GET['awb_number'])) {
+            $filters['awb_number'] = $_GET['awb_number'];
+        }
+
+        // Filter by order number
+        if (!empty($_GET['order_number'])) {
+            $filters['order_number'] = $_GET['order_number'];
+        }
+
+        // Filter by invoice number
+        if (!empty($_GET['invoice_number'])) {
+            $filters['invoice_number'] = $_GET['invoice_number'];
+        }
+
+        // Filter by customer contact
+        if (!empty($_GET['customer_contact'])) {
+            $filters['customer_contact'] = $_GET['customer_contact'];
+        }
+
+        // Filter by payment mode
+        if (!empty($_GET['payment_mode'])) {
+            $filters['payment_mode'] = $_GET['payment_mode'];
+        }
+
+        // Filter by status
+        if (!empty($_GET['status'])) {
+            $filters['status'] = $_GET['status'];
+        }
+        //dispatch table filter box size
+        if (!empty($_GET['box_size'])) {
+            $filters['box_size'] = $_GET['box_size'];
+        }
+        //dispatch table filter category        
+        if (!empty($_GET['category'])) {
+            $filters['category'] = $_GET['category'];
+        }
+
+        // Sorting
+        $sort = isset($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc']) ? strtolower($_GET['sort']) : 'desc';
+        if (!empty($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc'])) {
+            $filters['sort'] = strtolower($_GET['sort']);
+        } else {
+            $filters['sort'] = 'desc'; // Default sort order
+        }
 
         // Get total count for pagination
-        $totalInvoices = $invoiceModel->getInvoicesCount();
+        $totalInvoices = $invoiceModel->getInvoicesCount($filters);
         $totalPages = ceil($totalInvoices / $perPage);
 
         // Fetch paginated invoices
-        $invoices = $invoiceModel->getAllInvoicesPaginated($perPage, $offset);
-        foreach ($invoices as $invoice) {
+        $invoices = $invoiceModel->getAllInvoicesPaginated($perPage, $offset, $filters);
+        foreach ($invoices as &$invoice) {
             $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
+            //get items
+            $invoice['items'] = $invoiceModel->getInvoiceItems($invoice['id']);
         }
-
+        unset($invoice);
         renderTemplate('views/dispatch/index.php', [
             'invoice_dispatch' => $invoice_dispatch,
             'invoices' => $invoices,

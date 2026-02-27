@@ -220,7 +220,8 @@ class InvoicesController {
                 'sgst' => $sgstAmt,
                 'igst' => $igstAmt,
                 'tax_amount' => $totalTaxAmount,
-                'line_total' => $amount + $totalTaxAmount
+                'line_total' => $amount + $totalTaxAmount,
+                'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
             ];
             //print_r($itemData);
             $result = $invoiceModel->createInvoiceItem($itemData);
