@@ -1297,10 +1297,27 @@ class Inbounding {
         }
         return $blocked;
     }
-    public function getProductByItemCode($sku) {
+    public function getProductBysku($sku) {
         $sql = "SELECT id FROM vp_products WHERE sku = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result && $result->num_rows > 0) {
+            // Fetch the single row as an associative array: ['id' => 96]
+            $row = $result->fetch_assoc();
+            
+            // Return only the value of the 'id' column
+            return $row['id'];
+        }
+
+        return null;
+    }
+    public function getProductByItemcode($itemcode) {
+        $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('s', $itemcode);
         $stmt->execute();
         $result = $stmt->get_result();
 
@@ -1328,7 +1345,7 @@ class Inbounding {
         }
 
         // Lookup the product_id for the parent record using its SKU
-        $main_inbound[0]['product_id'] = $this->getProductByItemCode($main_inbound[0]['sku']);
+        $main_inbound[0]['product_id'] = $this->getProductByItemcode($main_inbound[0]['sku']);
 
         // 2. Fetch variations linked to this inbound ID
         $sql_var = "SELECT quantity_received, color, size, sku FROM vp_variations WHERE it_id = ?";
@@ -1343,7 +1360,7 @@ class Inbounding {
 
             foreach ($var_inbound as $value) {
                 // Get the ID directly using the variation's SKU
-                $variation_product_id = $this->getProductByItemCode($value['sku']);
+                $variation_product_id = $this->getProductBysku($value['sku']);
 
                 $main_inbound[] = [
                     'Item_code'         => $parent_item_code,
