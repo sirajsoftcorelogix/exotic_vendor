@@ -1284,5 +1284,131 @@ class Inbounding {
         }
         return $blocked;
     }
+    public function getProductByItemCode($item_code) {
+        $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('s', $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result && $result->num_rows > 0) {
+            // Fetch the single row as an associative array: ['id' => 96]
+            $row = $result->fetch_assoc();
+            
+            // Return only the value of the 'id' column
+            return $row['id'];
+        }
+
+        return null;
+    }
+    public function stock_data($id) {
+        // 1. Use prepared statements with bind_param for security
+        $sql = "SELECT Item_code,sku, quantity_received, color, size, ware_house_code FROM vp_inbound WHERE id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("i", $id); // Assuming ID is an integer
+        $stmt->execute();
+        $main_inbound = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+        // If no main record found, we probably shouldn't continue
+        if (empty($main_inbound)) {
+            return []; 
+        }
+        $product_id = $this->getProductByItemCode('ZCU88');
+        // $product_id = $this->getProductByItemCode($main_inbound[0]['Item_code']);
+        $main_inbound[0]['product_id'] = $product_id;
+        $sql_var = "SELECT quantity_received, color, size FROM vp_variations WHERE it_id = ?";
+        $stmt1 = $this->conn->prepare($sql_var);
+        $stmt1->bind_param("i", $id);
+        $stmt1->execute();
+        $var_inbound = $stmt1->get_result()->fetch_all(MYSQLI_ASSOC);
+
+        if ($var_inbound) {
+            // Get the warehouse code from the parent record to reuse
+            $parent_wh_code = $main_inbound[0]['ware_house_code'];
+            $Item_code = $main_inbound[0]['Item_code'];
+
+            foreach ($var_inbound as $value) {
+                $size_str = !empty($value['size']) ? '-' . $value['size'] : '';
+                $color_str = !empty($value['color']) ? '-' . $value['color'] : '';
+                
+                // Generate the specific SKU for this variation
+                $generated_sku = $Item_code . $size_str . $color_str;
+
+                // 3. Append to the array correctly without overwriting existing data
+                $main_inbound[] = [
+                    'Item_code'         => $Item_code,
+                    'sku'               => $generated_sku,
+                    'quantity_received' => $value['quantity_received'],
+                    'color'             => $value['color'],
+                    'size'              => $value['size'],
+                    'ware_house_code'   => $parent_wh_code,
+                    'product_id'        => $product_id,
+                ];
+            }
+        }
+        // Return the data instead of exiting (better for reusability)
+        return $main_inbound;
+    }
+    public function insert_stock_data($data = []) {
+        if (empty($data) || !is_array($data)) {
+            return false;
+        }
+        $sql = "INSERT INTO vp_stock_movements (
+                    product_id, 
+                    sku, 
+                    item_code, 
+                    size, 
+                    color, 
+                    warehouse_id, 
+                    movement_type, 
+                    quantity, 
+                    running_stock, 
+                    ref_type, 
+                    ref_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        $stmt = $this->conn->prepare($sql);
+
+        // 2. Define static defaults
+        $movement_type = 'IN';
+        $ref_type      = 'GRN';
+        $ref_id        = 0;
+        // 3. Loop through your data array
+        foreach ($data as $row) {
+            // Mapping array keys to variables
+            $product_id   = $row['product_id'];
+            $sku          = $row['sku'];
+            $item_code    = $row['Item_code'];
+            $size         = $row['size'] ?? ''; 
+            $color        = $row['color'] ?? '';
+            $warehouse_id = $row['ware_house_code'] ?? '';
+            $quantity     = $row['quantity_received'];
+            $running      = $row['quantity_received']; // Per your requirement
+
+            // 4. Bind parameters 
+            // i = integer, s = string
+            $stmt->bind_param(
+                "issssssiisi", 
+                $product_id, 
+                $sku, 
+                $item_code, 
+                $size, 
+                $color, 
+                $warehouse_id, 
+                $movement_type, 
+                $quantity, 
+                $running, 
+                $ref_type, 
+                $ref_id
+            );
+
+            // 5. Execute for each row
+            if (!$stmt->execute()) {
+                error_log("Failed to insert stock movement: " . $stmt->error);
+            }
+        }
+        $stmt->close();
+        return true;
+    }
 }
 ?>
