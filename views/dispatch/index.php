@@ -404,13 +404,23 @@ if (bulkPrintBtn) {
               headers: {'Content-Type': 'application/json'},
               body: JSON.stringify({ invoice_id: invoiceId })
           })
-          .then(res => res.json())
-          .then(data => {
-              if (data.success) {
-                  showAlert('Cancel initiated successfully. Reloading...', 'success');
-                  location.reload();
-              } else {
-                  showAlert('Error: ' + (data.message || 'Failed to cancel dispatch'), 'error');
+          .then(res => {
+              if (!res.ok) throw new Error('Network response was not ok');
+              return res.text();
+          })
+          .then(text => {
+              try {
+                  const data = JSON.parse(text);
+                  if (data.success) {
+                      showAlert('Cancel initiated successfully. Reloading...', 'success');
+                      location.reload();
+                  } else {
+                      showAlert('Error: ' + (data.message || 'Failed to cancel dispatch'), 'error');
+                  }
+              } catch (e) {
+                  console.error('JSON Parse Error:', e);
+                  console.error('Response text:', text);
+                  alert('Error: Invalid response from server');
               }
           })
           .catch(err => {
@@ -419,8 +429,5 @@ if (bulkPrintBtn) {
           });
         }
       });
-      //if (!confirm('Cancel dispatch for this invoice?')) return;
-      
-      
     }
 </script>
