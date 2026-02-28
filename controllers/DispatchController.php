@@ -607,7 +607,10 @@ class DispatchController {
                     // Cancel shipment via Shiprocket API
                     $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
                     if (!$response['success']) {
-                        throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
+                        //throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
+                        //echo json_encode(['success' => false, 'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error')]);
+                        echo json_encode($response);
+                        continue; // skip to next record
                     }
                     // Update dispatch record to mark as cancelled
                     //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');

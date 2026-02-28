@@ -397,7 +397,7 @@ if (bulkPrintBtn) {
       }
     });
     function cancelDispatchAjax(invoiceId) {
-      customConfirm('Are you sure you want to cancel the dispatch for this invoice? This action cannot be undone.').then(confirmed => {
+      customConfirm('Are you sure you want to cancel? This action cannot be undone.').then(confirmed => {
         if (confirmed) {
           fetch('?page=dispatch&action=cancel_dispatch', {
               method: 'POST',
