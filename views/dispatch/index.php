@@ -409,6 +409,7 @@ if (bulkPrintBtn) {
               return res.text();
           })
           .then(text => {
+              console.log('Cancel dispatch response:', text);
               try {
                   const data = JSON.parse(text);
                   if (data.success) {
