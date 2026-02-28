@@ -79,7 +79,7 @@
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
 
         <!-- Local Stock -->
-        <div class="flex items-center justify-between border rounded-lg p-4">
+        <div class="flex items-center justify-between border rounded-lg p-4 relative">
           <div>
             <p class="text-sm text-gray-500">Local Stock</p>
             <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
@@ -87,6 +87,9 @@
           <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">
             📦
           </div>
+          <button class="absolute top-0 right-1 text-gray-500 hover:text-blue-600" onclick="openStockModal()">
+            <i class="fas fa-edit text-sm"></i>
+          </button>
         </div>
 
         <!-- Committed -->
@@ -332,7 +335,109 @@
     <button onclick="document.getElementById('imagePopup').classList.add('hidden')" class="mt-2 px-4 py-2 bg-red-600 text-white rounded">Close</button>
   </div>
 </div> -->
+
+<!-- Stock Adjustment Card -->
+<!-- Overlay -->
+<div id="stockModal"
+     class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm
+            flex items-center justify-center z-50">
+
+  <!-- Modal Card -->
+  <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-8 relative
+              transform scale-95 transition-transform duration-300">
+
+    <!-- Close Button -->
+    <button onclick="closeStockModal()"
+      class="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-xl">
+      ✕
+    </button>
+
+    <!-- Header -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
+      <p class="text-sm text-gray-500 mt-1">
+        Adjust product inventory for selected warehouse and location
+      </p>
+    </div>
+
+    <!-- Form Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Adjustment Type
+        </label>
+        <select class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+          <option>Decrease</option>
+          <option>Increase</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Warehouse
+        </label>
+        <select class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+          <option>Wazirpur</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Location
+        </label>
+        <input type="text" value="LYT8765"
+          class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Quantity
+        </label>
+        <input type="number" value="5"
+          class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+      </div>
+
+    </div>
+
+    <!-- Reason -->
+    <div class="mt-6">
+      <label class="block text-sm font-medium text-gray-600 mb-1">
+        Reason
+      </label>
+      <textarea rows="4"
+        class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex justify-end gap-4 mt-8">
+      <button onclick="closeStockModal()"
+        class="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-100">
+        Cancel
+      </button>
+
+      <button
+        class="px-6 py-2.5 rounded-xl bg-orange-500 text-white font-semibold
+               hover:bg-orange-600 active:scale-95 transition">
+        Save Adjustment
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!--Stock Adjustment Card Ends -->
+
 <script>
+  function openStockModal() {
+    document.getElementById('stockModal').classList.remove('hidden');
+  }
+
+  function closeStockModal() {
+    document.getElementById('stockModal').classList.add('hidden');
+  }
+
+
 function openImagePopup(imageUrl) {
     const popup = document.getElementById('imagePopup');
     const popupImage = document.getElementById('popupImage');
