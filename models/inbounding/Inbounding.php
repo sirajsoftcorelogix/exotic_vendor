@@ -1368,7 +1368,7 @@ class Inbounding {
                     'quantity_received' => $value['quantity_received'],
                     'color'             => $value['color'],
                     'size'              => $value['size'],
-                    'ware_house_code'   => $parent_wh_code,
+                    'ware_house_code' => !empty($parent_wh_code) ? $parent_wh_code : 1,
                     'product_id'        => $variation_product_id,
                 ];
             }
@@ -1408,7 +1408,7 @@ class Inbounding {
             $item_code    = $row['Item_code'];
             $size         = $row['size'] ?? ''; 
             $color        = $row['color'] ?? '';
-            $warehouse_id = $row['ware_house_code'] ?? '';
+            $warehouse_id = $row['ware_house_code'] ?? 1;
             $quantity     = $row['quantity_received'];
             $running      = $row['quantity_received']; // Per your requirement
 
