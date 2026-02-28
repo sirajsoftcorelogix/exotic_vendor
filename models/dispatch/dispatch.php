@@ -331,10 +331,10 @@ class Dispatch {
         }
         return ['success' => true,'labelUrl' => $labelUrl ?? null, 'awbCode' => $awbCode ?? null, 'data' => ['awb_info_response' => $awbInfoResponse, 'label_info_response' => $labelInfoResponse], 'message' => 'API calls retried and dispatch record updated if new data was available'];
     }
-    public function cancelShiprocketShipment($shipmentId) {
+    public function cancelShiprocketShipment($shiprocketOrderId) {
         //fetch dispatch record
-        if(!$shipmentId) {
-            return ['success' => false, 'message' => 'No Shiprocket shipment ID associated with this dispatch record'];
+        if(!$shiprocketOrderId) {
+            return ['success' => false, 'message' => 'No Shiprocket order ID associated with this dispatch record'];
         }
         //call shiprocket cancel shipment API
         $url = "https://apiv2.shiprocket.in/v1/external/orders/cancel";
@@ -343,7 +343,7 @@ class Dispatch {
             "Authorization: Bearer " . $this->getShiprocketToken()
         ];
         $postData = json_encode([
-            "shipment_id" => $shipmentId
+            "ids" => [$shiprocketOrderId]
         ]);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

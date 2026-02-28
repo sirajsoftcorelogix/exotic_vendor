@@ -602,12 +602,12 @@ class DispatchController {
 
         try {
             foreach ($dispatchRecords as $record) {
-                $shipmentId = $record['shiprocket_shipment_id'];
-                if ($shipmentId) {
+                $shiprocketOrderId = $record['shiprocket_order_id'];
+                if ($shiprocketOrderId) {
                     // Cancel shipment via Shiprocket API
-                    $response = $dispatchModel->cancelShiprocketShipment($shipmentId);
+                    $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
                     if (!$response['success']) {
-                        throw new Exception("Failed to cancel shipment ID: " . $shipmentId);
+                        throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
                     }
                     // Update dispatch record to mark as cancelled
                     //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
