@@ -316,6 +316,61 @@ class DispatchController {
             renderTemplate('views/dispatch/create.php', ['invoices' => $invoices, 'dispatchRecords' => $dispatchRecords]);
         }
     }
+    public function retryInvoice() {
+        global $dispatchModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid request method']);
+            exit();
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        $invoiceId = $input['invoice_id'] ?? null;
+        if (!$invoiceId) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Invoice ID is required']);
+            exit();
+        }
+
+        // Get all dispatch records for this invoice
+        $records = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+        if (empty($records)) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'No dispatch records found for this invoice']);
+            exit();
+        }
+
+        $retried = 0;
+        $failed = 0;
+        $errors = [];
+        foreach ($records as $record) {
+            // Only retry if awb_code is missing
+            if (empty($record['awb_code'])) {
+                $result = $dispatchModel->retryShiprocketApiCalls($record['id']);
+                if ($result && isset($result['success']) && $result['success']) {
+                    $retried++;
+                } else {
+                    $failed++;
+                    $errors[] = 'Dispatch ID ' . $record['id'] . ': ' . ($result['message'] ?? 'Unknown error');
+                }
+            }
+        }
+
+        if ($retried > 0) {
+            echo json_encode([
+                'success' => true,
+                'message' => "Retried $retried dispatch(es)" . ($failed > 0 ? " ($failed failed)" : ''),
+                'retried' => $retried,
+                'failed' => $failed,
+                'errors' => $errors
+            ]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'No retries needed or all retries failed', 'errors' => $errors]);
+        }
+        exit();
+    }
+
     public function retryDispatch() {
         global $dispatchModel;
         //print_array($_POST);
@@ -345,6 +400,99 @@ class DispatchController {
             exit();
         }
     }
+    public function mergeLabels() {
+        // Merge PDF labels for selected invoices and stream result
+        global $dispatchModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid request method']);
+            exit();
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        $invoiceIds = $input['invoice_ids'] ?? [];
+        if (!is_array($invoiceIds) || empty($invoiceIds)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'No invoices selected']);
+            exit();
+        }
+
+        // gather label URLs from dispatch records
+        $labelUrls = [];
+        foreach ($invoiceIds as $invId) {
+            $records = $dispatchModel->getDispatchRecordsByInvoiceId($invId);
+            if (!empty($records)) {
+                foreach ($records as $rec) {
+                    if (!empty($rec['label_url'])) {
+                        $labelUrls[] = $rec['label_url'];
+                    }
+                }
+            }
+        }
+
+        if (empty($labelUrls)) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'No labels found for selected invoices']);
+            exit();
+        }
+
+        // download each PDF to temp directory
+        $tempDir = sys_get_temp_dir() . '/pdf_merge_' . uniqid();
+        mkdir($tempDir, 0755, true);
+        register_shutdown_function(function() use ($tempDir) {
+            if (is_dir($tempDir)) {
+                $files = array_diff(scandir($tempDir), ['.', '..']);
+                foreach ($files as $f) {
+                    @unlink($tempDir . '/' . $f);
+                }
+                @rmdir($tempDir);
+            }
+        });
+
+        $downloaded = [];
+        foreach ($labelUrls as $i => $url) {
+            $file = $tempDir . '/' . sprintf('%05d', $i) . '.pdf';
+            // basic download
+            $content = @file_get_contents($url);
+            if ($content && strlen($content) > 100) {
+                file_put_contents($file, $content);
+                $downloaded[] = $file;
+            }
+        }
+        if (empty($downloaded)) {
+            http_response_code(502);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to download any label PDFs']);
+            exit();
+        }
+
+        // merge using FPDI
+        require_once 'vendor/autoload.php';
+        try {
+            $pdf = new \setasign\Fpdi\Fpdi();
+
+            foreach ($downloaded as $file) {
+                $pageCount = $pdf->setSourceFile($file);
+                for ($page = 1; $page <= $pageCount; $page++) {
+                    $tpl = $pdf->importPage($page);
+                    $size = $pdf->getTemplateSize($tpl);
+                    $orientation = ($size['width'] > $size['height']) ? 'L' : 'P';
+                    $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+                    $pdf->useTemplate($tpl, 0, 0, $size['width'], $size['height']);
+                }
+            }
+
+            // stream PDF to browser
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: inline; filename=merged_labels.pdf');
+            $pdf->Output('I');
+            exit();
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['status' => 'error', 'message' => 'Error merging PDFs: ' . $e->getMessage()]);
+            exit();
+        }
+    }
+
     public function index() {
         global $dispatchModel;
         global $invoiceModel;
@@ -430,6 +578,47 @@ class DispatchController {
             'totalPages' => $totalPages,
             'totalInvoices' => $totalInvoices
         ]);
+    }
+    
+    public function cancelDispatch() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!isset($input['invoice_id'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
+            return;
+        }
+
+        global $dispatchModel;
+        global $commanModel;
+        $invoiceId = intval($input['invoice_id']);
+        //shipment id from dispatch record
+        $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+
+        try {
+            foreach ($dispatchRecords as $record) {
+                $shipmentId = $record['shiprocket_shipment_id'];
+                if ($shipmentId) {
+                    // Cancel shipment via Shiprocket API
+                    $response = $dispatchModel->cancelShiprocketShipment($shipmentId);
+                    if (!$response['success']) {
+                        throw new Exception("Failed to cancel shipment ID: " . $shipmentId);
+                    }
+                    // Update dispatch record to mark as cancelled
+                    //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
+                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], ['id' => $record['id']]);
+                }
+            }
+            echo json_encode(['success' => true, 'message' => 'Dispatch cancelled successfully']);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error cancelling dispatch: ' . $e->getMessage()]);
+        }
     }
 }
 ?>
