@@ -120,13 +120,13 @@
                 <div class="flex gap-8 flex-wrap">
                   <div>
                     <p class="text-xs text-gray-500">Inv No.</p>
-                    <p class="text-blue-600 font-semibold"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></p>
+                    <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
                   </div>
                   <div>
                     <p class="text-xs text-gray-500">Order No.</p>
                     <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
-                      echo htmlspecialchars($item['order_number'] ?? '') . '<br>';
+                      echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
                     } ?></p>
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
                   </div>
@@ -161,10 +161,13 @@
                       $awbs = [];
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                          if (!empty($dispatch['awb_code'])) $awbs[] = $dispatch['awb_code'];
+                          if (!empty($dispatch['awb_code'])) {
+                            $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
+                            $awbs[] = $link;
+                          }
                         }
                       }
-                      echo htmlspecialchars(implode(' | ', $awbs));
+                      echo implode(' | ', $awbs);
                     ?>
                   </p>
                   <p class="text-xs text-gray-400 mt-1"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
@@ -204,9 +207,33 @@
                     ?>
                   </p>
                 </div>
-                <button class="text-gray-600 hover:bg-gray-100 rounded-full p-2 text-lg">
-                  ⋮
-                </button>
+                <div class="relative">
+                  <button class="text-gray-600 hover:bg-gray-100 rounded-full p-2 text-lg" onclick="toggleMenu(this)">
+                    ⋮
+                  </button>
+                  <div class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download invoice</a>
+                    <?php if (!empty($invoice_dispatch[$invoice['id']])): ?>
+                      <?php foreach ($invoice_dispatch[$invoice['id']] as $dispatch): ?>
+                        <a href="<?php echo $dispatch['label_url']; ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download <Label><?php echo htmlspecialchars($dispatch['awb_code']); ?></Label></a>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+                    <a href="#" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Delete</a>
+                  </div>
+                </div>
+                <script>
+                  function toggleMenu(button) {
+                    const menu = button.nextElementSibling;
+                    menu.classList.toggle('hidden');
+                  }
+                  document.addEventListener('click', function(event) {
+                    if (!event.target.closest('.relative')) {
+                      document.querySelectorAll('.relative > div').forEach(menu => {
+                        menu.classList.add('hidden');
+                      });
+                    }
+                  });
+                </script>
               </div>
             </div>
           </div>
