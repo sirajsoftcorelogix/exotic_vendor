@@ -283,6 +283,9 @@ class InboundingController {
         $data['form2']['getimgdir'] = $this->getimgdir();
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
+        $stoc_data = $inboundingModel->stock_data(113);
+        $resuly = $inboundingModel->insert_stock_data($stoc_data);
+        echo "<pre>resuly: ";print_r($resuly);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
     function getimgdir() {
