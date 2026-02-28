@@ -317,7 +317,7 @@
     <div class="mt-8 flex justify-end space-x-4">
         <a href="<?php echo base_url('?page=orders&action=list'); ?>" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Cancel</a>
         <button type="button" onclick="previewInvoice()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Preview</button>
-        <button type="submit" id="createInvoiceButton" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button>
+        <!-- <button type="submit" id="createInvoiceButton" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button> -->
         <!-- Create and dispatch-->
         <button type="button" id="createAndDispatchButton" onclick="createAndDispatch()" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create & Dispatch</button>
     </div>
@@ -718,8 +718,8 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = 'Create Invoice';
+            //submitBtn.disabled = false;
+            //submitBtn.innerHTML = 'Create Invoice';
             // if (window.showGlobalToast) {
             //     window.showGlobalToast('Invoice created successfully!', 'success');
             // } else {
@@ -1000,8 +1000,8 @@ function createAndDispatch() {
         } else {
             alert('Failed to create invoice and dispatch');
         }
-        submitBtn2.disabled = false;
-        submitBtn2.innerHTML = 'Create & Dispatch';
+        //submitBtn2.disabled = false;
+        //submitBtn2.innerHTML = 'Create & Dispatch';
     })
     .catch(error => {
         console.error('Error:', error);

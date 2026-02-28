@@ -330,13 +330,17 @@ if (bulkPrintBtn) {
             alert('Please select at least one invoice');
             return;
         }
-
+        //processing
+        bulkPrintBtn.disabled = true;
+        bulkPrintBtn.textContent = '<span class="animate-spin">⏳</span> Processing...';
         fetch('?page=dispatch&action=merge_labels', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ invoice_ids: ids })
         })
         .then(res => {
+            bulkPrintBtn.disabled = false;
+            bulkPrintBtn.textContent = 'Print Label';
             if (!res.ok) throw new Error('Network response was not ok');
             return res.blob();
         })
@@ -346,10 +350,14 @@ if (bulkPrintBtn) {
             win.onload = function() {
                 setTimeout(() => win.print(), 500);
             };
+            bulkPrintBtn.disabled = false;
+            bulkPrintBtn.textContent = 'Print Label';
         })
         .catch(err => {
             console.error(err);
-            alert('Error merging labels: ' + err.message);
+            showAlert('Error merging labels: ' + err.message);
+            bulkPrintBtn.disabled = false;
+            bulkPrintBtn.textContent = 'Print Label';
         });
     });
 }
