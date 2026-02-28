@@ -370,3 +370,4 @@ COMMIT;
 --27/02/2026 12:22:25 PM
 ALTER TABLE `vp_invoice_items` ADD `groupname` VARCHAR(150) NULL AFTER `item_name`;
 ALTER TABLE `vp_dispatch_details` ADD `groupname` VARCHAR(150) NULL AFTER `box_items`;
+ALTER TABLE `vp_dispatch_details` ADD `box_size` VARCHAR(50) NULL AFTER `groupname`;

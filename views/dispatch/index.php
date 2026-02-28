@@ -93,7 +93,7 @@
 
     <!-- ACTION BAR -->
     <div class="flex flex-col md:flex-row justify-end items-center gap-3 mb-5">
-      <button class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition">
+      <button id="bulk-print-labels-btn" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition">
         Print Label
       </button>
       <button class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition">
@@ -116,17 +116,17 @@
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <!-- LEFT -->
               <div class="flex gap-4">
-                <input type="checkbox" class="mt-1 w-5 h-5">
+                <input type="checkbox" class="mt-1 w-5 h-5 label-checkbox" value="<?= htmlspecialchars($invoice['id']); ?>">
                 <div class="flex gap-8 flex-wrap">
                   <div>
                     <p class="text-xs text-gray-500">Inv No.</p>
-                    <p class="text-blue-600 font-semibold"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></p>
+                    <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
                   </div>
                   <div>
                     <p class="text-xs text-gray-500">Order No.</p>
                     <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
-                      echo htmlspecialchars($item['order_number'] ?? '') . '<br>';
+                      echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
                     } ?></p>
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
                   </div>
@@ -161,10 +161,13 @@
                       $awbs = [];
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                          if (!empty($dispatch['awb_code'])) $awbs[] = $dispatch['awb_code'];
+                          if (!empty($dispatch['awb_code'])) {
+                            $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
+                            $awbs[] = $link;
+                          }
                         }
                       }
-                      echo htmlspecialchars(implode(' | ', $awbs));
+                      echo implode(' | ', $awbs);
                     ?>
                   </p>
                   <p class="text-xs text-gray-400 mt-1"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
@@ -204,9 +207,36 @@
                     ?>
                   </p>
                 </div>
-                <button class="text-gray-600 hover:bg-gray-100 rounded-full p-2 text-lg">
-                  ⋮
-                </button>
+                <div class="relative">
+                  <button class="text-gray-600 hover:bg-gray-100 rounded-full p-2 text-lg" onclick="toggleMenu(this)">
+                    ⋮
+                  </button>
+                  <div class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download invoice</a>
+                    <?php if (!empty($invoice_dispatch[$invoice['id']])): ?>
+                      <?php foreach ($invoice_dispatch[$invoice['id']] as $dispatch): ?>
+                        <a href="<?php echo $dispatch['label_url']; ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download <Label><?php echo htmlspecialchars($dispatch['awb_code']); ?></Label></a>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+                    <?php
+                      $needsRetry = false;
+                      if (!empty($invoice_dispatch[$invoice['id']])) {
+                        foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                          if (empty($dispatch['awb_code'])) {
+                            $needsRetry = true;
+                            break;
+                          }
+                        }
+                      }
+                    ?>
+                    <?php if ($needsRetry): ?>
+                      <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="retryDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Retry Dispatch</button>
+                      
+                    <?php endif; ?>
+                    <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
+                  </div>
+                </div>
+                
               </div>
             </div>
           </div>
@@ -254,3 +284,135 @@
     </div>
     </div>
 </div>
+
+<script>
+// Persist selected invoices across pages using localStorage
+const DISPATCH_STORAGE_KEY = 'selected_dispatch_invoices';
+
+function saveCheckedInvoices() {
+    let checked = JSON.parse(localStorage.getItem(DISPATCH_STORAGE_KEY) || '[]');
+    const allCbs = Array.from(document.querySelectorAll('input.label-checkbox'));
+    const checkedOnPage = allCbs.filter(cb => cb.checked).map(cb => cb.value);
+    const uncheckedOnPage = allCbs.filter(cb => !cb.checked).map(cb => cb.value);
+
+    checked = checked.filter(id => !uncheckedOnPage.includes(id));
+    checkedOnPage.forEach(id => { if (!checked.includes(id)) checked.push(id); });
+    localStorage.setItem(DISPATCH_STORAGE_KEY, JSON.stringify(checked));
+}
+
+function restoreCheckedInvoices() {
+    const checked = JSON.parse(localStorage.getItem(DISPATCH_STORAGE_KEY) || '[]');
+    document.querySelectorAll('input.label-checkbox').forEach(cb => {
+        cb.checked = checked.includes(cb.value);
+    });
+}
+
+function getSelectedInvoiceIds() {
+    const visibleChecked = Array.from(document.querySelectorAll('input.label-checkbox:checked')).map(cb => cb.value);
+    const stored = JSON.parse(localStorage.getItem(DISPATCH_STORAGE_KEY) || '[]');
+    return Array.from(new Set([...stored, ...visibleChecked]));
+}
+
+document.addEventListener('change', function(e) {
+    if (e.target && e.target.classList.contains('label-checkbox')) {
+        saveCheckedInvoices();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', restoreCheckedInvoices);
+
+const bulkPrintBtn = document.getElementById('bulk-print-labels-btn');
+if (bulkPrintBtn) {
+    bulkPrintBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const ids = getSelectedInvoiceIds();
+        if (ids.length === 0) {
+            alert('Please select at least one invoice');
+            return;
+        }
+
+        fetch('?page=dispatch&action=merge_labels', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ invoice_ids: ids })
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('Network response was not ok');
+            return res.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const win = window.open(url, '_blank');
+            win.onload = function() {
+                setTimeout(() => win.print(), 500);
+            };
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error merging labels: ' + err.message);
+        });
+    });
+}
+</script>
+<script>
+    function toggleMenu(button) {
+      const menu = button.nextElementSibling;
+      menu.classList.toggle('hidden');
+    }
+    function retryDispatchAjax(invoiceId) {
+      if (!confirm('Retry dispatch for this invoice?')) return;
+      
+      fetch('?page=dispatch&action=retry_invoice', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ invoice_id: invoiceId })
+      })
+      .then(res => res.json())
+      .then(data => {
+          if (data.success) {
+              showAlert('Retry initiated successfully. Reloading...', 'success');
+              location.reload();
+          } else {
+              alert('Error: ' + (data.message || 'Failed to retry dispatch'));
+          }
+      })
+      .catch(err => {
+          console.error(err);
+          alert('Error retrying dispatch');
+      });
+    }
+    document.addEventListener('click', function(event) {
+      if (!event.target.closest('.relative')) {
+        document.querySelectorAll('.relative > div').forEach(menu => {
+          menu.classList.add('hidden');
+        });
+      }
+    });
+    function cancelDispatchAjax(invoiceId) {
+      customConfirm('Are you sure you want to cancel the dispatch for this invoice? This action cannot be undone.').then(confirmed => {
+        if (confirmed) {
+          fetch('?page=dispatch&action=cancel_dispatch', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ invoice_id: invoiceId })
+          })
+          .then(res => res.json())
+          .then(data => {
+              if (data.success) {
+                  showAlert('Cancel initiated successfully. Reloading...', 'success');
+                  location.reload();
+              } else {
+                  showAlert('Error: ' + (data.message || 'Failed to cancel dispatch'), 'error');
+              }
+          })
+          .catch(err => {
+              console.error(err);
+              alert('Error canceling dispatch');
+          });
+        }
+      });
+      //if (!confirm('Cancel dispatch for this invoice?')) return;
+      
+      
+    }
+</script>

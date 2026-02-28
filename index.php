@@ -781,8 +781,17 @@ switch ($page) {
             case 'retry_dispatch':
                 $controller->retryDispatch();
                 break;
+            case 'retry_invoice':
+                $controller->retryInvoice();
+                break;
+            case 'merge_labels':
+                $controller->mergeLabels();
+                break;
             case 'list':
                 $controller->index();
+                break;
+            case 'cancel_dispatch':
+                $controller->cancelDispatch();
                 break;
             default:
                 $controller->create();   

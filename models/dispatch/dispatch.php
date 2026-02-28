@@ -331,4 +331,42 @@ class Dispatch {
         }
         return ['success' => true,'labelUrl' => $labelUrl ?? null, 'awbCode' => $awbCode ?? null, 'data' => ['awb_info_response' => $awbInfoResponse, 'label_info_response' => $labelInfoResponse], 'message' => 'API calls retried and dispatch record updated if new data was available'];
     }
+    public function cancelShiprocketShipment($shipmentId) {
+        //fetch dispatch record
+        if(!$shipmentId) {
+            return ['success' => false, 'message' => 'No Shiprocket shipment ID associated with this dispatch record'];
+        }
+        //call shiprocket cancel shipment API
+        $url = "https://apiv2.shiprocket.in/v1/external/orders/cancel";
+        $headers = [
+            "Content-Type: application/json",
+            "Authorization: Bearer " . $this->getShiprocketToken()
+        ];
+        $postData = json_encode([
+            "shipment_id" => $shipmentId
+        ]);
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        $response = curl_exec($ch); 
+        curl_close($ch);
+        $responseDecoded = json_decode($response, true);
+        return ['success' => isset($responseDecoded['status_code']) && $responseDecoded['status_code'] == 200, 'message' => $responseDecoded['message'] ?? 'No response message', 'data' => $responseDecoded];
+        if(isset($responseDecoded['status_code']) && $responseDecoded['status_code'] == 200) {
+            //update dispatch record to mark as cancelled
+            // $sql = "UPDATE vp_dispatch_details SET shipment_status = 'cancelled' WHERE id = ?";
+            // $stmt = $this->db->prepare($sql);
+            // if (!$stmt) return ['success' => false, 'message' => 'Database error: ' . $this->db->error];
+            // $stmt->bind_param('i', $dispatchId);
+            // if ($stmt->execute()) {
+            //     return ['success' => true, 'message' => 'Shipment cancelled successfully and dispatch record updated'];
+            // } else {
+            //     return ['success' => false, 'message' => 'Shipment cancelled but failed to update dispatch record: ' . $stmt->error];
+            // }
+        } else {
+            return ['success' => false, 'message' => 'Failed to cancel shipment: ' . ($responseDecoded['message'] ?? 'Unknown error'), 'data' => $responseDecoded];
+        }
+    }
 }
