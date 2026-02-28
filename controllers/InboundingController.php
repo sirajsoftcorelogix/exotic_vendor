@@ -1118,7 +1118,7 @@ class InboundingController {
             }
         }
         unset($variant);
-        $inboundingModel->saveVariations($id, $allVariations, $item_code);
+        $inboundingModel->saveVariations($id, $allVariations, $item_code,$item_code);
 
         // 5. Update Image Order & Assignment
         if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
@@ -1285,7 +1285,7 @@ class InboundingController {
           }
 
           // Save extra variations
-          $inboundingModel->saveVariations($record_id, $allVariations);
+          $inboundingModel->saveVariations($record_id, $allVariations,$item_code);
          
           header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
           exit;

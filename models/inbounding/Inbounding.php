@@ -1014,7 +1014,7 @@ class Inbounding {
       }
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
-    public function saveVariations($it_id, $variations) {
+    public function saveVariations($it_id, $variations, $item_code) {
         $submittedIds = [];
         if (!is_array($variations)) { $variations = []; }
 
@@ -1035,12 +1035,13 @@ class Inbounding {
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
         }
 
+        // Prepare SQL with 'sku' column included
         $insertSql = "INSERT INTO vp_variations 
-                      (it_id, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps, dimensions, upc) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                      (it_id, sku, color, size, quantity_received, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps, dimensions, upc) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $updateSql = "UPDATE vp_variations 
-                      SET color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=?, dimensions=?, upc=?
+                      SET sku=?, color=?, size=?, quantity_received=?, cp=?, variation_image=?, height=?, width=?, depth=?, weight=?, store_location=?, price_india=?, price_india_mrp=?, inr_pricing=?, amazon_price=?, usd_price=?, hsn_code=?, gst_rate=?, colormaps=?, dimensions=?, upc=?
                       WHERE id=?";
 
         $stmtInsert = $this->conn->prepare($insertSql);
@@ -1069,30 +1070,42 @@ class Inbounding {
             $dim  = (string)($var['dimensions'] ?? '');
             $upc  = (string)($var['upc'] ?? '');
 
+            $s_raw = trim($var['size'] ?? '');
+            $c_raw = trim($var['color'] ?? '');
+
+            // 2. Convert to lowercase and replace all spaces with a single dash
+            // preg_replace handles one or more spaces (' ') and turns them into one dash
+            $f_size  = preg_replace('/\s+/', '-', strtolower($s_raw));
+            $f_color = preg_replace('/\s+/', '-', strtolower($c_raw));
+
+            // 3. Construct the SKU
+            // Pattern: itemcode-size-color
+            $generated_sku = $item_code . '-' . $f_size . '-' . $f_color;
+
+            // 4. Final Cleanup
+            // Remove trailing dashes if the color was empty
+            // Also remove double dashes if the size was empty, e.g., "SA001--red" -> "SA001-red"
+            $generated_sku = rtrim($generated_sku, '-');
+            $generated_sku = str_replace('--', '-', $generated_sku);
+
             if (!empty($id) && is_numeric($id)) {
-                // UPDATE: 20 SET fields + 1 WHERE id = 21 parameters
-                // Types: ssids dddd s ddddd s i s s s i (Total 21)
-                $stmtUpdate->bind_param("ssidsddddsdddddsisssi", 
-                    $var['color'], $var['size'], $qty, $cp, $img, 
+                // Types: s (sku) + ssidsddddsdddddsisss (others) + i (id) = 22 params
+                $stmtUpdate->bind_param("sssidsddddsdddddsisssi", 
+                    $generated_sku, $var['color'], $var['size'], $qty, $cp, $img, 
                     $h, $w, $d, $wt, $wh, 
                     $pi, $pm, $inr, $amz, $usd, 
                     $hsn, $gst, $colm, $dim, $upc, $id
                 );
-                if (!$stmtUpdate->execute()) {
-                    error_log("Update Error: " . $stmtUpdate->error);
-                }
+                $stmtUpdate->execute();
             } else {
-                // INSERT: 21 fields
-                // Types: i ssids dddd s ddddd s i s s s (Total 21)
-                $stmtInsert->bind_param("issidsddddsdddddsisss", 
-                    $it_id, $var['color'], $var['size'], $qty, $cp, $img, 
+                // Types: i (it_id) + s (sku) + ssidsddddsdddddsisss (others) = 22 params
+                $stmtInsert->bind_param("isssidsddddsdddddsisss", 
+                    $it_id, $generated_sku, $var['color'], $var['size'], $qty, $cp, $img, 
                     $h, $w, $d, $wt, $wh, 
                     $pi, $pm, $inr, $amz, $usd, 
                     $hsn, $gst, $colm, $dim, $upc
                 );
-                if (!$stmtInsert->execute()) {
-                    error_log("Insert Error: " . $stmtInsert->error);
-                }
+                $stmtInsert->execute();
             }
         }
         return true;
@@ -1284,10 +1297,10 @@ class Inbounding {
         }
         return $blocked;
     }
-    public function getProductByItemCode($item_code) {
-        $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";
+    public function getProductByItemCode($sku) {
+        $sql = "SELECT id FROM vp_products WHERE sku = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param('s', $item_code);
+        $stmt->bind_param('s', $sku);
         $stmt->execute();
         $result = $stmt->get_result();
 
@@ -1302,51 +1315,48 @@ class Inbounding {
         return null;
     }
     public function stock_data($id) {
-        // 1. Use prepared statements with bind_param for security
-        $sql = "SELECT Item_code,sku, quantity_received, color, size, ware_house_code FROM vp_inbound WHERE id = ?";
+        // 1. Fetch the main record using a prepared statement
+        $sql = "SELECT Item_code, sku, quantity_received, color, size, ware_house_code FROM vp_inbound WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param("i", $id); // Assuming ID is an integer
+        $stmt->bind_param("i", $id); 
         $stmt->execute();
-        $main_inbound = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $result = $stmt->get_result();
+        $main_inbound = $result->fetch_all(MYSQLI_ASSOC);
 
-        // If no main record found, we probably shouldn't continue
         if (empty($main_inbound)) {
             return []; 
         }
-        $product_id = $this->getProductByItemCode('ZCU88');
-        // $product_id = $this->getProductByItemCode($main_inbound[0]['Item_code']);
-        $main_inbound[0]['product_id'] = $product_id;
-        $sql_var = "SELECT quantity_received, color, size FROM vp_variations WHERE it_id = ?";
+
+        // Lookup the product_id for the parent record using its SKU
+        $main_inbound[0]['product_id'] = $this->getProductByItemCode($main_inbound[0]['sku']);
+
+        // 2. Fetch variations linked to this inbound ID
+        $sql_var = "SELECT quantity_received, color, size, sku FROM vp_variations WHERE it_id = ?";
         $stmt1 = $this->conn->prepare($sql_var);
         $stmt1->bind_param("i", $id);
         $stmt1->execute();
         $var_inbound = $stmt1->get_result()->fetch_all(MYSQLI_ASSOC);
 
         if ($var_inbound) {
-            // Get the warehouse code from the parent record to reuse
             $parent_wh_code = $main_inbound[0]['ware_house_code'];
-            $Item_code = $main_inbound[0]['Item_code'];
+            $parent_item_code = $main_inbound[0]['Item_code'];
 
             foreach ($var_inbound as $value) {
-                $size_str = !empty($value['size']) ? '-' . $value['size'] : '';
-                $color_str = !empty($value['color']) ? '-' . $value['color'] : '';
-                
-                // Generate the specific SKU for this variation
-                $generated_sku = $Item_code . $size_str . $color_str;
+                // Get the ID directly using the variation's SKU
+                $variation_product_id = $this->getProductByItemCode($value['sku']);
 
-                // 3. Append to the array correctly without overwriting existing data
                 $main_inbound[] = [
-                    'Item_code'         => $Item_code,
-                    'sku'               => $generated_sku,
+                    'Item_code'         => $parent_item_code,
+                    'sku'               => $value['sku'],
                     'quantity_received' => $value['quantity_received'],
                     'color'             => $value['color'],
                     'size'              => $value['size'],
                     'ware_house_code'   => $parent_wh_code,
-                    'product_id'        => $product_id,
+                    'product_id'        => $variation_product_id,
                 ];
             }
         }
-        // Return the data instead of exiting (better for reusability)
+
         return $main_inbound;
     }
     public function insert_stock_data($data = []) {
