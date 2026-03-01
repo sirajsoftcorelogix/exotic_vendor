@@ -871,42 +871,39 @@ class ProductsController {
     public function saveStockAdjustment() {
         is_login();
         global $productModel;
-        // 1. Clear any previous output buffers to ensure clean JSON
         if (ob_get_length()) ob_clean();
         header('Content-Type: application/json');
 
         try {
-            // 2. Get JSON input
             $json = file_get_contents('php://input');
             $data = json_decode($json, true);
 
-            if (!$data) {
-                throw new Exception('Invalid JSON data received');
-            }
+            if (!$data) throw new Exception('Invalid JSON');
 
-            // 3. Extract variables (matching your JS keys)
-            $productId    = (int)($data['product_id'] ?? 0);
-            $quantity     = (int)($data['quantity'] ?? 0);
-            $reason       = $data['reason'] ?? '';
-            $userId       = (int)($data['user_id'] ?? 0);
-            $movementType = $data['type'] ?? ''; // 'IN' or 'OUT'
+            // Fetch current product details to get SKU, Item Code, Size, Color
+            $product = $productModel->getProduct($data['product_id']);
+            if (!$product) throw new Exception('Product not found');
 
-            // 4. Validate
-            if ($productId === 0 || $quantity <= 0) {
-                throw new Exception('Product ID or Quantity is invalid');
-            }
+            // Merge submitted data with product details
+            $insertData = [
+                'product_id'    => (int)$product['id'],
+                'sku'           => $product['sku'],
+                'item_code'     => $product['item_code'],
+                'size'          => $product['size'],
+                'color'         => $product['color'],
+                'quantity'      => (int)$data['quantity'],
+                'reason'        => $data['reason'],
+                'user_id'       => (int)$data['user_id'],
+                'movement_type' => $data['type'],
+                'warehouse_id'  => $data['warehouse_id'],
+                'location'      => $data['location']
+            ];
 
-            // 5. Call Model (Make sure $this->model is initialized)
-            $result = $productModel->updateStockMovement($productId, $quantity, $reason, $userId, $movementType);
-
+            $result = $productModel->insertStockMovement($insertData);
             echo json_encode($result);
 
         } catch (Exception $e) {
-            // This ensures even errors are returned as JSON, not HTML
-            echo json_encode([
-                'success' => false,
-                'message' => $e->getMessage()
-            ]);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
     }

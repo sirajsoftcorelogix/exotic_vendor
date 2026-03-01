@@ -367,7 +367,7 @@
           Quantity
         </label>
         <input type="number" id="adj_quantity" 
-               value="<?php echo htmlspecialchars($products['stock_movements']['quantity'] ?? ''); ?>"
+               value="1"
                class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
       </div>
     </div>
@@ -590,7 +590,7 @@ function closeImagePopup() {
             
             // Optional: If you want the top stock counters to update, 
             // you might need a page reload or another JS update function
-            // location.reload(); 
+            location.reload(); 
         } else {
             alert('❌ Failed: ' + (data.message || 'Failed to save adjustment.'));
         }
