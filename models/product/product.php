@@ -1612,6 +1612,36 @@ class product
         }
         return [];
     }
+    public function updateStockMovement($product_id, $quantity, $reason, $user_id, $movement_type)
+    {
+        // IMPORTANT: You are using UPDATE. This only works if a row 
+        // for this product_id already exists. 
+        $sql = "UPDATE vp_stock_movements 
+                SET running_stock = ?, 
+                    reason = ?, 
+                    update_by_user = ?, 
+                    movement_type = ?, 
+                    updated_at = NOW() 
+                WHERE product_id = ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters: i = integer, s = string
+        // Order: quantity (i), reason (s), user_id (i), type (s), product_id (i)
+        $stmt->bind_param('isisi', $quantity, $reason, $user_id, $movement_type, $product_id);
+
+        if ($stmt->execute()) {
+            if ($stmt->affected_rows === 0) {
+                return ['success' => false, 'message' => 'No record found to update for this Product ID'];
+            }
+            return ['success' => true, 'message' => 'Stock updated successfully'];
+        }
+
+        return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+    }
     public function updateProductNotes($product_id, $notes)
     {
         $sql = "UPDATE vp_products SET notes = ?, updated_at = NOW() WHERE id = ?";
@@ -1783,6 +1813,20 @@ class product
             return $result->fetch_all(MYSQLI_ASSOC);
         }
         return [];
+    }
+    public function get_stock_movements($id)
+    {
+        $stmt = $this->db->prepare("SELECT vsm.*,a.address_title as warehouse_name FROM vp_stock_movements as vsm 
+LEFT JOIN exotic_address as a on vsm.warehouse_id=a.id
+WHERE vsm.product_id = ? ");
+        if ($stmt === false) {
+            return null;
+        }
+        $id = (int)$id;
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result ? $result->fetch_assoc() : null;
     }
            
 }
