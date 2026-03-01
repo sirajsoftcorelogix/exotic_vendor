@@ -394,7 +394,7 @@ class InvoicesController {
             // Create mPDF instance
             require_once 'vendor/autoload.php';
             
-            $filename = 'invoice_' . $invoice_id . '.pdf';
+            $filename = '' . $invoice['invoice_number'] . '.pdf';
             
             $mpdf = new \Mpdf\Mpdf([
                 'mode' => 'utf-8',
