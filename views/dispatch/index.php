@@ -151,7 +151,7 @@
 				<!-- Invoice Total -->
 				<div>
 				  <p class="font-semibold text-gray-700">Invoice Total</p>
-				  <p class="bg-red-50">[USD / INR / EUR] <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
+				  <p class="bg-red-100">[USD / INR / EUR] <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
 
 				  <div class="mt-2 flex gap-2">
 					<?php if (isset($invoice['status']) && strtolower($invoice['status']) == 'cod'): ?>
@@ -163,7 +163,7 @@
 
 				  <div class="mt-4">
 					<p class="font-semibold text-gray-700">Status:</p>
-					<p class="flex items-center gap-2">
+					<p class="flex items-center gap-2 bg-red-100">
 					  [Dispatched]
 					  <span class="text-blue-600">🔄</span>
 					</p>
@@ -176,10 +176,10 @@
 				  <p><?php foreach ($invoice['items'] ?? [] as $item) {
                       echo htmlspecialchars($item['item_code'] ?? '') . '<br>';
                     } ?>
-				  <span class="text-red-600 font-semibold">[+2]</span></p>
+				  <span class="text-red-600 font-semibold bg-red-100">[+2]</span></p>
 
 				  <div class="mt-4">
-					<p class="font-semibold text-gray-700">RTO Risk</p>
+					<p class="font-semibold text-gray-700 bg-red-100">RTO Risk</p>
 					<p class="flex items-center gap-2">
 					  [LOW | 10%]
 					  <span class="text-blue-600">🔄</span>
@@ -203,19 +203,19 @@
                       }
                       echo implode(' | ', $awbs);
                     ?></a>
-					<p class="text-gray-500">[19 Feb 2026]</p>
+					<p class="text-gray-500 bg-red-100">[19 Feb 2026]</p>
 				  </div>
 
 				  <div class="mt-4">
 					<p class="font-semibold text-gray-700">Box</p>
-					<p>[Custom : 3 x 2 x1]</p>
+					<p class="bg-red-100">[Custom : 3 x 2 x1]</p>
 				  </div>
 				</div>
 
 				<!-- Weight -->
 				<div>
-				  <p class="font-semibold text-gray-700">Applied wt.</p>
-				  <p>: <?php 
+				  <p class="font-semibold text-gray-700">Applied wt:</p>
+				  <p><?php 
                       $wt = 0;
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
@@ -227,7 +227,7 @@
 
 				  <div class="mt-4">
 					<p class="font-semibold text-gray-700">Charges:</p>
-					<p class="font-medium">[₹ 196] </p>
+					<p class="font-medium bg-red-100">[₹ 196] </p>
 				  </div>
 				</div>
 			  </div>
