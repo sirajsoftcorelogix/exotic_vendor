@@ -464,6 +464,16 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->detail();
                 break;
+            case 'save_stock_adjustment':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->saveStockAdjustment(); // This method will handle the POST data
+                break;
+            case 'update_stock_limits':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateStockLimits();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
@@ -781,8 +791,17 @@ switch ($page) {
             case 'retry_dispatch':
                 $controller->retryDispatch();
                 break;
+            case 'retry_invoice':
+                $controller->retryInvoice();
+                break;
+            case 'merge_labels':
+                $controller->mergeLabels();
+                break;
             case 'list':
                 $controller->index();
+                break;
+            case 'cancel_dispatch':
+                $controller->cancelDispatch();
                 break;
             default:
                 $controller->create();   

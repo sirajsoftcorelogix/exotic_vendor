@@ -1612,6 +1612,70 @@ class product
         }
         return [];
     }
+    public function insertStockMovement($data){
+        $this->db->begin_transaction();
+        try {
+            // 1. Get current stock from vp_products for calculation
+            $stmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE id = ?");
+            $stmt->bind_param('i', $data['product_id']);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $product = $res->fetch_assoc();
+            
+            if (!$product) throw new Exception("Product not found");
+
+            $current_stock = (int)$product['local_stock'];
+            $adj_qty = (int)$data['quantity'];
+
+            // 2. Calculate New Stock
+            if ($data['movement_type'] === 'IN' || $data['movement_type'] === 'TRANSFER_IN') {
+                $new_stock = $current_stock + $adj_qty;
+            } else {
+                $new_stock = $current_stock - $adj_qty;
+            }
+
+            // 3. Update local_stock in vp_products table
+            $updateSql = "UPDATE vp_products SET local_stock = ? WHERE id = ?";
+            $updateStmt = $this->db->prepare($updateSql);
+            $updateStmt->bind_param('ii', $new_stock, $data['product_id']);
+            if (!$updateStmt->execute()) {
+                throw new Exception("Failed to update master stock: " . $this->db->error);
+            }
+
+            // 4. Insert into vp_stock_movements (History)
+            $insertSql = "INSERT INTO vp_stock_movements (
+                        product_id, sku, item_code, size, color, 
+                        warehouse_id, location, movement_type, 
+                        quantity, running_stock, update_by_user, 
+                        ref_type, ref_id, reason, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+
+            $insertStmt = $this->db->prepare($insertSql);
+            $ref_type = 'GRN';
+            $ref_id = 0;
+
+            $insertStmt->bind_param(
+                'isssssssiiisss', 
+                $data['product_id'], $data['sku'], $data['item_code'], 
+                $data['size'], $data['color'], $data['warehouse_id'], 
+                $data['location'], $data['movement_type'], $adj_qty, 
+                $new_stock, $data['user_id'], $ref_type, $ref_id, $data['reason']
+            );
+
+            if (!$insertStmt->execute()) {
+                throw new Exception("Failed to record history: " . $this->db->error);
+            }
+
+            // If everything is fine, commit changes
+            $this->db->commit();
+            return ['success' => true, 'message' => 'Stock updated and history recorded.'];
+
+        } catch (Exception $e) {
+            // Rollback if any step fails
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
     public function updateProductNotes($product_id, $notes)
     {
         $sql = "UPDATE vp_products SET notes = ?, updated_at = NOW() WHERE id = ?";
@@ -1784,5 +1848,32 @@ class product
         }
         return [];
     }
-           
+    public function get_stock_movements($id)
+    {
+        $stmt = $this->db->prepare("SELECT vsm.*,a.address_title as warehouse_name FROM vp_stock_movements as vsm LEFT JOIN exotic_address as a on vsm.warehouse_id=a.id WHERE vsm.product_id = ? ");
+        if ($stmt === false) {
+            return null;
+        }
+        $id = (int)$id;
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result ? $result->fetch_assoc() : null;
+    }
+    public function setProductLimits($productId, $minStock, $maxStock){
+        $sql = "UPDATE vp_products 
+                SET min_stock = ?, 
+                    max_stock = ? 
+                WHERE id = ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        // Bind: min_stock (i), max_stock (i), product_id (i)
+        $stmt->bind_param('iii', $minStock, $maxStock, $productId);
+
+        return $stmt->execute();
+    } 
 }

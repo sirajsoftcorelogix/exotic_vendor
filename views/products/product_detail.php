@@ -2,7 +2,6 @@
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <div class="max-w-7xl mx-auto p-4 space-y-6">
-
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="flex gap-4">
@@ -22,7 +21,6 @@
           <?php echo htmlspecialchars($products['title'] ?? 'Product Title'); ?>
         </h2>
         <p class="text-sm text-gray-500">SKU: <?php echo htmlspecialchars($products['sku'] ?? ''); ?></p>
-
         <div class="flex flex-wrap gap-2 mt-2">
           <?php foreach ($products['variants'] as $variant): 
             if(isset($variant['sku']) && !empty($variant['sku'])): ?>
@@ -31,7 +29,6 @@
         </div>
       </div>
     </div>
-
     <!-- Measures -->
     <div class="bg-orange-50 rounded-lg p-4">
       <h3 class="font-semibold mb-2">Measures</h3>
@@ -42,10 +39,8 @@
         <div><i class="fas fa-weight mr-1 text-orange-600"></i>Weight: <b><?php echo htmlspecialchars($products['product_weight'] ?  $products['product_weight'] .' ' .$products['product_weight_unit'] : ''); ?></b></div>
       </div>
     </div>
-
     
   </div>
-
   <!-- INVENTORY -->
   <!-- <div class="bg-white rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
     <div>
@@ -72,14 +67,11 @@
   <!-- Inventory -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
   <div class="bg-white rounded-lg p-4 shadow-sm space-y-4 col-span-2">
-
     <h3 class="font-semibold text-gray-700">Inventory</h3>
-
       <!-- Stats -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-
         <!-- Local Stock -->
-        <div class="flex items-center justify-between border rounded-lg p-4">
+        <div class="flex items-center justify-between border rounded-lg p-4 relative">
           <div>
             <p class="text-sm text-gray-500">Local Stock</p>
             <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['local_stock'] ?? '0'); ?></p>
@@ -87,8 +79,10 @@
           <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">
             📦
           </div>
+          <button class="absolute top-0 right-1 text-gray-500 hover:text-blue-600" onclick="openStockModal()">
+            <i class="fas fa-edit text-sm"></i>
+          </button>
         </div>
-
         <!-- Committed -->
         <div class="flex items-center justify-between border rounded-lg p-4">
           <div>
@@ -99,7 +93,6 @@
             ⏱️
           </div>
         </div>
-
         <!-- Available -->
         <div class="flex items-center justify-between border rounded-lg p-4">
           <div>
@@ -110,7 +103,6 @@
             📈
           </div>
         </div>
-
         <!-- In Purchase -->
         <div class="flex items-center justify-between border rounded-lg p-4">
           <div>
@@ -121,16 +113,49 @@
             🛒
           </div>
         </div>
-
       </div>
-
       <!-- Number Sold -->
-      <div class="flex justify-between items-center border rounded-lg p-4">
-        <span class="text-sm text-gray-500">Number Sold</span>
-        <span class="font-semibold text-lg"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></span>
-      </div>
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-white">
+            <div>
+              <p class="text-sm text-gray-500">Number Sold</p>
+              <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></p>
+            </div>
+            <div class="bg-gray-100 text-gray-600 p-2 rounded-lg">
+              📊
+            </div>
+          </div>
 
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-red-50 relative">
+            <div>
+              <p class="text-sm text-gray-500">Min Stock</p>
+              <p class="text-xl font-semibold text-red-600"><?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?></p>
+            </div>
+            <div class="bg-red-100 p-2 rounded-lg">
+               🔔
+            </div>
+            <button class="absolute top-1 right-1 text-gray-400 hover:text-red-600" onclick="openMinMaxModal()">
+              <i class="fas fa-pencil-alt text-[10px]"></i>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-blue-50 relative">
+            <div>
+              <p class="text-sm text-gray-500">Max Stock</p>
+              <p class="text-xl font-semibold text-blue-600"><?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?></p>
+            </div>
+            <div class="bg-blue-100 p-2 rounded-lg">
+               🛡️
+            </div>
+            <button class="absolute top-1 right-1 text-gray-400 hover:text-blue-600" onclick="openMinMaxModal()">
+              <i class="fas fa-pencil-alt text-[10px]"></i>
+            </button>
+          </div>
+
+          <div class="hidden md:block"></div>
+        </div>
   </div>
+
   <!-- Price -->
     <div class="bg-white border rounded-lg p-4">
       <h3 class="font-semibold mb-3">Price</h3>
@@ -152,11 +177,8 @@
       </div>
     </div>
    </div>
-
-
   <!-- VENDORS + NOTES -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-
     <!-- Vendors -->
     <div class="bg-white rounded-lg p-4 md:col-span-2">
       <h3 class="font-semibold mb-3">Vendors</h3>
@@ -196,7 +218,6 @@
         </div>
       </div>
     </div>
-
     <!-- Notes -->
     <div class="bg-white rounded-lg p-4">
       <h3 class="font-semibold mb-3">Notes</h3>
@@ -204,9 +225,7 @@
         placeholder="Add notes here..."><?php echo htmlspecialchars($products['notes'] ?? ''); ?></textarea>
       <button class="mt-2 px-4 py-2 bg-blue-600 text-white rounded text-sm" onclick="saveProductNotes(<?php echo htmlspecialchars($products['id'] ?? 0); ?>)">Save Notes</button>
     </div>
-
   </div>
-
   <!-- STOCK TRANSACTIONS -->
   <div class="bg-white rounded-lg p-4 overflow-x-auto">
         <div class="flex items-center justify-between mb-4">
@@ -240,7 +259,6 @@
                 });
             });
         </script>
-
        <div>
           <label for="searchType" class="block text-sm font-medium text-gray-600 mb-1">Transaction Type</label>  
           <select id="searchType" class="border rounded p-2 text-sm">
@@ -317,7 +335,6 @@
       <button id="nextBtn" class="px-3 py-1 bg-gray-300 text-gray-700 rounded disabled:opacity-50" onclick="nextPage()">Next</button>
     </div>
   </div>
-
 </div>
 <!-- Image Popup -->
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
@@ -332,7 +349,121 @@
     <button onclick="document.getElementById('imagePopup').classList.add('hidden')" class="mt-2 px-4 py-2 bg-red-600 text-white rounded">Close</button>
   </div>
 </div> -->
+<div id="minMaxModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button onclick="closeMinMaxModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Update Stock Thresholds</h2>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Minimum Stock Level</label>
+                <input type="number" id="input_min_stock" 
+                       value="<?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?>"
+                       class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Maximum Stock Level</label>
+                <input type="number" id="input_max_stock" 
+                       value="<?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?>"
+                       class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+            <button onclick="closeMinMaxModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button onclick="submitMinMaxUpdate()" class="px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600">Update Limits</button>
+        </div>
+    </div>
+</div>
+<!-- Stock Adjustment Card -->
+<!-- Overlay -->
+<div id="stockModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-8 relative transform scale-95 transition-transform duration-300">
+    <button onclick="closeStockModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-xl">
+      ✕
+    </button>
+    
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-800">Stock Adjustment</h2>
+      <p class="text-sm text-gray-500 mt-1">
+        Adjust product inventory for selected warehouse and location
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Adjustment Type
+        </label>
+        <select id="adj_type" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+          <option value="OUT">Decrease</option>
+          <option value="IN">Increase</option>
+        </select>
+        <input type="hidden" name="user_id" id="current_user" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Warehouse
+        </label>
+        <select id="adj_warehouse" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+          <?php foreach ($products['warehouses'] as $value): 
+            $selected = ($value['id'] == ($products['stock_movements']['warehouse_id'] ?? '')) ? 'selected' : '';
+          ?> 
+            <option value="<?php echo $value['id']; ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($value['name']); ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Location
+        </label>
+        <input type="text" id="adj_location" 
+               value="<?php echo htmlspecialchars($products['stock_movements']['location'] ?? ''); ?>"
+               class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-600 mb-1">
+          Quantity
+        </label>
+        <input type="number" id="adj_quantity" 
+               value="1"
+               class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+      </div>
+    </div>
+
+    <div class="mt-6">
+      <label class="block text-sm font-medium text-gray-600 mb-1">
+        Reason
+      </label>
+      <textarea id="adj_reason" rows="4"
+        class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+    </div>
+
+    <div class="flex justify-end gap-4 mt-8">
+      <button onclick="closeStockModal()"
+        class="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-100">
+        Cancel
+      </button>
+      <button onclick="submitStockAdjustment()"
+        class="px-6 py-2.5 rounded-xl bg-orange-500 text-white font-semibold
+               hover:bg-orange-600 active:scale-95 transition">
+        Save Adjustment
+      </button>
+    </div>
+  </div>
+</div>
+<!--Stock Adjustment Card Ends -->
 <script>
+  function openStockModal() {
+    document.getElementById('stockModal').classList.remove('hidden');
+  }
+  function closeStockModal() {
+    document.getElementById('stockModal').classList.add('hidden');
+  }
 function openImagePopup(imageUrl) {
     const popup = document.getElementById('imagePopup');
     const popupImage = document.getElementById('popupImage');
@@ -369,12 +500,10 @@ function closeImagePopup() {
   let totalPages = 1;
   const itemsPerPage = 10;
   let lastFilterParams = {};
-
   function filterStockHistory(page = 1) {
     const dateRange = document.getElementById('dateRange').value;
     const type = document.getElementById('searchType').value;
     const warehouse = document.getElementById('searchWarehouse').value;
-
     // Parse date range
     let startDate = '';
     let endDate = '';
@@ -386,7 +515,6 @@ function closeImagePopup() {
       startDate = startMoment.format('YYYY-MM-DD');
       endDate = endMoment.format('YYYY-MM-DD');
     }
-
     // Store filter params for pagination (use page_no to avoid colliding with router 'page')
     lastFilterParams = {
       product_id: <?php echo htmlspecialchars($products['id'] ?? 0); ?>,
@@ -398,11 +526,9 @@ function closeImagePopup() {
       page_no: page,
       limit: itemsPerPage
     };
-
     const params = new URLSearchParams(lastFilterParams);
     const url = `index.php?page=products&action=get_filtered_stock_history&${params.toString()}`;
     console.log('Fetching stock history from:', url);
-
     fetch(url)
       .then(response => {
         console.log('Response status:', response.status);
@@ -419,7 +545,6 @@ function closeImagePopup() {
         if (data.success && data.records) {
           const tbody = document.querySelector('#stockHistoryTable tbody');
           tbody.innerHTML = '';
-
           if (data.records.length > 0) {
             data.records.forEach(history => {
               const row = document.createElement('tr');
@@ -442,7 +567,6 @@ function closeImagePopup() {
           } else {
             tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
           }
-
           // Update pagination
           currentPage = page;
           totalPages = Math.ceil((data.total || 0) / itemsPerPage);
@@ -458,7 +582,6 @@ function closeImagePopup() {
         alert('Failed to fetch stock history: ' + error.message);
       });
   }
-
   function updatePaginationButtons() {
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
@@ -466,23 +589,110 @@ function closeImagePopup() {
     prevBtn.disabled = currentPage === 1;
     nextBtn.disabled = currentPage === totalPages || totalPages === 0;
   }
-
   function previousPage() {
     if (currentPage > 1) {
       filterStockHistory(currentPage - 1);
     }
   }
-
   function nextPage() {
     if (currentPage < totalPages) {
       filterStockHistory(currentPage + 1);
     }
   }
-
   // Load initial data on page load
   document.addEventListener('DOMContentLoaded', function() {
     filterStockHistory(1);
   });
+</script>
+<script>
+  function submitStockAdjustment() {
+    // 1. Collect Data
+    const adjustmentData = {
+        product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
+        user_id: document.getElementById('current_user').value,
+        sku: <?php echo json_encode($products['sku'] ?? ''); ?>,
+        type: document.getElementById('adj_type').value,
+        warehouse_id: document.getElementById('adj_warehouse').value,
+        location: document.getElementById('adj_location').value,
+        quantity: document.getElementById('adj_quantity').value,
+        reason: document.getElementById('adj_reason').value
+    };
 
-  
+    // 2. Simple Validation
+    if (!adjustmentData.quantity || adjustmentData.quantity <= 0) {
+        alert("Please enter a valid quantity.");
+        return;
+    }
+
+    // 3. Send to Server
+    fetch(`index.php?page=products&action=save_stock_adjustment`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(adjustmentData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Success Popup
+            alert('✅ Success: Stock has been updated!'); 
+            
+            // Close the modal
+            closeStockModal();
+            
+            // Refresh the history table immediately
+            if (typeof filterStockHistory === "function") {
+                filterStockHistory(1);
+            }
+            
+            // Optional: If you want the top stock counters to update, 
+            // you might need a page reload or another JS update function
+            location.reload(); 
+        } else {
+            alert('❌ Failed: ' + (data.message || 'Failed to save adjustment.'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An unexpected error occurred. Please check the console.');
+    });
+}
+</script>
+<script>
+    function openMinMaxModal() {
+    document.getElementById('minMaxModal').classList.remove('hidden');
+}
+
+function closeMinMaxModal() {
+    document.getElementById('minMaxModal').classList.add('hidden');
+}
+
+function submitMinMaxUpdate() {
+    const data = {
+        product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
+        min_stock: document.getElementById('input_min_stock').value,
+        max_stock: document.getElementById('input_max_stock').value
+    };
+
+    fetch('index.php?page=products&action=update_stock_limits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(res => {
+        if(res.success) {
+            alert('✅ Limits updated!');
+            location.reload(); // Reload to see changes
+        } else {
+            alert('❌ Failed: ' + res.message);
+        }
+    });
+}
 </script>

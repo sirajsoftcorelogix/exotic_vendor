@@ -170,6 +170,7 @@
                 <input type="hidden" name="item_weights[<?php echo $boxNo; ?>][]" value="<?php echo $item['weight'] ?? '0.5'; ?>">
                 <input type="hidden" name="item_billable_weights[<?php echo $boxNo; ?>][]" value="<?php echo $item['weight'] ?? '0.5'; ?>">
                 <input type="hidden" name="item_shipping_charges[<?php echo $boxNo; ?>][]" value="<?php echo $item['shipping_charges'] ?? '0'; ?>">
+                <input type="hidden" name="item_groupnames[<?php echo $boxNo; ?>][]" value="<?php echo $item['groupname'] ?? ''; ?>">
               </div>
             <?php endforeach; ?>
           </div>

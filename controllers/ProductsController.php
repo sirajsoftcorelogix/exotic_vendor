@@ -848,29 +848,16 @@ class ProductsController {
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
-            //stock_value for this product
             $order['stock_value'] = $order['local_stock'] * $order['cost_price'];
             $order['committed_stock'] = $commanModel->getCommittedStockBySku($order['sku']);
             $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
             $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
-            //print_r($order['in_purchase_list']);
-            //fetch product_vendor_map for this product
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
-            //stock_movements for this product
-            //$order['stock_summary'] = $productModel->getStockMovementBySku($order['sku']);
-            //purchase history for this product
-            //$order['purchase_history'] = $productModel->getPurchaseHistoryByProductId($order['id']);
-            //stock_movements list
             $order['stock_history'] = $productModel->stock_history($order['sku']);
-            //echo $order['sku'];
-            
-            //stock summary across warehouses
             $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
-            //print_array($order['stocks']);
-            //product veriant details
             $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
-            //get all warehouses
             $order['warehouses'] = $productModel->getAllWarehouses();
+            $order['stock_movements'] = $productModel->get_stock_movements($id);
             if ($order) {
                 renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
             } else {
@@ -878,6 +865,78 @@ class ProductsController {
             }
         } else {
             echo '<p>Invalid Product Item Code.</p>';
+        }
+        exit;
+    }
+    public function saveStockAdjustment() {
+        is_login();
+        global $productModel;
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+
+            if (!$data) throw new Exception('Invalid JSON');
+
+            // Fetch current product details to get SKU, Item Code, Size, Color
+            $product = $productModel->getProduct($data['product_id']);
+            if (!$product) throw new Exception('Product not found');
+
+            // Merge submitted data with product details
+            $insertData = [
+                'product_id'    => (int)$product['id'],
+                'sku'           => $product['sku'],
+                'item_code'     => $product['item_code'],
+                'size'          => $product['size'],
+                'color'         => $product['color'],
+                'quantity'      => (int)$data['quantity'],
+                'reason'        => $data['reason'],
+                'user_id'       => (int)$data['user_id'],
+                'movement_type' => $data['type'],
+                'warehouse_id'  => $data['warehouse_id'],
+                'location'      => $data['location']
+            ];
+
+            $result = $productModel->insertStockMovement($insertData);
+            echo json_encode($result);
+
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+    public function updateStockLimits() {
+        is_login();
+        global $productModel;
+        
+        // Clear buffer and set header for JSON
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+
+            if (!$data || !isset($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+
+            $productId = (int)$data['product_id'];
+            $minStock  = (int)($data['min_stock'] ?? 0);
+            $maxStock  = (int)($data['max_stock'] ?? 0);
+
+            // Call the model to update only the limits
+            $result = $productModel->setProductLimits($productId, $minStock, $maxStock);
+
+            echo json_encode(['success' => $result]);
+
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
         }
         exit;
     }

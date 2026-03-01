@@ -4,7 +4,9 @@
         "mpdf/mpdf": "^8.2",
         "pear/text_languagedetect": "^1.0",
 		"cboden/ratchet": "^0.4",
-        "endroid/qr-code": "^6.0"
+        "endroid/qr-code": "^6.0",
+        "setasign/fpdi": "^2.6",
+        "setasign/fpdf": "^1.8"
     },
 	"autoload": {
 		"psr-4": { "ChatModule\\": "src/" }

@@ -283,7 +283,6 @@ class InboundingController {
         $data['form2']['getimgdir'] = $this->getimgdir();
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
-        // echo "<pre>";print_r($data['getimgdir']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
     function getimgdir() {
@@ -1119,7 +1118,7 @@ class InboundingController {
             }
         }
         unset($variant);
-        $inboundingModel->saveVariations($id, $allVariations, $item_code);
+        $inboundingModel->saveVariations($id, $allVariations, $item_code,$item_code);
 
         // 5. Update Image Order & Assignment
         if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
@@ -1286,7 +1285,7 @@ class InboundingController {
           }
 
           // Save extra variations
-          $inboundingModel->saveVariations($record_id, $allVariations);
+          $inboundingModel->saveVariations($record_id, $allVariations,$item_code);
          
           header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
           exit;
@@ -1673,6 +1672,8 @@ class InboundingController {
             $import_response = $ProductsController->importApiCall([$itemCode]);
 
             $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
+            $stoc_data = $inboundingModel->stock_data($id);
+            $inboundingModel->insert_stock_data($stoc_data);
             $inboundingModel->stat_logs($logData);
             echo json_encode([
                 'status' => 'success', 
