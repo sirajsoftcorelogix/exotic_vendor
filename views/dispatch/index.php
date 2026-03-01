@@ -308,6 +308,19 @@
 </div>
 
 <script>
+function toggleMenu(this) {
+    document.getElementById("actionMenu").classList.toggle("hidden");
+}
+
+document.addEventListener("click", function(event) {
+    const menu = document.getElementById("actionMenu");
+    const button = event.target.closest("button");
+
+    if (!button && !menu.contains(event.target)) {
+        menu.classList.add("hidden");
+    }
+});
+
 // Persist selected invoices across pages using localStorage
 const DISPATCH_STORAGE_KEY = 'selected_dispatch_invoices';
 
