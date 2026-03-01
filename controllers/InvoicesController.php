@@ -220,7 +220,8 @@ class InvoicesController {
                 'sgst' => $sgstAmt,
                 'igst' => $igstAmt,
                 'tax_amount' => $totalTaxAmount,
-                'line_total' => $amount + $totalTaxAmount
+                'line_total' => $amount + $totalTaxAmount,
+                'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
             ];
             //print_r($itemData);
             $result = $invoiceModel->createInvoiceItem($itemData);
@@ -393,7 +394,7 @@ class InvoicesController {
             // Create mPDF instance
             require_once 'vendor/autoload.php';
             
-            $filename = 'invoice_' . $invoice_id . '.pdf';
+            $filename = '' . $invoice['invoice_number'] . '.pdf';
             
             $mpdf = new \Mpdf\Mpdf([
                 'mode' => 'utf-8',
