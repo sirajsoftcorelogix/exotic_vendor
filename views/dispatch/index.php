@@ -112,7 +112,122 @@
     <div class="space-y-4">
       <?php if (!empty($invoices)): ?>
         <?php foreach ($invoices as $invoice): ?>
-          <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition">
+		
+		<!-- Start New Design By Siraj -->
+		<div class="bg-white border rounded-xl bg-gray-100 p-5 flex items-start gap-4">
+
+			  <!-- Checkbox -->
+			  <div class="pt-1">
+				<input type="checkbox" class="mt-1 w-5 h-5 label-checkbox" value="<?= htmlspecialchars($invoice['id']); ?>">
+			  </div>
+
+			  <!-- Main Grid -->
+			  <div class="grid grid-cols-6 gap-6 flex-1 text-sm">
+
+				<!-- Invoice -->
+				<div>
+				  <p class="font-semibold text-gray-700">Inv No.</p>
+				  <a href="#" class="text-blue-600 font-medium"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></a>
+					<p class="text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+				  
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Order No.</p>
+					<a href="#" class="text-blue-600 font-medium"><?php foreach ($invoice['items'] ?? [] as $item) {
+                      echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
+                    } ?></a>
+					<p class="text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+				  </div>
+				</div>
+
+				<!-- Invoice Total -->
+				<div>
+				  <p class="font-semibold text-gray-700">Invoice Total</p>
+				  <p class="text-lg font-semibold">[USD / INR / EUR] <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
+
+				  <div class="mt-2 flex gap-2">
+					<?php if (isset($invoice['status']) && strtolower($invoice['status']) == 'cod'): ?>
+						<span class="bg-gray-200 text-red-600 text-xs px-2 py-1 rounded">COD</span>
+					<?php else: ?>
+						<span class="bg-gray-200 text-green-600 text-xs px-2 py-1 rounded">Prepaid</span>
+					<?php endif: ?>
+				  </div>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Status:</p>
+					<p class="flex items-center gap-2">
+					  [Dispatched]
+					  <span class="text-blue-600">🔄</span>
+					</p>
+				  </div>
+				</div>
+
+				<!-- Items -->
+				<div>
+				  <p class="font-semibold text-gray-700">Items:</p>
+				  <p><?php foreach ($invoice['items'] ?? [] as $item) {
+                      echo htmlspecialchars($item['item_code'] ?? '') . '<br>';
+                    } ?>
+				  <span class="text-red-600 font-semibold">[+2]</span></p>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">RTO Risk</p>
+					<p class="flex items-center gap-2">
+					  [LOW | 10%]
+					  <span class="text-blue-600">🔄</span>
+					</p>
+				  </div>
+				</div>
+
+				<!-- AWB -->
+				<div>
+				  <p class="font-semibold text-gray-700">AWB:</p>
+				  <div>
+					<a href="#" class="text-blue-600"><?php 
+                      $awbs = [];
+                      if (!empty($invoice_dispatch[$invoice['id']])) {
+                        foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                          if (!empty($dispatch['awb_code'])) {
+                            $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
+                            $awbs[] = $link;
+                          }
+                        }
+                      }
+                      echo implode(' | ', $awbs);
+                    ?></a>
+					<p class="text-gray-500">[19 Feb 2026]</p>
+				  </div>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Box</p>
+					<p>[Custom : 3 x 2 x1]</p>
+				  </div>
+				</div>
+
+				<!-- Weight -->
+				<div>
+				  <p class="font-semibold text-gray-700">Applied wt.</p>
+				  <p>: <?php 
+                      $wt = 0;
+                      if (!empty($invoice_dispatch[$invoice['id']])) {
+                        foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                          $wt += (float)($dispatch['billing_weight'] ?? 0);
+                        }
+                      }
+                      echo $wt > 0 ? number_format($wt, 3) . ' Kg' : '-';
+                    ?></p>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Charges:</p>
+					<p class="font-medium">[₹ 196]</p>
+				  </div>
+				</div>
+			  </div>
+			</div>
+		<!-- End New Design By Siraj -->
+		
+		
+		
+          <!--div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition">
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <!-- LEFT -->
               <div class="flex gap-4">
@@ -239,7 +354,7 @@
                 
               </div>
             </div>
-          </div>
+          </div -->
         <?php endforeach; ?>
       <?php else: ?>
         <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
