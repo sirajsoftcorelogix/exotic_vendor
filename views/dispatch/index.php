@@ -240,8 +240,7 @@
   </button>
 
   <!-- Dropdown Menu -->
-  <div id="actionMenu"
-       class="hidden absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-50">
+  <div class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-50">
 
     <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
       Cancel Dispatch
@@ -308,17 +307,27 @@
 </div>
 
 <script>
-function toggleMenu(this) {
-    document.getElementById("actionMenu").classList.toggle("hidden");
+function toggleMenu(button) {
+
+    const menu = button.nextElementSibling;
+
+    // close all other menus
+    document.querySelectorAll('.dropdown-menu').forEach(m => {
+        if (m !== menu) m.classList.add('hidden');
+    });
+
+    menu.classList.toggle('hidden');
 }
 
-document.addEventListener("click", function(event) {
-    const menu = document.getElementById("actionMenu");
-    const button = event.target.closest("button");
+// close when clicking outside
+document.addEventListener("click", function(e) {
 
-    if (!button && !menu.contains(event.target)) {
-        menu.classList.add("hidden");
+    if (!e.target.closest(".relative")) {
+        document.querySelectorAll(".dropdown-menu").forEach(menu => {
+            menu.classList.add("hidden");
+        });
     }
+
 });
 
 // Persist selected invoices across pages using localStorage
