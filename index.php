@@ -787,6 +787,9 @@ switch ($page) {
             case 'merge_labels':
                 $controller->mergeLabels();
                 break;
+            case 'bulk_update_status':
+                $controller->bulkUpdateStatus();
+                break;
             case 'list':
                 $controller->index();
                 break;

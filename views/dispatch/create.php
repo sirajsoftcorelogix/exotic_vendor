@@ -132,7 +132,11 @@
 
             <p class="text-gray-600 text-sm pl-3.5 text-[#1E2939]">
               <span class="font-bold">Ship To:</span>
+              <?php if(isset($invoice['address']['shipping_first_name']) && !empty($invoice['address']['shipping_first_name'])): ?>
               <?php echo $invoice['address']['shipping_first_name'] ?? ''; ?><?php echo $invoice['address']['shipping_last_name'] ?? ''; ?>, <?php echo $invoice['address']['shipping_address_line1'].' '.$invoice['address']['shipping_address_line2']; ?>, <?php echo $invoice['address']['shipping_city']; ?>, <?php echo $invoice['address']['shipping_state']; ?> - <?php echo $invoice['address']['shipping_zipcode']; ?>
+              <?php else: ?>
+              <?php echo $invoice['address']['first_name'] ?? ''; ?><?php echo $invoice['address']['last_name'] ?? ''; ?>, <?php echo $invoice['address']['address_line1'].' '.$invoice['address']['address_line2']; ?>, <?php echo $invoice['address']['city']; ?>, <?php echo $invoice['address']['state']; ?> - <?php echo $invoice['address']['zipcode']; ?>
+              <?php endif; ?>
             </p>
 
             <p class="text-gray-600 text-sm mt-1.5 pl-3.5 text-[#1E2939]">
