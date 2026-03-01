@@ -1,49 +1,24 @@
+
 FROM php:8.4-apache
 
-# 1) Apache modules (common for routing / .htaccess)
+# Enable Apache modules
 RUN a2enmod rewrite headers
 
-# 2) System libs needed to compile PHP extensions used by mpdf/qr-code/etc.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git unzip \
+# Install system deps + build deps for PHP extensions
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
     libzip-dev \
-    libpng-dev libjpeg-dev libfreetype6-dev \
-    libonig-dev \
-    libxml2-dev \
-    libicu-dev \
-    libcurl4-openssl-dev \
-  && rm -rf /var/lib/apt/lists/*
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+      gd \
+      mysqli \
+      pdo \
+      pdo_mysql \
+      zip \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 3) PHP extensions
-# - mbstring, intl: mpdf + general
-# - gd: mpdf images + qr rendering
-# - zip: mpdf/composer
-# - sockets: Ratchet websocket server
-# - pdo_mysql + mysqli: DB
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install -j$(nproc) \
-     mbstring intl xml zip gd sockets pdo_mysql mysqli
-
-# 4) (Optional but useful) set PHP recommended defaults for mpdf
-RUN { \
-    echo "memory_limit=512M"; \
-    echo "upload_max_filesize=50M"; \
-    echo "post_max_size=50M"; \
-    echo "max_execution_time=300"; \
-  } > /usr/local/etc/php/conf.d/app.ini
-
-# 5) Install Composer (official way)
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# 6) App code
 WORKDIR /var/www/html
-COPY . /var/www/html
-
-# 7) Install PHP dependencies
-# If you don't want dev deps, keep --no-dev
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
-
-# 8) Permissions (adjust if your app writes to specific dirs)
-RUN chown -R www-data:www-data /var/www/html
-
-EXPOSE 80
