@@ -179,8 +179,8 @@
 				  <span class="text-red-600 font-semibold bg-red-100">[+2]</span></p>
 
 				  <div class="mt-4">
-					<p class="font-semibold text-gray-700 bg-red-100">RTO Risk</p>
-					<p class="flex items-center gap-2">
+					<p class="font-semibold text-gray-700">RTO Risk</p>
+					<p class="flex items-center gap-2 bg-red-100">
 					  [LOW | 10%]
 					  <span class="text-blue-600">🔄</span>
 					</p>
