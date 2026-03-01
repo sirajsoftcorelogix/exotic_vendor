@@ -2,6 +2,9 @@
 // 1. PHP Logic & Data Fetching
 $label_data[0] = $data['form2'] ?? [];
 $variations = $data['variation'];
+// echo "<pre>";
+// print_r($label_data);
+// exit;
 if (isset($variations) && !empty($variations)) {
     foreach ($variations as $key => $value) {
         $key++;
@@ -174,7 +177,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black">Pages:</span>
                             <span class="text-[42px] font-black text-black leading-none">
                                 <?php echo safe(
-                                    $current_label["page"] ?? "N/A"
+                                    $current_label["pages"] ?? "N/A"
                                 ); ?>
 
                             </span>
@@ -194,7 +197,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black">ISBN:</span>
                             <span class="text-[42px] font-black text-black leading-none">
                                 <?php echo safe(
-                                    $current_label["ISBN"] ?? "N/A"
+                                    $current_label["isbn"] ?? "N/A"
                                 ); ?>
 
                             </span>
@@ -207,7 +210,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe(
-                                $current_label["PUBLISHER"] ?? "N/A"
+                                $current_label["publisher"] ?? "N/A"
                             ); ?>
                         </span>
                     </div>

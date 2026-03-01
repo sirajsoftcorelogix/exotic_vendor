@@ -1,8 +1,12 @@
 <?php
 // 1. PHP Logic & Data Fetching
 $label_data[0] = $data["form2"] ?? [];
-$variations = $data["variation"] ?? [];
+$variations = $data["variations"] ?? [];
 // $variations = $data['variation'];
+
+// echo "<pre>";
+// print_r($label_data);
+// exit;
 if (isset($variations) && !empty($variations)) {
     foreach ($variations as $key => $value) {
         $key++;
@@ -188,20 +192,16 @@ $currentUrl =
                             </div>
                         </div>
 
-
-
-
-
                     </div>
 
                     <!-- Row 2 -->
 
-                    <div class="flex-1 w-full flex flex-col justify-center pl-8">
+                    <!-- <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
 
                         </span>
-                    </div>
+                    </div> -->
 
 
                 <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving') { ?>
