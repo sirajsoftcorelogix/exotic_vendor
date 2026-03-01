@@ -218,7 +218,7 @@
 
 				  <div class="mt-4">
 					<p class="font-semibold text-gray-700">Charges:</p>
-					<p class="font-medium">[₹ 196]</p>
+					<p class="font-medium">[₹ 196] </p>
 				  </div>
 				</div>
 			  </div>
