@@ -337,8 +337,12 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-[#222] mb-1 pt-[10px]">Enter Remarks:</label>
-                    <input type="text" id="feedback" name="feedback" 
-                           value="<?= htmlspecialchars($data['form2']['feedback'] ?? '') ?>" autocomplete="off" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                    <textarea 
+                        id="feedback" 
+                        name="feedback" 
+                        autocomplete="off" 
+                        class="w-full min-h-[100px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?= htmlspecialchars($data['form2']['feedback'] ?? '') ?></textarea>
                 </div>
             </fieldset>
         </div>
@@ -471,8 +475,20 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">GST:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? '') ?>" name="gst_rate">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['gst_rate'] ?? 0) ?>" name="gst_rate">
                             <span class="absolute right-[10px] text-xs text-[#777] pointer-events-none">%</span>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 w-full min-w-0">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Dimensions:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['dimensions'] ?? '') ?>" name="dimensions" placeholder="Dimensions">
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">UPC:</label>
+                        <div class="relative flex items-center w-full">
+                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['upc'] ?? '') ?>" name="upc" placeholder="upc">
                         </div>
                     </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
@@ -592,7 +608,9 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 </div>
                             </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['hsn_code'] ?? '') ?>" name="variations[<?= $var['id'] ?>][hsn_code]"></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? '') ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['gst_rate'] ?? 0) ?>" name="variations[<?= $var['id'] ?>][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                            <div class="lg:col-span-2 w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Dimensions:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['dimensions'] ?? '') ?>" name="variations[<?= $var['id'] ?>][dimensions]"></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">UPC:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['upc'] ?? '') ?>" name="variations[<?= $var['id'] ?>][upc]"></div></div>
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                             
                             <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
@@ -702,6 +720,8 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">HSN Code:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][hsn_code]"></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">GST:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][gst_rate]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">%</span></div></div>
+                <div class="lg:col-span-2 w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Dimensions:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][dimensions]"></div></div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">UPC:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][upc]"></div></div>
                 <div class="w-full min-w-0 colormap-wrapper" style="display:none;">
                     <label class="block text-xs font-bold text-[#555] mb-1">Color Map:</label>
                     <select name="variations[INDEX][colormaps]" class="colormap-select w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">
@@ -1046,18 +1066,22 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Keywords:</label>
-                    <input type="text" id="keywords_input" 
-                           class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                           value="<?= htmlspecialchars($data['form2']['key_words'] ?? '') ?>" 
-                           name="key_words"
-                           placeholder="Type keyword and press Enter or Comma...">
+                    <textarea 
+                        id="keywords_input" 
+                        name="key_words"
+                        placeholder="Type keyword and press Enter or Comma..."
+                        class="w-full min-h-[60px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?= htmlspecialchars($data['form2']['key_words'] ?? '') ?></textarea>
+                    
                     <div class="text-[10px] text-gray-500 mt-1">
                         Type text and press <strong>Enter</strong> or <strong>Comma (,)</strong> to add a tag.
                     </div>
                 </div>
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
-                    <input type="text" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?>" name="snippet_description">
+                    <textarea 
+                        class="w-full min-h-[80px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y" 
+                        name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
                 </div>
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
@@ -1265,7 +1289,13 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Marketplace Vendor:</label>
                         <div class="relative w-full">
                             <input type="text" name="marketplace" 
-                                   value="<?= htmlspecialchars($data['form2']['marketplace'] ?? 'exoticindia') ?>" 
+                                   value="<?php 
+                                        if (is_null($data['form2']['Marketplace'])) {
+                                            echo "exoticindia";
+                                        } else {
+                                            echo htmlspecialchars($data['form2']['Marketplace']);
+                                        } 
+                                    ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
                         </div>
                     </div>
@@ -1321,31 +1351,30 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
             </fieldset>
         </div>
-        <!-- <div class="mt-[15px] md:mx-5">
-            <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
-                <legend class="text-[13px] font-bold text-[#333] px-[5px]">Remarks</legend>
-                <div>
-                    <label class="block text-xs font-bold text-[#222] mb-1">Enter Remarks:</label>
-                    <input type="text" id="feedback" name="feedback" 
-                           value="<?= htmlspecialchars($data['form2']['feedback'] ?? '') ?>" autocomplete="off" class="w-full h-[34px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                </div>
-            </fieldset>
-        </div> -->
         <div class="flex justify-end gap-4 my-[25px] md:mx-5 mb-10">
             <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
-                <button type="button" onclick="openPublishPopup()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
+                <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
                 </button>
-            <?php  } ?>
+            <?php } ?>
 
-            <button type="button" onclick="validateAndSubmit('draft')" class="bg-gray-600 text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-gray-700 transition">
+            <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#db8235] transition">
                 Save as Draft
             </button>
-            
-            <button type="button" onclick="validateAndSubmit('generate')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#c0651a] transition">
-                Save and Generate Item Code
-            </button>
+            <?php if (!empty($data['form2']['id'])): ?>
+                <a href="<?= base_url('index.php?page=inbounding&action=printInboundLabel&id=' . $record_id) ?>"
+                   target="_blank"
+                   class="hidden md:inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2.5 rounded-full text-sm font-semibold shadow-md transition duration-200">
+                   
+                   <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                             d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/>
+                   </svg>
+
+                   Print Inbound Label
+                </a>
+            <?php endif; ?>
         </div>
     </form>
 </div>
@@ -2093,9 +2122,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- STEP A: NORMALIZE TO INCHES ---
         // If user entered CM, convert to Inch first (divide by 2.54)
         // if (dimUnit === 'cm') {
-             h = h / 2.54;
-             w = w / 2.54;
-             d = d / 2.54;
+             h = h * 2.54;
+             w = w * 2.54;
+             d = d * 2.54;
         // }
         // --- STEP B: ADD BUFFER (4 inches) ---
         let h_in = h;
@@ -2193,7 +2222,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    // 1. Open Popup
     function openPublishPopup() {
         const popup = document.getElementById('publishConfirmPopup');
         if(popup) {
@@ -2201,86 +2229,145 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             console.error("Popup element 'publishConfirmPopup' not found!");
         }
-    }
-    // 2. Close Popup
-    function closePublishPopup() {
+    }function closePublishPopup() {
         const popup = document.getElementById('publishConfirmPopup');
         if(popup) {
             popup.classList.add('hidden');
         }
     }
-    // 3. Trigger Controller Function
-    function triggerPublishController() {
-        // Get the current ID
-        const urlParams = new URLSearchParams(window.location.search);
-        const recordId = urlParams.get('id');
-        // CHECK: Is the library loaded?
-        if (typeof Swal === 'undefined') {
-            alert("Error: SweetAlert2 library not loaded. Please check Fix 1.");
-            return;
-        }
-        if (!recordId) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Record ID not found in URL.' });
-            closePublishPopup();
-            return;
-        }
-        // Visual Feedback
-        const confirmBtn = document.querySelector('#publishConfirmPopup button.confirm-btn') || document.querySelector('#publishConfirmPopup button:last-child');
-        let originalText = "Yes, Publish";
+    // 1. New function to bridge Validation and Publishing
+    function handlePublishClick() {
+        // Run the same validation used for 'generate'
+        // We pass a dummy action 'check_only' to see if it passes
+        const isValid = performValidationOnly(); 
         
-        if (confirmBtn) {
-            originalText = confirmBtn.innerText;
-            confirmBtn.innerText = "Processing...";
-            confirmBtn.disabled = true;
+        if(isValid) {
+            openPublishPopup();
         }
-        const targetUrl = `index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`;
-        fetch(targetUrl)
-        .then(response => {
-            if (!response.ok) throw new Error('Network error: ' + response.status);
-            return response.text(); 
-        })
-        .then(text => {
-            // Handle Blank = Success
-            if (!text || text.trim() === '') {
-                return { status: 'success', message: 'Published Successfully!' };
+    }
+
+    // 2. Helper to run validation without submitting
+    function performValidationOnly() {
+        let errors = [];
+        const form = document.getElementById('product_form');
+        
+        const getVal = (name) => {
+            const el = form.querySelector(`[name="${name}"]`);
+            return el ? el.value.trim() : '';
+        };
+
+        const isInvalidPrice = (val) => {
+            const num = parseFloat(val);
+            return !val || isNaN(num) || num <= 0;
+        };
+
+        // --- 1. GENERAL FIELDS ---
+        if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
+        if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
+        if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
+        if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
+        if (!getVal('material_code')) errors.push("Field 'Material' is required.");
+        if (!getVal('group_name')) errors.push("Field 'Group' is required.");
+        if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
+        if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
+        if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
+
+        // Category Check (Checkboxes)
+        const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
+        if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+
+        // Lead Time
+        const leadTime = parseFloat(getVal('lead_time_days')) || 0;
+        if (leadTime < 1) errors.push("'Lead Time' must be at least 1 day.");
+
+        // --- 2. MAIN ITEM ---
+        const mainQty = parseFloat(getVal('quantity_received')) || 0;
+        if (mainQty < 0) errors.push("Main Item: 'Quantity' must be at least 1.");
+
+        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+        if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
+        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
+        if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
+
+        // Gallery Check (Main)
+        const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
+        if (!mainGrid || mainGrid.querySelectorAll('.draggable-item').length < 1) {
+            errors.push("Main Item: Please add at least 1 photo to the Gallery.");
+        }
+
+        // --- 3. VARIATIONS LOOP ---
+        const variations = document.querySelectorAll('.variation-card');
+        variations.forEach((card, index) => {
+            const cardTitle = `Variation #${index + 1}`;
+            const getCardVal = (partialName) => {
+                const input = card.querySelector(`input[name*="[${partialName}]"], select[name*="[${partialName}]"]`);
+                return input ? input.value.trim() : '';
+            };
+
+            const vQty = parseFloat(getCardVal('quantity')) || 0;
+            if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
+
+            if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('price_india_mrp'))) errors.push(`${cardTitle}: 'Price India MRP' must be greater than 0.`);
+            if (isInvalidPrice(getCardVal('usd_price'))) errors.push(`${cardTitle}: 'USD Price' must be greater than 0.`);
+            if (!getCardVal('hsn_code')) errors.push(`${cardTitle}: 'HSN Code' is required.`);
+
+            const vGrid = card.querySelector('.photo-group-grid');
+            if (vGrid && vGrid.querySelectorAll('.draggable-item').length < 1) {
+                errors.push(`${cardTitle}: Please add at least 1 photo to Gallery.`);
             }
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                if (text.toLowerCase().includes('error')) throw new Error('Server Error: ' + text);
-                return { status: 'success', message: 'Published Successfully!' };
-            }
+        });
+
+        // --- 4. SHOW ERRORS IF ANY ---
+        if (errors.length > 0) {
+            let errorHtml = '<div style="text-align: left; max-height: 300px; overflow-y: auto;"><ul style="list-style-type: disc; padding-left: 20px;">';
+            errors.forEach(err => { errorHtml += `<li style="margin-bottom: 5px; color: #d33;">${err}</li>`; });
+            errorHtml += '</ul></div>';
+
+            Swal.fire({
+                icon: 'error',
+                title: 'Validation Failed',
+                html: errorHtml,
+                confirmButtonColor: '#d97824'
+            });
+            return false;
+        }
+        return true;
+    }
+
+    // 3. Update Publish Controller to Save Form + Publish
+    function triggerPublishController() {
+        const form = document.getElementById('product_form');
+        const formData = new FormData(form);
+        const recordId = new URLSearchParams(window.location.search).get('id');
+
+        const confirmBtn = document.querySelector('#publishConfirmPopup button:last-child');
+        confirmBtn.innerText = "Saving & Publishing...";
+        confirmBtn.disabled = true;
+
+        // First: Save the current form data so changes aren't lost
+        fetch(form.action + '&save_action=generate', {
+            method: 'POST',
+            body: formData
         })
+        .then(() => {
+            // Second: Call the Publish API after save is successful
+            return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}`);
+        })
+        .then(response => response.json())
         .then(data => {
-            if (data.status === 'error') throw new Error(data.message);
-            
             closePublishPopup();
-            // SUCCESS POPUP
             Swal.fire({
                 title: 'Published!',
-                text: data.message || "Product has been published.",
-                icon: 'success',
-                confirmButtonColor: '#3085d6',
-                confirmButtonText: 'Great!'
-            }).then((result) => {
-                if (result.isConfirmed) window.location.reload();
-            });
+                text: 'Form saved and product published successfully.',
+                icon: 'success'
+            }).then(() => window.location.reload());
         })
         .catch(error => {
             closePublishPopup();
-            // ERROR POPUP
-            Swal.fire({
-                icon: 'error',
-                title: 'Failed',
-                text: error.message,
-                confirmButtonColor: '#d33'
-            });
-        })
-        .finally(() => {
-            if (confirmBtn) {
-                confirmBtn.innerText = originalText;
-                confirmBtn.disabled = false;
-            }
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Publishing failed: ' + error.message });
         });
     }
 </script>
@@ -2454,12 +2541,12 @@ document.addEventListener('DOMContentLoaded', function() {
         let d = parseFloat(dInput.value) || 0;
         let actualWt = parseFloat(wtInput.value) || 0;
         // Logic: Add 4 inches buffer + Volumetric Divisor 5000
-         h = h / 2.54;
-         w = w / 2.54;
-         d = d / 2.54;
-        let h_in = h + 4;
-        let w_in = w + 4;
-        let d_in = d + 4;
+         h = h + 4;
+         w = w + 4;
+         d = d + 4;
+        let h_in = h / 2.54;
+        let w_in = w / 2.54;
+        let d_in = d / 2.54;
         // Volumetric Weight
         const volWt = (h_in * w_in * d_in) / 5000;
         // Chargeable Weight = Max(Volumetric, Actual * 1.5)

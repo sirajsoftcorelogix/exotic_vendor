@@ -148,9 +148,10 @@
     <div class="bg-white rounded-xl shadow-md ">
         <div class="p-6 ">
             <div class="w-full max-w-full overflow-x-auto block">
-                <table class="min-w-max w-full divide-y divide-gray-200">
+                <table id="master-purchase-table" class="min-w-max w-full divide-y divide-gray-200">
                     <thead>
                         <tr>
+                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order Number</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
@@ -159,25 +160,8 @@
                             <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Name</th> -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                <button class="flex items-center gap-2 hover:text-gray-700"
-                                    onclick="sortTableByDate()">
-                                    Added Date
-                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                        class="h-8 w-8 text-gray-400"
-                                        viewBox="0 0 20 20"
-                                        fill="currentColor">
-                                        <path d="M5 8l5-5 5 5H5z" />
-                                        <path d="M5 12l5 5 5-5H5z" />
-                                    </svg>
-                                </button>
-                            </th>
-
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchased Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weight</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Measurements</th>
-                            <th class="px-0 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -185,6 +169,32 @@
                             $image = $pl['image'] ?? 'https://placehold.co/100x140/e2e8f0/4a5568?text=No+Image';
                         ?>
                             <tr>
+                                <?php
+                                $date_purchased = $pl['date_purchased_readable']
+                                    ?? (!empty($pl['date_purchased']) ? date('d M Y', strtotime($pl['date_purchased'])) : 'N/A');
+
+                                $weight = 'N/A';
+                                if (!empty($pl['product_weight']) && $pl['product_weight'] !== 'N/A') {
+                                    $weight = htmlspecialchars($pl['product_weight'] . ' ' . ($pl['product_weight_unit'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                }
+
+                                $dims = [];
+                                if (!empty($pl['prod_height']) && $pl['prod_height'] !== 'N/A') {
+                                    $dims[] = 'H: ' . $pl['prod_height'];
+                                }
+                                if (!empty($pl['prod_width']) && $pl['prod_width'] !== 'N/A') {
+                                    $dims[] = 'W: ' . $pl['prod_width'];
+                                }
+                                if (!empty($pl['prod_length']) && $pl['prod_length'] !== 'N/A') {
+                                    $dims[] = 'L: ' . $pl['prod_length'];
+                                }
+                                $measurements = htmlspecialchars(implode(' x ', $dims), ENT_QUOTES, 'UTF-8');
+                                ?>
+                                <td class="px-2 py-4 whitespace-nowrap text-sm text-gray-900 details-control">
+                                    <button type="button" class="details-btn bg-amber-500 text-white w-7 h-7 rounded-full flex items-center justify-center" aria-label="Toggle details">
+                                        <span class="details-icon text-lg leading-none">+</span>
+                                    </button>
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-orange-500 hover:text-orange-700 cursor-pointer"
                                     onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')">
                                     <?php echo htmlspecialchars($pl['item_code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
@@ -194,7 +204,7 @@
                                 if (isset($pl['order_number']) && !empty($pl['order_number'])) {
                                     $orderLink = base_url('index.php?order_number=' . $pl['order_number']);
                                 ?>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td class="px-4 py-4 whitespace-normal break-words text-sm text-gray-900 max-w-[200px]">
                                     <a href="<?php echo htmlspecialchars($orderLink); ?>" 
                                     target="_blank" 
                                     class="text-yellow-500 hover:text-yellow-600">
@@ -202,7 +212,7 @@
                                     </a>
                                 </td>
                                 <?php } else {?>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                     N/A
                                 </td>    
                                 <?php } ?>
@@ -233,10 +243,6 @@
                                 </td>
 
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php echo htmlspecialchars($pl['agent_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <?php
                                     $date_added = $pl['date_added_readable']
                                         ?? (!empty($pl['date_added']) ? date('d M Y', strtotime($pl['date_added'])) : 'N/A');
@@ -244,66 +250,32 @@
                                     echo htmlspecialchars($date_added, ENT_QUOTES, 'UTF-8');
                                     ?>
                                 </td>
-
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php
-                                    $date_purchased = $pl['date_purchased_readable']
-                                        ?? (!empty($pl['date_purchased']) ? date('d M Y', strtotime($pl['date_purchased'])) : 'N/A');
-
-                                    echo htmlspecialchars($date_purchased, ENT_QUOTES, 'UTF-8');
-                                    ?>
+                                    <button type="button"
+                                        class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                                        onclick="deletePurchaseListItem('<?php echo $pl['id']; ?>')"
+                                        aria-label="Delete">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M6 7a1 1 0 011 1v7a1 1 0 11-2 0V8a1 1 0 011-1zm4 0a1 1 0 011 1v7a1 1 0 11-2 0V8a1 1 0 011-1zm4-3h-3.5l-1-1h-3l-1 1H2a1 1 0 100 2h1v11a2 2 0 002 2h10a2 2 0 002-2V6h1a1 1 0 100-2z" />
+                                        </svg>
+                                    </button>
                                 </td>
 
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?php
-                                    if (!empty($pl['product_weight']) && $pl['product_weight'] !== 'N/A') {
-                                        echo htmlspecialchars($pl['product_weight'] . ' ' . ($pl['product_weight_unit'] ?? ''), ENT_QUOTES, 'UTF-8');
-                                    } else {
-                                        echo 'N/A';
-                                    }
-                                ?>
-                                </td>
-                                <?php
-                                $dims = [];
+                            </tr>
+                            <tr class="detail-row hidden">
+                                <td colspan="10">
+                                    <div class="flex flex-wrap items-center gap-6 text-sm text-gray-700 px-4 py-3 bg-gray-50 rounded-md">
 
-                                if (!empty($pl['prod_height']) && $pl['prod_height'] !== 'N/A') {
-                                    $dims[] = 'H: ' . $pl['prod_height'];
-                                }
-
-                                if (!empty($pl['prod_width']) && $pl['prod_width'] !== 'N/A') {
-                                    $dims[] = 'W: ' . $pl['prod_width'];
-                                }
-
-                                if (!empty($pl['prod_length']) && $pl['prod_length'] !== 'N/A') {
-                                    $dims[] = 'L: ' . $pl['prod_length'];
-                                }
-                                ?>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <?= htmlspecialchars(implode(' x ', $dims), ENT_QUOTES, 'UTF-8'); ?>
-                                </td>
-
-                                <!-- action dropdown -->
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
-                                    <div class="menu-wrapper">
-                                        <button class="menu-button text-gray-500 hover:text-gray-700" onclick="toggleMenu(this)">
-                                            &#x22EE;
-                                        </button>
-                                        <ul class="menu-popup text-left">
-                                            <li>
-                                                <a href="javascript:void(0);"
-                                                    onclick="viewPurchaseListDetails('<?php echo $pl['id']; ?>')"
-                                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                                    View / Edit Details
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="javascript:void(0);"
-                                                    class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                                                    onclick="deletePurchaseListItem('<?php echo $pl['id']; ?>')">
-                                                    Delete
-                                                </a>
-                                            </li>
-                                        </ul>
+                                        <div><span class="font-semibold">Assigned To:</span> <?php echo htmlspecialchars($pl['agent_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
+                                        <div><span class="font-semibold">Vendor:</span> <?php
+                                            $vendor = trim($pl['vendor'] ?? '');
+                                            echo (!empty($vendor) && strtoupper($vendor) !== 'N/A')
+                                            ? ucwords(htmlspecialchars($vendor))
+                                            : 'N/A';
+                                        ?></div>
+                                        <div><span class="font-semibold">Purchased Date:</span> <?= htmlspecialchars($date_purchased, ENT_QUOTES, 'UTF-8'); ?></div>
+                                        <div><span class="font-semibold">Weight:</span> <?= $weight; ?></div>
+                                        <div><span class="font-semibold">Measurements:</span> <?= $measurements ?: 'N/A'; ?></div>
                                     </div>
                                 </td>
                             </tr>
@@ -488,188 +460,233 @@
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
+<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></script>
 <script>
     const statusArray = <?php echo json_encode(getPurchaseStatuses()); ?>;
 
-                          
-
-    //right side popup on item_code click 
     function viewPurchaseListDetails(plId) {
-        //DetailModal show
-        document.getElementById('DetailModal').classList.remove('hidden');
-        document.getElementById('modal-slider-bd').classList.remove('translate-x-full');
+  document.getElementById('DetailModal').classList.remove('hidden');
+  document.getElementById('modal-slider-bd').classList.remove('translate-x-full');
+  document.getElementById('plDetailMsg').innerHTML = '';
 
-        // Clear previous messages
-        document.getElementById('plDetailMsg').innerHTML = '';  
+  fetch(`?page=products&action=get_purchase_list_details&id=${encodeURIComponent(plId)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        showAlert('Failed to fetch purchase list details.');
+        return;
+      }
 
-        // Fetch purchase list details via AJAX
-        fetch(`<?php echo base_url('?page=products&action=get_purchase_list_details'); ?>&id=${plId}`)   
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const plDetails = data.purchaseItem;
-                    //console.log(plDetails);
-                    const fieldsContainer = document.getElementById('pl-detail-fields');
-                    //fieldsContainer.innerHTML = ''; // Clear previous fields
+      const plDetails = data.purchaseItem;
+      const fieldsContainer = document.getElementById('pl-detail-fields');
 
-                    // Populate fields dynamically
-                    document.querySelector('.p-title').innerText = `${plDetails.title || 'N/A'}`;
-                    const dims = [
-                        plDetails.prod_height ? `H: ${plDetails.prod_height}` : null,
-                        plDetails.prod_width  ? `W: ${plDetails.prod_width}`  : null,
-                        plDetails.prod_length ? `L: ${plDetails.prod_length}` : null,
-                    ]
-                    .filter(Boolean)
-                    .join(' x ');
+      document.querySelector('.p-title').innerText = `${plDetails.title || 'N/A'}`;
 
-                    const isPurchased = (plDetails.status === "purchased");
+      const dims = [
+        plDetails.prod_height ? `H: ${plDetails.prod_height}` : null,
+        plDetails.prod_width ? `W: ${plDetails.prod_width}` : null,
+        plDetails.prod_length ? `L: ${plDetails.prod_length}` : null,
+      ].filter(Boolean).join(' x ');
 
-                    fieldsContainer.innerHTML = `
-                        <!-- Product Image -->
-                        <input type="hidden" id="productId" value="${plDetails.id}" />
-                        <div class="col-span-2">
-                            <strong>Product Image : </strong>
-                            ${
-                                plDetails.image
-                                    ? `<div class="mt-2">
-                                        <img src="${plDetails.image}" alt="Product Image"
-                                            class="h-32 w-32 object-cover rounded border" />
-                                    </div>`
-                                    : `<span>N/A</span>`
-                            }
-                        </div>
-                        <div><strong>Assigned Agent : </strong> ${plDetails.agent_name || 'N/A'}</div>
-                        <div><strong>Vendor : </strong> ${plDetails.vendor || 'N/A'}</div>
-                        <div><strong>Date Added : </strong> ${plDetails.date_added_readable || 'N/A'}</div>
-                        <div><strong>Add By : </strong> ${plDetails.added_by_name || 'N/A'}</div>
-                        <div><strong>Purchased By: </strong> ${plDetails.agent_name || 'N/A'}</div>
-                        <div><strong>Purchased Date: </strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
-                        <div><strong>SKU : </strong> ${plDetails.sku || 'N/A'}</div>
-                        <div><strong>Color : </strong> ${plDetails.color || 'N/A'}</div>
-                        <div><strong>Size : </strong> ${plDetails.size || 'N/A'}</div>
-                        <div><strong>Material : </strong> ${plDetails.material || 'N/A'}</div>
-                        <div><strong>Measurements : </strong> ${dims}</div>
-                        <div><strong>Dimensions : </strong> </div>
-                        <div><strong>Weight : </strong> ${plDetails.weight ? plDetails.weight + ' kg' : 'N/A'}</div>`;
+      // ✅ Use plId for all ids in DOM
+      fieldsContainer.innerHTML = `
+        <!-- Hidden Fields -->
+        <input type="hidden" id="productId_${plId}" value="${plDetails.product_id || ''}" />
+        <input type="hidden" id="minStock_${plId}" value="${plDetails.min_stock || ''}" />
+        <input type="hidden" id="sku_${plId}" value="${plDetails.sku || ''}" />
+        <input type="hidden" id="orderId_${plId}" value="${plDetails.order_id || ''}" />
 
-                        fieldsContainer.innerHTML += `
-                            <div>
-                                <strong>Quantity to be Purchased: </strong>
-                                <span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-20 text-center">
-                                    ${plDetails.quantity || 0}
-                                </span>
-                            </div>
+        <input type="hidden" id="quantity_${plId}" value="${plDetails.quantity ?? ''}" data-original="${plDetails.quantity ?? ''}" />
+        <input type="hidden" id="edd_${plId}" value="${plDetails.expected_time_of_delivery ?? ''}" data-original="${plDetails.expected_time_of_delivery ?? ''}" />
+        <input type="hidden" id="status_${plId}" value="${plDetails.status ?? ''}" data-original="${plDetails.status ?? ''}" />
 
-                            <div>
-                                <strong>Quantity Purchased: </strong>
-                                ${
-                                    isPurchased
-                                        ? `<span class="inline-block bg-gray-100 border rounded px-2 py-1 mt-1 w-20 text-center">
-                                                ${plDetails.quantity || 0}
-                                        </span>`
-                                        : `<input type="number" id="pl-quantity" value="" class="no-negative border rounded px-2 py-1 mt-1 w-20" />`
-                                }
-                            </div>
-                        `;                       
+        <!-- Product Image -->
+        <div class="col-span-2">
+          <strong>Product Image :</strong>
+          ${
+            plDetails.image
+              ? `<div class="mt-2">
+                   <img src="${plDetails.image}" alt="Product Image"
+                        class="h-32 w-32 object-cover rounded border" />
+                 </div>`
+              : `<span>N/A</span>`
+          }
+        </div>
 
-                        fieldsContainer.innerHTML += `
-                        <div class="col-span-1 md:col-span-2">
-                            <strong>Status: </strong>
-                            <select id="pl-status" class="w-full border rounded px-2 py-1 mt-1 text-sm">
-                                ${Object.entries(statusArray).map(([value, label]) => {
-                                    const selected = (plDetails.status === value) ? 'selected' : '';
-                                    return `<option value="${value}" ${selected}>${label}</option>`;
-                                }).join('')}
-                            </select>
-                        </div>
+        <div><strong>Assigned Agent :</strong> ${plDetails.agent_name || 'N/A'}</div>
+        <div><strong>Vendor :</strong> ${plDetails.vendor || 'N/A'}</div>
+        <div><strong>Date Added :</strong> ${plDetails.date_added_readable || 'N/A'}</div>
+        <div><strong>Added By :</strong> ${plDetails.added_by_name || 'N/A'}</div>
+        <div><strong>Purchased By :</strong> ${plDetails.agent_name || 'N/A'}</div>
+        <div><strong>Purchased Date :</strong> ${plDetails.date_purchased_readable || 'N/A'}</div>
+        <div><strong>SKU :</strong> ${plDetails.sku || 'N/A'}</div>
+        <div><strong>Color :</strong> ${plDetails.color || 'N/A'}</div>
+        <div><strong>Size :</strong> ${plDetails.size || 'N/A'}</div>
+        <div><strong>Material :</strong> ${plDetails.material || 'N/A'}</div>
+        <div><strong>Measurements :</strong> ${dims || 'N/A'}</div>
+        <div><strong>Weight :</strong> ${plDetails.weight ? plDetails.weight + ' kg' : 'N/A'}</div>
 
-                         <div class="col-span-2 mt-4">
-                            <button
-                                type="button"
-                                class="text-sm text-blue-600 hover:underline"
-                                onclick="toggleComments(${plDetails.id})">
-                                Comments
-                            </button>
+        <!-- Editable fields (needed for submit handler) -->
+        <div class="col-span-1 md:col-span-2">
+          <strong>Quantity:</strong>
+          <input id="pl-quantity" class="w-full border rounded px-2 py-1 mt-1 text-sm"
+                 value="${plDetails.quantity ?? ''}" />
+        </div>
 
-                            <div id="commentsWrap_${plDetails.id}" class="mt-3">
-                                <!-- Thread list -->
-                                <div id="commentsThread_${plDetails.id}" class="space-y-3"></div>
+        <div class="col-span-1 md:col-span-2">
+          <strong>EDD:</strong>
+          <input id="pl-edd" type="date" class="w-full border rounded px-2 py-1 mt-1 text-sm"
+                 value="${(plDetails.expected_time_of_delivery || '').slice(0,10)}" />
+        </div>
 
-                                <!-- Add comment -->
-                                <div class="mt-3 flex gap-2">
-                                <input
-                                    id="commentInput_${plDetails.id}"
-                                    class="w-full border rounded px-3 py-2 text-sm"
-                                    placeholder="Write a comment..."
-                                />
-                                </div>
-                            </div>
-                        </div>   
+        <div class="col-span-1 md:col-span-2">
+          <strong>Status:</strong>
+          <select id="pl-status" class="w-full border rounded px-2 py-1 mt-1 text-sm">
+            ${Object.entries(statusArray).map(([value, label]) => {
+              const selected = (plDetails.status === value) ? 'selected' : '';
+              return `<option value="${value}" ${selected}>${label}</option>`;
+            }).join('')}
+          </select>
+        </div>
 
-                    `;
+        <!-- Comments -->
+        <div class="col-span-2 mt-4">
+          <button type="button" class="text-sm text-blue-600 hover:underline"
+                  onclick="toggleComments(${plId})">
+            Comments
+          </button>
 
-                    // Set hidden field value
-                    document.getElementById('purchase_list_id').value = plId;
-                    loadComments(plId);
-                } else {
-                    showAlert('Failed to fetch purchase list details.');
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching purchase list details:', error);
-                showAlert('An error occurred while fetching purchase list details.');
-            });
-    }
-    // Handle form submission for editing purchase list details
-    document.getElementById('plDetailForm').addEventListener('submit', function(event) {
+          <div id="commentsWrap_${plId}" class="mt-3">
+            <div id="commentsThread_${plId}" class="space-y-3"></div>
+
+            <div class="mt-3 flex gap-2">
+              <input id="commentInput_${plId}"
+                     class="w-full border rounded px-3 py-2 text-sm"
+                     placeholder="Write a comment..." />
+              
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('purchase_list_id').value = plId;
+      loadComments(plId);
+    })
+    .catch(err => {
+      console.error(err);
+      showAlert('An error occurred while fetching purchase list details.');
+    });
+}
+
+    document.getElementById("plDetailForm").addEventListener("submit", async function (event) {
         event.preventDefault();
 
-        const plId = document.getElementById('purchase_list_id').value;
-        let q = document.getElementById('pl-quantity')?.value;
-        if (q === undefined || q === null || q.trim() === "") {
-            q = 0;
-        } else {
-            q = Number(q);
-        }
+        const plId = document.getElementById("purchase_list_id")?.value;
+        if (!plId) return;
 
-        const quantity = q;
-        //const remark = document.getElementById('pl-remark').value;
-        const status = document.getElementById('pl-status').value;
+        const msgDiv = document.getElementById("plDetailMsg");
+        msgDiv.innerHTML = "";
 
-        // Prepare data to send
-        const formData = new FormData();
-        formData.append('page', 'products');
-        formData.append('action', 'editPlDetails');
-        formData.append('id', plId);
-        formData.append('quantity', quantity);
-        formData.append('status', status);
-        formData.append('product_id', productId);
+        // ----- Editable fields -----
+        let qRaw = String(document.getElementById("pl-quantity")?.value ?? "").trim();
+        const quantity = qRaw === "" ? 0 : Number(qRaw);
 
-        // ✅ 1) Save comment first (if any)
-        if (`commentInput_${plId}`.value !== '') {
-            addComment(plId);
-        }
+        const status = String(document.getElementById("pl-status")?.value ?? "");
 
-        // Send AJAX request to update details
-        fetch(`<?php echo base_url('?page=products&action=update_purchase_item'); ?>`, {
-                method: 'POST',
-                body: JSON.stringify(Object.fromEntries(formData))
-            })
-            .then(response => response.json())
-            .then(data => {
-                const msgDiv = document.getElementById('plDetailMsg');
-                if (data.success) {
-                    msgDiv.innerHTML = '<span class="text-green-600">Purchase list details updated successfully.</span>';
-                } else {
-                    msgDiv.innerHTML = '<span class="text-red-600">Failed to update purchase list details.</span>';
-                }
-            })
-            .catch(error => {
-                console.error('Error updating purchase list details:', error);
-                const msgDiv = document.getElementById('plDetailMsg');
-                msgDiv.innerHTML = '<span class="text-red-600">An error occurred while updating purchase list details.</span>';
+        const eddRaw = String(document.getElementById("pl-edd")?.value ?? "").trim();
+        const expected_time_of_delivery = eddRaw !== "" ? eddRaw : null;
+
+        // ----- Hidden fields / originals -----
+        const qtyHidden = document.getElementById(`quantity_${plId}`);
+        const statusHidden = document.getElementById(`status_${plId}`);
+        const eddHidden = document.getElementById(`edd_${plId}`);
+
+        const originalQty = String(qtyHidden?.dataset?.original ?? "");
+        const originalStatus = String(statusHidden?.dataset?.original ?? "");
+        const originalEddRaw = String(eddHidden?.dataset?.original ?? "");
+        const originalEdd = originalEddRaw.trim() !== "" ? originalEddRaw : null;
+
+        const productId = String(document.getElementById(`productId_${plId}`)?.value ?? "");
+        const sku = String(document.getElementById(`sku_${plId}`)?.value ?? "");
+        const orderID = String(document.getElementById(`orderId_${plId}`)?.value ?? "");
+
+        // ----- Comment -----
+        const commentEl = document.getElementById(`commentInput_${plId}`);
+        const commentText = commentEl ? String(commentEl.value ?? "").trim() : "";
+
+        // ----- Determine item changes -----
+        const changed =
+            //String(quantity) !== originalQty ||
+            status !== originalStatus ||
+            expected_time_of_delivery !== originalEdd;
+
+        let commentSaved = false;
+        let itemSaved = false;
+
+        try {
+            // 1) Save comment first (if any)
+            if (commentText !== "") { 
+            // If addComment needs commentText param, change to: await addComment(plId, orderID, commentText)
+            const commentRes = await addComment(plId, '','',orderID);
+
+            // Treat "no explicit false" as success (works even if addComment returns nothing)
+            if (commentRes?.success !== false) {
+                commentSaved = true;
+                if (commentEl) commentEl.value = "";
+            }
+            }
+
+            // 2) Update purchase item only if fields changed
+            if (changed) {
+            const payload = {
+                page: "products",
+                action: "update_purchase_item",
+                id: plId,
+                quantity,
+                expected_time_of_delivery,
+                status,
+                product_id: productId,
+                sku,
+                orderID
+            };
+
+            const res = await fetch("?page=products&action=update_purchase_item", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
             });
-    });
+
+            const data = await res.json();
+
+            if (data?.success) {
+                itemSaved = true;
+
+                // update originals so next save doesn't re-trigger
+                if (qtyHidden) qtyHidden.dataset.original = String(quantity);
+                if (statusHidden) statusHidden.dataset.original = status;
+                if (eddHidden) eddHidden.dataset.original = expected_time_of_delivery ?? "";
+            } else {
+                msgDiv.innerHTML = `<span class="text-red-600">Failed: ${data?.message ?? "Error"}</span>`;
+                return;
+            }
+            }
+
+            // 3) Final success message
+            if (commentSaved && itemSaved) {
+            msgDiv.innerHTML = `<span class="text-green-600">Comment and item updated successfully.</span>`;
+            } else if (commentSaved) {
+            msgDiv.innerHTML = `<span class="text-green-600">Comment added successfully.</span>`;
+            } else if (itemSaved) {
+            msgDiv.innerHTML = `<span class="text-green-600">Purchase item updated successfully.</span>`;
+            } else {
+            msgDiv.innerHTML = `<span class="text-gray-600">No changes detected.</span>`;
+            }
+        } catch (error) {
+            console.error("Save error:", error);
+            msgDiv.innerHTML = `<span class="text-red-600">An error occurred while saving.</span>`;
+        }
+});
+
 
     // show/hide popup
     document.getElementById('close-pl-modal').addEventListener('click', function() {
@@ -683,24 +700,6 @@
         document.getElementById('modal-slider-bd').classList.add('translate-x-full');
     });
 
-    //toggleMenu
-    function toggleMenu(button) {
-        const popup = button.nextElementSibling;
-        popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
-
-        // Close other open menus
-        document.querySelectorAll('.menu-popup').forEach(menu => {
-            if (menu !== popup) menu.style.display = 'none';
-        });
-    }
-    // Close menu when clicking outside
-    document.addEventListener('click', function(event) {
-        if (!event.target.closest('.menu-wrapper')) {
-            document.querySelectorAll('.menu-popup').forEach(menu => {
-                menu.style.display = 'none';
-            });
-        }
-    });
     // Delete purchase list item
     /*function deletePurchaseListItem(plId) {
         if (confirm('Are you sure you want to delete this purchase list item?')) {
@@ -783,16 +782,6 @@
         accordionIcon.classList.toggle('rotate-180');
     });
 
-    function sortTableByDate() {
-        const url = new URL(window.location.href);
-        const current = url.searchParams.get('sort_by_date') || 'desc';
-        const next = current === 'asc' ? 'desc' : 'asc';
-
-        url.searchParams.set('sort_by_date', next);
-        window.location.href = url.toString();
-    }
-
-
     $('#daterange').daterangepicker({
         autoUpdateInput: false,
         locale: {
@@ -837,4 +826,4 @@
         );
     }
 </script>
-<script src="<?php echo base_url('assets/js/purchase_list.js'); ?>"></script>
+

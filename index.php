@@ -396,7 +396,7 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();         
                 break;
-            case 'get_product_details_html';
+            case 'get_product_details_html':
                 $controller->getProductDetailsHTML();         
                 break;  
             case 'get_vendor_edit_form':
@@ -464,10 +464,20 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->detail();
                 break;
+            case 'save_stock_adjustment':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->saveStockAdjustment(); // This method will handle the POST data
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
-                
+            case 'get_filtered_stock_history':
+                $controller->getFilteredStockHistory();
+                break;
+            case 'inventory_ledger':
+                 $controller->inventoryLedger();                
+                break;    
             default:
                 $controller->product_list();
                 break;
@@ -626,6 +636,11 @@ switch ($page) {
                 $controller->getItamcode();
             case 'search_book_attr':
                 $controller->searchBookAttributes();
+            case 'bulkAssign':
+                $controller->bulk_assign_action();
+            case 'printInboundLabel':
+                $controller->printInboundLabel();
+                break;
             default:
                 $controller->index();
                 break;
@@ -761,6 +776,33 @@ switch ($page) {
                 break;
             default:
                 $controller->settings();   
+                break;
+        }
+        break;
+    case 'dispatch':
+        require_once 'controllers/DispatchController.php';
+        $controller = new DispatchController($conn);
+        switch ($action) {
+            case 'create':
+                $controller->create();   
+                break;
+            case 'retry_dispatch':
+                $controller->retryDispatch();
+                break;
+            case 'retry_invoice':
+                $controller->retryInvoice();
+                break;
+            case 'merge_labels':
+                $controller->mergeLabels();
+                break;
+            case 'list':
+                $controller->index();
+                break;
+            case 'cancel_dispatch':
+                $controller->cancelDispatch();
+                break;
+            default:
+                $controller->create();   
                 break;
         }
         break;

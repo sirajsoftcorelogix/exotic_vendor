@@ -15,48 +15,112 @@
     }
 </style>
 <div class="container mx-auto p-4">
+    <div class="container mx-auto p-4">
+    <div class="bg-white p-4 rounded-xl shadow-sm border">
+    <form method="GET"
+          class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-4 items-end">
+
+        <input type="hidden" name="page" value="products">
+        <input type="hidden" name="action" value="purchase_list">
+
+        <!-- Search (Wider) -->
+        <div class="md:col-span-3 lg:col-span-4">
+            <label class="text-sm text-gray-600">Search</label>
+            <input type="text" name="search"
+                placeholder="Search by Item Code, Title..."
+                value="<?= htmlspecialchars($_GET['search'] ?? '') ?>"
+                class="h-11 border rounded-lg px-3 w-full
+                       focus:ring-1 focus:ring-orange-400 focus:border-orange-400">
+        </div>
+
+        <!-- Added By (Smaller) -->
+        <div class="md:col-span-1 lg:col-span-2">
+            <label class="text-sm text-gray-600">Added By</label>
+            <select name="added_by"
+                class="h-11 border rounded-lg px-3 w-full
+                       focus:ring-1 focus:ring-orange-400 focus:border-orange-400">
+                <option value="">All</option>
+                <?php foreach ($staff_list as $id => $name): ?>
+                    <option value="<?= $id ?>" <?= ($_GET['added_by'] ?? '') == $id ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($name) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <!-- Assigned To (Smaller) -->
+        <div class="md:col-span-1 lg:col-span-2">
+            <label class="text-sm text-gray-600">Assigned To</label>
+            <select name="assigned_to"
+                class="h-11 border rounded-lg px-3 w-full
+                       focus:ring-1 focus:ring-orange-400 focus:border-orange-400">
+                <option value="">All</option>
+                <?php foreach ($staff_list as $id => $name): ?>
+                    <option value="<?= $id ?>" <?= ($_GET['assigned_to'] ?? '') == $id ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($name) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <!-- Category -->
+        <div class="md:col-span-1 lg:col-span-2">
+            <label class="text-sm text-gray-600">Category</label>
+            <select name="category"
+                class="h-11 border rounded-lg px-3 w-full
+                       focus:ring-1 focus:ring-orange-400 focus:border-orange-400">
+                <option value="all">All</option>
+                <?php foreach (($data['categories'] ?? []) as $cat): ?>
+                    <option value="<?= htmlspecialchars($cat) ?>"
+                        <?= ($_GET['category'] ?? '') === $cat ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($cat) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <!-- Status -->
+        <?php
+            $statuses = getPurchaseStatuses();
+            $selected = $_GET['status'] ?? '';
+        ?>
+        <div class="md:col-span-1 lg:col-span-2">
+            <label class="text-sm text-gray-600">Status</label>
+            <select name="status"
+                class="h-11 border rounded-lg px-3 w-full
+                       focus:ring-1 focus:ring-orange-400 focus:border-orange-400">
+                <option value="all">All</option>
+                <?php foreach ($statuses as $key => $label): ?>
+                    <option value="<?= htmlspecialchars($key) ?>"
+                        <?= ($selected === $key) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($label) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <!-- Buttons -->
+        <div class="lg:col-span-12 flex justify-end gap-3 pt-2">
+            <button type="button"
+                onclick="window.location.href='?page=products&action=purchase_list'"
+                class="h-11 px-5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg">
+                Reset
+            </button>
+
+            <button type="submit"
+                class="h-11 px-6 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium">
+                Apply Filter
+            </button>
+        </div>
+
+    </form>
+</div>
+</div>
     <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div class="flex justify-between items-center">
             <h1 class="text-2xl font-bold">Purchase List</h1>
             <div class="text-sm text-gray-600 ml-auto px-2">Showing <strong><?php echo isset($data['total_records']) ? (int)$data['total_records'] : 0; ?></strong> items</div>
-        </div>
-        <form method="GET" action="" class="flex items-center gap-3">
-            <input type="hidden" name="page" value="products">
-            <input type="hidden" name="action" value="purchase_list">
-            <div class=" gap-2 w-1/2 flex-1">
-                <label class="text-xs text-gray-600">Category</label><br>
-                <select name="category" class="text-sm border rounded px-2 py-1 bg-white" onchange="this.form.submit()">
-                    <option value="all">All</option>
-                    <?php foreach (($data['categories'] ?? []) as $cat): ?>
-                        <option value="<?= htmlspecialchars($cat) ?>" <?= (isset($data['selected_filters']['category']) && $data['selected_filters']['category'] === $cat) ? 'selected' : '' ?>><?= htmlspecialchars($cat) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="gap-2 w-1/2 ml-2 flex-2">
-                <label class="text-xs text-gray-600">Status</label><br>
-                <select name="status" class="text-sm border rounded px-2 py-1 bg-white w-full" onchange="this.form.submit()">
-                    <!-- ALL option -->
-                    <option value="all" <?= (!empty($data['selected_filters']['status']) && $data['selected_filters']['status'] === 'all') ? 'selected' : '' ?>>
-                        All
-                    </option>
-                    <?php
-                    $statuses = getPurchaseStatuses(); // returns key => label list
-                    $selected = $data['selected_filters']['status'] ?? 'pending'; // default fallback
-                    ?>
-                    <?php foreach ($statuses as $key => $label): ?>
-                        <option value="<?= htmlspecialchars($key) ?>"
-                            <?= ($selected === $key) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($label) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <!-- <div class="flex items-center gap-2">
-                <button type="submit" class="bg-amber-600 text-white px-3 py-1 rounded">Filter</button>
-                <a href="?page=products&action=purchase_list" class="px-3 py-1 border rounded text-sm">Clear</a>
-            </div> -->
-        </form>
+        </div>        
     </div>
     <?php if (!empty($data['purchase_list'])): ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -132,6 +196,12 @@
                 <!-- hidden fields -->
                 <input type="hidden" id="productId_<?= (int)$pl['id']; ?>" value="<?= (int)$pl['product_id']; ?>"/>
                 <input type="hidden" id="minStock_<?= (int)$pl['id']; ?>" value="<?= $pl['product']['min_stock'] ?? ''; ?>" />
+                <input type="hidden" id="sku_<?= (int)$pl['id']; ?>" value="<?= $item_code; ?>" />
+                <input type="hidden" id="orderId_<?= (int)$pl['id']; ?>" value="<?= $pl['order_id']; ?>" />
+
+                <input type="hidden" id="edd_<?= (int)$pl['id']; ?>" value="<?= $pl['expected_time_of_delivery']; ?>" data-original = "<?= $pl['expected_time_of_delivery']; ?>"/>
+                <input type="hidden" id="statusOrg_<?= (int)$pl['id']; ?>" value="<?= $status; ?>" data-original = "<?= $status; ?>"/>
+
 
                 <!-- HEADER -->
                 <div class="flex gap-4 relative">
@@ -208,11 +278,17 @@
                     <div class="text-gray">:</div>
                     <div class="font-medium"><?= htmlspecialchars($date_added); ?></div>
 
-                    <?php if (!empty($pl['vendor']) && strtoupper(trim($pl['vendor'])) !== 'N/A'): ?>
-                        <div class="text-gray">Vendor</div>
-                        <div class="text-gray">:</div>
-                        <div class="font-medium"><?= ucwords($pl['vendor']); ?></div>
-                    <?php endif; ?>
+                    <div class="text-gray">Vendor</div>
+                    <div class="text-gray">:</div>
+                    <div class="font-medium">
+                    <?php
+                        $vendor = trim($pl['vendor'] ?? '');
+                        echo (!empty($vendor) && strtoupper($vendor) !== 'N/A')
+                        ? ucwords(htmlspecialchars($vendor))
+                        : 'N/A';
+                    ?>
+                    </div>
+
 
                     <div class="text-gray">SKU</div>
                     <div class="text-gray">:</div>

@@ -1,5 +1,6 @@
  <?php
 require_once 'models/inbounding/Inbounding.php';
+require_once 'controllers/ProductsController.php';
 
 $inboundingModel = new Inbounding($conn);
 
@@ -15,25 +16,36 @@ class InboundingController {
         $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
         
         $filters = [
-            'vendor_code'         => $_GET['vendor_code'] ?? '',
-            'received_by_user_id' => $_GET['agent_id'] ?? '',
-            'group_name'          => $_GET['group_name'] ?? '',
-            'status_step'         => $_GET['status_step'] ?? '',
-            'updated_by_user_id'  => $_GET['updated_by'] ?? ''
+            'vendor_code'           => $_GET['vendor_code'] ?? '',
+            'received_by_user_id'   => $_GET['agent_id'] ?? '',
+            'group_name'            => $_GET['group_name'] ?? '',
+            'status_step'           => $_GET['status_step'] ?? '',
+            'updated_by_user_id'    => $_GET['updated_by'] ?? '',
+            'cp_filter'             => $_GET['cp_filter'] ?? '',
+            'priceindia_filter'     => $_GET['priceindia_filter'] ?? '',
+            'usd_filter'            => $_GET['usd_filter'] ?? '',
+            'in_house'              => $_GET['in_house'] ?? '',
+            'item_code'             => $_GET['filter_item_code'] ?? '',
+            'assigned_user_id'      => $_GET['assigned_user_id'] ?? '',
+            'created_from'          => $_GET['created_from'] ?? '',
+            'created_to'            => $_GET['created_to'] ?? '',
+            'published_from'        => $_GET['published_from'] ?? '',
+            'published_to'          => $_GET['published_to'] ?? ''
         ];
-
+        $sort = $_GET['sort'] ?? '';
         // 2. Pagination Logic
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
-        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
         $valid_limits = [10, 25, 50, 100]; 
-        if (!in_array($limit, $valid_limits)) $limit = 10;
-
+        if (!in_array($limit, $valid_limits)) $limit = 50;
+        $isMyInbound = isset($_GET['my_inbound']) && $_GET['my_inbound'] == 1;
+        $loggedUserId = $_SESSION['user']['id'];
         // 3. Fetch Main Data
-        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters); 
+        $pt_data = $inboundingModel->getAll($page_no, $limit, $search, $filters ,$isMyInbound,$loggedUserId,$sort); 
         
         // 4. Fetch Dynamic Dropdown Data (The function we just updated)
         $dropdowns = $inboundingModel->getFilterDropdowns();
-
+        $alluser_list = $inboundingModel->getAllActiveUsers();
         $data = [
             'inbounding_data' => $pt_data["inbounding"],
             'page_no'         => $page_no,
@@ -48,13 +60,45 @@ class InboundingController {
             'filters'         => $filters,
             'vendor_list'     => $dropdowns['vendors'],
             'user_list'       => $dropdowns['users'],
-            'group_list'      => $dropdowns['groups']
+            'group_list'      => $dropdowns['groups'],
+            'alluser_list'      => $alluser_list
         ];
-        
         renderTemplate('views/inbounding/index.php', $data, 'Manage Inbounding');
     }
     // In your Inbounding Controller
-
+    public function bulk_assign_action(){
+        is_login();
+        global $inboundingModel;
+        if (!isset($_POST['ids'], $_POST['user_id'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Missing parameters'
+            ]);
+            exit;
+        }
+        $ids_string = trim($_POST['ids']);      // "12,15,22"
+        $user_id    = (int) $_POST['user_id'];
+        if ($ids_string === '' || $user_id <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid data'
+            ]);
+            exit;
+        }
+        $ids = array_filter(array_map('intval', explode(',', $ids_string)));
+        if (empty($ids)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No valid IDs found'
+            ]);
+            exit;
+        }
+        $result = $inboundingModel->bulkAssign($ids, $user_id);
+        echo json_encode([
+            'success' => $result ? true : false
+        ]);
+        exit;
+    }
     public function exportSelected() {
         global $inboundingModel; // Use the global model instance
 
@@ -239,7 +283,6 @@ class InboundingController {
         $data['form2']['getimgdir'] = $this->getimgdir();
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
-        // echo "<pre>";print_r($data['getimgdir']);exit;
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
     }
     function getimgdir() {
@@ -551,24 +594,24 @@ class InboundingController {
             }
 
             // 3. Handle NEW File Uploads with Variation ID
-            if (!empty($_FILES['new_photos']['name'][0])) {
+            if (!empty($_FILES['new_photos']['name'])) {
                 $uploadDir = __DIR__ . '/../uploads/itm_img/';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                 
-                // Iterate over uploaded files
                 foreach ($_FILES['new_photos']['name'] as $key => $name) {
-                    if ($_FILES['new_photos']['error'][$key] === 0) {
+                    // Only process if the file exists and has no errors
+                    if (isset($_FILES['new_photos']['error'][$key]) && $_FILES['new_photos']['error'][$key] === 0) {
                         
                         $tmpName = $_FILES['new_photos']['tmp_name'][$key];
                         $ext = pathinfo($name, PATHINFO_EXTENSION);
                         $newName = 'img_' . $id . '_' . time() . '_' . rand(100,999) . '.' . $ext;
                         
-                        // Retrieve Caption AND Variation ID for this specific file index
+                        // In your JS, new_image_variation_id[] and new_captions[] are 
+                        // appended to the DOM, so they will follow the same index order as new_photos[]
                         $newCaption = $_POST['new_captions'][$key] ?? '';
-                        $varId = $_POST['new_image_variation_id'][$key] ?? -1; // Default to Base (-1)
+                        $varId = $_POST['new_image_variation_id'][$key] ?? -1;
 
                         if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
-                            // Pass Variation ID to Model
                             $inboundingModel->add_image($id, $newName, $newCaption, 0, $varId);
                         }
                     }
@@ -590,7 +633,7 @@ class InboundingController {
         
         // 1. Get images from DB
         $images = $inboundingModel->get_raw_item_imgs($id);
-        $item_code = $inboundingModel->get_temp_code($id);
+        $item_code = $inboundingModel->get_item_code($id);
         if(empty($images)) {
             echo "<script>alert('No images found for this item.'); history.back();</script>";
             exit;
@@ -598,7 +641,7 @@ class InboundingController {
 
         // 2. Setup Zip
         $zip = new ZipArchive();
-        $zipName = "Item_{$item_code['temp_code']}_Photos_" . date('Ymd_His') . ".zip";
+        $zipName = "Item_{$item_code['Item_code']}_Photos_" . date('Ymd_His') . ".zip";
         $tmp_file = sys_get_temp_dir() . '/' . $zipName;
 
         if ($zip->open($tmp_file, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
@@ -904,7 +947,6 @@ class InboundingController {
     }
     public function updatedesktopform() {
         global $inboundingModel;
-
         // 1. Setup & Checks
         $id = $_GET['id'] ?? 0;
         $oldData = $inboundingModel->getform1data($id);
@@ -927,79 +969,16 @@ class InboundingController {
 
         // 1. Capture Inputs
         $is_variant = $_POST['is_variant'] ?? '';
-        $item_code = $_POST['Item_code'] ?? ''; 
 
-        // 2. Fetch Old Data
-        $old_group_val = trim((string)($oldData['form1']['group_name'] ?? ''));
-        $old_cat_val   = trim((string)($oldData['form1']['category_code'] ?? ''));
-        // 3. Fetch New Data from Post
-        $new_group_val = trim((string)($_POST['group_name'] ?? ''));
-        $raw_cat       = $_POST['category_code'] ?? 0;
-        $new_cat_val   = is_array($raw_cat) ? trim((string)$raw_cat[0]) : trim((string)$raw_cat);
-
-        // --- DEBUGGING LINE: Remove // from the line below to see why it fails ---
-        // die("Old Group: $old_group_val | New Group: $new_group_val <br> Old Cat: $old_cat_val | New Cat: $new_cat_val");
-
-        // 4. LOGIC: Should we reset the item code?
-        $shouldRegenerate = false;
-
-        // If it's a parent record...
-        if ($is_variant === 'N') {
-            // If Item Code is totally empty
-            if (empty($item_code)) {
-                $shouldRegenerate = true;
-            } 
-            // OR if Group has changed (and isn't empty)
-            if ($new_group_val !== $old_group_val && !empty($old_group_val)) {
-                $shouldRegenerate = true;
+        if ($oldData['form1']['is_variant'] == 'Y') {
+            if ($_POST['is_variant'] != $oldData['form1']['is_variant']) {
+                $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name']));
+                $item_code = $this->generateItemcode($group_real_name);
+            }else{
+                $item_code = $_POST['Item_code'] ?? '';
             }
-            // OR if Category has changed (and isn't empty)
-            if ($new_cat_val !== $old_cat_val && !empty($old_cat_val)) {
-                $shouldRegenerate = true;
-            }
-        }
-
-        // 5. THE GENERATOR
-        if ($shouldRegenerate) {
-            // We clear item_code to force the loop to create a new one
-            $item_code = ''; 
-
-            $group_real_name = trim($inboundingModel->getGroupNameByCode($new_group_val));
-            $cat_real_name   = trim($inboundingModel->getCategoryName($new_cat_val));
-            
-            $char1 = !empty($group_real_name) ? strtoupper(substr($group_real_name, 0, 1)) : 'X';
-            $char2 = !empty($cat_real_name)   ? strtoupper(substr($cat_real_name, 0, 1))   : 'X';
-            $current_prefix = $char1 . $char2;
-
-            $last_code = $inboundingModel->getLastItemCodeGlobal();
-            
-            // INCREMENT LOGIC
-            if (empty($last_code)) {
-                $letters = 'AA'; $number = 0;
-            } else {
-                $last_sequence = substr($last_code, 2); 
-                if (preg_match('/^([A-Z]+)(\d+)$/', $last_sequence, $matches)) {
-                    $letters = $matches[1]; 
-                    $number = intval($matches[2]);
-                } else {
-                    $letters = 'AA'; $number = 0;
-                }
-            }
-
-            $attempts = 0;
-            do {
-                $attempts++;
-                if ($number < 99) { $number++; } else { $number = 1; $letters++; }
-                
-                $new_seq = $letters . str_pad($number, 2, '0', STR_PAD_LEFT);
-                $candidate_code = $current_prefix . $new_seq;
-                
-                if (!$inboundingModel->checkItemCodeExists($candidate_code)) {
-                    $item_code = $candidate_code;
-                    $shouldRename = true;
-                    break; 
-                }
-            } while ($attempts < 100000);
+        }else{
+            $item_code = $_POST['Item_code'] ?? '';         
         }
         if (!empty($item_code)) {
             $shouldRename = true; 
@@ -1087,7 +1066,9 @@ class InboundingController {
             'price_india'         => $_POST['price_india'] ?? '',
             'usd_price'             => !empty($_POST['usd_price']) ? $_POST['usd_price'] : 0,
             'hsn_code'            => $_POST['hsn_code'] ?? '',
-            'gst_rate'            => $_POST['gst_rate'] ?? '',
+            'gst_rate'            => $_POST['gst_rate'] ?? '0',
+            'dimensions'          => $_POST['dimensions'] ?? '',
+            'upc'                 => $_POST['upc'] ?? '',
             'height'              => $_POST['height'] ?? '',
             'width'               => $_POST['width'] ?? '',
             'depth'               => $_POST['depth'] ?? '',
@@ -1098,7 +1079,7 @@ class InboundingController {
             'permanently_available'=> $_POST['permanently_available'] ?? '',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
-            'marketplace'         => $_POST['marketplace'] ?? '',
+            'marketplace'         => $_POST['marketplace'] ?? ' ',
             'india_net_qty'       => $_POST['india_net_qty'] ?? '',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
@@ -1137,7 +1118,7 @@ class InboundingController {
             }
         }
         unset($variant);
-        $inboundingModel->saveVariations($id, $allVariations, $item_code);
+        $inboundingModel->saveVariations($id, $allVariations, $item_code,$item_code);
 
         // 5. Update Image Order & Assignment
         if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
@@ -1158,12 +1139,18 @@ class InboundingController {
             // =========================================================
             if (!empty($item_code) && $shouldRename) {
                 // Pass current POST data to helper so we use fresh color/size values
-                $currentDataForRename = [
-                    'is_variant' => $is_variant,
-                    'color'      => $_POST['color'] ?? '',
-                    'size'       => $_POST['size'] ?? ''
-                ];
-                $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
+                // $currentDataForRename = [
+                //     'is_variant' => $is_variant,
+                //     'color'      => $_POST['color'] ?? '',
+                //     'size'       => $_POST['size'] ?? ''
+                // ];
+                $this->ensureImagesAreRenamed(
+                    $id, 
+                    $item_code, 
+                    $is_variant, 
+                    $_POST['color'] ?? '', 
+                    $_POST['size'] ?? ''
+                );
             }
             // =========================================================
             
@@ -1181,13 +1168,43 @@ class InboundingController {
             echo "Update failed: " . $result['message'];
         }
     }
+
+    private function generateItemcode($group_real_name) {
+        global $inboundingModel;
+        $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
+        $last_code = $inboundingModel->getLastItemCode($prefix);
+
+        if (!$last_code) {
+            return $prefix . "A0001"; 
+        }
+        $alphaPart = substr($last_code, 1, 1); // Get 'A'
+        $numPart   = (int)substr($last_code, 2); // Get 1
+        $numPart++;
+        if ($numPart > 9999) {
+            $numPart = 1;
+            $alphaPart++; // PHP increments 'A' to 'B' automatically            
+            if (strlen($alphaPart) > 1) {
+                die("Error: Maximum item code limit reached for prefix $prefix");
+            }
+        }
+        return $prefix . $alphaPart . str_pad((string)$numPart, 4, '0', STR_PAD_LEFT);
+    }
     public function submitStep3() {
         global $inboundingModel;
-
         // 1. Basic Setup
         $record_id = $_POST['record_id'] ?? '';
         if (empty($record_id)) { echo "Record ID missing"; exit; }
 
+        // Use existing code if it's a variant, otherwise generate a new one
+        if ($_POST['is_variant']== 'Y') {
+            $item_code = $_POST['Item_code'];
+        } else {
+            // Get group name to determine the first letter
+            $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['category']));
+            $item_code = $this->generateItemcode($group_real_name);
+        }
+
+        // i want to genrate item_code here
         // 2. Process Variations
         $allVariations = array_values($_POST['variations'] ?? []);
         foreach ($allVariations as $index => &$variant) {
@@ -1197,6 +1214,9 @@ class InboundingController {
           $variant['price_india_mrp'] = !empty($variant['price_india_mrp']) ? $variant['price_india_mrp'] : 0;
           $variant['usd_price']   = !empty($variant['usd_price']) ? $variant['usd_price'] : 0;
           $variant['quantity']    = !empty($variant['quantity']) ? $variant['quantity'] : 0;
+          $variant['hsn_code']    = !empty($variant['hsn_code']) ? $variant['hsn_code'] : '';
+          $variant['gst_rate']    = !empty($variant['gst_rate']) ? $variant['gst_rate'] : 0;
+          $variant['dimensions']    = !empty($variant['dimensions']) ? $variant['dimensions'] : '';
           // Handle File Uploads (Same as before)
           $uploadError = $_FILES['variations']['error'][$index]['photo'] ?? UPLOAD_ERR_NO_FILE;
           if ($uploadError === UPLOAD_ERR_OK) {
@@ -1222,27 +1242,6 @@ class InboundingController {
 
         // 4. TEMP CODE LOGIC (Same as before)
         $existingData = $inboundingModel->getById($record_id);
-        if (!empty($existingData['temp_code']) && $existingData['temp_code'] !== '0') {
-          $temp_code = $existingData['temp_code'];
-        } else {
-          $categoryName = '';
-          if (!empty($existingData['group_name'])) {
-            $catData = $inboundingModel->getCategoryById($existingData['group_name']);
-            $categoryName = $catData['display_name'] ?? '';
-          }
-          $materialId = $_POST['material_code'] ?? '';
-          $materialName = '';
-          if (!empty($materialId)) {
-            $matData = $inboundingModel->getMaterialById($materialId);
-            $materialName = $matData['material_name'] ?? '';
-          }
-          $colorName = $mainVariant['color'] ?? '';
-          $char1 = !empty($categoryName) ? strtoupper(substr($categoryName, 0, 1)) : 'X';
-          $char2 = !empty($materialName) ? strtoupper(substr($materialName, 0, 1)) : 'X';
-          $char3 = !empty($colorName)  ? strtoupper(substr($colorName, 0, 1))  : 'X';
-          $prefix = $char1 . $char2 . $char3;
-          $temp_code = $inboundingModel->generateNextTempCode($prefix);
-        }
 
         // 5. PREPARE MAIN UPDATE DATA
         // FIX: Mapping HTML inputs to exact DB Column names here
@@ -1252,10 +1251,9 @@ class InboundingController {
           'material_code'    => $_POST['material_code'] ?? '',
           'group_name'     => $_POST['category'] ?? '',
           'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
-          'Item_code'      => $_POST['Item_code'] ?? '',
+          'Item_code'      => $item_code ?? '',
           'is_variant'      => $_POST['is_variant'] ?? '',
           'feedback'      => $_POST['feedback'] ?? '',
-          'temp_code'      => $temp_code,
          
           // Map Index 0 Data to DB Columns
           'height'       => $mainVariant['height'] ?? 0,
@@ -1269,6 +1267,9 @@ class InboundingController {
           'store_location'   => $mainVariant['store_location'] ?? '',
           'price_india'     => $mainVariant['price_india'] ?? '',
           'price_india_mrp'   => $mainVariant['price_india_mrp'] ?? '',
+          'hsn_code'   => $mainVariant['hsn_code'] ?? '',
+          'gst_rate'   => $mainVariant['gst_rate'] ?? 0,
+          'dimensions'   => $mainVariant['dimensions'] ?? 0,
 
           // CRITICAL FIX: Map 'quantity' from HTML to 'quantity_received' for DB
           'quantity_received'  => $mainVariant['quantity'] ?? 0,
@@ -1284,7 +1285,7 @@ class InboundingController {
           }
 
           // Save extra variations
-          $inboundingModel->saveVariations($record_id, $allVariations, $temp_code);
+          $inboundingModel->saveVariations($record_id, $allVariations,$item_code);
          
           header("Location: " . base_url("?page=inbounding&action=label&id=" . $record_id));
           exit;
@@ -1340,47 +1341,63 @@ class InboundingController {
         exit;
     }
     public function deleteSelected() {
-        // 1. Use the Global variable (Like in your sample code)
-        // Make sure this matches the variable name defined in your index.php
-        global $inboundingModel; 
-        global $conn; // Sometimes needed if the model relies on it implicitly
-
-        // 2. Security Check
-        if (!isset($_SESSION['user']['id'])) {
-            // Redirect to login or show error
-            header("Location: " . base_url('?page=inbounding&action=list&msg=unauthorized'));
+        global $inboundingModel;
+        
+        $ids_string = $_POST['ids'] ?? '';
+        if (empty($ids_string)) {
+            header("Location: ?page=inbounding&action=list&msg=no_selection");
             exit;
         }
 
-        // 3. Get IDs from POST
-        $ids_string = $_POST['ids'] ?? '';
-
-        if (!empty($ids_string)) {
-            // Convert string "1,2,3" into array
-            $ids_array = explode(',', $ids_string);
-            $ids_array = array_map('intval', $ids_array); // Security: Force integers
-            $ids_array = array_filter($ids_array); // Remove empty values
-
-            if (!empty($ids_array)) {
-                // 4. Call Model using the global variable
-                // Ensure you added the 'deleteInboundItems' function to your Model class!
-                $result = $inboundingModel->deleteInboundItems($ids_array);
-
-                if ($result) {
-                    // Success: Redirect back to the list
-                    header("Location: " . base_url('?page=inbounding&action=list&msg=deleted_success'));
-                    exit;
-                } else {
-                    // Database Error
-                    header("Location: " . base_url('?page=inbounding&action=list&msg=error_db'));
-                    exit;
-                }
-            }
-        }
+        $ids_array = array_filter(array_map('intval', explode(',', $ids_string)));
         
-        // Fallback: No IDs selected or other error
-        header("Location: " . base_url('?page=inbounding&action=list&msg=no_selection'));
+        // Find which ones are published
+        $blockedIds = $inboundingModel->checkPublishedBeforeDelete($ids_array);
+        
+        // Filter the array to only include IDs NOT in the blocked list
+        $allowedToDelete = array_diff($ids_array, $blockedIds);
+
+        if (empty($allowedToDelete)) {
+            // Everything selected was published
+            header("Location: ?page=inbounding&action=list&msg=all_blocked");
+            exit;
+        }
+
+        $result = $inboundingModel->deleteInboundItems($allowedToDelete);
+
+        if ($result) {
+            $msg = (!empty($blockedIds)) ? 'deleted_partial' : 'deleted_success';
+            header("Location: ?page=inbounding&action=list&msg=$msg");
+        } else {
+            header("Location: ?page=inbounding&action=list&msg=error_db");
+        }
         exit;
+    }
+    private function ensureImagesAreRenamed($id, $item_code, $is_variant, $color = '', $size = '') {
+        
+        if (empty($item_code)) return;
+
+        // Prepare the naming context
+        $currentDataForRename = [
+            'is_variant' => $is_variant,
+            'color'      => $color,
+            'size'       => $size
+        ];
+
+        // Call your existing renaming logic
+        // This ensures that even if renaming was skipped before, it happens now
+        $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
+    }
+    public function printInboundLabel(){
+        is_login();
+        global $inboundingModel;
+
+        $id = $_GET['id'] ?? 0;
+        if (!$id) {
+            die("Invalid ID");
+        }
+        $data = $inboundingModel->getForm2Data($id);
+        include 'views/inbounding/label_inbound.php';
     }
     public function inbound_product_publish(){
         global $inboundingModel;
@@ -1388,6 +1405,14 @@ class InboundingController {
 
         // top level data
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $data1 = $inboundingModel->getpublishdata($id);
+        $this->ensureImagesAreRenamed(
+            $id, 
+            $data1['data']['Item_code'], 
+            $data1['data']['is_variant'], 
+            $data1['data']['color'], 
+            $data1['data']['size']
+        );
         $data = $inboundingModel->getpublishdata($id);
 
         // --- HELPER: Get Current Date in Y-m-d format ---
@@ -1411,8 +1436,11 @@ class InboundingController {
         $API_data['date_first_added'] = date("Y-m-d", strtotime($data['data']['gate_entry_date_time']));
         $API_data['search_term'] = $data['data']['search_term'];
         $raw_string = $data['data']['search_category_string'];
-        if (trim($raw_string, '|') !== '') {
-            $API_data['search_category'] = ltrim($raw_string, '|');            
+        // if (trim($raw_string, '|') !== '') {
+        //     $API_data['search_category'] = ltrim($raw_string, '|');            
+        // }
+        if (trim($raw_string ?? '', '|') !== '') {
+            $API_data['search_category'] = ltrim($raw_string ?? '', '|');            
         }
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
@@ -1577,7 +1605,7 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
-        echo "<pre>";print_r($jsonString);
+        // echo "<pre>";print_r($jsonString);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
@@ -1619,8 +1647,7 @@ class InboundingController {
         ]);
 
         $response = curl_exec($ch);
-        
-        // echo "<pre>";print_r($response);
+        $result = json_decode($response);
         
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         
@@ -1639,14 +1666,21 @@ class InboundingController {
         }
 
         header('Content-Type: application/json');
+        if (isset($result) && $result->status == 'success') {
+            $ProductsController = new ProductsController();
+            $itemCode = $data['data']['Item_code'];
+            $import_response = $ProductsController->importApiCall([$itemCode]);
 
-        if (empty($response) || trim($response) === '') {
+            $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
+            $stoc_data = $inboundingModel->stock_data($id);
+            $inboundingModel->insert_stock_data($stoc_data);
+            $inboundingModel->stat_logs($logData);
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            echo $response; 
+            echo $result; 
         }
         exit;
     }

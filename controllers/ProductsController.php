@@ -122,16 +122,23 @@ class ProductsController {
         //     renderTemplateClean('views/errors/error.php', ['message' => $updatedCount['message']], 'Update Failed');
         // }
     }
-    public function importApiCall() {
+    public function importApiCall($manualCodes = null) {
         global $productModel;
         // Accept JSON body or form-data
-        $raw = file_get_contents('php://input');
-        $payload = json_decode($raw, true);
-        if (!$payload || !isset($payload['itemCodes'])) {
-            echo json_encode(['success' => false, 'message' => 'Invalid request.']);
-            exit;
+        if ($manualCodes !== null) {
+            // Called from PHP: $ProductsController->importApiCall([$itemCode])
+            $itemCodes = $manualCodes;
+        } else {
+            // Called from JavaScript fetch
+            $raw = file_get_contents('php://input');
+            $payload = json_decode($raw, true);
+            
+            if (!$payload || !isset($payload['itemCodes'])) {
+                echo json_encode(['success' => false, 'message' => 'Invalid request.']);
+                exit;
+            }
+            $itemCodes = $payload['itemCodes'];
         }
-        $itemCodes = $payload['itemCodes'];
         if (!is_array($itemCodes)) {
             echo json_encode(['success' => false, 'message' => 'Invalid itemCodes.']);
             exit;
@@ -672,8 +679,23 @@ class ProductsController {
         // Filters: category and status
         $filters = [];
         $filters['user_id'] = $_SESSION['user']['id'];
-        $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'pending';
+        $filters['status'] = isset($_GET['status']) ? $_GET['status'] : 'all';
         $filters['category'] = isset($_GET['category']) ? $_GET['category'] : 'all';
+        
+        //search
+        if (!empty($_GET['search'])) {
+            $filters['search'] = trim($_GET['search']);
+        }
+
+        //added By filter
+        if (!empty($_GET['added_by'])) {
+            $filters['added_by'] = (int)$_GET['added_by'];
+        }
+
+        //asigned to filter
+        if (!empty($_GET['assigned_to'])) {
+            $filters['assigned_to'] = (int)$_GET['assigned_to'];
+        }
 
         // fetch purchase list and count with filters
         $purchase_data = $productModel->getPurchaseList($limit, $offset, $filters); 
@@ -704,7 +726,8 @@ class ProductsController {
             'total_records' => $total_records,
             'limit' => $limit,
             'categories' => getCategories(),
-            'selected_filters' => $filters
+            'selected_filters' => $filters,
+            'staff_list' => $commanModel->get_staff_list(),
         ];
         // render clean for mobile users
         if (isMobile()){
@@ -773,7 +796,7 @@ class ProductsController {
             echo json_encode(['success' => false, 'message' => 'Invalid id']);
             exit;
         }
-        //$res = $productModel->updatePurchaseItem($id, $quantity, $remarks, $status, $expected_time_of_delivery);
+        
         if($quantity>0){
             $res = $productModel->addPurchaseTransaction($purchase_list_id, $quantity, $_SESSION['user']['id'], $status, $product_id);            
             echo json_encode($res);
@@ -825,21 +848,16 @@ class ProductsController {
         $id = isset($_GET['id']) ? $_GET['id'] : 0;
         if ($id != 0) {
             $order = $productModel->getProduct($id);
-            //fetch product_vendor_map for this product
+            $order['stock_value'] = $order['local_stock'] * $order['cost_price'];
+            $order['committed_stock'] = $commanModel->getCommittedStockBySku($order['sku']);
+            $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
+            $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
-            //stock_movements for this product
-            //$order['stock_summary'] = $productModel->getStockMovementBySku($order['sku']);
-            //purchase history for this product
-            //$order['purchase_history'] = $productModel->getPurchaseHistoryByProductId($order['id']);
-            //stock_movements list
             $order['stock_history'] = $productModel->stock_history($order['sku']);
-            //echo $order['sku'];
-            
-            //stock summary across warehouses
             $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
-            //print_array($order['stocks']);
-            //product veriant details
             $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
+            $order['warehouses'] = $productModel->getAllWarehouses();
+            $order['stock_movements'] = $productModel->get_stock_movements($id);
             if ($order) {
                 renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
             } else {
@@ -847,6 +865,48 @@ class ProductsController {
             }
         } else {
             echo '<p>Invalid Product Item Code.</p>';
+        }
+        exit;
+    }
+    public function saveStockAdjustment() {
+        is_login();
+        global $productModel;
+        // 1. Clear any previous output buffers to ensure clean JSON
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+
+        try {
+            // 2. Get JSON input
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+
+            if (!$data) {
+                throw new Exception('Invalid JSON data received');
+            }
+
+            // 3. Extract variables (matching your JS keys)
+            $productId    = (int)($data['product_id'] ?? 0);
+            $quantity     = (int)($data['quantity'] ?? 0);
+            $reason       = $data['reason'] ?? '';
+            $userId       = (int)($data['user_id'] ?? 0);
+            $movementType = $data['type'] ?? ''; // 'IN' or 'OUT'
+
+            // 4. Validate
+            if ($productId === 0 || $quantity <= 0) {
+                throw new Exception('Product ID or Quantity is invalid');
+            }
+
+            // 5. Call Model (Make sure $this->model is initialized)
+            $result = $productModel->updateStockMovement($productId, $quantity, $reason, $userId, $movementType);
+
+            echo json_encode($result);
+
+        } catch (Exception $e) {
+            // This ensures even errors are returned as JSON, not HTML
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
         }
         exit;
     }
@@ -866,5 +926,104 @@ class ProductsController {
         $res = $productModel->updateProductNotes($product_id, $notes);
         echo json_encode($res);
         exit;
+    }
+    public function getFilteredStockHistory() {
+        // Start output buffering to catch any accidental output
+        ob_start();
+        
+        // Set headers first
+        header('Content-Type: application/json');
+        header('X-Requested-With: XMLHttpRequest');
+        
+        // Check login (but won't output on AJAX)
+        is_login();
+        
+        // Clear any buffered output
+        ob_end_clean();
+        
+        global $productModel;
+        
+        try {
+            $_GET = array_map('trim', $_GET);
+            
+            $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
+            $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
+            $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : '';
+            $type = isset($_GET['type']) ? trim($_GET['type']) : '';
+            $warehouse = isset($_GET['warehouse']) ? trim($_GET['warehouse']) : '';
+            // Read pagination from 'page_no' to avoid collision with router 'page' param
+            if (isset($_GET['page_no'])) {
+                $page = max(1, (int)$_GET['page_no']);
+            } else {
+                $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            }
+            $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
+            
+            if ($sku === '') {
+                echo json_encode(['success' => false, 'message' => 'Invalid SKU']);
+                exit;
+            }
+            
+            $offset = ($page - 1) * $limit;
+            
+            $filters = [
+                'sku' => $sku,
+                'start_date' => $start_date,
+                'end_date' => $end_date,
+                'type' => $type,
+                'warehouse' => $warehouse
+            ];
+            
+            $history = $productModel->getFilteredStockHistory($filters, $limit, $offset);
+            $total = $productModel->getFilteredStockHistoryCount($filters);
+            
+            // Format the response
+            $records = [];
+            if (!empty($history)) {
+                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out'];
+                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt'];
+                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600'];
+                
+                foreach ($history as $record) {
+                    $record['formatted_date'] = date('d M Y', strtotime($record['created_at'] ?? ''));
+                    $record['type'] = $typeMap[$record['movement_type']] ?? $record['movement_type'];
+                    $record['icon'] = $iconMap[$record['movement_type']] ?? '';
+                    $record['textColor'] = $colorMap[$record['movement_type']] ?? '';
+                    $records[] = $record;
+                }
+            }
+            
+            echo json_encode([
+                'success' => true, 
+                'records' => $records,
+                'total' => $total,
+                'page' => $page,
+                'limit' => $limit
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+    public function inventoryLedger() {
+        is_login();
+        global $productModel;
+        $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
+        if ($sku === '') {
+            echo '<p>Invalid SKU.</p>';
+            exit;
+        }
+        $stock_history = $productModel->stock_history($sku);
+        //print_array($ledger);
+        // if (!$stock_history) {
+        //     echo '<p>Product not found for SKU: ' . htmlspecialchars($sku) . '</p>';
+        //     exit;
+        // }
+        $order['warehouses'] = $productModel->getAllWarehouses();
+        $data = [
+            'stock_history' => $stock_history,
+            'warehouses' => $order['warehouses']
+        ];
+        renderTemplate('views/products/inventory_ledger.php', $data, 'Inventory Ledger');
     }
 }

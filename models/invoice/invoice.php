@@ -63,13 +63,13 @@ class Invoice {
     }
 
     public function createInvoiceItem($data) {
-        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total, image_url, groupname)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $stmt->bind_param(
-            'isssssidddddddd',
+            'isssssiddddddddss',
             $data['invoice_id'],
             $data['order_number'],
             $data['item_code'],
@@ -84,7 +84,9 @@ class Invoice {
             $data['sgst'],
             $data['igst'],
             $data['tax_amount'],
-            $data['line_total']
+            $data['line_total'],           
+            $data['image_url'],
+            $data['groupname']
         );
 
         if ($stmt->execute()) {
@@ -232,5 +234,121 @@ class Invoice {
         );
 
         return $stmt->execute();
+    }
+    public function getInvoicesCount() {
+        $sql = "SELECT COUNT(*) AS cnt FROM vp_invoices";
+        $result = $this->db->query($sql);
+        if ($result) {
+            $row = $result->fetch_assoc();
+            return isset($row['cnt']) ? (int)$row['cnt'] : 0;
+        }
+        return 0;
+    }
+    public function getAllInvoicesPaginated($limit, $offset, $filters = []) {
+        // join dispatch details so we can filter on its columns
+        $sql  = "SELECT DISTINCT i.*, c.id AS customer_id, c.name, c.email, c.phone
+                FROM vp_invoices i
+                LEFT JOIN vp_customers c ON i.customer_id = c.id
+                LEFT JOIN vp_dispatch_details d ON d.invoice_id = i.id ";
+        $whereClause = [];
+
+        if (isset($filters['customer_name']) && $filters['customer_name'] !== '') {
+            $whereClause[] = "c.name LIKE '%" . $this->db->real_escape_string($filters['customer_name']) . "%'";
+        }
+        if (isset($filters['start_date']) && $filters['start_date'] !== '') {
+            $whereClause[] = "i.invoice_date >= '" . $this->db->real_escape_string($filters['start_date']) . "'";
+        }
+        if (isset($filters['end_date']) && $filters['end_date'] !== '') {
+            $whereClause[] = "i.invoice_date <= '" . $this->db->real_escape_string($filters['end_date']) . "'";
+        }
+        if (isset($filters['invoice_number']) && $filters['invoice_number'] !== '') {
+            $whereClause[] = "i.invoice_number LIKE '%" . $this->db->real_escape_string($filters['invoice_number']) . "%'";
+        }
+
+        // dispatch‑table filters
+        if (isset($filters['awb_number']) && $filters['awb_number'] !== '') {
+            $whereClause[] = "d.awb_code LIKE '%" . $this->db->real_escape_string($filters['awb_number']) . "%'";
+        }
+        if (isset($filters['order_number']) && $filters['order_number'] !== '') {
+            $whereClause[] = "d.order_number LIKE '%" . $this->db->real_escape_string($filters['order_number']) . "%'";
+        }
+        if (isset($filters['box_size']) && $filters['box_size'] !== '') {
+            if ($filters['box_size'] === 'R-1') {
+                $whereClause[] = "d.length >= 22 AND d.width >= 17 AND d.height >= 5";
+                //$whereClause[] = "d.box_size NOT IN ('R-1', 'R-2', 'R-3', 'R-4', 'R-5', 'R-6', 'R-7', 'R-8', 'R-9', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14')";
+            } elseif ($filters['box_size'] === 'R-2') {
+                $whereClause[] = "d.length >= 16 AND d.width >= 13 AND d.height >= 13";               
+            } elseif ($filters['box_size'] === 'R-3') {
+                $whereClause[] = "d.length >= 16 AND d.width >= 11 AND d.height >= 7";
+            } elseif ($filters['box_size'] === 'R-4') {
+                $whereClause[] = "d.length >= 13 AND d.width >= 10 AND d.height >= 7";
+            } elseif ($filters['box_size'] === 'R-5') {
+                $whereClause[] = "d.length >= 13 AND d.width >= 10 AND d.height >= 4";
+            } elseif ($filters['box_size'] === 'R-6') {
+                $whereClause[] = "d.length >= 11 AND d.width >= 9 AND d.height >= 6";
+            } elseif ($filters['box_size'] === 'R-7') {
+                $whereClause[] = "d.length >= 11 AND d.width >= 9 AND d.height >= 4";
+            } elseif ($filters['box_size'] === 'R-8') {
+                $whereClause[] = "d.length >= 10 AND d.width >= 8 AND d.height >= 5";
+            } elseif ($filters['box_size'] === 'R-9') {
+                $whereClause[] = "d.length >= 10 AND d.width >= 8 AND d.height >= 4";
+            } elseif ($filters['box_size'] === 'R-10') {
+                $whereClause[] = "d.length >= 9 AND d.width >= 7 AND d.height >= 5";
+            } elseif ($filters['box_size'] === 'R-11') {
+                $whereClause[] = "d.length >= 9 AND d.width >= 7 AND d.height >= 4";
+            } elseif ($filters['box_size'] === 'R-12') {
+                $whereClause[] = "d.length >= 8 AND d.width >= 6 AND d.height >= 4";
+            } elseif ($filters['box_size'] === 'R-13') {
+                $whereClause[] = "d.length >= 7 AND d.width >= 5 AND d.height >= 3";
+            } elseif ($filters['box_size'] === 'R-14') {
+                $whereClause[] = "d.length >= 14 AND d.width >= 12 AND d.height >= 10";
+            } else {
+                // custom size filter
+                // expected format: LxWxH (e.g. 20x15x10)
+                // $parts = explode('x', $filters['box_size']);
+                // if (count($parts) == 3) {
+                //     $length = (int)$parts[0];
+                //     $width = (int)$parts[1];
+                //     $height = (int)$parts[2];
+            
+                //     $whereClause[] = "d.length >= $length AND d.width >= $width AND d.height >= $height";
+                // }
+            }
+        }
+
+        if (isset($filters['customer_contact']) && $filters['customer_contact'] !== '') {
+            $whereClause[] = "c.phone LIKE '%" . $this->db->real_escape_string($filters['customer_contact']) . "%'";
+        }
+        if (isset($filters['payment_mode']) && $filters['payment_mode'] !== '') {
+            $whereClause[] = "i.payment_mode = '" . $this->db->real_escape_string($filters['payment_mode']) . "'";
+        }
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            $whereClause[] = "i.status = '" . $this->db->real_escape_string($filters['status']) . "'";
+        }
+        if (isset($filters['category']) && $filters['category'] !== '') {
+            $whereClause[] = "d.groupname LIKE '%" . $this->db->real_escape_string($filters['category']) . "%'";
+        }
+
+        if (!empty($whereClause)) {
+            $sql .= "WHERE " . implode(" AND ", $whereClause) . " ";
+        }
+
+        if (isset($filters['sort']) && in_array($filters['sort'], ['asc','desc'])) {
+            $sql .= "ORDER BY i.invoice_date " . (($filters['sort'] === 'asc') ? 'ASC' : 'DESC') . " ";
+        } else {
+            $sql .= "ORDER BY i.invoice_date DESC ";
+        }
+
+        $sql .= "LIMIT $limit OFFSET $offset";
+
+        //echo $sql; // debug if needed
+        $result = $this->db->query($sql);
+        $invoices = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $invoices[] = $row;
+            }
+        }
+        return $invoices;
     }
 }

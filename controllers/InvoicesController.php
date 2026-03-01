@@ -95,8 +95,8 @@ class InvoicesController {
         is_login();
         global $invoiceModel, $ordersModel, $commanModel;
         header('Content-Type: application/json');
-        // print_r($_POST);
-        // exit;
+         //print_r($_POST);
+         //exit;
         // Validate form inputs
         $invoice_date = isset($_POST['invoice_date']) ? $_POST['invoice_date'] : date('Y-m-d');
         $customer_id = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
@@ -209,6 +209,7 @@ class InvoicesController {
                 'order_number' => $order_number,
                 'item_code' => isset($item_codes[$idx]) ? trim($item_codes[$idx]) : '',
                 'item_name' => isset($item_names[$idx]) ? trim($item_names[$idx]) : '',
+                'image_url' => isset($_POST['image_url'][$idx]) ? trim($_POST['image_url'][$idx]) : '',
                 'description' => '',
                 'box_no' => isset($box_no[$idx]) ? trim($box_no[$idx]) : '',
                 'hsn' => isset($hsn_codes[$idx]) ? trim($hsn_codes[$idx]) : '',
@@ -219,7 +220,8 @@ class InvoicesController {
                 'sgst' => $sgstAmt,
                 'igst' => $igstAmt,
                 'tax_amount' => $totalTaxAmount,
-                'line_total' => $amount + $totalTaxAmount
+                'line_total' => $amount + $totalTaxAmount,
+                'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
             ];
             //print_r($itemData);
             $result = $invoiceModel->createInvoiceItem($itemData);
@@ -392,7 +394,7 @@ class InvoicesController {
             // Create mPDF instance
             require_once 'vendor/autoload.php';
             
-            $filename = 'invoice_' . $invoice_id . '.pdf';
+            $filename = '' . $invoice['invoice_number'] . '.pdf';
             
             $mpdf = new \Mpdf\Mpdf([
                 'mode' => 'utf-8',

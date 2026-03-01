@@ -791,9 +791,9 @@ class product
             $plTypes   .= 'i';
         }
 
-        if (!empty($filters['asigned_to'])) {
+        if (!empty($filters['assigned_to'])) {
             $plWhere[]  = 'user_id = ?';
-            $plParams[] = (int)$filters['asigned_to'];
+            $plParams[] = (int)$filters['assigned_to'];
             $plTypes   .= 'i';
         }
 
@@ -832,11 +832,12 @@ class product
         }
 
         if (!empty($filters['search'])) {
-            $outerWhere[]  = '(p.item_code LIKE ? OR p.title LIKE ?)';
+            $outerWhere[]  = '(p.item_code LIKE ? OR p.title LIKE ? OR o.order_number LIKE ?)';
             $searchTerm    = '%' . $filters['search'] . '%';
             $outerParams[] = $searchTerm;
             $outerParams[] = $searchTerm;
-            $outerTypes   .= 'ss';
+            $outerParams[] = $searchTerm;   // ✅ MISSING ONE
+            $outerTypes   .= 'sss';
         }
 
         $outerWhereSql = '';
@@ -1109,7 +1110,7 @@ class product
     }*/
 
     public function updatePurchaseListStatusValue($purchase_list_id, $status)
-    {
+    {        
         $sql = "UPDATE purchase_list SET status = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
@@ -1119,7 +1120,44 @@ class product
         $id = (int)$purchase_list_id;
         $stmt->bind_param('si', $status, $id);
 
-        if ($stmt->execute()) {
+        if ($stmt->execute()) {            
+
+            // ✅ logged-in user info
+            $loggedUserId = (int)($_SESSION['user']['id'] ?? 0);
+            $loggedUserName = $_SESSION['user']['name'] ?? 'Unknown';
+            $sql = "SELECT 
+                    pl.id,
+                    pl.sku,
+                    pl.edit_by,
+                    pl.user_id,
+                    pl.product_id,
+                    pl.order_id
+                FROM purchase_list AS pl
+                WHERE 
+                    pl.id = ?";
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('i', $purchase_list_id);
+            $stmt->execute();
+            $data = $stmt->get_result()->fetch_all(MYSQLI_ASSOC)[0];            
+            $statusText = "Purchase STATUS UPDATE (SKU : ".$data['sku'].")";
+
+            $this->createOrderStatusLog(
+                (int)$data['order_id'],         // order_id (required by vp_order_status_log)
+                $statusText,                    // status text
+                $loggedUserId,                  // changed_by
+                $loggedUserName,                // saved inside api_response JSON
+                0,         
+                [
+                    'action' => 'STATUS UPDATE',
+                    'purchase_list_id' => $purchase_list_id,
+                    'product_id' => (int)$data['product_id'],
+                    'user_id' => (int)$data['user_id'],
+                    'sku' => $data['sku'],
+                    'status' => $status,
+                    'date_added' => date('Y/m/d h:i:s'),
+                ]
+            );
             return ['success' => true, 'message' => 'Status updated'];
         }
 
@@ -1574,6 +1612,36 @@ class product
         }
         return [];
     }
+    public function updateStockMovement($product_id, $quantity, $reason, $user_id, $movement_type)
+    {
+        // IMPORTANT: You are using UPDATE. This only works if a row 
+        // for this product_id already exists. 
+        $sql = "UPDATE vp_stock_movements 
+                SET running_stock = ?, 
+                    reason = ?, 
+                    update_by_user = ?, 
+                    movement_type = ?, 
+                    updated_at = NOW() 
+                WHERE product_id = ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters: i = integer, s = string
+        // Order: quantity (i), reason (s), user_id (i), type (s), product_id (i)
+        $stmt->bind_param('isisi', $quantity, $reason, $user_id, $movement_type, $product_id);
+
+        if ($stmt->execute()) {
+            if ($stmt->affected_rows === 0) {
+                return ['success' => false, 'message' => 'No record found to update for this Product ID'];
+            }
+            return ['success' => true, 'message' => 'Stock updated successfully'];
+        }
+
+        return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+    }
     public function updateProductNotes($product_id, $notes)
     {
         $sql = "UPDATE vp_products SET notes = ?, updated_at = NOW() WHERE id = ?";
@@ -1599,5 +1667,166 @@ class product
         }
         return [];
     }
-    
+    public function getFilteredStockHistory($filters = [], $limit = 100, $offset = 0)
+    {
+        $where = [];
+        $params = [];
+        $types = '';
+
+        if (!empty($filters['sku'])) {
+            $where[] = 'sm.sku = ?';
+            $params[] = $filters['sku'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+            $where[] = 'sm.movement_type = ?';
+            $params[] = $filters['type'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['start_date'])) {
+            $where[] = 'DATE(sm.created_at) >= ?';
+            $params[] = $filters['start_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['end_date'])) {
+            $where[] = 'DATE(sm.created_at) <= ?';
+            $params[] = $filters['end_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['warehouse'])) {
+            $where[] = 'sm.warehouse_id = ?';
+            $params[] = $filters['warehouse'];
+            $types .= 's';
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name 
+                FROM vp_stock_movements sm 
+                LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id 
+                $whereSql 
+                ORDER BY sm.created_at DESC 
+                LIMIT ? OFFSET ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+
+        // bind dynamic params followed by limit and offset
+        if (!empty($params)) {
+            $types_all = $types . 'ii';
+            // Build the bind_param arguments correctly
+            $bindArgs = [$types_all];
+            foreach ($params as &$param) {
+                $bindArgs[] = &$param;
+            }
+            $bindArgs[] = &$limit;
+            $bindArgs[] = &$offset;
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+        } else {
+            $stmt->bind_param('ii', $limit, $offset);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+
+    public function getFilteredStockHistoryCount($filters = [])
+    {
+        $where = [];
+        $params = [];
+        $types = '';
+
+        if (!empty($filters['sku'])) {
+            $where[] = 'sm.sku = ?';
+            $params[] = $filters['sku'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+            $where[] = 'sm.movement_type = ?';
+            $params[] = $filters['type'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['start_date'])) {
+            $where[] = 'DATE(sm.created_at) >= ?';
+            $params[] = $filters['start_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['end_date'])) {
+            $where[] = 'DATE(sm.created_at) <= ?';
+            $params[] = $filters['end_date'];
+            $types .= 's';
+        }
+
+        if (!empty($filters['warehouse'])) {
+            $where[] = 'sm.warehouse_id = ?';
+            $params[] = $filters['warehouse'];
+            $types .= 's';
+        }
+
+        $whereSql = '';
+        if (!empty($where)) {
+            $whereSql = 'WHERE ' . implode(' AND ', $where);
+        }
+
+        $sql = "SELECT COUNT(*) as count FROM vp_stock_movements sm $whereSql";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return 0;
+
+        if (!empty($params)) {
+            $bindArgs = [$types];
+            foreach ($params as &$param) {
+                $bindArgs[] = &$param;
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $row = $result->fetch_assoc()) {
+            return $row['count'];
+        }
+        return 0;
+    }
+
+    public function getAllWarehouses()
+    {
+        $sql = "SELECT id, address_title as name FROM exotic_address WHERE is_active = 1 ORDER BY address_title";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return [];
+    }
+    public function get_stock_movements($id)
+    {
+        $stmt = $this->db->prepare("SELECT vsm.*,a.address_title as warehouse_name FROM vp_stock_movements as vsm 
+LEFT JOIN exotic_address as a on vsm.warehouse_id=a.id
+WHERE vsm.product_id = ? ");
+        if ($stmt === false) {
+            return null;
+        }
+        $id = (int)$id;
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result ? $result->fetch_assoc() : null;
+    }
+           
 }

@@ -235,8 +235,10 @@
                 <input type="hidden" name="gst[]" value="<?= $item['gst'] ?>">
                 <input type="hidden" name="tax_rate[]" value="<?= $item['gst'] ?>">
                 <input type="hidden" name="currency[]" value="<?php echo $item['currency'] ?? 'INR'; ?>">
+                <input type="hidden" name="image_url[]" value="<?= $item['image'] ?? '' ?>">
+                <input type="hidden" name="groupname[]" value="<?= $item['groupname'] ?? '' ?>">
                 <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
-                <td class="p-2">
+                <td class="p-0">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
                 </td>
                 <td class="p-2"><span><?= $item['sku'] ?></span></td>
@@ -315,7 +317,9 @@
     <div class="mt-8 flex justify-end space-x-4">
         <a href="<?php echo base_url('?page=orders&action=list'); ?>" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Cancel</a>
         <button type="button" onclick="previewInvoice()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Preview</button>
-        <button type="submit" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button>
+        <button type="submit" id="createInvoiceButton" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button>
+        <!-- Create and dispatch-->
+        <button type="button" id="createAndDispatchButton" onclick="createAndDispatch()" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create & Dispatch</button>
     </div>
     </form>
 </div>
@@ -497,7 +501,9 @@ function previewInvoice() {
             igst: row.querySelector('input[name="igst[]"]')?.value || 0,
             tax_amount: row.querySelector('input[name="tax_amount[]"]')?.value || 0,
             line_total: row.querySelector('input[name="line_total[]"]')?.value || 0,
-            currency: row.querySelector('input[name="currency[]"]')?.value || 'INR'
+            currency: row.querySelector('input[name="currency[]"]')?.value || 'INR',
+            image_url: row.querySelector('input[name="image_url[]"]')?.value || '',
+            groupname: row.querySelector('input[name="groupname[]"]')?.value || ''
         });
     });
     
@@ -691,6 +697,10 @@ document.addEventListener('DOMContentLoaded', function() {
 document.getElementById('create_invoice').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    // Disable button and show loading state
+    const submitBtn = document.getElementById('createInvoiceButton');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
 
     // Validate customer name
     const customerNameElement = document.querySelector('input[name="customer_id"]');
@@ -708,6 +718,8 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Create Invoice';
             // if (window.showGlobalToast) {
             //     window.showGlobalToast('Invoice created successfully!', 'success');
             // } else {
@@ -715,6 +727,13 @@ document.getElementById('create_invoice').addEventListener('submit', function(e)
             // }
             localStorage.removeItem('selected_po_orders');
             showAlert('Invoice created successfully!', 'success');
+            //dispatch after success
+            const dispatchField = document.querySelector('input[name="dispatch_after_creation"]');
+            //redirect to ?page=dispatch&action=create&invoice_id=
+            if (dispatchField && dispatchField.checked) {
+                window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + data.invoice_id;
+                return;
+            }
             // Generate PDF after a short delay
             setTimeout(() => {
                 fetch('<?php echo base_url('?page=invoices&action=generate_pdf'); ?>', {
@@ -880,15 +899,16 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
             
             if (existingItemCode === itemData.item_code && existingOrderNumber === itemData.order_number) {
                 itemExists = true;
+                showAlert('Item already added to invoice', 'warning');
                 // Increase quantity if item already exists
-                const quantityInput = row.querySelector('input[name="quantity[]"]');
-                const quantitySpan = quantityInput.parentElement.querySelector('span');
-                const currentQty = parseFloat(quantityInput.value) || 1;
-                const newQty = currentQty + (parseFloat(itemData.quantity) || 1);
-                quantityInput.value = newQty;
-                if (quantitySpan) {
-                    quantitySpan.textContent = newQty;
-                }
+                // const quantityInput = row.querySelector('input[name="quantity[]"]');
+                // const quantitySpan = quantityInput.parentElement.querySelector('span');
+                // const currentQty = parseFloat(quantityInput.value) || 1;
+                // const newQty = currentQty + (parseFloat(itemData.quantity) || 1);
+                // quantityInput.value = newQty;
+                // if (quantitySpan) {
+                //     quantitySpan.textContent = newQty;
+                // }
             }
         });
         
@@ -902,8 +922,11 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
                 <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
                 <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
                 <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
+                <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
+                <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
+                <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
                 <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
-                <td class="p-2">
+                <td class="p-0">
                     <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
                 </td>
                 <td class="p-2"><span>${itemData.sku || ''}</span></td>
@@ -952,4 +975,38 @@ document.getElementById('orderItemsTableBody').addEventListener('click', functio
         document.getElementById('orderModal').style.display = 'none';
     }
 });
+function createAndDispatch() {
+    // submit create_invoice and redirect to dispatch page with invoice_id
+    const form = document.getElementById('create_invoice');
+    const formData = new FormData(form);
+    formData.append('dispatch_after_creation', '1'); // Add a flag to indicate dispatch after creation
+    
+    const submitBtn2 = document.getElementById('createAndDispatchButton');
+    submitBtn2.disabled = true;
+    submitBtn2.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
+    fetch(form.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            response.json().then(data => {
+                if (data.invoice_id) {
+                    window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + data.invoice_id;
+                } else {
+                    alert('Failed to create invoice and dispatch');
+                }
+            });
+        } else {
+            alert('Failed to create invoice and dispatch');
+        }
+        submitBtn2.disabled = false;
+        submitBtn2.innerHTML = 'Create & Dispatch';
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while creating invoice and dispatching');
+    });
+   
+}
 </script>

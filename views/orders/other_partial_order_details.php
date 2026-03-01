@@ -1,17 +1,33 @@
+<style>
+    .scrollbar-visible::-webkit-scrollbar {
+        height: 6px;
+    }
+    .scrollbar-visible::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    .scrollbar-visible::-webkit-scrollbar-thumb {
+        background: #D1D5DB;
+        border-radius: 10px;
+    }
+    .scrollbar-visible::-webkit-scrollbar-thumb:hover {
+        background: #9CA3AF;
+    }
+</style>
 <?php 
 $total_price = 0;
 $currency = '';
-// echo "<pre>";print_r($order); die;
+
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
 endforeach;
-$currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥', 'CNY' => '¥', 'KRW' => '₩', 'RUB' => '₽', 'AUD' => '$', 'CAD' => '$', 'NZD' => '$', 'SGD' => '$', 'HKD' => '$', 'CHF' => 'CHF', 'SEK' => 'kr', 'NOK' => 'kr', 'DKK' => 'kr', 'ZAR' => 'R', 'BRL' => 'R$', 'MXN' => '$', 'ARS' => '$', 'CLP' => '$', 'COP' => '$', 'PEN' => 'S/', 'AED' => 'د.إ', 'SAR' => '﷼', 'QAR' => '﷼', 'OMR' => '﷼', 'KWD' => 'د.ك', 'BHD' => '.د.ب', 'ILS' => '₪', 'TRY' => '₺', 'THB' => '฿', 'IDR' => 'Rp', 'MYR' => 'RM', 'PHP' => '₱', 'VND' => '₫', 'PKR' => '₨', 'BDT' => '৳', 'LKR' => 'Rs', 'NPR' => 'Rs', 'EGP' => '£', 'KES' => 'KSh', 'NGN' => '₦', 'GHS' => '₵', 'TZS' => 'TSh', 'UGX' => 'USh', 'MAD' => 'د.م.', 'TND' => 'د.ت', 'DZD' => 'دج', 'CZK' => 'Kč', 'HUF' => 'Ft', 'PLN' => 'zł', 'RON' => 'lei', 'BGN' => 'лв', 'UAH' => '₴', ];
+$currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold"><?php echo $order[0]['order_number']; ?></h1>
+            <h1 class="text-xl font-bold"><?php echo $orderremarks['order_number'] ?? ''; ?></h1>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -24,13 +40,25 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Return</button>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
-            <div class="relative">
-                <button class="flex items-center gap-2 rounded bg-black px-4 py-1.5 text-sm font-medium text-white">
+            <div class="relative inline-block text-left">
+                <input type="checkbox" id="dropdown-toggle" class="peer hidden">
+                <label for="dropdown-toggle" class="flex cursor-pointer items-center gap-2 rounded bg-black px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors select-none">
                     Print
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 transition-transform duration-200 peer-checked:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
-                </button>
+                </label>
+                <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
+                    <div class="py-1">
+                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
+                            Print Invoice
+                        </a>
+                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
+                            print order
+                        </a>
+                    </div>
+                </div>
+                <label for="dropdown-toggle" class="fixed inset-0 h-full w-full cursor-default hidden peer-checked:block z-40"></label>
             </div>
         </div>
     </div>
@@ -56,7 +84,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                 <path
                                     d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                             </svg>
-                            <span><?php echo $order[0]['city']; ?>, <?php echo $order[0]['state']; ?></span>
+                            <span><?php echo $orderremarks['city'] ?? ''; ?>, <?php echo $orderremarks['state'] ?? ''; ?></span>
                         </div>
                     </div>
 
@@ -66,7 +94,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                         <span
-                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
+                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')) ; ?></span>
                     </div>
                 </div>
 
@@ -79,9 +107,8 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             $currencysymbol = $currencyCode.' ';
                         }
                     ?>
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-4 accordion-trigger">
                         <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
-
                         <div class="flex flex-1 items-start gap-5 rounded-2xl border border-gray-200 p-4">
                             <div class="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
                                 <img src="<?php echo $item['image']; ?>" class="h-full w-full object-cover"
@@ -89,9 +116,9 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             </div>
 
                             <div class="flex-1">
-                                <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
+                                <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
                                     <?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?>
-                                </h4>
+                                </h4> -->
                                 <h4 class="mb-3 text-[14px] leading-tight text-black-900">
                                     <?php echo $item['title']; ?>
                                 </h4>
@@ -135,16 +162,89 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             </div>
                         </div>
                     </div>
+                    <div class="accordion-content-details max-h-0 overflow-hidden transition-all duration-300 ease-in-out [&:has(>input:checked)]:max-h-[1200px] bg-gray-50">
+                        <div class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
+                            <p class="flex flex-wrap items-center gap-2">
+                                <span class="section-title font-bold text-gray-700 text-sm italic">Addons : </span>
+                                <span class="section-value text-green-700 font-semibold text-sm bg-green-50 px-2.5 py-1 rounded-lg border border-green-100">
+                                    <?php 
+                                        $options = json_decode($item['options'], true); 
+                                        echo !empty($options) ? implode(', ', $options) : 'None'; 
+                                    ?>
+                                </span>
+                            </p>
+                        </div>
+                        <div class="py-6 bg-white border-t border-b border-gray-100">
+                            <div class="overflow-x-auto pb-4 px-4">
+                                <div class="relative flex items-start min-w-max">
+                                    <div class="relative z-10 flex flex-col items-center w-[120px]">
+                                        <div class="w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white z-20"></div>
+                                        
+                                        <?php if (!empty($item['status_log'])): ?>
+                                            <div class="absolute top-[8px] left-1/2 w-full h-[2px] bg-[#27AE60] z-0"></div>
+                                        <?php endif; ?>
+
+                                        <div class="mt-4 text-center px-2">
+                                            <p class="text-[12px] font-bold text-gray-900 leading-tight">Created</p>
+                                            <p class="text-[10px] text-gray-500 mt-1"><?= date('d M, Y', strtotime($item['order_date'] ?? 'now')) ?></p>
+                                            <p class="text-[9px] text-gray-400 italic">System</p>
+                                        </div>
+                                    </div>
+
+                                    <?php if (!empty($item['status_log'])): 
+                                        $totalSteps = count($item['status_log']);
+                                        foreach ($item['status_log'] as $index => $log): 
+                                            $isLast = ($index === $totalSteps - 1);
+                                    ?>
+                                        <div class="relative z-10 flex flex-col items-center w-[120px]">
+                                            <div class="w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white z-20"></div>
+                                            <?php if (!$isLast): ?>
+                                                <div class="absolute top-[8px] left-1/2 w-full h-[2px] bg-[#27AE60] z-0"></div>
+                                            <?php endif; ?>
+
+                                            <div class="mt-4 text-center px-2">
+                                                <p class="text-[11px] font-bold text-gray-900 leading-tight">
+                                                    Agent: <?= htmlspecialchars($log['changed_by_username']) ?>
+                                                </p>
+                                                <p class="text-[10px] text-gray-500 mt-0.5"><?= date('d M, Y', strtotime($log['change_date'])) ?></p>
+                                                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-tighter mt-1">
+                                                    <?= str_replace('_', ' ', $log['status']) ?>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; endif; ?>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <?php endforeach; ?>
                 </div>
                 <?php
-                    $tax_rate = 0.05; // 5%
-                    $calculated_subtotal = $total_price / (1 + $tax_rate);
-                    $calculated_tax = $total_price - $calculated_subtotal;
+                    $tax_rate = 0.05; // 5% (SGST + CGST combined)
+
+                    // Individual reduction values (use 0 if not set)
+                    $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
+                    $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
+                    $credit             = floatval($orderremarks['credit']             ?? 0);
+                    // $custom_reduce   = floatval($orderremarks['custom_reduce']      ?? 0); // add if needed
+
+                    $all_reductions = $coupon_reduce + $giftvoucher_reduce + $credit; // + $custom_reduce ...
+
+                    // Final amount customer paid
+                    $final_paid = floatval($orderremarks['total'] ?? 0);
+
+                    // Amount before tax = taxable amount (after discounts)
+                    $amount_before_tax = $final_paid / (1 + $tax_rate);
+
+                    // Tax amount
+                    $tax_amount = $final_paid - $amount_before_tax;
+
+                    // Original subtotal before discounts
+                    $subtotal_before_discounts = $amount_before_tax + $all_reductions;
                 ?>
                 <div class="mt-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-    
-                    <div class="mb-5">
+                    <!-- <div class="mb-5">
                         <span class="inline-flex items-center gap-2 bg-[#E5E7EB] text-[#5C5F62] px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-[#5C5F62]">
                                 <path d="M19 3H5C3.89543 3 3 3.89543 3 5V21L5.5 18.5L8 21L10.5 18.5L13 21L15.5 18.5L18 21L21 18V5C21 3.89543 20.1046 3 19 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -152,103 +252,189 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             </svg>
                             Paid
                         </span>
-                    </div>
+                    </div> -->
 
                     <div class="border border-gray-200 rounded-xl overflow-hidden">
-                        
+
                         <div class="p-6 space-y-5">
                             <div class="grid grid-cols-12 items-start text-sm">
                                 <div class="col-span-3 font-bold text-black-800">Subtotal</div>
                                 <div class="col-span-6 text-black-500"><?php echo count($order); ?> items</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($calculated_subtotal, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($subtotal_before_discounts, 2); ?>
                                 </div>
                             </div>
-
+                            <!-- Individual discount rows -->
+                            <?php if ($all_reductions > 0): ?>
+                                <?php if ($coupon_reduce > 0 && !empty($orderremarks['coupon'])): ?>
+                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                        <div class="col-span-3 font-medium">Coupon </div>
+                                        <div class="col-span-6 text-gray-600">
+                                            <?php echo htmlspecialchars($orderremarks['coupon']); ?></div>
+                                        <div class="col-span-3 text-right font-medium">
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($coupon_reduce, 2); ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($giftvoucher_reduce > 0 && !empty($orderremarks['giftvoucher'])): ?>
+                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                        <div class="col-span-3 font-medium">Gift Voucher </div>
+                                        <div class="col-span-6 text-gray-600">
+                                            <?php echo htmlspecialchars($orderremarks['giftvoucher']); ?></div>
+                                        <div class="col-span-3 text-right font-medium">
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($giftvoucher_reduce, 2); ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($credit > 0): ?>
+                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                        <div class="col-span-3 font-medium">Credit / Wallet</div>
+                                        <div class="col-span-6 text-gray-600"></div>
+                                        <div class="col-span-3 text-right font-medium">
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($credit, 2); ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            <!-- Taxes -->
                             <div class="grid grid-cols-12 items-start text-sm">
                                 <div class="col-span-3 font-bold text-black-800">Taxes</div>
-                                <div class="col-span-6 text-black-500">SGST CGST 5% (Included)</div>
+                                <div class="col-span-6 text-black-500">SGST + CGST 5% (Included)</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($calculated_tax, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($tax_amount, 2); ?>
                                 </div>
                             </div>
-
-                            <div class="grid grid-cols-12 items-start text-sm pt-1">
+                            <!-- Final Total -->
+                            <div class="grid grid-cols-12 items-start text-sm pt-1 border-t border-gray-200 pt-3">
                                 <div class="col-span-3 font-bold text-black-800">Total</div>
-                                <div class="col-span-6"></div> 
-                                <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($total_price, 2); ?>
+                                <div class="col-span-6"></div>
+                                <div class="col-span-3 text-right font-bold text-black-900 text-lg">
+                                    <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
                                 </div>
                             </div>
                         </div>
-
                         <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
                             <span class="text-sm font-bold text-black-800">Paid</span>
                             <span class="text-sm font-bold text-black-900">
-                                <?php echo $currencysymbol; ?><?php echo number_format($total_price, 2); ?>
+                                <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
                             </span>
                         </div>
                     </div>
                 </div>
+                <?php if(!empty($fullOrderJourny)){ ?>
+                    <div class="space-y-4 mt-8">
+                        <div class="py-6 bg-[#F9FAFB] border border-gray-100 rounded-xl">
+                            <h5 class="text-[10px] font-bold uppercase tracking-widest text-[#8E959F] mb-8 px-8">ORDER JOURNEY</h5>
+
+                            <div class="relative flex flex-col px-8 space-y-0">
+                                <?php 
+                                    $totalItems = count($fullOrderJourny);
+                                    $currentIteration = 0;
+                                    
+                                    foreach($fullOrderJourny as $journey){ 
+                                        $currentIteration++;
+                                        $isLast = ($currentIteration === $totalItems);
+                                ?>
+                                <div class="relative flex gap-x-4 pb-8">
+                                    <?php if (!$isLast): ?>
+                                        <div class="absolute top-2 left-[7px] w-[2px] h-full bg-[#27AE60] z-0"></div>
+                                    <?php endif; ?>
+
+                                    <div
+                                        class="relative z-10 w-4 h-4 rounded-full bg-[#27AE60] border-[3px] border-white shadow-sm flex-shrink-0">
+                                    </div>
+
+                                    <div class="flex flex-col">
+                                        <p class="text-[12px] font-bold text-gray-900 leading-none">
+                                            <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $journey['status']))); ?>
+                                        </p>
+                                        <p class="text-[10px] text-gray-500 mt-1">
+                                            <span class="font-medium text-gray-700">By:</span>
+                                            <?php echo htmlspecialchars($journey['changed_by']); ?>
+                                        </p>
+                                        <p class="text-[9px] text-[#8E959F] italic mt-0.5">
+                                            <?php echo date('d M, Y | h:i A', strtotime($journey['created_on'])); ?>
+                                        </p>
+                                    </div>
+                                </div>
+                                <?php } ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php } ?>
             </div>
         </div>
         <div class="space-y-6">
             <!-- Note Section -->
-            <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>">
-                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>','<?= htmlspecialchars($order[0]['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
+            <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
+                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
                 <h3 class="mb-2 text-sm font-bold text-black-700">Note</h3>
-                <?php if(!empty($order[0]['remarks'])): ?>
-                <div id="note-display-<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
-                    <?php echo ($order[0]['remarks']); ?>
+                <?php if(!empty($orderremarks['remarks'])): ?>
+                <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <?php echo ($orderremarks['remarks']); ?>
                 </div>
                 <?php endif; ?>
             </div>
+            <!-- Conversion Summary -->
+            <?php if(!empty($orderremarks['payment_type']) || !empty($orderremarks['country'])): ?>
+                <div class="rounded-lg border bg-white p-5 shadow-sm relative">
+                    <h3 class="mb-2 text-sm font-bold text-black-700">Conversion Summary</h3>
+                    <div
+                        class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                        <b>Payment Type:</b> <?php echo ($orderremarks['payment_type'] ?? 'N/A'); ?>
+                        <br>
+                        <b>Payment ID:</b> <?php echo ($orderremarks['transid'] ?? 'N/A'); ?>
+                        <br>
+                        <b>Country:</b> <?php echo ($orderremarks['country'] ?? 'N/A'); ?>
+                    </div>
+                </div>
+            <?php endif; ?>
             <!-- address Section -->
-            <!-- <div class="rounded-lg border bg-white p-5 shadow-sm relative">
-                <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($order[0]['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
+            <?php /* <div class="rounded-lg border bg-white p-5 shadow-sm relative">
+                <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
                 <h3 class="mb-3 text-sm font-bold">Customer</h3>
-                <p class="text-sm font-medium text-blue-600" id="display-customer-name"><?php echo $order[0]['customer_name'] ?? 'N/A'; ?></p>
+                <p class="text-sm font-medium text-blue-600" id="display-customer-name"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></p>
                 <p class="text-sm text-black-500">12 orders</p>
 
                 <div class="mt-6">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Contact information</h4>
-                    <p class="mt-1 text-sm text-blue-600"><?php echo $order[0]['customer_email'] ?? 'N/A'; ?></p>
-                    <p class="text-sm" id="display-customer-phone"><?php echo $order[0]['customer_phone'] ?? 'N/A'; ?></p>
+                    <p class="mt-1 text-sm text-blue-600"><?php echo $customerdetails['customer_email'] ?? 'N/A'; ?></p>
+                    <p class="text-sm" id="display-customer-phone"><?php echo $customerdetails['customer_phone'] ?? 'N/A'; ?></p>
                 </div>
 
                 <div class="mt-6">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
                     <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span class="block font-medium"><?php echo $order[0]['customer_name'] ?? 'N/A'; ?></span>
-                        <span id="address1"><?php echo $order[0]['address_line1'] ?? ''; ?></span>
-                        <span id="address2"><?php echo $order[0]['address_line2'] ?? ''; ?></span>
+                        <span class="block font-medium"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></span>
+                        <span id="address1"><?php echo $orderremarks['address_line1'] ?? ''; ?></span>
+                        <span id="address2"><?php echo $orderremarks['address_line2'] ?? ''; ?></span>
                         <br>
-                        <span id="city"><?php echo $order[0]['city'] ?? ''; ?></span> -
-                        <span id="zipcode"><?php echo $order[0]['zipcode'] ?? ''; ?></span>,
-                        <span id="country"><?php echo $order[0]['country'] ?? ''; ?></span>
+                        <span id="city"><?php echo $orderremarks['city'] ?? ''; ?></span> -
+                        <span id="zipcode"><?php echo $orderremarks['zipcode'] ?? ''; ?></span>,
+                        <span id="country"><?php echo $orderremarks['country'] ?? ''; ?></span>
                         <br>
-                        <span id="customer_phone" class="mt-1 block"><?php echo $order[0]['customer_phone'] ?? ''; ?></span>
+                        <span id="customer_phone" class="mt-1 block"><?php echo $customerdetails['customer_phone'] ?? ''; ?></span>
                     </address>
                 </div>
 
                 <div class="mt-6">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing Address</h4>
                     <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span id="billing_address1"><?php echo $order[0]['shipping_address_line1'] ?? ''; ?></span>
-                        <span id="billing_address2"><?php echo $order[0]['shipping_address_line2'] ?? ''; ?></span>
+                        <span id="billing_address1"><?php echo $orderremarks['shipping_address_line1'] ?? ''; ?></span>
+                        <span id="billing_address2"><?php echo $orderremarks['shipping_address_line2'] ?? ''; ?></span>
                         <br>
-                        <span id="billing_city_city"><?php echo $order[0]['shipping_city'] ?? ''; ?></span> -
-                        <span id="billing_city_zip"><?php echo $order[0]['shipping_zipcode'] ?? ''; ?></span>, 
-                        <span id="billing_country"><?php echo $order[0]['shipping_country'] ?? ''; ?></span><br>
-                        <span id="billing_mobile" class="mt-1 block"><?php echo $order[0]['shipping_mobile'] ?? ''; ?></span>
+                        <span id="billing_city_city"><?php echo $orderremarks['shipping_city'] ?? ''; ?></span> -
+                        <span id="billing_city_zip"><?php echo $orderremarks['shipping_zipcode'] ?? ''; ?></span>, 
+                        <span id="billing_country"><?php echo $orderremarks['shipping_country'] ?? ''; ?></span><br>
+                        <span id="billing_mobile" class="mt-1 block"><?php echo $orderremarks['shipping_mobile'] ?? ''; ?></span>
                     </address>
                 </div>
 
@@ -257,7 +443,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                     <p class="mt-1 text-sm">This is their 11th order</p>
                     <button class="mt-2 text-sm text-blue-600 hover:underline">View map</button>
                 </div>
-            </div> -->
+            </div> */ ?>
         </div>
     </div>
 </div>
@@ -509,5 +695,32 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
         .catch(() => {
             alert("Connection problem. Please try again.");
         });
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        const accordionTriggers = document.querySelectorAll('.accordion-trigger');
+            accordionTriggers.forEach(trigger => {
+                // Remove previous handler if stored to avoid duplicate handlers
+                if (trigger.__accordionClick__) {
+                    trigger.removeEventListener('click', trigger.__accordionClick__);
+                }
+
+                const handler = function () {
+                    const content = this.nextElementSibling;
+                    const isOpening = !content.classList.contains('open');
+
+                    // Open or close the clicked one
+                    if (isOpening) {
+                        content.classList.add('open');
+                        this.classList.add('active');
+                    } else {
+                        content.classList.remove('open');
+                        this.classList.remove('active');
+                    }
+                };
+
+                // store the handler reference so it can be removed later
+                trigger.__accordionClick__ = handler;
+                trigger.addEventListener('click', handler);
+            });
     });
 </script>
