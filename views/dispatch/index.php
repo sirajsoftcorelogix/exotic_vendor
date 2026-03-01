@@ -151,7 +151,7 @@
 				<!-- Invoice Total -->
 				<div>
 				  <p class="font-semibold text-gray-700">Invoice Total</p>
-				  <p class="text-lg font-semibold">[USD / INR / EUR] <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
+				  <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="text-blue-600 font-medium">[USD / INR / EUR] <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></a>
 
 				  <div class="mt-2 flex gap-2">
 					<?php if (isset($invoice['status']) && strtolower($invoice['status']) == 'cod'): ?>
