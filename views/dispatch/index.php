@@ -158,7 +158,7 @@
 						<span class="bg-gray-200 text-red-600 text-xs px-2 py-1 rounded">COD</span>
 					<?php else: ?>
 						<span class="bg-gray-200 text-green-600 text-xs px-2 py-1 rounded">Prepaid</span>
-					<?php endif: ?>
+					<?php endif; ?>
 				  </div>
 
 				  <div class="mt-4">
