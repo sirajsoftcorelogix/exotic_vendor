@@ -464,6 +464,16 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->detail();
                 break;
+            case 'save_stock_adjustment':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->saveStockAdjustment(); // This method will handle the POST data
+                break;
+            case 'update_stock_limits':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateStockLimits();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
