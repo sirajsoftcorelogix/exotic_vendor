@@ -231,6 +231,33 @@
 				  </div>
 				</div>
 			  </div>
+			    <!-- Menu -->
+<div class="relative">
+
+  <button onclick="toggleMenu()" 
+    class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-xl hover:bg-gray-400">
+    ⋮
+  </button>
+
+  <!-- Dropdown Menu -->
+  <div id="actionMenu"
+       class="hidden absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-50">
+
+    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+      Cancel Dispatch
+    </a>
+
+    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+      Print Label
+    </a>
+
+    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+      Download Invoice
+    </a>
+
+  </div>
+
+</div>
 			</div>
 		<!-- End New Design By Siraj -->
 		
