@@ -136,7 +136,7 @@
 				<!-- Invoice -->
 				<div>
 				  <p class="font-semibold text-gray-700">Inv No.</p>
-				  <a href="#" class="text-blue-600 font-medium"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></a>
+				  <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="text-blue-600 font-medium"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a>
 					<p class="text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
 				  
 				  <div class="mt-4">
