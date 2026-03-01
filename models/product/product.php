@@ -1860,5 +1860,20 @@ class product
         $result = $stmt->get_result();
         return $result ? $result->fetch_assoc() : null;
     }
-           
+    public function setProductLimits($productId, $minStock, $maxStock){
+        $sql = "UPDATE vp_products 
+                SET min_stock = ?, 
+                    max_stock = ? 
+                WHERE id = ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        // Bind: min_stock (i), max_stock (i), product_id (i)
+        $stmt->bind_param('iii', $minStock, $maxStock, $productId);
+
+        return $stmt->execute();
+    } 
 }

@@ -115,11 +115,47 @@
         </div>
       </div>
       <!-- Number Sold -->
-      <div class="flex justify-between items-center border rounded-lg p-4">
-        <span class="text-sm text-gray-500">Number Sold</span>
-        <span class="font-semibold text-lg"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></span>
-      </div>
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-white">
+            <div>
+              <p class="text-sm text-gray-500">Number Sold</p>
+              <p class="text-xl font-semibold"><?php echo htmlspecialchars($products['numsold'] ?? '0'); ?></p>
+            </div>
+            <div class="bg-gray-100 text-gray-600 p-2 rounded-lg">
+              📊
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-red-50 relative">
+            <div>
+              <p class="text-sm text-gray-500">Min Stock</p>
+              <p class="text-xl font-semibold text-red-600"><?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?></p>
+            </div>
+            <div class="bg-red-100 p-2 rounded-lg">
+               🔔
+            </div>
+            <button class="absolute top-1 right-1 text-gray-400 hover:text-red-600" onclick="openMinMaxModal()">
+              <i class="fas fa-pencil-alt text-[10px]"></i>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between border rounded-lg p-4 bg-blue-50 relative">
+            <div>
+              <p class="text-sm text-gray-500">Max Stock</p>
+              <p class="text-xl font-semibold text-blue-600"><?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?></p>
+            </div>
+            <div class="bg-blue-100 p-2 rounded-lg">
+               🛡️
+            </div>
+            <button class="absolute top-1 right-1 text-gray-400 hover:text-blue-600" onclick="openMinMaxModal()">
+              <i class="fas fa-pencil-alt text-[10px]"></i>
+            </button>
+          </div>
+
+          <div class="hidden md:block"></div>
+        </div>
   </div>
+
   <!-- Price -->
     <div class="bg-white border rounded-lg p-4">
       <h3 class="font-semibold mb-3">Price</h3>
@@ -313,6 +349,33 @@
     <button onclick="document.getElementById('imagePopup').classList.add('hidden')" class="mt-2 px-4 py-2 bg-red-600 text-white rounded">Close</button>
   </div>
 </div> -->
+<div id="minMaxModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button onclick="closeMinMaxModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Update Stock Thresholds</h2>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Minimum Stock Level</label>
+                <input type="number" id="input_min_stock" 
+                       value="<?php echo htmlspecialchars($products['min_stock'] ?? '0'); ?>"
+                       class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Maximum Stock Level</label>
+                <input type="number" id="input_max_stock" 
+                       value="<?php echo htmlspecialchars($products['max_stock'] ?? '0'); ?>"
+                       class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none">
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+            <button onclick="closeMinMaxModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button onclick="submitMinMaxUpdate()" class="px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600">Update Limits</button>
+        </div>
+    </div>
+</div>
 <!-- Stock Adjustment Card -->
 <!-- Overlay -->
 <div id="stockModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
@@ -598,6 +661,38 @@ function closeImagePopup() {
     .catch(error => {
         console.error('Error:', error);
         alert('An unexpected error occurred. Please check the console.');
+    });
+}
+</script>
+<script>
+    function openMinMaxModal() {
+    document.getElementById('minMaxModal').classList.remove('hidden');
+}
+
+function closeMinMaxModal() {
+    document.getElementById('minMaxModal').classList.add('hidden');
+}
+
+function submitMinMaxUpdate() {
+    const data = {
+        product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
+        min_stock: document.getElementById('input_min_stock').value,
+        max_stock: document.getElementById('input_max_stock').value
+    };
+
+    fetch('index.php?page=products&action=update_stock_limits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(res => {
+        if(res.success) {
+            alert('✅ Limits updated!');
+            location.reload(); // Reload to see changes
+        } else {
+            alert('❌ Failed: ' + res.message);
+        }
     });
 }
 </script>

@@ -907,6 +907,39 @@ class ProductsController {
         }
         exit;
     }
+    public function updateStockLimits() {
+        is_login();
+        global $productModel;
+        
+        // Clear buffer and set header for JSON
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+
+            if (!$data || !isset($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+
+            $productId = (int)$data['product_id'];
+            $minStock  = (int)($data['min_stock'] ?? 0);
+            $maxStock  = (int)($data['max_stock'] ?? 0);
+
+            // Call the model to update only the limits
+            $result = $productModel->setProductLimits($productId, $minStock, $maxStock);
+
+            echo json_encode(['success' => $result]);
+
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+        exit;
+    }
     public function saveProductNotes() {
         is_login();
         global $productModel;
