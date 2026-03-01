@@ -234,7 +234,7 @@
 			    <!-- Menu -->
 <div class="relative">
 
-  <button onclick="toggleMenu()" 
+  <button onclick="toggleMenu(this)" 
     class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-xl hover:bg-gray-400">
     ⋮
   </button>
