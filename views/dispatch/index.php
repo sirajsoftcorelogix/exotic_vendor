@@ -141,9 +141,9 @@
 				  
 				  <div class="mt-4">
 					<p class="font-semibold text-gray-700">Order No.</p>
-					<a href="#" class="text-blue-600 font-medium"><?php foreach ($invoice['items'] ?? [] as $item) {
-                      echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
-                    } ?></a>
+					<?php foreach ($invoice['items'] ?? [] as $item) {
+                      echo '<a class="text-blue-600 font-medium" href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
+                    } ?>
 					<p class="text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
 				  </div>
 				</div>
