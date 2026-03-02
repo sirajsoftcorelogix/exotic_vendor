@@ -212,9 +212,10 @@
                         $items = $invoice['items'] ?? [];
                         $itemCount = count($items);
                         if ($itemCount > 0) {
+                          $itemCodes = array_column($items, 'item_code');
                           echo htmlspecialchars($items[0]['item_code'] ?? '');
                           if ($itemCount > 1) {
-                            echo ' +' . ($itemCount - 1);
+                            echo '<span class="text-xs text-blue-500" title="">[ +' . ($itemCount - 1). ' ]</span>';
                           }
                         }
                       ?>

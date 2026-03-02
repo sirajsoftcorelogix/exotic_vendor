@@ -137,7 +137,7 @@ class Dispatch {
         curl_close($ch);
 
         // Log for debugging
-        file_put_contents(__DIR__ . '/shiprocket_http_log.txt', date('c') . " - URL: $apiUrl - HTTP: $httpCode - Error: $curlErr - Request: $json - Response: $responseRaw\n", FILE_APPEND);
+        //file_put_contents(__DIR__ . '/shiprocket_http_log.txt', date('c') . " - URL: $apiUrl - HTTP: $httpCode - Error: $curlErr - Request: $json - Response: $responseRaw\n", FILE_APPEND);
         //@chmod(__DIR__ . '/shiprocket_http_log.txt', 0666);
 
         $responseDecoded = null;
