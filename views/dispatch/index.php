@@ -1,4 +1,9 @@
 <div class="container mx-auto px-4 py-8">
+    <!-- include daterangepicker assets -->
+    <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">Customer Invoices</h1>
         <!-- <a href="<?php //echo base_url('?page=invoices&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Invoice</a> -->
@@ -12,7 +17,7 @@
 
         <div>
           <label class="text-sm font-semibold">Date Range :</label>
-          <input type="text" name="date_range" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" value="<?= htmlspecialchars($_GET['date_range'] ?? '') ?>">
+          <input type="text" id="daterange" name="date_range" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" value="<?= htmlspecialchars($_GET['date_range'] ?? '') ?>">
         </div>
 
         <div>
@@ -93,10 +98,14 @@
 
     <!-- ACTION BAR -->
     <div class="flex flex-col md:flex-row justify-end items-center gap-3 mb-5">
+      <!--clear all check-->
+      <button id="clear-selection-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md transition" onclick="localStorage.removeItem('selected_dispatch_invoices'); document.querySelectorAll('input.label-checkbox').forEach(cb => cb.checked = false);">
+        Clear Selection
+      </button>
       <button id="bulk-print-labels-btn" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition">
         Print Label
       </button>
-      <button class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition">
+      <button id="bulk-update-status-btn" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition">
         Update Status
       </button>
       
@@ -112,52 +121,77 @@
     <div class="space-y-4">
       <?php if (!empty($invoices)): ?>
         <?php foreach ($invoices as $invoice): ?>
-          <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition">
-            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <!-- LEFT -->
-              <div class="flex gap-4">
-                <input type="checkbox" class="mt-1 w-5 h-5 label-checkbox" value="<?= htmlspecialchars($invoice['id']); ?>">
-                <div class="flex gap-8 flex-wrap">
-                  <div>
-                    <p class="text-xs text-gray-500">Inv No.</p>
-                    <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
-                  </div>
-                  <div>
-                    <p class="text-xs text-gray-500">Order No.</p>
-                    <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
-                      echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
-                    } ?></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
-                  </div>
-                </div>
-              </div>
-              <!-- MIDDLE GRID -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
-                <div>
-                  <p class="text-xs text-gray-500">Invoice Total</p>
-                  <p class="font-semibold text-gray-800">₹ <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
-                  <div class="flex gap-2 mt-2">
-                    <?php if (isset($invoice['status']) && strtolower($invoice['status']) == 'cod'): ?>
-                      <span class="bg-red-100 text-red-600 text-xs px-2 py-1 rounded">COD</span>
-                    <?php else: ?>
-                      <span class="bg-green-100 text-green-600 text-xs px-2 py-1 rounded">Prepaid</span>
-                    <?php endif; ?>
-                  </div>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500">Items:</p>
-                  <p class="font-semibold">
-                    <?php //echo count($invoice['items'] ?? []); ?>
-                    <?php foreach ($invoice['items'] ?? [] as $item) {
+		
+		<!-- Start New Design By Siraj -->
+		<div class="bg-white border rounded-xl bg-gray-100 p-5 flex items-start gap-4">
+
+			  <!-- Checkbox -->
+			  <div class="pt-1">
+				<input type="checkbox" class="mt-1 w-5 h-5 label-checkbox" value="<?= htmlspecialchars($invoice['id']); ?>">
+			  </div>
+
+			  <!-- Main Grid -->
+			  <div class="grid grid-cols-6 gap-6 flex-1 text-sm">
+
+				<!-- Invoice -->
+				<div>
+				  <p class="font-semibold text-gray-700">Inv No.</p>
+				  <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="text-blue-600 font-medium"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a>
+					<p class="text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+				  
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Order No.</p>
+					<?php foreach ($invoice['items'] ?? [] as $item) {
+                      echo '<a class="text-blue-600 font-medium" href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
+                    } ?>
+					<p class="text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+				  </div>
+				</div>
+
+				<!-- Invoice Total -->
+				<div>
+				  <p class="font-semibold text-gray-700">Invoice Total</p>
+				  <p class="bg-red-100">[USD / INR / EUR] <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
+
+				  <div class="mt-2 flex gap-2">
+					<?php if (isset($invoice['status']) && strtolower($invoice['status']) == 'cod'): ?>
+						<span class="bg-gray-200 text-red-600 text-xs px-2 py-1 rounded">COD</span>
+					<?php else: ?>
+						<span class="bg-gray-200 text-green-600 text-xs px-2 py-1 rounded">Prepaid</span>
+					<?php endif; ?>
+				  </div>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Status:</p>
+					<p class="flex items-center gap-2 bg-red-100">
+					  [Dispatched]
+					  <span class="text-blue-600">🔄</span>
+					</p>
+				  </div>
+				</div>
+
+				<!-- Items -->
+				<div>
+				  <p class="font-semibold text-gray-700">Items:</p>
+				  <p><?php foreach ($invoice['items'] ?? [] as $item) {
                       echo htmlspecialchars($item['item_code'] ?? '') . '<br>';
                     } ?>
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500">AWB:</p>
-                  <p class="text-blue-600 font-medium text-sm">
-                    <?php 
+				  <span class="text-red-600 font-semibold bg-red-100">[+2]</span></p>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">RTO Risk</p>
+					<p class="flex items-center gap-2 bg-red-100">
+					  [LOW | 10%]
+					  <span class="text-blue-600">🔄</span>
+					</p>
+				  </div>
+				</div>
+
+				<!-- AWB -->
+				<div>
+				  <p class="font-semibold text-gray-700">AWB:</p>
+				  <div>
+					<a href="#" class="text-blue-600"><?php 
                       $awbs = [];
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
@@ -168,21 +202,20 @@
                         }
                       }
                       echo implode(' | ', $awbs);
-                    ?>
-                  </p>
-                  <p class="text-xs text-gray-400 mt-1"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500">RTO Risk</p>
-                  <p class="font-semibold text-gray-800">-</p>
-                </div>
-              </div>
-              <!-- RIGHT -->
-              <div class="flex flex-col lg:items-end gap-3">
-                <div>
-                  <p class="text-xs text-gray-500">Applied wt.</p>
-                  <p class="font-semibold">
-                    <?php 
+                    ?></a>
+					<p class="text-gray-500 bg-red-100">[19 Feb 2026]</p>
+				  </div>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Box</p>
+					<p class="bg-red-100">[Custom : 3 x 2 x1]</p>
+				  </div>
+				</div>
+
+				<!-- Weight -->
+				<div>
+				  <p class="font-semibold text-gray-700">Applied wt:</p>
+				  <p><?php 
                       $wt = 0;
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
@@ -190,56 +223,44 @@
                         }
                       }
                       echo $wt > 0 ? number_format($wt, 3) . ' Kg' : '-';
-                    ?>
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500">Charges:</p>
-                  <p class="font-semibold">
-                    ₹ <?php 
-                      $charges = 0;
-                      if (!empty($invoice_dispatch[$invoice['id']])) {
-                        foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                          $charges += (float)($dispatch['shipping_charges'] ?? 0);
-                        }
-                      }
-                      echo number_format($charges, 2);
-                    ?>
-                  </p>
-                </div>
-                <div class="relative">
-                  <button class="text-gray-600 hover:bg-gray-100 rounded-full p-2 text-lg" onclick="toggleMenu(this)">
-                    ⋮
-                  </button>
-                  <div class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                    <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download invoice</a>
-                    <?php if (!empty($invoice_dispatch[$invoice['id']])): ?>
-                      <?php foreach ($invoice_dispatch[$invoice['id']] as $dispatch): ?>
-                        <a href="<?php echo $dispatch['label_url']; ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download <Label><?php echo htmlspecialchars($dispatch['awb_code']); ?></Label></a>
-                      <?php endforeach; ?>
-                    <?php endif; ?>
-                    <?php
-                      $needsRetry = false;
-                      if (!empty($invoice_dispatch[$invoice['id']])) {
-                        foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                          if (empty($dispatch['awb_code'])) {
-                            $needsRetry = true;
-                            break;
-                          }
-                        }
-                      }
-                    ?>
-                    <?php if ($needsRetry): ?>
-                      <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="retryDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Retry Dispatch</button>
-                      
-                    <?php endif; ?>
-                    <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
-                  </div>
-                </div>
-                
-              </div>
-            </div>
-          </div>
+                    ?></p>
+
+				  <div class="mt-4">
+					<p class="font-semibold text-gray-700">Charges:</p>
+					<p class="font-medium bg-red-100">[₹ 196] </p>
+				  </div>
+				</div>
+			  </div>
+			    <!-- Menu -->
+<div class="relative">
+
+  <button onclick="toggleMenu(this)" 
+    class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-xl hover:bg-gray-400">
+    ⋮
+  </button>
+
+  <!-- Dropdown Menu -->
+  <div class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-50">
+
+    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+      Cancel Dispatch
+    </a>
+
+    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+      Print Label
+    </a>
+
+    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+      Download Invoice
+    </a>
+
+  </div>
+
+</div>
+			</div>
+		<!-- End New Design By Siraj -->
+		
+		
         <?php endforeach; ?>
       <?php else: ?>
         <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
@@ -286,6 +307,29 @@
 </div>
 
 <script>
+function toggleMenu(button) {
+
+    const menu = button.nextElementSibling;
+
+    // close all other menus
+    document.querySelectorAll('.dropdown-menu').forEach(m => {
+        if (m !== menu) m.classList.add('hidden');
+    });
+
+    menu.classList.toggle('hidden');
+}
+
+// close when clicking outside
+document.addEventListener("click", function(e) {
+
+    if (!e.target.closest(".relative")) {
+        document.querySelectorAll(".dropdown-menu").forEach(menu => {
+            menu.classList.add("hidden");
+        });
+    }
+
+});
+
 // Persist selected invoices across pages using localStorage
 const DISPATCH_STORAGE_KEY = 'selected_dispatch_invoices';
 
@@ -306,6 +350,52 @@ function restoreCheckedInvoices() {
         cb.checked = checked.includes(cb.value);
     });
 }
+  const bulkUpdateBtn = document.getElementById('bulk-update-status-btn');
+  if (bulkUpdateBtn) {
+    bulkUpdateBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const ids = getSelectedInvoiceIds();
+      if (ids.length === 0) {
+        alert('Please select at least one invoice');
+        return;
+      }
+      bulkUpdateBtn.disabled = true;
+      const origText = bulkUpdateBtn.textContent;
+      bulkUpdateBtn.textContent = 'Processing...';
+      fetch('?page=dispatch&action=bulk_update_status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ invoice_ids: ids })
+      })
+      .then(res => {
+        bulkUpdateBtn.disabled = false;
+        bulkUpdateBtn.textContent = origText;
+        if (!res.ok) throw new Error('Network response was not ok');
+        return res.json();
+      })
+      .then(data => {
+        if (data && data.status === 'success') {
+          const summary = data.summary || {};
+          const msg = `Processed ${summary.processed_invoices || 0} invoices, ${summary.processed_dispatches || 0} dispatches. Updated: ${summary.updated || 0}`;
+          if (typeof showAlert === 'function') {
+            showAlert(msg, 'success');
+          } else {
+            alert(msg);
+          }
+          setTimeout(() => location.reload(), 3000);
+        } else {
+          const err = data.message || 'Failed to update status';
+          if (typeof showAlert === 'function') showAlert(err, 'error'); else alert(err);
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        bulkUpdateBtn.disabled = false;
+        bulkUpdateBtn.textContent = origText;
+        if (typeof showAlert === 'function') showAlert('Error updating statuses: ' + err.message, 'error'); else alert('Error updating statuses: ' + err.message);
+      });
+    });
+  }
 
 function getSelectedInvoiceIds() {
     const visibleChecked = Array.from(document.querySelectorAll('input.label-checkbox:checked')).map(cb => cb.value);
@@ -321,6 +411,33 @@ document.addEventListener('change', function(e) {
 
 document.addEventListener('DOMContentLoaded', restoreCheckedInvoices);
 
+    // initialize date range picker for filter
+    $(function() {
+        if ($('#daterange').length) {
+            $('#daterange').daterangepicker({
+                autoUpdateInput: false,
+                showDropdowns: true,
+                locale: { format: 'YYYY-MM-DD' },
+                autoApply: true,
+                opens: 'right'
+            });
+            $('#daterange').on('apply.daterangepicker', function(ev, picker) {
+                $(this).val(picker.startDate.format('YYYY-MM-DD') + ' to ' + picker.endDate.format('YYYY-MM-DD'));
+            });
+            $('#daterange').on('cancel.daterangepicker', function(ev, picker) {
+                $(this).val('');
+            });
+            // if input already has value (from GET), ensure picker reflects it
+            var existing = $('#daterange').val();
+            if (existing) {
+                var parts = existing.split(' to ');
+                if (parts.length === 2) {
+                    $('#daterange').data('daterangepicker').setStartDate(parts[0]);
+                    $('#daterange').data('daterangepicker').setEndDate(parts[1]);
+                }
+            }
+        }
+    });
 const bulkPrintBtn = document.getElementById('bulk-print-labels-btn');
 if (bulkPrintBtn) {
     bulkPrintBtn.addEventListener('click', function(e) {
@@ -332,7 +449,7 @@ if (bulkPrintBtn) {
         }
         //processing
         bulkPrintBtn.disabled = true;
-        bulkPrintBtn.textContent = '<span class="animate-spin">⏳</span> Processing...';
+        bulkPrintBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
         fetch('?page=dispatch&action=merge_labels', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -431,4 +548,25 @@ if (bulkPrintBtn) {
         }
       });
     }
+    function updateStatusAjax(invoiceId) {
+      fetch('?page=dispatch&action=bulk_update_status', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ invoice_ids: [invoiceId] })
+      })
+      .then(res => res.json())
+      .then(data => {
+          if (data.status === 'success') {
+              showAlert('Status updated successfully. Reloading...', 'success');
+              setTimeout(() => location.reload(), 3000);              
+          } else {
+              alert('Error: ' + (data.message || 'Failed to update status'));
+          }
+      })
+      .catch(err => {
+          console.error(err);
+          alert('Error updating status');
+      });
+    }
+    
 </script>
