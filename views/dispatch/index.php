@@ -138,19 +138,19 @@
                     <span class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
                       echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
                     } ?></span></p>
-                    <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
+                    <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
                       <?php 
                         //$shiprocketOrderIds = [];
-                        if (!empty($invoice_dispatch[$invoice['id']])) {
-                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                            if (!empty($dispatch['shiprocket_shipment_id'])) {
-                              echo htmlspecialchars($dispatch['shiprocket_shipment_id']) . '<br>';
-                            }
-                          }
-                        }
+                        // if (!empty($invoice_dispatch[$invoice['id']])) {
+                        //   foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                        //     if (!empty($dispatch['shiprocket_shipment_id'])) {
+                        //       echo htmlspecialchars($dispatch['shiprocket_shipment_id']) . '<br>';
+                        //     }
+                        //   }
+                        // }
                         //echo implode(' | ', $shiprocketOrderIds);
-                      ?></p>  
+                      ?></p>   -->
                   </div>
                   </div>
                   
@@ -171,7 +171,7 @@
                   </div>
                 </div>
                 <div>
-                  <p class="text-xs text-gray-500">Status</p>
+                  <p class="text-xs text-gray-500">Dispatch Status</p>
                   <div class="flex gap-2 mt-2">
                     <?php 
                       // $dispatchStatus = '-';
