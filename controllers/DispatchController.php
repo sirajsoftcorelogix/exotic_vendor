@@ -850,7 +850,7 @@ class DispatchController {
 
                 // call shiprocket just like in create()
                 $reDispatchResult = $dispatchModel->shiprocketCreateShipment($shiprocketPayload);
-                //print_array($reDispatchResult);
+                print_array($reDispatchResult);
                 // validate response
                 if (!$reDispatchResult || !isset($reDispatchResult['json']['order_id']) || ($reDispatchResult['json']['status'] ?? '') !== 'NEW') {
                     $msg = $reDispatchResult['json']['status'] ?? $reDispatchResult['error'] ?? 'Failed to create re-dispatch shipment';
