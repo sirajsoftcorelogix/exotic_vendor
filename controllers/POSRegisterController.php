@@ -11,12 +11,21 @@ class POSRegisterController
     {
         $this->pos     = new pos($conn);
     }
-   
+
     public function index()
     {
         // slug => label
         $categories = getCategories();
+        require_once 'models/user/user.php';
+        global $conn;   // use existing DB connection
+        $usersModel = new User($conn);   //  create instance
 
+        $warehouseName = 'No Warehouse';
+
+        if (!empty($_SESSION['warehouse_id'])) {
+            $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
+            $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
+        }
         // Add "All Products" (slug => label)
         // Put it first:
         $categories = ['allProducts' => 'All Products'] + $categories;
@@ -71,10 +80,11 @@ class POSRegisterController
         }
 
         renderTemplate('views/pos_register/index.php', [
-            'categories' => $categoryData
+            'categories' => $categoryData,
+            'warehouse_name' => $warehouseName
         ]);
     }
-    
+
     /**
      * DataTables AJAX endpoint for products list
      */
@@ -205,7 +215,8 @@ class POSRegisterController
         }
         $curlParts[] = escapeshellarg($url);
         $curlParts[] = '--data ' . escapeshellarg(http_build_query($postData));
-        print('[POS cart-add] ' . implode(' ', $curlParts)); die;
+        print('[POS cart-add] ' . implode(' ', $curlParts));
+        die;
 
 
         $capturedEuid = null;
@@ -228,7 +239,9 @@ class POSRegisterController
             return $len;
         });
 
-        $response = curl_exec($ch); print_r($response); die; 
+        $response = curl_exec($ch);
+        print_r($response);
+        die;
         $error = curl_error($ch);
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);

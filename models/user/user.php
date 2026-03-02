@@ -1,48 +1,57 @@
-<?php 
+<?php
 
 // This file is part of the Vendor Portal project.
 // It is used to manage user-related functionalities such as login, logout, and rendering user views.
 
-class User {
-    private $db;    
-    public function __construct($db) {
+class User
+{
+    private $db;
+    public function __construct($db)
+    {
         $this->db = $db;
     }
-    public function login($login, $password) {
+    public function login($login, $password)
+    {
         $sql = "SELECT * FROM vp_users WHERE email = ? OR phone = ?";
-        $stmt = $this->db->prepare($sql);   
+        $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ss', $login, $login);
         $stmt->execute();
-        $result = $stmt->get_result();  
+        $result = $stmt->get_result();
         if ($result->num_rows > 0) {
-            $user = $result->fetch_assoc(); 
+            $user = $result->fetch_assoc();
             //if (password_verify($password, $user['password'])) {
-                @session_start();
-                $_SESSION['user'] = $user;
-                assignAPIToken($user["id"]); // Insert Token for Chat
-                return true;
+            @session_start();
+            $_SESSION['user'] = $user;
+            $_SESSION['warehouse_id'] = $user['warehouse_id'];
+            assignAPIToken($user["id"]); // Insert Token for Chat
+            return true;
             //}
-        }   
-  
+        }
+
         return false;
     }
-    public function logout() {
+    public function logout()
+    {
         session_start();
         session_destroy();
     }
-    public function isLoggedIn() {
+    public function isLoggedIn()
+    {
         //session_start();
         return isset($_SESSION['user']);
     }
-    public function getUser() {
+    public function getUser()
+    {
         //session_start();
         return isset($_SESSION['user']) ? $_SESSION['user'] : null;
     }
-    public function getUserId() {
+    public function getUserId()
+    {
         //session_start();
         return isset($_SESSION['user']['id']) ? $_SESSION['user']['id'] : null;
     }
-    public function findByLogin($login) {
+    public function findByLogin($login)
+    {
         $sql = "SELECT * FROM vp_users WHERE email = ? OR phone = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ss', $login, $login);
@@ -50,7 +59,8 @@ class User {
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
-    public function getUserById($id) {
+    public function getUserById_bk($id)
+    {
         $sql = "SELECT * FROM vp_users WHERE id = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $id);
@@ -58,7 +68,26 @@ class User {
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
-    public function updatePassword($userId, $newPassword) {
+    public function getUserById($id)
+    {
+        $sql = "SELECT 
+                u.*, 
+                ea.address_title AS warehouse_name
+            FROM vp_users u
+            LEFT JOIN exotic_address ea 
+                ON u.warehouse_id = ea.id
+            WHERE u.id = ?
+            LIMIT 1";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        return $result->fetch_assoc();
+    }
+    public function updatePassword($userId, $newPassword)
+    {
         $hash = password_hash($newPassword, PASSWORD_DEFAULT);
         $sql = "UPDATE vp_users SET password = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
@@ -66,14 +95,16 @@ class User {
         $stmt->execute();
         return $stmt->affected_rows > 0;
     }
-    public function saveResetToken($id, $token) {
+    public function saveResetToken($id, $token)
+    {
         $sql = "UPDATE vp_users SET remember_token = ? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('si', $token, $id);
         $stmt->execute();
         return $stmt->affected_rows > 0;
     }
-    public function verifyResetToken($login, $token) {
+    public function verifyResetToken($login, $token)
+    {
         $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND remember_token = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $login, $login, $token);
@@ -81,7 +112,8 @@ class User {
         $result = $stmt->get_result();
         return $result->num_rows > 0;
     }
-    public function insert($data) {
+    public function insert($data)
+    {
         // Check if email already exists
         $checkSql = "SELECT id FROM vp_users WHERE email = ?";
         $checkStmt = $this->db->prepare($checkSql);
@@ -93,15 +125,16 @@ class User {
         }
         $checkStmt->close();
 
-        $sql = "INSERT INTO vp_users (name, email, phone, password, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_users (name, email, phone, password, role_id, warehouse_id, is_active) VALUES (?, ?, ?, ?, ?, ?,?)";
         $stmt = $this->db->prepare($sql);
         $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-        $stmt->bind_param('ssssii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active']);
+        $warehouse_id = !empty($data['warehouse_id']) ? $data['warehouse_id'] : NULL;
+        $stmt->bind_param('ssssiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $warehouse_id, $data['is_active']);
         if ($stmt->execute()) {
             $user_id = $this->db->insert_id;
             // Add vendor teams
             if (!empty($data['team']) && is_array($data['team'])) {
-               $tm_status = $this->addUserTeams($user_id, $data['team']);
+                $tm_status = $this->addUserTeams($user_id, $data['team']);
             }
             return ['success' => true, 'message' => 'User added successfully.'];
         }
@@ -110,7 +143,8 @@ class User {
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
-    public function update($id, $data) {
+    public function update($id, $data)
+    {
         // Check if email already exists for another user
         $checkSql = "SELECT id FROM vp_users WHERE email = ? AND id != ?";
         $checkStmt = $this->db->prepare($checkSql);
@@ -123,19 +157,19 @@ class User {
         $checkStmt->close();
 
         if (!empty($data['password'])) {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ? WHERE id = ?, warehouse_id = ?";
             $stmt = $this->db->prepare($sql);
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-            $stmt->bind_param('ssssiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('ssssiiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $data['warehouse_id'], $id);
         } else {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role_id = ?, is_active = ? WHERE id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, warehouse_id = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->bind_param('sssiii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $id);
+            $stmt->bind_param('sssiiii', $data['name'], $data['email'], $data['phone'], $data['role'], $data['is_active'], $data['warehouse_id'], $id);
         }
         if ($stmt->execute()) {
             // Add vendor teams
             if (!empty($data['team']) && is_array($data['team'])) {
-               $tm_status = $this->addUserTeams($id, $data['team']);
+                $tm_status = $this->addUserTeams($id, $data['team']);
             }
             return ['success' => true, 'message' => 'User updated successfully.'];
         }
@@ -144,7 +178,8 @@ class User {
             'message' => 'Update failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
-    public function addUserTeams($user_id, $teamIds){       
+    public function addUserTeams($user_id, $teamIds)
+    {
         if (empty($user_id)) {
             return ['success' => false, 'message' => 'User ID is required.'];
         }
@@ -170,8 +205,9 @@ class User {
         $stmt->close();
         return ['success' => true, 'message' => 'Teams updated successfully.'];
     }
-    public function getUserTeams($u_id) {
-        $sql = "SELECT team_id FROM vp_user_team_mapping WHERE user_id = ".$u_id;
+    public function getUserTeams($u_id)
+    {
+        $sql = "SELECT team_id FROM vp_user_team_mapping WHERE user_id = " . $u_id;
         $result = $this->db->query($sql);
         $uTeamMembers = [];
         if ($result && $result->num_rows > 0) {
@@ -181,7 +217,8 @@ class User {
         }
         return $uTeamMembers;
     }
-    public function updateUserPriofile($id, $data) {
+    public function updateUserPriofile($id, $data)
+    {
 
         if (!empty($data['password'])) {
             $sql = "UPDATE vp_users SET name = ?, phone = ?, password = ? WHERE id = ?";
@@ -201,7 +238,8 @@ class User {
             'message' => 'Update failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
-    public function delete($id) {
+    public function delete($id)
+    {
         $sql = "DELETE FROM vp_users WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $id);
@@ -210,7 +248,8 @@ class User {
         }
         return ['success' => false, 'error' => 'Failed: ' . $stmt->error];
     }
-    public function getAll($search = '', $sort_by = 'id', $sort_order = 'asc', $limit = 20, $offset = 0) {
+    public function getAll($search = '', $sort_by = 'id', $sort_order = 'asc', $limit = 20, $offset = 0)
+    {
         $search = '%' . $this->db->real_escape_string($search) . '%';
         $sql = "SELECT * FROM vp_users WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?) ORDER BY $sort_by $sort_order LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
@@ -219,7 +258,8 @@ class User {
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
-    public function countAll($search = '') {
+    public function countAll($search = '')
+    {
         $search = '%' . $this->db->real_escape_string($search) . '%';
         $sql = "SELECT COUNT(*) FROM vp_users WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
         $stmt = $this->db->prepare($sql);
@@ -228,16 +268,18 @@ class User {
         $result = $stmt->get_result();
         return $result->fetch_row()[0];
     }
-    public function getAllUsers() {
+    public function getAllUsers()
+    {
         $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
         $result = $this->db->query($sql);
-        $users = [];        
+        $users = [];
         while ($row = $result->fetch_assoc()) {
             $users[$row['id']] = $row['name'];
         }
         return $users;
     }
-    public function getAllUsersListing($page = 1, $limit = 10, $search = '', $role_filter = '', $status_filter = '') {
+    public function getAllUsersListing($page = 1, $limit = 10, $search = '', $role_filter = '', $status_filter = '')
+    {
         // sanitize
         $page = (int)$page;
         if ($page < 1) $page = 1;
@@ -246,9 +288,9 @@ class User {
         // calculate offset
         $offset = ($page - 1) * $limit;
         if (!empty($status_filter)) {
-            if($status_filter == 'active') {
+            if ($status_filter == 'active') {
                 $status_filter = 1;
-            } else if($status_filter == 'inactive') {
+            } else if ($status_filter == 'inactive') {
                 $status_filter = 0;
             }
         }
@@ -283,12 +325,18 @@ class User {
             }
 
             if (is_numeric($status_filter)) {
-                $search = $this->db->real_escape_string($status_filter);   
+                $search = $this->db->real_escape_string($status_filter);
                 $where = "WHERE vu.is_active = '$status_filter'";
             }
         }
         // total records
-        $sql = "SELECT COUNT(DISTINCT vu.id) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where";
+        // $sql = "SELECT COUNT(DISTINCT vu.id) AS total FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where";
+        $sql = "SELECT COUNT(DISTINCT vu.id) AS total 
+FROM vp_users AS vu 
+LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id 
+LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id 
+LEFT JOIN exotic_address AS ea ON vu.warehouse_id = ea.id
+$where";
         $resultCount = $this->db->query($sql);
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'] ?? 0;
@@ -296,7 +344,18 @@ class User {
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT vu.*, GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id LIMIT $limit OFFSET $offset;";
+        // $sql = "SELECT vu.*, GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id LIMIT $limit OFFSET $offset;";
+        $sql = "SELECT 
+        vu.*, 
+        ea.address_title AS warehouse_name,
+        GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names 
+    FROM vp_users AS vu 
+    LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id 
+    LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id 
+    LEFT JOIN exotic_address AS ea ON vu.warehouse_id = ea.id
+    $where 
+    GROUP BY vu.id 
+    LIMIT $limit OFFSET $offset;";
         $result = $this->db->query($sql);
 
         $users = [];
@@ -314,25 +373,52 @@ class User {
             'search'       => $search
         ];
     }
-    public function getAllRoles() {
+    public function getAllRoles()
+    {
         $sql = "SELECT id, role_name FROM vp_roles WHERE is_active = 1 ORDER BY role_name ASC";
         $result = $this->db->query($sql);
-        $roles = [];        
+        $roles = [];
         while ($row = $result->fetch_assoc()) {
             $roles[] = $row;
         }
         return $roles;
     }
-    public function getAllTeams() {
+    public function getAllTeams()
+    {
         $sql = "SELECT id, team_name FROM vp_teams WHERE is_active = 1 ORDER BY team_name ASC";
         $result = $this->db->query($sql);
-        $teams = [];        
+        $teams = [];
         while ($row = $result->fetch_assoc()) {
             $teams[] = $row;
         }
         return $teams;
     }
+    public function getAllWarehouses()
+    {
+        global $conn;
+        $sql = "SELECT id, address_title FROM exotic_address WHERE is_active = 0 ORDER BY address_title ASC";
+        $result = mysqli_query($conn, $sql);
+
+        $warehouses = [];
+        while ($row = mysqli_fetch_assoc($result)) {
+            $warehouses[] = $row;
+        }
+        return $warehouses;
+    }
+
+    public function getWarehouseById($id)
+    {
+        
+        $sql = "SELECT id, address_title 
+            FROM exotic_address 
+            WHERE id = ? AND is_active = 0 
+            LIMIT 1";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+// echo '<pre>';print_r($stmt);exit;
+        return $result->fetch_assoc(); // returns single row
+    }
 }
-
-
-?>
