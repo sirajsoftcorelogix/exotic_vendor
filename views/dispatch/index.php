@@ -134,18 +134,31 @@
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
                     </div>
                     <div>
-                    <p class="text-xs text-gray-500">Order No.</p>
-                    <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
+                    <p ><span class="text-xs text-gray-500">Order No.</span>
+                    <span class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
                       echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
-                    } ?></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
-                    </div>
+                    } ?></span></p>
+                    <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
+                    <p class="text-blue-600 font-semibold">
+                      <?php 
+                        //$shiprocketOrderIds = [];
+                        if (!empty($invoice_dispatch[$invoice['id']])) {
+                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                            if (!empty($dispatch['shiprocket_shipment_id'])) {
+                              echo htmlspecialchars($dispatch['shiprocket_shipment_id']) . '<br>';
+                            }
+                          }
+                        }
+                        //echo implode(' | ', $shiprocketOrderIds);
+                      ?></p>  
+                  </div>
                   </div>
                   
                 </div>
               </div>
               <!-- MIDDLE GRID -->
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
+                <div class="flex flex-col gap-2">
                 <div>
                   <p class="text-xs text-gray-500">Invoice Total</p>
                   <p class="font-semibold text-gray-800">₹ <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
@@ -157,6 +170,33 @@
                     <?php endif; ?>
                   </div>
                 </div>
+                <div>
+                  <p class="text-xs text-gray-500">Status</p>
+                  <div class="flex gap-2 mt-2">
+                    <?php 
+                      // $dispatchStatus = '-';
+                      // if (!empty($invoice_dispatch[$invoice['id']])) {
+                      //   $allDispatched = true;
+                      //   foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                      //     if (empty($dispatch['awb_code'])) {
+                      //       $allDispatched = false;
+                      //       break;
+                      //     }
+                      //   }
+                      //   $dispatchStatus = $allDispatched ? '<span class="bg-green-100 text-green-600 text-xs px-2 py-1 rounded">Dispatched</span>' : '<span class="bg-yellow-100 text-yellow-600 text-xs px-2 py-1 rounded">Ready to Ship</span>';
+                      // }
+                      // echo $dispatchStatus;
+                      foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                          if (strtolower($dispatch['shipment_status'] ?? '') === 'cancelled' || strtolower($dispatch['shipment_status'] ?? '') === 'cancellation requested') {
+                              echo '<span class="bg-red-100 text-red-600 text-xs px-2 py-1 rounded">Cancelled</span>';
+                          }  else {
+                              echo '<span class="bg-blue-100 text-blue-600 text-xs px-2 py-1 rounded">' . htmlspecialchars($dispatch['shipment_status'] ?? '') . '</span>';
+                          }
+                        }
+                    ?>
+                  </div>
+                </div>  
+                </div>
                 <div class="flex flex-col gap-2">
                   <div>
                     <p class="text-xs text-gray-500">Customer</p>
@@ -167,10 +207,16 @@
                   <div>
                     <p class="text-xs text-gray-500">Items:</p>
                     <p class="font-semibold">
-                      <?php //echo count($invoice['items'] ?? []); ?>
-                      <?php foreach ($invoice['items'] ?? [] as $item) {
-                        echo htmlspecialchars($item['item_code'] ?? '') . '<br>';
-                      } ?>
+                      <?php 
+                        $items = $invoice['items'] ?? [];
+                        $itemCount = count($items);
+                        if ($itemCount > 0) {
+                          echo htmlspecialchars($items[0]['item_code'] ?? '');
+                          if ($itemCount > 1) {
+                            echo ' +' . ($itemCount - 1);
+                          }
+                        }
+                      ?>
                     </p>
                   </div>
                 </div>
@@ -215,6 +261,7 @@
                             if (!empty($dispatch['box_size'])) {
                               $boxSizes[] = htmlspecialchars($dispatch['box_size']);
                             } elseif (!empty($dimensions)) {
+                              $dimensions = array_map(function($d) { return rtrim(rtrim((string)$d, '0'), '.'); }, $dimensions);
                               $boxSizes[] = implode('x', $dimensions) . ' inch';
                             }
                           }
@@ -224,14 +271,47 @@
                     </p>
                   </div>
                 </div>
-                <div>
-                  <p class="text-xs text-gray-500">RTO Risk</p>
-                  <p class="font-semibold text-gray-800">-</p>
+                <div class="flex flex-col gap-3">
+                  <div>
+                    <p class="text-xs text-gray-500">RTO Risk</p>
+                    <p class="font-semibold text-gray-800">-</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500">Applied wt.</p>
+                    <p class="font-semibold">
+                      <?php 
+                        $wt = 0;
+                        if (!empty($invoice_dispatch[$invoice['id']])) {
+                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                            $wt += (float)($dispatch['billing_weight'] ?? 0);
+                          }
+                        }
+                        echo $wt > 0 ? number_format($wt, 3) . ' Kg' : '-';
+                      ?>
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500">ETD:</p>
+                    <p class="font-semibold">
+                      <?php 
+                        $etd = null;
+                        if (!empty($invoice_dispatch[$invoice['id']])) {
+                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                            if (!empty($dispatch['etd'])) {
+                              $etd = $dispatch['etd'];
+                              break;
+                            }
+                          }
+                        }
+                        echo $etd ? date('d M Y', strtotime($etd)) : '-';
+                      ?>
+                    </p>
+                  </div>
                 </div>
               </div>
               <!-- RIGHT -->
-              <div class="flex flex-col lg:items-end gap-3">
-                <div class="relative">
+              <div class="flex flex-col sm:items-end gap-3">
+                <div class="relative ">
                   <button class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg" onclick="toggleMenu(this)">
                     ⋮
                   </button>
@@ -244,55 +324,32 @@
                     <?php endif; */?>
                     <?php
                       $needsRetry = false;
+                      $reDispatch = false;
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
                           if (empty($dispatch['awb_code'])) {
                             $needsRetry = true;
                             break;
                           }
+                          if (strtolower($dispatch['shipment_status'] ?? '') === 'cancelled' || strtolower($dispatch['shipment_status'] ?? '') === 'cancellation requested') {
+                            $reDispatch = true;
+                          }
                         }
                       }
                     ?>
                     <?php if ($needsRetry): ?>
-                      <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="retryDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Retry Dispatch</button>
+                      <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="retryDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">AWB Generate</button>
                       
+                    <?php endif; ?>
+                    <?php if ($reDispatch): ?>
+                      <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="reDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Re-Dispatch</button>
                     <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
                   </div>
                 </div>
-                <div>
-                  <p class="text-xs text-gray-500">Applied wt.</p>
-                  <p class="font-semibold">
-                    <?php 
-                      $wt = 0;
-                      if (!empty($invoice_dispatch[$invoice['id']])) {
-                        foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                          $wt += (float)($dispatch['billing_weight'] ?? 0);
-                        }
-                      }
-                      echo $wt > 0 ? number_format($wt, 3) . ' Kg' : '-';
-                    ?>
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500">ETD:</p>
-                  <p class="font-semibold">
-                    <?php 
-                      $etd = null;
-                      if (!empty($invoice_dispatch[$invoice['id']])) {
-                        foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                          if (!empty($dispatch['etd'])) {
-                            $etd = $dispatch['etd'];
-                            break;
-                          }
-                        }
-                      }
-                      echo $etd ? date('d M Y', strtotime($etd)) : '-';
-                    ?>
-                  </p>
-                </div>
-                
+                <div></div>
+                <div></div>
                 
               </div>
             </div>
@@ -581,5 +638,31 @@ if (bulkPrintBtn) {
           alert('Error updating status');
       });
     }
+    function reDispatchAjax(invoiceId) {
+      //if (!confirm('Re-dispatch will attempt to create a new shipment for this invoice. Proceed?')) return;
+      customConfirm('Re-dispatch will attempt to create a new shipment for this invoice. Proceed?').then(confirmed => {
+        if (confirmed) {
+            fetch('?page=dispatch&action=re_dispatch_invoice', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ invoice_id: invoiceId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Re-dispatch initiated successfully. Reloading...', 'success');
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to re-dispatch'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Error re-dispatching');
+            });
+      
+        }
+      });
+  }
     
 </script>
