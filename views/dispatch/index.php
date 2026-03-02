@@ -134,10 +134,11 @@
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
                     </div>
                     <div>
-                    <p ><span class="text-xs text-gray-500">Order No.</span>
-                    <span class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
+                    <p class="text-xs text-gray-500">Order No.</p>
+                    <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
                       echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
-                    } ?></span></p>
+                    } ?></p>
+                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>   
                     <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
                       <?php 
