@@ -400,29 +400,6 @@
 </div>
 
 <script>
-function toggleMenu(button) {
-
-    const menu = button.nextElementSibling;
-
-    // close all other menus
-    document.querySelectorAll('.dropdown-menu').forEach(m => {
-        if (m !== menu) m.classList.add('hidden');
-    });
-
-    menu.classList.toggle('hidden');
-}
-
-// close when clicking outside
-document.addEventListener("click", function(e) {
-
-    if (!e.target.closest(".relative")) {
-        document.querySelectorAll(".dropdown-menu").forEach(menu => {
-            menu.classList.add("hidden");
-        });
-    }
-
-});
-
 // Persist selected invoices across pages using localStorage
 const DISPATCH_STORAGE_KEY = 'selected_dispatch_invoices';
 
