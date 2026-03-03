@@ -234,8 +234,22 @@ class Dispatch {
         return json_decode($response, true);
     }
     //get tracking info from shiprocket
-    public function getShiprocketTrackingInfo($trackingNumber) {
-        $url = "https://apiv2.shiprocket.in/v1/external/track/shipment/{$trackingNumber}";
+    public function getShiprocketTrackingInfo($shipment_id) {
+        $url = "https://apiv2.shiprocket.in/v1/external/courier/track/shipment/$shipment_id";
+        $headers = [
+            "Content-Type: application/json",
+            "Authorization: Bearer " . $this->getShiprocketToken()
+        ];
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $response = curl_exec($ch); 
+        curl_close($ch);
+        return json_decode($response, true);
+    }
+    //get tracking info from shiprocket by AWB code
+    public function getShiprocketTrackingByAWB($awb_code) {
+        $url = "https://apiv2.shiprocket.in/v1/external/courier/track/awb/$awb_code";
         $headers = [
             "Content-Type: application/json",
             "Authorization: Bearer " . $this->getShiprocketToken()
@@ -283,6 +297,17 @@ class Dispatch {
         if (!$stmt) return false;
         //echo "Updating label URL for shipment ID $shipment_id with URL: $label_url\n";
         $stmt->bind_param('si', $label_url, $shipment_id);
+        $result = $stmt->execute();
+        $stmt->close();
+        return $result;
+    }
+    
+    public function updateDispatchStatus($dispatchId, $status, $tracking_url = null, $etd = null, $edd = null) {
+        $sql = "UPDATE vp_dispatch_details SET shipment_status = ?, shiprocket_tracking_url = ?, etd = ?, edd = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param('ssssi', $status, $tracking_url, $etd, $edd, $dispatchId);
         $result = $stmt->execute();
         $stmt->close();
         return $result;

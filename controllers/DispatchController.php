@@ -492,6 +492,90 @@ class DispatchController {
             exit();
         }
     }
+    
+    public function bulkUpdateStatus() {
+        global $dispatchModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid request method']);
+            exit();
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        $invoiceIds = $input['invoice_ids'] ?? [];
+        if (!is_array($invoiceIds) || empty($invoiceIds)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'No invoices selected']);
+            exit();
+        }
+
+        $summary = [
+            'processed_invoices' => 0,
+            'processed_dispatches' => 0,
+            'updated' => 0,
+            'errors' => [],
+            'details' => []
+        ];
+
+        foreach ($invoiceIds as $invId) {
+            $summary['processed_invoices']++;
+            $records = $dispatchModel->getDispatchRecordsByInvoiceId($invId);
+            if (empty($records)) {
+                $summary['errors'][] = "No dispatch records for invoice $invId";
+                continue;
+            }
+            foreach ($records as $rec) {
+                $summary['processed_dispatches']++;
+                $dispatchId = $rec['id'];
+                $awb = $rec['awb_code'] ?? '';
+                if (empty($awb)) {
+                    $summary['details'][$dispatchId] = ['status' => 'no_awb'];
+                    continue;
+                }
+
+                $resp = $dispatchModel->getShiprocketTrackingByAWB($awb);
+               
+                if (empty($resp)) {
+                    $summary['errors'][] = "Empty response for AWB $awb (dispatch $dispatchId)";
+                    $summary['details'][$dispatchId] = ['success' => false, 'error' => 'empty_response'];
+                    continue;
+                }
+
+                // best-effort extraction of status and tracking URL from response
+                $status = null;
+                $tracking_url = null;
+                if (isset($resp['tracking_data']['shipment_track']) && is_array($resp['tracking_data']['shipment_track'])) {
+                    foreach ($resp['tracking_data']['shipment_track'] as $track) {
+                        $edd = $track['edd'] ?? null;
+                        if (isset($track['current_status'])) {
+                            $status = $track['current_status'];
+                            break;
+                        }
+                    }
+                }
+                $tracking_url = $resp['tracking_data']['track_url'] ?? null;
+                //echo "Extracted status: $status, tracking_url: $tracking_url for AWB $awb (dispatch $dispatchId)\n";
+                $etd = $resp['tracking_data']['etd'] ?? null;
+                
+                if ($status !== null || $tracking_url !== null) {
+                    $updated = $dispatchModel->updateDispatchStatus($dispatchId, $status ?? '', $tracking_url, $etd, $edd);
+                    if ($updated) {
+                        $summary['updated']++;
+                        $summary['details'][$dispatchId] = ['success' => true, 'status' => $status, 'tracking_url' => $tracking_url, 'etd' => $etd, 'edd' => $edd];
+                    } else {
+                        $summary['details'][$dispatchId] = ['success' => false, 'error' => 'db_update_failed', 'status' => $status, 'tracking_url' => $tracking_url, 'etd' => $etd, 'edd' => $edd];
+                        $summary['errors'][] = "DB update failed for dispatch $dispatchId";
+                    }
+                } else {
+                    $summary['details'][$dispatchId] = ['success' => false, 'error' => 'no_status_in_response', 'raw' => $resp];
+                    $summary['errors'][] = "No status in response for AWB $awb (dispatch $dispatchId)";
+                }
+            }
+        }
+
+        echo json_encode(['status' => 'success', 'summary' => $summary]);
+        exit();
+    }
 
     public function index() {
         global $dispatchModel;
@@ -564,6 +648,7 @@ class DispatchController {
 
         // Fetch paginated invoices
         $invoices = $invoiceModel->getAllInvoicesPaginated($perPage, $offset, $filters);
+        //print_array($invoices);
         foreach ($invoices as &$invoice) {
             $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
             //get items
