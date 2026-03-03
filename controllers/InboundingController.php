@@ -1515,6 +1515,7 @@ class InboundingController {
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
         $stock_price_temp[0]['youtube_links'] = '';
         $stock_price_temp[0]['sketchfab_links'] = '';
+        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? 0;
 
         // Variation Records [1..n]
         if (!empty($data['data']['var_rows'])) {
@@ -1566,6 +1567,18 @@ class InboundingController {
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
                 $stock_price_temp[$i]['youtube_links'] = '';
                 $stock_price_temp[$i]['sketchfab_links'] = '';
+                $stock_price_temp[$i]['dimensions'] = $value['dimensions'] ?? '';
+            }
+            
+            // ========================================================================
+            // LOGIC: When Parent is "N" and has variations, add main data as a copy
+            // ========================================================================
+            if ($data['data']['is_variant'] == 'N') {
+                // Clone the base item (stock_price_temp[0]) and add it to the end as another variation
+                // This ensures the parent product data is also included in the variations array
+                $i++;
+                $stock_price_temp[$i] = $stock_price_temp[0];
+                $stock_price_temp[$i]['item_level'] = 'variation'; // Change item level from 'parent' to 'variation'
             }
         }
 
@@ -1605,7 +1618,7 @@ class InboundingController {
         $API_data['images'] = $images_payload;
 
         $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
-        // echo "<pre>";print_r($jsonString);
+        echo "<pre>";print_r($jsonString);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
