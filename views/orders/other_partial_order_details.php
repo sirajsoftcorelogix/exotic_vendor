@@ -68,24 +68,31 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
             <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div class="mb-6 space-y-3">
                     <div class="flex items-center gap-2">
-                        <div
+                        <?php /*<div
                             class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                 stroke-width="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                             </svg>
                             <span>Fulfilled (32)</span>
-                        </div>
-                        <div
-                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                stroke-width="1.5">
-                                <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path
-                                    d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                            </svg>
-                            <span><?php echo $orderremarks['city'] ?? ''; ?>, <?php echo $orderremarks['state'] ?? ''; ?></span>
-                        </div>
+                        </div> */ ?>
+                        <?php
+                            $city = $orderremarks['city'] ?? '';
+                            $state = $orderremarks['state'] ?? '';
+
+                            $location = implode(', ', array_filter([$city, $state]));
+                        ?>
+                        <?php if (!empty($location)) : ?>
+                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                    stroke-width="1.5">
+                                    <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path
+                                        d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                </svg>
+                                <span><?php echo $location; ?></span>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
