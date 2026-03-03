@@ -75,7 +75,7 @@
             $shipToAddresses = [];
             $billingState = $customer_address[0]['state'] ?? '';
             $firmState = $firm['state'] ?? '';
-            print_r($customer_address);
+            
             // Store firm state for JavaScript
             $firmStateJS = json_encode($firmState);
             if (isset($customer_address) && is_array($customer_address) && count($customer_address) > 0) {
