@@ -213,9 +213,10 @@
                         $itemCount = count($items);
                         if ($itemCount > 0) {
                           $itemCodes = array_column($items, 'item_code');
+                          
                           echo htmlspecialchars($items[0]['item_code'] ?? '');
                           if ($itemCount > 1) {
-                            echo '<span class="text-xs text-blue-500" title="">[ +' . ($itemCount - 1). ' ]</span>';
+                            echo '<span class="text-xs text-blue-500 cursor-pointer" title="' . implode(', ', $itemCodes) . '">[ +' . ($itemCount - 1). ' ]</span>';
                           }
                         }
                       ?>
@@ -231,7 +232,11 @@
                         if (!empty($invoice_dispatch[$invoice['id']])) {
                           foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
                             if (!empty($dispatch['awb_code'])) {
-                              $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
+                              if(strtolower($dispatch['shipment_status'] ?? '') === 'cancelled' || strtolower($dispatch['shipment_status'] ?? '') === 'cancellation requested') {
+                                $link = '<span class="line-through text-red-500">' . htmlspecialchars($dispatch['awb_code']) . '</span>';
+                              } else {
+                                $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
+                              }
                               $awbs[] = $link;
                             }
                           }
