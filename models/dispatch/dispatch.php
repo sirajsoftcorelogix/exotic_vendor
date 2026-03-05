@@ -387,7 +387,7 @@ class Dispatch {
         $response = curl_exec($ch); 
         curl_close($ch);
         $responseDecoded = json_decode($response, true);
-        return ['success' => isset($responseDecoded['status_code']) && $responseDecoded['status_code'] == 200, 'message' => $responseDecoded['message'] ?? 'No response message', 'data' => $responseDecoded];
+        return ['success' => $responseDecoded['status_code'] ?? $responseDecoded['status'] ?? false, 'message' => $responseDecoded['message'] ?? 'No response message', 'data' => $responseDecoded];
         if(isset($responseDecoded['status_code']) && $responseDecoded['status_code'] == 200) {
             //update dispatch record to mark as cancelled
             // $sql = "UPDATE vp_dispatch_details SET shipment_status = 'cancelled' WHERE id = ?";
