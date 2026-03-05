@@ -255,7 +255,11 @@ class InvoicesController {
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
         }
-        
+        // insert in vp_stock_movements and update stock in vp_stock table
+        foreach ($order_numbers as $order_number) {
+           // $stockModel->updateStockByOrderNumber($order_number);
+        }
+
         // Clear session
         unset($_SESSION['invoice_items']);
         

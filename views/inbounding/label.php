@@ -137,10 +137,10 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                                 </span>
                             </div>
                             <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-2">Publisher:</span>
+                                <span class="text-[32px] font-bold text-black uppercase mb-2">Edition:</span>
                                 <span class="text-[42px] font-black text-black">
                                     <?php echo safe(
-                                        $current_label["publisher"] ?? "N/A"
+                                        $current_label["edition"] ?? "N/A"
                                     ); ?>
                                 </span>
                             </div>
@@ -194,7 +194,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                             <span class="text-[30px] font-bold uppercase text-black">ISBN:</span>
                             <span class="text-[42px] font-black text-black leading-none">
                                 <?php echo safe(
-                                    $current_label["ISBN"] ?? "N/A"
+                                    $current_label["isbn"] ?? "N/A"
                                 ); ?>
 
                             </span>
@@ -203,17 +203,17 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
                     <!-- Row 2 -->
 
-                    <!-- <div class="flex-1 w-full flex flex-col justify-center pl-8">
+                    <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
                             <?php echo safe(
-                                $current_label["PUBLISHER"] ?? "N/A"
+                                $current_label["publisher"] ?? "N/A"
                             ); ?>
                         </span>
-                    </div> -->
+                    </div>
 
 
-                <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving') { ?>
+                <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving' || $categoryName == 'paintings') { ?>
                     <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
                         <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
                             <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
@@ -302,7 +302,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     </div>
 
 
-                <?php } elseif ($categoryName == 'jewelry' || $categoryName == 'textile') { ?>
+                <?php } elseif ($categoryName == 'jewelry' || $categoryName == 'textiles') { ?>
                   <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
                         <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
                             <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
