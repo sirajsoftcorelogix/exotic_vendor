@@ -12,9 +12,9 @@
 <body class="min-h-screen flex justify-center py-6 text-sm font-sans">
 <div class="w-full max-w-6xl bg-white shadow-md border border-gray-200">
 
-    <div class="border-b border-gray-200 px-6 py-3 flex items-center justify-between bg-white">
-        <h2 class="text-lg font-semibold text-gray-800">Bulk Dispatch</h2>
-        <div class="flex items-center gap-3">
+    <div class="border-b border-gray-200 px-6 py-3 bg-white">
+        <h1 class="text-lg font-semibold text-gray-800 mb-3">Bulk Dispatch</h1>
+        <div class="flex items-center gap-3 flex-wrap">
             <div class="flex items-center gap-2">
                 <label for="orderNumber" class="text-gray-700 font-medium">Order Number:</label>
                 <input id="orderNumber" type="text" class="border border-gray-300 rounded px-2 py-1 w-40 text-sm"/>
@@ -24,7 +24,7 @@
                 <label for="weight" class="text-gray-700 font-medium">Weight (kg):</label>
                 <input id="weight" type="text" class="border border-gray-300 rounded px-2 py-1 w-20 text-sm"/>
                 <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-1.5 rounded text-sm">
-                + Add
+                Apply to All
             </button>
             </div>
             <div class="flex items-center gap-2">
