@@ -253,7 +253,7 @@ class Tables {
         }
         $values[] = $id;
         $types .= 'i';
-
+        //print_array($data);
         $sql = "UPDATE " . $table . " SET " . implode(', ', $setClause) . " WHERE id = ?";
         $stmt = $this->ci->prepare($sql);
         if (!$stmt) return false;

@@ -5,26 +5,28 @@ class Dispatch {
     public function __construct($conn) {
         $this->db = $conn;
     }
+    public function checkDispatchExists($invoiceId, $boxNo) {
+        $sql = "SELECT id FROM vp_dispatch_details WHERE invoice_id = ? AND box_no = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
 
-    public function createDispatch($data) {
-        //check if dispatch already exists for this invoice and box_no
-        $sqlCheck = "SELECT id FROM vp_dispatch_details WHERE invoice_id = ? AND box_no = ?";
-        $stmtCheck = $this->db->prepare($sqlCheck);
-        if (!$stmtCheck) return false;
-        $stmtCheck->bind_param('ii', $data['invoice_id'], $data['box_no']);
-        $stmtCheck->execute();
-        $result = $stmtCheck->get_result();
-        if ($result && $result->num_rows > 0) {
-            // Dispatch already exists for this invoice and box_no
-            return false;
+        $stmt->bind_param('ii', $invoiceId, $boxNo);
+        if ($stmt->execute()) {
+            $result = $stmt->get_result();
+            return $result->num_rows > 0;
         }
-        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, groupname, created_by, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        return false;
+    }   
+    public function createDispatch($data) {
+       
+        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, groupname, created_by, created_at, pickup_location) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $data['created_by'] = isset($data['created_by']) ? (int)$data['created_by'] : 0;
         $data['created_at'] = $data['created_at'] ?? date('Y-m-d H:i:s');
+        $data['pickup_location'] = $data['pickup_location'] ?? null;
         $boxItemsJson = is_string($data['box_items']) ? $data['box_items'] : json_encode($data['box_items'] ?? []);
 
         // Bind parameters must be variables (passed by reference). Prepare local vars:
@@ -35,6 +37,7 @@ class Dispatch {
         $shiprocket_shipment_id = $data['shiprocket_shipment_id'] ?? null;
         $shiprocket_tracking_url = $data['shiprocket_tracking_url'] ?? null;
         $box_items = $boxItemsJson;
+        $pickup_location = $data['pickup_location'] ?? null;
         $length = (float)($data['length'] ?? 0);
         $width = (float)($data['width'] ?? 0);
         $height = (float)($data['height'] ?? 0);
@@ -52,7 +55,7 @@ class Dispatch {
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iisssssdddddddssssssis',
+            'iisssssdddddddssssssiss',
             $invoice_id,
             $box_no,
             $order_number,
@@ -74,11 +77,17 @@ class Dispatch {
             $label_url,
             $groupname,
             $created_by,
-            $created_at
+            $created_at,
+            $pickup_location
         );
 
         if ($stmt->execute()) {
             return $this->db->insert_id;
+        }
+        //error return
+        if ($stmt->error) {
+            error_log("Database error in createDispatch: " . $stmt->error);
+            echo "Database error: " . $stmt->error;
         }
         return false;
     }
@@ -378,7 +387,7 @@ class Dispatch {
         $response = curl_exec($ch); 
         curl_close($ch);
         $responseDecoded = json_decode($response, true);
-        return ['success' => isset($responseDecoded['status_code']) && $responseDecoded['status_code'] == 200, 'message' => $responseDecoded['message'] ?? 'No response message', 'data' => $responseDecoded];
+        return ['success' => $responseDecoded['status_code'] ?? $responseDecoded['status'] ?? false, 'message' => $responseDecoded['message'] ?? 'No response message', 'data' => $responseDecoded];
         if(isset($responseDecoded['status_code']) && $responseDecoded['status_code'] == 200) {
             //update dispatch record to mark as cancelled
             // $sql = "UPDATE vp_dispatch_details SET shipment_status = 'cancelled' WHERE id = ?";

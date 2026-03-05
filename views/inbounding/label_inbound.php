@@ -199,12 +199,12 @@ $currentUrl =
                     <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">PUBLISHER:</span>
                         <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
-
+                             <?php echo $current_label["publisher"] ?? ''; ?>
                         </span>
                     </div>
 
-
-                <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving') { ?>
+                <?php }
+                elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving' || $categoryName == 'paintings') { ?>
                     <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
                         <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
                             <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
@@ -214,24 +214,25 @@ $currentUrl =
                         </div>
                         <div class="flex-1 h-full flex flex-col justify-center pl-10 pr-6 pt-6 space-y-6">
                             <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-3">CP: <span class="text-[54px] font-black text-black tracking-tight">
-                                    ₹ <?php echo safe($current_label['cp'] ?? '0'); ?>
-                                </span></span>
+                                <span class="text-[32px] font-bold text-black uppercase mb-3">dimensions: </span><span class="text-[54px] font-black text-black tracking-tight">
+                                    <?php echo safe($current_label['dimensions'] ?? ' '); ?>
+                                </span>
                                 
                             </div>
-                            <div class="flex flex-col leading-none">
-                                <span class="text-[32px] font-bold text-black uppercase mb-2">QTY:</span>
-                                <span class="text-[54px] font-black text-black">
-                                    <?php echo safe(
-                                        $current_label["quantity_received"] ?? "1"
-                                    ); ?>
-                                </span>
-                            </div>
+                           
                             <div class="flex flex-col leading-none">
                                 <span class="text-[32px] font-bold text-black uppercase mb-2">COLOR:</span>
                                 <span class="text-[42px] font-bold text-black leading-tight">
                                     <?php echo safe(
                                         $current_label["color"] ?? "N/A"
+                                    ); ?>
+                                </span>
+                            </div>
+                             <div class="flex flex-col leading-none">
+                                <span class="text-[32px] font-bold text-black uppercase mb-2">size:</span>
+                                <span class="text-[54px] font-black text-black">
+                                    <?php echo safe(
+                                        $current_label["size"] ?? " "
                                     ); ?>
                                 </span>
                             </div>
@@ -268,32 +269,22 @@ $currentUrl =
                         <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
                             <span class="text-[30px] font-bold uppercase text-black">material:</span>
                             <span class="text-[42px] font-black text-black leading-none">
-                                <?php if (!empty($current_label["material_name"])) {
+                                <?php 
                                     echo safe($current_label["material_name"]);
-                                } ?>
+                                 ?>
                             </span>
                         </div>
 
                         <div class="w-[320px] pl-4 flex flex-col justify-center h-full">
-                            <span class="text-[30px] font-bold uppercase text-black">SIZE:</span>
+                            <span class="text-[30px] font-bold uppercase text-black">location:</span>
                             <span class="text-[42px] font-black text-black leading-none">
-                                <?php if (!empty($current_label["size"])) {
-                                    echo safe($current_label["size"]);
-                                } ?>
+                                <?php 
+                                    echo safe($current_label["store_location"]);
+                             ?>
                             </span>
                         </div>
                     </div>
-
-
-                    <div class="flex-1 w-full flex flex-col justify-center pl-8">
-                        <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">VENDOR:</span>
-                        <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2">
-                            <?php echo safe($current_label['vendor_name'] ?? 'Jagapoorani Arts & Crafts'); ?>
-                        </span>
-                    </div>
-
-
-                <?php } elseif ($categoryName == 'jewelry' || $categoryName == 'textile') { ?>
+                <?php } elseif ($categoryName == 'jewelry' || $categoryName == 'textiles') { ?>
                     <div class="flex flex-row w-full h-[450px] border-b-[3px] border-black">
                         <div class="w-[350px] h-full flex flex-col items-center justify-center p-6">
                             <div class="qrcode-highres" style="width: 300px; height: 300px;"></div>
