@@ -806,6 +806,12 @@ switch ($page) {
             case 'cancel_dispatch':
                 $controller->cancelDispatch();
                 break;
+            case 're_dispatch_invoice':
+                $controller->reDispatchInvoice();
+                break;
+            case 'cancel_invoice':
+                $controller->cancelInvoice();
+                break;
             default:
                 $controller->create();   
                 break;
