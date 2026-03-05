@@ -353,6 +353,7 @@
                     <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
+                    <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
                   </div>
                 </div>
                 <div></div>
@@ -693,6 +694,30 @@ if (bulkPrintBtn) {
       
         }
       });
+  }
+  function cancelInvoiceAjax(invoiceId) {
+    customConfirm('Canceling the invoice will attempt to cancel the order and any associated shipments. This action cannot be undone. Are you sure?').then(confirmed => {
+      if (confirmed) {
+        fetch('?page=dispatch&action=cancel_invoice', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ invoice_id: invoiceId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Invoice cancellation initiated successfully. Reloading...', 'success');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.message || 'Failed to cancel invoice'));
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error canceling invoice');
+        });
+      }
+    });
   }
     
 </script>

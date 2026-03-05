@@ -908,5 +908,54 @@ class DispatchController {
         }
         echo json_encode(['success' => true, 'results' => $results]);
     }
+    public function cancelInvoice() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!isset($input['invoice_id'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
+            return;
+        }
+
+        global $dispatchModel;
+        global $commanModel;
+        global $invoiceModel;
+        $invoiceId = intval($input['invoice_id']);
+        //shipment id from dispatch record
+        $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+
+        try {
+            foreach ($dispatchRecords as $record) {
+                $shiprocketOrderId = $record['shiprocket_order_id'];
+                if ($shiprocketOrderId) {
+                    // Cancel shipment via Shiprocket API
+                    $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
+                    //print_array($response);
+                    if (!$response['success']) {
+                        //throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
+                        echo json_encode(['success' => false, 'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error')]);
+                        exit();
+                        //echo json_encode($response);
+                        //continue; // skip to next record
+                    }
+                    // Update dispatch record to mark as cancelled
+                    //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
+                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
+                }
+            }
+            //update invoice status to cancelled
+            $invoiceModel->updateInvoiceStatus($invoiceId, 'Cancelled');
+            echo json_encode(['success' => true, 'message' => 'Invoice cancelled successfully']);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()]);
+        }
+    }
 }
 ?>
