@@ -18,10 +18,14 @@
             <div class="flex items-center gap-2">
                 <label for="orderNumber" class="text-gray-700 font-medium">Order Number:</label>
                 <input id="orderNumber" type="text" class="border border-gray-300 rounded px-2 py-1 w-40 text-sm"/>
+                <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-1.5 rounded text-sm">+ Add            </button>
             </div>
             <div class="flex items-center gap-2">
                 <label for="weight" class="text-gray-700 font-medium">Weight (kg):</label>
                 <input id="weight" type="text" class="border border-gray-300 rounded px-2 py-1 w-20 text-sm"/>
+                <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-1.5 rounded text-sm">
+                + Add
+            </button>
             </div>
             <div class="flex items-center gap-2">
                 <label for="boxSize" class="text-gray-700 font-medium">Box Size</label>
@@ -31,9 +35,6 @@
             </div>
             <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-1 rounded text-sm">
                 Apply to All
-            </button>
-            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-1.5 rounded text-sm">
-                + Add
             </button>
         </div>
     </div>
