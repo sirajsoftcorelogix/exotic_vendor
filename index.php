@@ -164,6 +164,12 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'get_order_details_for_dispatch':
+                $controller->getOrderDetailsForDispatch();
+                break;
+            case 'get_order_items_for_dispatch':
+                $controller->getOrderItemsForDispatch();
+                break;
             case 'update_note_ajax':
                 $controller->updateNoteAjax();
                 break;
@@ -811,6 +817,9 @@ switch ($page) {
                 break;
             case 'cancel_invoice':
                 $controller->cancelInvoice();
+                break;
+            case 'bulk_dispatch':
+                $controller->bulkDispatch();
                 break;
             default:
                 $controller->create();   

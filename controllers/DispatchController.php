@@ -957,5 +957,42 @@ class DispatchController {
             echo json_encode(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()]);
         }
     }
+    public function bulkDispatch(){
+        global $dispatchModel;
+        global $invoiceModel;
+        $invoice_dispatch = [];
+        // $invoices = $invoiceModel->getAllInvoices(1000, 0, ['status' => 'Ready for Dispatch']);
+        // foreach ($invoices as &$invoice) {
+        //     $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
+        // }
+        unset($invoice);
+        renderTemplate('views/dispatch/bulk_dispatch.php', ['invoices' => [], 'dispatchRecords' => $invoice_dispatch]);
+    }
+    public function bulkDispatchPost() {
+        global $dispatchModel;
+        global $invoiceModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid request method']);
+            exit();
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        $invoiceIds = $input['invoice_ids'] ?? [];
+        if (!is_array($invoiceIds) || empty($invoiceIds)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'No invoices selected']);
+            exit();
+        }
+
+        $results = [];
+        foreach ($invoiceIds as $invId) {
+            $result = $dispatchModel->createShipmentsForInvoice($invId);
+            $results[] = ['invoice_id' => $invId, 'result' => $result];
+        }
+
+        echo json_encode(['status' => 'success', 'results' => $results]);
+        exit();
+    }
 }
 ?>
