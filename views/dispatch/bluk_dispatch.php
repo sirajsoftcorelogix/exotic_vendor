@@ -80,11 +80,9 @@
                     <div class="flex justify-between">
                         <span>Order: 2564719</span>
                         <span>Item: <span class="font-semibold">Book</span> | HZA99</span>
-                    </div>
-                    <div class="flex flex-wrap justify-between gap-4 text-gray-700">
                         <span>Quantity: 1</span>
                         <span>Weight: 0.11 kg</span>
-                        <span>Box Size: 7x4x1</span>
+                        <span>7x4x1</span>
                         <span>GST: 5%</span>
                         <span>Item Total: 205</span>
                         <span>Payment Type: COD</span>
