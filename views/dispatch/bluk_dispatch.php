@@ -87,14 +87,18 @@
             <div class="px-4 py-2 text-xs">
                 <div class="space-y-1">
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-1 items-center">
-                        <span class="sm:col-span-1">Order: 2564719</span>
-                        <span class="sm:col-span-1">Item: <span class="font-semibold">Book</span> | HZA99</span>
+                        <span class="sm:col-span-2">Order: 2564719</span>
+                        <span class="sm:col-span-2">Item: <span class="font-semibold">Book</span> | HZA99</span>
                         <span class="sm:col-span-1 sm:text-right">Qty: 1</span>
                         <span class="sm:col-span-1 sm:text-right">Wt: 0.11 kg</span>
                         <span class="sm:col-span-1 sm:text-right">7x4x1</span>
                         <span class="sm:col-span-1 sm:text-right">GST: 5%</span>
                         <span class="sm:col-span-2 sm:text-right">Item Total₹ 205</span>
-                        <span class="sm:col-span-2 sm:text-right">Payment Type: COD</span>
+                        <span class="sm:col-span-1 sm:text-right">
+                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700">
+                                COD
+                            </span>
+                        </span>
 
                         <div class="sm:col-span-1 flex items-center sm:justify-end gap-2 pt-1 sm:pt-0">
                             <button type="button"
@@ -139,9 +143,16 @@
                         <span><span class="font-semibold">Total Weight:</span> 0.11 kg</span>
                         <span><span class="font-semibold">Max:</span> 7x4x1</span>
                     </div>
-                    <div class="flex flex-wrap gap-4 text-gray-800">
-                        <span><span class="font-semibold">Net Total:</span> ₹ 615</span>
-                        <span><span class="font-semibold">COD Amount:</span> ₹ 205</span>
+                    <div class="flex flex-wrap items-center gap-4 text-gray-800">
+                        <span class="inline-flex items-center gap-2 rounded px-2 py-0.5 bg-green-100 text-green-800">
+                            <span class="text-[11px] font-bold">Net Total</span>
+                            <span class="text-xs font-semibold">₹ 615</span>
+                        </span>
+
+                        <span class="inline-flex items-center gap-2">
+                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700">
+                                COD Amount:₹ 205</span>
+                        </span>
                     </div>
                 </div>
             </div>
