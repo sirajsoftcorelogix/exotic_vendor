@@ -53,7 +53,16 @@
             <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
                 <div class="flex items-center gap-2">
                     <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
-                        📦
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M21 8.5v7a2 2 0 0 1-1.1 1.79l-7 3.5a2 2 0 0 1-1.8 0l-7-3.5A2 2 0 0 1 3 15.5v-7"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3.3 8.2 12 12.5l8.7-4.3"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M12 12.5v9"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M21 8.5 12 4 3 8.5"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                     </span>
                     <span class="font-semibold text-gray-800">Box 1</span>
                 </div>
@@ -77,15 +86,49 @@
 
             <div class="px-4 py-2 text-xs">
                 <div class="space-y-1">
-                    <div class="flex justify-between">
-                        <span>Order: 2564719</span>
-                        <span>Item: <span class="font-semibold">Book</span> | HZA99</span>
-                        <span>Quantity: 1</span>
-                        <span>Weight: 0.11 kg</span>
-                        <span>7x4x1</span>
-                        <span>GST: 5%</span>
-                        <span>Item Total: 205</span>
-                        <span>Payment Type: COD</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-1 items-center">
+                        <span class="sm:col-span-1">Order: 2564719</span>
+                        <span class="sm:col-span-1">Item: <span class="font-semibold">Book</span> | HZA99</span>
+                        <span class="sm:col-span-1 sm:text-right">Qty: 1</span>
+                        <span class="sm:col-span-1 sm:text-right">Wt: 0.11 kg</span>
+                        <span class="sm:col-span-1 sm:text-right">7x4x1</span>
+                        <span class="sm:col-span-1 sm:text-right">GST: 5%</span>
+                        <span class="sm:col-span-2 sm:text-right">Item Total₹ 205</span>
+                        <span class="sm:col-span-2 sm:text-right">Payment Type: COD</span>
+
+                        <div class="sm:col-span-1 flex items-center sm:justify-end gap-2 pt-1 sm:pt-0">
+                            <button type="button"
+                                    class="inline-flex items-center rounded border border-gray-200 p-1.5 text-gray-700 hover:bg-gray-50"
+                                    title="Package">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M21 8.5v7a2 2 0 0 1-1.1 1.79l-7 3.5a2 2 0 0 1-1.8 0l-7-3.5A2 2 0 0 1 3 15.5v-7"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M3.3 8.2 12 12.5l8.7-4.3"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M12 12.5v9"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M21 8.5 12 4 3 8.5"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+
+                            <button type="button"
+                                    class="inline-flex items-center rounded border border-red-200 p-1.5 text-red-600 hover:bg-red-50"
+                                    title="Delete row">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M4 7h16"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M10 11v6"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M14 11v6"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M6 7l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="mt-2 border-t border-gray-200 pt-2 flex flex-wrap justify-between text-xs bg-orange-50 -mx-4 px-4 pb-2">
