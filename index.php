@@ -718,6 +718,9 @@ switch ($page) {
             case 'products-ajax':
                 $controller->productsAjax();   
                 break;
+            case 'cart-add':
+                $controller->cartAdd();
+                break;
             default:
                 $controller->index();   
                 break;
@@ -829,5 +832,4 @@ switch ($page) {
 		 }
         break;
 }
-
 
