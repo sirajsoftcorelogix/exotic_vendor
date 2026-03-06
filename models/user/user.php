@@ -396,7 +396,7 @@ $where";
     public function getAllWarehouses()
     {
         global $conn;
-        $sql = "SELECT id, address_title FROM exotic_address WHERE is_active = 0 ORDER BY address_title ASC";
+        $sql = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
         $result = mysqli_query($conn, $sql);
 
         $warehouses = [];
