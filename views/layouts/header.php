@@ -55,9 +55,14 @@ $msgCnt = $notificationController->getUnreadCount();
 
             <!-- Search bar start here-->
             <div class="flex-1 flex justify-center px-4">
-                <div class="inline-flex rounded-full border border-gray-300 overflow-hidden bg-white text-sm">
+                <form class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm"
+                      method="get"
+                      action="index.php">
+                    <input type="hidden" name="page" value="search" />
+                    <input type="hidden" name="action" value="indexheader" />
+
                     <div class="relative flex items-center border-r border-gray-200 w-24">
-                        <select class="w-full h-9 pl-3 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
+                        <select name="type" class="w-full h-9 pl-3 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
                             <option>Order</option>
                             <option>Purchase Order</option>
                             <option>Customer Invoice</option>
@@ -70,6 +75,7 @@ $msgCnt = $notificationController->getUnreadCount();
                     <input
                         type="text"
                         placeholder="Search"
+                        name="q"
                         class="h-9 px-3 focus:outline-none text-sm w-48 sm:w-56 md:w-64"
                     />
                     <button
@@ -78,7 +84,7 @@ $msgCnt = $notificationController->getUnreadCount();
                     >
                         Search
                     </button>
-                </div>
+                </form>
             </div>
             <!-- Search bar ends here -->
             <!-- Right Side: Search, Flag, Notifications, Profile -->
