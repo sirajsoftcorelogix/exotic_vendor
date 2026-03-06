@@ -59,7 +59,8 @@ $msgCnt = $notificationController->getUnreadCount();
                     <div class="relative flex items-center border-r border-gray-200">
                         <select class="h-9 pl-3 pr-6 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
                             <option>Order</option>
-                            <option>Customer</option>
+                            <option>Purchase Order</option>
+                            <option>Customer Invoice</option>
                             <option>AWB</option>
                         </select>
                         <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500 text-xs">
