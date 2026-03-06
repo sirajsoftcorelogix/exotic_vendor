@@ -53,6 +53,33 @@ $msgCnt = $notificationController->getUnreadCount();
                 <span class="breadcrumb-current">Onboarding Dashboard</span>
             </div>
 
+            <!-- Search bar start here-->
+            <div class="flex-1 flex justify-center px-4">
+                <div class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm">
+                    <div class="relative flex items-center border-r border-gray-200">
+                        <select class="h-9 pl-3 pr-6 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
+                            <option>Order</option>
+                            <option>Customer</option>
+                            <option>AWB</option>
+                        </select>
+                        <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500 text-xs">
+                            ▼
+                        </span>
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search"
+                        class="flex-1 h-9 px-3 focus:outline-none text-sm"
+                    />
+                    <button
+                        type="submit"
+                        class="px-4 h-9 text-sm text-gray-700 bg-gray-100 border-l border-gray-200 hover:bg-gray-200"
+                    >
+                        Search
+                    </button>
+                </div>
+            </div>
+            <!-- Search bar ends here -->
             <!-- Right Side: Search, Flag, Notifications, Profile -->
             <div class="flex items-center space-x-4 md:space-x-6">
 
