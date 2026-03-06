@@ -1388,6 +1388,8 @@ class OrdersController {
 
         try {
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
+            //address details from vp_order_info table
+            $order_info = $ordersModel->getRemarksByOrderNumber($order_number);
             
             if (empty($orders)) {
                 echo json_encode([
@@ -1398,7 +1400,7 @@ class OrdersController {
             }
 
             // Build HTML for order card
-            $firstOrder = $orders[0];
+            $firstOrder = $order_info;
             $customer_name = $firstOrder['customer_name'] ?? 'Unknown';
             $customer_id = $firstOrder['customer_id'] ?? '-';
             $shipping_address = '';
@@ -1438,7 +1440,7 @@ class OrdersController {
                 $total_amount += $item_total;
 
                 $items_html .= '
-                <div class="px-4 py-1 text-xs text-gray-700 border-b border-gray-100">
+                <div class="px-4 py-1 text-xs text-gray-700 border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">
                     <div class="grid grid-cols-12 gap-2 items-center">
                         <div class="col-span-2">' . htmlspecialchars($order['order_number'] ?? '') . '</div>
                         <div class="col-span-3">
@@ -1451,13 +1453,15 @@ class OrdersController {
                         <div class="col-span-1 text-right">₹ ' . number_format($item_total, 0) . '</div>
                         <div class="col-span-1 text-right">' . $payment_type . '</div>
                         <div class="col-span-1 flex justify-center gap-2 text-lg">
-                            <button class="text-gray-500 hover:text-gray-700" title="Move">📦</button>
-                            <button class="text-red-500 hover:text-red-700" title="Remove">🗑</button>
+                            <button class="move-item-btn text-gray-500 hover:text-gray-700" title="Move">📦</button>
+                            <button class="remove-item-btn text-red-500 hover:text-red-700" title="Remove">🗑</button>
                         </div>
                     </div>
                 </div>';
             }
 
+            // after building items HTML wrap it
+            $items_html_wrapped = '<div class="items-container">' . $items_html . '</div>';
             $html = '
         <div class="bg-orange-500 text-white px-4 py-2 flex flex-wrap justify-between items-center rounded-t">
             <div class="font-semibold">
@@ -1509,7 +1513,7 @@ class OrdersController {
                 </div>
             </div>
 
-            ' . $items_html . '
+            ' . $items_html_wrapped . '
 
             <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
                 <div class="flex flex-wrap gap-4 text-gray-700">
@@ -1524,9 +1528,12 @@ class OrdersController {
             </div>
         </div>
 
-        <div class="mt-2 mb-4">
-            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2">
+        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between">
+            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
                 <span>+ Add Box</span>
+            </button>
+            <button type="button" class="remove-order-btn text-red-500 hover:text-red-700 text-sm font-semibold px-4 py-2 rounded">
+                🗑 Remove Order
             </button>
         </div>';
 
@@ -1561,7 +1568,7 @@ class OrdersController {
 
         try {
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
-            
+            $order_info = $ordersModel->getRemarksByOrderNumber($order_number);
             if (empty($orders)) {
                 echo json_encode([
                     'success' => false,
@@ -1570,25 +1577,54 @@ class OrdersController {
                 exit;
             }
 
+            // Build shipping address
+            $firstOrder = $order_info;
+            $shipping_address = '';
+            if (!empty($firstOrder['shipping_address_line1'])) {
+                $shipping_address = htmlspecialchars($firstOrder['shipping_address_line1']);
+                if (!empty($firstOrder['shipping_address_line2'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_address_line2']);
+                }
+                if (!empty($firstOrder['shipping_city'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_city']);
+                }
+                if (!empty($firstOrder['shipping_state'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_state']);
+                }
+                if (!empty($firstOrder['shipping_zipcode'])) {
+                    $shipping_address .= ' - ' . htmlspecialchars($firstOrder['shipping_zipcode']);
+                }
+            }
+
             $items_html = '';
             foreach ($orders as $order) {
                 $quantity = $order['quantity'] ?? 0;
+                $product_weight = (float)($order['product_weight'] ?? 0);
+                $gst = $order['gst'] ?? 0;
+                $finalprice = $order['finalprice'] ?? 0;
+                $item_total = $quantity * $finalprice;
+                $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
                 $items_html .= '
-                <tr class="border-b border-gray-100">
+                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">
                     <td class="p-2">
                         <input type="checkbox" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
                     <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') . ' | ' . htmlspecialchars($order['item_code'] ?? '') . '</td>
                     <td class="p-2 text-right">' . $quantity . '</td>
+                    <td class="p-2 text-right">' . number_format($product_weight, 3) . ' kg</td>
+                    <td class="p-2 text-right">' . $gst . '%</td>
+                    <td class="p-2 text-right">₹ ' . number_format($item_total, 0) . '</td>
+                    <td class="p-2 text-right">' . $payment_type . '</td>
                 </tr>';
             }
 
             echo json_encode([
                 'success' => true,
                 'order_number' => $order_number,
-                'customer_name' => htmlspecialchars($orders[0]['customer_name'] ?? ''),
-                'customer_id' => htmlspecialchars($orders[0]['customer_id'] ?? ''),
+                'customer_name' => htmlspecialchars($order_info['first_name'] ?? '') . ' ' . htmlspecialchars($order_info['last_name'] ?? ''),
+                'customer_id' => htmlspecialchars($order_info['customer_id'] ?? ''),
+                'shipping_address' => $shipping_address,
                 'items_html' => $items_html
             ]);
             exit;

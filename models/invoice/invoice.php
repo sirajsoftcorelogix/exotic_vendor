@@ -32,14 +32,15 @@ class Invoice {
     }
 
     public function createInvoice($data) {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount, batch_no) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
         $invoice_number = 'INV-' . date('Ymd') . '-' . mt_rand(1000, 9999);
+        $batch_no = $data['batch_no'] ?? null;
         $stmt->bind_param(
-            'ssisssdddsdssd',
+            'ssisssdddsdsdss',
             $data['invoice_number'],
             $data['invoice_date'],
             $data['customer_id'],
@@ -53,7 +54,8 @@ class Invoice {
             $data['created_by'],
             $data['created_at'],
             $data['exchange_text'],
-            $data['converted_amount']
+            $data['converted_amount'],
+            $batch_no
         );
 
         if ($stmt->execute()) {
