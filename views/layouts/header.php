@@ -54,7 +54,7 @@ $msgCnt = $notificationController->getUnreadCount();
             </div>
 
             <!-- Search bar start here-->
-            <!--div class="flex-1 flex justify-center px-4">
+            <div class="flex-1 flex justify-center px-4">
                 <form class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm"
                       method="get"
                       action="index.php">
@@ -86,7 +86,7 @@ $msgCnt = $notificationController->getUnreadCount();
                         Search
                     </button>
                 </form>
-            </div-->
+            </div>
             <!-- Search bar ends here -->
             <!-- Right Side: Search, Flag, Notifications, Profile -->
             <div class="flex items-center space-x-4 md:space-x-6">
