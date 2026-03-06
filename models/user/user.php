@@ -157,7 +157,7 @@ class User
         $checkStmt->close();
 
         if (!empty($data['password'])) {
-            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ? WHERE id = ?, warehouse_id = ?";
+            $sql = "UPDATE vp_users SET name = ?, email = ?, phone = ?, password = ?, role_id = ?, is_active = ?, warehouse_id = ? WHERE id = ?";
             $stmt = $this->db->prepare($sql);
             $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
             $stmt->bind_param('ssssiiii', $data['name'], $data['email'], $data['phone'], $hashedPassword, $data['role'], $data['is_active'], $data['warehouse_id'], $id);
