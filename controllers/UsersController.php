@@ -212,6 +212,7 @@ class UsersController {
         exit;
     }
     public function index() {
+        
         is_login();
         global $usersModel;
         /*$page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;*/
@@ -229,6 +230,8 @@ class UsersController {
         $users_data = $usersModel->getAllUsersListing($page_no, $limit, $search, $role_filter, $status_filter);
         $roles = $usersModel->getAllRoles();
         $teams = $usersModel->getAllTeams();
+        $warehouses = $usersModel->getAllWarehouses();
+        // print_r($warehouses);exit;
         $data = [
             'users' => $users_data["users"],
             'roles_list' => $roles,
@@ -243,7 +246,9 @@ class UsersController {
             'limit'        => $limit,
             'totalRecords' => $users_data["totalRecords"],
             'role_filter'  => $role_filter,
-            'status_filter'=> $status_filter
+            'status_filter'=> $status_filter,
+            'warehouses_list' => $warehouses,
+            
         ];
 
         renderTemplate('views/users/index.php', $data, 'Users');
@@ -345,7 +350,9 @@ class UsersController {
         if ($id > 0) {
             $user = $usersModel->getUserById($id);
             $user['teamIds'] = $usersModel->getUserTeams($id);
+            // echo '<pre>'; print_r($user); exit;
             if ($user) {
+                
                 echo json_encode($user);
             } else {
                 echo json_encode(['status' => 'error', 'message' => 'User not found.']);

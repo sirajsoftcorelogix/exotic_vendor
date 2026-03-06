@@ -1,8 +1,8 @@
 <div class="max-w-7xl mx-auto bg-white shadow-md border border-gray-200">
 
-    <div class="border-b border-gray-200 px-6 py-3 flex items-center justify-between bg-white">
-        <h2 class="text-lg font-semibold text-gray-800">Bulk Dispatch</h2>
-        <div class="flex items-center gap-3">
+    <div class="border-b border-gray-200 px-6 py-3 bg-white">
+        <h1 class="text-lg font-semibold text-gray-800 mb-3">Bulk Dispatch</h1>
+        <div class="flex items-center gap-3 flex-wrap">
             <div class="flex items-center gap-2">
                 <label for="orderNumber" class="text-gray-700 font-medium">Order Number:</label>
                 <input id="orderNumber" type="text" class="border border-gray-300 rounded px-2 py-1 w-40 text-sm"/>
@@ -12,7 +12,7 @@
                 <label for="weight" class="text-gray-700 font-medium">Weight (kg):</label>
                 <input id="weight" type="text" class="border border-gray-300 rounded px-2 py-1 w-20 text-sm"/>
                 <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-1.5 rounded text-sm">
-                + Add
+                Apply to All
             </button>
             </div>
             <div class="flex items-center gap-2">
@@ -26,8 +26,8 @@
             </button>
         </div>
     </div>
-    <div id="invDispatchesContainer">
-    <!-- <div class="px-4 pt-4 pb-2">
+
+    <div class="px-4 pt-2 pb-4 border-t border-gray-200">
         <div class="bg-orange-500 text-white px-4 py-2 flex flex-wrap justify-between items-center rounded-t">
             <div class="font-semibold">
                 Customer - 263920
@@ -37,12 +37,20 @@
                 Sujan reddy, 1-100/12, near SBI kismatpur, maruti nagar, kismatpur, K.V.Rangareddy, Telangana, 500030, IN
             </div>
         </div>
-
         <div class="border border-orange-400 border-t-0 rounded-b bg-white">
             <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
                 <div class="flex items-center gap-2">
                     <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
-                        📦
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M21 8.5v7a2 2 0 0 1-1.1 1.79l-7 3.5a2 2 0 0 1-1.8 0l-7-3.5A2 2 0 0 1 3 15.5v-7"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3.3 8.2 12 12.5l8.7-4.3"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M12 12.5v9"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M21 8.5 12 4 3 8.5"
+                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                     </span>
                     <span class="font-semibold text-gray-800">Box 1</span>
                 </div>
@@ -64,62 +72,86 @@
                 </div>
             </div>
 
-            <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
-                <div class="grid grid-cols-12 gap-2 font-semibold">
-                    <div class="col-span-2">Order</div>
-                    <div class="col-span-3">Item</div>
-                    <div class="col-span-1 text-right">Quantity</div>
-                    <div class="col-span-1 text-right">Weight</div>
-                    <div class="col-span-1 text-right">Box Size</div>
-                    <div class="col-span-1 text-right">GST</div>
-                    <div class="col-span-1 text-right">Item Total</div>
-                    <div class="col-span-1 text-right">Payment Type</div>
-                    <div class="col-span-1 text-center">Actions</div>
-                </div>
-            </div>
+            <div class="px-4 py-2 text-xs">
+                <div class="space-y-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-1 items-center">
+                        <span class="sm:col-span-2">Order: 2564719</span>
+                        <span class="sm:col-span-2">Item: <span class="font-semibold">Book</span> | HZA99</span>
+                        <span class="sm:col-span-1 sm:text-right">Qty: 1</span>
+                        <span class="sm:col-span-1 sm:text-right">Wt: 0.11 kg</span>
+                        <span class="sm:col-span-1 sm:text-right">7x4x1</span>
+                        <span class="sm:col-span-1 sm:text-right">GST: 5%</span>
+                        <span class="sm:col-span-2 sm:text-right">Item Total₹ 205</span>
+                        <span class="sm:col-span-1 sm:text-right">
+                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700">
+                                COD
+                            </span>
+                        </span>
 
-            <div class="px-4 py-1 text-xs text-gray-700 border-b border-gray-100">
-                <div class="grid grid-cols-12 gap-2 items-center">
-                    <div class="col-span-2">2564719</div>
-                    <div class="col-span-3">
-                        <span class="font-semibold">Book</span> | HZA99
-                    </div>
-                    <div class="col-span-1 text-right">1</div>
-                    <div class="col-span-1 text-right">0.11 kg</div>
-                    <div class="col-span-1 text-right">7x4x1</div>
-                    <div class="col-span-1 text-right">5%</div>
-                    <div class="col-span-1 text-right">₹ 205</div>
-                    <div class="col-span-1 text-right">Prepaid</div>
-                    <div class="col-span-1 flex justify-center gap-2 text-lg">
-                        <button class="text-gray-500 hover:text-gray-700" title="Move">📦</button>
-                        <button class="text-red-500 hover:text-red-700" title="Remove">🗑</button>
-                    </div>
-                </div>
-            </div>
+                        <div class="sm:col-span-1 flex items-center sm:justify-end gap-2 pt-1 sm:pt-0">
+                            <button type="button"
+                                    class="inline-flex items-center rounded border border-gray-200 p-1.5 text-gray-700 hover:bg-gray-50"
+                                    title="Package">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M21 8.5v7a2 2 0 0 1-1.1 1.79l-7 3.5a2 2 0 0 1-1.8 0l-7-3.5A2 2 0 0 1 3 15.5v-7"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M3.3 8.2 12 12.5l8.7-4.3"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M12 12.5v9"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M21 8.5 12 4 3 8.5"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
 
-            <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
-                <div class="flex flex-wrap gap-4 text-gray-700">
-                    <span><span class="font-semibold">Order:</span> 1</span>
-                    <span><span class="font-semibold">SKU Count:</span> 3</span>
-                    <span><span class="font-semibold">Total Quantity:</span> 3</span>
-                    <span><span class="font-semibold">Total Weight:</span> 0.11 kg</span>
-                    <span><span class="font-semibold">Max:</span> 7x4x1</span>
+                            <button type="button"
+                                    class="inline-flex items-center rounded border border-red-200 p-1.5 text-red-600 hover:bg-red-50"
+                                    title="Delete row">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M4 7h16"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M10 11v6"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M14 11v6"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M6 7l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"
+                                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex flex-wrap gap-4 text-gray-800">
-                    <span><span class="font-semibold">Net Total:</span> ₹ 615</span>
-                    <span><span class="font-semibold">COD Amount:</span> ₹ 205</span>
+                <div class="mt-2 border-t border-gray-200 pt-2 flex flex-wrap justify-between text-xs bg-orange-50 -mx-4 px-4 pb-2">
+                    <div class="flex flex-wrap gap-4 text-gray-700">
+                        <span><span class="font-semibold">Order:</span> 1</span>
+                        <span><span class="font-semibold">SKU Count:</span> 3</span>
+                        <span><span class="font-semibold">Total Quantity:</span> 3</span>
+                        <span><span class="font-semibold">Total Weight:</span> 0.11 kg</span>
+                        <span><span class="font-semibold">Max:</span> 7x4x1</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-4 text-gray-800">
+                        <span class="inline-flex items-center gap-2 rounded px-2 py-0.5 bg-green-100 text-green-800">
+                            <span class="text-[11px] font-bold">Net Total</span>
+                            <span class="text-xs font-semibold">₹ 615</span>
+                        </span>
+
+                        <span class="inline-flex items-center gap-2">
+                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700">
+                                COD Amount:₹ 205</span>
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="mt-2 mb-4">
+        <div class="mt-2">
             <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2">
                 <span>+ Add Box</span>
             </button>
         </div>
-    </div> -->
     </div>
-    
 
     <div class="border-t border-gray-200 px-4 py-3 flex justify-end bg-white">
         <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-2 rounded text-sm inline-flex items-center gap-2">

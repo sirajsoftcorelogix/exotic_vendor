@@ -15,8 +15,8 @@ $pageDir   = $viewsPath . '/' . $page;
             
 if (!is_dir($pageDir)) {
     // Page not implemented → coming soon
-    require $viewsPath . '/pages/coming-soon.php';
-    exit;
+    //require $viewsPath . '/pages/coming-soon.php';
+    //exit;
 }
 
 switch ($page) {
@@ -725,6 +725,9 @@ switch ($page) {
             case 'products-ajax':
                 $controller->productsAjax();   
                 break;
+            case 'cart-add':
+                $controller->cartAdd();
+                break;
             default:
                 $controller->index();   
                 break;
@@ -832,7 +835,17 @@ switch ($page) {
                 $controller->create();   
                 break;
         }
+	case 'search':
+		require_once 'controllers/DashboardController.php';
+        $controller = new DashboardController($conn);
+		switch ($action) {
+            case 'indexheader':
+                $controller->indexheader();
+                break;
+			default:
+                $controller->indexheader();
+                break;
+		 }
         break;
 }
-
 

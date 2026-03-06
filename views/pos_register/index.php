@@ -58,7 +58,7 @@
         <div class="flex items-center gap-2 border rounded-xl px-3 py-2">
           <div class="h-8 w-8 rounded-full bg-slate-300"></div>
           <div class="text-xs">
-            <div class="font-semibold">Store_1</div>
+            <div class="font-semibold"> <?= $warehouse_name ?? 'No Warehouse'; ?></div>
             <div class="text-slate-500">Sales Terminal</div>
           </div>
         </div>

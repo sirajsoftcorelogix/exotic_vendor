@@ -53,6 +53,40 @@ $msgCnt = $notificationController->getUnreadCount();
                 <span class="breadcrumb-current">Onboarding Dashboard</span>
             </div>
 
+            <!-- Search bar start here--> 
+            <div class="flex-1 flex justify-center px-4">
+                <form class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm"
+                      method="get"
+                      action="index.php">
+                    <input type="hidden" name="page" value="search" />
+                    <input type="hidden" name="action" value="indexheader" />
+
+                    <div class="relative flex items-center border-r border-gray-200 w-28">
+                        <select name="type" class="w-full h-9 pl-3 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
+                            <option value="orders">Order</option>
+                            <option value="purchase_orders">Purchase Order</option>
+                            <option value="invoice">Customer Invoice</option>
+                            <option value="awb">AWB</option>
+                        </select>
+                        <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500 text-xs">
+                            ▼
+                        </span>
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search"
+                        name="q"
+                        class="flex-1 h-9 px-3 focus:outline-none text-sm min-w-0"
+                    />
+                    <button
+                        type="submit"
+                        class="px-4 h-9 text-sm text-gray-700 bg-gray-100 border-l border-gray-200 hover:bg-gray-200"
+                    >
+                        Search
+                    </button>
+                </form>
+            </div>
+            <!-- Search bar ends here -->
             <!-- Right Side: Search, Flag, Notifications, Profile -->
             <div class="flex items-center space-x-4 md:space-x-6">
 
