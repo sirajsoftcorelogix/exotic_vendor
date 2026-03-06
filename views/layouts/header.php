@@ -53,8 +53,8 @@ $msgCnt = $notificationController->getUnreadCount();
                 <span class="breadcrumb-current">Onboarding Dashboard</span>
             </div>
 
-            <!-- Search bar start here-->
-            <!--div class="flex-1 flex justify-center px-4">
+            <!-- Search bar start here--> 
+            <div class="flex-1 flex justify-center px-4">
                 <form class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm"
                       method="get"
                       action="index.php">
@@ -67,7 +67,6 @@ $msgCnt = $notificationController->getUnreadCount();
                             <option value="purchase_orders">Purchase Order</option>
                             <option value="invoice">Customer Invoice</option>
                             <option value="awb">AWB</option>
-                            <option value="customer">Customer</option>
                         </select>
                         <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500 text-xs">
                             ▼
@@ -77,7 +76,7 @@ $msgCnt = $notificationController->getUnreadCount();
                         type="text"
                         placeholder="Search"
                         name="q"
-                        class="h-9 px-3 focus:outline-none text-sm w-48 sm:w-56 md:w-64"
+                        class="flex-1 h-9 px-3 focus:outline-none text-sm min-w-0"
                     />
                     <button
                         type="submit"
@@ -86,7 +85,7 @@ $msgCnt = $notificationController->getUnreadCount();
                         Search
                     </button>
                 </form>
-            </div-->
+            </div>
             <!-- Search bar ends here -->
             <!-- Right Side: Search, Flag, Notifications, Profile -->
             <div class="flex items-center space-x-4 md:space-x-6">

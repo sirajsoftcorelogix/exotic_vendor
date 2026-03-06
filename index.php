@@ -15,8 +15,8 @@ $pageDir   = $viewsPath . '/' . $page;
             
 if (!is_dir($pageDir)) {
     // Page not implemented → coming soon
-    require $viewsPath . '/pages/coming-soon.php';
-    exit;
+    //require $viewsPath . '/pages/coming-soon.php';
+    //exit;
 }
 
 switch ($page) {
@@ -718,6 +718,9 @@ switch ($page) {
             case 'products-ajax':
                 $controller->productsAjax();   
                 break;
+            case 'cart-add':
+                $controller->cartAdd();
+                break;
             default:
                 $controller->index();   
                 break;
@@ -829,5 +832,4 @@ switch ($page) {
 		 }
         break;
 }
-
 
