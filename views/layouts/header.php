@@ -55,7 +55,7 @@ $msgCnt = $notificationController->getUnreadCount();
 
             <!-- Search bar start here-->
             <div class="flex-1 flex justify-center px-4">
-                <div class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm">
+                <div class="inline-flex rounded-full border border-gray-300 overflow-hidden bg-white text-sm">
                     <div class="relative flex items-center border-r border-gray-200 w-24">
                         <select class="w-full h-9 pl-3 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
                             <option>Order</option>
