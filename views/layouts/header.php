@@ -53,7 +53,7 @@ $msgCnt = $notificationController->getUnreadCount();
                 <span class="breadcrumb-current">Onboarding Dashboard</span>
             </div>
 
-            <!-- Search bar start here-->
+            <!-- Search bar start here--> 
             <div class="flex-1 flex justify-center px-4">
                 <form class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm"
                       method="get"
