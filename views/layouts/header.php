@@ -61,12 +61,13 @@ $msgCnt = $notificationController->getUnreadCount();
                     <input type="hidden" name="page" value="search" />
                     <input type="hidden" name="action" value="indexheader" />
 
-                    <div class="relative flex items-center border-r border-gray-200 w-24">
+                    <div class="relative flex items-center border-r border-gray-200 w-28">
                         <select name="type" class="w-full h-9 pl-3 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
-                            <option>Order</option>
-                            <option>Purchase Order</option>
-                            <option>Customer Invoice</option>
-                            <option>AWB</option>
+                            <option value="orders">Order</option>
+                            <option value="purchase_orders">Purchase Order</option>
+                            <option value="invoice">Customer Invoice</option>
+                            <option value="awb">AWB</option>
+                            <option value="customer">Customer</option>
                         </select>
                         <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500 text-xs">
                             ▼
