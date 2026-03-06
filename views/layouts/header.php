@@ -70,7 +70,7 @@ $msgCnt = $notificationController->getUnreadCount();
                     <input
                         type="text"
                         placeholder="Search"
-                        class="flex-1 h-9 px-3 focus:outline-none text-sm"
+                        class="h-9 px-3 focus:outline-none text-sm w-48 sm:w-56 md:w-64"
                     />
                     <button
                         type="submit"
