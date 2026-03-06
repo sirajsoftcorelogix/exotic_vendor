@@ -15,8 +15,8 @@ $pageDir   = $viewsPath . '/' . $page;
             
 if (!is_dir($pageDir)) {
     // Page not implemented → coming soon
-    require $viewsPath . '/pages/coming-soon.php';
-    exit;
+    //require $viewsPath . '/pages/coming-soon.php';
+    //exit;
 }
 
 switch ($page) {
@@ -469,6 +469,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->saveStockAdjustment(); // This method will handle the POST data
                 break;
+            case 'update_stock_limits':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateStockLimits();
+                break;
             case 'save_product_notes':
                 $controller->saveProductNotes();
                 break;
@@ -795,16 +800,36 @@ switch ($page) {
             case 'merge_labels':
                 $controller->mergeLabels();
                 break;
+            case 'bulk_update_status':
+                $controller->bulkUpdateStatus();
+                break;
             case 'list':
                 $controller->index();
                 break;
             case 'cancel_dispatch':
                 $controller->cancelDispatch();
                 break;
+            case 're_dispatch_invoice':
+                $controller->reDispatchInvoice();
+                break;
+            case 'cancel_invoice':
+                $controller->cancelInvoice();
+                break;
             default:
                 $controller->create();   
                 break;
         }
+	case 'search':
+		require_once 'controllers/DashboardController.php';
+        $controller = new DashboardController($conn);
+		switch ($action) {
+            case 'indexheader':
+                $controller->indexheader();
+                break;
+			default:
+                $controller->indexheader();
+                break;
+		 }
         break;
 }
 

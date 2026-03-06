@@ -130,32 +130,27 @@
                   <div class="flex flex-col gap-2">
                     <div> 
                     <p class="text-xs text-gray-500">Inv No.</p>
-                    <?php if($invoice['status'] == 'Cancelled'): ?>
-                      <p class="text-red-500 font-semibold"><s><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></s></p>
-                    <?php else: ?>
-                      <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
-                    <?php endif; ?>
+                    <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
                     </div>
                     <div>
-                    <p class="text-xs text-gray-500">Order No.</p>
-                    <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
+                    <p ><span class="text-xs text-gray-500">Order No.</span>
+                    <span class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
                       echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
-                    } ?></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>   
-                    <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
+                    } ?></span></p>
+                    <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
                       <?php 
                         //$shiprocketOrderIds = [];
-                        // if (!empty($invoice_dispatch[$invoice['id']])) {
-                        //   foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                        //     if (!empty($dispatch['shiprocket_shipment_id'])) {
-                        //       echo htmlspecialchars($dispatch['shiprocket_shipment_id']) . '<br>';
-                        //     }
-                        //   }
-                        // }
+                        if (!empty($invoice_dispatch[$invoice['id']])) {
+                          foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
+                            if (!empty($dispatch['shiprocket_shipment_id'])) {
+                              echo htmlspecialchars($dispatch['shiprocket_shipment_id']) . '<br>';
+                            }
+                          }
+                        }
                         //echo implode(' | ', $shiprocketOrderIds);
-                      ?></p>   -->
+                      ?></p>  
                   </div>
                   </div>
                   
@@ -176,7 +171,7 @@
                   </div>
                 </div>
                 <div>
-                  <p class="text-xs text-gray-500">Dispatch Status</p>
+                  <p class="text-xs text-gray-500">Status</p>
                   <div class="flex gap-2 mt-2">
                     <?php 
                       // $dispatchStatus = '-';
@@ -216,11 +211,9 @@
                         $items = $invoice['items'] ?? [];
                         $itemCount = count($items);
                         if ($itemCount > 0) {
-                          $itemCodes = array_column($items, 'item_code');
-                          
                           echo htmlspecialchars($items[0]['item_code'] ?? '');
                           if ($itemCount > 1) {
-                            echo '<span class="text-xs text-blue-500 cursor-pointer" title="' . implode(', ', $itemCodes) . '">[ +' . ($itemCount - 1). ' ]</span>';
+                            echo ' +' . ($itemCount - 1);
                           }
                         }
                       ?>
@@ -236,11 +229,7 @@
                         if (!empty($invoice_dispatch[$invoice['id']])) {
                           foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
                             if (!empty($dispatch['awb_code'])) {
-                              if(strtolower($dispatch['shipment_status'] ?? '') === 'cancelled' || strtolower($dispatch['shipment_status'] ?? '') === 'cancellation requested') {
-                                $link = '<span class="line-through text-red-500">' . htmlspecialchars($dispatch['awb_code']) . '</span>';
-                              } else {
-                                $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
-                              }
+                              $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
                               $awbs[] = $link;
                             }
                           }
@@ -357,7 +346,6 @@
                     <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
-                    <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
                   </div>
                 </div>
                 <div></div>
@@ -412,29 +400,6 @@
 </div>
 
 <script>
-function toggleMenu(button) {
-
-    const menu = button.nextElementSibling;
-
-    // close all other menus
-    document.querySelectorAll('.dropdown-menu').forEach(m => {
-        if (m !== menu) m.classList.add('hidden');
-    });
-
-    menu.classList.toggle('hidden');
-}
-
-// close when clicking outside
-document.addEventListener("click", function(e) {
-
-    if (!e.target.closest(".relative")) {
-        document.querySelectorAll(".dropdown-menu").forEach(menu => {
-            menu.classList.add("hidden");
-        });
-    }
-
-});
-
 // Persist selected invoices across pages using localStorage
 const DISPATCH_STORAGE_KEY = 'selected_dispatch_invoices';
 
@@ -698,30 +663,6 @@ if (bulkPrintBtn) {
       
         }
       });
-  }
-  function cancelInvoiceAjax(invoiceId) {
-    customConfirm('Canceling the invoice will attempt to cancel the order and any associated shipments. This action cannot be undone. Are you sure?').then(confirmed => {
-      if (confirmed) {
-        fetch('?page=dispatch&action=cancel_invoice', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ invoice_id: invoiceId })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                showAlert('Invoice cancellation initiated successfully. Reloading...', 'success');
-                location.reload();
-            } else {
-                alert('Error: ' + (data.message || 'Failed to cancel invoice'));
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert('Error canceling invoice');
-        });
-      }
-    });
   }
     
 </script>

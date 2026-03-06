@@ -1,3 +1,20 @@
+/* ========== THEME COLORS – change these to switch the app theme ========== */
+:root {
+    --theme-primary: #ea580c;        /* main brand color (default: orange-600) */
+    --theme-primary-hover: #c2410c; /* hover/dark variant (default: orange-700) */
+    --theme-primary-light: #ffedd5; /* light background (e.g. orange-100) */
+}
+
+/* Optional: make Tailwind orange classes use theme variables so existing UI updates */
+.bg-orange-500 { background-color: var(--theme-primary) !important; }
+.bg-orange-600 { background-color: var(--theme-primary) !important; }
+.hover\:bg-orange-600:hover { background-color: var(--theme-primary-hover) !important; }
+.hover\:bg-orange-500:hover { background-color: var(--theme-primary-hover) !important; }
+.bg-orange-400 { background-color: var(--theme-primary) !important; }
+.bg-orange-50 { background-color: var(--theme-primary-light) !important; }
+.border-orange-400 { border-color: var(--theme-primary) !important; }
+.border-orange-200 { border-color: var(--theme-primary-light) !important; }
+
 /* General body styles from header.html */
 body {
     font-family: 'Inter', sans-serif;

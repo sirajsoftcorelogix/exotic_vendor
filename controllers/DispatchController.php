@@ -492,6 +492,90 @@ class DispatchController {
             exit();
         }
     }
+    
+    public function bulkUpdateStatus() {
+        global $dispatchModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['status' => 'error', 'message' => 'Invalid request method']);
+            exit();
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        $invoiceIds = $input['invoice_ids'] ?? [];
+        if (!is_array($invoiceIds) || empty($invoiceIds)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'No invoices selected']);
+            exit();
+        }
+
+        $summary = [
+            'processed_invoices' => 0,
+            'processed_dispatches' => 0,
+            'updated' => 0,
+            'errors' => [],
+            'details' => []
+        ];
+
+        foreach ($invoiceIds as $invId) {
+            $summary['processed_invoices']++;
+            $records = $dispatchModel->getDispatchRecordsByInvoiceId($invId);
+            if (empty($records)) {
+                $summary['errors'][] = "No dispatch records for invoice $invId";
+                continue;
+            }
+            foreach ($records as $rec) {
+                $summary['processed_dispatches']++;
+                $dispatchId = $rec['id'];
+                $awb = $rec['awb_code'] ?? '';
+                if (empty($awb)) {
+                    $summary['details'][$dispatchId] = ['status' => 'no_awb'];
+                    continue;
+                }
+
+                $resp = $dispatchModel->getShiprocketTrackingByAWB($awb);
+               
+                if (empty($resp)) {
+                    $summary['errors'][] = "Empty response for AWB $awb (dispatch $dispatchId)";
+                    $summary['details'][$dispatchId] = ['success' => false, 'error' => 'empty_response'];
+                    continue;
+                }
+
+                // best-effort extraction of status and tracking URL from response
+                $status = null;
+                $tracking_url = null;
+                if (isset($resp['tracking_data']['shipment_track']) && is_array($resp['tracking_data']['shipment_track'])) {
+                    foreach ($resp['tracking_data']['shipment_track'] as $track) {
+                        $edd = $track['edd'] ?? null;
+                        if (isset($track['current_status'])) {
+                            $status = $track['current_status'];
+                            break;
+                        }
+                    }
+                }
+                $tracking_url = $resp['tracking_data']['track_url'] ?? null;
+                //echo "Extracted status: $status, tracking_url: $tracking_url for AWB $awb (dispatch $dispatchId)\n";
+                $etd = $resp['tracking_data']['etd'] ?? null;
+                
+                if ($status !== null || $tracking_url !== null) {
+                    $updated = $dispatchModel->updateDispatchStatus($dispatchId, $status ?? '', $tracking_url, $etd, $edd);
+                    if ($updated) {
+                        $summary['updated']++;
+                        $summary['details'][$dispatchId] = ['success' => true, 'status' => $status, 'tracking_url' => $tracking_url, 'etd' => $etd, 'edd' => $edd];
+                    } else {
+                        $summary['details'][$dispatchId] = ['success' => false, 'error' => 'db_update_failed', 'status' => $status, 'tracking_url' => $tracking_url, 'etd' => $etd, 'edd' => $edd];
+                        $summary['errors'][] = "DB update failed for dispatch $dispatchId";
+                    }
+                } else {
+                    $summary['details'][$dispatchId] = ['success' => false, 'error' => 'no_status_in_response', 'raw' => $resp];
+                    $summary['errors'][] = "No status in response for AWB $awb (dispatch $dispatchId)";
+                }
+            }
+        }
+
+        echo json_encode(['status' => 'success', 'summary' => $summary]);
+        exit();
+    }
 
     public function index() {
         global $dispatchModel;
@@ -564,6 +648,7 @@ class DispatchController {
 
         // Fetch paginated invoices
         $invoices = $invoiceModel->getAllInvoicesPaginated($perPage, $offset, $filters);
+        //print_array($invoices);
         foreach ($invoices as &$invoice) {
             $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
             //get items
@@ -607,6 +692,8 @@ class DispatchController {
                 if ($shiprocketOrderId) {
                     // Cancel shipment via Shiprocket API
                     $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
+                    //print_array($response);
+                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                     if (!$response['success']) {
                         //throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
                         echo json_encode(['success' => false, 'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error')]);
@@ -616,13 +703,258 @@ class DispatchController {
                     }
                     // Update dispatch record to mark as cancelled
                     //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
-                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], ['id' => $record['id']]);
+                    //$commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
             }
             echo json_encode(['success' => true, 'message' => 'Dispatch cancelled successfully']);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Error cancelling dispatch: ' . $e->getMessage()]);
+        }
+    }
+    public function getDispatchDetails() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        if (!isset($_GET['dispatch_id'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Missing dispatch_id']);
+            return;
+        }
+
+        global $dispatchModel;
+        $dispatchId = intval($_GET['dispatch_id']);
+        $details = $dispatchModel->getDispatchDetailsById($dispatchId);
+        if ($details) {
+            echo json_encode(['success' => true, 'data' => $details]);
+        } else {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Dispatch not found']);
+        }
+    }
+    public function reDispatchInvoice() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!isset($input['invoice_id'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
+            return;
+        }
+
+        global $dispatchModel;
+        global $commanModel;
+        global $invoiceModel;
+        $invoiceId = intval($input['invoice_id']);
+        //shipment id from dispatch record
+        $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+
+        // re-dispatch logic: for each cancelled dispatch, attempt to create a new shipment with same details
+        $results = [];
+        foreach ($dispatchRecords as $record) {
+            if ($record['shipment_status'] === 'cancelled' || $record['shipment_status'] === 'Cancellation Requested') {
+                // re-dispatch payload: replicate same fields sent in create()
+                // new order identifier so Shiprocket will accept it
+                $newOrderId = $record['order_number'] ? ($record['order_number'] . '_re' . time()) : ('order_' . $record['invoice_id'] . '_box' . $record['box_no'] . '_re' . time());
+
+                // fetch invoice & address so we can populate billing/shipping info
+                $invoice = $invoiceModel->getInvoiceById($record['invoice_id']);
+                $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? []);
+                $subTotal = 0;
+                // assemble order_items from stored box_items (comma list of item IDs)
+                $orderItems = [];
+                if (!empty($record['box_items'])) {
+                    $boxItems = explode(',', $record['box_items']);
+                    $invoiceItems = $invoiceModel->getInvoiceItems($invoice['id'] ?? $record['invoice_id']);
+                    $itemsMap = [];
+                    foreach ($invoiceItems as $it) {
+                        $itemsMap[$it['id']] = $it;
+                    }
+                    foreach ($boxItems as $itm) {
+                        if (!isset($itemsMap[$itm])) continue;
+                        $it = $itemsMap[$itm];
+                        $units = isset($it['quantity']) ? (int)$it['quantity'] : 1;
+                        $price = isset($it['unit_price']) ? (float)$it['unit_price'] : (isset($it['selling_price']) ? (float)$it['selling_price'] : 0);
+                        $rawHsn = $it['hsn'] ?? '';
+                        $hsnVal = '';
+                        if ($rawHsn !== '') {
+                            if (strpos($rawHsn, '.') !== false) {
+                                $hsnVal = explode('.', $rawHsn)[0];
+                            } else {
+                                $hsnDigits = preg_replace('/\D/', '', $rawHsn);
+                                $hsnVal = $hsnDigits;
+                            }
+                            $hsnVal = substr(preg_replace('/\D/','', $hsnVal), 0, 4);
+                        }
+                        $orderItems[] = [
+                            'name' => $it['groupname'] ?? $it['sku'] ?? 'Item',
+                            'sku' => $it['item_code'] ?? '',
+                            'units' => $units,
+                            'selling_price' => $price,
+                            'discount' => $it['discount'] ?? '',
+                            'tax' => $it['tax_amount'] ?? '',
+                            'hsn' => $hsnVal
+                        ];
+                        $subTotal += $units * $price;
+                    }
+                }
+
+                $shiprocketPayload = [
+                    'order_id' => $newOrderId,
+                    'order_date' => date('Y-m-d H:i'),
+                    'pickup_location' => $record['pickup_location'] ?? '',
+                    'comment' => 'Re-dispatch of box ' . $record['box_no'],
+                    'billing_customer_name' => $address['first_name'] ?? '',
+                    'billing_last_name' => $address['last_name'] ?? '',
+                    'billing_address' => $address['address_line1'] ?? '',
+                    'billing_address_2' => $address['address_line2'] ?? '',
+                    'billing_city' => $address['city'] ?? '',
+                    'billing_state' => $address['state'] ?? '',
+                    'billing_country' => $address['country'] ?? '',
+                    'billing_pincode' => $address['zipcode'] ?? '',
+                    'billing_email' => $address['email'] ?? '',
+                    'billing_phone' => $address['mobile'] ?? '',
+                    'shipping_is_billing' => $address['shipping_first_name'] ? false : true,
+                    'shipping_customer_name' => $address['shipping_first_name'] ?? '',
+                    'shipping_last_name' => $address['shipping_last_name'] ?? '',
+                    'shipping_address' => $address['shipping_address_line1'] ?? '',
+                    'shipping_address_2' => $address['shipping_address_line2'] ?? '',
+                    'shipping_city' => $address['shipping_city'] ?? '',
+                    'shipping_pincode' => $address['shipping_zipcode'] ?? '',
+                    'shipping_country' => $address['shipping_country'] ?? '',
+                    'shipping_state' => $address['shipping_state'] ?? '',
+                    'shipping_email' => $address['shipping_email'] ?? '',
+                    'shipping_phone' => $address['shipping_mobile'] ?? '',
+                    'customer_gst_no' => $address['gst_number'] ?? '',
+                    'order_items' => $orderItems,
+                    'payment_method' => strtoupper($invoice['payment_method'] ?? 'Prepaid'),
+                    'shipping_charges' => $record['shipping_charges'] ?? 0,
+                    'giftwrap_charges' => 0,
+                    'transaction_charges' => 0,
+                    'total_discount' => 0,
+                    'sub_total' => $subTotal,
+                    'length' => $record['length'] ?? 0,
+                    'breadth' => $record['width'] ?? 0,
+                    'height' => $record['height'] ?? 0,
+                    'weight' => $record['billing_weight'] ?? $record['weight'] ?? 0
+                ];
+
+                // call shiprocket just like in create()
+                $reDispatchResult = $dispatchModel->shiprocketCreateShipment($shiprocketPayload);
+                //print_array($reDispatchResult);
+                // validate response
+                if (!$reDispatchResult || !isset($reDispatchResult['json']['order_id']) || ($reDispatchResult['json']['status'] ?? '') !== 'NEW') {
+                    $msg = $reDispatchResult['json']['status'] ?? $reDispatchResult['error'] ?? 'Failed to create re-dispatch shipment';
+                    $results[] = ['dispatch_id' => $record['id'], 'success' => false, 'message' => $msg];
+                } else {
+                    // update record with details from new shipment
+                    $updateDis = $commanModel->updateRecord('vp_dispatch_details', [
+                        'shipment_status' => 're-dispatched',
+                        'shiprocket_order_id' => $reDispatchResult['json']['order_id'],                       
+                        'shiprocket_shipment_id' => $reDispatchResult['json']['shipment_id'] ?? '',
+                        'awb_code' => $reDispatchResult['json']['awb_code'] ?? '',
+                        'order_number' => $newOrderId,
+                        'updated_at' => date('Y-m-d H:i:s'),
+                        'is_re_dispatch' => 1,
+                        're_dispatch_count' => $record['re_dispatch_count'] + 1,
+                        'label_url' => null,
+                        'etd' => null,
+                        'edd' => null,
+                        'shiprocket_tracking_url' => null
+
+                    ], $record['id']);
+                    //create new dispatch record with same details but new shipment info
+                    // $dispatchData = [
+                    //     'invoice_id' => $record['invoice_id'],
+                    //     'box_no' => $record['box_no'],
+                    //     'order_number' => $newOrderId,                    
+                    //     'pickup_location' => $record['pickup_location'],
+                    //     'box_items' => $record['box_items'],
+                    //     'length' => $record['length'],
+                    //     'width' => $record['width'],
+                    //     'height' => $record['height'],
+                    //     'weight' => $record['weight'],
+                    //     'shipping_charges' => $record['shipping_charges'],
+                    //     'volumetric_weight' => ($record['length'] * $record['width'] * $record['height']) / 5000,
+                    //     'billing_weight' => $record['billing_weight'] ?? $record['weight'] ?? 0,
+                    //     'shipping_charges' => $record['shipping_charges'] ?? 0,
+                    //     'dispatch_date' => date('Y-m-d H:i:s'),
+                    //     'courier_name' => $record['courier_name'] ?? null,
+                    //     'shiprocket_order_id' => $reDispatchResult['json']['order_id'] ?? null,
+                    //     'shiprocket_shipment_id' => $reDispatchResult['json']['shipment_id'] ?? null,
+                    //     'shiprocket_tracking_url' => $reDispatchResult['json']['tracking_url'] ?? null,                    
+                    //     'awb_code' => $reDispatchResult['json']['awb_code'] ?? null,
+                    //     'shipment_status' => $reDispatchResult['json']['status'] ?? null,
+                    //     'label_url' => $reDispatchResult['json']['label_url'] ?? null,
+                    //     'groupname' => $record['groupname'] ?? null,
+                    //     'created_by' => $_SESSION['user']['id'] ?? 0,
+                    //     'created_at' => date('Y-m-d H:i:s'),
+                        
+                    // ];
+                    
+                    // $dispatchId = $dispatchModel->createDispatch($dispatchData);
+                    $results[] = ['dispatch' => $updateDis, 'success' => true, 'message' => 'Re-dispatch successful', 'new_shiprocket_order_id' => $reDispatchResult['json']['order_id']];
+                }
+            }
+        }
+        echo json_encode(['success' => true, 'results' => $results]);
+    }
+    public function cancelInvoice() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!isset($input['invoice_id'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Missing invoice_id']);
+            return;
+        }
+
+        global $dispatchModel;
+        global $commanModel;
+        global $invoiceModel;
+        $invoiceId = intval($input['invoice_id']);
+        //shipment id from dispatch record
+        $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+
+        try {
+            foreach ($dispatchRecords as $record) {
+                $shiprocketOrderId = $record['shiprocket_order_id'];
+                if ($shiprocketOrderId) {
+                    // Cancel shipment via Shiprocket API
+                    $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
+                    //print_array($response);
+                    if (!$response['success']) {
+                        //throw new Exception("Failed to cancel shiprocket order ID: " . $shiprocketOrderId);
+                        echo json_encode(['success' => false, 'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error')]);
+                        exit();
+                        //echo json_encode($response);
+                        //continue; // skip to next record
+                    }
+                    // Update dispatch record to mark as cancelled
+                    //$dispatchModel->updateDispatchStatus($record['id'], 'cancelled');
+                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
+                }
+            }
+            //update invoice status to cancelled
+            $invoiceModel->updateInvoiceStatus($invoiceId, 'Cancelled');
+            echo json_encode(['success' => true, 'message' => 'Invoice cancelled successfully']);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()]);
         }
     }
 }

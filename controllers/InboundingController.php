@@ -1,4 +1,4 @@
- <?php
+<?php
 require_once 'models/inbounding/Inbounding.php';
 require_once 'controllers/ProductsController.php';
 
@@ -1515,6 +1515,7 @@ class InboundingController {
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
         $stock_price_temp[0]['youtube_links'] = '';
         $stock_price_temp[0]['sketchfab_links'] = '';
+        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? 0;
 
         // Variation Records [1..n]
         if (!empty($data['data']['var_rows'])) {
@@ -1559,13 +1560,25 @@ class InboundingController {
                 $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
-                $stock_price_temp[$i]['cp'] = $value['usd_price'] ?? 0;
+                $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
                 $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
                 $stock_price_temp[$i]['youtube_links'] = '';
                 $stock_price_temp[$i]['sketchfab_links'] = '';
+                $stock_price_temp[$i]['dimensions'] = $value['dimensions'] ?? '';
+            }
+            
+            // ========================================================================
+            // LOGIC: When Parent is "N" and has variations, add main data as a copy
+            // ========================================================================
+            if ($data['data']['is_variant'] == 'N') {
+                // Clone the base item (stock_price_temp[0]) and add it to the end as another variation
+                // This ensures the parent product data is also included in the variations array
+                $i++;
+                $stock_price_temp[$i] = $stock_price_temp[0];
+                $stock_price_temp[$i]['item_level'] = 'variation'; // Change item level from 'parent' to 'variation'
             }
         }
 
@@ -1604,8 +1617,7 @@ class InboundingController {
 
         $API_data['images'] = $images_payload;
 
-        $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
-        // echo "<pre>";print_r($jsonString);
+        $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
@@ -1666,7 +1678,7 @@ class InboundingController {
         }
 
         header('Content-Type: application/json');
-        if (isset($result) && $result->status == 'success') {
+        if (is_object($result) && isset($result->status) && $result->status == 'success') {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
@@ -1680,7 +1692,7 @@ class InboundingController {
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            echo $result; 
+            echo json_encode(['status' => 'error', 'message' => 'Publish failed.', 'response' => $response]);
         }
         exit;
     }

@@ -370,4 +370,7 @@ COMMIT;
 --27/02/2026 12:22:25 PM
 ALTER TABLE `vp_invoice_items` ADD `groupname` VARCHAR(150) NULL AFTER `item_name`;
 ALTER TABLE `vp_dispatch_details` ADD `groupname` VARCHAR(150) NULL AFTER `box_items`;
-ALTER TABLE `vp_dispatch_details` ADD `box_size` VARCHAR(50) NULL AFTER `groupname`;
+
+ALTER TABLE `vp_dispatch_details` ADD `etd` DATETIME NULL AFTER `label_url`, ADD `edd` DATETIME NULL AFTER `etd`;
+ALTER TABLE `vp_dispatch_details` ADD `pickup_location` VARCHAR(255) NULL AFTER `edd`, ADD `pickup_date` DATETIME NULL AFTER `pickup_location`;
+ALTER TABLE `vp_dispatch_details` ADD `is_re_dispatch` TINYINT(1) NOT NULL DEFAULT 0 AFTER `pickup_date`, ADD `re_dispatch_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `is_re_dispatch`;

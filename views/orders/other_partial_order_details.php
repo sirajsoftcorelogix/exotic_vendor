@@ -68,24 +68,31 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
             <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div class="mb-6 space-y-3">
                     <div class="flex items-center gap-2">
-                        <div
+                        <?php /*<div
                             class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                 stroke-width="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                             </svg>
                             <span>Fulfilled (32)</span>
-                        </div>
-                        <div
-                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                stroke-width="1.5">
-                                <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path
-                                    d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                            </svg>
-                            <span><?php echo $orderremarks['city'] ?? ''; ?>, <?php echo $orderremarks['state'] ?? ''; ?></span>
-                        </div>
+                        </div> */ ?>
+                        <?php
+                            $city = $orderremarks['city'] ?? '';
+                            $state = $orderremarks['state'] ?? '';
+
+                            $location = implode(', ', array_filter([$city, $state]));
+                        ?>
+                        <?php if (!empty($location)) : ?>
+                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                    stroke-width="1.5">
+                                    <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path
+                                        d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                </svg>
+                                <span><?php echo $location; ?></span>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
@@ -153,9 +160,8 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                                         <div class="w-20 text-right text-[14px] font-bold text-black-900">
                                             <?php echo $currencysymbol; ?><?php echo $item['finalprice'] * $item['quantity']; ?>
                                         </div>
-                                        <div class="w-20 text-right text-[14px] font-bold text-black-900">
-                                            <span
-                                                class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white"><?php echo $item['status']; ?></span>
+                                        <div class="flex-shrink-0">
+                                            <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo ucwords(str_replace('_', ' ', $item['status'])); ?></span>
                                         </div>
                                     </div>
                                 </div>
@@ -221,38 +227,46 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                     <?php endforeach; ?>
                 </div>
                 <?php
-                    $tax_rate = 0.05; // 5% (SGST + CGST combined)
-
-                    // Individual reduction values (use 0 if not set)
+                    /*
+                        $tax_rate = 0.05;
+                        $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
+                        $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
+                        $credit             = floatval($orderremarks['credit']             ?? 0);
+                        $all_reductions = $coupon_reduce + $giftvoucher_reduce + $credit;
+                        $final_paid = floatval($orderremarks['total'] ?? 0);
+                        $amount_before_tax = $final_paid / (1 + $tax_rate);
+                        $tax_amount = $final_paid - $amount_before_tax;
+                        $subtotal_before_discounts = $amount_before_tax + $all_reductions;
+                    */ 
                     $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
                     $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
                     $credit             = floatval($orderremarks['credit']             ?? 0);
-                    // $custom_reduce   = floatval($orderremarks['custom_reduce']      ?? 0); // add if needed
-
-                    $all_reductions = $coupon_reduce + $giftvoucher_reduce + $credit; // + $custom_reduce ...
-
-                    // Final amount customer paid
+                    $all_reductions = $coupon_reduce + $giftvoucher_reduce + $credit;
                     $final_paid = floatval($orderremarks['total'] ?? 0);
-
-                    // Amount before tax = taxable amount (after discounts)
-                    $amount_before_tax = $final_paid / (1 + $tax_rate);
-
-                    // Tax amount
-                    $tax_amount = $final_paid - $amount_before_tax;
-
-                    // Original subtotal before discounts
+                    $tax_amount = 0.0;
+                    foreach ($order as $item) {
+                        $qty        = (int)($item['quantity'] ?? 1);
+                        $unit_price = floatval($item['finalprice'] ?? 0);   // ← Pre-GST unit price
+                        $gst_percent = floatval($item['gst'] ?? 0);         // ← GST percentage from DB
+                        $line_total_excl_gst = $unit_price * $qty;
+                        $line_gst_amount     = $line_total_excl_gst * ($gst_percent / 100);
+                        $tax_amount += $line_gst_amount;
+                    }
+                    $tax_amount = round($tax_amount, 2);   // clean money value
+                    // Derive remaining values (keeps everything 100% consistent with final_paid)
+                    $amount_before_tax       = $final_paid - $tax_amount;
                     $subtotal_before_discounts = $amount_before_tax + $all_reductions;
                 ?>
                 <div class="mt-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                    <!-- <div class="mb-5">
-                        <span class="inline-flex items-center gap-2 bg-[#E5E7EB] text-[#5C5F62] px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-[#5C5F62]">
-                                <path d="M19 3H5C3.89543 3 3 3.89543 3 5V21L5.5 18.5L8 21L10.5 18.5L13 21L15.5 18.5L18 21L21 18V5C21 3.89543 20.1046 3 19 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M9 11L11 13L15 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            Paid
-                        </span>
-                    </div> -->
+                        <!-- <div class="mb-5">
+                            <span class="inline-flex items-center gap-2 bg-[#E5E7EB] text-[#5C5F62] px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-[#5C5F62]">
+                                    <path d="M19 3H5C3.89543 3 3 3.89543 3 5V21L5.5 18.5L8 21L10.5 18.5L13 21L15.5 18.5L18 21L21 18V5C21 3.89543 20.1046 3 19 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M9 11L11 13L15 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                Paid
+                            </span>
+                        </div> -->
 
                     <div class="border border-gray-200 rounded-xl overflow-hidden">
 
@@ -299,7 +313,7 @@ $currencyIcons = [ 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 
                             <!-- Taxes -->
                             <div class="grid grid-cols-12 items-start text-sm">
                                 <div class="col-span-3 font-bold text-black-800">Taxes</div>
-                                <div class="col-span-6 text-black-500">SGST + CGST 5% (Included)</div>
+                                <div class="col-span-6 text-black-500">SGST + CGST</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
                                     <?php echo $currencysymbol; ?><?php echo number_format($tax_amount, 2); ?>
                                 </div>
