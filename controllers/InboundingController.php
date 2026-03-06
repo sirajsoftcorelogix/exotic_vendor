@@ -1,4 +1,4 @@
- <?php
+<?php
 require_once 'models/inbounding/Inbounding.php';
 require_once 'controllers/ProductsController.php';
 
@@ -1560,7 +1560,7 @@ class InboundingController {
                 $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
-                $stock_price_temp[$i]['cp'] = $value['usd_price'] ?? 0;
+                $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
                 $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
@@ -1617,8 +1617,7 @@ class InboundingController {
 
         $API_data['images'] = $images_payload;
 
-        $jsonString = json_encode($API_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES); // Pretty print for easier reading
-        echo "<pre>";print_r($jsonString);
+        $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
@@ -1679,7 +1678,7 @@ class InboundingController {
         }
 
         header('Content-Type: application/json');
-        if (isset($result) && $result->status == 'success') {
+        if (is_object($result) && isset($result->status) && $result->status == 'success') {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
@@ -1693,7 +1692,7 @@ class InboundingController {
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
-            echo $result; 
+            echo json_encode(['status' => 'error', 'message' => 'Publish failed.', 'response' => $response]);
         }
         exit;
     }
