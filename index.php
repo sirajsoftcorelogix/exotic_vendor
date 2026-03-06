@@ -816,6 +816,17 @@ switch ($page) {
                 $controller->create();   
                 break;
         }
+	case 'search':
+		require_once 'controllers/DashboardController.php';
+        $controller = new DashboardController($conn);
+		switch ($action) {
+            case 'indexheader':
+                $controller->indexheader();
+                break;
+			default:
+                $controller->indexheader();
+                break;
+		 }
         break;
 }
 
