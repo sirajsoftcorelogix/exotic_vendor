@@ -80,7 +80,7 @@
                 <thead class="bg-gray-100">
                 <tr>
                     <th class="p-2 border-b border-gray-200 w-10">
-                        <input type="checkbox"/>
+                        <!-- <input type="checkbox"/> -->
                     </th>
                     <th class="p-2 border-b border-gray-200">Order</th>
                     <th class="p-2 border-b border-gray-200">Item</th>
@@ -179,16 +179,26 @@
                 const weightText = weightCol?.textContent.trim() || '0';
                 const weight = parseFloat(weightText.replace(/[^0-9.]/g, '')) || 0;
                 totalWeight += weight;
+                //console.log('Row:', row, 'Order:', orderNum, 'Quantity:', quantity, 'Weight:', weight, 'totalWeight:', totalWeight);
             });
             
             // Update the summary display
             const summary = boxElement.querySelector('.px-4.py-3');
             if (summary) {
-                const spans = summary.querySelectorAll('span');
-                if (spans[0]) spans[0].innerHTML = '<span class="font-semibold">Order:</span>' + (orderCount.size > 0 ? orderCount.size : '0');
-                if (spans[1]) spans[1].innerHTML = '<span class="font-semibold">SKU:</span> ' + skuCount;
-                if (spans[2]) spans[2].innerHTML = '<span class="font-semibold">Quantity:</span> ' + totalQuantity;
-                if (spans[3]) spans[3].innerHTML = '<span class="font-semibold">Weight:</span> ' + totalWeight.toFixed(3) + ' kg';
+                //console.log('Updating summary:', { orderCount: orderCount.size, skuCount, totalQuantity, totalWeight });
+                const orderSummary = boxElement.querySelector('.order-summary');
+                const skuSummary = boxElement.querySelector('.sku-summary');
+                const qtySummary = boxElement.querySelector('.qty-summary');
+                const weightSummary = boxElement.querySelector('.weight-summary');
+                if (orderSummary) orderSummary.innerHTML = '<span class="font-semibold">Order:</span> ' + (orderCount.size > 0 ? orderCount.size : '0');
+                if (skuSummary) skuSummary.innerHTML = '<span class="font-semibold">SKU Count:</span> ' + skuCount;
+                if (qtySummary) qtySummary.innerHTML = '<span class="font-semibold">Total Quantity:</span> ' + totalQuantity;
+                if (weightSummary) weightSummary.innerHTML = '<span class="font-semibold">Total Weight:</span> ' + totalWeight.toFixed(3) + ' kg';
+                //const spans = summary.querySelectorAll('span');
+                //if (spans[0]) spans[0].innerHTML = '<span class="font-semibold">Order:</span>' + (orderCount.size > 0 ? orderCount.size : '0');
+                //if (spans[1]) spans[1].innerHTML = '<span class="font-semibold">SKU:</span> ' + skuCount;                
+                //if (spans[2]) spans[2].innerHTML = '<span class="font-semibold">Quantity:</span> ' + totalQuantity;
+                //if (spans[3]) spans[3].innerHTML = '<span class="font-semibold">Weight:</span> ' + totalWeight.toFixed(3) + ' kg';
             }
         }
 
@@ -397,6 +407,12 @@
                                 tbody.innerHTML = data.items_html;
                             }
 
+                            // Check all checkboxes on load
+                            // const checkboxes = modal.querySelectorAll('tbody input[type="checkbox"]');
+                            // checkboxes.forEach(cb => cb.checked = true);
+                            // const selectAllCheckbox = modal.querySelector('#selectAllModal');
+                            // if (selectAllCheckbox) selectAllCheckbox.checked = true;
+
                             // Open modal
                             openModal();
                         } else {
@@ -445,6 +461,21 @@
                     const parts = customerText.split(' - ');
                     customerName = parts[0] || '';
                     customerId = parts[1] || '';
+                }
+
+                // Validate order number before adding
+                if (!orderNumber) {
+                    showAlert('Order number is missing or invalid', 'error');
+                    return;
+                }
+
+                // When adding a brand new order from the modal, prevent duplicates
+                if (!currentBox) {
+                    const existingOrderBox = document.querySelector('[data-order-number="' + orderNumber + '"]');
+                    if (existingOrderBox) {
+                        showAlert('This order is already added. Use "+ Item" to add more items.', 'warning');
+                        return;
+                    }
                 }
 
                 if (!currentBox) {
@@ -496,9 +527,14 @@
                                             <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
                                         </select>
                                     </div>
-                                    <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
-                                        + Item
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
+                                            + Item
+                                        </button>
+                                        <button type="button" class="remove-box-btn text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded border border-red-300 bg-white">
+                                            Remove Box
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -519,11 +555,11 @@
                             <div class="items-container"></div>
 
                             <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
-                                <div class="flex flex-wrap gap-4 text-gray-700">
-                                    <span><span class="font-semibold">Order:</span> 0</span>
-                                    <span><span class="font-semibold">SKU Count:</span> 0</span>
-                                    <span><span class="font-semibold">Total Quantity:</span> 0</span>
-                                    <span><span class="font-semibold">Total Weight:</span> 0.000 kg</span>
+                                <div class="flex flex-wrap gap-4 text-gray-700 summary-info">
+                                    <span class="order-summary"><span class="font-semibold">Order:-</span> 0</span>
+                                    <span class="sku-summary"><span class="font-semibold">SKU Count:</span> 0</span>
+                                    <span class="qty-summary"><span class="font-semibold">Total Quantity:</span> 0</span>
+                                    <span class="weight-summary"><span class="font-semibold">Total Weight:-</span> 0.000 kg</span>
                                 </div>
                                 <div class="flex flex-wrap gap-4 text-gray-800">
                                     <span><span class="font-semibold">Net Total:</span> ₹ 0</span>
@@ -557,6 +593,15 @@
                         const paymentType = cols[7]?.textContent.trim() || '';
                         const groupname = row.dataset.groupname || '';
                         const itemId = row.dataset.itemId || '';
+
+                        // Skip if this exact item is already added to the current box
+                        if (currentBox && itemId) {
+                            const duplicate = currentBox.querySelector('[data-item-id="' + itemId + '"]');
+                            if (duplicate) {
+                                showAlert('This item is already added in this order box.', 'warning');
+                                return;
+                            }
+                        }
                         const itemRow = document.createElement('div');
                         itemRow.className = 'px-4 py-1 text-xs text-gray-700 border-b border-gray-100';
                         if (groupname) {
@@ -596,9 +641,10 @@
                     if (currentBox) {
                         updateBoxTotals(currentBox);
                     }
+                    selectAllCheckbox.checked = false;
                     closeModal();
                 } else {
-                    showAlert('Please select at least one item');
+                    showAlert('Please select at least one item which is not already added in this order box.', 'warning');
                 }
             });
         }
@@ -680,43 +726,48 @@
             // Create new box HTML
             const newBoxHtml = `
                 <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}">
-                    <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
-                        <div class="flex items-center gap-2">
-                            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
-                                📦
-                            </span>
-                            <span class="font-semibold text-gray-800">Box ${boxNumber}</span>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
-                            <div>
-                                <span class="font-semibold text-gray-700">Total Weight (kg):</span>
-                                <input type="text" name="weight" value="0.000"
-                                       class="weight-input ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
+                            <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
+                                        📦
+                                    </span>
+                                    <span class="font-semibold text-gray-800">Box ${boxNumber}</span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
+                                    <div>
+                                        <span class="font-semibold text-gray-700">Total Weight (kg):</span>
+                                        <input type="text" name="weight" value="0.000"
+                                               class="weight-input ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-semibold text-gray-700">Box Size:</span>
+                                        <select class="BoxSize border border-gray-300 rounded px-2 py-0.5 text-xs w-28">
+                                            <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
+                                            <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
+                                            <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
+                                            <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 inch)</option>
+                                            <option value="R-5" data-length="21" data-width="11" data-height="7">R-5 (21x11x7 inch)</option>
+                                            <option value="R-6" data-length="11" data-width="10" data-height="8">R-6 (11x10x8 inch)</option>
+                                            <option value="R-7" data-length="8" data-width="6" data-height="5">R-7 (8x6x5 inch)</option>
+                                            <option value="R-8" data-length="12" data-width="12" data-height="1.5">R-8 (12x12x1.5 inch)</option>
+                                            <option value="R-9" data-length="17" data-width="12" data-height="2">R-9 (17x12x2 inch)</option>
+                                            <option value="R-10" data-length="12" data-width="9" data-height="2">R-10 (12x9x2 inch)</option>
+                                            <option value="R-11" data-length="10" data-width="10" data-height="2">R-11 (10x10x2 inch)</option>
+                                            <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
+                                            <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
+                                            <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
+                                            + Item
+                                        </button>
+                                        <button type="button" class="remove-box-btn text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded border border-red-300 bg-white">
+                                            Remove Box
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <span class="font-semibold text-gray-700">Box Size:</span>
-                                <select class="BoxSize border border-gray-300 rounded px-2 py-0.5 text-xs w-28">
-                                    <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
-                                    <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
-                                    <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
-                                    <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 inch)</option>
-                                    <option value="R-5" data-length="21" data-width="11" data-height="7">R-5 (21x11x7 inch)</option>
-                                    <option value="R-6" data-length="11" data-width="10" data-height="8">R-6 (11x10x8 inch)</option>
-                                    <option value="R-7" data-length="8" data-width="6" data-height="5">R-7 (8x6x5 inch)</option>
-                                    <option value="R-8" data-length="12" data-width="12" data-height="1.5">R-8 (12x12x1.5 inch)</option>
-                                    <option value="R-9" data-length="17" data-width="12" data-height="2">R-9 (17x12x2 inch)</option>
-                                    <option value="R-10" data-length="12" data-width="9" data-height="2">R-10 (12x9x2 inch)</option>
-                                    <option value="R-11" data-length="10" data-width="10" data-height="2">R-11 (10x10x2 inch)</option>
-                                    <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
-                                    <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
-                                    <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
-                                </select>
-                            </div>
-                            <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
-                                + Item
-                            </button>
-                        </div>
-                    </div>
 
                     <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
                         <div class="grid grid-cols-12 gap-2 font-semibold">
@@ -736,10 +787,10 @@
 
                     <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
                         <div class="flex flex-wrap gap-4 text-gray-700">
-                            <span><span class="font-semibold">Order:</span> 0</span>
-                            <span><span class="font-semibold">SKU Count:</span> 0</span>
-                            <span><span class="font-semibold">Total Quantity:</span> 0</span>
-                            <span><span class="font-semibold">Total Weight:</span> 0.000 kg</span>
+                            <span class="order-summary"><span class="font-semibold">Order:</span> 0</span>
+                            <span class="sku-summary"><span class="font-semibold">SKU Count:</span> 0</span>
+                            <span class="qty-summary"><span class="font-semibold">Total Quantity:</span> 0</span>
+                            <span class="weight-summary"><span class="font-semibold">Total Weight:</span> 0.000 kg</span>
                         </div>
                         <div class="flex flex-wrap gap-4 text-gray-800">
                             <span><span class="font-semibold">Net Total:</span> ₹ 0</span>
@@ -760,6 +811,15 @@
             e.preventDefault();
             const orderWrapper = e.target.closest('.px-4.pt-4.pb-2');
             if (orderWrapper) orderWrapper.remove();
+            return;
+        }
+
+        if (e.target.matches('.remove-box-btn') || e.target.closest('.remove-box-btn')) {
+            e.preventDefault();
+            const box = e.target.closest('[data-order-number]');
+            if (box) {
+                box.remove();
+            }
         }
     });
 
