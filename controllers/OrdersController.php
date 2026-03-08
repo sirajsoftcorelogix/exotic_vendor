@@ -1370,6 +1370,272 @@ class OrdersController {
         echo json_encode($result);
         exit;
     }
+
+    public function getOrderDetailsForDispatch() {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json');
+        
+        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        
+        if ($order_number <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid order number'
+            ]);
+            exit;
+        }
+
+        try {
+            $orders = $ordersModel->getOrderByOrderNumber($order_number);
+            //address details from vp_order_info table
+            $order_info = $ordersModel->getRemarksByOrderNumber($order_number);
+            
+            if (empty($orders)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order not found'
+                ]);
+                exit;
+            }
+
+            // Build HTML for order card
+            $firstOrder = $order_info;
+            $customer_name = $firstOrder['customer_name'] ?? 'Unknown';
+            $customer_id = $firstOrder['customer_id'] ?? '-';
+            $shipping_address = '';
+            
+            // Build shipping address
+            if (!empty($firstOrder['address_line1'])) {
+                $shipping_address = htmlspecialchars($firstOrder['address_line1']);
+                if (!empty($firstOrder['address_line2'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['address_line2']);
+                }
+                if (!empty($firstOrder['city'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['city']);
+                }
+                if (!empty($firstOrder['state'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['state']);
+                }
+                if (!empty($firstOrder['zipcode'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['zipcode']);
+                }
+            }
+
+            // Build order items HTML
+            $items_html = '';
+            $total_weight = 0;
+            $total_amount = 0;
+            $items_count = count($orders);
+            
+            foreach ($orders as $idx => $order) {
+                $quantity = $order['quantity'] ?? 0;
+                $finalprice = $order['finalprice'] ?? 0;
+                $item_total = $quantity * $finalprice;
+                $gst = $order['gst'] ?? 0;
+                $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
+                $product_weight = (float)($order['product_weight'] ?? 0);
+                
+                $total_weight += $product_weight * $quantity;
+                $total_amount += $item_total;
+
+                $items_html .= '
+                <div class="px-4 py-1 text-xs text-gray-700 border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">
+                    <div class="grid grid-cols-12 gap-2 items-center">
+                        <div class="col-span-2">' . htmlspecialchars($order['order_number'] ?? '') . '</div>
+                        <div class="col-span-3">
+                            <span class="font-semibold">' . htmlspecialchars($order['title'] ?? 'Product') . '</span> | ' . htmlspecialchars($order['item_code'] ?? '') . '
+                        </div>
+                        <div class="col-span-1 text-right">' . $quantity . '</div>
+                        <div class="col-span-1 text-right">' . number_format($product_weight, 3) . ' kg</div>
+                        <div class="col-span-1 text-right">-</div>
+                        <div class="col-span-1 text-right">' . $gst . '%</div>
+                        <div class="col-span-1 text-right">₹ ' . number_format($item_total, 0) . '</div>
+                        <div class="col-span-1 text-right">' . $payment_type . '</div>
+                        <div class="col-span-1 flex justify-center gap-2 text-lg">
+                            <button class="move-item-btn text-gray-500 hover:text-gray-700" title="Move">📦</button>
+                            <button class="remove-item-btn text-red-500 hover:text-red-700" title="Remove">🗑</button>
+                        </div>
+                    </div>
+                </div>';
+            }
+
+            // after building items HTML wrap it
+            $items_html_wrapped = '<div class="items-container">' . $items_html . '</div>';
+            $html = '
+        <div class="bg-orange-500 text-white px-4 py-2 flex flex-wrap justify-between items-center rounded-t">
+            <div class="font-semibold">
+                Customer - ' . htmlspecialchars($customer_id) . '
+            </div>
+            <div class="text-xs sm:text-sm">
+                <span class="font-semibold">Shipping to:</span>
+                ' . $shipping_address . '
+            </div>
+        </div>
+
+        <div class="border border-orange-400 border-t-0 rounded-b bg-white" data-order-number="' . htmlspecialchars($order_number) . '" data-customer-id="' . htmlspecialchars($customer_id) . '" data-customer-name="' . htmlspecialchars($customer_name) . '">
+            <div class="px-4 py-2 flex flex-wrap items-center justify-between bg-orange-50 border-b border-orange-200">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
+                        📦
+                    </span>
+                    <span class="font-semibold text-gray-800">Box 1</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
+                    <div>
+                        <span class="font-semibold text-gray-700">Total Weight (kg):</span>
+                        <input type="text" value="' . number_format($total_weight, 3) . '"
+                               class="ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold text-gray-700">Box Size:</span>
+                        <select class="border border-gray-300 rounded px-2 py-0.5 text-xs w-28">
+                            <option>R1 - 7x4x1</option>
+                        </select>
+                    </div>
+                    <button type="button" data-open-select-items class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded">
+                        + Item
+                    </button>
+                </div>
+            </div>
+
+            <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
+                <div class="grid grid-cols-12 gap-2 font-semibold">
+                    <div class="col-span-2">Order</div>
+                    <div class="col-span-3">Item</div>
+                    <div class="col-span-1 text-right">Quantity</div>
+                    <div class="col-span-1 text-right">Weight</div>
+                    <div class="col-span-1 text-right">Box Size</div>
+                    <div class="col-span-1 text-right">GST</div>
+                    <div class="col-span-1 text-right">Item Total</div>
+                    <div class="col-span-1 text-right">Payment Type</div>
+                    <div class="col-span-1 text-center">Actions</div>
+                </div>
+            </div>
+
+            ' . $items_html_wrapped . '
+
+            <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs bg-orange-50">
+                <div class="flex flex-wrap gap-4 text-gray-700">
+                    <span><span class="font-semibold">Order:</span> ' . $items_count . '</span>
+                    <span><span class="font-semibold">SKU Count:</span> ' . $items_count . '</span>
+                    <span><span class="font-semibold">Total Quantity:</span> ' . array_sum(array_column($orders, 'quantity')) . '</span>
+                    <span><span class="font-semibold">Total Weight:</span> ' . number_format($total_weight, 3) . ' kg</span>
+                </div>
+                <div class="flex flex-wrap gap-4 text-gray-800">
+                    <span><span class="font-semibold">Net Total:</span> ₹ ' . number_format($total_amount, 0) . '</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-2 mb-4 flex flex-wrap items-center justify-between">
+            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
+                <span>+ Add Box</span>
+            </button>
+            <button type="button" class="remove-order-btn text-red-500 hover:text-red-700 text-sm font-semibold px-4 py-2 rounded">
+                🗑 Remove Order
+            </button>
+        </div>';
+
+            echo json_encode([
+                'success' => true,
+                'html' => $html
+            ]);
+            exit;
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+            exit;
+        }
+    }
+
+    public function getOrderItemsForDispatch() {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json');
+        
+        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        
+        if ($order_number <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid order number'
+            ]);
+            exit;
+        }
+
+        try {
+            $orders = $ordersModel->getOrderByOrderNumber($order_number);
+            $order_info = $ordersModel->getRemarksByOrderNumber($order_number);
+            if (empty($orders)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order not found'
+                ]);
+                exit;
+            }
+
+            // Build shipping address
+            $firstOrder = $order_info;
+            $shipping_address = '';
+            if (!empty($firstOrder['shipping_address_line1'])) {
+                $shipping_address = htmlspecialchars($firstOrder['shipping_address_line1']);
+                if (!empty($firstOrder['shipping_address_line2'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_address_line2']);
+                }
+                if (!empty($firstOrder['shipping_city'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_city']);
+                }
+                if (!empty($firstOrder['shipping_state'])) {
+                    $shipping_address .= ', ' . htmlspecialchars($firstOrder['shipping_state']);
+                }
+                if (!empty($firstOrder['shipping_zipcode'])) {
+                    $shipping_address .= ' - ' . htmlspecialchars($firstOrder['shipping_zipcode']);
+                }
+            }
+
+            $items_html = '';
+            foreach ($orders as $order) {
+                $quantity = $order['quantity'] ?? 0;
+                $product_weight = (float)($order['product_weight'] ?? 0);
+                $gst = $order['gst'] ?? 0;
+                $finalprice = $order['finalprice'] ?? 0;
+                $item_total = $quantity * $finalprice;
+                $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
+                $items_html .= '
+                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">
+                    <td class="p-2">
+                        <input type="checkbox" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
+                    </td>
+                    <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
+                    <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') . ' | ' . htmlspecialchars($order['item_code'] ?? '') . '</td>
+                    <td class="p-2 text-right">' . $quantity . '</td>
+                    <td class="p-2 text-right">' . number_format($product_weight, 3) . ' kg</td>
+                    <td class="p-2 text-right">' . $gst . '%</td>
+                    <td class="p-2 text-right">₹ ' . number_format($item_total, 0) . '</td>
+                    <td class="p-2 text-right">' . $payment_type . '</td>
+                </tr>';
+            }
+
+            echo json_encode([
+                'success' => true,
+                'order_number' => $order_number,
+                'customer_name' => htmlspecialchars($order_info['first_name'] ?? '') . ' ' . htmlspecialchars($order_info['last_name'] ?? ''),
+                'customer_id' => htmlspecialchars($order_info['customer_id'] ?? ''),
+                'shipping_address' => $shipping_address,
+                'items_html' => $items_html
+            ]);
+            exit;
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+            exit;
+        }
+    }
 }
 ?>
 

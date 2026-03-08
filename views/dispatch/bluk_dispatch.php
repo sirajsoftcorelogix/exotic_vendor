@@ -1,16 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Dispatch</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #f8f8f8; }
-    </style>
-</head>
-<body class="min-h-screen flex justify-center py-6 text-sm font-sans">
-<div class="w-full max-w-6xl bg-white shadow-md border border-gray-200">
+<div class="max-w-7xl mx-auto bg-white shadow-md border border-gray-200">
 
     <div class="border-b border-gray-200 px-6 py-3 bg-white">
         <h1 class="text-lg font-semibold text-gray-800 mb-3">Bulk Dispatch</h1>
@@ -18,7 +6,7 @@
             <div class="flex items-center gap-2">
                 <label for="orderNumber" class="text-gray-700 font-medium">Order Number:</label>
                 <input id="orderNumber" type="text" class="border border-gray-300 rounded px-2 py-1 w-40 text-sm"/>
-                <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-1.5 rounded text-sm">+ Add            </button>
+                <button id="addOrderBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-1.5 rounded text-sm">+ Add            </button>
             </div>
             <div class="flex items-center gap-2">
                 <label for="weight" class="text-gray-700 font-medium">Weight (kg):</label>
@@ -253,7 +241,6 @@
         const modal = document.getElementById('selectItemsModal');
         if (!modal) return;
 
-        const openButtons = document.querySelectorAll('[data-open-select-items]');
         const closeButtons = modal.querySelectorAll('[data-close-select-items]');
         const backdrop = modal.querySelector('[data-modal-backdrop]');
 
@@ -271,7 +258,53 @@
             document.body.classList.remove('overflow-hidden');
         }
 
-        openButtons.forEach(btn => btn.addEventListener('click', openModal));
+        // Use event delegation for dynamically added buttons
+        document.addEventListener('click', function(e) {
+            if (e.target.matches('[data-open-select-items]')) {
+                e.preventDefault();
+                
+                // Get the closest order box parent
+                const orderBox = e.target.closest('[data-order-number]');
+                if (!orderBox) {
+                    showAlert('Error: Order information not found');
+                    return;
+                }
+
+                const orderNumber = orderBox.getAttribute('data-order-number');
+                const customerId = orderBox.getAttribute('data-customer-id');
+                const customerName = orderBox.getAttribute('data-customer-name');
+
+                // Fetch items for this order
+                fetch('?page=orders&action=get_order_items_for_dispatch&order_number=' + encodeURIComponent(orderNumber))
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Update modal header
+                            const orderNoLink = modal.querySelector('.flex.justify-between div:first-child a');
+                            const customerLink = modal.querySelector('.flex.justify-between div:last-child a');
+                            
+                            if (orderNoLink) orderNoLink.textContent = data.order_number;
+                            if (customerLink) customerLink.textContent = customerName + ' - ' + customerId;
+
+                            // Update modal body with items
+                            const tbody = modal.querySelector('tbody');
+                            if (tbody) {
+                                tbody.innerHTML = data.items_html;
+                            }
+
+                            // Open modal
+                            openModal();
+                        } else {
+                            showAlert(data.message || 'Failed to fetch items');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showAlert('Error fetching items: ' + error.message);
+                    });
+            }
+        });
+
         closeButtons.forEach(btn => btn.addEventListener('click', closeModal));
         if (backdrop) backdrop.addEventListener('click', closeModal);
 
@@ -279,6 +312,41 @@
             if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
         });
     })();
+
+    // Handle Add Order button
+    document.getElementById('addOrderBtn').addEventListener('click', function() {
+        const orderNumber = document.getElementById('orderNumber').value.trim();
+        
+        if (!orderNumber) {
+            showAlert('Please enter an order number');
+            return;
+        }
+
+        // Fetch order details
+        fetch('?page=orders&action=get_order_details_for_dispatch&order_number=' + encodeURIComponent(orderNumber))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.html) {
+                    const container = document.getElementById('invDispatchesContainer');
+                    const newOrderDiv = document.createElement('div');
+                    newOrderDiv.className = 'px-4 pt-4 pb-2';
+                    newOrderDiv.innerHTML = data.html;
+                    container.appendChild(newOrderDiv);
+                    document.getElementById('orderNumber').value = '';
+                } else {
+                    showAlert(data.message || 'Failed to fetch order details');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('Error fetching order: ' + error.message);
+            });
+    });
+
+    // Allow Enter key to add order
+    document.getElementById('orderNumber').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('addOrderBtn').click();
+        }
+    });
 </script>
-</body>
-</html>
