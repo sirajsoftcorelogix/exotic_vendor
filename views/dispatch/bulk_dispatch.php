@@ -160,6 +160,7 @@
             let totalQuantity = 0;
             let totalWeight = 0;
             let orderCount = new Set(); // for unique orders
+            let netTotal = 0;
             
             itemRows.forEach(row => {
                 skuCount++;
@@ -180,6 +181,11 @@
                 const weight = parseFloat(weightText.replace(/[^0-9.]/g, '')) || 0;
                 totalWeight += weight;
                 //console.log('Row:', row, 'Order:', orderNum, 'Quantity:', quantity, 'Weight:', weight, 'totalWeight:', totalWeight);
+                // Net Total is in col-span-1 (index 6)
+                const netTotalCol = cols[6];
+                const netTotalText = netTotalCol?.textContent.trim() || '0';
+                const itemNetTotal = parseFloat(netTotalText.replace(/[^0-9.]/g, '')) || 0;
+                netTotal += itemNetTotal;
             });
             
             // Update the summary display
@@ -190,10 +196,12 @@
                 const skuSummary = boxElement.querySelector('.sku-summary');
                 const qtySummary = boxElement.querySelector('.qty-summary');
                 const weightSummary = boxElement.querySelector('.weight-summary');
+                const netTotalSummary = boxElement.querySelector('.net-total');
                 if (orderSummary) orderSummary.innerHTML = '<span class="font-semibold">Order:</span> ' + (orderCount.size > 0 ? orderCount.size : '0');
                 if (skuSummary) skuSummary.innerHTML = '<span class="font-semibold">SKU Count:</span> ' + skuCount;
                 if (qtySummary) qtySummary.innerHTML = '<span class="font-semibold">Total Quantity:</span> ' + totalQuantity;
                 if (weightSummary) weightSummary.innerHTML = '<span class="font-semibold">Total Weight:</span> ' + totalWeight.toFixed(3) + ' kg';
+                if (netTotalSummary) netTotalSummary.innerHTML = '<span class="font-semibold">Net Total:</span> ₹ ' + netTotal.toFixed(2);
                 //const spans = summary.querySelectorAll('span');
                 //if (spans[0]) spans[0].innerHTML = '<span class="font-semibold">Order:</span>' + (orderCount.size > 0 ? orderCount.size : '0');
                 //if (spans[1]) spans[1].innerHTML = '<span class="font-semibold">SKU:</span> ' + skuCount;                
@@ -562,7 +570,7 @@
                                     <span class="weight-summary"><span class="font-semibold">Total Weight:-</span> 0.000 kg</span>
                                 </div>
                                 <div class="flex flex-wrap gap-4 text-gray-800">
-                                    <span><span class="font-semibold">Net Total:</span> ₹ 0</span>
+                                    <span class="net-total"><span class="font-semibold">Net Total:</span> ₹ 0</span>
                                 </div>
                             </div>
                         </div>
@@ -793,7 +801,7 @@
                             <span class="weight-summary"><span class="font-semibold">Total Weight:</span> 0.000 kg</span>
                         </div>
                         <div class="flex flex-wrap gap-4 text-gray-800">
-                            <span><span class="font-semibold">Net Total:</span> ₹ 0</span>
+                            <span class="net-total"><span class="font-semibold">Net Total:</span> ₹ 0</span>
                         </div>
                     </div>
                 </div>
