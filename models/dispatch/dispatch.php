@@ -19,8 +19,8 @@ class Dispatch {
     }   
     public function createDispatch($data) {
        
-        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, groupname, created_by, created_at, pickup_location) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_dispatch_details (invoice_id, box_no, order_number, shiprocket_order_id, shiprocket_shipment_id, shiprocket_tracking_url, box_items, length, width, height, weight, volumetric_weight, billing_weight, shipping_charges, dispatch_date, courier_name, awb_code, shipment_status, label_url, groupname, box_size, created_by, created_at, pickup_location, batch_no) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
@@ -28,6 +28,7 @@ class Dispatch {
         $data['created_at'] = $data['created_at'] ?? date('Y-m-d H:i:s');
         $data['pickup_location'] = $data['pickup_location'] ?? null;
         $boxItemsJson = is_string($data['box_items']) ? $data['box_items'] : json_encode($data['box_items'] ?? []);
+        $batch_no = $data['batch_no'] ?? null;
 
         // Bind parameters must be variables (passed by reference). Prepare local vars:
         $invoice_id = (int)($data['invoice_id'] ?? 0);
@@ -51,11 +52,12 @@ class Dispatch {
         $shipment_status = $data['shipment_status'] ?? null;
         $label_url = $data['label_url'] ?? null;
         $groupname = $data['groupname'] ?? null;
+        $box_size = $data['box_size'] ?? null;
         $created_by = (int)$data['created_by'];
         $created_at = $data['created_at'];
 
         $stmt->bind_param(
-            'iisssssdddddddssssssiss',
+            'iisssssdddddddsssssssisss',
             $invoice_id,
             $box_no,
             $order_number,
@@ -76,9 +78,11 @@ class Dispatch {
             $shipment_status,
             $label_url,
             $groupname,
+            $box_size,
             $created_by,
             $created_at,
-            $pickup_location
+            $pickup_location,
+            $batch_no
         );
 
         if ($stmt->execute()) {
@@ -321,6 +325,32 @@ class Dispatch {
         $stmt->close();
         return $result;
     }
+
+    public function updateDispatch($dispatchId, $data) {
+        if (empty($data)) return false;
+        
+        $setParts = [];
+        $types = '';
+        $values = [];
+        
+        foreach ($data as $field => $value) {
+            $setParts[] = "$field = ?";
+            $types .= 's';
+            $values[] = $value;
+        }
+        
+        $types .= 'i'; // for dispatchId
+        $values[] = $dispatchId;
+        
+        $sql = "UPDATE vp_dispatch_details SET " . implode(', ', $setParts) . " WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        $stmt->bind_param($types, ...$values);
+        $result = $stmt->execute();
+        $stmt->close();
+        return $result;
+    }
       
     public function getDispatchRecordsByInvoiceId($invoiceId) {
         $sql = "SELECT * FROM vp_dispatch_details WHERE invoice_id = ?";
@@ -402,5 +432,27 @@ class Dispatch {
         } else {
             return ['success' => false, 'message' => 'Failed to cancel shipment: ' . ($responseDecoded['message'] ?? 'Unknown error'), 'data' => $responseDecoded];
         }
+    }
+    public function getDispatchByBatchNo($batch_no) {
+        // $sql = "SELECT * FROM vp_dispatch_details WHERE batch_no = ?";
+        // $stmt = $this->db->prepare($sql);
+        // if (!$stmt) return false;
+
+        // $stmt->bind_param('s', $batch_no);
+        // if ($stmt->execute()) {
+        //     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        // }
+        // return false;
+        // Get all dispatch records for this batch that don't have shipment_id (failed shipments)
+            $sql = "SELECT dd.* FROM vp_dispatch_details dd
+                    INNER JOIN vp_invoices vi ON dd.invoice_id = vi.id
+                    WHERE vi.batch_no = ? AND (dd.shiprocket_shipment_id IS NULL OR dd.shiprocket_shipment_id = '')";
+            
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param('s', $batch_no);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $dispatch_records = $result->fetch_all(MYSQLI_ASSOC);
+            return $dispatch_records;
     }
 }

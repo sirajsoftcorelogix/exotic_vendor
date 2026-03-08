@@ -1579,6 +1579,8 @@ class InboundingController {
                 $i++;
                 $stock_price_temp[$i] = $stock_price_temp[0];
                 $stock_price_temp[$i]['item_level'] = 'variation'; // Change item level from 'parent' to 'variation'
+                $stock_price_temp[$i]['size'] = $data['data']['size'];
+                $stock_price_temp[$i]['color'] = $data['data']['color'];
             }
         }
 

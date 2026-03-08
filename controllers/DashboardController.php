@@ -70,11 +70,12 @@ class DashboardController {
                         $params['order_number'] = $query;
                     }
                     break;
-            }
+           
         
-            $redirectUrl = 'index.php?' . http_build_query($params);
-            header('Location: ' . $redirectUrl);
-            exit;
+				$redirectUrl = 'index.php?' . http_build_query($params);
+				header('Location: ' . $redirectUrl);
+				exit;
+			 }
         }
     }
 ?>
