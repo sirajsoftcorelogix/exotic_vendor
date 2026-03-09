@@ -854,6 +854,9 @@ switch ($page) {
             case 'list':
                 $controller->list();   
                 break;
+            case 'view':
+                $controller->view();
+                break;
             default:
                 $controller->index();
                 break;
