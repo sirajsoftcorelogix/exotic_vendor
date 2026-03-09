@@ -108,5 +108,61 @@ class Customer{
         }
         return $states;
     }
+    public function getAllCustomers($limit, $offset = 0, $filters = []) {
+        $sql = "SELECT * FROM vp_customers";
+        $params = [];
+        $types = "";
+
+        if (!empty($filters['search'])) {
+            $sql .= " WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+            $searchTerm = "%" . $filters['search'] . "%";
+            array_push($params, $searchTerm, $searchTerm, $searchTerm);
+            $types .= "sss";
+        }
+
+        if (!empty($filters['state'])) {
+            $sql .= " AND state = ?";
+            $params[] = $filters['state'];
+            $types .= "s";
+        }
+
+        $sql .= " ORDER BY id DESC LIMIT ? OFFSET ?";
+        array_push($params, $limit, $offset);
+        $types .= "ii";
+
+        $stmt = $this->conn->prepare($sql);
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+    public function countAllCustomers($filters = []) {
+
+        $sql = "SELECT COUNT(*) as total FROM vp_customers";
+        $params = [];
+        $types = "";
+
+        if (!empty($filters['search'])) {
+            $sql .= " WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+            $searchTerm = "%" . $filters['search'] . "%";
+            array_push($params, $searchTerm, $searchTerm, $searchTerm);
+            $types .= "sss";
+        }
+
+        if (!empty($filters['state'])) {
+            $sql .= " AND state = ?";
+            $params[] = $filters['state'];
+            $types .= "s";
+        }
+
+        $stmt = $this->conn->prepare($sql);
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        return $result['total'];
+    }
 }
 ?>

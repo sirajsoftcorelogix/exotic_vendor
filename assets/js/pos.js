@@ -7,55 +7,14 @@ $(function () {
   let hasMore = true;
 
   let loadedKeys = new Set();
-  let productsByKey = new Map(); // cache product by key
+  let productsByKey = new Map();
 
   const $cards = $('#productsCards');
   const $scrollWrapper = $cards.parent();
 
-  // =========================
-  // CART PANEL HOOKS (your aside)
-  // =========================
-  // REQUIRED HTML IDs:
-  // #cartItems
-  // #cartSubTotal, #cartGST, #cartTotal
-  // #couponInput, #applyCouponBtn, #couponMessage
-  // #addonSelect
-  // #shippingCheckbox (optional; if missing shipping always applied)
-  const $cartItems = $('#cartItems');
-  const $cartSubTotal = $('#cartSubTotal');
-  const $cartGST = $('#cartGST');
-  const $cartTotal = $('#cartTotal');
-
-  const $couponInput = $('#couponInput');
-  const $applyCouponBtn = $('#applyCouponBtn');
-  const $couponMessage = $('#couponMessage');
-
-  const $addonSelect = $('#addonSelect');
-  const $shippingCheckbox = $('#shippingCheckbox');
-
-  // --- constants ---
-  const GST_RATE = 0.18;
-  const SHIPPING_CHARGE = 8265;
-  const CART_API_ENDPOINT = '?page=pos_register&action=cart-add';
-
-  // --- coupon state ---
-  // supported coupons: percent/flat
-  const COUPONS = {
-    SAVE10: { type: 'percent', value: 10 },
-    FLAT500: { type: 'flat', value: 500 },
-    SAVE5: { type: 'percent', value: 5 }
-  };
-
-  let appliedCoupon = null; // {code,type,value} or null
-  let addonCharge = 0;
-
-  // --- cart state ---
-  // key -> { product, qty }
-  const cart = new Map();
-
-  // =========================
-  // HELPERS
-  // =========================
+  // ────────────────────────────────────────────────
+  // HELPERS (needed for products & modal)
+  // ────────────────────────────────────────────────
   function formatPrice(price) {
     const p = parseFloat(price || 0);
     return '₹ ' + p.toLocaleString('en-IN', {
@@ -80,16 +39,12 @@ $(function () {
     return (p.id != null && p.id !== '') ? `id:${p.id}` : `code:${p.item_code || ''}`;
   }
 
-  // treat "", null, undefined, "N/A", 0, "0", "0.00" as empty
   function isMeaningful(val) {
     if (val === null || val === undefined) return false;
-
     const s = String(val).trim();
     if (s === '' || s.toLowerCase() === 'n/a') return false;
-
     const n = Number(s);
     if (!Number.isNaN(n) && n === 0) return false;
-
     return true;
   }
 
@@ -101,16 +56,14 @@ $(function () {
     `;
   }
 
-  // =========================
-  // MODAL HELPERS
-  // =========================
+  // ────────────────────────────────────────────────
+  // MODAL HELPERS (kept unchanged)
+  // ────────────────────────────────────────────────
   const $modal = $('#productModal');
   const $overlay = $('#productModalOverlay');
   const $close = $('#productModalClose');
   const $closeBtn = $('#pmCloseBtn');
 
-  // Modal controls (must exist in modal HTML)
-  const $pmAddToCart = $('#pmAddToCart');
   const $pmQtyDec = $('#pmQtyDec');
   const $pmQtyInc = $('#pmQtyInc');
   const $pmQtyVal = $('#pmQtyVal');
@@ -131,11 +84,14 @@ $(function () {
   $overlay.on('click', closeModal);
   $close.on('click', closeModal);
   $closeBtn.on('click', closeModal);
+function setModalQty(qty) {
+  const q = Math.max(1, parseInt(qty || 1, 10));
 
-  function setModalQty(qty) {
-    const q = Math.max(1, parseInt(qty || 1, 10));
-    $pmQtyVal.text(q);
-  }
+  $pmQtyVal.text(q);
+
+  // IMPORTANT: update hidden field
+  $('#modal_qty').val(q);
+}
 
   function getModalQty() {
     return Math.max(1, parseInt($pmQtyVal.text() || '1', 10));
@@ -158,15 +114,16 @@ $(function () {
     const imgSrc = p.image || 'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
 
-    // badges
     const badges = [];
     if (isMeaningful(p.item_code)) badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Code: ${p.item_code}</span>`);
     if (isMeaningful(p.sku)) badges.push(`<span class="rounded-md bg-blue-100 px-2 py-1 text-[10px] text-blue-700">SKU: ${p.sku}</span>`);
     if (isMeaningful(p.groupname)) badges.push(`<span class="rounded-md bg-gray-100 px-2 py-1 text-[10px] text-gray-700">${p.groupname}</span>`);
     if (isMeaningful(p.stock_qty)) badges.push(`<span class="rounded-md bg-green-100 px-2 py-1 text-[10px] text-green-700">Stock: ${p.stock_qty}</span>`);
+    $('#modal_product_code').val(p.item_code || p.code || p.id || '');  // most important line
+    // $('#modal_qty').val(getModalQty());
+    setModalQty(1);
     $('#pmBadges').html(badges.join(''));
 
-    // details
     let html = '';
 
     if (isMeaningful(p.price)) {
@@ -204,256 +161,9 @@ $(function () {
     setModalQty(1);
   }
 
-  // =========================
-  // CART UI + CALCULATION
-  // =========================
-  function cartItemTemplate(p, qty, key) {
-    const imgSrc = p.image || 'https://dummyimage.com/200x200/e5e7eb/6b7280&text=No+Image';
-    const title = (p.title || '').replace(/\s+/g, ' ').trim();
-    const unitPrice = Number(p.price || 0);
-
-    return `
-      <div class="cart-item flex gap-3" data-pkey="${key}">
-        <img
-          src="${imgSrc}"
-          class="h-12 w-12 rounded-lg bg-slate-50 object-contain"
-          alt="${title.replace(/"/g, '&quot;')}"
-        />
-
-        <div class="flex-1 min-w-0">
-          <div class="text-[9px] leading-snug line-clamp-2">
-            ${title}
-          </div>
-
-          <div class="mt-1 flex items-center justify-between">
-            <span class="text-orange-600 font-semibold">${formatPrice(unitPrice)}</span>
-          </div>
-
-          <div class="mt-2 flex items-center justify-between">
-            <div class="flex items-center border rounded-md overflow-hidden">
-              <button type="button" class="cart-dec h-6 w-6 text-slate-600">−</button>
-              <span class="h-6 w-7 flex items-center justify-center font-semibold">${qty}</span>
-              <button type="button" class="cart-inc h-6 w-6 text-slate-600">+</button>
-            </div>
-
-            <button type="button" class="cart-remove text-[10px] text-red-600 hover:underline">
-              Remove
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function calcSubTotal() {
-    let sub = 0;
-    cart.forEach(({ product, qty }) => {
-      sub += Number(product.price || 0) * Number(qty || 0);
-    });
-    return sub;
-  }
-
-  function calcDiscount(subTotal) {
-    if (!appliedCoupon) return 0;
-
-    let d = 0;
-    if (appliedCoupon.type === 'percent') {
-      d = (subTotal * appliedCoupon.value) / 100;
-    } else if (appliedCoupon.type === 'flat') {
-      d = appliedCoupon.value;
-    }
-
-    if (d > subTotal) d = subTotal;
-    return d;
-  }
-
-  function calcShipping() {
-    // if checkbox not present, assume shipping applies
-    if (!$shippingCheckbox.length) return SHIPPING_CHARGE;
-    return $shippingCheckbox.is(':checked') ? SHIPPING_CHARGE : 0;
-  }
-
-  function updateTotals() {
-    const sub = calcSubTotal();
-    const discount = calcDiscount(sub);
-    const shipping = calcShipping();
-
-    const base = Math.max(0, sub - discount) + Number(addonCharge || 0) + Number(shipping || 0);
-    const gst = base * GST_RATE;
-    const total = base + gst;
-
-    if ($cartSubTotal.length) $cartSubTotal.text(formatPrice(sub));
-    if ($cartGST.length) $cartGST.text(formatPrice(gst));
-    if ($cartTotal.length) $cartTotal.text(formatPrice(total));
-  }
-
-  function renderCartItem(key) {
-    const item = cart.get(key);
-    if (!item) return;
-
-    const $existing = $cartItems.find(`.cart-item[data-pkey="${key}"]`);
-    const html = cartItemTemplate(item.product, item.qty, key);
-
-    if ($existing.length) $existing.replaceWith(html);
-    else $cartItems.append(html);
-
-    updateTotals();
-  }
-
-  function removeFromCart(key) {
-    cart.delete(key);
-    $cartItems.find(`.cart-item[data-pkey="${key}"]`).remove();
-    updateTotals();
-  }
-
-  function changeQty(key, delta) {
-    const item = cart.get(key);
-    if (!item) return;
-
-    item.qty = Number(item.qty || 0) + Number(delta || 0);
-
-    if (item.qty <= 0) {
-      removeFromCart(key);
-      return;
-    }
-    renderCartItem(key);
-
-    if (Number(delta || 0) > 0) {
-      callAddToCartApi(item.product, Number(delta || 0));
-    }
-  }
-
-  function addToCartByKey(key, qtyToAdd = 1) {
-    const p = productsByKey.get(key);
-    if (!p) return;
-
-    const addQty = Math.max(1, parseInt(qtyToAdd, 10) || 1);
-
-    const existing = cart.get(key);
-    if (existing) existing.qty += addQty;
-    else cart.set(key, { product: p, qty: addQty });
-
-    renderCartItem(key);
-    callAddToCartApi(p, addQty);
-  }
-
-  function getGiftVoucherValue() {
-    const $gift = $('#giftVoucherInput');
-    if (!$gift.length) return '';
-    return String($gift.val() || '').trim();
-  }
-
-  function callAddToCartApi(p, qtyToAdd) {
-    if (!p || !p.item_code) return;
-
-    const discountCode = appliedCoupon ? appliedCoupon.code : '';
-    const giftVoucher = getGiftVoucherValue();
-
-    const payload = {
-      code: p.item_code,
-      qty: Math.max(1, parseInt(qtyToAdd || 1, 10))
-    };
-
-    if (discountCode) payload.discountcoupondetails = discountCode;
-    if (giftVoucher) payload.giftvoucherdetails = giftVoucher;
-
-    console.log('Add to cart request', {
-      url: CART_API_ENDPOINT,
-      method: 'POST',
-      payload: payload
-    });
-
-    $.ajax({
-      url: CART_API_ENDPOINT,
-      type: 'POST',
-      dataType: 'json',
-      data: payload,
-      success: function (res) {
-        if (res && res.error) {
-          console.error('Cart add error', res.error);
-        }
-      },
-      error: function (xhr, status, err) {
-        console.error('Cart add API failed', err);
-      }
-    });
-  }
-
-  // cart events
-  $cartItems.on('click', '.cart-inc', function () {
-    const key = $(this).closest('.cart-item').data('pkey');
-    changeQty(key, +1);
-  });
-
-  $cartItems.on('click', '.cart-dec', function () {
-    const key = $(this).closest('.cart-item').data('pkey');
-    changeQty(key, -1);
-  });
-
-  $cartItems.on('click', '.cart-remove', function () {
-    const key = $(this).closest('.cart-item').data('pkey');
-    removeFromCart(key);
-  });
-
-  // modal add to cart
-  $pmAddToCart.on('click', function () {
-    if (!activeModalKey) return;
-    addToCartByKey(activeModalKey, getModalQty());
-    closeModal();
-  });
-
-  // =========================
-  // COUPON + ADDON + SHIPPING EVENTS
-  // =========================
-  function setCouponMessage(text, ok) {
-    if (!$couponMessage.length) return;
-    $couponMessage
-      .removeClass('text-red-600 text-green-600')
-      .addClass(ok ? 'text-green-600' : 'text-red-600')
-      .text(text || '');
-  }
-
-  if ($applyCouponBtn.length) {
-    $applyCouponBtn.on('click', function () {
-      const code = ($couponInput.val() || '').trim().toUpperCase();
-
-      if (!code) {
-        appliedCoupon = null;
-        setCouponMessage('Please enter a coupon code.', false);
-        updateTotals();
-        return;
-      }
-
-      const c = COUPONS[code];
-      if (!c) {
-        appliedCoupon = null;
-        setCouponMessage('Invalid coupon code.', false);
-        updateTotals();
-        return;
-      }
-
-      appliedCoupon = { code, type: c.type, value: c.value };
-      setCouponMessage(`Coupon applied: ${code}`, true);
-      updateTotals();
-    });
-  }
-
-  if ($addonSelect.length) {
-    $addonSelect.on('change', function () {
-      addonCharge = Number($(this).val() || 0);
-      updateTotals();
-    });
-  }
-
-  if ($shippingCheckbox.length) {
-    $shippingCheckbox.on('change', function () {
-      updateTotals();
-    });
-  }
-
-  // =========================
-  // PRODUCTS RENDERING + FETCH
-  // =========================
+  // ────────────────────────────────────────────────
+  // PRODUCTS RENDERING + FETCH (unchanged)
+  // ────────────────────────────────────────────────
   function renderProducts(products, append = false) {
     if (!append) {
       $cards.empty();
@@ -469,8 +179,6 @@ $(function () {
       }
       return;
     }
-
-    let appendedCount = 0;
 
     products.forEach(function (p) {
       const key = getProductKey(p);
@@ -511,10 +219,7 @@ $(function () {
       `;
 
       $cards.append(cardHtml);
-      appendedCount++;
     });
-
-    if (append && appendedCount === 0) hasMore = false;
   }
 
   function fetchProducts(page = 1, append = false) {
@@ -568,7 +273,10 @@ $(function () {
     $scrollWrapper.scrollTop(0);
   }
 
-  // click card => open modal
+  // ────────────────────────────────────────────────
+  // EVENT LISTENERS (only products & modal)
+  // ────────────────────────────────────────────────
+
   $cards.on('click', '.product-card', function () {
     const key = $(this).data('pkey');
     const p = productsByKey.get(key);
@@ -578,7 +286,6 @@ $(function () {
     openModal();
   });
 
-  // category click
   $('[data-category]').on('click', function () {
     $('[data-category]')
       .removeClass('bg-orange-600 text-white')
@@ -598,7 +305,6 @@ $(function () {
     resetAndLoad();
   });
 
-  // search debounce
   let searchTimeout = null;
   $('#searchCode, #searchName').on('keyup change', function () {
     clearTimeout(searchTimeout);
@@ -607,7 +313,6 @@ $(function () {
     }, 400);
   });
 
-  // infinite scroll
   $scrollWrapper.on('scroll', function () {
     const scrollTop = $(this).scrollTop();
     const scrollHeight = this.scrollHeight;
@@ -620,9 +325,20 @@ $(function () {
     }
   });
 
-  // initial totals
-  updateTotals();
-
-  // initial load
+  // Initial load – products only
   resetAndLoad();
+});
+function renderProductModal(p, key) {
+  // ... your existing code ...
+$('#modal_product_code').val(p.item_code || p.code || p.id || '');
+setModalQty(1); // this already updates modal_qty
+  // Add this line at the end of renderProductModal
+  // $('#modal_product_code').val(p.item_code || p.code || '');
+  // $('#modal_qty').val(getModalQty());
+}
+// In pos.js, add this
+$('#addonSelect').on('change', function() {
+    let val = $(this).val();
+    let optionsStr = val !== '0' ? 'OPTIONALS_GIFTWRAP:blank:' + val : '';
+    $('#modal_options').val(optionsStr);  // add <input type="hidden" name="options" id="modal_options"> in form
 });
