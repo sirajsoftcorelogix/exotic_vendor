@@ -1,7 +1,7 @@
 <div class="mx-auto space-y-6 mr-4">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">Customer List</h1>
-        <a href="<?php echo base_url('?page=customers&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Customer</a>
+        <a href="<?php echo base_url('?page=customer&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Customer</a>
     </div>
     <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
         <button id="accordion-button" class="w-full flex justify-between items-center mb-2">
@@ -76,9 +76,9 @@
                             <td class="px-6 py-4 text-sm font-semibold"></td>
                             
                             <td class="px-6 py-4 text-right text-sm space-x-2">
-                                <a href="<?php echo base_url('?page=customers&action=view&customer_id=' . $customer['id']); ?>" class="text-indigo-600 hover:text-indigo-900">View</a>
-                                <a href="<?php echo base_url('?page=customers&action=edit&customer_id=' . $customer['id']); ?>" class="text-green-600 hover:text-green-900">Edit</a>
-                                <a href="<?php echo base_url('?page=customers&action=delete&customer_id=' . $customer['id']); ?>" class="text-red-600 hover:text-red-900" onclick="return confirm('Are you sure you want to delete this customer?');">Delete</a>
+                                <a href="<?php echo base_url('?page=customer&action=view&customer_id=' . $customer['id']); ?>" class="text-indigo-600 hover:text-indigo-900">View</a>
+                                <a href="<?php echo base_url('?page=customer&action=edit&customer_id=' . $customer['id']); ?>" class="text-green-600 hover:text-green-900">Edit</a>
+                                <a href="<?php echo base_url('?page=customer&action=delete&customer_id=' . $customer['id']); ?>" class="text-red-600 hover:text-red-900" onclick="return confirm('Are you sure you want to delete this customer?');">Delete</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -79,7 +79,7 @@ class CustomerController {
             header("Location: " . base_url('?page=customer&action=list'));
             exit;
         }
-        print_array($customer);
+        //print_array($customer);
         //search filters
         $search = $_GET['search'] ?? '';
         $filters = [];
