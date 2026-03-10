@@ -818,8 +818,9 @@ class InboundingController {
             // CASE 1: Simple Product -> abc1234
             $baseName = $itemCode; 
         } elseif (!$isVariant && $hasVariations) {
-            // CASE 2: Complex Product (Base) -> abc1234
-            $baseName = $itemCode; 
+            // CASE 2: Complex Product (Base with variations) -> abc1234-blue (use color/size from parent)
+            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
+            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
         } else {
             // CASE 3 & 4: Variation -> abc1234-color
             $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
@@ -1618,7 +1619,6 @@ class InboundingController {
         }
 
         $API_data['images'] = $images_payload;
-
         $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
         $apiurl =  '';
         
