@@ -1,103 +1,102 @@
 <?php
 // Top of index.php
-require_once 'cart-functions.php';
+// require_once 'cart-functions.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+// if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
-  // ADD TO CART
-  if ($_POST['action'] === 'add_to_cart') {
+//   // ADD TO CART
+//   if ($_POST['action'] === 'add_to_cart') {
 
-    $code      = trim($_POST['code'] ?? '');
-    $qty       = (int)($_POST['qty'] ?? 1);
-    $variation = trim($_POST['variation'] ?? '');
-    $options   = trim($_POST['options'] ?? '');
+//     $code      = trim($_POST['code'] ?? '');
+//     $qty       = (int)($_POST['qty'] ?? 1);
+//     $variation = trim($_POST['variation'] ?? '');
+//     $options   = trim($_POST['options'] ?? '');
 
-    if ($code !== '') {
-      $addResult = add_to_cart($code, $qty, $variation, $options, false);
-      $_SESSION['cart_message'] = $addResult['message'];
-    }
-  }
+//     if ($code !== '') {
+//       $addResult = add_to_cart($code, $qty, $variation, $options, false);
+//       $_SESSION['cart_message'] = $addResult['message'];
+//     }
+//   }
 
-  // CHANGE QUANTITY
-  if ($_POST['action'] === 'change_qty') {
+//   // CHANGE QUANTITY
+//   if ($_POST['action'] === 'change_qty') {
 
-    $cartref = $_POST['cartref'] ?? '';
-    $newqty  = (int)($_POST['newqty'] ?? 1);
+//     $cartref = $_POST['cartref'] ?? '';
+//     $newqty  = (int)($_POST['newqty'] ?? 1);
 
-    if ($cartref) {
-      change_qty($cartref, $newqty);
-    }
-  }
+//     if ($cartref) {
+//       change_qty($cartref, $newqty);
+//     }
+//   }
 
-  // REMOVE ITEM
-  if ($_POST['action'] === 'remove') {
+//   // REMOVE ITEM
+//   if ($_POST['action'] === 'remove') {
 
-    $cartref = $_POST['cartref'] ?? '';
+//     $cartref = $_POST['cartref'] ?? '';
 
-    if ($cartref) {
-      remove_item($cartref);
-    }
-  }
+//     if ($cartref) {
+//       remove_item($cartref);
+//     }
+//   }
 
-  // APPLY COUPON
-  if ($_POST['action'] === 'apply_coupon') {
+//   // APPLY COUPON
+//   if ($_POST['action'] === 'apply_coupon') {
 
-    $coupon = trim($_POST['coupon'] ?? '');
+//     $coupon = trim($_POST['coupon'] ?? '');
 
-    if ($coupon !== '') {
+//     if ($coupon !== '') {
 
-      $apply = apply_coupon($coupon);
+//       $apply = apply_coupon($coupon);
 
-      if ($apply['success']) {
-        $_SESSION['coupon_message'] = $apply['message'];
-        $_SESSION['coupon_status']  = 'success';
-      } else {
-        $_SESSION['coupon_message'] = $apply['message'];
-        $_SESSION['coupon_status']  = 'error';
-      }
-    }
-  }
-  // REMOVE COUPON
-  if ($_POST['action'] === 'remove_coupon') {
+//       if ($apply['success']) {
+//         $_SESSION['coupon_message'] = $apply['message'];
+//         $_SESSION['coupon_status']  = 'success';
+//       } else {
+//         $_SESSION['coupon_message'] = $apply['message'];
+//         $_SESSION['coupon_status']  = 'error';
+//       }
+//     }
+//   }
+//   // REMOVE COUPON
+//   if ($_POST['action'] === 'remove_coupon') {
 
-    unset($_SESSION['discount_coupon']);
+//     unset($_SESSION['discount_coupon']);
 
-    // $_SESSION['coupon_message'] = "Coupon removed successfully";
-    $_SESSION['coupon_status'] = "success";
-  }
+//     // $_SESSION['coupon_message'] = "Coupon removed successfully";
+//     $_SESSION['coupon_status'] = "success";
+//   }
 
-  // EXPRESS SHIPPING
-  if ($_POST['action'] === 'toggle_express_shipping') {
+//   // EXPRESS SHIPPING
+//   if ($_POST['action'] === 'toggle_express_shipping') {
 
-    $cartid = $_POST['cartid'] ?? '';
-    $shippingAction = $_POST['shipping_action'] ?? '';
+//     $cartid = $_POST['cartid'] ?? '';
+//     $shippingAction = $_POST['shipping_action'] ?? '';
 
-    if ($cartid && $shippingAction) {
-      modify_express_shipping($cartid, $shippingAction);
-    }
-  }
+//     if ($cartid && $shippingAction) {
+//       modify_express_shipping($cartid, $shippingAction);
+//     }
+//   }
 
-  if ($_POST['action'] === 'create_order') {
-    header('Content-Type: application/json');
+//   if ($_POST['action'] === 'create_order') {
+//     header('Content-Type: application/json');
 
-    $cartData = get_cart();
-    $paymentType = $_POST['payment_type'] ?? 'cod';
-    $note = $_POST['note'] ?? '';
+//     $cartData = get_cart();
+//     $paymentType = $_POST['payment_type'] ?? 'cod';
+//     $note = $_POST['note'] ?? '';
 
-    echo json_encode(create_order($cartData, $paymentType, $note));
+//     echo json_encode(create_order($cartData, $paymentType, $note));
 
-    exit;
-  }
+//     exit;
+//   }
 
-  if ($_POST['action'] !== 'create_order') {
-    header("Location: " . $_SERVER['REQUEST_URI']);
-    exit;
-  }
-  
-}
+//   if ($_POST['action'] !== 'create_order') {
+//     header("Location: " . $_SERVER['REQUEST_URI']);
+//     exit;
+//   }
+
+// }
 
 // Get current cart to display
-$cartData = get_cart();
 
 ?>
 <div class="min-h-screen">
@@ -204,7 +203,7 @@ $cartData = get_cart();
 
     <!-- ===== PAYMENT / CART ===== -->
     <?php
-    $cartData = get_cart();
+
     $cart = $cartData['items'] ?? [];
     ?>
 
@@ -268,8 +267,8 @@ $cartData = get_cart();
                       <!-- QTY -->
                       <div class="flex items-center border rounded-md overflow-hidden">
 
-                        <form method="POST">
-                          <input type="hidden" name="action" value="change_qty">
+                        <form method="POST" action="?page=pos_register&action=change-qty">
+                          <!-- <input type="hidden" name="action" value="change_qty"> -->
                           <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
                           <button type="submit"
                             name="newqty"
@@ -281,8 +280,8 @@ $cartData = get_cart();
                           <?= $item['quantity'] ?>
                         </span>
 
-                        <form method="POST">
-                          <input type="hidden" name="action" value="change_qty">
+                        <form method="POST" action="?page=pos_register&action=change-qty">
+                          <!-- <input type="hidden" name="action" value="change_qty"> -->
                           <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
                           <button type="submit"
                             name="newqty"
@@ -293,8 +292,8 @@ $cartData = get_cart();
                       </div>
 
                       <!-- REMOVE -->
-                      <form method="POST">
-                        <input type="hidden" name="action" value="remove">
+                      <form method="POST" action="?page=pos_register&action=remove-item">
+                        <!-- <input type="hidden" name="action" value="remove"> -->
                         <input type="hidden" name="cartref" value="<?= $item['cartref'] ?>">
                         <button type="submit" class="text-[10px] text-red-600 hover:underline">
                           Remove
@@ -314,12 +313,12 @@ $cartData = get_cart();
 
                       <div class="flex h-6 w-6 items-center justify-center rounded-md">
 
-                        <form method="POST">
+                        <form method="POST" action="?page=pos_register&action=toggle-shipping">
 
-                          <input type="hidden" name="action" value="toggle_express_shipping">
+                          <!-- <input type="hidden" name="action" value="toggle_express_shipping"> -->
                           <input type="hidden" name="cartid" value="<?= $item['cartref'] ?>">
 
-                          <input type="hidden" name="shipping_action"
+                          <input type="hidden" name="action"
                             value="<?= $item['express_selected'] ? 'delete' : 'add' ?>">
 
                           <input type="checkbox"
@@ -378,15 +377,15 @@ $cartData = get_cart();
 
           </div>
 
-         
+
           <?php $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? ''; ?>
 
           <?php if (empty($coupon)): ?>
 
             <!-- APPLY COUPON -->
-            <form method="POST" class="flex gap-2">
+            <form method="POST" action="?page=pos_register&action=apply-coupon" class="flex gap-2">
 
-              <input type="hidden" name="action" value="apply_coupon">
+              <!-- <input type="hidden" name="action" value="apply_coupon"> -->
 
               <input
                 name="coupon"
@@ -410,8 +409,8 @@ $cartData = get_cart();
                 Coupon Applied: <?= htmlspecialchars(explode('|', $coupon)[0]) ?>
               </span>
 
-              <form method="POST">
-                <input type="hidden" name="action" value="remove_coupon">
+              <form method="POST" action="?page=pos_register&action=remove-coupon">
+                <!-- <input type="hidden" name="action" value="remove_coupon"> -->
 
                 <button
                   type="submit"
@@ -558,9 +557,9 @@ $cartData = get_cart();
               </div>
             </div>
 
-           
-            <form method="POST" id="addToCartForm">
-              <input type="hidden" name="action" value="add_to_cart">
+
+            <form method="POST" action="?page=pos_register&action=cart-add">
+              <!-- <input type="hidden" name="action" value="add_to_cart"> -->
               <input type="hidden" name="code" id="modal_product_code">
               <input type="hidden" name="qty" id="modal_qty" value="1">
               <input type="hidden" name="options" id="modal_options">
@@ -725,7 +724,7 @@ $cartData = get_cart();
       formData.append("payment_type", paymentType);
       formData.append("note", note);
 
-      fetch("", {
+      fetch("?page=pos_register&action=create-order", {
           method: "POST",
           body: formData
         })
@@ -735,7 +734,7 @@ $cartData = get_cart();
           if (data.success) {
 
             closePaymentModal();
-
+            importOrder(data.orderid);
             let msg = document.createElement("div");
             msg.className = "fixed top-5 right-5 bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
             msg.innerHTML = data.message + " (Order ID: " + data.orderid + ")";
@@ -762,4 +761,39 @@ $cartData = get_cart();
     });
 
   });
+function importOrder(orderid){
+  const secretKey = 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801';
+  const url = 'index.php?page=orders&action=import_orders&secret_key=' + secretKey + '&orderid=' + orderid;
+  
+  fetch(url, {
+    method: 'GET'
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('Order imported successfully:', data);
+    
+    // Display success message
+    let successMsg = document.createElement("div");
+    successMsg.className = "fixed top-5 right-5 bg-blue-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
+    successMsg.innerHTML = "✓ Order imported successfully";
+    document.body.appendChild(successMsg);
+    
+    setTimeout(() => {
+      successMsg.remove();
+    }, 3000);
+  })
+  .catch(error => {
+    console.error('Error importing order:', error);
+    
+    // Display error message
+    let errorMsg = document.createElement("div");
+    errorMsg.className = "fixed top-5 right-5 bg-red-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
+    errorMsg.innerHTML = "✗ Error importing order";
+    document.body.appendChild(errorMsg);
+    
+    setTimeout(() => {
+      errorMsg.remove();
+    }, 3000);
+  });
+}
 </script>
