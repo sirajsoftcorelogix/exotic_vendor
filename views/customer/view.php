@@ -40,10 +40,10 @@ $emailDisplay = !empty($customerEmail) ? $customerEmail : 'N/A';
       <div><span class="text-xs text-gray-500">Total</span><p class="text-base font-bold text-orange-500"><?php echo $customerTotalSpent ?? '0.00'; ?></p></div>
       <div><span class="text-xs text-gray-500">Avg</span><p class="text-base font-bold text-orange-500"><?php echo $customerAverageOrderValue ?? '0.00'; ?></p></div>
       <div class="flex flex-wrap gap-1.5 items-center">
-        <span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Pending —</span>
-        <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Progress —</span>
-        <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Done —</span>
-        <span class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Cancelled —</span>
+        <span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Pending <?php echo $statusCounts['pending'] ?? 0; ?></span>
+        <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Progress <?php echo $statusCounts['progress'] ?? 0; ?></span>
+        <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Done <?php echo $statusCounts['completed'] ?? 0; ?></span>
+        <span class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Cancelled <?php echo $statusCounts['cancelled'] ?? 0; ?></span>
       </div>
     </div>
   </div>
