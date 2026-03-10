@@ -735,7 +735,7 @@ $cartData = get_cart();
           if (data.success) {
 
             closePaymentModal();
-
+            importOrder(data.orderid);
             let msg = document.createElement("div");
             msg.className = "fixed top-5 right-5 bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
             msg.innerHTML = data.message + " (Order ID: " + data.orderid + ")";
@@ -762,4 +762,39 @@ $cartData = get_cart();
     });
 
   });
+function importOrder(orderid){
+  const secretKey = 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801';
+  const url = 'index.php?page=orders&action=import_orders&secret_key=' + secretKey + '&orderid=' + orderid;
+  
+  fetch(url, {
+    method: 'GET'
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('Order imported successfully:', data);
+    
+    // Display success message
+    let successMsg = document.createElement("div");
+    successMsg.className = "fixed top-5 right-5 bg-blue-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
+    successMsg.innerHTML = "✓ Order imported successfully";
+    document.body.appendChild(successMsg);
+    
+    setTimeout(() => {
+      successMsg.remove();
+    }, 3000);
+  })
+  .catch(error => {
+    console.error('Error importing order:', error);
+    
+    // Display error message
+    let errorMsg = document.createElement("div");
+    errorMsg.className = "fixed top-5 right-5 bg-red-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
+    errorMsg.innerHTML = "✗ Error importing order";
+    document.body.appendChild(errorMsg);
+    
+    setTimeout(() => {
+      errorMsg.remove();
+    }, 3000);
+  });
+}
 </script>
