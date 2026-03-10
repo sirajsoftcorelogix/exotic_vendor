@@ -379,3 +379,7 @@ ALTER TABLE vp_invoices ADD COLUMN batch_no VARCHAR(50) NULL AFTER total_amount;
 ALTER TABLE vp_dispatch_details ADD COLUMN batch_no VARCHAR(50) NULL AFTER shipping_charges;
 ALTER TABLE `vp_dispatch_details` CHANGE `courier_name` `courier_name` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, CHANGE `tracking_number` `tracking_number` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL;
 ALTER TABLE `vp_dispatch_details` ADD `box_size` VARCHAR(100) NULL AFTER `box_no`;
+
+--vp_order_info customer_id order_number index
+ALTER TABLE `vp_order_info` ADD INDEX idx_customer_id (customer_id);
+ALTER TABLE `vp_order_info` ADD INDEX idx_order_number (order_number);

@@ -847,5 +847,20 @@ switch ($page) {
                 break;
 		 }
         break;
+    case 'customer':
+        require_once 'controllers/CustomerController.php';
+        $controller = new CustomerController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->list();   
+                break;
+            case 'view':
+                $controller->view();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
 }
 

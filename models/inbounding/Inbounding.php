@@ -1214,15 +1214,13 @@ class Inbounding {
 
         if ($inbounding) {
             // Correct concatenation using dots (.) outside of quotes
-            $cat_id_string = $inbounding['category_code'] . ',' . 
-                             $inbounding['sub_category_code'] . ',' . 
-                             $inbounding['sub_sub_category_code']. ',';
+            $cat_id_string = $inbounding['category_code'] . '|' . 
+                             $inbounding['sub_category_code'] . '|' . 
+                             $inbounding['sub_sub_category_code']. '|';
         }
         
-        
-        
         // Trim the trailing comma
-        $final_cat_ids = rtrim($cat_id_string, ',') ;
+        $final_cat_ids = rtrim($cat_id_string, '|') ;
         $inbounding['final_cat_ids'] = $final_cat_ids;
         // Add to main array
         $inbounding['cat_ids'] = $final_cat_ids; // Added missing semicolon here
