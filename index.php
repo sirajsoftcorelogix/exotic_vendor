@@ -9,10 +9,10 @@ $page = $_GET['page'] ?? 'orders';
 $action = $_GET['action'] ?? 'list';
 
 // Prevent directory traversal
-$page = basename($page); 
+$page = basename($page);
 $viewsPath = __DIR__ . '/views';
-$pageDir   = $viewsPath . '/' . $page; 
-            
+$pageDir   = $viewsPath . '/' . $page;
+
 if (!is_dir($pageDir)) {
     // Page not implemented → coming soon
     //require $viewsPath . '/pages/coming-soon.php';
@@ -20,10 +20,10 @@ if (!is_dir($pageDir)) {
 }
 
 switch ($page) {
-	case 'users':
+    case 'users':
         require_once 'controllers/UsersController.php';
-		$controller = new UsersController($conn);
-		
+        $controller = new UsersController($conn);
+
         switch ($action) {
             case 'login':
                 $controller->login();
@@ -54,19 +54,19 @@ switch ($page) {
                 break;
             case 'updateProfile':
                 $controller->updateUserProfile();
-                break;    
+                break;
             case 'forgotPassword':
                 $controller->forgotPassword();
-                break; 
+                break;
             case 'sendResetLink':
                 $controller->sendResetLink();
-                break;  
+                break;
             case 'resetPassword':
                 $controller->resetPassword();
                 break;
             case 'updateCaptcha':
                 $controller->updateCaptcha();
-                break;            
+                break;
             case 'validateCaptcha':
                 $controller->validateCaptcha();
                 break;
@@ -81,12 +81,12 @@ switch ($page) {
                 break;
         }
         break;
-	case 'vendors':
+    case 'vendors':
         require_once 'controllers/VendorsController.php';
         $controller = new VendorsController($conn);
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'addPost': // Method to Add / Edit Vendor
                 $controller->addVendorRecord();
@@ -147,10 +147,10 @@ switch ($page) {
                 $controller->importOrders();
                 break;
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'view':
-                $controller->viewOrder();   
+                $controller->viewOrder();
                 break;
             case 'get_order_details':
                 $controller->getOrderDetails();
@@ -170,7 +170,7 @@ switch ($page) {
             case 'get_order_items_for_dispatch':
                 $controller->getOrderItemsForDispatch();
                 break;
-           
+
             case 'update_note_ajax':
                 $controller->updateNoteAjax();
                 break;
@@ -211,7 +211,7 @@ switch ($page) {
         break;
     case 'purchase_orders':
         require_once 'controllers/PurchaseOrdersController.php';
-        $controller = new PurchaseOrdersController($conn);        
+        $controller = new PurchaseOrdersController($conn);
         switch ($action) {
             case 'list':
                 $controller->index();
@@ -238,7 +238,7 @@ switch ($page) {
                 $controller->downloadPurchaseOrder();
                 break;
             case 'delete':
-                $controller->deletePurchaseOrder(); 
+                $controller->deletePurchaseOrder();
                 break;
             case 'update_status':
                 $controller->updateStatus();
@@ -259,7 +259,7 @@ switch ($page) {
                 $controller->deleteInvoice();
                 break;
             case 'get_po':
-                $controller->getPO();                
+                $controller->getPO();
                 break;
             case 'preview_pdf':
                 $controller->previewPDF();
@@ -276,7 +276,7 @@ switch ($page) {
             case 'remove_payment':
                 $controller->removePayment();
                 break;
-            
+
             case 'add_challan':
                 $controller->addChallan();
                 break;
@@ -306,7 +306,7 @@ switch ($page) {
                 break;
         }
         break;
-    
+
     case 'invoices':
         require_once 'controllers/InvoicesController.php';
         $controller = new InvoicesController();
@@ -337,13 +337,13 @@ switch ($page) {
                 break;
         }
         break;
-    
+
     case 'payement_terms':
         require_once 'controllers/PaymenetTermsController.php';
         $controller = new PaymenetTermsController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'addRecord':
                 $controller->addPTRecord();
@@ -366,7 +366,7 @@ switch ($page) {
         $controller = new OrdersPriorityStatusController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'addRecord':
                 $controller->addOPSRecord();
@@ -399,15 +399,15 @@ switch ($page) {
                 break;
             case 'update_api_call':
                 $controller->updateApiCall();
-                break;   
+                break;
             case 'import_api_call':
-                $controller->importApiCall();         
+                $controller->importApiCall();
                 break;
             case 'get_product_details_html':
-                $controller->getProductDetailsHTML();         
-                break;  
+                $controller->getProductDetailsHTML();
+                break;
             case 'get_vendor_edit_form':
-                $controller->getVendorEditForm();         
+                $controller->getVendorEditForm();
                 break;
             case 'add_vendor_map':
                 $controller->addVendorMap();
@@ -454,18 +454,18 @@ switch ($page) {
             case 'delete':
                 $controller->product_delete();
                 break;*/
-             case 'comment_list':
+            case 'comment_list':
                 require_once 'controllers/PurchaseListCommentController.php';
                 $controller = new PurchaseListCommentController($conn);
                 $controller->list();
-            break;
-            
+                break;
+
             case 'addComment':
                 require_once 'controllers/PurchaseListCommentController.php';
                 $controller = new PurchaseListCommentController($conn);
                 $controller->add();
-            break;
-            
+                break;
+
             case 'detail':
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
@@ -488,8 +488,8 @@ switch ($page) {
                 $controller->getFilteredStockHistory();
                 break;
             case 'inventory_ledger':
-                 $controller->inventoryLedger();                
-                break;    
+                $controller->inventoryLedger();
+                break;
             default:
                 $controller->product_list();
                 break;
@@ -500,7 +500,7 @@ switch ($page) {
         $controller = new RolesController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             /*case 'addRecord':
                 $controller->addRecord();
@@ -535,7 +535,7 @@ switch ($page) {
         $controller = new TeamsController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'addRecord':
                 $controller->addRecord();
@@ -553,12 +553,12 @@ switch ($page) {
                 break;
         }
         break;
-	case 'modules':        
+    case 'modules':
         require_once 'controllers/ModulesController.php';
         $controller = new ModulesController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'addRecord':
                 $controller->addRecord();
@@ -576,17 +576,17 @@ switch ($page) {
                 break;
         }
         break;
-     case 'inbounding':        
+    case 'inbounding':
         require_once 'controllers/InboundingController.php';
         $controller = new InboundingController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'exportSelected':
                 $controller->exportSelected();
                 break;
-            case 'deleteSelected': 
+            case 'deleteSelected':
                 $controller->deleteSelected();
                 break;
             case 'form1':
@@ -663,10 +663,10 @@ switch ($page) {
         $controller = new NotificationController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'fetch_notifications':
-                $controller->fetchNotifications();   
+                $controller->fetchNotifications();
                 break;
             case 'mark_as_read':
                 $controller->markAsRead();
@@ -683,7 +683,7 @@ switch ($page) {
                 $controller->isdisplay();
                 break;
             default:
-                $controller->fetchNotifications();   
+                $controller->fetchNotifications();
                 break;
         }
         break;
@@ -692,59 +692,132 @@ switch ($page) {
         $controller = new GrnsController($conn);
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'view':
-                $controller->viewGrn();   
+                $controller->viewGrn();
                 break;
             case 'create':
-                $controller->createGrn();   
+                $controller->createGrn();
                 break;
             case 'create_post':
-                $controller->createGrnPost();   
+                $controller->createGrnPost();
                 break;
             case 'qrcode':
                 $controller->downloadQrCode();
                 break;
             case 'delete':
-                $controller->deleteGrn();   
+                $controller->deleteGrn();
                 break;
             default:
-                $controller->index();   
+                $controller->index();
                 break;
         }
         break;
-    
+
     case 'pos_register':
+
         require_once 'controllers/POSRegisterController.php';
         $controller = new POSRegisterController($conn);
+
         switch ($action) {
+
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
+
             case 'products-ajax':
-                $controller->productsAjax();   
+                $controller->productsAjax();
                 break;
+
             case 'cart-add':
-                $controller->cartAdd();
+
+                $code = $_POST['code'] ?? '';
+                $qty = $_POST['qty'] ?? 1;
+                $variation = $_POST['variation'] ?? '';
+                $options = $_POST['options'] ?? '';
+
+                $controller->add_to_cart($code, $qty, $variation, $options);
+
+                header("Location: ?page=pos_register");
+                exit;
+
                 break;
+
+            case 'change-qty':
+
+                $cartref = $_POST['cartref'] ?? '';
+                $qty = $_POST['newqty'] ?? 1;
+
+                $controller->change_qty($cartref, $qty);
+
+                header("Location: ?page=pos_register");
+                exit;
+
+                break;
+
+            case 'remove-item':
+
+                $cartref = $_POST['cartref'] ?? '';
+
+                $controller->remove_item($cartref);
+
+                header("Location: ?page=pos_register");
+                exit;
+
+                break;
+
+            case 'apply-coupon':
+
+                $coupon = $_POST['coupon'] ?? '';
+
+                $controller->apply_coupon($coupon);
+
+                header("Location: ?page=pos_register");
+                exit;
+
+                break;
+
+            case 'toggle-shipping':
+
+                $cartid = $_POST['cartid'] ?? '';
+                $action = $_POST['action'] ?? '';
+
+                $controller->modify_express_shipping($cartid, $action);
+
+                header("Location: ?page=pos_register");
+                exit;
+
+                break;
+
+            case 'create-order':
+
+                $cart = $controller->get_cart();
+                $controller->create_order($cart);
+
+                header("Location: ?page=pos_register");
+                exit;
+
+                break;
+
             default:
-                $controller->index();   
+                $controller->index();
                 break;
-        }    
-        break;        
-        default:
-            require_once 'controllers/DashboardController.php';
-            $controller = new DashboardController();
-            $controller->index();
-            break;
+        }
+
+        break;
+    default:
+        require_once 'controllers/DashboardController.php';
+        $controller = new DashboardController();
+        $controller->index();
+        break;
 
     case 'currency':
         require_once 'controllers/CurrencyController.php';
         $controller = new CurrencyController($conn);
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             case 'addRecord':
                 $controller->addCurrencyRecord();
@@ -764,12 +837,12 @@ switch ($page) {
                 $controller->index();
                 break;
         }
-    case 'category':        
+    case 'category':
         require_once 'controllers/CategoryController.php';
         $controller = new CategoryController();
         switch ($action) {
             case 'list':
-                $controller->index();   
+                $controller->index();
                 break;
             default:
                 $controller->index();
@@ -781,13 +854,13 @@ switch ($page) {
         $controller = new GlobalsController($conn);
         switch ($action) {
             case 'settings':
-                $controller->settings();   
+                $controller->settings();
                 break;
             case 'update_settings':
                 $controller->update_settings();
                 break;
             default:
-                $controller->settings();   
+                $controller->settings();
                 break;
         }
         break;
@@ -796,7 +869,7 @@ switch ($page) {
         $controller = new DispatchController($conn);
         switch ($action) {
             case 'create':
-                $controller->create();   
+                $controller->create();
                 break;
             case 'retry_dispatch':
                 $controller->retryDispatch();
@@ -832,27 +905,27 @@ switch ($page) {
                 $controller->retryShipments();
                 break;
             default:
-                $controller->create();   
+                $controller->create();
                 break;
         }
-	case 'search':
-		require_once 'controllers/DashboardController.php';
+    case 'search':
+        require_once 'controllers/DashboardController.php';
         $controller = new DashboardController($conn);
-		switch ($action) {
+        switch ($action) {
             case 'indexheader':
                 $controller->indexheader();
                 break;
-			default:
+            default:
                 $controller->indexheader();
                 break;
-		 }
+        }
         break;
     case 'customer':
         require_once 'controllers/CustomerController.php';
         $controller = new CustomerController($conn);
         switch ($action) {
             case 'list':
-                $controller->list();   
+                $controller->list();
                 break;
             case 'view':
                 $controller->view();
@@ -863,4 +936,3 @@ switch ($page) {
         }
         break;
 }
-
