@@ -952,7 +952,7 @@ class DispatchController {
                 }
             }
             //update invoice status to cancelled
-            $invoiceModel->updateInvoiceStatus($invoiceId, 'Cancelled');
+            $invoiceModel->updateInvoiceStatus($invoiceId, 'cancelled');
             echo json_encode(['success' => true, 'message' => 'Invoice cancelled successfully']);
         } catch (Exception $e) {
             http_response_code(500);
