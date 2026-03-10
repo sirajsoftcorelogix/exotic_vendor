@@ -95,6 +95,7 @@ class CustomerController {
             $assignmentDates[$order['id']] =  $orders[$key]['status_log']['change_date'] ?? '';         
         }
         $spents = $customerModel->getCustomerTotalSpent($customerId);
+        $statusCounts = $customerModel->getCustomerOrderStatusCounts($customerId);
         //print_array($spents);
         $data = [
             'customer' => $customer,
@@ -107,7 +108,8 @@ class CustomerController {
             'assignmentDates' => $assignmentDates,
             'customerOrderCount' => $customerModel->getCustomerOrderCount($customerId),
             'customerTotalSpent' => $spents['total_spent'] ?? 0,
-            'customerAverageOrderValue' => $spents['average_order_value'] ?? 0 
+            'customerAverageOrderValue' => $spents['average_order_value'] ?? 0,
+            'statusCounts' => $statusCounts
         ];
         renderTemplate('views/customer/view.php', $data, 'Customer Details');
     }

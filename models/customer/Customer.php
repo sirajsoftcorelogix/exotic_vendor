@@ -233,5 +233,20 @@ class Customer{
         $stmt->execute();
         return $stmt->get_result()->fetch_assoc();
     }
+    
+    public function getCustomerOrderStatusCounts($customer_id) {
+        $sql = "SELECT 
+                    COUNT(CASE WHEN o.status = 'pending' THEN 1 END) as pending,
+                    COUNT(CASE WHEN o.status IN ('ready_for_packing', 'po_pending', 'po_approved', 'po_inprogress', 'item_received', 'added_to_picklist', 'store_transfer', 'ready_for_qc', 'sent_for_repair') THEN 1 END) as progress,
+                    COUNT(CASE WHEN o.status = 'shipped' THEN 1 END) as completed,
+                    COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END) as cancelled
+                FROM vp_orders o
+                WHERE o.customer_id = ?";
+        
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("i", $customer_id);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_assoc();
+    }
 }
 ?>
