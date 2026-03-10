@@ -1610,7 +1610,8 @@ class OrdersController {
                         <input type="checkbox" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
-                    <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') . ' | ' . htmlspecialchars($order['item_code'] ?? '') . '</td>
+                    <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') .'</td>
+                    <td class="p-2 text-right">' . htmlspecialchars($order['item_code'] ?? '') . '</td>
                     <td class="p-2 text-right">' . $quantity . '</td>
                     <td class="p-2 text-right">' . number_format($product_weight, 3) . ' kg</td>
                     <td class="p-2 text-right">' . $gst . '%</td>
