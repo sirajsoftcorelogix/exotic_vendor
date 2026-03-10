@@ -57,14 +57,14 @@
      class="fixed inset-0 z-50 hidden"
      aria-hidden="true">
     <div data-modal-backdrop class="absolute inset-0 bg-black/40"></div>
-    <div class="relative z-10 w-full max-w-xl bg-white shadow-lg border border-gray-300 mx-3 sm:mx-6 rounded">
+    <div class="relative z-10 w-full max-w-2xl max-h-[80vh] bg-white shadow-lg border border-gray-300 mx-3 sm:mx-6 rounded">
         <div class="flex justify-between items-center px-4 py-2 border-b border-gray-200 bg-orange-500 text-white rounded-t">
             <span class="font-semibold text-sm">Select Items for Dispatch</span>
             <button type="button" data-close-select-items aria-label="Close"
                     class="text-white text-xl leading-none px-2 hover:text-white/90">&times;</button>
         </div>
 
-        <div class="px-4 py-3 text-xs text-gray-800">
+        <div class="px-4 py-3 text-xs text-gray-800 overflow-y-auto max-h-[60vh]">
             <div class="flex justify-between mb-2">
                 <div>
                     <span class="font-semibold">Order No:</span>
@@ -84,6 +84,7 @@
                     </th>
                     <th class="p-2 border-b border-gray-200">Order</th>
                     <th class="p-2 border-b border-gray-200">Item</th>
+                    <th class="p-2 border-b border-gray-200 text-right">Item Code</th>
                     <th class="p-2 border-b border-gray-200 text-right">Quantity</th>
                     <th class="p-2 border-b border-gray-200 text-right">Weight</th>
                     <th class="p-2 border-b border-gray-200 text-right">GST</th>
@@ -91,7 +92,7 @@
                     <th class="p-2 border-b border-gray-200 text-right">Payment Type</th>
                 </tr>
                 </thead>
-                <tbody>
+                <tbody >
                 <tr class="border-b border-gray-100">
                     <td class="p-2">
                         <input type="checkbox"/>
@@ -170,19 +171,19 @@
                 const orderNum = cols[0]?.textContent.trim() || '';
                 if (orderNum) orderCount.add(orderNum);
                 
-                // Quantity is in col-span-1 (index 2, after Item which is col-span-3)
-                const quantityCol = cols[2];
+                // Quantity is in col-span-1 (index 3)
+                const quantityCol = cols[3];
                 const quantity = parseInt(quantityCol?.textContent.trim() || '0') || 0;
                 totalQuantity += quantity;
                 
-                // Weight is in col-span-1 (index 3)
-                const weightCol = cols[3];
+                // Weight is in col-span-1 (index 4)
+                const weightCol = cols[4];
                 const weightText = weightCol?.textContent.trim() || '0';
                 const weight = parseFloat(weightText.replace(/[^0-9.]/g, '')) || 0;
                 totalWeight += weight;
                 //console.log('Row:', row, 'Order:', orderNum, 'Quantity:', quantity, 'Weight:', weight, 'totalWeight:', totalWeight);
-                // Net Total is in col-span-1 (index 6)
-                const netTotalCol = cols[6];
+                // Net Total is in col-span-1 (index 7)
+                const netTotalCol = cols[7];
                 const netTotalText = netTotalCol?.textContent.trim() || '0';
                 const itemNetTotal = parseFloat(netTotalText.replace(/[^0-9.]/g, '')) || 0;
                 netTotal += itemNetTotal;
@@ -549,7 +550,8 @@
                             <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
                                 <div class="grid grid-cols-12 gap-2 font-semibold">
                                     <div class="col-span-2">Order</div>
-                                    <div class="col-span-3">Item</div>
+                                    <div class="col-span-2">Item</div>
+                                    <div class="col-span-1 text-right">Item Code</div>
                                     <div class="col-span-1 text-right">Quantity</div>
                                     <div class="col-span-1 text-right">Weight</div>
                                     <div class="col-span-1 text-right">Box Size</div>
@@ -594,11 +596,12 @@
                         const cols = row.querySelectorAll('td');
                         const orderNum = cols[1]?.textContent.trim() || '';
                         const itemInfo = cols[2]?.textContent.trim() || '';
-                        const quantity = cols[3]?.textContent.trim() || '';
-                        const weight = cols[4]?.textContent.trim() || '';
-                        const gst = cols[5]?.textContent.trim() || '';
-                        const itemTotal = cols[6]?.textContent.trim() || '';
-                        const paymentType = cols[7]?.textContent.trim() || '';
+                        const itemCode = cols[3]?.textContent.trim() || '';
+                        const quantity = cols[4]?.textContent.trim() || '';
+                        const weight = cols[5]?.textContent.trim() || '';
+                        const gst = cols[6]?.textContent.trim() || '';
+                        const itemTotal = cols[7]?.textContent.trim() || '';
+                        const paymentType = cols[8]?.textContent.trim() || '';
                         const groupname = row.dataset.groupname || '';
                         const itemId = row.dataset.itemId || '';
 
@@ -621,7 +624,8 @@
                         itemRow.innerHTML = `
                             <div class="grid grid-cols-12 gap-2 items-center">
                                 <div class="col-span-2">${orderNum}</div>
-                                <div class="col-span-3">${itemInfo}</div>
+                                <div class="col-span-2">${itemInfo}</div>
+                                <div class="col-span-1 text-right">${itemCode}</div>
                                 <div class="col-span-1 text-right">${quantity}</div>
                                 <div class="col-span-1 text-right">${weight}</div>
                                 <div class="col-span-1 text-right">-</div>
@@ -780,7 +784,8 @@
                     <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
                         <div class="grid grid-cols-12 gap-2 font-semibold">
                             <div class="col-span-2">Order</div>
-                            <div class="col-span-3">Item</div>
+                            <div class="col-span-2">Item</div>
+                            <div class="col-span-1 text-right">Item Code</div>
                             <div class="col-span-1 text-right">Quantity</div>
                             <div class="col-span-1 text-right">Weight</div>
                             <div class="col-span-1 text-right">Box Size</div>
