@@ -130,7 +130,7 @@
                   <div class="flex flex-col gap-2">
                     <div> 
                     <p class="text-xs text-gray-500">Inv No.</p>
-                    <?php if($invoice['status'] == 'Cancelled'): ?>
+                    <?php if($invoice['status'] == 'cancelled'): ?>
                       <p class="text-red-500 font-semibold"><s><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></s></p>
                     <?php else: ?>
                       <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
@@ -700,7 +700,8 @@ if (bulkPrintBtn) {
       });
   }
   function cancelInvoiceAjax(invoiceId) {
-    customConfirm('Canceling the invoice will attempt to cancel the order and any associated shipments. This action cannot be undone. Are you sure?').then(confirmed => {
+    document.getElementById('globalConfirmOk').textContent = 'Confirm Cancellation';    
+    customConfirm('Cancelling this invoice will also cancel the associated Dispatch.\nThis action cannot be undone. Are you sure you want to continue?').then(confirmed => {
       if (confirmed) {
         fetch('?page=dispatch&action=cancel_invoice', {
             method: 'POST',
