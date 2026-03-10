@@ -1619,6 +1619,7 @@ class InboundingController {
         }
 
         $API_data['images'] = $images_payload;
+        echo "<pre>";print_r($API_data);
         $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
         $apiurl =  '';
         
