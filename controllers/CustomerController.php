@@ -62,5 +62,56 @@ class CustomerController {
         
         renderTemplate('views/customer/list.php', $data, 'Customers');
     }
+    public function view() {
+        is_login();
+        global $customerModel;
+        //require_once 'models/order/order.php';
+        //$orderModel = new Order($GLOBALS['conn']);
+        require_once 'models/comman/tables.php';
+        $commanModel = new Tables($GLOBALS['conn']);
+        $customerId = $_GET['customer_id'] ?? null;
+        if (!$customerId) {
+            header("Location: " . base_url('?page=customer&action=list'));
+            exit;
+        }
+        $customer = $customerModel->getCustomerById($customerId);
+        if (!$customer) {
+            header("Location: " . base_url('?page=customer&action=list'));
+            exit;
+        }
+        //print_array($customer);
+        //search filters
+        $search = $_GET['search'] ?? '';
+        $filters = [];
+        if (!empty($search)) {
+            $filters['search'] = $search;
+        }
+        $sort = $_GET['sort'] ?? 'new_to_old';
+        // Fetch orders for this customer
+        $orders = $customerModel->getOrderItemsByCustomerId($customerId, 20, 0, $filters);
+        $assignmentDates = [];          
+        foreach ($orders as $key => $order) {
+            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['id']);  
+            $assignmentDates[$order['id']] =  $orders[$key]['status_log']['change_date'] ?? '';         
+        }
+        $spents = $customerModel->getCustomerTotalSpent($customerId);
+        $statusCounts = $customerModel->getCustomerOrderStatusCounts($customerId);
+        //print_array($spents);
+        $data = [
+            'customer' => $customer,
+            'orders' => $orders ?? [],
+            'total_records' => count($orders),
+            'page_no' => 1,
+            'limit' => 20,
+            'sort' => $sort,
+            'filters' => $filters,
+            'assignmentDates' => $assignmentDates,
+            'customerOrderCount' => $customerModel->getCustomerOrderCount($customerId),
+            'customerTotalSpent' => $spents['total_spent'] ?? 0,
+            'customerAverageOrderValue' => $spents['average_order_value'] ?? 0,
+            'statusCounts' => $statusCounts
+        ];
+        renderTemplate('views/customer/view.php', $data, 'Customer Details');
+    }
 }
 ?>
