@@ -20,7 +20,7 @@ $phoneDisplay = !empty($customerPhone) ? $customerPhone : 'N/A';
 $emailDisplay = !empty($customerEmail) ? $customerEmail : 'N/A';
 ?>
 
-<div class="mx-auto space-y-6 mr-4">
+<div class="mx-auto space-y-6 mr-4 mb-10 mt-4">
 <!-- Customer Profile Header (Compact) -->
 <div class="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
   <div class="flex flex-wrap items-center gap-4 md:gap-6">
@@ -58,9 +58,9 @@ $emailDisplay = !empty($customerEmail) ? $customerEmail : 'N/A';
 Action
 </button>
 <div id="actionMenu" class="hidden absolute left-0 top-full mt-2 w-48 bg-white shadow-lg rounded border py-1 z-50">
-<a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create Invoice</a>
-<a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dispatch</a>
-<a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
+<!-- <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create Invoice</a> -->
+<a href="<?php echo base_url('?page=dispatch&action=bulk_dispatch'); ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dispatch</a>
+<!-- <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a> -->
 </div>
 </div>
 
@@ -82,12 +82,12 @@ Action
 <option value="new_to_old" <?= isset($_GET['sort']) && $_GET['sort'] === 'new_to_old' ? 'selected' : '' ?>>Sort By New to Old</option>
 <option value="old_to_new" <?= isset($_GET['sort']) && $_GET['sort'] === 'old_to_new' ? 'selected' : '' ?>>Sort By Old to New</option>
 </select>
-<select id="perPageSelect" class="border rounded px-3 py-2 text-sm" onchange="location.href='?page=customer&action=view&customer_id=<?= $_GET['customer_id'] ?>&page_no=1&limit=' + this.value;">
+<!-- <select id="perPageSelect" class="border rounded px-3 py-2 text-sm" onchange="location.href='?page=customer&action=view&customer_id=<?= $_GET['customer_id'] ?>&page_no=1&limit=' + this.value;">
 <option value="10" selected>10 per page</option>
 <option value="20">20 per page</option>
 <option value="50">50 per page</option>
 <option value="100">100 per page</option>
-</select>
+</select> -->
 </div>
 
 </div>
@@ -135,8 +135,8 @@ if (!empty($orders) && is_array($orders)):
                 <input type="checkbox">
                 <img src="<?php echo htmlspecialchars($order['image'] ?? 'https://via.placeholder.com/60'); ?>" class="w-16 h-16 object-cover border rounded">
                 <div>
-                    <p>Order No : <span class="text-blue-600"><?php echo htmlspecialchars($orderNumber); ?></span></p>
-                    <p>Item Code : <span class="text-blue-600"><?php echo htmlspecialchars($itemCode); ?></span></p>
+                    <p>Order No : <span class="text-blue-600"><a href="<?php echo base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . $order['id']); ?>" target="_blank" class="hover:underline"><?php echo htmlspecialchars($orderNumber); ?></a></span></p>
+                    <p>Item Code : <span class="text-blue-600"><a href="<?php echo base_url('?page=products&action=get_product_details_html&type=outer&item_code=' . $order['sku'] ?? $order['item_code']); ?>" target="_blank" class="hover:underline"><?php echo htmlspecialchars($itemCode); ?></a></span></p>
                     <p>Status : <span class="<?php echo $statusClass; ?> px-2 py-0.5 rounded text-xs font-medium inline-block"><?php echo ucfirst(str_replace('_', ' ', $status)); ?></span></p>
                 </div>
             </div>
@@ -277,3 +277,21 @@ endif;
         </div>
     </div>
 </div>
+<script>
+    // Close action menu when clicking outside
+    document.addEventListener('click', function(event) {
+        const actionMenu = document.getElementById('actionMenu');
+        const actionButton = event.target.closest('button[aria-label="Action menu"]');
+        if (!actionButton && !event.target.closest('#actionMenu')) {
+            actionMenu.classList.add('hidden');
+        }
+    });
+    // Close order card menu when clicking outside
+    document.addEventListener('click', function(event) {
+        const orderMenu = event.target.closest('.order-card-menu');
+        const orderButton = event.target.closest('button[aria-label="Order options"]');
+        if (!orderButton && !event.target.closest('.order-card-menu')) {
+            document.querySelectorAll('.order-card-menu').forEach(menu => menu.classList.add('hidden'));
+        }
+    });
+</script>

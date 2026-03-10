@@ -225,7 +225,8 @@ class Customer{
         $sql = "SELECT 
                     COUNT(*) AS total_orders, 
                     SUM(finalprice) AS total_spent, 
-                    AVG(finalprice) AS average_order_value
+                    AVG(finalprice) AS average_order_value,
+                    
                 FROM vp_orders
                 WHERE customer_id = ?";
         $stmt = $this->conn->prepare($sql);

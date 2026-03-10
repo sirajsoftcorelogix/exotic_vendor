@@ -383,3 +383,4 @@ ALTER TABLE `vp_dispatch_details` ADD `box_size` VARCHAR(100) NULL AFTER `box_no
 --vp_order_info customer_id order_number index
 ALTER TABLE `vp_order_info` ADD INDEX idx_customer_id (customer_id);
 ALTER TABLE `vp_order_info` ADD INDEX idx_order_number (order_number);
+ALTER TABLE `vp_products` ADD `add_ons` TEXT NULL AFTER `notes`;
