@@ -700,8 +700,10 @@ if (bulkPrintBtn) {
       });
   }
   function cancelInvoiceAjax(invoiceId) {
-    document.getElementById('globalConfirmOk').textContent = 'Confirm Cancellation';    
-    customConfirm('Cancelling this invoice will also cancel the associated Dispatch.\nThis action cannot be undone. Are you sure you want to continue?').then(confirmed => {
+    customConfirm(
+        'Cancelling this invoice will also cancel the associated Dispatch.This action cannot be undone. Are you sure you want to continue?',
+        { okText: 'Confirm Cancellation' }
+    ).then(confirmed => {
       if (confirmed) {
         fetch('?page=dispatch&action=cancel_invoice', {
             method: 'POST',
