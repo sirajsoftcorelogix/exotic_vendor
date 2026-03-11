@@ -1,104 +1,3 @@
-<?php
-// Top of index.php
-// require_once 'cart-functions.php';
-
-// if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-
-//   // ADD TO CART
-//   if ($_POST['action'] === 'add_to_cart') {
-
-//     $code      = trim($_POST['code'] ?? '');
-//     $qty       = (int)($_POST['qty'] ?? 1);
-//     $variation = trim($_POST['variation'] ?? '');
-//     $options   = trim($_POST['options'] ?? '');
-
-//     if ($code !== '') {
-//       $addResult = add_to_cart($code, $qty, $variation, $options, false);
-//       $_SESSION['cart_message'] = $addResult['message'];
-//     }
-//   }
-
-//   // CHANGE QUANTITY
-//   if ($_POST['action'] === 'change_qty') {
-
-//     $cartref = $_POST['cartref'] ?? '';
-//     $newqty  = (int)($_POST['newqty'] ?? 1);
-
-//     if ($cartref) {
-//       change_qty($cartref, $newqty);
-//     }
-//   }
-
-//   // REMOVE ITEM
-//   if ($_POST['action'] === 'remove') {
-
-//     $cartref = $_POST['cartref'] ?? '';
-
-//     if ($cartref) {
-//       remove_item($cartref);
-//     }
-//   }
-
-//   // APPLY COUPON
-//   if ($_POST['action'] === 'apply_coupon') {
-
-//     $coupon = trim($_POST['coupon'] ?? '');
-
-//     if ($coupon !== '') {
-
-//       $apply = apply_coupon($coupon);
-
-//       if ($apply['success']) {
-//         $_SESSION['coupon_message'] = $apply['message'];
-//         $_SESSION['coupon_status']  = 'success';
-//       } else {
-//         $_SESSION['coupon_message'] = $apply['message'];
-//         $_SESSION['coupon_status']  = 'error';
-//       }
-//     }
-//   }
-//   // REMOVE COUPON
-//   if ($_POST['action'] === 'remove_coupon') {
-
-//     unset($_SESSION['discount_coupon']);
-
-//     // $_SESSION['coupon_message'] = "Coupon removed successfully";
-//     $_SESSION['coupon_status'] = "success";
-//   }
-
-//   // EXPRESS SHIPPING
-//   if ($_POST['action'] === 'toggle_express_shipping') {
-
-//     $cartid = $_POST['cartid'] ?? '';
-//     $shippingAction = $_POST['shipping_action'] ?? '';
-
-//     if ($cartid && $shippingAction) {
-//       modify_express_shipping($cartid, $shippingAction);
-//     }
-//   }
-
-//   if ($_POST['action'] === 'create_order') {
-//     header('Content-Type: application/json');
-
-//     $cartData = get_cart();
-//     $paymentType = $_POST['payment_type'] ?? 'cod';
-//     $note = $_POST['note'] ?? '';
-
-//     echo json_encode(create_order($cartData, $paymentType, $note));
-
-//     exit;
-//   }
-
-//   if ($_POST['action'] !== 'create_order') {
-//     header("Location: " . $_SERVER['REQUEST_URI']);
-//     exit;
-//   }
-
-// }
-
-// Get current cart to display
-
-?>
 <div class="min-h-screen">
   <a href="test_create_order_static();"></a>
   <!-- ===== TOP BAR ===== -->
@@ -167,8 +66,6 @@
     <section class="col-span-12 lg:col-span-9 space-y-5">
 
       <!-- Sales cards -->
-
-
       <!-- Products -->
       <div class="rounded-2xl bg-white border p-4">
         <h2 class="font-semibold text-sm mb-3">Products</h2>
@@ -202,13 +99,51 @@
     </section>
 
     <!-- ===== PAYMENT / CART ===== -->
+    <!-- CUSTOMER SELECT -->
+
     <?php
 
     $cart = $cartData['items'] ?? [];
     ?>
 
     <aside class="col-span-12 lg:col-span-3">
+      <div class="px-4 py-3 border-b">
 
+        <label class="text-xs text-gray-500">Customer</label>
+
+        <div class="flex gap-2 mt-1">
+
+          <select id="customerSelect"
+            name="customer_id"
+            class="w-full border rounded-lg px-3 py-2 text-sm">
+
+            <option value="">Walk-in Customer</option>
+
+            <?php foreach ($customers as $c): ?>
+
+              <option value="<?= $c['id'] ?>"
+                data-name="<?= htmlspecialchars($c['name']) ?>"
+                data-phone="<?= htmlspecialchars($c['phone']) ?>"
+                data-email="<?= htmlspecialchars($c['email']) ?>"
+                <?= (!empty($_SESSION['pos_customer_id']) && $_SESSION['pos_customer_id'] == $c['id']) ? 'selected' : '' ?>>
+
+                <?= htmlspecialchars($c['name']) ?> (<?= $c['phone'] ?>)
+
+              </option>
+
+            <?php endforeach; ?>
+
+          </select>
+
+          <button onclick="openCustomerModal()"
+            class="bg-orange-600 text-white px-3 rounded-lg text-sm hover:bg-orange-700">
+            +
+          </button>
+
+
+        </div>
+
+      </div>
       <div class="sticky top-4 rounded-2xl bg-white border shadow-sm overflow-hidden">
 
         <!-- USER -->
@@ -581,13 +516,153 @@
     </div>
   </div>
 </div>
+<!-- CUSTOMER MODAL -->
+<div id="customerModal" class="fixed inset-0 z-[9999] hidden">
+
+  <div class="absolute inset-0 bg-black/40" onclick="closeCustomerModal()"></div>
+
+  <div class="relative mx-auto mt-10 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl max-h-[85vh] flex flex-col">
+
+    <!-- HEADER -->
+    <div class="flex items-center justify-between border-b px-5 py-3">
+      <h2 class="text-sm font-semibold">Add Customer</h2>
+      <button onclick="closeCustomerModal()" class="text-gray-500 text-lg">✕</button>
+    </div>
+
+    <!-- form -->
+    <form id="customerForm" class="p-5 space-y-4 text-xs overflow-y-auto" method="POST">
+
+      <!-- BILLING -->
+      <div class="font-semibold text-gray-700">Billing Details</div>
+
+      <div class="grid grid-cols-2 gap-3">
+
+        <div>
+          <label class="text-gray-500">First Name</label>
+          <input name="first_name" required class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Last Name</label>
+          <input name="last_name" required class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Mobile</label>
+          <input name="mobile" required class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Email</label>
+          <input name="cus_email" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div class="col-span-2">
+          <label class="text-gray-500">Address</label>
+          <input name="address_line1" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+
+        <div>
+          <label class="text-gray-500">City</label>
+          <input name="city" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">State</label>
+          <input name="state" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Zipcode</label>
+          <input name="zipcode" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">GSTIN</label>
+          <input name="gstin" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+      </div>
+
+      <!-- SHIPPING -->
+      <div class="flex items-center gap-2 mt-2">
+        <input type="checkbox" id="sameAddress" onchange="copyBilling()">
+        <label class="text-xs text-gray-600">Shipping same as billing</label>
+      </div>
+
+      <div class="font-semibold text-gray-700">Shipping Details</div>
+
+      <div class="grid grid-cols-2 gap-3">
+
+        <div>
+          <label class="text-gray-500">First Name</label>
+          <input name="shipping_first_name" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Last Name</label>
+          <input name="shipping_last_name" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Mobile</label>
+          <input name="shipping_mobile" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Email</label>
+          <input name="shipping_email" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div class="col-span-2">
+          <label class="text-gray-500">Address</label>
+          <input name="shipping_address_line1" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">City</label>
+          <input name="shipping_city" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">State</label>
+          <input name="shipping_state" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+        <div>
+          <label class="text-gray-500">Zipcode</label>
+          <input name="shipping_zipcode" class="w-full border rounded px-2 py-1.5">
+        </div>
+
+      </div>
+
+      <!-- buttons -->
+      <div class="flex justify-end gap-3 border-t pt-4">
+
+        <button type="button"
+          onclick="closeCustomerModal()"
+          class="px-4 py-1.5 rounded bg-gray-300 text-gray-700">
+          Cancel
+        </button>
+
+        <button type="submit"
+          class="px-4 py-1.5 rounded bg-orange-600 text-white">
+          Save Customer
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
 <!-- PAYMENT MODAL -->
 <div id="paymentModal" class="fixed inset-0 z-[9999] hidden">
 
-  <!-- Overlay -->
   <div class="absolute inset-0 bg-black/40" onclick="closePaymentModal()"></div>
 
-  <!-- Modal Box -->
   <div class="relative mx-auto mt-20 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl">
 
     <!-- Header -->
@@ -604,14 +679,18 @@
 
       <div class="grid grid-cols-3 gap-4">
 
-        <!-- Amount -->
+        <!-- Payment Type -->
         <div>
-          <label class="text-xs text-gray-600">Amount</label>
-          <input
-            type="number"
-            value="<?= $cartData['grand_total'] ?? 0 ?>"
-            readonly
-            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-gray-100 cursor-not-allowed">
+          <label class="text-xs text-gray-600">Payment Type</label>
+
+          <select name="payment_stage" id="payment_stage"
+            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
+
+            <option value="final">Final</option>
+            <option value="partial">Partial</option>
+            <option value="advance">Advance</option>
+
+          </select>
         </div>
 
         <!-- Payment Mode -->
@@ -623,7 +702,7 @@
 
             <option value="cod">Cash</option>
             <option value="bank_transfer">Bank Transfer</option>
-            <option value="pos_machine">Credit/Debit Card (POS Machine)</option>
+            <option value="pos_machine">POS Machine</option>
             <option value="razorpay">Razorpay</option>
             <option value="specialpay">SpecialPay</option>
             <option value="cheque">Cheque</option>
@@ -635,24 +714,55 @@
         <!-- Payment Date -->
         <div>
           <label class="text-xs text-gray-600">Payment Date</label>
+
           <input
             type="date"
             value="<?= date('Y-m-d') ?>"
-            readonly
-            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-gray-100 ">
+            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
         </div>
 
       </div>
 
+
+      <div class="grid grid-cols-2 gap-4">
+
+        <!-- Amount -->
+        <div>
+          <label class="text-xs text-gray-600">Amount</label>
+
+          <input
+            type="number"
+            id="payment_amount"
+            value="<?= $cartData['grand_total'] ?? 0 ?>"
+            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
+        </div>
+
+        <!-- Transaction ID -->
+        <div>
+          <label class="text-xs text-gray-600">Transaction ID</label>
+
+          <input
+            type="text"
+            id="transaction_id"
+            placeholder="Enter transaction id"
+            class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
+        </div>
+
+      </div>
+
+
       <!-- Note -->
       <div>
         <label class="text-xs text-gray-600">Note</label>
-        <textarea name="note"
+
+        <textarea
+          name="note"
           placeholder="Enter note"
-          class="w-full mt-1 border rounded-lg px-3 py-2 text-sm h-28"></textarea>
+          class="w-full mt-1 border rounded-lg px-3 py-2 text-sm h-24"></textarea>
       </div>
 
     </div>
+
 
     <!-- Footer -->
     <div class="flex justify-end gap-3 border-t px-6 py-4">
@@ -663,31 +773,17 @@
         Cancel
       </button>
 
-      <!-- <form method="POST">
-
-        <input type="hidden" name="action" value="create_order">
-
-        <input type="hidden" id="payment_type_input" name="payment_type">
-
-        <input type="hidden" id="payment_note_input" name="note">
-
-        <button
-          class="px-5 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700">
-          Confirm Order
-        </button>
-
-      </form> -->
       <button
         id="placeOrderBtn"
         class="px-5 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700">
         Confirm Order
       </button>
 
-
     </div>
 
   </div>
 </div>
+<!-- CUSTOMER MODAL -->
 
 </div>
 </div>
@@ -710,19 +806,36 @@
 <script>
   document.addEventListener("DOMContentLoaded", function() {
 
-    const btn = document.getElementById("placeOrderBtn");
+    document.getElementById("placeOrderBtn").addEventListener("click", function() {
 
-    if (!btn) return;
+      let paymentType = document.getElementById("payment_mode").value
+      let paymentStage = document.getElementById("payment_stage").value
+      let paymentAmount = document.getElementById("payment_amount").value
+      let transactionId = document.getElementById("transaction_id").value
+      let note = document.querySelector("textarea[name='note']").value
 
-    btn.addEventListener("click", function() {
-
-      let paymentType = document.getElementById("payment_mode").value;
-      let note = document.querySelector("textarea[name='note']").value;
-
+      /* GET CUSTOMER FORM DATA */
+      // let formData = new FormData(document.getElementById("customerForm"))
+      let form = document.getElementById("customerForm");
       let formData = new FormData();
-      formData.append("action", "create_order");
-      formData.append("payment_type", paymentType);
-      formData.append("note", note);
+      for (let key in customerData) {
+        formData.append(key, customerData[key]);
+      }
+      for (let element of form.elements) {
+        if (element.name) {
+          formData.append(element.name, element.value);
+        }
+      }
+      for (let pair of formData.entries()) {
+        // console.log(pair[0] + ":", pair[1]);
+      }
+
+      formData.append("action", "create_order")
+      formData.append("payment_type", paymentType)
+      formData.append("payment_stage", paymentStage)
+      formData.append("amount", paymentAmount)
+      formData.append("transaction_id", transactionId)
+      formData.append("note", note)
 
       fetch("?page=pos_register&action=create-order", {
           method: "POST",
@@ -732,68 +845,189 @@
         .then(data => {
 
           if (data.success) {
+            console.log(data.success, "data.success")
+            closePaymentModal()
 
-            closePaymentModal();
-            importOrder(data.orderid);
-            let msg = document.createElement("div");
-            msg.className = "fixed top-5 right-5 bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
-            msg.innerHTML = data.message + " (Order ID: " + data.orderid + ")";
+            importOrder(data.orderid)
 
-            document.body.appendChild(msg);
+            let msg = document.createElement("div")
+            msg.className = "fixed top-5 right-5 bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]"
+            msg.innerHTML = data.message + " (Order ID: " + data.orderid + ")"
+
+            document.body.appendChild(msg)
 
             setTimeout(() => {
-              msg.remove();
-              location.reload();
-            }, 2000);
+              msg.remove()
+              location.reload()
+            }, 2000)
 
           } else {
 
-            alert(data.message || "Order failed");
+            alert(data.message || "Order failed")
 
           }
 
         })
-        .catch(err => {
-          console.error(err);
-          alert("Server error");
+
+    })
+  });
+
+  function importOrder(orderid) {
+    const secretKey = 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801';
+    const url = 'index.php?page=orders&action=import_orders&secret_key=' + secretKey + '&orderid=' + orderid;
+
+    fetch(url, {
+        method: 'GET'
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Order imported successfully:', data);
+
+        // Display success message
+        let successMsg = document.createElement("div");
+        successMsg.className = "fixed top-5 right-5 bg-blue-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
+        successMsg.innerHTML = "✓ Order imported successfully";
+        document.body.appendChild(successMsg);
+
+        setTimeout(() => {
+          successMsg.remove();
+        }, 3000);
+      })
+      .catch(error => {
+        console.error('Error importing order:', error);
+
+        // Display error message
+        let errorMsg = document.createElement("div");
+        errorMsg.className = "fixed top-5 right-5 bg-red-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
+        errorMsg.innerHTML = "✗ Error importing order";
+        document.body.appendChild(errorMsg);
+
+        setTimeout(() => {
+          errorMsg.remove();
+        }, 3000);
+      });
+  }
+</script>
+<script>
+  function openCustomerModal() {
+    document.getElementById("customerModal").classList.remove("hidden")
+  }
+
+  function closeCustomerModal() {
+    document.getElementById("customerModal").classList.add("hidden")
+  }
+  let customerData = {};
+  document.getElementById("customerForm").addEventListener("submit", function(e) {
+
+    e.preventDefault();
+
+    let formData = new FormData(this);
+
+    /* STORE FORM DATA */
+    customerData = {};
+    formData.forEach((value, key) => {
+      customerData[key] = value;
+    });
+
+    fetch("?page=pos_register&action=add-customer", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+
+        if (data.success) {
+
+          let select = document.getElementById("customerSelect");
+
+          let option = document.createElement("option");
+
+          option.value = data.customer.id;
+          option.text = data.customer.name + " (" + data.customer.phone + ")";
+
+          select.appendChild(option);
+
+          select.value = data.customer.id;
+
+          closeCustomerModal();
+
+        }
+
+      });
+
+  });
+</script>
+
+<script>
+  document.getElementById("customerSelect").addEventListener("change", function() {
+
+    let id = this.value
+
+    fetch("?page=pos_register&action=set-customer", {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: "customer_id=" + id
+    })
+
+    let selected = this.options[this.selectedIndex]
+
+    let name = selected.getAttribute("data-name")
+    let phone = selected.getAttribute("data-phone")
+
+    document.getElementById("selectedCustomerName").innerText = name || "Walk-in Customer"
+    document.getElementById("selectedCustomerPhone").innerText = phone || "-"
+
+  })
+</script>
+
+<script>
+  function copyBilling() {
+
+    const checkbox = document.getElementById("sameAddress");
+
+    const map = {
+      "first_name": "shipping_first_name",
+      "last_name": "shipping_last_name",
+      "mobile": "shipping_mobile",
+      "cus_email": "shipping_email",
+      "address_line1": "shipping_address_line1",
+      "city": "shipping_city",
+      "state": "shipping_state",
+      "zipcode": "shipping_zipcode"
+    };
+
+    Object.keys(map).forEach(billingField => {
+
+      const shippingField = map[billingField];
+
+      const billingInput = document.querySelector(`[name="${billingField}"]`);
+      const shippingInput = document.querySelector(`[name="${shippingField}"]`);
+
+      if (!billingInput || !shippingInput) return;
+
+      if (checkbox.checked) {
+
+        shippingInput.value = billingInput.value;
+        shippingInput.readOnly = true;
+        shippingInput.classList.add("bg-gray-100");
+
+        /* LIVE SYNC */
+        billingInput.addEventListener("input", function() {
+          if (checkbox.checked) {
+            shippingInput.value = billingInput.value;
+          }
         });
+
+      } else {
+
+        shippingInput.readOnly = false;
+        shippingInput.classList.remove("bg-gray-100");
+
+      }
 
     });
 
-  });
-function importOrder(orderid){
-  const secretKey = 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801';
-  const url = 'index.php?page=orders&action=import_orders&secret_key=' + secretKey + '&orderid=' + orderid;
-  
-  fetch(url, {
-    method: 'GET'
-  })
-  .then(response => response.json())
-  .then(data => {
-    console.log('Order imported successfully:', data);
-    
-    // Display success message
-    let successMsg = document.createElement("div");
-    successMsg.className = "fixed top-5 right-5 bg-blue-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
-    successMsg.innerHTML = "✓ Order imported successfully";
-    document.body.appendChild(successMsg);
-    
-    setTimeout(() => {
-      successMsg.remove();
-    }, 3000);
-  })
-  .catch(error => {
-    console.error('Error importing order:', error);
-    
-    // Display error message
-    let errorMsg = document.createElement("div");
-    errorMsg.className = "fixed top-5 right-5 bg-red-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
-    errorMsg.innerHTML = "✗ Error importing order";
-    document.body.appendChild(errorMsg);
-    
-    setTimeout(() => {
-      errorMsg.remove();
-    }, 3000);
-  });
-}
+  }
 </script>

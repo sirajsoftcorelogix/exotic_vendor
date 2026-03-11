@@ -731,75 +731,37 @@ switch ($page) {
                 break;
 
             case 'cart-add':
-
-                $code = $_POST['code'] ?? '';
-                $qty = $_POST['qty'] ?? 1;
-                $variation = $_POST['variation'] ?? '';
-                $options = $_POST['options'] ?? '';
-
-                $controller->add_to_cart($code, $qty, $variation, $options);
-
-                header("Location: ?page=pos_register");
-                exit;
-
+                $controller->add_to_cart();
                 break;
 
             case 'change-qty':
-
-                $cartref = $_POST['cartref'] ?? '';
-                $qty = $_POST['newqty'] ?? 1;
-
-                $controller->change_qty($cartref, $qty);
-
-                header("Location: ?page=pos_register");
-                exit;
-
+                $controller->change_qty();
                 break;
 
             case 'remove-item':
-
-                $cartref = $_POST['cartref'] ?? '';
-
-                $controller->remove_item($cartref);
-
-                header("Location: ?page=pos_register");
-                exit;
-
+                $controller->remove_item();
                 break;
 
             case 'apply-coupon':
-
-                $coupon = $_POST['coupon'] ?? '';
-
-                $controller->apply_coupon($coupon);
-
-                header("Location: ?page=pos_register");
-                exit;
-
+                $controller->apply_coupon();
                 break;
-
+            case 'remove-coupon':
+                $controller->remove_coupon();
+                break;
             case 'toggle-shipping':
-
-                $cartid = $_POST['cartid'] ?? '';
-                $action = $_POST['action'] ?? '';
-
-                $controller->modify_express_shipping($cartid, $action);
-
-                header("Location: ?page=pos_register");
-                exit;
-
+                $controller->modify_express_shipping();
                 break;
 
             case 'create-order':
-
-                $cart = $controller->get_cart();
-                $controller->create_order($cart);
-
-                header("Location: ?page=pos_register");
-                exit;
-
+                $controller->create_order();
                 break;
 
+            case 'add-customer':
+                $controller->add_customer();
+                break;
+            case 'set-customer':
+                $controller->set_customer();
+                break;
             default:
                 $controller->index();
                 break;
