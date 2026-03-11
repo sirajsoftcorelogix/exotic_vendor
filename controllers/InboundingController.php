@@ -1757,11 +1757,12 @@ class InboundingController {
      * Returns the log filename
      */
     private function logPublishProcess($data) {
-        $logDir = __DIR__ . '/../log/publish_logs/';
+        // Use proper path from root - go up 2 levels from controllers to app root, then to log folder
+        $logDir = dirname(__DIR__) . '/log/publish_logs/';
         
-        // Create directory if it doesn't exist
+        // Create directory if it doesn't exist with proper permissions
         if (!is_dir($logDir)) {
-            mkdir($logDir, 0755, true);
+            @mkdir($logDir, 0777, true);
         }
 
         // Create filename with timestamp
@@ -1789,7 +1790,7 @@ class InboundingController {
         ];
 
         // Write to file
-        file_put_contents($filename, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        @file_put_contents($filename, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         
         // Return just the filename (without path) for the response
         return basename($filename);
@@ -1808,11 +1809,11 @@ class InboundingController {
 
         // Sanitize filename to prevent path traversal attacks
         $filename = basename($filename);
-        $filepath = __DIR__ . '/../log/publish_logs/' . $filename;
+        $filepath = dirname(__DIR__) . '/log/publish_logs/' . $filename;
 
         // Check if file exists
         if (!file_exists($filepath)) {
-            echo "File not found.";
+            echo "File not found: " . htmlspecialchars($filepath);
             exit;
         }
 
