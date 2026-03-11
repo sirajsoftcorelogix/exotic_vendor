@@ -598,6 +598,9 @@ switch ($page) {
             case 'inbound_product_publish':
                 $controller->inbound_product_publish();
                 break;
+            case 'downloadPublishLog':
+                $controller->downloadPublishLog();
+                break;
             case 'i_photos':
                 $controller->i_photos();
                 break;
