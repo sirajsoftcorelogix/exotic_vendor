@@ -1668,6 +1668,18 @@ class InboundingController {
         if (curl_errno($ch)) {
             $error = "cURL Error: " . curl_error($ch);
             curl_close($ch);
+            
+            // === LOG CURL ERROR ===
+            $this->logPublishProcess([
+                'item_code' => $data['data']['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'curl_error',
+                'error_message' => $error,
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
             echo json_encode(['status' => 'error', 'message' => $error]);
             exit;
         }
@@ -1675,6 +1687,19 @@ class InboundingController {
         curl_close($ch);
 
         if ($httpCode != 200 && $httpCode != 201) {
+            // === LOG HTTP ERROR ===
+            $this->logPublishProcess([
+                'item_code' => $data['data']['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'http_error',
+                'http_code' => $httpCode,
+                'error_message' => "API Error HTTP found.",
+                'api_response' => $response,
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
             echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response]);
             exit;
         }
@@ -1687,16 +1712,81 @@ class InboundingController {
 
             $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
             $stoc_data = $inboundingModel->stock_data($id);
-            $inboundingModel->insert_stock_data($stoc_data);
+            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
             $inboundingModel->stat_logs($logData);
+            
+            // === LOG SUCCESS ===
+            $this->logPublishProcess([
+                'item_code' => $itemCode,
+                'inbound_id' => $id,
+                'status' => 'success',
+                'request_data' => $API_data,
+                'api_response' => $result,
+                'import_response' => $import_response,
+                'insert_stock_response' => $insert_stock_response,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!'
             ]);
         } else {
+            // === LOG API FAILURE (non-success response) ===
+            $this->logPublishProcess([
+                'item_code' => $data['data']['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'api_response_failed',
+                'error_message' => 'API returned non-success status',
+                'api_response' => $response,
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
             echo json_encode(['status' => 'error', 'message' => 'Publish failed.', 'response' => $response]);
         }
         exit;
+    }
+
+    /**
+     * Log publish process: API request, API response, import response, and insert_stock_data response
+     * Handles both successful and failed publish attempts
+     */
+    private function logPublishProcess($data) {
+        $logDir = __DIR__ . '/../log/publish_logs/';
+        
+        // Create directory if it doesn't exist
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+
+        // Create filename with timestamp
+        $timestamp = date('Y-m-d_H-i-s');
+        $microseconds = microtime(true);
+        $microseconds = str_replace('.', '_', $microseconds);
+        $filename = $logDir . 'publish_' . $timestamp . '_' . $microseconds . '.json';
+
+        // Prepare log entry
+        $logEntry = [
+            'timestamp' => date('Y-m-d H:i:s'),
+            'datetime_unix' => time(),
+            'status' => $data['status'] ?? 'unknown',  // success or failed
+            'item_code' => $data['item_code'] ?? '',
+            'inbound_id' => $data['inbound_id'] ?? '',
+            'user_id' => $data['user_id'] ?? 'unknown',
+            'request_data' => $data['request_data'] ?? [],
+            'api_response' => $data['api_response'] ?? null,
+            'import_response' => $data['import_response'] ?? null,
+            'insert_stock_response' => $data['insert_stock_response'] ?? null,
+            // For error cases
+            'error_type' => $data['error_type'] ?? null,
+            'error_message' => $data['error_message'] ?? null,
+            'http_code' => $data['http_code'] ?? null,
+        ];
+
+        // Write to file
+        file_put_contents($filename, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }
 ?>
