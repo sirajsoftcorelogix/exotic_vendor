@@ -18,7 +18,7 @@ class POSRegisterController
 
         $categories = getCategories();
         require_once 'models/user/user.php';
-        require_once 'models/customer/customer.php';
+        require_once 'models/customer/Customer.php';
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
 
@@ -31,7 +31,6 @@ class POSRegisterController
         // Add "All Products" (slug => label)
         // Put it first:
         $categories = ['allProducts' => 'All Products'] + $categories;
-        require_once 'models/customer/customer.php';
 
         $customerModel = new Customer($conn);
         $customers = $customerModel->getAllCustomers(100, 0, []);
