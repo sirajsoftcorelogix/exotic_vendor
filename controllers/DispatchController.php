@@ -1281,7 +1281,7 @@ class DispatchController {
             // After all invoices and dispatch records are created, create Shiprocket shipments separately
             if (!empty($batch_no) && !empty($created_dispatches)) {
                 
-                foreach ($created_dispatches as $dispatchInfo) {
+                foreach ($created_dispatches as $index => $dispatchInfo) {
                     $dispatchId = $dispatchInfo['dispatch_id'];
                     $invoiceId = $dispatchInfo['invoice_id'];
                     $order_number = $dispatchInfo['order_number'];
@@ -1514,7 +1514,7 @@ class DispatchController {
                         //Update order status to dispatched
                         $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
                         //add shipment_id in created_dispatches array for response
-                        $created_dispatches[count($created_dispatches)-1]['shiprocket_shipment_id'] = $shiprocketResponse['json']['shipment_id'] ?? null;
+                        $created_dispatches[$index]['shiprocket_shipment_id'] = $shiprocketResponse['json']['shipment_id'] ?? null;
                         // Get AWB info
                         if (!empty($shiprocketResponse['json']['shipment_id'])) {
                             $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
@@ -1525,7 +1525,7 @@ class DispatchController {
                         }
                         //add awb_code in created_dispatches array for response
                         if (!empty($shiprocketResponse['json']['shipment_id']) && !empty($awbInfoResponse['response']['data']['awb_code'])) {
-                            $created_dispatches[count($created_dispatches)-1]['awb_code'] = $awbInfoResponse['response']['data']['awb_code'];
+                            $created_dispatches[$index]['awb_code'] = $awbInfoResponse['response']['data']['awb_code'];
                         }
                         // Get label info
                         if (!empty($shiprocketResponse['json']['shipment_id'])) {
@@ -1537,7 +1537,7 @@ class DispatchController {
                         }
                         //add label_url in created_dispatches array for response
                         if (!empty($shiprocketResponse['json']['shipment_id']) && !empty($labelInfoResponse['label_url'])) {
-                            $created_dispatches[count($created_dispatches)-1]['label_url'] = $labelInfoResponse['label_url'];
+                            $created_dispatches[$index]['label_url'] = $labelInfoResponse['label_url'];
                         }
                         
                     } else {
