@@ -164,7 +164,7 @@
             <thead class="bg-gray-100">
                 <tr>
                     <th class="p-2 border-b border-gray-200 w-10">
-                        <!-- <input type="checkbox"/> -->
+                        <input type="checkbox" name="selectall" id="selectalldispatched"/>
                     </th>                   
                     <th class="p-2 border-b border-gray-200">Batch No.</th>
                     <th class="p-2 border-b border-gray-200 text-right">Order Number.</th>
@@ -1120,7 +1120,7 @@
                                 row.className = 'border-b border-gray-100 hover:bg-gray-50';
                                 row.innerHTML = `
                                     <td class="p-2 border-b border-gray-200 w-10">
-                                        <input type="checkbox" class="label-checkbox" value="${dispatch.dispatch_id || ''}"/>
+                                        <input type="checkbox" class="label-checkbox dispatched-checkbox" value="${dispatch.dispatch_id || ''}"/>
                                     </td>
                                     <td class="p-2 border-b border-gray-200">${data.batch_no || '-'}</td>
                                     <td class="p-2 border-b border-gray-200 text-right">${dispatch.order_number || '-'}</td>
@@ -1242,6 +1242,17 @@
             });
         });
     }
+    //selectall checkbox handler
+    const selectalldispatched = document.getElementById('selectalldispatched');
+    if (selectalldispatched) {
+        selectalldispatched.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.dispatched-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+    }
+
     // Handle Apply to All button for box size
     const boxSizeApplyBtn = document.getElementById('boxSizeApplyBtn');
     if (boxSizeApplyBtn) {
