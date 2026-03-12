@@ -345,10 +345,12 @@ class DispatchController {
         $retried = 0;
         $failed = 0;
         $errors = [];
+        $results = [];
         foreach ($records as $record) {
             // Only retry if awb_code is missing
             if (empty($record['awb_code'])) {
                 $result = $dispatchModel->retryShiprocketApiCalls($record['id']);
+                $results[] = $result;
                 if ($result && isset($result['success']) && $result['success']) {
                     $retried++;
                 } else {
@@ -364,7 +366,8 @@ class DispatchController {
                 'message' => "Retried $retried dispatch(es)" . ($failed > 0 ? " ($failed failed)" : ''),
                 'retried' => $retried,
                 'failed' => $failed,
-                'errors' => $errors
+                'errors' => $errors,
+                'results' => $results
             ]);
         } else {
             http_response_code(400);
