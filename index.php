@@ -866,6 +866,9 @@ switch ($page) {
             case 'bulk_create_invoices_dispatch':
                 $controller->bulkCreateInvoicesDispatch();
                 break;
+            case 'bulk_print_labels':
+                $controller->bulkPrintLabels();
+                break;
             case 'retry_shipments':
                 $controller->retryShipments();
                 break;
