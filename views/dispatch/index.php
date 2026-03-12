@@ -616,7 +616,7 @@ if (bulkPrintBtn) {
       .then(data => {
           if (data.success) {
               showAlert('Retry initiated successfully. Reloading...', 'success');
-              location.reload();
+              //location.reload();
           } else {
               alert('Error: ' + (data.message || 'Failed to retry dispatch'));
           }
