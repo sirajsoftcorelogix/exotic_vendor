@@ -513,7 +513,7 @@ class DispatchController {
         }
 
         // collect label URLs for the given dispatch ids
-        $records = $dispatchModel->getDispatchRecordsByIds($ids);
+        $records = $dispatchModel->getDispatchById($ids);
         $labelUrls = [];
         if (!empty($records)) {
             foreach ($records as $rec) {
