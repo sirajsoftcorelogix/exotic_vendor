@@ -1431,5 +1431,13 @@ class Order{
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+    public function invoiceExists($order_number) {
+        $sql = "SELECT vp_invoices.id FROM vp_invoices join vp_invoice_items on vp_invoices.id = vp_invoice_items.invoice_id WHERE vp_invoice_items.order_number = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return ($result && $result->num_rows > 0);
+    }
 }
 ?>

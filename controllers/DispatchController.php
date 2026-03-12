@@ -226,7 +226,7 @@ class DispatchController {
                     'shipment_status' => $shiprocketResponse['json']['status'] ?? null,
                     'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
                     'groupname' => $box['groupname'] ?? null,
-                    'created_by' => $_SESSION['user_id'] ?? 0,
+                    'created_by' => $_SESSION['user']['id'] ?? 0,
                     'created_at' => date('Y-m-d H:i:s')
                 ];
 
@@ -494,6 +494,75 @@ class DispatchController {
             exit();
         }
     }
+
+    // new bulk print labels action
+    public function bulkPrintLabels() {
+        global $dispatchModel;
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit();
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        $ids = $input['dispatch_ids'] ?? [];
+        if (!is_array($ids) || empty($ids)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'No dispatch records selected']);
+            exit();
+        }
+
+        // collect label URLs for the given dispatch ids
+        $records = $dispatchModel->getDispatchRecordsByIds($ids);
+        $labelUrls = [];
+        if (!empty($records)) {
+            foreach ($records as $rec) {
+                if (!empty($rec['label_url'])) {
+                    $labelUrls[] = $rec['label_url'];
+                }
+            }
+        }
+
+        if (empty($labelUrls)) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'No labels found for selected dispatches']);
+            exit();
+        }
+
+        // download and merge similar to mergeLabels, then save merged file to tmp directory accessible by web
+        $tempDir = __DIR__ . '/../tmp';
+        if (!is_dir($tempDir)) mkdir($tempDir, 0755, true);
+        $outFile = $tempDir . '/merged_labels_' . uniqid() . '.pdf';
+
+        require_once 'vendor/autoload.php';
+        try {
+            $pdf = new \setasign\Fpdi\Fpdi();
+            foreach ($labelUrls as $url) {
+                $content = @file_get_contents($url);
+                if ($content && strlen($content) > 100) {
+                    $tmp = tempnam(sys_get_temp_dir(), 'lbl');
+                    file_put_contents($tmp, $content);
+                    $pageCount = $pdf->setSourceFile($tmp);
+                    for ($page = 1; $page <= $pageCount; $page++) {
+                        $tpl = $pdf->importPage($page);
+                        $size = $pdf->getTemplateSize($tpl);
+                        $orientation = ($size['width'] > $size['height']) ? 'L' : 'P';
+                        $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+                        $pdf->useTemplate($tpl, 0, 0, $size['width'], $size['height']);
+                    }
+                    @unlink($tmp);
+                }
+            }
+            $pdf->Output('F', $outFile);
+            $publicUrl = base_url('tmp/' . basename($outFile));
+            echo json_encode(['success' => true, 'label_url' => $publicUrl]);
+            exit();
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error merging PDFs: ' . $e->getMessage()]);
+            exit();
+        }
+    }
     
     public function bulkUpdateStatus() {
         global $dispatchModel;
@@ -582,6 +651,7 @@ class DispatchController {
     public function index() {
         global $dispatchModel;
         global $invoiceModel;
+        global $commanModel;
         $invoice_dispatch = [];
         // Pagination params
         $page = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
@@ -663,7 +733,8 @@ class DispatchController {
             'page' => $page,
             'perPage' => $perPage,
             'totalPages' => $totalPages,
-            'totalInvoices' => $totalInvoices
+            'totalInvoices' => $totalInvoices,
+            'staffList' => $commanModel->get_staff_list()
         ]);
     }
     
@@ -1116,7 +1187,10 @@ class DispatchController {
                     'customer_name' => $customer_name,
                     'total_amount' => $total_amount
                 ];
-                                
+                
+                // Update order status to invoiced      
+                $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
+                       
                 // Create dispatch records for each box
                 foreach ($boxes as $boxIndex => $boxData) {
                     $box_no = $boxIndex + 1;
@@ -1186,7 +1260,14 @@ class DispatchController {
                             'height' => $height,
                             'weight' => $weight,
                             'volumetric_weight' => $volumetric_weight,
-                            'groupname' => $boxData['groupname'] ?? null
+                            'groupname' => $boxData['groupname'] ?? null,
+                            'invoice' => [
+                                'invoice_id' => $invoiceId,
+                                'invoice_number' => $invoice_number,
+                                'customer_id' => $customer_id,
+                                'customer_name' => $customer_name,
+                                'total_amount' => $total_amount
+                            ]
                         ];
                     } else {
                         $errors[] = "Failed to create dispatch for order #$order_number, box #$box_no";
@@ -1427,7 +1508,10 @@ class DispatchController {
                         ];
                         
                         $dispatchModel->updateDispatch($dispatchId, $updateData);
-                        
+                        //Update order status to dispatched
+                        $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
+                        //add shipment_id in created_dispatches array for response
+                        $created_dispatches[count($created_dispatches)-1]['shiprocket_shipment_id'] = $shiprocketResponse['json']['shipment_id'] ?? null;
                         // Get AWB info
                         if (!empty($shiprocketResponse['json']['shipment_id'])) {
                             $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
@@ -1436,7 +1520,10 @@ class DispatchController {
                                 $dispatchModel->updateDispatchAwbCode($shiprocketResponse['json']['shipment_id'], $awbCode);
                             }
                         }
-                        
+                        //add awb_code in created_dispatches array for response
+                        if (!empty($shiprocketResponse['json']['shipment_id']) && !empty($awbInfoResponse['response']['data']['awb_code'])) {
+                            $created_dispatches[count($created_dispatches)-1]['awb_code'] = $awbInfoResponse['response']['data']['awb_code'];
+                        }
                         // Get label info
                         if (!empty($shiprocketResponse['json']['shipment_id'])) {
                             $labelInfoResponse = $dispatchModel->getShiprocketLabels($shiprocketResponse['json']['shipment_id']);
@@ -1445,6 +1532,11 @@ class DispatchController {
                                 $dispatchModel->updateDispatchLabelUrl($shiprocketResponse['json']['shipment_id'], $labelUrl);
                             }
                         }
+                        //add label_url in created_dispatches array for response
+                        if (!empty($shiprocketResponse['json']['shipment_id']) && !empty($labelInfoResponse['label_url'])) {
+                            $created_dispatches[count($created_dispatches)-1]['label_url'] = $labelInfoResponse['label_url'];
+                        }
+                        
                     } else {
                         $errorMsg = $shiprocketResponse['json']['status'] ?? $shiprocketResponse['error'] ?? 'Failed to create shipment for Box ' . $box_no;
                         $errors[] = "Shiprocket error for order #$order_number, box #$box_no: $errorMsg";

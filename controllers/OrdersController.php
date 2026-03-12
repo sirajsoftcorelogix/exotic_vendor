@@ -1565,6 +1565,15 @@ class OrdersController {
             ]);
             exit;
         }
+        //check if invoice already exists for the order number, if yes return error
+        
+        if ($ordersModel->invoiceExists($order_number)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice already exists for this order number'
+            ]);
+            exit;
+        }
 
         try {
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
