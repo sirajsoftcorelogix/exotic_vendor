@@ -709,8 +709,7 @@ class POSRegisterController
                 "sphone" => trim($_POST['shipping_mobile'] ?? '')
             ];
         }
-        // print_r($billing);
-        // exit;
+        
         /* ================= VALIDATION ================= */
         if (!$billing['first_name'] || !$billing['phone'] || !$billing['state'] || !$billing['zip']) {
             echo json_encode(["success" => false, "message" => "Billing missing"]);
@@ -723,7 +722,7 @@ class POSRegisterController
         }
 
         /* ================= COD ================= */
-        /* ================= COD ================= */
+       
         if ($paymentType == 'cod' && $cartData['codcharges'] > 0) {
             $cod = "1";
             $codCharges = (string)$cartData['codcharges'];
@@ -786,18 +785,6 @@ class POSRegisterController
         ]);
     }
 
-
-    private function getCustomers()
-    {
-        require_once 'models/customer/customer.php';
-
-        global $conn;
-
-        $customerModel = new Customer($conn);
-
-        // fetch limited customers for dropdown
-        return $customerModel->getAllCustomers(50, 0, []);
-    }
     public function add_customer()
     {
         global $conn;
