@@ -1,4 +1,4 @@
-<div class="max-w-7xl mx-auto bg-white shadow-md border border-gray-200">
+<div class="max-w-7xl mx-auto bg-white shadow-md border border-gray-200 mt-6 rounded">
 
     <div class="border-b border-gray-200 px-6 py-3 flex items-center justify-between bg-white">
         <h2 class="text-lg font-semibold text-gray-800">Bulk Dispatch</h2>
@@ -144,7 +144,43 @@
         </div>
     </div>
 </div>
+<!--Dispatched list with status--->
+<div id="dispatchListContainer" class="max-w-7xl mx-auto mt-6 bg-white shadow-md border border-gray-200 rounded hidden">
+    <div class="border-b border-gray-200 px-6 py-3 flex items-center justify-between bg-white">
+        <h2 class="text-lg font-semibold text-gray-800">Dispatch List</h2>
+        <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-blue-600 hover:text-blue-700 underline font-semibold">View All Dispatches</a>
+    </div>
+     <div class="flex flex-col md:flex-row justify-end items-center gap-3 mb-5">
+      <!--clear all check-->
+      <button id="clear-selection-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md transition" onclick="localStorage.removeItem('selected_dispatch_invoices'); document.querySelectorAll('input.label-checkbox').forEach(cb => cb.checked = false);">
+        Clear Selection
+      </button>
+      <button id="bulk-print-labels-btn" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition">
+        Print Label
+      </button>
+     </div>
+    <div id="dispatchListContent" class="px-4 py-3 text-sm text-gray-700">
+        <table class="w-full text-left border border-gray-200 text-xs">
+            <thead class="bg-gray-100">
+                <tr>
+                    <th class="p-2 border-b border-gray-200 w-10">
+                        <!-- <input type="checkbox"/> -->
+                    </th>                   
+                    <th class="p-2 border-b border-gray-200">Batch No.</th>
+                    <th class="p-2 border-b border-gray-200 text-right">Order Number.</th>
+                    <th class="p-2 border-b border-gray-200 text-right">Invoice No.</th>
+                    <th class="p-2 border-b border-gray-200 text-right">Shipment ID</th>
+                    <th class="p-2 border-b border-gray-200 text-right">AWB</th>
+                    <th class="p-2 border-b border-gray-200 text-right">Action</th>                    
+                </tr>
+            </thead>
+            <tbody id="dispatchListBody">
+            <!-- Dispatch records will be injected here via AJAX -->
+            </tbody>
+        </table>        
+    </div>
 
+</div>
 <script>
     (function () {
         const modal = document.getElementById('selectItemsModal');
@@ -1009,6 +1045,40 @@
             bulkCreateBtn.disabled = true;
             bulkCreateBtn.innerHTML = '<span>⏳</span><span>Creating...</span>';
 
+            // Create and show overlay lock screen
+            const overlayId = 'bulkDispatchOverlay';
+            let overlay = document.getElementById(overlayId);
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = overlayId;
+                overlay.className = 'fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center';
+                overlay.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-2xl p-8 text-center max-w-md">
+                        <div class="mb-4">
+                            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-orange-100">
+                                <div class="animate-spin">
+                                    <svg class="w-8 h-8 text-orange-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                        <h2 class="text-xl font-bold text-gray-800 mb-2">Processing Dispatch</h2>
+                        <p class="text-gray-600 mb-4 text-sm">Please wait while we create your invoices and dispatch records...</p>
+                        <div class="bg-red-50 border border-red-200 rounded-md p-3">
+                            <p class="text-xs text-red-700 font-semibold">⚠️ Important</p>
+                            <p class="text-xs text-red-600 mt-1">Do <strong>NOT</strong> click Back</p>
+                            <p class="text-xs text-red-600">Do <strong>NOT</strong> Close this Window</p>
+                            <p class="text-xs text-red-600 mt-2">Closing may cause incomplete data</p>
+                        </div>
+                    </div>
+                `;
+                overlay.style.pointerEvents = 'none';
+                document.body.appendChild(overlay);
+            }
+            overlay.style.display = 'flex';
+
             // Send data to server
             fetch('?page=dispatch&action=bulk_create_invoices_dispatch', {
                 method: 'POST',
@@ -1020,6 +1090,9 @@
             })
             .then(response => response.json())
             .then(data => {
+                // Hide overlay
+                overlay.style.display = 'none';
+                
                 bulkCreateBtn.disabled = false;
                 bulkCreateBtn.innerHTML = '<span>🚚</span><span>Invoice &amp; Dispatch</span>';
 
@@ -1033,6 +1106,46 @@
                         // Clear the container
                         container.innerHTML = '';
                         
+                        // Display dispatches in the dispatch list table
+                        const dispatchListBody = document.getElementById('dispatchListBody');
+                        const dispatchListContainer = document.getElementById('dispatchListContainer');
+                        
+                        if (dispatchListBody && data.dispatches && data.dispatches.length > 0) {
+                            // Clear previous data
+                            dispatchListBody.innerHTML = '';
+                            
+                            // Populate dispatch rows
+                            data.dispatches.forEach(dispatch => {
+                                const row = document.createElement('tr');
+                                row.className = 'border-b border-gray-100 hover:bg-gray-50';
+                                row.innerHTML = `
+                                    <td class="p-2 border-b border-gray-200 w-10">
+                                        <input type="checkbox" class="label-checkbox" value="${dispatch.dispatch_id || ''}"/>
+                                    </td>
+                                    <td class="p-2 border-b border-gray-200">${data.batch_no || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.order_number || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">
+                                        <a href="?page=invoices&action=generate_pdf&invoice_id=${dispatch.invoice_id}" target="_blank" class="text-blue-600 hover:underline">
+                                            ${dispatch.invoice.invoice_number || '-'}
+                                        </a>
+                                    </td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.shiprocket_shipment_id || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">
+                                        ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
+                                    </td>
+                                    <td class="p-2 border-b border-gray-200 text-right">
+                                        <button class="text-blue-600 hover:text-blue-800 text-sm font-semibold" onclick="alert('View dispatch: ${dispatch.dispatch_id}')">View</button>
+                                    </td>
+                                `;
+                                dispatchListBody.appendChild(row);
+                            });
+                            
+                            // Show the dispatch list container
+                            if (dispatchListContainer) {
+                                dispatchListContainer.classList.remove('hidden');
+                            }
+                        }
+
                         // Show summary
                         console.log('Created Invoices:', data.invoices);
                         console.log('Created Dispatches:', data.dispatches);
@@ -1045,10 +1158,87 @@
                 }
             })
             .catch(error => {
+                // Hide overlay
+                overlay.style.display = 'none';
+                
                 bulkCreateBtn.disabled = false;
                 bulkCreateBtn.innerHTML = '<span>🚚</span><span>Invoice &amp; Dispatch</span>';
                 console.error('Error:', error);
                 showAlert('Error creating invoices: ' + error.message, 'error');
+            });
+        });
+    }
+
+    // Handle bulk print labels
+    const bulkPrintLabelsBtn = document.getElementById('bulk-print-labels-btn');
+    if (bulkPrintLabelsBtn) {
+        bulkPrintLabelsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            // Get selected checkboxes
+            const selectedCheckboxes = document.querySelectorAll('input.label-checkbox:checked');
+            
+            if (selectedCheckboxes.length === 0) {
+                showAlert('Please select at least one dispatch to print labels', 'warning');
+                return;
+            }
+
+            // Collect dispatch IDs
+            const dispatchIds = Array.from(selectedCheckboxes).map(cb => cb.value).filter(id => id);
+
+            if (dispatchIds.length === 0) {
+                showAlert('No valid dispatch IDs selected', 'warning');
+                return;
+            }
+
+            // Show loading state
+            bulkPrintLabelsBtn.disabled = true;
+            bulkPrintLabelsBtn.innerHTML = '<span>⏳</span><span>Processing...</span>';
+
+            // Send request to merge and get labels
+            fetch('?page=dispatch&action=bulk_print_labels', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ dispatch_ids: dispatchIds })
+            })
+            .then(response => response.json())
+            .then(data => {
+                bulkPrintLabelsBtn.disabled = false;
+                bulkPrintLabelsBtn.innerHTML = 'Print Label';
+
+                if (data.success) {
+                    if (data.label_url) {
+                        // Open merged label in new window for printing
+                        const printWindow = window.open(data.label_url, '_blank');
+                        if (printWindow) {
+                            // Wait a bit for the document to load, then trigger print
+                            printWindow.onload = function() {
+                                printWindow.print();
+                            };
+                            // Also trigger print after a short delay as fallback
+                            setTimeout(() => {
+                                if (!printWindow.closed) {
+                                    printWindow.print();
+                                }
+                            }, 1000);
+                        } else {
+                            showAlert('Please allow popups to print labels', 'warning');
+                        }
+                    } else {
+                        showAlert('No label URL received', 'warning');
+                    }
+                } else {
+                    showAlert('Error: ' + (data.message || 'Failed to generate labels'), 'error');
+                }
+            })
+            .catch(error => {
+                bulkPrintLabelsBtn.disabled = false;
+                bulkPrintLabelsBtn.innerHTML = 'Print Label';
+                console.error('Error:', error);
+                showAlert('Error generating labels: ' + error.message, 'error');
             });
         });
     }

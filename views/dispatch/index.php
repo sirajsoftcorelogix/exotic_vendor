@@ -138,11 +138,24 @@
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
                     </div>
                     <div>
+<?php
+                    // build order links only if order_number is set (avoid duplicates)
+                    $orderLinks = [];
+                    $seen = [];
+                    foreach ($invoice['items'] ?? [] as $item) {
+                        $num = trim((string)($item['order_number'] ?? ''));
+                        if ($num === '' || isset($seen[$num])) {
+                            continue;
+                        }
+                        $seen[$num] = true;
+                        $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($num)) . '">' . htmlspecialchars($num) . '</a>';
+                    }
+                    if (!empty($orderLinks)): ?>
                     <p class="text-xs text-gray-500">Order No.</p>
-                    <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
-                      echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
-                    } ?></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>   
+                    <p class="text-blue-600 font-semibold"><?php echo implode('<br>', $orderLinks); ?></p>
+                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+                    <?php endif; ?>
+
                     <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
                       <?php 
@@ -225,6 +238,7 @@
                         }
                       ?>
                     </p>
+                    <p class="text-xs text-gray-400 mt-1">Created by: <?php echo htmlspecialchars($staffList[$invoice['created_by']] ?? '-'); ?></p>
                   </div>
                 </div>
                 <div class="flex flex-col gap-2">
@@ -280,6 +294,7 @@
                         echo !empty($boxSizes) ? implode(' | ', $boxSizes) : '-';
                       ?>
                     </p>
+                    <p class="text-xs text-gray-400 mt-1"><?php echo htmlspecialchars($invoice['batch_no'] ? 'Batch No: ' . $invoice['batch_no'] : ''); ?></p>
                   </div>
                 </div>
                 <div class="flex flex-col gap-3">
@@ -700,8 +715,10 @@ if (bulkPrintBtn) {
       });
   }
   function cancelInvoiceAjax(invoiceId) {
-    document.getElementById('globalConfirmOk').textContent = 'Confirm Cancellation';    
-    customConfirm('Cancelling this invoice will also cancel the associated Dispatch.\nThis action cannot be undone. Are you sure you want to continue?').then(confirmed => {
+    customConfirm(
+        'Cancelling this invoice will also cancel the associated Dispatch.This action cannot be undone. Are you sure you want to continue?',
+        { okText: 'Confirm Cancellation' }
+    ).then(confirmed => {
       if (confirmed) {
         fetch('?page=dispatch&action=cancel_invoice', {
             method: 'POST',
