@@ -455,4 +455,20 @@ class Dispatch {
             $dispatch_records = $result->fetch_all(MYSQLI_ASSOC);
             return $dispatch_records;
     }
+    public function getDispatchRecordsByIds($ids) {
+        if(empty($ids)) return [];
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = "SELECT * FROM vp_dispatch_details WHERE id IN ($placeholders)";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return false;
+
+        // Dynamically bind parameters
+        $types = str_repeat('i', count($ids));
+        $stmt->bind_param($types, ...$ids);
+
+        if ($stmt->execute()) {
+            return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        }
+        return false;
+    }
 }
