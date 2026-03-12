@@ -1670,7 +1670,7 @@ class InboundingController {
             curl_close($ch);
             
             // === LOG CURL ERROR ===
-            $logFile = $this->logPublishProcess([
+            $logFileData = $this->logPublishProcess([
                 'item_code' => $data['data']['Item_code'] ?? '',
                 'inbound_id' => $id,
                 'status' => 'failed',
@@ -1680,7 +1680,7 @@ class InboundingController {
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
             ]);
             
-            echo json_encode(['status' => 'error', 'message' => $error, 'log_file' => $logFile]);
+            echo json_encode(['status' => 'error', 'message' => $error, 'log_file' => $logFileData['filename']]);
             exit;
         }
         
@@ -1688,7 +1688,7 @@ class InboundingController {
 
         if ($httpCode != 200 && $httpCode != 201) {
             // === LOG HTTP ERROR ===
-            $logFile = $this->logPublishProcess([
+            $logFileData = $this->logPublishProcess([
                 'item_code' => $data['data']['Item_code'] ?? '',
                 'inbound_id' => $id,
                 'status' => 'failed',
@@ -1700,7 +1700,7 @@ class InboundingController {
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
             ]);
             
-            echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response, 'log_file' => $logFile]);
+            echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response, 'log_file' => $logFileData['filename']]);
             exit;
         }
 
@@ -1716,7 +1716,7 @@ class InboundingController {
             $inboundingModel->stat_logs($logData);
             
             // === LOG SUCCESS ===
-            $logFile = $this->logPublishProcess([
+            $logFileData = $this->logPublishProcess([
                 'item_code' => $itemCode,
                 'inbound_id' => $id,
                 'status' => 'success',
@@ -1730,12 +1730,12 @@ class InboundingController {
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!',
-                'log_file' => $logFile
+                'log_file' => $logFileData['filename']
             ]);
         } else {
             // === LOG API FAILURE (non-success response or has error) ===
             $errorMsg = isset($result->error) ? $result->error : 'API returned non-success status';
-            $logFile = $this->logPublishProcess([
+            $logFileData = $this->logPublishProcess([
                 'item_code' => $data['data']['Item_code'] ?? '',
                 'inbound_id' => $id,
                 'status' => 'failed',
@@ -1746,7 +1746,7 @@ class InboundingController {
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
             ]);
             
-            echo json_encode(['status' => 'error', 'message' => 'Publish failed. ' . $errorMsg, 'response' => $response, 'log_file' => $logFile]);
+            echo json_encode(['status' => 'error', 'message' => 'Publish failed. ' . $errorMsg, 'response' => $response, 'log_file' => $logFileData['filename']]);
         }
         exit;
     }
@@ -1757,25 +1757,29 @@ class InboundingController {
      * Returns the log filename
      */
     private function logPublishProcess($data) {
-        // Use proper path from root - go up 2 levels from controllers to app root, then to log folder
+        // Try primary log directory first
         $logDir = dirname(__DIR__) . '/log/publish_logs/';
         
-        // Create directory if it doesn't exist with proper permissions
-        if (!is_dir($logDir)) {
-            @mkdir($logDir, 0777, true);
+        // Fallback to temp directory if primary fails
+        if (!is_dir($logDir) && !@mkdir($logDir, 0777, true)) {
+            $logDir = sys_get_temp_dir() . '/exotic_publish_logs/';
+            if (!is_dir($logDir)) {
+                @mkdir($logDir, 0777, true);
+            }
         }
 
         // Create filename with timestamp
         $timestamp = date('Y-m-d_H-i-s');
         $microseconds = microtime(true);
         $microseconds = str_replace('.', '_', $microseconds);
-        $filename = $logDir . 'publish_' . $timestamp . '_' . $microseconds . '.json';
+        $filename = 'publish_' . $timestamp . '_' . $microseconds . '.json';
+        $filepath = $logDir . $filename;
 
         // Prepare log entry
         $logEntry = [
             'timestamp' => date('Y-m-d H:i:s'),
             'datetime_unix' => time(),
-            'status' => $data['status'] ?? 'unknown',  // success or failed
+            'status' => $data['status'] ?? 'unknown',
             'item_code' => $data['item_code'] ?? '',
             'inbound_id' => $data['inbound_id'] ?? '',
             'user_id' => $data['user_id'] ?? 'unknown',
@@ -1783,17 +1787,26 @@ class InboundingController {
             'api_response' => $data['api_response'] ?? null,
             'import_response' => $data['import_response'] ?? null,
             'insert_stock_response' => $data['insert_stock_response'] ?? null,
-            // For error cases
             'error_type' => $data['error_type'] ?? null,
             'error_message' => $data['error_message'] ?? null,
             'http_code' => $data['http_code'] ?? null,
         ];
 
-        // Write to file
-        @file_put_contents($filename, json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        
-        // Return just the filename (without path) for the response
-        return basename($filename);
+        // Write to file with error checking
+        $jsonContent = json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $writeSuccess = @file_put_contents($filepath, $jsonContent);
+
+        if ($writeSuccess === false) {
+            // If write failed, store in a fallback session variable for display
+            $_SESSION['last_publish_log'] = $logEntry;
+            error_log('Failed to write publish log to: ' . $filepath);
+        }
+
+        return [
+            'filename' => $filename,
+            'filepath' => $filepath,
+            'success' => $writeSuccess !== false
+        ];
     }
 
     /**
@@ -1803,17 +1816,33 @@ class InboundingController {
         $filename = $_GET['file'] ?? '';
         
         if (empty($filename)) {
-            echo "No file specified.";
+            echo json_encode(['error' => 'No file specified.']);
             exit;
         }
 
         // Sanitize filename to prevent path traversal attacks
         $filename = basename($filename);
+        
+        // Try primary location first
         $filepath = dirname(__DIR__) . '/log/publish_logs/' . $filename;
+        
+        // Fallback to temp directory
+        if (!file_exists($filepath)) {
+            $filepath = sys_get_temp_dir() . '/exotic_publish_logs/' . $filename;
+        }
+
+        // Last resort: check if it's in session
+        if (!file_exists($filepath) && isset($_SESSION['last_publish_log'])) {
+            header('Content-Type: application/json');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            echo json_encode($_SESSION['last_publish_log'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
 
         // Check if file exists
         if (!file_exists($filepath)) {
-            echo "File not found: " . htmlspecialchars($filepath);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Log file not found: ' . htmlspecialchars($filepath)]);
             exit;
         }
 

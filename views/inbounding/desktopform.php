@@ -2361,7 +2361,10 @@ document.addEventListener('DOMContentLoaded', function() {
             closePublishPopup();
             
             // CHECK RESPONSE STATUS BEFORE SHOWING SUCCESS
-            if (data.status === 'success') {
+            // Support both "status": "success" and "success": true formats
+            const isSuccess = (data.status === 'success' || data.success === true) && !data.error;
+            
+            if (isSuccess) {
                 // Show success with download button
                 let html = '<div style="text-align: center;">';
                 html += '<p>Form saved and product published successfully.</p>';
