@@ -1,6 +1,6 @@
 <?php
 require_once 'models/pos/pos.php';
-//require_once 'models/pos/product.php';
+require_once 'models/user/user.php';
 
 class POSRegisterController
 {
@@ -15,8 +15,10 @@ class POSRegisterController
     public function index()
     {
         // slug => label
+
         $categories = getCategories();
         require_once 'models/user/user.php';
+        require_once 'models/customer/customer.php';
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
 
@@ -29,7 +31,10 @@ class POSRegisterController
         // Add "All Products" (slug => label)
         // Put it first:
         $categories = ['allProducts' => 'All Products'] + $categories;
+        require_once 'models/customer/customer.php';
 
+        $customerModel = new Customer($conn);
+        $customers = $customerModel->getAllCustomers(100, 0, []);
         // slug => svg icon
         $categoryIcons = [
             'allProducts' => '
@@ -78,11 +83,12 @@ class POSRegisterController
                 'icon'  => $categoryIcons[$slug] ?? '', // fallback
             ];
         }
-        $cartData = $this->get_cart();
+
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
-            'cartData' => $this->get_cart()
+            'cartData' => $this->get_cart(),
+            'customers' => $customers
         ]);
     }
 
@@ -325,6 +331,78 @@ class POSRegisterController
 
         return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
     }
+    public function exotic_api_call_new($endpoint, $method = 'GET', $params = [], $postData = null)
+    {
+        $url = 'https://www.exoticindia.com/api' . $endpoint;
+
+        if ($params) {
+            $url .= '?' . http_build_query($params);
+        }
+
+        $ch = curl_init($url);
+
+        $headers = [
+            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
+            'x-api-deviceid: POS-Store_1',
+            'x-api-appplayerid: POS-Web-Terminal',
+            'x-api-countrycode: IN',
+            'User-Agent: ExoticPOS-Web/1.0'
+        ];
+
+        if (!empty($_SESSION['x_api_euid'])) {
+            $headers[] = 'x-api-euid: ' . $_SESSION['x_api_euid'];
+        }
+
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+        /* CAPTURE RESPONSE HEADERS */
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) {
+            $len = strlen($header);
+            $header = explode(':', $header, 2);
+
+            if (count($header) < 2) return $len;
+
+            $name = strtolower(trim($header[0]));
+            $value = trim($header[1]);
+
+            if ($name == 'x-api-euid') {
+                $_SESSION['x_api_euid'] = $value;
+            }
+
+            if ($name == 'x-api-etd') {
+                $_SESSION['x_api_etd'] = $value;
+            }
+
+            if ($name == 'x-api-browsehistory') {
+                $_SESSION['x_api_browsehistory'] = $value;
+            }
+
+            return $len;
+        });
+
+        if ($method == 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+
+            if (is_array($postData)) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData); // multipart
+            } else {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            }
+        }
+
+        $response = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        curl_close($ch);
+
+        return [
+            'data' => json_decode($response, true),
+            'code' => $code,
+            'raw'  => $response
+        ];
+    }
 
 
     public function get_cart()
@@ -378,7 +456,7 @@ class POSRegisterController
                 }
             }
         }
-
+        $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $discount = (float)($data['couponreduction'] ?? 0);
         $gst = (float)($data['gstamount'] ?? 0);
 
@@ -391,15 +469,23 @@ class POSRegisterController
             'gst' => $gst,
             'discount' => $discount,
             'grand_total' => $grand_total,
-            'checkoutdata' => $data['checkoutdata'] ?? ''
+            'checkoutdata' => $data['checkoutdata'] ?? '',
+            'codcharges' => $codcharges
         ];
     }
 
-    public function add_to_cart($code, $qty, $variation = '', $options = '', $buyNow = false)
+
+    public function add_to_cart()
     {
+        $code      = $_POST['code'] ?? '';
+        $qty       = $_POST['qty'] ?? 1;
+        $variation = $_POST['variation'] ?? '';
+        $options   = $_POST['options'] ?? '';
+        $buyNow    = false;
 
         if (empty(trim($code))) {
-            return ['success' => false, 'message' => 'Product code is required'];
+            header("Location: ?page=pos_register");
+            exit;
         }
 
         $coupon = '';
@@ -408,7 +494,7 @@ class POSRegisterController
             if (is_array($_SESSION['discount_coupon'])) {
                 $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
             } else {
-                $coupon = $_SESSION['discount_coupon']['discountcoupondetails'];
+                $coupon = $_SESSION['discount_coupon'];
             }
         }
 
@@ -421,54 +507,54 @@ class POSRegisterController
             'discountcoupondetails' => $coupon
         ]);
 
-        // echo '<pre>'; print_r($postData);exit;
         $result = $this->exotic_api_call('/cart/add', 'POST', [], $postData);
 
-        $response = $result['data'] ?? [];
-        $httpCode = $result['code'] ?? 0;
-
-        if ($httpCode >= 200 && $httpCode < 300) {
-
-            $success = isset($response['success'])
-                ? $response['success']
-                : (stripos(json_encode($response), 'success') !== false ||
-                    stripos(json_encode($response), 'added') !== false);
-
-            return [
-                'success'  => $success,
-                'message'  => $response['message'] ?? 'Item added to cart',
-                'response' => $response,
-                'cartref'  => $response['cartref'] ?? null
-            ];
+        // optional: check success
+        if (!empty($result['data']['cartref'])) {
+            // item added
         }
 
-        return [
-            'success'  => false,
-            'message'  => $response['message'] ?? 'Failed to add to cart (HTTP ' . $httpCode . ')',
-            'response' => $response,
-            'http_code' => $httpCode
-        ];
+        header("Location: ?page=pos_register");
+        exit;
     }
-    public  function change_qty($cartref, $newqty)
+
+    public function change_qty()
     {
-        return $this->exotic_api_call('/cart/modifyqty', 'GET', [
+        $cartref = $_POST['cartref'] ?? '';
+        $qty = $_POST['newqty'] ?? 1;
+
+        $this->exotic_api_call('/cart/modifyqty', 'GET', [
             'cartid' => $cartref,
-            'newqty' => $newqty
+            'newqty' => $qty
         ]);
+
+        header("Location: ?page=pos_register");
+        exit;
     }
 
-    public function remove_item($cartref)
+    public function remove_item()
     {
-        return $this->change_qty($cartref, 0);
+        $cartref = $_POST['cartref'] ?? '';
+
+        $qty = 0;
+
+        $this->exotic_api_call('/cart/modifyqty', 'GET', [
+            'cartid' => $cartref,
+            'newqty' => $qty
+        ]);
+
+        header("Location: ?page=pos_register");
+        exit;
     }
 
-    public function apply_coupon($couponId)
+
+    public function apply_coupon()
     {
+        $couponId = $_POST['coupon'] ?? '';
+
         if (empty($couponId)) {
-            return [
-                'success' => false,
-                'message' => 'Coupon code required'
-            ];
+            header("Location: ?page=pos_register");
+            exit;
         }
 
         $result = $this->exotic_api_call(
@@ -479,31 +565,29 @@ class POSRegisterController
             ]
         );
 
-        $response = $result['data'] ?? [];
-        // echo '<pre>'; print_r($result); exit;
-        // Example response: "APP05|P|5"
+        $response = $result['data'] ?? '';
+
         if (!empty($response) && !isset($response['error'])) {
 
-            // store validated coupon string in session
+            // store string coupon
             $_SESSION['discount_coupon'] = $response;
-
-            return [
-                'success' => true,
-                // 'message' => 'Coupon applied successfully',
-                'coupon_string' => $response
-            ];
         }
 
-        return [
-            'success' => false,
-            'message' => $response['message'] ?? 'Invalid coupon'
-        ];
+        header("Location: ?page=pos_register");
+        exit;
     }
 
-    public  function modify_express_shipping($cartid, $action)
+    public function modify_express_shipping()
     {
-        // echo $cartid; exit;
-        return $this->exotic_api_call(
+        $cartid = $_POST['cartid'] ?? '';
+        $action = $_POST['action'] ?? '';
+
+        if (!$cartid || !$action) {
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
+        $this->exotic_api_call(
             '/cart/modifycartexpress',
             'GET',
             [
@@ -511,196 +595,266 @@ class POSRegisterController
                 'action' => $action
             ]
         );
+
+        header("Location: ?page=pos_register");
+        exit;
     }
 
 
-    // function create_order($cartData, $paymentType = 'cod')
-    public  function create_order($cartData, $paymentType = 'cash', $note = '')
+
+
+    public function create_order()
     {
-        global $conn; // mysqli connection
+        global $conn;
 
-        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-        // echo "<pre>";
-        // print_r($paymentType);
-        // exit;
-        $postData = [
-            "payment_type" => "cod",
-            "buynow" => "0",
+        header('Content-Type: application/json');
 
-            // IMPORTANT → put checkoutdata from cart/retrieve here
-            'checkoutdata' => $cartData['checkoutdata'],
+        /* ================= PAYMENT TYPE ================= */
+        $paymentType = $_POST['payment_type'] ?? 'cod';
 
-            // "cardnumber" => "",
-            // "cardexpmonth" => "",
-            // "cardexpyear" => "",
-            // "card_cvv" => "",
+        if (!in_array($paymentType, ['cod', 'razorpay', 'offline', 'cc'])) {
+            $paymentType = 'offline';
+        }
 
-            // "razorpay_order_id" => "",
-            // "razorpay_payment_id" => "",
-            // "razorpay_signature" => "",
+        $transactionId = $_POST['transaction_id'] ?? '';
 
-            // "magiccheckout_done" => "",
-            // "paypal_transaction_status" => "",
-            // "paypal_transaction_id" => "",
+        /* ================= USER / STORE ================= */
+        $userModel = new User($conn);
+        $user_id = $_SESSION['user']['id'] ?? 0;
+        $user = $userModel->getUserById($user_id);
+        $warehouse_name = $user['warehouse_name'] ?? 'POS';
 
-            "cod" => "0",
-            "codcharges" => "0",
+        $store_payment_details = $warehouse_name . "_" . $paymentType . "_" . $transactionId;
 
-            "first_name" => $_SESSION['user']['name'] ?? "POS",
-            "last_name" => "User",
-            "email" => "test@example.com",
+        /* ================= CART ================= */
+        $cartData = $this->get_cart();
 
-            "address1" => "Test Address",
-            "address2" => "",
+        if (empty($cartData['checkoutdata'])) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Cart empty"
+            ]);
+            exit;
+        }
 
-            "city" => "Ahmedabad",
-            "state" => "Gujarat",
-            "zip" => "380001",
-            "country" => "IN",
-            "phone" => $_SESSION['user']['phone'] ?? "9999999999",
+        /* ================= CUSTOMER ================= */
+        $customerId = $_SESSION['pos_customer_id'] ?? 0;
 
-            "gstin" => "",
+        if ($customerId > 0) {
 
-            "sname" => "Test User",
-            "saddress1" => "Test Address",
-            "saddress2" => "",
+            $stmt = $conn->prepare("
+            SELECT * FROM vp_order_info
+            WHERE customer_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        ");
+            $stmt->bind_param("i", $customerId);
+            $stmt->execute();
+            $info = $stmt->get_result()->fetch_assoc();
 
-            "scity" => "Ahmedabad",
-            "sstate" => "Gujarat",
-            "szip" => "380001",
-            "scountry" => "IN",
-            "sphone" => "9999999999"
+            if ($info) {
+
+                $billing = [
+                    "first_name" => $info['first_name'],
+                    "last_name" => $info['last_name'],
+                    "email" => $info['email'],
+                    "phone" => $info['mobile'],
+                    "address1" => $info['address_line1'],
+                    "address2" => $info['address_line2'],
+                    "city" => $info['city'],
+                    "state" => $info['state'],
+                    "zip" => $info['zipcode'],
+                    "country" => $info['country'] ?: 'IN',
+                    "gstin" => $info['gstin']
+                ];
+
+                $shipping = [
+                    "sname" => trim($info['shipping_first_name'] . " " . $info['shipping_last_name']),
+                    "saddress1" => $info['shipping_address_line1'],
+                    "saddress2" => $info['shipping_address_line2'],
+                    "scity" => $info['shipping_city'],
+                    "sstate" => $info['shipping_state'],
+                    "szip" => $info['shipping_zipcode'],
+                    "scountry" => $info['shipping_country'] ?: 'IN',
+                    "sphone" => $info['shipping_mobile']
+                ];
+            }
+        }
+
+        /* ================= WALKIN ================= */
+        if (empty($billing)) {
+
+            $billing = [
+                "first_name" => trim($_POST['first_name'] ?? ''),
+                "last_name" => trim($_POST['last_name'] ?? ''),
+                "email" => trim($_POST['cus_email'] ?? ''),
+                "phone" => trim($_POST['mobile'] ?? ''),
+                "address1" => trim($_POST['address_line1'] ?? ''),
+                "address2" => trim($_POST['address_line2'] ?? ''),
+                "city" => trim($_POST['city'] ?? ''),
+                "state" => trim($_POST['state'] ?? ''),
+                "zip" => trim($_POST['zipcode'] ?? ''),
+                "country" => "IN",
+                "gstin" => trim($_POST['gstin'] ?? '')
+            ];
+
+            $shipping = [
+                "sname" => trim(($_POST['shipping_first_name'] ?? '') . " " . ($_POST['shipping_last_name'] ?? '')),
+                "saddress1" => trim($_POST['shipping_address_line1'] ?? ''),
+                "saddress2" => trim($_POST['shipping_address_line2'] ?? ''),
+                "scity" => trim($_POST['shipping_city'] ?? ''),
+                "sstate" => trim($_POST['shipping_state'] ?? ''),
+                "szip" => trim($_POST['shipping_zipcode'] ?? ''),
+                "scountry" => "IN",
+                "sphone" => trim($_POST['shipping_mobile'] ?? '')
+            ];
+        }
+        
+        /* ================= VALIDATION ================= */
+        if (!$billing['first_name'] || !$billing['phone'] || !$billing['state'] || !$billing['zip']) {
+            echo json_encode(["success" => false, "message" => "Billing missing"]);
+            exit;
+        }
+
+        if (!$shipping['sname'] || !$shipping['sphone'] || !$shipping['sstate']) {
+            echo json_encode(["success" => false, "message" => "Shipping missing"]);
+            exit;
+        }
+
+        /* ================= COD ================= */
+       
+        if ($paymentType == 'cod' && $cartData['codcharges'] > 0) {
+            $cod = "1";
+            $codCharges = (string)$cartData['codcharges'];
+        } else {
+            $cod = "0";
+            $codCharges = "0";
+        }
+
+        /* ================= RAZORPAY ================= */
+        $razorpay = [
+            "razorpay_order_id" => $_POST['razorpay_order_id'] ?? '',
+            "razorpay_payment_id" => $_POST['razorpay_payment_id'] ?? '',
+            "razorpay_signature" => $_POST['razorpay_signature'] ?? '',
+            "magiccheckout_done" => $_POST['magiccheckout_done'] ?? ''
         ];
 
+        /* ================= CARD ================= */
+        $card = [
+            "cardnumber" => $_POST['cardnumber'] ?? '',
+            "cardexpmonth" => $_POST['cardexpmonth'] ?? '',
+            "cardexpyear" => $_POST['cardexpyear'] ?? '',
+            "card_cvv" => $_POST['card_cvv'] ?? ''
+        ];
 
+        /* ================= FINAL DATA ================= */
+        $postData = array_merge([
+            "payment_type" => $paymentType,
+            "buynow" => "0",
+            "checkoutdata" => $cartData['checkoutdata'], // RAW !!!
+            "cod" => $cod,
+            "codcharges" => $codCharges,
+            "store_payment_details" => $store_payment_details
+        ], $billing, $shipping, $razorpay, $card);
 
+        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+
+        /* ================= API CALL ================= */
         $result = $this->exotic_api_call(
             '/order/create',
             'POST',
             ['discountcoupondetails' => $coupon],
             $postData
         );
-        // if (empty($cartData['checkoutdata'])) {
-        //     echo json_encode([
-        //         'success' => false,
-        //         'message' => 'Checkout session expired'
-        //     ]);
-        //     exit;
-        // }
-        // // header('Content-Type: application/json');
-        // if (empty($result['data']['orderid'])) {
 
-        //     echo json_encode([
-        //         'success' => false,
-        //         'api_response' => $result
-        //     ]);
-
-        //     exit;
-        // }
-        if (!empty($result['data']['orderid'])) {
-
-            $orderId = $result['data']['orderid'];
-
-            /* -----------------------
-           SAVE ORDER
-        ------------------------*/
-
-            $smartech = $result['data']['smartech'][0] ?? [];
-
-            $params = json_decode($smartech['params'], true);
-
-            $amount = $params['amount'] ?? 0;
-            $totalQty = $params['total_prqt'] ?? 0;
-            $source = $params['source'] ?? '';
-            $link = $params['link'] ?? '';
-            $domain = $params['domain'] ?? '';
-
-            $rawResponse = json_encode($result['data']);
-
-            $stmt = $conn->prepare("INSERT INTO pos_orders 
-        (api_order_id,payment_mode,total_amount,total_qty,source,invoice_link,domain,raw_response,note)
-        VALUES (?,?,?,?,?,?,?,?,?)");
-
-            $stmt->bind_param(
-                "isdiissss",
-                $orderId,
-                $paymentType,
-                $amount,
-                $totalQty,
-                $source,
-                $link,
-                $domain,
-                $rawResponse,
-                $note
-            );
-
-            $stmt->execute();
-
-            $localOrderId = $stmt->insert_id;
-
-            /* -----------------------
-           SAVE ORDER ITEMS
-        ------------------------*/
-
-            if (!empty($params['items'])) {
-
-                foreach ($params['items'] as $item) {
-
-                    $stmt2 = $conn->prepare("INSERT INTO pos_order_items
-                (order_id,product_code,product_name,category,subcategories,image_url,product_url,quantity,selling_price,discounted_price,language,author,publisher)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-
-                    $stmt2->bind_param(
-                        "issssssiddsss",
-                        $localOrderId,
-                        $item['prid'],
-                        $item['product_name'],
-                        $item['category'],
-                        $item['subcategories'],
-                        $item['image'],
-                        $item['product_url'],
-                        $item['prqt'],
-                        $item['selling_price'],
-                        $item['discounted_price'],
-                        $item['language'],
-                        $item['author'],
-                        $item['publisher']
-                    );
-
-                    $stmt2->execute();
-                }
-            }
-
-            unset($_SESSION['discount_coupon']);
-
-            return [
-                "success" => true,
-                "orderid" => $orderId,
-                "message" => "Order placed successfully"
-            ];
-        } else {
-
-            return [
+        if (empty($result['data']['orderid'])) {
+            echo json_encode([
                 "success" => false,
-                "message" => "Order failed",
-                "api_response" => $result
-            ];
+                "message" => "Order API failed",
+                "api" => $result
+            ]);
+            exit;
         }
+        //  echo '<pre>';print_r($result);
+        //         exit;
+        unset($_SESSION['discount_coupon']);
+
+        echo json_encode([
+            "success" => true,
+            "orderid" => $result['data']['orderid']
+        ]);
+    }
+
+    public function add_customer()
+    {
+        global $conn;
+
+        $first = $_POST['first_name'] ?? '';
+        $last  = $_POST['last_name'] ?? '';
+        $phone = $_POST['mobile'] ?? '';
+        $email = $_POST['email'] ?? '';
+
+        if (!$first || !$phone) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Name and phone required"
+            ]);
+            exit;
+        }
+
+        $name = trim($first . ' ' . $last);
+
+        $stmt = $conn->prepare("
+        INSERT INTO vp_customers (name,email,phone)
+        VALUES (?,?,?)
+    ");
+
+        $stmt->bind_param("sss", $name, $email, $phone);
+        $stmt->execute();
+
+        $id = $stmt->insert_id;
+
+        /* SAVE SELECTED CUSTOMER */
+        $_SESSION['pos_customer_id'] = $id;
+
+        echo json_encode([
+            "success" => true,
+            "customer" => [
+                "id" => $id,
+                "name" => $name,
+                "phone" => $phone,
+                "email" => $email
+            ]
+        ]);
 
         exit;
     }
-
-    public  function get_orders()
+    public function set_customer()
     {
 
-        return $this->exotic_api_call(
-            '/order/retrieve',
-            'GET',
-            [
-                'duration' => 30,
-                'offset' => 0,
-                'showpackages' => 1
-            ]
-        );
+        $customerId = $_POST['customer_id'] ?? '';
+
+        if ($customerId) {
+
+            $_SESSION['pos_customer_id'] = $customerId;
+        } else {
+
+            unset($_SESSION['pos_customer_id']);
+        }
+
+        echo json_encode(["success" => true]);
+        exit;
+    }
+
+    public function remove_coupon()
+    {
+        if (isset($_SESSION['discount_coupon'])) {
+            unset($_SESSION['discount_coupon']);
+        }
+
+        $_SESSION['coupon_status'] = "success";
+
+        header("Location: ?page=pos_register");
+        exit;
     }
 }
