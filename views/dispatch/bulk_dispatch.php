@@ -1366,6 +1366,16 @@
                 return;
             }
 
+            const weightValue = parseFloat(weight);
+            if (weightValue > 20) {
+                showAlert('Weight cannot exceed 20 kg', 'warning');
+                return;
+            }
+            if (weightValue < 0) {
+                showAlert('Weight cannot be negative', 'warning');
+                return;
+            }
+
             // Get all weight inputs in the container
             const container = document.getElementById('invDispatchesContainer');
             const weightInputs = container.querySelectorAll('.weight-input');
