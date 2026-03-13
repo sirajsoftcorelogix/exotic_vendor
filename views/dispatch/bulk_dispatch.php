@@ -1102,6 +1102,20 @@
                 return;
             }
 
+            // Validate weights
+            let hasInvalidWeight = false;
+            orders.forEach(order => {
+                order.boxes.forEach(box => {
+                    if (box.weight > 20 || box.weight < 0) {
+                        hasInvalidWeight = true;
+                    }
+                });
+            });
+            if (hasInvalidWeight) {
+                showAlert('All box weights must be below 20 kg', 'warning');
+                return;
+            }
+
             // Show loading state
             bulkCreateBtn.disabled = true;
             bulkCreateBtn.innerHTML = '<span>⏳</span><span>Creating...</span>';
