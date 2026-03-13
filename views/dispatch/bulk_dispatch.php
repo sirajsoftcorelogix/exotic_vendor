@@ -277,6 +277,10 @@
                         <button type="button" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded text-sm close-error-modal">
                             Close
                         </button>
+                        <button type="button" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold px-4 py-2 rounded text-sm continue-without-shipments-btn" data-close-error-modal>
+                            Continue without Shipments
+                        </button>
+
                         <button type="button" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm retry-shipments-btn" data-batch-no="${data.batch_no}">
                             🔄 Retry Shipments
                         </button>
@@ -307,6 +311,63 @@
                 retryBtn.addEventListener('click', function() {
                     const batchNo = this.getAttribute('data-batch-no');
                     retryShipmentCreation(batchNo, errorModal);
+                });
+            }
+
+            // Continue without shipments button handler
+            const continueBtn = errorModal.querySelector('.continue-without-shipments-btn');
+            if (continueBtn) {
+                continueBtn.addEventListener('click', function() {
+                    // Show the dispatch list container
+                    // const dispatchListContainer = document.getElementById('dispatchListContainer');
+                    // if (dispatchListContainer) {
+                    //     dispatchListContainer.classList.remove('hidden');
+                    // }
+                    // Close the error modal
+                    errorModal.remove();
+                    // Display dispatches in the dispatch list table
+                        const dispatchListBody = document.getElementById('dispatchListBody');
+                        const dispatchListContainer = document.getElementById('dispatchListContainer');
+                        
+                        if (dispatchListBody && data.dispatches && data.dispatches.length > 0) {
+                            // Clear previous data
+                            dispatchListBody.innerHTML = '';
+                            
+                            // Populate dispatch rows
+                            data.dispatches.forEach(dispatch => {
+                                const row = document.createElement('tr');
+                                row.className = 'border-b border-gray-100 hover:bg-gray-50';
+                                row.innerHTML = `
+                                    <td class="p-2 border-b border-gray-200 w-10">
+                                        <input type="checkbox" class="label-checkbox dispatched-checkbox" value="${dispatch.dispatch_id || ''}"/>
+                                    </td>
+                                    <td class="p-2 border-b border-gray-200">${data.batch_no || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.order_number || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">
+                                        <a href="?page=invoices&action=generate_pdf&invoice_id=${dispatch.invoice_id}" target="_blank" class="text-blue-600 hover:underline">
+                                            ${dispatch.invoice.invoice_number || '-'}
+                                        </a>
+                                    </td>
+                                    <td class="p-2 border-b border-gray-200 text-right">${dispatch.shiprocket_shipment_id || '-'}</td>
+                                    <td class="p-2 border-b border-gray-200 text-right">
+                                        ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
+                                    </td>
+                                    <td class="p-2 border-b border-gray-200 text-right">
+                                        <button class="text-blue-600 hover:text-blue-800 text-sm font-semibold" onclick="alert('View dispatch: ${dispatch.dispatch_id}')">View</button>
+                                    </td>
+                                `;
+                                dispatchListBody.appendChild(row);
+                            });
+                            
+                            // Show the dispatch list container
+                            if (dispatchListContainer) {
+                                dispatchListContainer.classList.remove('hidden');
+                            }
+                        } else {
+                            if (dispatchListBody) {
+                                dispatchListBody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-500">No dispatch records found.</td></tr>';
+                            }
+                        }
                 });
             }
         }
