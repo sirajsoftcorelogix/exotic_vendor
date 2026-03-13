@@ -359,6 +359,14 @@ class DispatchController {
                 }
             }
         }
+        //update dispatch status
+        foreach ($records as $record) {
+            if (isset($record['awb_code']) && !empty($record['awb_code'])) {
+                $dispatchModel->updateDispatchStatus($record['id'], 'Dispatched');
+            }else {
+                $dispatchModel->updateDispatchStatus($record['id'], 'Dispatch Failed');
+            }
+        }
 
         if ($retried > 0) {
             echo json_encode([

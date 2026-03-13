@@ -615,8 +615,33 @@ if (bulkPrintBtn) {
       .then(res => res.json())
       .then(data => {
           if (data.success) {
-              showAlert('Retry initiated successfully. Reloading...', 'success');
-              //location.reload();
+              const results = Array.isArray(data.results) ? data.results : [];
+              const contentHtml = results.map((res, idx) => {
+                  const awb = res?.data?.awb_info_response;
+                  const label = res?.data?.label_info_response;
+                  const awbmsg = awb?.response?.data || '';
+                  const labelmsg = label?.response || '';
+                  return `
+                    <div class="mb-4">
+                      <div class="font-semibold mb-2">Dispatch #${idx + 1}</div>
+                      <p class="text-sm text-gray-700"><strong>AWB Response:</strong> ${escapeHtml(awbmsg)}</p>                     
+                      <details class="mb-2">
+                        <summary class="cursor-pointer font-medium">AWB Info</summary>
+                        <pre class="whitespace-pre-wrap text-xs mt-1">${escapeHtml(JSON.stringify(awb, null, 2))}</pre>
+                      </details>
+                      <p class="text-sm text-gray-700"><strong>Label Response:</strong> ${escapeHtml(labelmsg)}</p>
+                      <details>
+                        <summary class="cursor-pointer font-medium">Label Info</summary>
+                        <pre class="whitespace-pre-wrap text-xs mt-1">${escapeHtml(JSON.stringify(label, null, 2))}</pre>
+                      </details>
+                    </div>`;
+              }).join('');
+
+              if (contentHtml) {
+                  showModal('Retry Shipment Results', contentHtml);
+              } else {
+                  showAlert('Retry initiated successfully. No API response data available.', 'success');
+              }
           } else {
               alert('Error: ' + (data.message || 'Failed to retry dispatch'));
           }
@@ -626,6 +651,56 @@ if (bulkPrintBtn) {
           alert('Error retrying dispatch');
       });
     }
+
+    function escapeHtml(text) {
+      if (typeof text !== 'string') return text;
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function showModal(title, contentHtml) {
+      const existing = document.getElementById('retry-response-modal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'retry-response-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center';
+      modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/40"></div>
+        <div class="relative w-full max-w-2xl max-h-[90vh] overflow-auto bg-white rounded-lg shadow-lg">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+            <h2 class="text-lg font-semibold">${title}</h2>
+            <button class="text-gray-600 hover:text-gray-900 text-2xl leading-none close-modal-btn" type="button" aria-label="Close">&times;</button>
+          </div>
+          <div class="p-4 text-xs text-gray-800">${contentHtml}</div>
+          <div class="px-4 py-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b">
+            <button class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded text-sm close-modal-btn">Close</button>
+            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm close-reload-btn">Close and Reload</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const closeBtns = modal.querySelectorAll('.close-modal-btn');
+      const reloadBtn = modal.querySelector('.close-reload-btn');
+      const backdrop = modal.querySelector('.absolute');
+      
+      const closeModal = () => modal.remove();
+      const closeAndReload = () => {
+        modal.remove();
+        location.reload();
+      };
+
+      closeBtns.forEach(btn => btn.addEventListener('click', closeModal));
+      if (reloadBtn) reloadBtn.addEventListener('click', closeAndReload);
+      if (backdrop) backdrop.addEventListener('click', closeModal);
+    }
+
     document.addEventListener('click', function(event) {
       if (!event.target.closest('.relative')) {
         document.querySelectorAll('.relative > div').forEach(menu => {
