@@ -103,6 +103,10 @@ class OrdersController {
         if (!empty($_GET['author'])) {
             $filters['author'] = $_GET['author'];            
         }
+        //unshipped
+        if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {
+            $filters['unshipped'] = true;  
+        }
         
         
 
