@@ -737,10 +737,14 @@
             </div>
             <!-- Tabs -->
             <div class="relative border-b-[4px] border-white">
-                <div id="tabsContainer" class="flex space-x-8" aria-label="Tabs">
+                <div id="tabsContainer" class="flex space-x-6" aria-label="Tabs">
                     <a href="<?php echo base_url('?page=orders&action=list&status=all'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'all') ? 'tab-active' : '';
                                                                                                         echo (!isset($_GET['status']) && !isset($_GET['options']) && !isset($_GET['agent'])) ? 'tab-active' : ''; ?> text-center relative py-4">
                         <span class="px-1 text-md">All Orders</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="<?php echo base_url('?page=orders&action=list&options=unshipped'); ?>" class="tab <?php echo (isset($_GET['options']) && $_GET['options'] === 'unshipped') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-md">Unshipped</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&options=express'); ?>" class="tab <?php echo (isset($_GET['options']) && $_GET['options'] === 'express') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
@@ -748,7 +752,7 @@
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=pending'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-md">Pending</span>
+                        <span class="px-1 text-md">Unprocessed</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=processed'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'processed') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
@@ -756,7 +760,11 @@
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=dispatch'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'dispatch') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-md">Preparing for Dispatch</span>
+                        <span class="px-1 text-md">Prep. for Dispatch</span>
+                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
+                    </a>
+                    <a href="<?php echo base_url('?page=orders&action=list&agent=') . $_SESSION['user']['id']; ?>" class="tab <?php echo (isset($_GET['agent']) && $_GET['agent'] == $_SESSION['user']['id']) ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
+                        <span class="px-1 text-md">My Orders</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=orders&action=list&status=shipped'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'shipped') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
@@ -777,10 +785,7 @@
                         <span class="px-1 text-md">Returned</span>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
-                    <a href="<?php echo base_url('?page=orders&action=list&agent=') . $_SESSION['user']['id']; ?>" class="tab <?php echo (isset($_GET['agent']) && $_GET['agent'] == $_SESSION['user']['id']) ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-md">My Orders</span>
-                        <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
-                    </a>
+                    
                 </div>
                 <div class="right-0 top-0 absolute p-4 size">
                     <!--<select id="category" class="px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
