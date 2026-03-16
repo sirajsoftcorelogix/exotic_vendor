@@ -816,8 +816,8 @@
 </div>
 
 <!-- ===== END PAGE WRAPPER ===== -->
-<!-- <script src="<?php echo base_url(); ?>assets/js/pos.js"></script> -->
-<script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script>
+<script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
+<!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
 <script>
   function autoCreateInvoiceThenPreview(orderid) {
 
