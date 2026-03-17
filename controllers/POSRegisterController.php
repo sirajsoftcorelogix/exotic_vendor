@@ -15,13 +15,12 @@ class POSRegisterController
     public function index()
     {
         // slug => label
-
         $categories = getCategories();
         require_once 'models/user/user.php';
         require_once 'models/customer/Customer.php';
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
-
+   
         $warehouseName = 'No Warehouse';
 
         if (!empty($_SESSION['warehouse_id'])) {
