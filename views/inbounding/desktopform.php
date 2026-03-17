@@ -1544,126 +1544,80 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Track the item currently being dragged
     let draggedItem = null;
-    let draggedFromContainer = null;
-    let draggedFromIndex = null;
-    
-    // 1. DRAG START (Global Listener)
+    let placeholder = document.createElement('div');
+    placeholder.className = 'border-2 border-dashed border-[#d97824] rounded-[4px] bg-orange-50 min-w-[100px] h-32';
+
+    // 1. DRAG START
     document.addEventListener('dragstart', function(e) {
-        // Only trigger if the element is one of our draggable items
         const item = e.target.closest('.draggable-item');
         if (!item) return;
         
         draggedItem = item;
-        draggedFromContainer = item.closest('.photo-group-grid');
-        draggedFromIndex = Array.from(draggedFromContainer.querySelectorAll('.draggable-item')).indexOf(item);
-        
-        item.classList.add('dragging'); // Used for styling and logic
-        item.style.opacity = '0.5';     // Visual feedback
-        
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', ''); // Required for Firefox
-    });
-    
-    // 2. DRAG END (Cleanup)
-    document.addEventListener('dragend', function(e) {
-        const item = e.target.closest('.draggable-item');
-        if (!item) return;
-        item.classList.remove('dragging');
-        item.style.opacity = '1';
         
-        // If drop was not successful, restore to original position
-        if (draggedItem && draggedFromContainer && draggedFromIndex !== null) {
-            const allItems = draggedFromContainer.querySelectorAll('.draggable-item');
-            if (draggedFromIndex < allItems.length) {
-                draggedFromContainer.insertBefore(draggedItem, allItems[draggedFromIndex]);
-            } else {
-                draggedFromContainer.appendChild(draggedItem);
-            }
-        }
-        
-        draggedItem = null;
-        draggedFromContainer = null;
-        draggedFromIndex = null;
+        // Use a timeout to hide the original item so the "ghost" image remains visible
+        setTimeout(() => {
+            item.classList.add('hidden');
+        }, 0);
     });
-    
-    // 3. DRAG OVER (Just provide visual feedback, don't move yet)
+
+    // 2. DRAG OVER (Smooth Insertion)
     document.addEventListener('dragover', function(e) {
-        // If we aren't dragging a valid item, ignore
-        if (!draggedItem) return;
-        // Check if we are over a valid Drop Zone (The Grid)
         const container = e.target.closest('.photo-group-grid');
-        if (!container) return;
-        e.preventDefault(); // Necessary to allow dropping
-        
-        // Visual indicator of where item will be placed
+        if (!container || !draggedItem) return;
+
+        e.preventDefault(); // Allow dropping
         const afterElement = getDragAfterElement(container, e.clientX);
         
-        // Add visual feedback class to show insertion point
-        container.classList.add('drag-over-active');
-    });
-    
-    // Handle drag leave
-    document.addEventListener('dragleave', function(e) {
-        const container = e.target.closest('.photo-group-grid');
-        if (container && !container.contains(e.relatedTarget)) {
-            container.classList.remove('drag-over-active');
+        // Move the placeholder to show where the item will land
+        if (afterElement == null) {
+            container.appendChild(placeholder);
+        } else {
+            container.insertBefore(placeholder, afterElement);
         }
     });
-    
-    // 4. DROP (Actually move item here)
+
+    // 3. DROP
     document.addEventListener('drop', function(e) {
-        e.preventDefault(); // Prevent browser default (opening file)
-        
-        // We only care if we dropped into a valid grid
         const container = e.target.closest('.photo-group-grid');
+        if (!container || !draggedItem) return;
         
-        if (draggedItem && container) {
-            // Remove visual feedback
-            container.classList.remove('drag-over-active');
-            
-            // Calculate final position
-            const afterElement = getDragAfterElement(container, e.clientX);
-            
-            // Only move if dropping into a different container or different position
-            if (container !== draggedFromContainer || afterElement !== draggedItem.nextElementSibling) {
-                // A. Move the DOM element
-                if (afterElement == null) {
-                    container.appendChild(draggedItem);
-                } else {
-                    container.insertBefore(draggedItem, afterElement);
-                }
-                
-                // B. Update the Hidden Variation ID Input
-                const newVarId = container.getAttribute('data-var-id');
-                const varInput = draggedItem.querySelector('.variation-input');
-                if(varInput) {
-                    varInput.value = newVarId;
-                }
-            }
-            
-            // C. Recalculate Sort Order for ALL grids
-            document.querySelectorAll('.photo-group-grid').forEach(grid => {
-                updateOrderInputs(grid);
-            });
+        e.preventDefault();
+
+        // A. Move the actual item to the placeholder's position
+        placeholder.parentNode.insertBefore(draggedItem, placeholder);
+        draggedItem.classList.remove('hidden');
+        placeholder.remove();
+
+        // B. Update the Hidden Variation ID for the moved item
+        const newVarId = container.getAttribute('data-var-id');
+        const varInput = draggedItem.querySelector('.variation-input');
+        if(varInput) {
+            varInput.value = newVarId;
         }
+
+        // C. Recalculate Sort Order for ALL images in the grid
+        updateOrderInputs(container);
     });
-    
-    // --- HELPER: Calculate Position based on X Axis ---
+
+    // 4. DRAG END (Cleanup if dropped outside)
+    document.addEventListener('dragend', function(e) {
+        if (draggedItem) {
+            draggedItem.classList.remove('hidden');
+            placeholder.remove();
+        }
+        draggedItem = null;
+    });
+
+    // --- HELPER: Find the gap between items based on mouse X position ---
     function getDragAfterElement(container, x) {
-        // Get all items in this grid EXCEPT the one we are dragging
-        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.dragging)')];
+        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.hidden)')];
+
         return draggableElements.reduce((closest, child) => {
             const box = child.getBoundingClientRect();
-            
-            // Find the horizontal center of the child
-            const boxCenter = box.left + box.width / 2;
-            
-            // Distance between cursor and center
-            const offset = x - boxCenter;
-            // We are looking for the element where the cursor is to the LEFT of its center
-            // (negative offset) but closest to 0 (smallest negative number)
+            const offset = x - box.left - box.width / 2;
             if (offset < 0 && offset > closest.offset) {
                 return { offset: offset, element: child };
             } else {
@@ -1671,15 +1625,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
-    
-    // --- HELPER: Update hidden input values (1, 2, 3...) ---
+
+    // --- HELPER: Update the numeric order inputs (1, 2, 3...) ---
     function updateOrderInputs(container) {
-        if(!container) return;
-        const currentItems = container.querySelectorAll('.draggable-item');
-        currentItems.forEach((item, index) => {
+        const items = container.querySelectorAll('.draggable-item');
+        items.forEach((item, index) => {
             const input = item.querySelector('.order-input');
             if(input) {
-                input.value = index + 1;
+                input.value = index + 1; // 1-based indexing for display order
             }
         });
     }
