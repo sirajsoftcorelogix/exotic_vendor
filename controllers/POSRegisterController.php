@@ -15,6 +15,7 @@ class POSRegisterController
     public function index()
     {
         // slug => label
+        print_array($_SESSION);
         $categories = getCategories();
         require_once 'models/user/user.php';
         global $conn;   // use existing DB connection
