@@ -9,19 +9,21 @@ $ordersModel = new Order($conn);
 $usersModel = new User($conn);
 $commanModel = new Tables($conn);
 
-class InvoicesController {
-    public function index() {
+class InvoicesController
+{
+    public function index()
+    {
         is_login();
         global $invoiceModel;
-        
+
         $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50;
         $offset = ($page_no - 1) * $limit;
-        
+
         $invoices = $invoiceModel->getAllInvoices($limit, $offset);
         $total_records = $invoiceModel->countAllInvoices();
-        
+
         $data = [
             'invoices' => $invoices,
             'page_no' => $page_no,
@@ -29,29 +31,30 @@ class InvoicesController {
             'total_records' => $total_records,
             'limit' => $limit
         ];
-        
+
         renderTemplate('views/invoices/index.php', $data, 'Invoices');
     }
-    
-    public function create() {
+
+    public function create()
+    {
         is_login();
         global $ordersModel, $usersModel, $commanModel;
-        
+
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
         //print_r($itemIds);
         if (empty($itemIds)) {
-            if(isset($_SESSION['invoice_items']) && !empty($_SESSION['invoice_items'])){
+            if (isset($_SESSION['invoice_items']) && !empty($_SESSION['invoice_items'])) {
                 $itemIds = $_SESSION['invoice_items'];
             } else {
                 renderTemplate('views/errors/not_found.php', ['message' => 'No items selected for Invoice.'], 'No items selected');
                 exit;
             }
         }
-        
-        if(!empty($itemIds)){
+
+        if (!empty($itemIds)) {
             $_SESSION['invoice_items'] = $itemIds;
         }
-        
+
         // Fetch order data for selected items
         $data = [];
         foreach ($itemIds as $id) {
@@ -59,24 +62,22 @@ class InvoicesController {
             //print_r($order);
             if ($order) {
                 $data['data'][] = $order;
-                
             }
         }
         //customer info
         $orderNumber = [];
         $data['customer'] = $commanModel->getRecordById('vp_customers', isset($data['data'][0]['customer_id']) ? $data['data'][0]['customer_id'] : 0);
-        foreach($data['data'] as $key => $order){
+        foreach ($data['data'] as $key => $order) {
             //same order_number validation
-            if(!in_array($order['order_number'], $orderNumber)){
+            if (!in_array($order['order_number'], $orderNumber)) {
                 $orderNumber[] = $order['order_number'];
-                $data['customer_address'][$key]= $commanModel->get_customer_address($order['order_number']);  
+                $data['customer_address'][$key] = $commanModel->get_customer_address($order['order_number']);
             }
             //unit_price calculation with finalprice
             $gstRate = isset($order['gst']) ? $order['gst'] : 0;
             $finalPrice = $order['finalprice'];
             $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
             $data['data'][$key]['unit_price'] = number_format($unitPriceBeforeGst, 2, '.', '');
-                    
         }
         //firm info
         $data['firm'] = $commanModel->getRecordById('firm_details', 1);
@@ -86,17 +87,18 @@ class InvoicesController {
 
         $data['users'] = $usersModel->getAllUsers();
         $data['invoiceModel'] = null; // placeholder for next invoice number logic
-        
+
         renderTemplate('views/invoices/create.php', $data, 'Create Invoice');
         exit;
     }
-    
-    public function createPost() {
+
+    public function createPost()
+    {
         is_login();
         global $invoiceModel, $ordersModel, $commanModel;
         header('Content-Type: application/json');
-         //print_r($_POST);
-         //exit;
+        //print_r($_POST);
+        //exit;
         // Validate form inputs
         $invoice_date = isset($_POST['invoice_date']) ? $_POST['invoice_date'] : date('Y-m-d');
         $customer_id = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
@@ -106,7 +108,7 @@ class InvoicesController {
         $tax_amount = isset($_POST['tax_amount']) ? floatval($_POST['tax_amount']) : 0;
         $discount_amount = isset($_POST['discount_amount']) ? floatval($_POST['discount_amount']) : 0;
         $total_amount = isset($_POST['total_amount']) ? floatval($_POST['total_amount']) : 0;
-        
+
         $order_numbers = isset($_POST['order_number']) && is_array($_POST['order_number']) ? $_POST['order_number'] : [];
         $item_codes = isset($_POST['item_code']) && is_array($_POST['item_code']) ? $_POST['item_code'] : [];
         $item_names = isset($_POST['item_name']) && is_array($_POST['item_name']) ? $_POST['item_name'] : [];
@@ -118,7 +120,7 @@ class InvoicesController {
         $sgst = isset($_POST['sgst']) && is_array($_POST['sgst']) ? $_POST['sgst'] : [];
         $igst = isset($_POST['igst']) && is_array($_POST['igst']) ? $_POST['igst'] : [];
         $box_no = isset($_POST['box_no']) && is_array($_POST['box_no']) ? $_POST['box_no'] : [];
-        
+
         if ($customer_id <= 0 || empty($order_numbers)) {
             echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
             exit;
@@ -144,12 +146,12 @@ class InvoicesController {
         $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
         $invoice_series = $globalSettings['invoice_series'] ?? 0;
         $invoice_series++;
-        
+
         // Update global_settings with new invoice_series
         $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
-        
+
         $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
-        
+
         // Create invoice header
         $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
         $invoiceData = [
@@ -172,38 +174,38 @@ class InvoicesController {
                 $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
                 $convertedAmount = $total_amount * $exchangeRate;
                 $invoiceData['converted_amount'] = $convertedAmount;
-                $invoiceData['exchange_text'] = 'Exchange Rate ('. $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
+                $invoiceData['exchange_text'] = 'Exchange Rate (' . $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
             }
-        }else{
+        } else {
             $invoiceData['exchange_text'] = '';
             $invoiceData['converted_amount'] = 0.00;
         }
         $invoiceId = $invoiceModel->createInvoice($invoiceData);
-        
+
         if (!$invoiceId) {
             echo json_encode(['success' => false, 'message' => 'Failed to create invoice']);
             exit;
         }
-        
+
         // Create invoice items
         $itemCreated = 0;
         $itemsFailed = [];
-        
+
         foreach ($order_numbers as $idx => $order_number) {
             $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
             $unit_price = isset($unit_prices[$idx]) ? floatval($unit_prices[$idx]) : 0;
             $tax_rate = isset($tax_rates[$idx]) ? floatval($tax_rates[$idx]) : 0;
-            
+
             $amount = $quantity * $unit_price;
             $totalTaxAmount = ($amount * $tax_rate) / 100;
-            
+
             // Calculate SGST/CGST/IGST (assuming 50/50 split for SGST/CGST, IGST is 0)
             //$sgstRate = $tax_rate / 2;
             //$cgstRate = $tax_rate / 2;
             $sgstAmt = ($amount * $sgst[$idx] ?? 0) / 100;
             $cgstAmt = ($amount * $cgst[$idx] ?? 0) / 100;
             $igstAmt = ($amount * $igst[$idx] ?? 0) / 100;
-            
+
             $itemData = [
                 'invoice_id' => $invoiceId,
                 'order_number' => $order_number,
@@ -232,7 +234,7 @@ class InvoicesController {
             }
         }
         //save international fields
-        if($isInternational){
+        if ($isInternational) {
             $internationalData = [
                 'invoice_id' => $invoiceId,
                 'pre_carriage_by' => isset($_POST['pre_carriage_by']) ? trim($_POST['pre_carriage_by']) : '',
@@ -257,12 +259,12 @@ class InvoicesController {
         }
         // insert in vp_stock_movements and update stock in vp_stock table
         foreach ($order_numbers as $order_number) {
-           // $stockModel->updateStockByOrderNumber($order_number);
+            // $stockModel->updateStockByOrderNumber($order_number);
         }
 
         // Clear session
         unset($_SESSION['invoice_items']);
-        
+
         echo json_encode([
             'success' => true,
             'message' => "Invoice created with $itemCreated items",
@@ -273,20 +275,21 @@ class InvoicesController {
         ]);
         exit;
     }
-    public function generateIrnForInvoice($invoiceId) {
+    public function generateIrnForInvoice($invoiceId)
+    {
         is_login();
         global $invoiceModel, $commanModel;
-        
+
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
         $items = $invoiceModel->getInvoiceItems($invoiceId);
-        
+
         if (!$invoice || empty($items)) {
             return false;
         }
-        
+
         // Prepare data for IRN generation
         $invoiceData = $commanModel->prepareIrisIrpInvoiceData($invoice, $items);
-        
+
         require_once 'models/invoice/IrisIrpClient.php';
         // Initialize IrisIrpClient
         $irisClient = new IrisIrpClient(
@@ -296,14 +299,14 @@ class InvoicesController {
             IRIS_IRP_PASSWORD,
             IRIS_IRP_SANDBOX
         );
-        
+
         try {
             // Authenticate
             $irisClient->authenticate();
-            
+
             // Generate IRN
             $response = $irisClient->generateIrn($invoiceData);
-            
+
             if (isset($response['irn'])) {
                 // Update invoice with IRN details
                 $updateData = [
@@ -325,46 +328,48 @@ class InvoicesController {
             return false;
         }
     }
-    public function view() {
+    public function view()
+    {
         is_login();
         global $invoiceModel;
-        
+
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id <= 0) {
             echo '<p>Invalid Invoice ID.</p>';
             exit;
         }
-        
+
         $invoice = $invoiceModel->getInvoiceById($id);
         $items = $invoiceModel->getInvoiceItems($id);
-        
+
         if (!$invoice) {
             echo '<p>Invoice not found.</p>';
             exit;
         }
-        
+
         $data = [
             'invoice' => $invoice,
             'items' => $items
         ];
-        
+
         renderTemplate('views/invoices/view.php', $data, 'Invoice Details');
     }
-    
-    public function generatePdf() {
+
+    public function generatePdf()
+    {
         is_login();
         global $invoiceModel;
-        
+
         try {
             // Clear any output buffers
             if (ob_get_level()) {
                 ob_end_clean();
             }
-            
+
             $invoice_id = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
-            if(!$invoice_id){
-            $input = json_decode(file_get_contents('php://input'), true);
-            $invoice_id = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
+            if (!$invoice_id) {
+                $input = json_decode(file_get_contents('php://input'), true);
+                $invoice_id = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
             }
             if ($invoice_id <= 0) {
                 http_response_code(400);
@@ -372,34 +377,34 @@ class InvoicesController {
                 echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
                 exit;
             }
-            
+
             $invoice = $invoiceModel->getInvoiceById($invoice_id);
             $items = $invoiceModel->getInvoiceItems($invoice_id);
-            
+
             if (!$invoice) {
                 http_response_code(404);
                 header('Content-Type: application/json');
                 echo json_encode(['success' => false, 'message' => 'Invoice not found']);
                 exit;
             }
-            
+
             //term and conditions fetch
             global $commanModel;
             $firmSettings = $commanModel->getRecordById('global_settings', 1);
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
-            
+
             // Generate HTML for PDF
             $html = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');
-            
+
             if (empty($html)) {
                 throw new Exception('Failed to generate invoice HTML');
             }
-            
+
             // Create mPDF instance
             require_once 'vendor/autoload.php';
-            
+
             $filename = '' . $invoice['invoice_number'] . '.pdf';
-            
+
             $mpdf = new \Mpdf\Mpdf([
                 'mode' => 'utf-8',
                 'format' => 'A4',
@@ -409,20 +414,19 @@ class InvoicesController {
                 'margin_bottom' => 10,
                 'tempDir' => sys_get_temp_dir()
             ]);
-            
+
             $mpdf->WriteHTML($html);
-            
+
             // Set headers before output
             header('Content-Type: application/pdf; charset=utf-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
             header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
             header('Pragma: no-cache');
             header('Expires: 0');
-            
+
             // Output PDF to browser
             $mpdf->Output($filename, 'D');
             exit;
-            
         } catch (Exception $e) {
             // Clear any output buffers for error response
             if (ob_get_level()) {
@@ -438,10 +442,11 @@ class InvoicesController {
             exit;
         }
     }
-    
-    private function generateInvoiceHtml($invoice, $items, $type = '') {
+
+    private function generateInvoiceHtml($invoice, $items, $type = '')
+    {
         global $commanModel;
-        
+
         // Initialize variables
         $itemsrows = '';
         $summaryrows = '';
@@ -453,19 +458,19 @@ class InvoicesController {
         $totalSgstAmt = 0;
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
-        
+
         // Build item rows
         foreach ($items as $idx => $item) {
             // $amount = $item['quantity'] * $item['unit_price'];
             // $taxAmount = ($amount * $item['tax_rate']) / 100;
             // $lineTotal = $amount + $taxAmount;
-            
+
             // $totalSubtotal += $amount;
             // $totalTax += $taxAmount;
             // $totalAmount += $lineTotal;
             $totalQuantity += $item['quantity'];
             $totalGstAmount += $item['tax_amount'];
-            
+
             // // Determine tax type (simplified - assuming SGST/CGST for domestic, IGST for other)
             // $sgstRate = $item['tax_rate'] / 2;
             // $cgstRate = $item['tax_rate'] / 2;
@@ -473,20 +478,20 @@ class InvoicesController {
             // $sgstAmt = ($amount * $sgstRate) / 100;
             // $cgstAmt = ($amount * $cgstRate) / 100;
             // $igstAmt = 0;
-            
+
             // $totalSgstAmt += $sgstAmt;
             // $totalCgstAmt += $cgstAmt;
             // $totalIgstAmt += $igstAmt;
             $totalSgstAmt += $item['sgst'];
             $totalCgstAmt += $item['cgst'];
             $totalIgstAmt += $item['igst'];
-            if($item['igst'] > 0){
-                $igstRate = ($item['igst'] / $item['quantity']) / ($item['unit_price'] /100);
+            if ($item['igst'] > 0) {
+                $igstRate = ($item['igst'] / $item['quantity']) / ($item['unit_price'] / 100);
                 $sgstRate = 0;
                 $cgstRate = 0;
             } else {
-                $sgstRate = ($item['sgst'] / $item['quantity']) / ($item['unit_price'] /100);
-                $cgstRate = ($item['cgst'] / $item['quantity']) / ($item['unit_price'] /100);
+                $sgstRate = ($item['sgst'] / $item['quantity']) / ($item['unit_price'] / 100);
+                $cgstRate = ($item['cgst'] / $item['quantity']) / ($item['unit_price'] / 100);
                 $igstRate = 0;
             }
             $itemsrows .= '
@@ -507,7 +512,7 @@ class InvoicesController {
                     </tr>
             ';
         }
-        if(count($items) < 3){
+        if (count($items) < 3) {
             // Add empty rows to maintain table height
             $rowsToAdd = 3 - count($items);
             for ($i = 0; $i < $rowsToAdd; $i++) {
@@ -532,7 +537,7 @@ class InvoicesController {
         }
         // Build summary rows with tax totals
         $discount = $invoice['discount_amount'] ?? 0;
-        
+
         // Add row for tax amount totals (below each SGST/CGST/IGST column)
         $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
@@ -547,9 +552,9 @@ class InvoicesController {
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
                         <td class="right bold">' . number_format($totalAmount, 2) . '</td>
                     </tr>
-        ';       
-       
-        
+        ';
+
+
         if ($discount > 0) {
             $summaryrows .= '
                     <tr style="background: #f9f9f9;">
@@ -559,54 +564,53 @@ class InvoicesController {
                     </tr>';
             $totalAmount -= $discount;
         }
-        
+
         // Fetch currency exchange rate and add conversion row
         $currency = $invoice['currency'] ?? 'INR';
         $exchangeRate = 1;
         $convertedAmount = $totalAmount;
-        
+
         if ($currency && $currency !== 'INR') {
-            if($type === 'tax_invoice'){
+            if ($type === 'tax_invoice') {
                 $exchangeText = $invoice['exchange_text'] ?? '';
                 $convertedAmount = $invoice['converted_amount'] ?? 0;
             } else {
-                 $currencyRecord = $this->getCurrencyByCode($currency);                 
+                $currencyRecord = $this->getCurrencyByCode($currency);
                 if (!empty($currencyRecord)) {
                     $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
                     $convertedAmount = $totalAmount * $exchangeRate;
-                }else{
+                } else {
                     //if currancy record not found then USD exchange rate will be considered if currency is not INR
-                    $currencyRecord = $this->getCurrencyByCode('USD'); 
+                    $currencyRecord = $this->getCurrencyByCode('USD');
                     $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
                     $convertedAmount = $totalAmount * $exchangeRate;
                 }
-                $exchangeText = 'Exchange Rate ('. $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
+                $exchangeText = 'Exchange Rate (' . $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
             }
-               
+
             $summaryrows .= '
                 <tr style="background: #f9f9f9;">
-                    <td colspan="13" style="padding: 20px;" class="right bold">' . htmlspecialchars($exchangeText) .'</td>
+                    <td colspan="13" style="padding: 20px;" class="right bold">' . htmlspecialchars($exchangeText) . '</td>
                     
                 </tr>
                 <tr style="background: #f9f9f9;">
                     <td colspan="12" class="right bold" style="text-align: right;">Converted Amount (INR)</td>
                     <td class="right bold">' . number_format($convertedAmount, 2) . '</td>
                 </tr>';
-            
         }
-        
+
         $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
                         <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>                      
                         <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
                     </tr>
         ';
-        
+
         // Fetch customer and address information
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
         $billToInfo = '';
         $shipToInfo = '';
-        
+
         if ($customer) {
             $billToInfo = '<strong>' . htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name'] ?? 'N/A') . '</strong><br>';
             $billToInfo .= htmlspecialchars($customer['address_line1'] ?? '') . '';
@@ -614,13 +618,13 @@ class InvoicesController {
             $billToInfo .= htmlspecialchars($customer['city'] ?? '') . ' ' . htmlspecialchars($customer['state'] ?? '') . ' ' . htmlspecialchars($customer['zipcode'] ?? '') . '<br>';
             $billToInfo .= 'Tel: ' . htmlspecialchars($customer['mobile'] ?? '') . '<br>';
         }
-        if(!empty($customer['shipping_address_line1']) && !empty($customer['shipping_address_line2'])){
+        if (!empty($customer['shipping_address_line1']) && !empty($customer['shipping_address_line2'])) {
             $shipToInfo = '<strong>' . htmlspecialchars($customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? 'N/A') . '</strong><br>';
             $shipToInfo .= htmlspecialchars($customer['shipping_address_line1'] ?? '') . '';
             $shipToInfo .= htmlspecialchars($customer['shipping_address_line2'] ?? '') . '<br>';
             $shipToInfo .= htmlspecialchars($customer['shipping_city'] ?? '') . ' ' . htmlspecialchars($customer['shipping_state'] ?? '') . ' ' . htmlspecialchars($customer['shipping_zipcode'] ?? '') . '<br>';
             $shipToInfo .= 'Tel: ' . htmlspecialchars($customer['shipping_mobile'] ?? '') . '<br>';
-        }else{
+        } else {
             $shipToInfo = $billToInfo; // Use same info unless stored separately
         }
         //print_r($billToInfo);
@@ -629,12 +633,12 @@ class InvoicesController {
         if (!file_exists($templatePath)) {
             return '<p>Error: Invoice template not found at ' . htmlspecialchars($templatePath) . '</p>';
         }
-        
+
         $temphtml = file_get_contents($templatePath);
-        
+
         // Replace placeholders
         $html = str_replace(
-            ['{{INVOICE_NUMBER}}', '{{INVOICE_DATE}}', '{{BILL_TO_INFO}}', '{{SHIP_TO_INFO}}', '{{ITEM_ROWS}}', '{{SUMMARY_ROWS}}', '{{AMOUNT_IN_WORDS}}','{{TERM_AND_CONDITIONS}}'],
+            ['{{INVOICE_NUMBER}}', '{{INVOICE_DATE}}', '{{BILL_TO_INFO}}', '{{SHIP_TO_INFO}}', '{{ITEM_ROWS}}', '{{SUMMARY_ROWS}}', '{{AMOUNT_IN_WORDS}}', '{{TERM_AND_CONDITIONS}}'],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
                 date('d M Y', strtotime($invoice['invoice_date'])),
@@ -647,17 +651,45 @@ class InvoicesController {
             ],
             $temphtml
         );
-        
+
         return $html;
     }
-    
-    public function previewInvoice() {
+
+    public function previewInvoice()
+    {
         is_login();
         header('Content-Type: application/json');
-        
+
         try {
             global $commanModel;
+
             $previewData = json_decode(file_get_contents('php://input'), true);
+
+            $orderNumber = $previewData['orderid'] ?? null;
+            // echo '<pre>';
+            // print_r($orderNumber);
+            // exit;
+            if ($orderNumber) {
+
+                global $invoiceModel;
+
+                $invoice = $invoiceModel->getInvoiceByOrderNumber($orderNumber);
+
+                if (!$invoice) {
+                    echo json_encode(['success' => false, 'message' => 'Invoice not found']);
+                    exit;
+                }
+
+                $items = $invoiceModel->getInvoiceItems($invoice['id']);
+
+                $html = $this->generateInvoiceHtml($invoice, $items, 'preview');
+
+                echo json_encode([
+                    'success' => true,
+                    'html' => $html
+                ]);
+                exit;
+            }
             //print_r($previewData);
             // Get preview data from POST
             $invoiceDate = isset($previewData['invoice_date']) ? $previewData['invoice_date'] : date('Y-m-d');
@@ -668,10 +700,10 @@ class InvoicesController {
             $taxAmount = isset($previewData['tax_amount']) ? floatval($previewData['tax_amount']) : 0;
             $discountAmount = isset($previewData['discount_amount']) ? floatval($previewData['discount_amount']) : 0;
             $totalAmount = isset($previewData['total_amount']) ? floatval($previewData['total_amount']) : 0;
-            
+
             // Get items
             $items = isset($previewData['items']) ? (array)$previewData['items'] : [];
-            
+
             if (empty($items)) {
                 echo json_encode(['success' => false, 'message' => 'No items to preview']);
                 exit;
@@ -693,24 +725,24 @@ class InvoicesController {
             // Get firm settings for terms and conditions
             $firmSettings = $commanModel->getRecordById('global_settings', 1);
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
-            
+
             // Convert items to proper format for HTML generation
             $invoiceItems = [];
             foreach ($items as $item) {
                 $quantity = floatval($item['quantity'] ?? 0);
                 $unitPrice = floatval($item['unit_price'] ?? 0);
                 $lineTotal = $quantity * $unitPrice;
-                
+
                 // Calculate GST amounts based on unit price and quantity
                 $sgstPercent = floatval($item['sgst'] ?? 0);
                 $cgstPercent = floatval($item['cgst'] ?? 0);
                 $igstPercent = floatval($item['igst'] ?? 0);
-                
+
                 $sgstAmount = ($lineTotal * $sgstPercent) / 100;
                 $cgstAmount = ($lineTotal * $cgstPercent) / 100;
                 $igstAmount = ($lineTotal * $igstPercent) / 100;
                 $totalTaxAmount = $sgstAmount + $cgstAmount + $igstAmount;
-                
+
                 $invoiceItems[] = [
                     'box_no' => $item['box_no'] ?? '',
                     'item_name' => $item['item_name'] ?? '',
@@ -724,21 +756,20 @@ class InvoicesController {
                     'line_total' => $lineTotal + $totalTaxAmount
                 ];
             }
-            
+
             // Generate the invoice HTML using the tax invoice template
             $html = $this->generateInvoiceHtml($invoice, $invoiceItems, 'preview');
-            
+
             if (empty($html)) {
                 echo json_encode(['success' => false, 'message' => 'Failed to generate preview HTML']);
                 exit;
             }
-            
+
             echo json_encode([
                 'success' => true,
                 'html' => $html
             ]);
             exit;
-            
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode([
@@ -748,43 +779,46 @@ class InvoicesController {
             exit;
         }
     }
-    public function clearSessionItems() {
+    public function clearSessionItems()
+    {
         is_login();
         header('Content-Type: application/json');
-        
+
         if (isset($_SESSION['invoice_items'])) {
             unset($_SESSION['invoice_items']);
         }
-        
+
         echo json_encode(['success' => true, 'message' => 'Invoice items cleared from session']);
         exit;
     }
-    public function printInvoice() {
+    public function printInvoice()
+    {
         is_login();
         global $invoiceModel;
-        
+
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id <= 0) {
             echo '<p>Invalid Invoice ID.</p>';
             exit;
         }
-        
+
         $invoice = $invoiceModel->getInvoiceById($id);
         $items = $invoiceModel->getInvoiceItems($id);
-        
+
         if (!$invoice) {
             echo '<p>Invoice not found.</p>';
             exit;
         }
-        
+
         $data = [
             'invoice' => $invoice,
             'items' => $items
         ];
-        
+
         renderTemplate('views/invoices/print.php', $data, 'Print Invoice');
     }
-    public function fetchItems(){
+    public function fetchItems()
+    {
         is_login();
         header('Content-Type: application/json');
         $inputdata = json_decode(file_get_contents('php://input'), true);
@@ -797,34 +831,137 @@ class InvoicesController {
         //     echo json_encode(['success' => false, 'message' => 'No item IDs provided']);
         //     exit;
         // }
-        
-         $itemsData = [];
+
+        $itemsData = [];
         // foreach ($itemIds as $id) {
         //     $order = $ordersModel->getOrderById($id);
         //     if ($order) {
         //         $itemsData[] = $order;
         //     }
         // }
-        
-       //echo $customerId.'---'.$search;
-        $orderItems = $ordersModel->getOrderItemsByCustomerId($customerId,$search,[]);
-        
+
+        //echo $customerId.'---'.$search;
+        $orderItems = $ordersModel->getOrderItemsByCustomerId($customerId, $search, []);
+
         //calculate unit price before gst
-        foreach($orderItems as $key => $order){
+        foreach ($orderItems as $key => $order) {
             $gstRate = isset($order['gst']) ? $order['gst'] : 0;
             $finalPrice = $order['finalprice'];
             $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
             $orderItems[$key]['unit_price'] = number_format($unitPriceBeforeGst, 2, '.', '');
         }
-        
+
         echo json_encode(['success' => true, 'items' => $orderItems, 'selected_items' => $itemsData]);
         exit;
-
     }
-    
+
     // Helper method to get currency by code
-    private function getCurrencyByCode($code) {
+    private function getCurrencyByCode($code)
+    {
         global $commanModel;
         return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
+    }
+    public function create_auto_from_order()
+    {
+        is_login();
+        header('Content-Type: application/json');
+
+        try {
+
+            global $conn, $invoiceModel;
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            $orderNumber = $input['orderid'] ?? null;
+
+            if (!$orderNumber) {
+                echo json_encode(['success' => false, 'message' => 'Order number missing']);
+                exit;
+            }
+
+            // check invoice already exists
+            $existing = $invoiceModel->getInvoiceByOrderNumber($orderNumber);
+            if ($existing) {
+                echo json_encode(['success' => true]);
+                exit;
+            }
+
+            // ===== GET ORDER ITEMS DIRECT =====
+            $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("s", $orderNumber);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result->num_rows == 0) {
+                echo json_encode(['success' => false, 'message' => 'Order not found']);
+                exit;
+            }
+
+            $items = [];
+            while ($row = $result->fetch_assoc()) {
+                $items[] = $row;
+            }
+
+            // ===== GET ADDRESS INFO =====
+            $sql2 = "SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1";
+            $stmt2 = $conn->prepare($sql2);
+            $stmt2->bind_param("s", $orderNumber);
+            $stmt2->execute();
+            $info = $stmt2->get_result()->fetch_assoc();
+
+            if (!$info) {
+                echo json_encode(['success' => false, 'message' => 'Order address not found']);
+                exit;
+            }
+
+            // ===== BUILD POST LIKE MANUAL CREATE =====
+            $_POST = [
+                'invoice_date' => date('Y-m-d'),
+                'customer_id' => $items[0]['customer_id'],
+                'vp_order_info_id' => $info['id'],
+                'status' => 'final',
+                'subtotal' => 0,
+                'tax_amount' => 0,
+                'discount_amount' => 0,
+                'total_amount' => 0
+            ];
+
+            foreach ($items as $i => $it) {
+
+                $_POST['order_number'][] = $it['order_number'];
+                $_POST['item_code'][] = $it['item_code'];
+                $_POST['item_name'][] = $it['title'];
+                $_POST['hsn'][] = $it['hsn'];
+                $_POST['quantity'][] = $it['quantity'];
+
+                $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $it['quantity'];
+
+                $_POST['unit_price'][] = $unit;
+                $_POST['tax_rate'][] = $it['gst'];
+
+                $_POST['cgst'][] = $it['gst'] / 2;
+                $_POST['sgst'][] = $it['gst'] / 2;
+                $_POST['igst'][] = 0;
+
+                $_POST['box_no'][] = '';
+
+                $_POST['currency'][] = $it['currency'];
+
+                $_POST['subtotal'] += $unit * $it['quantity'];
+                $_POST['tax_amount'] += ($unit * $it['quantity']) * ($it['gst'] / 100);
+            }
+
+            $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
+
+            // ===== CALL EXISTING CREATE =====
+            return $this->createPost();
+        } catch (Exception $e) {
+
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+            exit;
+        }
     }
 }

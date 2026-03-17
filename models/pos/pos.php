@@ -1,5 +1,6 @@
 <?php
-class pos {
+class pos
+{
     private $db;
 
     public function __construct($db)
@@ -19,92 +20,241 @@ class pos {
      * DataTables / AJAX products
      */
     public function getProductsDataTable(
-    int $start,
-    int $length,
-    string $searchValue = '',
-    string $productName = '',
-    string $orderColumn = 'title',
-    string $orderDir = 'asc',
-    string $category = ''
-): array {
+        int $start,
+        int $length,
+        string $searchValue = '',
+        string $productName = '',
+        string $orderColumn = 'title',
+        string $orderDir = 'asc',
+        string $category = ''
+    ): array {
 
-    /* =========================
+        $warehouseId = $_SESSION['warehouse_id'] ?? 0;
+
+        /* ================= TOTAL PRODUCTS ================= */
+        $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
+        $totalStmt = $this->db->prepare($totalSql);
+        $totalStmt->execute();
+        $totalStmt->bind_result($recordsTotal);
+        $totalStmt->fetch();
+        $totalStmt->close();
+
+        /* ================= FILTERS ================= */
+        $where  = " WHERE p.is_active = 1 ";
+        $params = [];
+        $types  = "";
+
+        if (!empty($category) && $category != 'allProducts') {
+            $where .= " AND p.groupname = ? ";
+            $params[] = $category;
+            $types .= "s";
+        }
+
+        if ($productName !== '') {
+            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ?) ";
+            $params[] = "%{$productName}%";
+            $params[] = "%{$productName}%";
+            $types .= "ss";
+        }
+
+        if ($searchValue !== '') {
+            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ?) ";
+            $params[] = "%{$searchValue}%";
+            $params[] = "%{$searchValue}%";
+            $types .= "ss";
+        }
+
+        /* ================= ORDER ================= */
+        $allowedColumns = [
+            'item_code',
+            'title',
+            'groupname',
+            'size',
+            'color',
+            'image',
+            'stock_qty',
+            'price'
+        ];
+
+        if (!in_array($orderColumn, $allowedColumns, true)) {
+            $orderColumn = 'title';
+        }
+
+        $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
+
+        /* ================= COUNT FILTERED ================= */
+        $countSql = "
+    SELECT COUNT(*)
+    FROM vp_products p
+    JOIN (
+        SELECT sm1.product_id, sm1.running_stock
+        FROM vp_stock_movements sm1
+        JOIN (
+            SELECT product_id, MAX(id) AS max_id
+            FROM vp_stock_movements
+            WHERE warehouse_id = ?
+            GROUP BY product_id
+        ) latest ON latest.max_id = sm1.id
+        WHERE sm1.running_stock > 0
+    ) sm ON sm.product_id = p.id
+    $where
+    ";
+
+        $countStmt = $this->db->prepare($countSql);
+
+        $countTypes = "i" . $types;
+        $countParams = array_merge([$warehouseId], $params);
+
+        $countStmt->bind_param($countTypes, ...$countParams);
+        $countStmt->execute();
+        $countStmt->bind_result($recordsFiltered);
+        $countStmt->fetch();
+        $countStmt->close();
+
+        /* ================= DATA QUERY ================= */
+        $dataSql = "
+    SELECT
+        p.id,
+        p.item_code,
+        p.sku,
+        p.material,
+        p.title,
+        p.groupname,
+        p.size,
+        p.color,
+        p.image,
+        p.hsn,
+        p.product_weight,
+        p.product_weight_unit,
+        p.prod_height,
+        p.prod_width,
+        p.prod_length,
+        p.length_unit,
+        p.cost_price,
+        sm.running_stock AS stock_qty,
+        p.itemprice AS price
+    FROM vp_products p
+    JOIN (
+        SELECT sm1.product_id, sm1.running_stock
+        FROM vp_stock_movements sm1
+        JOIN (
+            SELECT product_id, MAX(id) AS max_id
+            FROM vp_stock_movements
+            WHERE warehouse_id = ?
+            GROUP BY product_id
+        ) latest ON latest.max_id = sm1.id
+        WHERE sm1.running_stock > 0
+    ) sm ON sm.product_id = p.id
+    $where
+    ORDER BY p.$orderColumn $orderDir
+    LIMIT ?, ?
+    ";
+
+        $dataStmt = $this->db->prepare($dataSql);
+
+        $dataTypes = "i" . $types . "ii";
+        $dataParams = array_merge([$warehouseId], $params, [$start, $length]);
+
+        $dataStmt->bind_param($dataTypes, ...$dataParams);
+        $dataStmt->execute();
+
+        $result = $dataStmt->get_result();
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $dataStmt->close();
+
+        return [
+            'recordsTotal'    => (int) $recordsTotal,
+            'recordsFiltered' => (int) $recordsFiltered,
+            'data'            => $rows
+        ];
+    }
+    public function getProductsDataTable_bk(
+        int $start,
+        int $length,
+        string $searchValue = '',
+        string $productName = '',
+        string $orderColumn = 'title',
+        string $orderDir = 'asc',
+        string $category = ''
+    ): array {
+
+        /* =========================
      * 1) Total records
      * ========================= */
-    $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
-    $totalStmt = $this->db->prepare($totalSql);
-    $totalStmt->execute();
-    $totalStmt->bind_result($recordsTotal);
-    $totalStmt->fetch();
-    $totalStmt->close();
+        $totalSql = "SELECT COUNT(*) FROM vp_products WHERE is_active = 1";
+        $totalStmt = $this->db->prepare($totalSql);
+        $totalStmt->execute();
+        $totalStmt->bind_result($recordsTotal);
+        $totalStmt->fetch();
+        $totalStmt->close();
 
-    /* =========================
+        /* =========================
      * 2) Filters
      * ========================= */
-    $where  = " WHERE is_active = 1 ";
-    $params = [];
-    $types  = "";
+        $where  = " WHERE is_active = 1 ";
+        $params = [];
+        $types  = "";
 
-    // ✅ Category filter (match groupname)
-    if (!empty($category) && $category != 'allProducts') {
-        $where .= " AND groupname = ? ";
-        $params[] = $category;
-        $types   .= "s";
-    }
+        // ✅ Category filter (match groupname)
+        if (!empty($category) && $category != 'allProducts') {
+            $where .= " AND groupname = ? ";
+            $params[] = $category;
+            $types   .= "s";
+        }
 
-    if ($productName !== '') {
-        $where .= " AND (title LIKE ? OR item_code LIKE ?) ";
-        $params[] = "%{$productName}%";
-        $params[] = "%{$productName}%";
-        $types   .= "ss";
-    }
+        if ($productName !== '') {
+            $where .= " AND (title LIKE ? OR item_code LIKE ?) ";
+            $params[] = "%{$productName}%";
+            $params[] = "%{$productName}%";
+            $types   .= "ss";
+        }
 
-    if ($searchValue !== '') {
-        $where .= " AND (item_code LIKE ? OR title LIKE ?) ";
-        $params[] = "%{$searchValue}%";
-        $params[] = "%{$searchValue}%";
-        $types   .= "ss";
-    }
+        if ($searchValue !== '') {
+            $where .= " AND (item_code LIKE ? OR title LIKE ?) ";
+            $params[] = "%{$searchValue}%";
+            $params[] = "%{$searchValue}%";
+            $types   .= "ss";
+        }
 
-    /* =========================
+        /* =========================
      * 3) Order guard
      * ========================= */
-    $allowedColumns = [
-        'item_code',
-        'title',
-        'groupname',     // ✅ allow ordering by groupname too
-        'size',
-        'color',
-        'image',
-        'local_stock',
-        'itemprice'
-    ];
+        $allowedColumns = [
+            'item_code',
+            'title',
+            'groupname',     // ✅ allow ordering by groupname too
+            'size',
+            'color',
+            'image',
+            'local_stock',
+            'itemprice'
+        ];
 
-    if (!in_array($orderColumn, $allowedColumns, true)) {
-        $orderColumn = 'title';
-    }
+        if (!in_array($orderColumn, $allowedColumns, true)) {
+            $orderColumn = 'title';
+        }
 
-    $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
+        $orderDir = strtolower($orderDir) === 'desc' ? 'DESC' : 'ASC';
 
-    /* =========================
+        /* =========================
      * 4) Filtered count
      * ========================= */
-    $countSql = "SELECT COUNT(*) FROM vp_products $where";
-    $countStmt = $this->db->prepare($countSql);
+        $countSql = "SELECT COUNT(*) FROM vp_products $where";
+        $countStmt = $this->db->prepare($countSql);
 
-    if (!empty($params)) {
-        $countStmt->bind_param($types, ...$params);
-    }
+        if (!empty($params)) {
+            $countStmt->bind_param($types, ...$params);
+        }
 
-    $countStmt->execute();
-    $countStmt->bind_result($recordsFiltered);
-    $countStmt->fetch();
-    $countStmt->close();
+        $countStmt->execute();
+        $countStmt->bind_result($recordsFiltered);
+        $countStmt->fetch();
+        $countStmt->close();
 
-    /* =========================
+        /* =========================
      * 5) Data query
      * ========================= */
-    $dataSql = " 
+        $dataSql = " 
         SELECT
             id,
             item_code,
@@ -131,28 +281,26 @@ class pos {
         LIMIT ?, ?
     ";
 
-    $dataStmt = $this->db->prepare($dataSql);
+        $dataStmt = $this->db->prepare($dataSql);
 
-    // add pagination params
-    $paramsWithLimit = $params;
-    $paramsWithLimit[] = $start;
-    $paramsWithLimit[] = $length;
+        // add pagination params
+        $paramsWithLimit = $params;
+        $paramsWithLimit[] = $start;
+        $paramsWithLimit[] = $length;
 
-    $typesWithLimit = $types . "ii";
+        $typesWithLimit = $types . "ii";
 
-    $dataStmt->bind_param($typesWithLimit, ...$paramsWithLimit);
+        $dataStmt->bind_param($typesWithLimit, ...$paramsWithLimit);
 
-    $dataStmt->execute();
-    $result = $dataStmt->get_result();
-    $rows = $result->fetch_all(MYSQLI_ASSOC);
-    $dataStmt->close();
+        $dataStmt->execute();
+        $result = $dataStmt->get_result();
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $dataStmt->close();
 
-    return [
-        'recordsTotal'    => (int) $recordsTotal,
-        'recordsFiltered' => (int) $recordsFiltered,
-        'data'            => $rows
-    ];
-}
-
-
+        return [
+            'recordsTotal'    => (int) $recordsTotal,
+            'recordsFiltered' => (int) $recordsFiltered,
+            'data'            => $rows
+        ];
+    }
 }

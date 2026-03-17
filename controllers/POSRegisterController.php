@@ -15,13 +15,12 @@ class POSRegisterController
     public function index()
     {
         // slug => label
-
         $categories = getCategories();
         require_once 'models/user/user.php';
         require_once 'models/customer/Customer.php';
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
-
+   
         $warehouseName = 'No Warehouse';
 
         if (!empty($_SESSION['warehouse_id'])) {
@@ -324,6 +323,9 @@ class POSRegisterController
         }
 
         $response = curl_exec($ch);
+        //   echo '<pre>';
+        // print_r($response);
+        // exit;
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         curl_close($ch);
@@ -469,7 +471,8 @@ class POSRegisterController
             'discount' => $discount,
             'grand_total' => $grand_total,
             'checkoutdata' => $data['checkoutdata'] ?? '',
-            'codcharges' => $codcharges
+            'codcharges' => $codcharges,
+            'currency' => $data['fx_type'] ?? 'INR'
         ];
     }
 
@@ -607,13 +610,14 @@ class POSRegisterController
         global $conn;
 
         header('Content-Type: application/json');
-
+        $paymentType = 'offline';
         /* ================= PAYMENT TYPE ================= */
-        $paymentType = $_POST['payment_type'] ?? 'cod';
+        // $paymentType = $_POST['payment_type'] ?? 'cod';
+        $note = $_POST['note'] ?? '';
 
-        if (!in_array($paymentType, ['cod', 'razorpay', 'offline', 'cc'])) {
-            $paymentType = 'offline';
-        }
+        // if (!in_array($paymentType, ['cod', 'razorpay', 'offline', 'cc'])) {
+        //     $paymentType = 'offline';
+        // }
 
         $transactionId = $_POST['transaction_id'] ?? '';
 
@@ -623,7 +627,7 @@ class POSRegisterController
         $user = $userModel->getUserById($user_id);
         $warehouse_name = $user['warehouse_name'] ?? 'POS';
 
-        $store_payment_details = $warehouse_name . "_" . $paymentType . "_" . $transactionId;
+        $store_payment_details = $warehouse_name . "_" . $paymentType . "_" . $transactionId . "_" . $note;
 
         /* ================= CART ================= */
         $cartData = $this->get_cart();
@@ -636,23 +640,31 @@ class POSRegisterController
             exit;
         }
 
-        /* ================= CUSTOMER ================= */
-        $customerId = $_SESSION['pos_customer_id'] ?? 0;
 
+        /* ================= CUSTOMER ================= */
+
+        $billing = [];
+        $shipping = [];
+
+        // $customerId = $_POST['customer_id'] ?? 0;
+        $customerId = $_POST['customer_id'] ?? ($_SESSION['pos_customer_id'] ?? 0);
+
+        /* ---------- STEP 1 : EXISTING CUSTOMER ---------- */
         if ($customerId > 0) {
 
             $stmt = $conn->prepare("
-            SELECT * FROM vp_order_info
-            WHERE customer_id = ?
-            ORDER BY id DESC
-            LIMIT 1
-        ");
+        SELECT * FROM vp_order_info
+        WHERE customer_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    ");
             $stmt->bind_param("i", $customerId);
             $stmt->execute();
             $info = $stmt->get_result()->fetch_assoc();
 
             if ($info) {
 
+                /*  EXISTING CUSTOMER WITH ORDER HISTORY */
                 $billing = [
                     "first_name" => $info['first_name'],
                     "last_name" => $info['last_name'],
@@ -680,35 +692,40 @@ class POSRegisterController
             }
         }
 
-        /* ================= WALKIN ================= */
-        if (empty($billing)) {
+        /* ---------- STEP 2 : NEW CUSTOMER (SESSION FORM) ---------- */
+        if (empty($billing) && !empty($_SESSION['pos_customer_form'])) {
+
+            $form = $_SESSION['pos_customer_form'];
 
             $billing = [
-                "first_name" => trim($_POST['first_name'] ?? ''),
-                "last_name" => trim($_POST['last_name'] ?? ''),
-                "email" => trim($_POST['cus_email'] ?? ''),
-                "phone" => trim($_POST['mobile'] ?? ''),
-                "address1" => trim($_POST['address_line1'] ?? ''),
-                "address2" => trim($_POST['address_line2'] ?? ''),
-                "city" => trim($_POST['city'] ?? ''),
-                "state" => trim($_POST['state'] ?? ''),
-                "zip" => trim($_POST['zipcode'] ?? ''),
+                "first_name" => trim($form['first_name'] ?? ''),
+                "last_name" => trim($form['last_name'] ?? ''),
+                "email" => trim($form['cus_email'] ?? ''),
+                "phone" => trim($form['mobile'] ?? ''),
+                "address1" => trim($form['address_line1'] ?? ''),
+                "address2" => trim($form['address_line2'] ?? ''),
+                "city" => trim($form['city'] ?? ''),
+                "state" => trim($form['state'] ?? ''),
+                "zip" => trim($form['zipcode'] ?? ''),
                 "country" => "IN",
-                "gstin" => trim($_POST['gstin'] ?? '')
+                "gstin" => trim($form['gstin'] ?? '')
             ];
 
             $shipping = [
-                "sname" => trim(($_POST['shipping_first_name'] ?? '') . " " . ($_POST['shipping_last_name'] ?? '')),
-                "saddress1" => trim($_POST['shipping_address_line1'] ?? ''),
-                "saddress2" => trim($_POST['shipping_address_line2'] ?? ''),
-                "scity" => trim($_POST['shipping_city'] ?? ''),
-                "sstate" => trim($_POST['shipping_state'] ?? ''),
-                "szip" => trim($_POST['shipping_zipcode'] ?? ''),
+                "sname" => trim(($form['shipping_first_name'] ?? '') . " " . ($form['shipping_last_name'] ?? '')),
+                "saddress1" => trim($form['shipping_address_line1'] ?? ''),
+                "saddress2" => trim($form['shipping_address_line2'] ?? ''),
+                "scity" => trim($form['shipping_city'] ?? ''),
+                "sstate" => trim($form['shipping_state'] ?? ''),
+                "szip" => trim($form['shipping_zipcode'] ?? ''),
                 "scountry" => "IN",
-                "sphone" => trim($_POST['shipping_mobile'] ?? '')
+                "sphone" => trim($form['shipping_mobile'] ?? '')
             ];
         }
-        
+        // echo '<pre>';
+        // print_r($billing);
+        // exit;
+
         /* ================= VALIDATION ================= */
         if (!$billing['first_name'] || !$billing['phone'] || !$billing['state'] || !$billing['zip']) {
             echo json_encode(["success" => false, "message" => "Billing missing"]);
@@ -721,7 +738,7 @@ class POSRegisterController
         }
 
         /* ================= COD ================= */
-       
+
         if ($paymentType == 'cod' && $cartData['codcharges'] > 0) {
             $cod = "1";
             $codCharges = (string)$cartData['codcharges'];
@@ -774,16 +791,17 @@ class POSRegisterController
             ]);
             exit;
         }
-        //  echo '<pre>';print_r($result);
-        //         exit;
-        unset($_SESSION['discount_coupon']);
 
+        unset($_SESSION['discount_coupon']);
+        unset($_SESSION['pos_customer_form']);
+        unset($_SESSION['pos_customer_id']);
         echo json_encode([
             "success" => true,
             "orderid" => $result['data']['orderid']
         ]);
     }
 
+   
     public function add_customer()
     {
         global $conn;
@@ -791,7 +809,7 @@ class POSRegisterController
         $first = $_POST['first_name'] ?? '';
         $last  = $_POST['last_name'] ?? '';
         $phone = $_POST['mobile'] ?? '';
-        $email = $_POST['email'] ?? '';
+        $email = $_POST['cus_email'] ?? '';
 
         if (!$first || !$phone) {
             echo json_encode([
@@ -807,14 +825,14 @@ class POSRegisterController
         INSERT INTO vp_customers (name,email,phone)
         VALUES (?,?,?)
     ");
-
         $stmt->bind_param("sss", $name, $email, $phone);
         $stmt->execute();
 
         $id = $stmt->insert_id;
 
-        /* SAVE SELECTED CUSTOMER */
+        /*  STORE FULL BILLING + SHIPPING IN SESSION */
         $_SESSION['pos_customer_id'] = $id;
+        $_SESSION['pos_customer_form'] = $_POST;
 
         echo json_encode([
             "success" => true,
@@ -831,13 +849,13 @@ class POSRegisterController
     public function set_customer()
     {
 
+        // $customerId = $_POST['customer_id'] ?? '';
         $customerId = $_POST['customer_id'] ?? '';
 
         if ($customerId) {
-
             $_SESSION['pos_customer_id'] = $customerId;
+            unset($_SESSION['pos_customer_form']); // ⭐ VERY IMPORTANT
         } else {
-
             unset($_SESSION['pos_customer_id']);
         }
 
@@ -856,4 +874,22 @@ class POSRegisterController
         header("Location: ?page=pos_register");
         exit;
     }
+    public function apply_custom_discount()
+    {
+        $amount = $_POST['amount'] ?? 0;
+
+        $amount = floatval($amount);
+
+        $this->exotic_api_call(
+            '/cart/addcustomdiscount',
+            'GET',
+            ['custom_reduce' => $amount]
+        );
+
+        echo json_encode([
+            "success" => true
+        ]);
+        exit;
+    }
+    
 }
