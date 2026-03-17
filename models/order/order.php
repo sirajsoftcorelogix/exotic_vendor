@@ -139,6 +139,9 @@ class Order{
             $sql .= " AND vp_orders.author LIKE ?";
             $params[] = '%' . $filters['author'] . '%';            
         }
+        if (!empty($filters['unshipped'])) {
+            $sql .= " AND vp_orders.status != 'shipped'";
+        }
         //echo $sql;
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
@@ -301,6 +304,9 @@ class Order{
         if (!empty($filters['author'])) {
             $sql .= " AND vp_orders.author LIKE ?";
             $params[] = '%' . $filters['author'] . '%';            
+        }
+        if (!empty($filters['unshipped'])) {
+            $sql .= " AND vp_orders.status != 'shipped'";
         }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {

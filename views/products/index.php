@@ -799,8 +799,7 @@ document.addEventListener('DOMContentLoaded', function () {
     productsSearchForm.addEventListener('submit', function(event) {
         // You can add custom validation here if needed
         // For example, ensure that from_date is not after to_date
-        const form = document.getElementById('search-form') || document.querySelector('#accordion-content form') || document.querySelector('form[method="GET"]');
-        if (!form) return false;
+        const form = this; // Use the form that triggered the event
         
         function setHidden(name, value){
             let inp = form.querySelector('input[name="' + name + '"]');
@@ -817,8 +816,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setHidden('page', 'products');
         setHidden('action', 'list');
 
-        form.submit();
-        return false;
+        // Let the form submit normally
     });
 });
 //vendor auto complete

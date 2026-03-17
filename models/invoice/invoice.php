@@ -336,9 +336,9 @@ class Invoice {
         }
 
         if (isset($filters['sort']) && in_array($filters['sort'], ['asc','desc'])) {
-            $sql .= "ORDER BY i.invoice_date " . (($filters['sort'] === 'asc') ? 'ASC' : 'DESC') . " ";
+            $sql .= "ORDER BY i.id " . (($filters['sort'] === 'asc') ? 'ASC' : 'DESC') . " ";
         } else {
-            $sql .= "ORDER BY i.invoice_date DESC ";
+            $sql .= "ORDER BY i.id DESC ";
         }
 
         $sql .= "LIMIT $limit OFFSET $offset";

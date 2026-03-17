@@ -150,7 +150,7 @@
         <h2 class="text-lg font-semibold text-gray-800">Dispatch List</h2>
         <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-blue-600 hover:text-blue-700 underline font-semibold">View All Dispatches</a>
     </div>
-     <div class="flex flex-col md:flex-row justify-end items-center gap-3 mb-5">
+     <div class="flex flex-col md:flex-row justify-end items-center gap-3 mb-5 mt-4 px-4">
       <!--clear all check-->
       <button id="clear-selection-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md transition" onclick="localStorage.removeItem('selected_dispatch_invoices'); document.querySelectorAll('input.label-checkbox').forEach(cb => cb.checked = false);">
         Clear Selection
@@ -171,7 +171,7 @@
                     <th class="p-2 border-b border-gray-200 text-right">Invoice No.</th>
                     <th class="p-2 border-b border-gray-200 text-right">Shipment ID</th>
                     <th class="p-2 border-b border-gray-200 text-right">AWB</th>
-                    <th class="p-2 border-b border-gray-200 text-right">Action</th>                    
+                    <!-- <th class="p-2 border-b border-gray-200 text-right">Action</th>                     -->
                 </tr>
             </thead>
             <tbody id="dispatchListBody">
@@ -352,9 +352,7 @@
                                     <td class="p-2 border-b border-gray-200 text-right">
                                         ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
                                     </td>
-                                    <td class="p-2 border-b border-gray-200 text-right">
-                                        <button class="text-blue-600 hover:text-blue-800 text-sm font-semibold" onclick="alert('View dispatch: ${dispatch.dispatch_id}')">View</button>
-                                    </td>
+                                    
                                 `;
                                 dispatchListBody.appendChild(row);
                             });
