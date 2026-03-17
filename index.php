@@ -493,6 +493,15 @@ switch ($page) {
             case 'inventory_ledger':
                 $controller->inventoryLedger();
                 break;
+            case 'transfer_stock':
+                $controller->getTransferStockForm();
+                break;
+            case 'process_transfer_stock':
+                $controller->processTransferStock();
+                break;
+            case 'get_last_warehouse':
+                $controller->getLastWarehouse();
+                break;
             default:
                 $controller->product_list();
                 break;
