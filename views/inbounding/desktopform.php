@@ -1546,27 +1546,49 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Track the item currently being dragged
     let draggedItem = null;
+    let draggedFromContainer = null;
+    let draggedFromIndex = null;
+    
     // 1. DRAG START (Global Listener)
     document.addEventListener('dragstart', function(e) {
         // Only trigger if the element is one of our draggable items
         const item = e.target.closest('.draggable-item');
         if (!item) return;
+        
         draggedItem = item;
+        draggedFromContainer = item.closest('.photo-group-grid');
+        draggedFromIndex = Array.from(draggedFromContainer.querySelectorAll('.draggable-item')).indexOf(item);
+        
         item.classList.add('dragging'); // Used for styling and logic
         item.style.opacity = '0.5';     // Visual feedback
         
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', ''); // Required for Firefox
     });
+    
     // 2. DRAG END (Cleanup)
     document.addEventListener('dragend', function(e) {
         const item = e.target.closest('.draggable-item');
         if (!item) return;
         item.classList.remove('dragging');
         item.style.opacity = '1';
+        
+        // If drop was not successful, restore to original position
+        if (draggedItem && draggedFromContainer && draggedFromIndex !== null) {
+            const allItems = draggedFromContainer.querySelectorAll('.draggable-item');
+            if (draggedFromIndex < allItems.length) {
+                draggedFromContainer.insertBefore(draggedItem, allItems[draggedFromIndex]);
+            } else {
+                draggedFromContainer.appendChild(draggedItem);
+            }
+        }
+        
         draggedItem = null;
+        draggedFromContainer = null;
+        draggedFromIndex = null;
     });
-    // 3. DRAG OVER (The "Shuffle" Logic)
+    
+    // 3. DRAG OVER (Just provide visual feedback, don't move yet)
     document.addEventListener('dragover', function(e) {
         // If we aren't dragging a valid item, ignore
         if (!draggedItem) return;
@@ -1574,17 +1596,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = e.target.closest('.photo-group-grid');
         if (!container) return;
         e.preventDefault(); // Necessary to allow dropping
-        // Calculate where to place the item based on Mouse X position
+        
+        // Visual indicator of where item will be placed
         const afterElement = getDragAfterElement(container, e.clientX);
         
-        // Move the DOM element live (Swapping effect)
-        if (afterElement == null) {
-            container.appendChild(draggedItem);
-        } else {
-            container.insertBefore(draggedItem, afterElement);
+        // Add visual feedback class to show insertion point
+        container.classList.add('drag-over-active');
+    });
+    
+    // Handle drag leave
+    document.addEventListener('dragleave', function(e) {
+        const container = e.target.closest('.photo-group-grid');
+        if (container && !container.contains(e.relatedTarget)) {
+            container.classList.remove('drag-over-active');
         }
     });
-    // 4. DROP (Save Data)
+    
+    // 4. DROP (Actually move item here)
     document.addEventListener('drop', function(e) {
         e.preventDefault(); // Prevent browser default (opening file)
         
@@ -1592,20 +1620,36 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = e.target.closest('.photo-group-grid');
         
         if (draggedItem && container) {
-            // A. Update the Hidden Variation ID Input
-            // This ensures the photo is now assigned to the new color/variation
-            const newVarId = container.getAttribute('data-var-id');
-            const varInput = draggedItem.querySelector('.variation-input');
-            if(varInput) {
-                varInput.value = newVarId;
+            // Remove visual feedback
+            container.classList.remove('drag-over-active');
+            
+            // Calculate final position
+            const afterElement = getDragAfterElement(container, e.clientX);
+            
+            // Only move if dropping into a different container or different position
+            if (container !== draggedFromContainer || afterElement !== draggedItem.nextElementSibling) {
+                // A. Move the DOM element
+                if (afterElement == null) {
+                    container.appendChild(draggedItem);
+                } else {
+                    container.insertBefore(draggedItem, afterElement);
+                }
+                
+                // B. Update the Hidden Variation ID Input
+                const newVarId = container.getAttribute('data-var-id');
+                const varInput = draggedItem.querySelector('.variation-input');
+                if(varInput) {
+                    varInput.value = newVarId;
+                }
             }
-            // B. Recalculate Sort Order for ALL grids
-            // (We update all because moving an item changes the order in both Source and Target)
+            
+            // C. Recalculate Sort Order for ALL grids
             document.querySelectorAll('.photo-group-grid').forEach(grid => {
                 updateOrderInputs(grid);
             });
         }
     });
+    
     // --- HELPER: Calculate Position based on X Axis ---
     function getDragAfterElement(container, x) {
         // Get all items in this grid EXCEPT the one we are dragging
@@ -1627,6 +1671,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
+    
     // --- HELPER: Update hidden input values (1, 2, 3...) ---
     function updateOrderInputs(container) {
         if(!container) return;
@@ -2275,10 +2320,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Category Check (Checkboxes)
         const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
         if (catChecked === 0) errors.push("Please select at least one 'Category'.");
-
-        // Lead Time
-        const leadTime = parseFloat(getVal('lead_time_days')) || 0;
-        if (leadTime < 1) errors.push("'Lead Time' must be at least 1 day.");
 
         // --- 2. MAIN ITEM ---
         const mainQty = parseFloat(getVal('quantity_received')) || 0;
@@ -3354,10 +3395,6 @@ function validateAndSubmit(actionType) {
     // Category Check (Checkboxes)
     const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
     if (catChecked === 0) errors.push("Please select at least one 'Category'.");
-
-    // Lead Time
-    const leadTime = parseFloat(getVal('lead_time_days')) || 0;
-    if (leadTime < 1) errors.push("'Lead Time' must be at least 1 day.");
 
     // --- 2. MAIN ITEM VALIDATION ---
     const mainQty = parseFloat(getVal('quantity_received')) || 0;
