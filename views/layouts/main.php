@@ -148,8 +148,13 @@ global $domain, $root_path, $page, $action, $conn;
             const titleEl = document.getElementById('globalConfirmTitle');
             const ok = document.getElementById('globalConfirmOk');
             const cancel = document.getElementById('globalConfirmCancel');
+            // apply custom texts if supplied, otherwise fall back to defaults
             titleEl.textContent = options.title || 'Confirm';
             msgEl.textContent = message;
+            if (options.okText) ok.textContent = options.okText;
+            else ok.textContent = 'OK';
+            if (options.cancelText) cancel.textContent = options.cancelText;
+            else cancel.textContent = 'Cancel';
             modal.style.display = 'flex';
             function cleanup(res){
                 modal.style.display = 'none';

@@ -2359,15 +2359,115 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             closePublishPopup();
-            Swal.fire({
-                title: 'Published!',
-                text: 'Form saved and product published successfully.',
-                icon: 'success'
-            }).then(() => window.location.reload());
+            
+            // CHECK RESPONSE STATUS BEFORE SHOWING SUCCESS
+            // Support both "status": "success" and "success": true formats
+            const isSuccess = (data.status === 'success' || data.success === true) && !data.error;
+            
+            if (isSuccess) {
+                // Show success with download button
+                let html = '<div style="text-align: center;">';
+                html += '<p>Form saved and product published successfully.</p>';
+                if (data.log_file) {
+                    html += '<div style="margin-top: 15px;">';
+                    html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
+                    html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+                    html += 'Download Log File';
+                    html += '</a>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                
+                Swal.fire({
+                    title: 'Published!',
+                    html: html,
+                    icon: 'success'
+                }).then(() => window.location.reload());
+            } else {
+                // Extract actual error from debug field if available
+                let errorMsg = data.message || 'An error occurred during publishing. Please check the logs.';
+                
+                if (data.debug) {
+                    try {
+                        const debugData = JSON.parse(data.debug);
+                        if (debugData.error) {
+                            errorMsg = debugData.error;
+                        }
+                    } catch (e) {
+                        // If debug is not JSON, use it as is
+                        errorMsg = data.debug;
+                    }
+                }
+                
+                // Show error with download button
+                let html = '<div style="text-align: center;">';
+                html += '<p style="margin-bottom: 15px; color: #d33;">' + errorMsg + '</p>';
+                if (data.log_file) {
+                    html += '<div>';
+                    html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #dc3545; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
+                    html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+                    html += 'Download Error Log';
+                    html += '</a>';
+                    html += '</div>';
+                }
+                html += '</div>';
+                
+                Swal.fire({
+                    title: 'Publish Failed!',
+                    html: html,
+                    icon: 'error'
+                });
+            }
         })
         .catch(error => {
             closePublishPopup();
             Swal.fire({ icon: 'error', title: 'Error', text: 'Publishing failed: ' + error.message });
+        });
+    }
+
+    // Download publish log file
+    function downloadPublishLog(filename) {
+        console.log('Attempting to download:', filename);
+        
+        // Construct the URL
+        const url = `?page=inbounding&action=downloadPublishLog&file=${encodeURIComponent(filename)}`;
+        console.log('Download URL:', url);
+        
+        // Fetch the file as a blob
+        fetch(url)
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response type:', response.type);
+            
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.statusText);
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            console.log('Blob received, size:', blob.size);
+            
+            // Create a blob URL and trigger download
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            
+            console.log('Triggering download...');
+            link.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+                console.log('Cleanup done');
+            }, 100);
+        })
+        .catch(error => {
+            console.error('Download failed:', error);
+            alert('Failed to download log file: ' + error.message + '\n\nPlease check the browser console for more details.');
         });
     }
 </script>

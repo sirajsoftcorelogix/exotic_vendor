@@ -258,6 +258,29 @@ class OrdersController {
             renderTemplateClean('views/errors/error.php', ['message' => ['type'=>'success','text'=>'No orders found in the API response.']], 'No Orders Found');
             return;
         }
+        //page
+        $page = $orders['total_pages'];
+        if($page > 1){
+            for($i=2; $i<=$page; $i++){
+                $postData['page'] = $i;
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                $response = curl_exec($ch);
+                $error = curl_error($ch);
+                curl_close($ch);
+                if ($response === false) {
+                    renderTemplateClean('views/errors/error.php', ['message' => 'API request failed on page '.$i.': ' . $error], 'API Error');
+                    return;
+                }
+                $pageOrders = json_decode($response, true);
+                if (is_array($pageOrders) && !empty($pageOrders['orders'])) {
+                    $orders['orders'] = array_merge($orders['orders'], $pageOrders['orders']);
+                }
+            }
+        }
         $imported = 0; $totalorder = 0; $result =[]; $pdata = []; $addressdata = [];
         foreach ($orders['orders'] as $order) { 
             
@@ -1565,6 +1588,15 @@ class OrdersController {
             ]);
             exit;
         }
+        //check if invoice already exists for the order number, if yes return error
+        
+        if ($ordersModel->invoiceExists($order_number)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice already exists for this order number'
+            ]);
+            exit;
+        }
 
         try {
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
@@ -1610,7 +1642,8 @@ class OrdersController {
                         <input type="checkbox" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
-                    <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') . ' | ' . htmlspecialchars($order['item_code'] ?? '') . '</td>
+                    <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') .'</td>
+                    <td class="p-2 text-right">' . htmlspecialchars($order['item_code'] ?? '') . '</td>
                     <td class="p-2 text-right">' . $quantity . '</td>
                     <td class="p-2 text-right">' . number_format($product_weight, 3) . ' kg</td>
                     <td class="p-2 text-right">' . $gst . '%</td>

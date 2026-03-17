@@ -818,8 +818,9 @@ class InboundingController {
             // CASE 1: Simple Product -> abc1234
             $baseName = $itemCode; 
         } elseif (!$isVariant && $hasVariations) {
-            // CASE 2: Complex Product (Base) -> abc1234
-            $baseName = $itemCode; 
+            // CASE 2: Complex Product (Base with variations) -> abc1234-blue (use color/size from parent)
+            $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
+            $baseName = $itemCode . ($suffix ? '-' . $suffix : '');
         } else {
             // CASE 3 & 4: Variation -> abc1234-color
             $suffix = $this->getNamingSuffix($currentData['color'], $currentData['size']);
@@ -1618,7 +1619,6 @@ class InboundingController {
         }
 
         $API_data['images'] = $images_payload;
-
         $jsonString = json_encode($API_data, JSON_UNESCAPED_SLASHES);
         $apiurl =  '';
         
@@ -1668,34 +1668,195 @@ class InboundingController {
         if (curl_errno($ch)) {
             $error = "cURL Error: " . curl_error($ch);
             curl_close($ch);
-            echo json_encode(['status' => 'error', 'message' => $error]);
+            
+            // === LOG CURL ERROR ===
+            $logFileData = $this->logPublishProcess([
+                'item_code' => $data['data']['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'curl_error',
+                'error_message' => $error,
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
+            echo json_encode(['status' => 'error', 'message' => $error, 'log_file' => $logFileData['filename']]);
             exit;
         }
         
         curl_close($ch);
 
         if ($httpCode != 200 && $httpCode != 201) {
-            echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response]);
+            // === LOG HTTP ERROR ===
+            $logFileData = $this->logPublishProcess([
+                'item_code' => $data['data']['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'http_error',
+                'http_code' => $httpCode,
+                'error_message' => "API Error HTTP found.",
+                'api_response' => $response,
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
+            echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response, 'log_file' => $logFileData['filename']]);
             exit;
         }
 
         header('Content-Type: application/json');
-        if (is_object($result) && isset($result->status) && $result->status == 'success') {
+        if (is_object($result) && isset($result->status) && $result->status == 'success' && !isset($result->error)) {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
 
             $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
             $stoc_data = $inboundingModel->stock_data($id);
-            $inboundingModel->insert_stock_data($stoc_data);
+            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
             $inboundingModel->stat_logs($logData);
+            
+            // === LOG SUCCESS ===
+            $logFileData = $this->logPublishProcess([
+                'item_code' => $itemCode,
+                'inbound_id' => $id,
+                'status' => 'success',
+                'request_data' => $API_data,
+                'api_response' => $result,
+                'import_response' => $import_response,
+                'insert_stock_response' => $insert_stock_response,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
             echo json_encode([
                 'status' => 'success', 
-                'message' => 'Product Published Successfully!'
+                'message' => 'Product Published Successfully!',
+                'log_file' => $logFileData['filename']
             ]);
         } else {
-            echo json_encode(['status' => 'error', 'message' => 'Publish failed.', 'response' => $response]);
+            // === LOG API FAILURE (non-success response or has error) ===
+            $errorMsg = isset($result->error) ? $result->error : 'API returned non-success status';
+            $logFileData = $this->logPublishProcess([
+                'item_code' => $data['data']['Item_code'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'api_response_failed',
+                'error_message' => $errorMsg,
+                'api_response' => $response,
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            
+            echo json_encode(['status' => 'error', 'message' => 'Publish failed. ' . $errorMsg, 'response' => $response, 'log_file' => $logFileData['filename']]);
         }
+        exit;
+    }
+
+    /**
+     * Log publish process: API request, API response, import response, and insert_stock_data response
+     * Handles both successful and failed publish attempts
+     * Returns the log filename
+     */
+    private function logPublishProcess($data) {
+        // Try primary log directory first
+        $logDir = dirname(__DIR__) . '/log/publish_logs/';
+        
+        // Fallback to temp directory if primary fails
+        if (!is_dir($logDir) && !@mkdir($logDir, 0777, true)) {
+            $logDir = sys_get_temp_dir() . '/exotic_publish_logs/';
+            if (!is_dir($logDir)) {
+                @mkdir($logDir, 0777, true);
+            }
+        }
+
+        // Create filename with timestamp
+        $timestamp = date('Y-m-d_H-i-s');
+        $microseconds = microtime(true);
+        $microseconds = str_replace('.', '_', $microseconds);
+        $filename = 'publish_' . $timestamp . '_' . $microseconds . '.json';
+        $filepath = $logDir . $filename;
+
+        // Prepare log entry
+        $logEntry = [
+            'timestamp' => date('Y-m-d H:i:s'),
+            'datetime_unix' => time(),
+            'status' => $data['status'] ?? 'unknown',
+            'item_code' => $data['item_code'] ?? '',
+            'inbound_id' => $data['inbound_id'] ?? '',
+            'user_id' => $data['user_id'] ?? 'unknown',
+            'request_data' => $data['request_data'] ?? [],
+            'api_response' => $data['api_response'] ?? null,
+            'import_response' => $data['import_response'] ?? null,
+            'insert_stock_response' => $data['insert_stock_response'] ?? null,
+            'error_type' => $data['error_type'] ?? null,
+            'error_message' => $data['error_message'] ?? null,
+            'http_code' => $data['http_code'] ?? null,
+        ];
+
+        // Write to file with error checking
+        $jsonContent = json_encode($logEntry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $writeSuccess = @file_put_contents($filepath, $jsonContent);
+
+        if ($writeSuccess === false) {
+            // If write failed, store in a fallback session variable for display
+            $_SESSION['last_publish_log'] = $logEntry;
+            error_log('Failed to write publish log to: ' . $filepath);
+        }
+
+        return [
+            'filename' => $filename,
+            'filepath' => $filepath,
+            'success' => $writeSuccess !== false
+        ];
+    }
+
+    /**
+     * Download publish log file
+     */
+    public function downloadPublishLog() {
+        $filename = $_GET['file'] ?? '';
+        
+        if (empty($filename)) {
+            echo json_encode(['error' => 'No file specified.']);
+            exit;
+        }
+
+        // Sanitize filename to prevent path traversal attacks
+        $filename = basename($filename);
+        
+        // Try primary location first
+        $filepath = dirname(__DIR__) . '/log/publish_logs/' . $filename;
+        
+        // Fallback to temp directory
+        if (!file_exists($filepath)) {
+            $filepath = sys_get_temp_dir() . '/exotic_publish_logs/' . $filename;
+        }
+
+        // Last resort: check if it's in session
+        if (!file_exists($filepath) && isset($_SESSION['last_publish_log'])) {
+            header('Content-Type: application/json');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            echo json_encode($_SESSION['last_publish_log'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        // Check if file exists
+        if (!file_exists($filepath)) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Log file not found: ' . htmlspecialchars($filepath)]);
+            exit;
+        }
+
+        // Set headers for download
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/json');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($filepath));
+
+        // Output the file
+        readfile($filepath);
         exit;
     }
 }

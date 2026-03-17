@@ -19,3 +19,4 @@ shiprocket_awb_response_log.txt
 shiprocket_response_log.txt
 models/dispatch/shiprocket_http_log.txt
 shiprocket_label_response_log.txt
+/log

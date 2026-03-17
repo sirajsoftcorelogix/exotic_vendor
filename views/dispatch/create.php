@@ -285,7 +285,7 @@
                             <p class="text-green-600 font-semibold text-lg">✓ Dispatch Already Created</p>
                             <p class="text-green-600 text-sm mt-1">Below are the dispatch details and labels for this invoice.</p>
                         </div>
-                        <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-green-600 hover:text-green-700 underline font-semibold">← Back to Dispatch List</a>
+                        <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-green-600 hover:text-green-700 underline font-semibold">← Go to Dispatch List</a>
                     </div>
                 </div>
 
@@ -626,12 +626,12 @@ function submitDispatchForm(event) {
                       if (awbAssignStatus === 0 || labelCreated === 0) {
                           showAlert('AWB assignment or label creation failed for Box ' + boxNo + '. Please retry.','error');
                           // Optionally, you can add a retry button here that calls an API to retry the failed step for this box
-                      }
+                      
                       //button to retry failed api calls for this box
                       const retryBtn = document.createElement('button');
                       retryBtn.type = 'button';
                       retryBtn.className = 'mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700';
-                      retryBtn.innerHTML = 'Retry API Call';
+                      retryBtn.innerHTML = 'Retry Dispatch';
                       retryBtn.onclick = function(e) {
                           e.preventDefault();
                           // Call API to retry failed dispatch for this box
@@ -665,7 +665,7 @@ function submitDispatchForm(event) {
                           });
                       };
                       container.appendChild(retryBtn);
-
+                    }
                 });
             }
             const invoiceContainer = document.getElementById('invoice-container');

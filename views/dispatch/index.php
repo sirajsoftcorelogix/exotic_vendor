@@ -130,7 +130,7 @@
                   <div class="flex flex-col gap-2">
                     <div> 
                     <p class="text-xs text-gray-500">Inv No.</p>
-                    <?php if($invoice['status'] == 'Cancelled'): ?>
+                    <?php if($invoice['status'] == 'cancelled'): ?>
                       <p class="text-red-500 font-semibold"><s><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></s></p>
                     <?php else: ?>
                       <p class="text-blue-600 font-semibold"><a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>"><?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id']); ?></a></p>
@@ -138,11 +138,24 @@
                     <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
                     </div>
                     <div>
+<?php
+                    // build order links only if order_number is set (avoid duplicates)
+                    $orderLinks = [];
+                    $seen = [];
+                    foreach ($invoice['items'] ?? [] as $item) {
+                        $num = trim((string)($item['order_number'] ?? ''));
+                        if ($num === '' || isset($seen[$num])) {
+                            continue;
+                        }
+                        $seen[$num] = true;
+                        $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($num)) . '">' . htmlspecialchars($num) . '</a>';
+                    }
+                    if (!empty($orderLinks)): ?>
                     <p class="text-xs text-gray-500">Order No.</p>
-                    <p class="text-blue-600 font-semibold"><?php foreach ($invoice['items'] ?? [] as $item) {
-                      echo '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . htmlspecialchars($item['order_number'] ?? '')) . '">' . htmlspecialchars($item['order_number'] ?? '') . '</a><br>';
-                    } ?></p>
-                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>   
+                    <p class="text-blue-600 font-semibold"><?php echo implode('<br>', $orderLinks); ?></p>
+                    <p class="text-xs text-gray-500"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
+                    <?php endif; ?>
+
                     <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
                       <?php 
@@ -225,6 +238,7 @@
                         }
                       ?>
                     </p>
+                    <p class="text-xs text-gray-400 mt-1">Created by: <?php echo htmlspecialchars($staffList[$invoice['created_by']] ?? '-'); ?></p>
                   </div>
                 </div>
                 <div class="flex flex-col gap-2">
@@ -280,6 +294,7 @@
                         echo !empty($boxSizes) ? implode(' | ', $boxSizes) : '-';
                       ?>
                     </p>
+                    <p class="text-xs text-gray-400 mt-1"><?php echo htmlspecialchars($invoice['batch_no'] ? 'Batch No: ' . $invoice['batch_no'] : ''); ?></p>
                   </div>
                 </div>
                 <div class="flex flex-col gap-3">
@@ -600,8 +615,33 @@ if (bulkPrintBtn) {
       .then(res => res.json())
       .then(data => {
           if (data.success) {
-              showAlert('Retry initiated successfully. Reloading...', 'success');
-              location.reload();
+              const results = Array.isArray(data.results) ? data.results : [];
+              const contentHtml = results.map((res, idx) => {
+                  const awb = res?.data?.awb_info_response;
+                  const label = res?.data?.label_info_response;
+                  const awbmsg = awb?.response?.data || '';
+                  const labelmsg = label?.response || '';
+                  return `
+                    <div class="mb-4">
+                      <div class="font-semibold mb-2">Dispatch #${idx + 1}</div>
+                      <p class="text-sm text-gray-700"><strong>AWB Response:</strong> ${escapeHtml(awbmsg)}</p>                     
+                      <details class="mb-2">
+                        <summary class="cursor-pointer font-medium">AWB Info</summary>
+                        <pre class="whitespace-pre-wrap text-xs mt-1">${escapeHtml(JSON.stringify(awb, null, 2))}</pre>
+                      </details>
+                      <p class="text-sm text-gray-700"><strong>Label Response:</strong> ${escapeHtml(labelmsg)}</p>
+                      <details>
+                        <summary class="cursor-pointer font-medium">Label Info</summary>
+                        <pre class="whitespace-pre-wrap text-xs mt-1">${escapeHtml(JSON.stringify(label, null, 2))}</pre>
+                      </details>
+                    </div>`;
+              }).join('');
+
+              if (contentHtml) {
+                  showModal('Retry Shipment Results', contentHtml);
+              } else {
+                  showAlert('Retry initiated successfully. No API response data available.', 'success');
+              }
           } else {
               alert('Error: ' + (data.message || 'Failed to retry dispatch'));
           }
@@ -611,6 +651,56 @@ if (bulkPrintBtn) {
           alert('Error retrying dispatch');
       });
     }
+
+    function escapeHtml(text) {
+      if (typeof text !== 'string') return text;
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function showModal(title, contentHtml) {
+      const existing = document.getElementById('retry-response-modal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'retry-response-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center';
+      modal.innerHTML = `
+        <div class="absolute inset-0 bg-black/40"></div>
+        <div class="relative w-full max-w-2xl max-h-[90vh] overflow-auto bg-white rounded-lg shadow-lg">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+            <h2 class="text-lg font-semibold">${title}</h2>
+            <button class="text-gray-600 hover:text-gray-900 text-2xl leading-none close-modal-btn" type="button" aria-label="Close">&times;</button>
+          </div>
+          <div class="p-4 text-xs text-gray-800">${contentHtml}</div>
+          <div class="px-4 py-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b">
+            <button class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded text-sm close-modal-btn">Close</button>
+            <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm close-reload-btn">Close and Reload</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const closeBtns = modal.querySelectorAll('.close-modal-btn');
+      const reloadBtn = modal.querySelector('.close-reload-btn');
+      const backdrop = modal.querySelector('.absolute');
+      
+      const closeModal = () => modal.remove();
+      const closeAndReload = () => {
+        modal.remove();
+        location.reload();
+      };
+
+      closeBtns.forEach(btn => btn.addEventListener('click', closeModal));
+      if (reloadBtn) reloadBtn.addEventListener('click', closeAndReload);
+      if (backdrop) backdrop.addEventListener('click', closeModal);
+    }
+
     document.addEventListener('click', function(event) {
       if (!event.target.closest('.relative')) {
         document.querySelectorAll('.relative > div').forEach(menu => {
@@ -700,7 +790,10 @@ if (bulkPrintBtn) {
       });
   }
   function cancelInvoiceAjax(invoiceId) {
-    customConfirm('Canceling the invoice will attempt to cancel the order and any associated shipments. This action cannot be undone. Are you sure?').then(confirmed => {
+    customConfirm(
+        'Cancelling this invoice will also cancel the associated Dispatch.This action cannot be undone. Are you sure you want to continue?',
+        { okText: 'Confirm Cancellation' }
+    ).then(confirmed => {
       if (confirmed) {
         fetch('?page=dispatch&action=cancel_invoice', {
             method: 'POST',

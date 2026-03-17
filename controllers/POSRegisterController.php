@@ -1,6 +1,6 @@
 <?php
 require_once 'models/pos/pos.php';
-//require_once 'models/pos/product.php';
+require_once 'models/user/user.php';
 
 class POSRegisterController
 {
@@ -15,9 +15,9 @@ class POSRegisterController
     public function index()
     {
         // slug => label
-        print_array($_SESSION);
         $categories = getCategories();
         require_once 'models/user/user.php';
+        require_once 'models/customer/Customer.php';
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
    
@@ -31,6 +31,8 @@ class POSRegisterController
         // Put it first:
         $categories = ['allProducts' => 'All Products'] + $categories;
 
+        $customerModel = new Customer($conn);
+        $customers = $customerModel->getAllCustomers(100, 0, []);
         // slug => svg icon
         $categoryIcons = [
             'allProducts' => '
@@ -82,7 +84,9 @@ class POSRegisterController
 
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
-            'warehouse_name' => $warehouseName
+            'warehouse_name' => $warehouseName,
+            'cartData' => $this->get_cart(),
+            'customers' => $customers
         ]);
     }
 
@@ -241,7 +245,7 @@ class POSRegisterController
         });
 
         $response = curl_exec($ch);
-        print_r($response);
+        // print_r($response);
         die;
         $error = curl_error($ch);
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -276,4 +280,616 @@ class POSRegisterController
         // TODO: Implement database query
         return [];
     }
+
+    public  function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null)
+    {
+        // echo "<pre>";
+        // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
+        // exit;
+
+        $url = 'https://www.exoticindia.com/api' . $endpoint;
+        if ($params) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
+        }
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        // $headers = [
+        //     'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
+        //     'x-api-deviceid: POS-Store_1',
+        //     'x-api-appplayerid: POS-Web-Terminal',
+        //     'x-api-countrycode: IN',
+        //     'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
+        //     'User-Agent: ExoticPOS-Web/1.0'
+        // ];
+        $headers = [
+            // 'Content-Type: application/x-www-form-urlencoded',
+            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
+            'x-api-deviceid: POS-Store_1',
+            'x-api-appplayerid: POS-Web-Terminal',
+            'x-api-countrycode: IN',
+            'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
+            'User-Agent: ExoticPOS-Web/1.0'
+        ];
+
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        if ($method === 'POST' && $postData) {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        }
+
+        $response = curl_exec($ch);
+        //   echo '<pre>';
+        // print_r($response);
+        // exit;
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        curl_close($ch);
+
+        return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
+    }
+    public function exotic_api_call_new($endpoint, $method = 'GET', $params = [], $postData = null)
+    {
+        $url = 'https://www.exoticindia.com/api' . $endpoint;
+
+        if ($params) {
+            $url .= '?' . http_build_query($params);
+        }
+
+        $ch = curl_init($url);
+
+        $headers = [
+            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
+            'x-api-deviceid: POS-Store_1',
+            'x-api-appplayerid: POS-Web-Terminal',
+            'x-api-countrycode: IN',
+            'User-Agent: ExoticPOS-Web/1.0'
+        ];
+
+        if (!empty($_SESSION['x_api_euid'])) {
+            $headers[] = 'x-api-euid: ' . $_SESSION['x_api_euid'];
+        }
+
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+        /* CAPTURE RESPONSE HEADERS */
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) {
+            $len = strlen($header);
+            $header = explode(':', $header, 2);
+
+            if (count($header) < 2) return $len;
+
+            $name = strtolower(trim($header[0]));
+            $value = trim($header[1]);
+
+            if ($name == 'x-api-euid') {
+                $_SESSION['x_api_euid'] = $value;
+            }
+
+            if ($name == 'x-api-etd') {
+                $_SESSION['x_api_etd'] = $value;
+            }
+
+            if ($name == 'x-api-browsehistory') {
+                $_SESSION['x_api_browsehistory'] = $value;
+            }
+
+            return $len;
+        });
+
+        if ($method == 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+
+            if (is_array($postData)) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData); // multipart
+            } else {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            }
+        }
+
+        $response = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        curl_close($ch);
+
+        return [
+            'data' => json_decode($response, true),
+            'code' => $code,
+            'raw'  => $response
+        ];
+    }
+
+
+    public function get_cart()
+    {
+        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+
+        $res = $this->exotic_api_call(
+            '/cart/retrieve',
+            'GET',
+            [
+                'discountcoupondetails' => $coupon,
+                'giftvoucherdetails' => ''
+            ]
+        );
+
+        $data = $res['data'] ?? [];
+
+        $items = [];
+        $subtotal = 0;
+        $shipping_total = 0;
+
+        if (!empty($data['cartitems'])) {
+
+            foreach ($data['cartitems'] as $item) {
+
+                // $shipping = (float)($item['express_shipping_cost'] ?? 0);
+                $shipping_per_unit = (float)($item['express_shipping_cost'] ?? 0);
+                $shipping = $shipping_per_unit * (int)$item['quantity'];
+                // $expressSelected = $item['express_shipping_chosen'] ?? false;
+                $expressSelected = $item['express_shipping_chosen'] ?? false;
+
+                $items[] = [
+                    'cartref' => $item['cartref'],
+                    'name' => $item['name'],
+                    'imageurl' => $item['imageurl'],
+                    'price' => (float)$item['price'],
+                    'quantity' => (int)$item['quantity'],
+                    'shipping' => $shipping,
+                    'shipping_per_unit' => $shipping_per_unit,
+                    'shipping_title' => $item['express_shipping_option']['title'] ?? '',
+                    'shipping_longtitle' => $item['express_shipping_option']['longtitle'] ?? '',
+                    'express_selected' => $expressSelected
+                ];
+
+                $subtotal += ((float)$item['price'] * (int)$item['quantity']);
+                // echo $expressSelected;
+                // exit;
+                // Add shipping only if selected
+                if ($expressSelected) {
+                    $shipping_total += $shipping;
+                }
+            }
+        }
+        $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
+        $discount = (float)($data['couponreduction'] ?? 0);
+        $gst = (float)($data['gstamount'] ?? 0);
+
+        $grand_total = $subtotal + $shipping_total + $gst - $discount;
+
+        return [
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'shipping_total' => $shipping_total,
+            'gst' => $gst,
+            'discount' => $discount,
+            'grand_total' => $grand_total,
+            'checkoutdata' => $data['checkoutdata'] ?? '',
+            'codcharges' => $codcharges,
+            'currency' => $data['fx_type'] ?? 'INR'
+        ];
+    }
+
+
+    public function add_to_cart()
+    {
+        $code      = $_POST['code'] ?? '';
+        $qty       = $_POST['qty'] ?? 1;
+        $variation = $_POST['variation'] ?? '';
+        $options   = $_POST['options'] ?? '';
+        $buyNow    = false;
+
+        if (empty(trim($code))) {
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
+        $coupon = '';
+
+        if (!empty($_SESSION['discount_coupon'])) {
+            if (is_array($_SESSION['discount_coupon'])) {
+                $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+            } else {
+                $coupon = $_SESSION['discount_coupon'];
+            }
+        }
+
+        $postData = http_build_query([
+            'buynow'   => $buyNow ? 1 : 0,
+            'code'     => trim($code),
+            'qty'      => max(1, (int)$qty),
+            'variation' => trim($variation),
+            'options'  => trim($options),
+            'discountcoupondetails' => $coupon
+        ]);
+
+        $result = $this->exotic_api_call('/cart/add', 'POST', [], $postData);
+
+        // optional: check success
+        if (!empty($result['data']['cartref'])) {
+            // item added
+        }
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
+
+    public function change_qty()
+    {
+        $cartref = $_POST['cartref'] ?? '';
+        $qty = $_POST['newqty'] ?? 1;
+
+        $this->exotic_api_call('/cart/modifyqty', 'GET', [
+            'cartid' => $cartref,
+            'newqty' => $qty
+        ]);
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
+
+    public function remove_item()
+    {
+        $cartref = $_POST['cartref'] ?? '';
+
+        $qty = 0;
+
+        $this->exotic_api_call('/cart/modifyqty', 'GET', [
+            'cartid' => $cartref,
+            'newqty' => $qty
+        ]);
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
+
+
+    public function apply_coupon()
+    {
+        $couponId = $_POST['coupon'] ?? '';
+
+        if (empty($couponId)) {
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
+        $result = $this->exotic_api_call(
+            '/cart/addcoupon',
+            'GET',
+            [
+                'couponid' => $couponId
+            ]
+        );
+
+        $response = $result['data'] ?? '';
+
+        if (!empty($response) && !isset($response['error'])) {
+
+            // store string coupon
+            $_SESSION['discount_coupon'] = $response;
+        }
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
+
+    public function modify_express_shipping()
+    {
+        $cartid = $_POST['cartid'] ?? '';
+        $action = $_POST['action'] ?? '';
+
+        if (!$cartid || !$action) {
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
+        $this->exotic_api_call(
+            '/cart/modifycartexpress',
+            'GET',
+            [
+                'cartid' => $cartid,
+                'action' => $action
+            ]
+        );
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
+
+
+
+
+    public function create_order()
+    {
+        global $conn;
+
+        header('Content-Type: application/json');
+        $paymentType = 'offline';
+        /* ================= PAYMENT TYPE ================= */
+        // $paymentType = $_POST['payment_type'] ?? 'cod';
+        $note = $_POST['note'] ?? '';
+
+        // if (!in_array($paymentType, ['cod', 'razorpay', 'offline', 'cc'])) {
+        //     $paymentType = 'offline';
+        // }
+
+        $transactionId = $_POST['transaction_id'] ?? '';
+
+        /* ================= USER / STORE ================= */
+        $userModel = new User($conn);
+        $user_id = $_SESSION['user']['id'] ?? 0;
+        $user = $userModel->getUserById($user_id);
+        $warehouse_name = $user['warehouse_name'] ?? 'POS';
+
+        $store_payment_details = $warehouse_name . "_" . $paymentType . "_" . $transactionId . "_" . $note;
+
+        /* ================= CART ================= */
+        $cartData = $this->get_cart();
+
+        if (empty($cartData['checkoutdata'])) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Cart empty"
+            ]);
+            exit;
+        }
+
+
+        /* ================= CUSTOMER ================= */
+
+        $billing = [];
+        $shipping = [];
+
+        // $customerId = $_POST['customer_id'] ?? 0;
+        $customerId = $_POST['customer_id'] ?? ($_SESSION['pos_customer_id'] ?? 0);
+
+        /* ---------- STEP 1 : EXISTING CUSTOMER ---------- */
+        if ($customerId > 0) {
+
+            $stmt = $conn->prepare("
+        SELECT * FROM vp_order_info
+        WHERE customer_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    ");
+            $stmt->bind_param("i", $customerId);
+            $stmt->execute();
+            $info = $stmt->get_result()->fetch_assoc();
+
+            if ($info) {
+
+                /*  EXISTING CUSTOMER WITH ORDER HISTORY */
+                $billing = [
+                    "first_name" => $info['first_name'],
+                    "last_name" => $info['last_name'],
+                    "email" => $info['email'],
+                    "phone" => $info['mobile'],
+                    "address1" => $info['address_line1'],
+                    "address2" => $info['address_line2'],
+                    "city" => $info['city'],
+                    "state" => $info['state'],
+                    "zip" => $info['zipcode'],
+                    "country" => $info['country'] ?: 'IN',
+                    "gstin" => $info['gstin']
+                ];
+
+                $shipping = [
+                    "sname" => trim($info['shipping_first_name'] . " " . $info['shipping_last_name']),
+                    "saddress1" => $info['shipping_address_line1'],
+                    "saddress2" => $info['shipping_address_line2'],
+                    "scity" => $info['shipping_city'],
+                    "sstate" => $info['shipping_state'],
+                    "szip" => $info['shipping_zipcode'],
+                    "scountry" => $info['shipping_country'] ?: 'IN',
+                    "sphone" => $info['shipping_mobile']
+                ];
+            }
+        }
+
+        /* ---------- STEP 2 : NEW CUSTOMER (SESSION FORM) ---------- */
+        if (empty($billing) && !empty($_SESSION['pos_customer_form'])) {
+
+            $form = $_SESSION['pos_customer_form'];
+
+            $billing = [
+                "first_name" => trim($form['first_name'] ?? ''),
+                "last_name" => trim($form['last_name'] ?? ''),
+                "email" => trim($form['cus_email'] ?? ''),
+                "phone" => trim($form['mobile'] ?? ''),
+                "address1" => trim($form['address_line1'] ?? ''),
+                "address2" => trim($form['address_line2'] ?? ''),
+                "city" => trim($form['city'] ?? ''),
+                "state" => trim($form['state'] ?? ''),
+                "zip" => trim($form['zipcode'] ?? ''),
+                "country" => "IN",
+                "gstin" => trim($form['gstin'] ?? '')
+            ];
+
+            $shipping = [
+                "sname" => trim(($form['shipping_first_name'] ?? '') . " " . ($form['shipping_last_name'] ?? '')),
+                "saddress1" => trim($form['shipping_address_line1'] ?? ''),
+                "saddress2" => trim($form['shipping_address_line2'] ?? ''),
+                "scity" => trim($form['shipping_city'] ?? ''),
+                "sstate" => trim($form['shipping_state'] ?? ''),
+                "szip" => trim($form['shipping_zipcode'] ?? ''),
+                "scountry" => "IN",
+                "sphone" => trim($form['shipping_mobile'] ?? '')
+            ];
+        }
+        // echo '<pre>';
+        // print_r($billing);
+        // exit;
+
+        /* ================= VALIDATION ================= */
+        if (!$billing['first_name'] || !$billing['phone'] || !$billing['state'] || !$billing['zip']) {
+            echo json_encode(["success" => false, "message" => "Billing missing"]);
+            exit;
+        }
+
+        if (!$shipping['sname'] || !$shipping['sphone'] || !$shipping['sstate']) {
+            echo json_encode(["success" => false, "message" => "Shipping missing"]);
+            exit;
+        }
+
+        /* ================= COD ================= */
+
+        if ($paymentType == 'cod' && $cartData['codcharges'] > 0) {
+            $cod = "1";
+            $codCharges = (string)$cartData['codcharges'];
+        } else {
+            $cod = "0";
+            $codCharges = "0";
+        }
+
+        /* ================= RAZORPAY ================= */
+        $razorpay = [
+            "razorpay_order_id" => $_POST['razorpay_order_id'] ?? '',
+            "razorpay_payment_id" => $_POST['razorpay_payment_id'] ?? '',
+            "razorpay_signature" => $_POST['razorpay_signature'] ?? '',
+            "magiccheckout_done" => $_POST['magiccheckout_done'] ?? ''
+        ];
+
+        /* ================= CARD ================= */
+        $card = [
+            "cardnumber" => $_POST['cardnumber'] ?? '',
+            "cardexpmonth" => $_POST['cardexpmonth'] ?? '',
+            "cardexpyear" => $_POST['cardexpyear'] ?? '',
+            "card_cvv" => $_POST['card_cvv'] ?? ''
+        ];
+
+        /* ================= FINAL DATA ================= */
+        $postData = array_merge([
+            "payment_type" => $paymentType,
+            "buynow" => "0",
+            "checkoutdata" => $cartData['checkoutdata'], // RAW !!!
+            "cod" => $cod,
+            "codcharges" => $codCharges,
+            "store_payment_details" => $store_payment_details
+        ], $billing, $shipping, $razorpay, $card);
+
+        $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
+
+        /* ================= API CALL ================= */
+        $result = $this->exotic_api_call(
+            '/order/create',
+            'POST',
+            ['discountcoupondetails' => $coupon],
+            $postData
+        );
+
+        if (empty($result['data']['orderid'])) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Order API failed",
+                "api" => $result
+            ]);
+            exit;
+        }
+
+        unset($_SESSION['discount_coupon']);
+        unset($_SESSION['pos_customer_form']);
+        unset($_SESSION['pos_customer_id']);
+        echo json_encode([
+            "success" => true,
+            "orderid" => $result['data']['orderid']
+        ]);
+    }
+
+   
+    public function add_customer()
+    {
+        global $conn;
+
+        $first = $_POST['first_name'] ?? '';
+        $last  = $_POST['last_name'] ?? '';
+        $phone = $_POST['mobile'] ?? '';
+        $email = $_POST['cus_email'] ?? '';
+
+        if (!$first || !$phone) {
+            echo json_encode([
+                "success" => false,
+                "message" => "Name and phone required"
+            ]);
+            exit;
+        }
+
+        $name = trim($first . ' ' . $last);
+
+        $stmt = $conn->prepare("
+        INSERT INTO vp_customers (name,email,phone)
+        VALUES (?,?,?)
+    ");
+        $stmt->bind_param("sss", $name, $email, $phone);
+        $stmt->execute();
+
+        $id = $stmt->insert_id;
+
+        /*  STORE FULL BILLING + SHIPPING IN SESSION */
+        $_SESSION['pos_customer_id'] = $id;
+        $_SESSION['pos_customer_form'] = $_POST;
+
+        echo json_encode([
+            "success" => true,
+            "customer" => [
+                "id" => $id,
+                "name" => $name,
+                "phone" => $phone,
+                "email" => $email
+            ]
+        ]);
+
+        exit;
+    }
+    public function set_customer()
+    {
+
+        // $customerId = $_POST['customer_id'] ?? '';
+        $customerId = $_POST['customer_id'] ?? '';
+
+        if ($customerId) {
+            $_SESSION['pos_customer_id'] = $customerId;
+            unset($_SESSION['pos_customer_form']); // ⭐ VERY IMPORTANT
+        } else {
+            unset($_SESSION['pos_customer_id']);
+        }
+
+        echo json_encode(["success" => true]);
+        exit;
+    }
+
+    public function remove_coupon()
+    {
+        if (isset($_SESSION['discount_coupon'])) {
+            unset($_SESSION['discount_coupon']);
+        }
+
+        $_SESSION['coupon_status'] = "success";
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
+    public function apply_custom_discount()
+    {
+        $amount = $_POST['amount'] ?? 0;
+
+        $amount = floatval($amount);
+
+        $this->exotic_api_call(
+            '/cart/addcustomdiscount',
+            'GET',
+            ['custom_reduce' => $amount]
+        );
+
+        echo json_encode([
+            "success" => true
+        ]);
+        exit;
+    }
+    
 }
