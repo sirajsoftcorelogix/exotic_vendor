@@ -117,7 +117,7 @@
             name="customer_id"
             class="w-full border rounded-lg px-3 py-2 text-sm">
 
-            <option value="">Walk-in Customer</option>
+            <option value="">Select Customer</option>
 
             <?php foreach ($customers as $c): ?>
 
@@ -127,7 +127,9 @@
                 data-email="<?= htmlspecialchars($c['email']) ?>"
                 <?= (!empty($_SESSION['pos_customer_id']) && $_SESSION['pos_customer_id'] == $c['id']) ? 'selected' : '' ?>>
 
-                <?= htmlspecialchars($c['name']) ?> (<?= $c['phone'] ?>)
+                <?= htmlspecialchars($c['name']) ?> | <?= $c['phone'] ?> | <?= $c['email'] ?>
+
+              </option>
 
               </option>
 
@@ -193,7 +195,7 @@
 
                     <div class="mt-1 flex items-center justify-between">
                       <span class="text-orange-600 font-semibold">
-                        ₹ <?= number_format($item['price'], 2) ?>
+                        <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['price'], 2) ?>
                       </span>
                     </div>
 
@@ -242,45 +244,45 @@
                 </div>
                 <?php if (!empty($item['shipping']) && $item['shipping'] > 0): ?>
 
-                  <div class="flex gap-2">
+                  <!-- <div class="flex gap-2"> -->
 
-                    <div class="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-2">
+                  <!-- <div class="flex items-center gap-2 rounded-lg bg-green-100 px-3 py-2 justify-center "> -->
+                  <div class="flex items-center justify-center gap-2 rounded-lg bg-green-100 px-3 py-2 text-center">
+                    <div class="flex h-6 w-6 items-center justify-center rounded-md">
 
-                      <div class="flex h-6 w-6 items-center justify-center rounded-md">
+                      <form method="POST" action="?page=pos_register&action=toggle-shipping">
 
-                        <form method="POST" action="?page=pos_register&action=toggle-shipping">
+                        <!-- <input type="hidden" name="action" value="toggle_express_shipping"> -->
+                        <input type="hidden" name="cartid" value="<?= $item['cartref'] ?>">
 
-                          <!-- <input type="hidden" name="action" value="toggle_express_shipping"> -->
-                          <input type="hidden" name="cartid" value="<?= $item['cartref'] ?>">
+                        <input type="hidden" name="action"
+                          value="<?= $item['express_selected'] ? 'delete' : 'add' ?>">
 
-                          <input type="hidden" name="action"
-                            value="<?= $item['express_selected'] ? 'delete' : 'add' ?>">
+                        <input type="checkbox"
+                          <?= $item['express_selected'] ? 'checked' : '' ?>
+                          onchange="this.form.submit()"
+                          class="h-4 w-4 rounded border-slate-300 text-green-600">
 
-                          <input type="checkbox"
-                            <?= $item['express_selected'] ? 'checked' : '' ?>
-                            onchange="this.form.submit()"
-                            class="h-4 w-4 rounded border-slate-300 text-green-600">
+                      </form>
 
-                        </form>
+                    </div>
 
+                    <div>
+
+                      <div class="text-[9px] text-green-900 leading-tight">
+                        <?= htmlspecialchars($item['shipping_title'] ?? 'Express Shipping') ?>
                       </div>
 
-                      <div>
-
-                        <div class="text-[9px] text-green-900 leading-tight">
-                          <?= htmlspecialchars($item['shipping_title'] ?? 'Express Shipping') ?>
-                        </div>
-
-                        <div class="text-[11px] font-semibold text-green-900">
-                          ₹ <?= number_format($item['shipping_per_unit'], 2) ?>
-                        </div>
-
+                      <div class="text-[11px] font-semibold text-green-900">
+                        <?= currencySymbol($cartData['currency']) ?> <?= number_format($item['shipping_per_unit'], 2) ?>
                       </div>
 
                     </div>
 
+                  </div>
 
-                    <div class="flex items-center gap-2 rounded-lg bg-green-200 px-3 py-2">
+
+                  <!-- <div class="flex items-center gap-2 rounded-lg bg-green-200 px-3 py-2">
 
                       <div class="flex h-6 w-6 items-center justify-center rounded-md bg-orange-500">
 
@@ -300,9 +302,9 @@
                         </div>
                       </div>
 
-                    </div>
+                    </div> -->
 
-                  </div>
+                  <!-- </div> -->
 
                 <?php endif; ?>
 
@@ -387,28 +389,29 @@
             <?php if (!empty($cartData['discount'])): ?>
               <div class="flex justify-between text-green-600">
                 <span>Coupon Discount</span>
-                <span>- ₹ <?= number_format($cartData['discount'], 2) ?></span>
+                <span>- <?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['discount'], 2) ?></span>
               </div>
             <?php endif; ?>
             <div class="flex justify-between text-slate-600">
               <span>Sub Total</span>
-              <span>₹ <?= number_format($cartData['subtotal'] ?? 0, 2) ?></span>
+              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['subtotal'] ?? 0, 2) ?></span>
             </div>
 
             <div class="flex justify-between text-slate-600">
               <span>GST</span>
-              <span>₹ <?= number_format($cartData['gst'] ?? 0, 2) ?></span>
+              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['gst'] ?? 0, 2) ?></span>
             </div>
 
             <div class="flex justify-between font-semibold text-slate-900">
               <span>Total</span>
-              <span>₹ <?= number_format($cartData['grand_total'] ?? 0, 2) ?></span>
+              <span><?= currencySymbol($cartData['currency']) ?> <?= number_format($cartData['grand_total'] ?? 0, 2) ?></span>
             </div>
 
           </div>
 
           <!-- ACTION -->
-          <button class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold">
+          <button id="applyCustomDiscountBtn"
+            class="w-full rounded-xl bg-orange-600 py-3 text-white font-semibold">
             Apply Cart Discount
           </button>
 
@@ -558,10 +561,13 @@
         </div>
 
         <div class="col-span-2">
-          <label class="text-gray-500">Address</label>
+          <label class="text-gray-500">Address 1</label>
           <input name="address_line1" class="w-full border rounded px-2 py-1.5">
         </div>
-
+        <div class="col-span-2">
+          <label class="text-gray-500">Address 2</label>
+          <input name="address_line2" class="w-full border rounded px-2 py-1.5">
+        </div>
 
         <div>
           <label class="text-gray-500">City</label>
@@ -616,10 +622,13 @@
         </div>
 
         <div class="col-span-2">
-          <label class="text-gray-500">Address</label>
+          <label class="text-gray-500">Address 1</label>
           <input name="shipping_address_line1" class="w-full border rounded px-2 py-1.5">
         </div>
-
+        <div class="col-span-2">
+          <label class="text-gray-500">Address 2</label>
+          <input name="shipping_address_line2" class="w-full border rounded px-2 py-1.5">
+        </div>
         <div>
           <label class="text-gray-500">City</label>
           <input name="shipping_city" class="w-full border rounded px-2 py-1.5">
@@ -658,6 +667,7 @@
   </div>
 
 </div>
+
 <!-- PAYMENT MODAL -->
 <div id="paymentModal" class="fixed inset-0 z-[9999] hidden">
 
@@ -784,7 +794,21 @@
   </div>
 </div>
 <!-- CUSTOMER MODAL -->
+<!-- INVOICE PREVIEW MODAL -->
 
+<div id="invoicePreviewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50" onclick="closePreviewModal()">
+  <div class="bg-white max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-lg" onclick="event.stopPropagation()">
+    <div class="sticky top-0 bg-gray-100 p-4 border-b flex justify-between items-center">
+      <h2 class="text-xl font-bold">Invoice Preview</h2>
+      <button type="button" onclick="closePreviewModal()" class="text-red-600 hover:text-red-800 text-2xl">&times;</button>
+    </div>
+    <div id="invoicePreviewContent" class="p-4"></div>
+    <div class="sticky bottom-0 bg-gray-100 p-4 border-t flex justify-end space-x-2">
+      <button type="button" onclick="closePreviewModal()" class="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500">Close</button>
+      <button type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Print</button>
+    </div>
+  </div>
+</div>
 </div>
 </div>
 </div>
@@ -794,6 +818,171 @@
 <!-- ===== END PAGE WRAPPER ===== -->
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
+<script>
+  function autoCreateInvoiceThenPreview(orderid) {
+
+    fetch('?page=invoices&action=CreateAutoFromOrder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderid: orderid
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+
+        if (!data.success) {
+          showToast(data.message || "Invoice create failed", "red");
+          return;
+        }
+
+        showToast("✓ Invoice created", "green");
+
+        previewInvoiceFromOrder(orderid);
+
+      })
+      .catch(err => {
+        console.error(err);
+        showToast("Invoice error", "red");
+      });
+  }
+
+  function previewInvoiceFromOrder(orderNumber) {
+
+    fetch('?page=invoices&action=preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderid: orderNumber
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+
+        if (!data.success) {
+          showToast(data.message || "Preview failed", "red");
+          return;
+        }
+
+        document.getElementById('invoicePreviewContent').innerHTML = data.html;
+        document.getElementById('invoicePreviewModal').classList.remove('hidden');
+
+      })
+      .catch(err => {
+        console.error(err);
+        showToast("Preview error", "red");
+      });
+
+  }
+
+  function openInvoicePreview(invoice_id) {
+
+    fetch('?page=invoices&action=preview_after_create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'invoice_id=' + invoice_id
+      })
+      .then(res => res.json())
+      .then(data => {
+
+        if (!data.success) {
+          alert(data.message);
+          return;
+        }
+
+        document.getElementById('invoicePreviewContent').innerHTML = data.html;
+        document.getElementById('invoicePreviewModal').classList.remove('hidden');
+
+      });
+
+  }
+
+  function previewInvoice() {
+    const formData = new FormData(document.getElementById('create_invoice'));
+
+    // Collect item data
+    const items = [];
+    document.querySelectorAll('#invoiceTable tbody tr').forEach((row, idx) => {
+      items.push({
+        order_number: row.querySelector('input[name="order_number[]"]')?.value || '',
+        box_no: row.querySelector('input[name="box_no[]"]')?.value || '',
+        item_code: row.querySelector('input[name="item_code[]"]')?.value || '',
+        item_name: row.querySelector('input[name="item_name[]"]')?.value || '',
+        hsn: row.querySelector('input[name="hsn[]"]')?.value || '',
+        quantity: row.querySelector('input[name="quantity[]"]')?.value || 0,
+        unit_price: row.querySelector('input[name="unit_price[]"]')?.value || 0,
+        cgst: row.querySelector('input[name="cgst[]"]')?.value || 0,
+        sgst: row.querySelector('input[name="sgst[]"]')?.value || 0,
+        igst: row.querySelector('input[name="igst[]"]')?.value || 0,
+        tax_amount: row.querySelector('input[name="tax_amount[]"]')?.value || 0,
+        line_total: row.querySelector('input[name="line_total[]"]')?.value || 0,
+        currency: row.querySelector('input[name="currency[]"]')?.value || 'INR',
+        image_url: row.querySelector('input[name="image_url[]"]')?.value || '',
+        groupname: row.querySelector('input[name="groupname[]"]')?.value || ''
+      });
+    });
+
+    if (items.length === 0) {
+      alert('Please add at least one item to preview');
+      return;
+    }
+
+    // Get selected address
+    const vp_order_info_id = document.getElementById('vp_order_info_id').value;
+    //const vpAddressInfoId = billToSelect && billToSelect.tagName === 'SELECT' ? billToSelect.value : '';
+
+    const previewData = {
+      invoice_date: formData.get('invoice_date') || new Date().toISOString().split('T')[0],
+      customer_id: formData.get('customer_id') || 0,
+      vp_order_info_id: vp_order_info_id || 0,
+      subtotal: document.getElementById('subtotal')?.value || 0,
+      tax_amount: document.getElementById('tax_amount')?.value || 0,
+      discount_amount: document.getElementById('discount_amount')?.value || 0,
+      total_amount: document.getElementById('total_amount')?.value || 0,
+      status: formData.get('status') || 'draft',
+      items: items
+    };
+
+    // Send to server for preview using template
+    fetch('<?php echo base_url('?page=invoices&action=preview'); ?>', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(previewData)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Display the HTML preview in modal
+          const modal = document.getElementById('invoicePreviewModal');
+          const previewContent = document.getElementById('invoicePreviewContent');
+
+          // Set the HTML content from the tax invoice template
+          previewContent.innerHTML = `<div style="max-height: 500px; overflow-y: auto; background: white;">${data.html}</div>`;
+
+          modal.classList.remove('hidden');
+        } else {
+          alert('Error generating preview: ' + data.message);
+        }
+      })
+      .catch(err => {
+        console.error('Preview error:', err);
+        alert('Failed to generate preview');
+      });
+  }
+
+
+  function closePreviewModal() {
+    document.getElementById('invoicePreviewModal').classList.add('hidden');
+  }
+</script>
 <script>
   function openPaymentModal() {
     document.getElementById("paymentModal").classList.remove("hidden");
@@ -807,7 +996,16 @@
   document.addEventListener("DOMContentLoaded", function() {
 
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
+      let customerId = document.getElementById("customerSelect").value;
 
+      if (!customerId) {
+
+        showToast("⚠ Please select customer first", "red");
+
+        document.getElementById("customerSelect").focus();
+
+        return;
+      }
       let paymentType = document.getElementById("payment_mode").value
       let paymentStage = document.getElementById("payment_stage").value
       let paymentAmount = document.getElementById("payment_amount").value
@@ -836,6 +1034,7 @@
       formData.append("amount", paymentAmount)
       formData.append("transaction_id", transactionId)
       formData.append("note", note)
+      formData.append("customer_id", $('#customerSelect').val());
 
       fetch("?page=pos_register&action=create-order", {
           method: "POST",
@@ -845,26 +1044,19 @@
         .then(data => {
 
           if (data.success) {
-            console.log(data.success, "data.success")
-            closePaymentModal()
 
-            importOrder(data.orderid)
+            closePaymentModal();
+            showToast("✓ Order Created", "green");
 
-            let msg = document.createElement("div")
-            msg.className = "fixed top-5 right-5 bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]"
-            msg.innerHTML = data.message + " (Order ID: " + data.orderid + ")"
+            importOrder(data.orderid, function() {
 
-            document.body.appendChild(msg)
 
-            setTimeout(() => {
-              msg.remove()
-              location.reload()
-            }, 2000)
+              autoCreateInvoiceThenPreview(data.orderid);
+              previewInvoiceFromOrder(data.orderid);
+            });
 
           } else {
-
-            alert(data.message || "Order failed")
-
+            alert(data.message || "Order failed");
           }
 
         })
@@ -872,40 +1064,50 @@
     })
   });
 
-  function importOrder(orderid) {
+
+  function importOrder(orderid, callback = null) {
+
     const secretKey = 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801';
     const url = 'index.php?page=orders&action=import_orders&secret_key=' + secretKey + '&orderid=' + orderid;
 
-    fetch(url, {
-        method: 'GET'
+    fetch(url)
+      .then(res => res.text())
+      .then(text => {
+
+        console.log("IMPORT RESPONSE:", text);
+
+        if (text.includes("orders imported successfully") || text.includes("Import Result")) {
+
+          showToast("✓ Order imported & Invoice created", "blue");
+
+          setTimeout(() => {
+            if (callback) callback();
+          }, 800);
+
+        } else {
+
+          showToast("Import failed", "red");
+
+        }
+
       })
-      .then(response => response.json())
-      .then(data => {
-        console.log('Order imported successfully:', data);
-
-        // Display success message
-        let successMsg = document.createElement("div");
-        successMsg.className = "fixed top-5 right-5 bg-blue-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
-        successMsg.innerHTML = "✓ Order imported successfully";
-        document.body.appendChild(successMsg);
-
-        setTimeout(() => {
-          successMsg.remove();
-        }, 3000);
-      })
-      .catch(error => {
-        console.error('Error importing order:', error);
-
-        // Display error message
-        let errorMsg = document.createElement("div");
-        errorMsg.className = "fixed top-5 right-5 bg-red-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]";
-        errorMsg.innerHTML = "✗ Error importing order";
-        document.body.appendChild(errorMsg);
-
-        setTimeout(() => {
-          errorMsg.remove();
-        }, 3000);
+      .catch(err => {
+        console.error(err);
+        showToast("✗ Import request failed", "red");
       });
+  }
+
+  function showToast(msg, color) {
+
+    let div = document.createElement("div");
+
+    div.className = `fixed top-5 right-5 bg-${color}-600 text-white px-5 py-3 rounded-lg shadow-lg z-[99999]`;
+
+    div.innerHTML = msg;
+
+    document.body.appendChild(div);
+
+    setTimeout(() => div.remove(), 3000);
   }
 </script>
 <script>
@@ -993,6 +1195,7 @@
       "mobile": "shipping_mobile",
       "cus_email": "shipping_email",
       "address_line1": "shipping_address_line1",
+      "address_line2": "shipping_address_line2",
       "city": "shipping_city",
       "state": "shipping_state",
       "zipcode": "shipping_zipcode"
@@ -1010,7 +1213,7 @@
       if (checkbox.checked) {
 
         shippingInput.value = billingInput.value;
-        shippingInput.readOnly = true;
+        // shippingInput.readOnly = true;
         shippingInput.classList.add("bg-gray-100");
 
         /* LIVE SYNC */
@@ -1022,7 +1225,7 @@
 
       } else {
 
-        shippingInput.readOnly = false;
+        // shippingInput.readOnly = false;
         shippingInput.classList.remove("bg-gray-100");
 
       }
@@ -1030,4 +1233,113 @@
     });
 
   }
+</script>
+
+<script>
+  $(document).ready(function() {
+
+    $('#customerSelect').select2({
+      placeholder: "Search Customer",
+      allowClear: true,
+      width: '100%',
+
+      matcher: function(params, data) {
+
+        if ($.trim(params.term) === '') {
+          return data;
+        }
+
+        if (!data.element) return data;
+
+        let term = params.term.toLowerCase();
+        let el = $(data.element);
+
+        let name = String(el.data('name') || '').toLowerCase();
+        let phone = String(el.data('phone') || '').toLowerCase();
+        let email = String(el.data('email') || '').toLowerCase();
+        let text = String(data.text || '').toLowerCase();
+
+        if (
+          name.includes(term) ||
+          phone.includes(term) ||
+          email.includes(term) ||
+          text.includes(term)
+        ) {
+          return data;
+        }
+
+        return null;
+      },
+
+      templateResult: formatCustomer,
+      templateSelection: formatCustomerSelection
+    });
+
+  });
+
+  function formatCustomer(data) {
+
+    if (!data.id) return data.text;
+
+    let el = $(data.element);
+
+    let name = el.data('name') || data.text;
+    let phone = el.data('phone') || '';
+    let email = el.data('email') || '';
+
+    return $(`
+        <div>
+            <div style="font-weight:600">${name}</div>
+            <div style="font-size:11px;color:#777">
+                ${phone} ${email ? ' | ' + email : ''}
+            </div>
+        </div>
+    `);
+  }
+
+  function formatCustomerSelection(data) {
+
+    if (!data.id) return data.text;
+
+    let el = $(data.element);
+    let name = el.data('name');
+
+    return name || data.text;
+  }
+</script>
+
+<script>
+  document.getElementById("applyCustomDiscountBtn").addEventListener("click", function() {
+
+    let amount = prompt("Enter Discount Amount");
+
+    if (amount === null) return;
+
+    amount = parseFloat(amount);
+
+    if (isNaN(amount) || amount < 0) {
+      alert("Invalid discount amount");
+      return;
+    }
+
+    fetch("?page=pos_register&action=apply-custom-discount", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: "amount=" + amount
+      })
+      .then(res => res.json())
+      .then(data => {
+
+        if (data.success) {
+          showToast("✓ Discount Applied", "green");
+          location.reload();
+        } else {
+          showToast(data.message || "Discount failed", "red");
+        }
+
+      });
+
+  });
 </script>

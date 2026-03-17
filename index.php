@@ -332,6 +332,9 @@ switch ($page) {
             case 'fetch_items':
                 $controller->fetchItems();
                 break;
+            case 'CreateAutoFromOrder':
+                $controller->create_auto_from_order();
+                break;
             default:
                 $controller->index();
                 break;
