@@ -1401,6 +1401,7 @@ class InboundingController {
         include 'views/inbounding/label_inbound.php';
     }
     public function inbound_product_publish(){
+        is_login();
         global $inboundingModel;
         $API_data = array();
 
@@ -1707,13 +1708,17 @@ class InboundingController {
         header('Content-Type: application/json');
         if (is_object($result) && isset($result->status) && $result->status == 'success' && !isset($result->error)) {
             $ProductsController = new ProductsController();
+            // publish log
+            $logData1 = ['userid_log' => $_SESSION['user']['id'] ?? '0', 'i_id' => $id, 'stat' => 'Published'];
+            $inboundingModel->stat_logs($logData1);
+
+            // import API
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
-
-            $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
+            
+            // insert stock moment
             $stoc_data = $inboundingModel->stock_data($id);
             $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
-            $inboundingModel->stat_logs($logData);
             
             // === LOG SUCCESS ===
             $logFileData = $this->logPublishProcess([

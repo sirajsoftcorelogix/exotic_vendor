@@ -128,6 +128,7 @@
                     <a href="javascript:void(0)" id="importProductsBtn" title="Import products" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Import Products</a>
                     <a href="javascript:void(0)" id="bulkUpdateBtn" title="Update stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Products</a>
                     <a href="javascript:void(0)" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
+                    <a href="javascript:void(0)" id="action-transfer-stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add Transfer Stock</a>
                 </div>
             </div>
             <!-- <button id="importProductsBtn" title="Import products" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">
@@ -1225,9 +1226,27 @@ window.updateVendorPriority = function(id,item_code, priority, el) {
         const menu = document.getElementById('bulk-action-menu');
         menu.classList.toggle('hidden');
     });
-    // close menu on outside click
-    document.addEventListener('click', function() {
-        document.getElementById('bulk-action-menu').classList.add('hidden');
+    
+    // Close menu on outside click
+    document.addEventListener('click', function(e) {
+        const menu = document.getElementById('bulk-action-menu');
+        const toggle = document.getElementById('bulk-action-toggle');
+        if (!toggle.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add('hidden');
+        }
+    });
+    
+    // Transfer Stock handler
+    document.getElementById('action-transfer-stock').addEventListener('click', function(e) {
+        e.preventDefault();
+        const products = getSelectedProductIds();
+        if (products.length === 0) {
+            showAlert('Please select at least one product for stock transfer.', 'warning');
+            return;
+        }
+        
+        const productIds = products.map(p => p.id).join(',');
+        window.location.href = '?page=products&action=transfer_stock&product_ids=' + encodeURIComponent(productIds);
     });
 
 
