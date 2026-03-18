@@ -273,7 +273,7 @@ class StockTransfer
         
         // Format counter with leading zeros
         return $basePrefix . str_pad($counter, 4, '0', STR_PAD_LEFT);
-        
+      }  
     /**
      * Validate that transfer quantity doesn't exceed available stock
      * @param string $sku Product SKU
