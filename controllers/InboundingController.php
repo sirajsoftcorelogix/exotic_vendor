@@ -1710,10 +1710,10 @@ class InboundingController {
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
 
-            $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $data['data']['id'], 'stat' => 'Published'];
-            $stoc_data = $inboundingModel->stock_data($id);
-            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
+            $logData = ['userid_log' => $_SESSION['user']['id'] ?? '', 'i_id' => $id, 'stat' => 'Published'];
             $inboundingModel->stat_logs($logData);
+            // $stoc_data = $inboundingModel->stock_data($id);
+            // $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
             
             // === LOG SUCCESS ===
             $logFileData = $this->logPublishProcess([
