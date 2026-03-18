@@ -1707,13 +1707,13 @@ class InboundingController {
 
         header('Content-Type: application/json');
         if (is_object($result) && isset($result->status) && $result->status == 'success' && !isset($result->error)) {
-            $ProductsController = new ProductsController();
-            $itemCode = $data['data']['Item_code'];
-            $import_response = $ProductsController->importApiCall([$itemCode]);
             $logData1 = ['userid_log' => $_SESSION['user']['id'] ?? '0', 'i_id' => $id, 'stat' => 'Published'];
             $inboundingModel->stat_logs($logData1);
             $stoc_data = $inboundingModel->stock_data($id);
             $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
+            $ProductsController = new ProductsController();
+            $itemCode = $data['data']['Item_code'];
+            $import_response = $ProductsController->importApiCall([$itemCode]);
             
             // === LOG SUCCESS ===
             $logFileData = $this->logPublishProcess([
