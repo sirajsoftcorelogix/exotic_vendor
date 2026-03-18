@@ -1343,7 +1343,7 @@ class Inbounding {
         }
 
         // Lookup the product_id for the parent record using its SKU
-        $main_inbound[0]['product_id'] = $this->getProductByItemcode($main_inbound[0]['sku']);
+        $main_inbound[0]['product_id'] = $this->getProductBysku($main_inbound[0]['sku']);
 
         // 2. Fetch variations linked to this inbound ID
         $sql_var = "SELECT quantity_received, color, size, sku FROM vp_variations WHERE it_id = ?";
