@@ -1713,12 +1713,12 @@ class InboundingController {
             $inboundingModel->stat_logs($logData1);
 
             // import API
+            $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
             
             // insert stock moment
             $stoc_data = $inboundingModel->stock_data($id);
             $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
-            $itemCode = $data['data']['Item_code'];
             
             // === LOG SUCCESS ===
             $logFileData = $this->logPublishProcess([
