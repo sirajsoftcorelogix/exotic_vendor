@@ -1401,6 +1401,7 @@ class InboundingController {
         include 'views/inbounding/label_inbound.php';
     }
     public function inbound_product_publish(){
+        is_login();
         global $inboundingModel;
         $API_data = array();
 
@@ -1623,7 +1624,7 @@ class InboundingController {
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
@@ -1709,10 +1710,10 @@ class InboundingController {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
-            $logData1 = ['userid_log' => 12, 'i_id' => $id, 'stat' => 'Published'];
+            $logData1 = ['userid_log' => $_SESSION['user']['id'] ?? '0', 'i_id' => $id, 'stat' => 'Published'];
             $inboundingModel->stat_logs($logData1);
-            // $stoc_data = $inboundingModel->stock_data($id);
-            // $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
+            $stoc_data = $inboundingModel->stock_data($id);
+            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
             
             // === LOG SUCCESS ===
             $logFileData = $this->logPublishProcess([
