@@ -1623,7 +1623,7 @@ class InboundingController {
         $apiurl =  '';
         
         $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
+        $baseUrl   = 'https://wp.exoticindia.com/vendor-api/product/create';
 
         $apiurl = ($isVariant == 'Y') 
             ? $baseUrl . '?new_variation=1'
@@ -1709,8 +1709,8 @@ class InboundingController {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
-
-            $logData = ['userid_log' => $_SESSION['user']['id'] ?? '', 'i_id' => $id, 'stat' => 'Published'];
+            $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $id, 'stat' => 'Published'];
+            echo "<pre>log_data: ";print_r($logData);
             $inboundingModel->stat_logs($logData);
             // $stoc_data = $inboundingModel->stock_data($id);
             // $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
