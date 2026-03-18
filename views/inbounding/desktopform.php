@@ -1544,82 +1544,80 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Track the item currently being dragged
     let draggedItem = null;
-    // 1. DRAG START (Global Listener)
+    let placeholder = document.createElement('div');
+    placeholder.className = 'border-2 border-dashed border-[#d97824] rounded-[4px] bg-orange-50 min-w-[100px] h-32';
+
+    // 1. DRAG START
     document.addEventListener('dragstart', function(e) {
-        // Only trigger if the element is one of our draggable items
         const item = e.target.closest('.draggable-item');
         if (!item) return;
-        draggedItem = item;
-        item.classList.add('dragging'); // Used for styling and logic
-        item.style.opacity = '0.5';     // Visual feedback
         
+        draggedItem = item;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', ''); // Required for Firefox
+        
+        // Use a timeout to hide the original item so the "ghost" image remains visible
+        setTimeout(() => {
+            item.classList.add('hidden');
+        }, 0);
     });
-    // 2. DRAG END (Cleanup)
-    document.addEventListener('dragend', function(e) {
-        const item = e.target.closest('.draggable-item');
-        if (!item) return;
-        item.classList.remove('dragging');
-        item.style.opacity = '1';
-        draggedItem = null;
-    });
-    // 3. DRAG OVER (The "Shuffle" Logic)
+
+    // 2. DRAG OVER (Smooth Insertion)
     document.addEventListener('dragover', function(e) {
-        // If we aren't dragging a valid item, ignore
-        if (!draggedItem) return;
-        // Check if we are over a valid Drop Zone (The Grid)
         const container = e.target.closest('.photo-group-grid');
-        if (!container) return;
-        e.preventDefault(); // Necessary to allow dropping
-        // Calculate where to place the item based on Mouse X position
+        if (!container || !draggedItem) return;
+
+        e.preventDefault(); // Allow dropping
         const afterElement = getDragAfterElement(container, e.clientX);
         
-        // Move the DOM element live (Swapping effect)
+        // Move the placeholder to show where the item will land
         if (afterElement == null) {
-            container.appendChild(draggedItem);
+            container.appendChild(placeholder);
         } else {
-            container.insertBefore(draggedItem, afterElement);
+            container.insertBefore(placeholder, afterElement);
         }
     });
-    // 4. DROP (Save Data)
+
+    // 3. DROP
     document.addEventListener('drop', function(e) {
-        e.preventDefault(); // Prevent browser default (opening file)
-        
-        // We only care if we dropped into a valid grid
         const container = e.target.closest('.photo-group-grid');
+        if (!container || !draggedItem) return;
         
-        if (draggedItem && container) {
-            // A. Update the Hidden Variation ID Input
-            // This ensures the photo is now assigned to the new color/variation
-            const newVarId = container.getAttribute('data-var-id');
-            const varInput = draggedItem.querySelector('.variation-input');
-            if(varInput) {
-                varInput.value = newVarId;
-            }
-            // B. Recalculate Sort Order for ALL grids
-            // (We update all because moving an item changes the order in both Source and Target)
-            document.querySelectorAll('.photo-group-grid').forEach(grid => {
-                updateOrderInputs(grid);
-            });
+        e.preventDefault();
+
+        // A. Move the actual item to the placeholder's position
+        placeholder.parentNode.insertBefore(draggedItem, placeholder);
+        draggedItem.classList.remove('hidden');
+        placeholder.remove();
+
+        // B. Update the Hidden Variation ID for the moved item
+        const newVarId = container.getAttribute('data-var-id');
+        const varInput = draggedItem.querySelector('.variation-input');
+        if(varInput) {
+            varInput.value = newVarId;
         }
+
+        // C. Recalculate Sort Order for ALL images in the grid
+        updateOrderInputs(container);
     });
-    // --- HELPER: Calculate Position based on X Axis ---
+
+    // 4. DRAG END (Cleanup if dropped outside)
+    document.addEventListener('dragend', function(e) {
+        if (draggedItem) {
+            draggedItem.classList.remove('hidden');
+            placeholder.remove();
+        }
+        draggedItem = null;
+    });
+
+    // --- HELPER: Find the gap between items based on mouse X position ---
     function getDragAfterElement(container, x) {
-        // Get all items in this grid EXCEPT the one we are dragging
-        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.dragging)')];
+        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.hidden)')];
+
         return draggableElements.reduce((closest, child) => {
             const box = child.getBoundingClientRect();
-            
-            // Find the horizontal center of the child
-            const boxCenter = box.left + box.width / 2;
-            
-            // Distance between cursor and center
-            const offset = x - boxCenter;
-            // We are looking for the element where the cursor is to the LEFT of its center
-            // (negative offset) but closest to 0 (smallest negative number)
+            const offset = x - box.left - box.width / 2;
             if (offset < 0 && offset > closest.offset) {
                 return { offset: offset, element: child };
             } else {
@@ -1627,14 +1625,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
-    // --- HELPER: Update hidden input values (1, 2, 3...) ---
+
+    // --- HELPER: Update the numeric order inputs (1, 2, 3...) ---
     function updateOrderInputs(container) {
-        if(!container) return;
-        const currentItems = container.querySelectorAll('.draggable-item');
-        currentItems.forEach((item, index) => {
+        const items = container.querySelectorAll('.draggable-item');
+        items.forEach((item, index) => {
             const input = item.querySelector('.order-input');
             if(input) {
-                input.value = index + 1;
+                input.value = index + 1; // 1-based indexing for display order
             }
         });
     }
@@ -2275,10 +2273,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Category Check (Checkboxes)
         const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
         if (catChecked === 0) errors.push("Please select at least one 'Category'.");
-
-        // Lead Time
-        const leadTime = parseFloat(getVal('lead_time_days')) || 0;
-        if (leadTime < 1) errors.push("'Lead Time' must be at least 1 day.");
 
         // --- 2. MAIN ITEM ---
         const mainQty = parseFloat(getVal('quantity_received')) || 0;
@@ -3354,10 +3348,6 @@ function validateAndSubmit(actionType) {
     // Category Check (Checkboxes)
     const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
     if (catChecked === 0) errors.push("Please select at least one 'Category'.");
-
-    // Lead Time
-    const leadTime = parseFloat(getVal('lead_time_days')) || 0;
-    if (leadTime < 1) errors.push("'Lead Time' must be at least 1 day.");
 
     // --- 2. MAIN ITEM VALIDATION ---
     const mainQty = parseFloat(getVal('quantity_received')) || 0;
