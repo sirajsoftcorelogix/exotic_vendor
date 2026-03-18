@@ -1056,4 +1056,206 @@ class ProductsController {
         ];
         renderTemplate('views/products/inventory_ledger.php', $data, 'Inventory Ledger');
     }
+    
+    public function getTransferStockForm() {
+        is_login();
+        global $productModel, $conn;
+        
+        $product_ids = isset($_GET['product_ids']) ? $_GET['product_ids'] : '';
+        
+        if (empty($product_ids)) {
+            renderTemplateClean('views/errors/error.php', ['message' => 'No products selected for transfer.'], 'Error');
+            exit;
+        }
+        
+        // Convert comma-separated IDs to array
+        $ids = array_map('intval', array_filter(explode(',', $product_ids)));
+        
+        if (empty($ids)) {
+            renderTemplateClean('views/errors/error.php', ['message' => 'Invalid product IDs.'], 'Error');
+            exit;
+        }
+        
+        // Fetch product details
+        $products = [];
+        foreach ($ids as $id) {
+            $product = $productModel->getProduct($id);
+            if ($product) {
+                $products[] = $product;
+            }
+        }
+        
+        if (empty($products)) {
+            renderTemplateClean('views/errors/error.php', ['message' => 'Products not found.'], 'Error');
+            exit;
+        }
+        
+        // Fetch warehouses from exotic_address table
+        $warehouses = [];
+        $warehouseQuery = "SELECT id, address_title, address FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+        $warehouseResult = mysqli_query($conn, $warehouseQuery);
+        if ($warehouseResult) {
+            while ($row = mysqli_fetch_assoc($warehouseResult)) {
+                $warehouses[] = $row;
+            }
+        }
+        
+        // Fetch users from vp_users table
+        $users = [];
+        $userQuery = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
+        $userResult = mysqli_query($conn, $userQuery);
+        if ($userResult) {
+            while ($row = mysqli_fetch_assoc($userResult)) {
+                $users[] = $row;
+            }
+        }
+        
+        // Render the transfer stock form as full page
+        renderTemplate('views/products/transfer_stock_page.php', [
+            'products' => $products, 
+            'product_ids' => $product_ids,
+            'warehouses' => $warehouses,
+            'users' => $users
+        ], 'Transfer Stock');
+    }
+    
+    public function processTransferStock() {
+        is_login();
+        global $conn;
+        
+        header('Content-Type: application/json');
+        
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+        
+        // Get JSON payload
+        $raw = file_get_contents('php://input');
+        $data = json_decode($raw, true);
+        
+        // Validate input
+        $transfer_order_no = isset($data['transfer_order_no']) ? trim($data['transfer_order_no']) : '';
+        $product_ids = isset($data['product_ids']) ? trim($data['product_ids']) : '';
+        $from_warehouse = isset($data['from_warehouse']) ? intval($data['from_warehouse']) : 0;
+        $to_warehouse = isset($data['to_warehouse']) ? intval($data['to_warehouse']) : 0;
+        $dispatch_date = isset($data['dispatch_date']) ? trim($data['dispatch_date']) : '';
+        $est_delivery_date = isset($data['est_delivery_date']) ? trim($data['est_delivery_date']) : '';
+        $requested_by = isset($data['requested_by']) ? intval($data['requested_by']) : 0;
+        $dispatch_by = isset($data['dispatch_by']) ? intval($data['dispatch_by']) : 0;
+        
+        // Validation
+        if (empty($transfer_order_no)) {
+            echo json_encode(['success' => false, 'message' => 'Transfer order number is required']);
+            exit;
+        }
+        
+        if (empty($product_ids)) {
+            echo json_encode(['success' => false, 'message' => 'No products specified']);
+            exit;
+        }
+        
+        if ($from_warehouse <= 0 || $to_warehouse <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select source and destination warehouses']);
+            exit;
+        }
+        
+        if ($from_warehouse === $to_warehouse) {
+            echo json_encode(['success' => false, 'message' => 'Source and destination warehouses must be different']);
+            exit;
+        }
+        
+        // Validate items have transfer quantities
+        if (!isset($data['items']) || empty($data['items'])) {
+            echo json_encode(['success' => false, 'message' => 'No items found']);
+            exit;
+        }
+        
+        $hasItems = false;
+        foreach ($data['items'] as $item) {
+            if ((int)$item['transfer_qty'] > 0) {
+                $hasItems = true;
+                break;
+            }
+        }
+        
+        if (!$hasItems) {
+            echo json_encode(['success' => false, 'message' => 'Please enter transfer quantity for at least one item']);
+            exit;
+        }
+        
+        // Validate each item transfer quantity doesn't exceed available stock
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        
+        foreach ($data['items'] as $item) {
+            $transfer_qty = (int)$item['transfer_qty'];
+            if ($transfer_qty <= 0) {
+                continue;
+            }
+            
+            $sku = trim($item['sku'] ?? '');
+            if (empty($sku)) {
+                continue;
+            }
+            
+            // Validate stock using model method
+            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $transfer_qty);
+            if (!$validation['valid']) {
+                echo json_encode(['success' => false, 'message' => $validation['message']]);
+                exit;
+            }
+        }
+        
+        // Prepare data for model
+        $transferData = [
+            'transfer_order_no' => $transfer_order_no,
+            'from_warehouse' => $from_warehouse,
+            'to_warehouse' => $to_warehouse,
+            'dispatch_date' => $dispatch_date,
+            'est_delivery_date' => $est_delivery_date,
+            'requested_by' => $requested_by,
+            'dispatch_by' => $dispatch_by,
+            'booking_no' => isset($data['booking_no']) ? trim($data['booking_no']) : '',
+            'vehicle_no' => isset($data['vehicle_no']) ? trim($data['vehicle_no']) : '',
+            'vehicle_type' => isset($data['vehicle_type']) ? trim($data['vehicle_type']) : '',
+            'driver_name' => isset($data['driver_name']) ? trim($data['driver_name']) : '',
+            'driver_mobile' => isset($data['driver_mobile']) ? trim($data['driver_mobile']) : '',
+            'create_pickup_list' => isset($data['create_pickup_list']) ? 1 : 0,
+            'create_picking_slip' => isset($data['create_picking_slip']) ? 1 : 0,
+            'create_delivery_challan' => isset($data['create_delivery_challan']) ? 1 : 0,
+            'items' => $data['items'],
+            'user_id' => $_SESSION['user_id'] ?? 1
+        ];
+        
+        // Call model to create transfer
+        $result = $stockTransferModel->createTransfer($transferData);
+        
+        echo json_encode($result);
+        exit;
+    }
+    
+    public function getLastWarehouse() {
+        header('Content-Type: application/json');
+        global $conn;
+        
+        // Load model to get last warehouse
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        
+        $warehouse_id = $stockTransferModel->getLastWarehouse();
+        
+        if ($warehouse_id) {
+            echo json_encode([
+                'success' => true,
+                'warehouse_id' => $warehouse_id
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'warehouse_id' => null
+            ]);
+        }
+        exit;
+    }
 }
