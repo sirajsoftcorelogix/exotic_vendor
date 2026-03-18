@@ -1709,9 +1709,8 @@ class InboundingController {
             $ProductsController = new ProductsController();
             $itemCode = $data['data']['Item_code'];
             $import_response = $ProductsController->importApiCall([$itemCode]);
-            $logData = ['userid_log' => $_SESSION['user']['id']??'', 'i_id' => $id, 'stat' => 'Published'];
-            echo "<pre>log_data: ";print_r($logData);
-            $inboundingModel->stat_logs($logData);
+            $logData1 = ['userid_log' => 12, 'i_id' => $id, 'stat' => 'Published'];
+            $inboundingModel->stat_logs($logData1);
             // $stoc_data = $inboundingModel->stock_data($id);
             // $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data);
             
