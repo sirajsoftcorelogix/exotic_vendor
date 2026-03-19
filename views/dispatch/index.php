@@ -118,10 +118,46 @@
           <input type="text" name="item_code" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Item Code" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>">
         </div>
         <div>
+          <label class="text-sm font-semibold">Payment ID:</label>
+          <input type="text" name="payment_id" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Payment ID" value="<?= htmlspecialchars($_GET['payment_id'] ?? '') ?>">
+        </div>
+        <div>
           <label class="text-sm font-semibold">Batch No:</label>
           <input type="text" name="batch_no" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Batch No" value="<?= htmlspecialchars($_GET['batch_no'] ?? '') ?>">
         </div>
-        
+        <div class="">
+          <label for="country" class="text-sm font-semibold">Country</label>
+          <select id="country" name="country" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none">
+              <option value="" selected>All Country</option>
+              <optgroup label="Easy">
+                  <option value="overseas">Overseas</option>
+                  <option value="IN">India</option>
+              </optgroup>
+              <?php foreach ($country_list as $key => $value): ?>
+                  <option value="<?php echo $key; ?>" <?php echo (isset($_GET['country']) && $_GET['country'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
+              <?php endforeach; ?>
+          </select>
+        </div>
+        <div><?php //print_r($warehouseList);?>
+          <label class="text-sm font-semibold">Warehouse:</label>
+          <select name="warehouse_id" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none">
+            <!-- <option value="">All Warehouses</option> -->
+            <?php 
+           
+            foreach ($warehouseList as $warehouse): ?>
+                <option value="<?php echo $warehouse['id']; ?>" <?php echo (isset($_GET['warehouse_id']) && $_GET['warehouse_id'] == $warehouse['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($warehouse['address_title']); ?></option>
+            <?php endforeach; ?>
+          </select>
+
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Shipping Carrier:</label>
+          <select name="shipping_carrier" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none">
+            <!-- <option value="">All Carriers</option> -->
+            <option value="shiprocket" <?php echo (isset($_GET['shipping_carrier']) && $_GET['shipping_carrier'] === 'shiprocket') ? 'selected' : ''; ?>>ShipRocket</option>
+            <!-- <option value="bluedart" <?php //echo (isset($_GET['shipping_carrier']) && $_GET['shipping_carrier'] === 'bluedart') ? 'selected' : ''; ?>>BlueDart</option> -->
+          </select>
+        </div>
         <div class="flex items-end">
           <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-md transition">
             Search

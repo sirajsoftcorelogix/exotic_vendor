@@ -770,7 +770,9 @@ class DispatchController {
             'perPage' => $perPage,
             'totalPages' => $totalPages,
             'totalInvoices' => $totalInvoices,
-            'staffList' => $commanModel->get_staff_list()
+            'staffList' => $commanModel->get_staff_list(),
+            'country_list' => $commanModel->get_counry_list(),
+            'warehouseList' => $commanModel->get_exotic_address()
         ]);
     }
     
