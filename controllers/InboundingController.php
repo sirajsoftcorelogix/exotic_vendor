@@ -1402,6 +1402,9 @@ class InboundingController {
     }
     public function inbound_product_publish(){
         is_login();
+        if (ob_get_level() === 0) {
+            ob_start();
+        }
         global $inboundingModel;
         $API_data = array();
 
@@ -1681,6 +1684,8 @@ class InboundingController {
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
             ]);
             
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => $error, 'log_file' => $logFileData['filename']]);
             exit;
         }
@@ -1701,11 +1706,12 @@ class InboundingController {
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
             ]);
             
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response, 'log_file' => $logFileData['filename']]);
             exit;
         }
 
-        header('Content-Type: application/json');
         if (is_object($result) && isset($result->status) && $result->status == 'success' && !isset($result->error)) {
             $ProductsController = new ProductsController();
             // publish log
@@ -1732,6 +1738,8 @@ class InboundingController {
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
             ]);
             
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Product Published Successfully!',
@@ -1751,6 +1759,8 @@ class InboundingController {
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
             ]);
             
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => 'Publish failed. ' . $errorMsg, 'response' => $response, 'log_file' => $logFileData['filename']]);
         }
         exit;
