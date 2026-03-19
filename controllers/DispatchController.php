@@ -716,6 +716,31 @@ class DispatchController {
         if (!empty($_GET['category'])) {
             $filters['category'] = $_GET['category'];
         }
+        //dispatch table filter invoice value
+        if (!empty($_GET['invoice_value_min'])) {
+            $filters['invoice_value_min'] = floatval($_GET['invoice_value_min']);
+        }
+        if (!empty($_GET['invoice_value_max'])) {
+            $filters['invoice_value_max'] = floatval($_GET['invoice_value_max']);
+        }
+        if (!empty($_GET['item_code'])) {
+            $filters['item_code'] = $_GET['item_code'];
+        }
+        if (!empty($_GET['staff_id'])) {
+            $filters['staff_id'] = intval($_GET['staff_id']);
+        }
+        if (!empty($_GET['batch_no'])) {
+            $filters['batch_no'] = $_GET['batch_no'];
+
+        }
+        //Box Weight
+        if (!empty($_GET['box_weight_min'])) {
+            $filters['box_weight_min'] = floatval($_GET['box_weight_min']);
+        }
+        if (!empty($_GET['box_weight_max'])) {
+            $filters['box_weight_max'] = floatval($_GET['box_weight_max']);
+        }
+
 
         // Sorting
         $sort = isset($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc']) ? strtolower($_GET['sort']) : 'desc';
