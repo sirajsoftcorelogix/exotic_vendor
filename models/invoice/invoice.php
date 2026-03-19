@@ -343,8 +343,8 @@ class Invoice {
             $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_code LIKE '%" . $this->db->real_escape_string($filters['item_code']) . "%')"; 
 
         }
-        if (isset($filters['staff_id']) && $filters['staff_id'] !== '') {
-            $whereClause[] = "i.created_by = " . intval($filters['staff_id']);
+        if (isset($filters['created_by']) && $filters['created_by'] !== '') {
+            $whereClause[] = "d.created_by = " . intval($filters['created_by']);
         }
         if (isset($filters['item_name']) && $filters['item_name'] !== '') {
             $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_name LIKE '%" . $this->db->real_escape_string($filters['item_name']) . "%')";
@@ -371,7 +371,7 @@ class Invoice {
 
         $sql .= "LIMIT $limit OFFSET $offset";
 
-        //echo $sql; // debug if needed
+        echo $sql; // debug if needed
         $result = $this->db->query($sql);
         $invoices = [];
         if ($result && $result->num_rows > 0) {

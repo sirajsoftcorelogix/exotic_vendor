@@ -726,8 +726,8 @@ class DispatchController {
         if (!empty($_GET['item_code'])) {
             $filters['item_code'] = $_GET['item_code'];
         }
-        if (!empty($_GET['staff_id'])) {
-            $filters['staff_id'] = intval($_GET['staff_id']);
+        if (!empty($_GET['created_by'])) {
+            $filters['created_by'] = intval($_GET['created_by']);
         }
         if (!empty($_GET['batch_no'])) {
             $filters['batch_no'] = $_GET['batch_no'];
