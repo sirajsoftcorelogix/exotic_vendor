@@ -371,7 +371,7 @@ class Invoice {
 
         $sql .= "LIMIT $limit OFFSET $offset";
 
-        echo $sql; // debug if needed
+        //echo $sql; // debug if needed
         $result = $this->db->query($sql);
         $invoices = [];
         if ($result && $result->num_rows > 0) {
