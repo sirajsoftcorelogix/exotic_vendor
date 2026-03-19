@@ -1454,7 +1454,7 @@ class InboundingController {
             $API_data['optionals'] = str_replace(',', '|', $data['data']['optionals']);
         }
         $API_data['material'] = $data['data']['material_name'];
-        $API_data['discrete_vendors'][0]['vendor'] = $data['data']['vendor_code'];
+        $API_data['discrete_vendors'][0]['vendor'] = $data['data']['v_code'];
         $API_data['discrete_vendors'][0]['priority'] = 1;
         $stock_price_temp = array();
         if ($data['data']['is_variant'] == 'N') {
