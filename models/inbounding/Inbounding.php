@@ -1195,7 +1195,7 @@ class Inbounding {
         $id = (int)$id;
 
         // 1. Get Main Inbound Data
-        $sql = "SELECT vi.*, vv.vendor_name, c.display_name as category, c.category as category_id, c.name as groupname, m.material_name ,vv.vendor_code as v_code
+        $sql = "SELECT vi.*, vv.vendor_name, c.display_name as category, c.category as category_id, c.name as groupname, m.material_name 
                 FROM vp_inbound AS vi 
                 LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id
                 LEFT JOIN category as c on vi.group_name = c.category
