@@ -54,7 +54,8 @@
           <select name="status" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none">
             <option value="">All</option>
             <option value="ready_to_ship" <?= ($_GET['status'] ?? '') === 'ready_to_ship' ? 'selected' : '' ?>>Ready to Ship</option>
-            <option value="dispatched" <?= ($_GET['status'] ?? '') === 'dispatched' ? 'selected' : '' ?>>Dispatched</option>
+            <option value="NEW" <?= ($_GET['status'] ?? '') === 'NEW' ? 'selected' : '' ?>>Dispatched</option>
+            <option value="failed" <?= ($_GET['status'] ?? '') === 'failed' ? 'selected' : '' ?>>Failed</option>
           </select>
         </div>
         <div>
@@ -86,6 +87,41 @@
             <?php endforeach; ?>
           </select>
         </div>
+        <div>
+          <label class="text-sm font-semibold">Invoice Value Min (₹):</label>
+          <input type="number" name="invoice_value_min" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Min" min="0" step="0.01" value="<?= htmlspecialchars($_GET['invoice_value_min'] ?? '') ?>">
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Invoice Value Max (₹):</label>
+          <input type="number" name="invoice_value_max" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Max" min="0" step="0.01" value="<?= htmlspecialchars($_GET['invoice_value_max'] ?? '') ?>">
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Created By:</label>
+          <select name="created_by" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none">
+            <option value="">All Staff</option>
+            <?php foreach ($staffList as $staffId => $staffName): ?>
+                <option value="<?php echo $staffId; ?>" <?php echo (isset($_GET['created_by']) && $_GET['created_by'] == $staffId) ? 'selected' : ''; ?>><?php echo htmlspecialchars($staffName); ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold">Box Weight Min (kg):</label>
+          <input type="number" name="box_weight_min" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Min" min="0" step="0.01" value="<?= htmlspecialchars($_GET['box_weight_min'] ?? '') ?>">
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Box Weight Max (kg):</label>
+          <input type="number" name="box_weight_max" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Max" min="0" step="0.01" value="<?= htmlspecialchars($_GET['box_weight_max'] ?? '') ?>">
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Item Code:</label>
+          <input type="text" name="item_code" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Item Code" value="<?= htmlspecialchars($_GET['item_code'] ?? '') ?>">
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Batch No:</label>
+          <input type="text" name="batch_no" class="w-full mt-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-purple-400 outline-none" placeholder="Batch No" value="<?= htmlspecialchars($_GET['batch_no'] ?? '') ?>">
+        </div>
+        
         <div class="flex items-end">
           <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-md transition">
             Search
