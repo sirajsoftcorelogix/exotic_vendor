@@ -263,7 +263,7 @@ class ProductsController {
         $failed = [];
         // prepare comma separated itemcodes (no spaces)
         $itm = implode(',', $codes);
-        $url = 'https://wp.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
 
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
@@ -449,7 +449,7 @@ class ProductsController {
         }
 
         return json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
-        // exit;
+        exit;
     }
     public function getProductDetailsHTML() {
         is_login();
