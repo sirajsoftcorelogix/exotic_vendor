@@ -15,6 +15,10 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
+                <label class="block text-sm font-medium mb-2">Transfer Order No.</label>
+                <input type="text" name="transfer_order_no" value="<?php echo htmlspecialchars($transfer['transfer_order_no']); ?>" class="w-full px-4 py-2 border rounded-lg bg-gray-100 cursor-not-allowed" readonly>
+            </div>
+            <div>
                 <label class="block text-sm font-medium mb-2">Dispatch Date</label>
                 <input type="date" name="dispatch_date" value="<?php echo htmlspecialchars($transfer['dispatch_date']); ?>" class="w-full px-4 py-2 border rounded-lg" required>
             </div>
