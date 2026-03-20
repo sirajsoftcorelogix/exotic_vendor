@@ -1259,13 +1259,42 @@ class ProductsController {
             exit;
         }
         
-        // Get JSON payload
+        // Get JSON payload or fallback to standard POST data
         $raw = file_get_contents('php://input');
         $data = json_decode($raw, true);
-        
+        if (!is_array($data) || empty($data)) {
+            $data = $_POST;
+        }
+
+        // if item arrays are provided separately, build items array
+        if (empty($data['items']) && !empty($data['item_code']) && is_array($data['item_code']) && is_array($data['sku'])) {
+            $items = [];
+            $count = max(count($data['item_code']), count($data['sku']), count($data['transfer_qty'] ?? []), count($data['item_notes'] ?? []));
+            for ($i = 0; $i < $count; $i++) {
+                $items[] = [
+                    'item_code' => $data['item_code'][$i] ?? '',
+                    'sku' => $data['sku'][$i] ?? '',
+                    'transfer_qty' => isset($data['transfer_qty'][$i]) ? $data['transfer_qty'][$i] : 0,
+                    'item_notes' => $data['item_notes'][$i] ?? '',
+                    'product_id' => isset($data['product_id'][$i]) ? $data['product_id'][$i] : 0,
+                    'title' => isset($data['title'][$i]) ? $data['title'][$i] : ''
+                ];
+            }
+            $data['items'] = $items;
+        }
+
         // Validate input
         $transfer_order_no = isset($data['transfer_order_no']) ? trim($data['transfer_order_no']) : '';
         $product_ids = isset($data['product_ids']) ? trim($data['product_ids']) : '';
+
+        // fallback transfer order from existing transfer when editing
+        $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
+        if (empty($transfer_order_no) && $transferId > 0) {
+            $existingTransfer = $stockTransferModel->getTransferById($transferId);
+            if (!empty($existingTransfer['transfer_order_no'])) {
+                $transfer_order_no = $existingTransfer['transfer_order_no'];
+            }
+        }
         $from_warehouse = isset($data['from_warehouse']) ? intval($data['from_warehouse']) : 0;
         $to_warehouse = isset($data['to_warehouse']) ? intval($data['to_warehouse']) : 0;
         $dispatch_date = isset($data['dispatch_date']) ? trim($data['dispatch_date']) : '';

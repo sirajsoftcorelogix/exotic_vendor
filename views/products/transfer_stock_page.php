@@ -253,14 +253,27 @@
     window.addEventListener('DOMContentLoaded', function() {
         const toField = document.querySelector('input[name="transfer_order_no"]');
         const isEdit = !!document.querySelector('input[name="transfer_id"]');
-        if (toField && !isEdit) {
-            toField.value = generateTransferOrderNo();
+
+        // Set transfer order no when missing:
+        // - keep existing transfer value when editing
+        // - generate when creating new OR if missing due empty DB value
+        const fromWarehouseSelect = document.getElementById('from_warehouse');
+        const toWarehouseSelect = document.getElementById('to_warehouse');
+
+        if (toField) {
+            if (!toField.value) {
+                if (fromWarehouseSelect && toWarehouseSelect && fromWarehouseSelect.value && toWarehouseSelect.value) {
+                    toField.value = generateTransferOrderNo();
+                } else if (!isEdit) {
+                    toField.value = generateTransferOrderNo();
+                }
+            }
         }
 
         // Update warehouse address displays when editing an existing transfer
-        if (isEdit) {
-            const fromWarehouseValue = document.getElementById('from_warehouse').value;
-            const toWarehouseValue = document.getElementById('to_warehouse').value;
+        if (fromWarehouseSelect && toWarehouseSelect) {
+            const fromWarehouseValue = fromWarehouseSelect.value;
+            const toWarehouseValue = toWarehouseSelect.value;
             document.getElementById('source_address').textContent = warehouseData[fromWarehouseValue]?.address || 'Select a warehouse to see address';
             document.getElementById('dest_address').textContent = warehouseData[toWarehouseValue]?.address || 'Select a warehouse to see address';
         }
@@ -273,7 +286,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.warehouse_id) {
-                    const fromWarehouseSelect = document.getElementById('from_warehouse');
                     fromWarehouseSelect.value = data.warehouse_id;
                     // Trigger change event to update address display
                     fromWarehouseSelect.dispatchEvent(new Event('change'));
