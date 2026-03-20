@@ -84,6 +84,11 @@ class ProductsController {
             return;
         }
 
+        // Fallback for missing transfer_order_no in old records
+        if (empty($transfer['transfer_order_no']) && !empty($transfer['from_warehouse']) && !empty($transfer['to_warehouse'])) {
+            $transfer['transfer_order_no'] = $stockTransferModel->generateUniqueTransferOrderNo((int)$transfer['from_warehouse'], (int)$transfer['to_warehouse']);
+        }
+
         // Provide warehouse list for editing
         $warehouses = [];
         $warehouseQuery = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
@@ -1211,6 +1216,11 @@ class ProductsController {
             $stockTransferModel = new StockTransfer($conn);
             $transfer = $stockTransferModel->getTransferById($transfer_id);
             if ($transfer) {
+                // Fallback: ensure transfer order number is set in edit mode
+                if (empty($transfer['transfer_order_no']) && !empty($transfer['from_warehouse']) && !empty($transfer['to_warehouse'])) {
+                    $transfer['transfer_order_no'] = $stockTransferModel->generateUniqueTransferOrderNo((int)$transfer['from_warehouse'], (int)$transfer['to_warehouse']);
+                }
+
                 // Build a map of items keyed by product_id so we can prefill quantities/notes
                 $itemsByProduct = [];
                 foreach ($transfer['items'] as $item) {
