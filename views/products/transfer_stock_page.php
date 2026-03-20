@@ -8,7 +8,7 @@
     </div>
 
     <!-- Main Form -->
-    <form id="transferStockForm" class="space-y-6">
+    <form id="transferStockForm" class="space-y-6" method="POST" action="?page=products&action=process_transfer_stock">
         <!-- Header Info Section -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-6">
@@ -18,6 +18,7 @@
                     <?php if (!empty($transfer['id'])): ?>
                         <input type="hidden" name="transfer_id" value="<?php echo (int)$transfer['id']; ?>">
                     <?php endif; ?>
+                    <noscript><input type="hidden" name="noscript_fallback" value="1"></noscript>
                 </div>
                 <div class="flex flex-col">
                     <label class="text-sm font-semibold text-gray-700 mb-2">Dispatch Date <span class="text-red-500">*</span></label>
