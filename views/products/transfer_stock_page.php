@@ -1,3 +1,12 @@
+<?php
+$transferOrderNo = $transfer['transfer_order_no'] ?? '';
+if (empty($transferOrderNo) && !empty($transfer['from_warehouse']) && !empty($transfer['to_warehouse'])) {
+    $transferOrderNo = 'TO-' . intval($transfer['from_warehouse']) . '-' . intval($transfer['to_warehouse']) . '-' . str_pad((string)rand(1, 9999), 4, '0', STR_PAD_LEFT);
+}
+if (empty($transferOrderNo)) {
+    $transferOrderNo = 'TO-' . str_pad((string)rand(1, 9999), 4, '0', STR_PAD_LEFT);
+}
+?>
 <div class="min-h-screen bg-gray-50 p-6">
     <!-- Header -->
     <div class="flex items-center gap-4 mb-8 pb-4 border-b border-gray-200">
@@ -14,7 +23,7 @@
             <div class="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-6">
                 <div class="flex flex-col">
                     <label class="text-sm font-semibold text-gray-700 mb-2">Transfer Order No.</label>
-                    <input type="text" name="transfer_order_no" readonly value="<?php echo htmlspecialchars($transfer['transfer_order_no'] ?? ''); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-sm text-gray-700 cursor-not-allowed">
+                    <input type="text" name="transfer_order_no" readonly value="<?php echo htmlspecialchars($transferOrderNo); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-sm text-gray-700 cursor-not-allowed">
                     <?php if (!empty($transfer['id'])): ?>
                         <input type="hidden" name="transfer_id" value="<?php echo (int)$transfer['id']; ?>">
                     <?php endif; ?>
