@@ -263,7 +263,7 @@ class ProductsController {
         $failed = [];
         // prepare comma separated itemcodes (no spaces)
         $itm = implode(',', $codes);
-        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
+        $url = 'https://wp.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
 
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
