@@ -474,6 +474,18 @@ class StockTransfer
         // Format counter with leading zeros
         return $basePrefix . str_pad($counter, 4, '0', STR_PAD_LEFT);
       }  
+
+    /**
+     * Get next unique transfer order number (public API wrapper)
+     * @param int $from_warehouse
+     * @param int $to_warehouse
+     * @return string
+     */
+    public function getNextTransferOrderNo($from_warehouse, $to_warehouse)
+    {
+        return $this->generateUniqueTransferOrderNo((int)$from_warehouse, (int)$to_warehouse);
+    }
+
     /**
      * Validate that transfer quantity doesn't exceed available stock
      * @param string $sku Product SKU

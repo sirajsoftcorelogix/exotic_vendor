@@ -245,17 +245,27 @@ if (empty($transferOrderNo)) {
         <?php endforeach; ?>
     };
 
-    // Generate transfer order number
+    // Generate transfer order number in constant source-dest format (fallback if endpoint unavailable)
     function generateTransferOrderNo() {
         const fromWarehouse = document.getElementById('from_warehouse').value;
         const toWarehouse = document.getElementById('to_warehouse').value;
-        
-        if (!fromWarehouse || !toWarehouse) {
-            return 'TO-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+
+        if (fromWarehouse && toWarehouse) {
+            return 'TO-' + fromWarehouse + '-' + toWarehouse + '-0001';
         }
-        
-        // Format: TO-sourceId-destId-0001
-        return 'TO-' + fromWarehouse + '-' + toWarehouse + '-0001';
+        return 'TO-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    }
+
+    function fetchNextTransferOrderNo(fromWarehouse, toWarehouse) {
+        return fetch(`?page=products&action=get_transfer_order_no&from_warehouse=${encodeURIComponent(fromWarehouse)}&to_warehouse=${encodeURIComponent(toWarehouse)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.transfer_order_no) {
+                    return data.transfer_order_no;
+                }
+                return generateTransferOrderNo();
+            })
+            .catch(() => generateTransferOrderNo());
     }
 
     // Initialize transfer order no field on page load
@@ -270,12 +280,12 @@ if (empty($transferOrderNo)) {
         const toWarehouseSelect = document.getElementById('to_warehouse');
 
         if (toField) {
-            if (!toField.value) {
-                if (fromWarehouseSelect && toWarehouseSelect && fromWarehouseSelect.value && toWarehouseSelect.value) {
-                    toField.value = generateTransferOrderNo();
-                } else if (!isEdit) {
-                    toField.value = generateTransferOrderNo();
-                }
+            if (!toField.value && fromWarehouseSelect && toWarehouseSelect && fromWarehouseSelect.value && toWarehouseSelect.value) {
+                fetchNextTransferOrderNo(fromWarehouseSelect.value, toWarehouseSelect.value).then(no => {
+                    toField.value = no;
+                });
+            } else if (!toField.value && !isEdit) {
+                toField.value = generateTransferOrderNo();
             }
         }
 
@@ -287,8 +297,10 @@ if (empty($transferOrderNo)) {
             document.getElementById('dest_address').textContent = warehouseData[toWarehouseValue]?.address || 'Select a warehouse to see address';
 
             // ensure order no is present when both warehouses selected
-            if (toField && !toField.value && fromWarehouseValue && toWarehouseValue) {
-                toField.value = generateTransferOrderNo();
+            if (toField && fromWarehouseValue && toWarehouseValue) {
+                fetchNextTransferOrderNo(fromWarehouseValue, toWarehouseValue).then(no => {
+                    toField.value = no;
+                });
             }
         }
 
@@ -314,8 +326,11 @@ if (empty($transferOrderNo)) {
         const address = warehouseData[this.value]?.address || 'Select a warehouse to see address';
         document.getElementById('source_address').textContent = address;
         const orderInput = document.querySelector('input[name="transfer_order_no"]');
-        if (orderInput && !orderInput.value) {
-            orderInput.value = generateTransferOrderNo();
+        const toWarehouseValue = document.getElementById('to_warehouse').value;
+        if (orderInput && this.value && toWarehouseValue) {
+            fetchNextTransferOrderNo(this.value, toWarehouseValue).then(no => {
+                orderInput.value = no;
+            });
         }
     });
 
@@ -323,8 +338,11 @@ if (empty($transferOrderNo)) {
         const address = warehouseData[this.value]?.address || 'Select a warehouse to see address';
         document.getElementById('dest_address').textContent = address;
         const orderInput = document.querySelector('input[name="transfer_order_no"]');
-        if (orderInput && !orderInput.value) {
-            orderInput.value = generateTransferOrderNo();
+        const fromWarehouseValue = document.getElementById('from_warehouse').value;
+        if (orderInput && fromWarehouseValue && this.value) {
+            fetchNextTransferOrderNo(fromWarehouseValue, this.value).then(no => {
+                orderInput.value = no;
+            });
         }
     });
 

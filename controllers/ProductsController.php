@@ -1465,4 +1465,28 @@ class ProductsController {
         }
         exit;
     }
+
+    public function getTransferOrderNo() {
+        header('Content-Type: application/json');
+        global $conn;
+
+        $fromWarehouse = isset($_GET['from_warehouse']) ? (int)$_GET['from_warehouse'] : 0;
+        $toWarehouse = isset($_GET['to_warehouse']) ? (int)$_GET['to_warehouse'] : 0;
+
+        if ($fromWarehouse <= 0 || $toWarehouse <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid warehouse selection']);
+            exit;
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        try {
+            $nextOrderNo = $stockTransferModel->getNextTransferOrderNo($fromWarehouse, $toWarehouse);
+            echo json_encode(['success' => true, 'transfer_order_no' => $nextOrderNo]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
 }
