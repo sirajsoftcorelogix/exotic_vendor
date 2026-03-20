@@ -40,6 +40,99 @@ class ProductsController {
         ];
         renderTemplate('views/products/index.php', $data, 'Products');
     }
+    public function stock_transfer_list() {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $page_no = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50;
+        $offset = ($page_no - 1) * $limit;
+
+        $transferData = $stockTransferModel->listTransfers($limit, $offset);
+
+        $data = [
+            'transfers' => $transferData['records'],
+            'page_no' => $page_no,
+            'total_records' => $transferData['total'],
+            'limit' => $limit
+        ];
+
+        renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
+    }
+
+    public function stock_transfer_edit() {
+        is_login();
+        global $conn;
+        global $usersModel;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $transferId = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
+        if ($transferId <= 0) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Invalid transfer id']], 'Error');
+            return;
+        }
+
+        $transfer = $stockTransferModel->getTransferById($transferId);
+        if (!$transfer) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Stock transfer not found']], 'Error');
+            return;
+        }
+
+        // Provide warehouse list for editing
+        $warehouses = [];
+        $warehouseQuery = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+        $warehouseResult = mysqli_query($conn, $warehouseQuery);
+        if ($warehouseResult) {
+            while ($row = mysqli_fetch_assoc($warehouseResult)) {
+                $warehouses[] = $row;
+            }
+        }
+
+        renderTemplate('views/products/stock_transfer_edit.php', [
+            'transfer' => $transfer,
+            'users' => $usersModel->getAllUsers(),
+            'warehouses' => $warehouses,
+        ], 'Edit Stock Transfer');
+    }
+
+    public function stock_transfer_update() {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+        if ($transferId <= 0) {
+            header('Location: ?page=products&action=stock_transfer_list');
+            return;
+        }
+
+        $data = [
+            'dispatch_date' => $_POST['dispatch_date'] ?? '',
+            'est_delivery_date' => $_POST['est_delivery_date'] ?? '',
+            'from_warehouse' => isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0,
+            'to_warehouse' => isset($_POST['to_warehouse']) ? (int)$_POST['to_warehouse'] : 0,
+            'requested_by' => isset($_POST['requested_by']) ? (int)$_POST['requested_by'] : 0,
+            'dispatch_by' => isset($_POST['dispatch_by']) ? (int)$_POST['dispatch_by'] : 0,
+            'booking_no' => $_POST['booking_no'] ?? '',
+            'vehicle_no' => $_POST['vehicle_no'] ?? '',
+            'vehicle_type' => $_POST['vehicle_type'] ?? '',
+            'driver_name' => $_POST['driver_name'] ?? '',
+            'driver_mobile' => $_POST['driver_mobile'] ?? '',
+            'status' => $_POST['status'] ?? '',
+        ];
+
+        $stockTransferModel->updateTransfer($transferId, $data);
+
+        header('Location: ?page=products&action=stock_transfer_list');
+    }
 
     public function getProductById($id) {
         global $productModel;
@@ -347,7 +440,7 @@ class ProductsController {
         }
 
         echo json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
-        // exit;
+        exit;
     }
     public function getProductDetailsHTML() {
         is_login();
@@ -1060,22 +1153,23 @@ class ProductsController {
     public function getTransferStockForm() {
         is_login();
         global $productModel, $conn;
-        
+
         $product_ids = isset($_GET['product_ids']) ? $_GET['product_ids'] : '';
-        
+        $transfer_id = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
+
         if (empty($product_ids)) {
             renderTemplateClean('views/errors/error.php', ['message' => 'No products selected for transfer.'], 'Error');
             exit;
         }
-        
+
         // Convert comma-separated IDs to array
         $ids = array_map('intval', array_filter(explode(',', $product_ids)));
-        
+
         if (empty($ids)) {
             renderTemplateClean('views/errors/error.php', ['message' => 'Invalid product IDs.'], 'Error');
             exit;
         }
-        
+
         // Fetch product details
         $products = [];
         foreach ($ids as $id) {
@@ -1084,12 +1178,12 @@ class ProductsController {
                 $products[] = $product;
             }
         }
-        
+
         if (empty($products)) {
             renderTemplateClean('views/errors/error.php', ['message' => 'Products not found.'], 'Error');
             exit;
         }
-        
+
         // Fetch warehouses from exotic_address table
         $warehouses = [];
         $warehouseQuery = "SELECT id, address_title, address FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
@@ -1099,7 +1193,7 @@ class ProductsController {
                 $warehouses[] = $row;
             }
         }
-        
+
         // Fetch users from vp_users table
         $users = [];
         $userQuery = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
@@ -1109,14 +1203,49 @@ class ProductsController {
                 $users[] = $row;
             }
         }
-        
+
+        // Load existing transfer for editing (if requested)
+        $transfer = null;
+        if ($transfer_id > 0) {
+            require_once 'models/product/StockTransfer.php';
+            $stockTransferModel = new StockTransfer($conn);
+            $transfer = $stockTransferModel->getTransferById($transfer_id);
+            if ($transfer) {
+                // Build a map of items keyed by product_id so we can prefill quantities/notes
+                $itemsByProduct = [];
+                foreach ($transfer['items'] as $item) {
+                    if (!empty($item['product_id'])) {
+                        $itemsByProduct[(int)$item['product_id']] = $item;
+                    }
+                }
+
+                // Override product list with transfer items if they exist
+                $ids = array_keys($itemsByProduct);
+                if (!empty($ids)) {
+                    $products = [];
+                    foreach ($ids as $id) {
+                        $product = $productModel->getProduct($id);
+                        if ($product) {
+                            // Prefill transfer quantities and notes
+                            $product['transfer_qty'] = isset($itemsByProduct[$id]['transfer_qty']) ? (int)$itemsByProduct[$id]['transfer_qty'] : 0;
+                            $product['item_notes'] = $itemsByProduct[$id]['item_notes'] ?? '';
+                            $products[] = $product;
+                        }
+                    }
+                }
+
+                $product_ids = implode(',', array_unique($ids));
+            }
+        }
+
         // Render the transfer stock form as full page
         renderTemplate('views/products/transfer_stock_page.php', [
-            'products' => $products, 
+            'products' => $products,
             'product_ids' => $product_ids,
             'warehouses' => $warehouses,
-            'users' => $users
-        ], 'Transfer Stock');
+            'users' => $users,
+            'transfer' => $transfer,
+        ], $transfer ? 'Edit Transfer Order' : 'New Transfer Order');
     }
     
     public function processTransferStock() {
@@ -1184,23 +1313,41 @@ class ProductsController {
             exit;
         }
         
+        // Determine transfer ID (if editing existing transfer) before validating items.
+        $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
+
         // Validate each item transfer quantity doesn't exceed available stock
         require_once 'models/product/StockTransfer.php';
         $stockTransferModel = new StockTransfer($conn);
-        
+
+        // When editing, we want to allow keeping the same qty even if stock was already deducted.
+        $existingQtyBySku = [];
+        $existingTransfer = null;
+        if ($transferId > 0) {
+            $existingTransfer = $stockTransferModel->getTransferById($transferId);
+            if ($existingTransfer && isset($existingTransfer['from_warehouse']) && $existingTransfer['from_warehouse'] == $from_warehouse) {
+                foreach ($existingTransfer['items'] as $existingItem) {
+                    $skuKey = trim($existingItem['sku'] ?? '');
+                    if ($skuKey !== '') {
+                        $existingQtyBySku[$skuKey] = (int)$existingItem['transfer_qty'];
+                    }
+                }
+            }
+        }
+
         foreach ($data['items'] as $item) {
             $transfer_qty = (int)$item['transfer_qty'];
             if ($transfer_qty <= 0) {
                 continue;
             }
-            
+
             $sku = trim($item['sku'] ?? '');
             if (empty($sku)) {
                 continue;
             }
-            
-            // Validate stock using model method
-            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $transfer_qty);
+
+            $existingQty = $existingQtyBySku[$sku] ?? 0;
+            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $transfer_qty, $existingQty);
             if (!$validation['valid']) {
                 echo json_encode(['success' => false, 'message' => $validation['message']]);
                 exit;
@@ -1209,6 +1356,7 @@ class ProductsController {
         
         // Prepare data for model
         $transferData = [
+            'transfer_id' => $transferId,
             'transfer_order_no' => $transfer_order_no,
             'from_warehouse' => $from_warehouse,
             'to_warehouse' => $to_warehouse,
@@ -1227,7 +1375,27 @@ class ProductsController {
             'items' => $data['items'],
             'user_id' => $_SESSION['user_id'] ?? 1
         ];
-        
+
+        // If transfer_id is present, update existing transfer (and related items). Otherwise, create new.
+        if ($transferId > 0) {
+            // Ensure we use the authoritative transfer order number to update items.
+            $existingTransfer = $stockTransferModel->getTransferById($transferId);
+            $transferOrderNoToUse = $existingTransfer['transfer_order_no'] ?? $transfer_order_no;
+
+            $updated = $stockTransferModel->updateTransfer($transferId, $transferData);
+            $stockTransferModel->replaceTransferItems($transferOrderNoToUse, $data['items']);
+
+            // Keep stock movements in sync with updated item quantities
+            $stockTransferModel->syncTransferOutMovements($transferOrderNoToUse, $from_warehouse, $data['items'], $transferData['user_id']);
+
+            echo json_encode([
+                'success' => true,
+                'message' => $updated ? 'Stock transfer updated successfully' : 'Stock transfer updated (no changes)',
+                'transfer_order_no' => $transferOrderNoToUse
+            ]);
+            exit;
+        }
+
         // Call model to create transfer
         $result = $stockTransferModel->createTransfer($transferData);
         
