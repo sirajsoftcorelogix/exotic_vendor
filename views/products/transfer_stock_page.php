@@ -276,6 +276,11 @@
             const toWarehouseValue = toWarehouseSelect.value;
             document.getElementById('source_address').textContent = warehouseData[fromWarehouseValue]?.address || 'Select a warehouse to see address';
             document.getElementById('dest_address').textContent = warehouseData[toWarehouseValue]?.address || 'Select a warehouse to see address';
+
+            // ensure order no is present when both warehouses selected
+            if (toField && !toField.value && fromWarehouseValue && toWarehouseValue) {
+                toField.value = generateTransferOrderNo();
+            }
         }
 
         // Fetch and set last warehouse as default source warehouse when creating a new transfer
@@ -299,18 +304,18 @@
     document.getElementById('from_warehouse').addEventListener('change', function() {
         const address = warehouseData[this.value]?.address || 'Select a warehouse to see address';
         document.getElementById('source_address').textContent = address;
-        // Generate new transfer order no when warehouse changes (only for new transfers)
-        if (!document.querySelector('input[name="transfer_id"]')) {
-            document.querySelector('input[name="transfer_order_no"]').value = generateTransferOrderNo();
+        const orderInput = document.querySelector('input[name="transfer_order_no"]');
+        if (orderInput && !orderInput.value) {
+            orderInput.value = generateTransferOrderNo();
         }
     });
 
     document.getElementById('to_warehouse').addEventListener('change', function() {
         const address = warehouseData[this.value]?.address || 'Select a warehouse to see address';
         document.getElementById('dest_address').textContent = address;
-        // Generate new transfer order no when warehouse changes (only for new transfers)
-        if (!document.querySelector('input[name="transfer_id"]')) {
-            document.querySelector('input[name="transfer_order_no"]').value = generateTransferOrderNo();
+        const orderInput = document.querySelector('input[name="transfer_order_no"]');
+        if (orderInput && !orderInput.value) {
+            orderInput.value = generateTransferOrderNo();
         }
     });
 
