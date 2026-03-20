@@ -567,6 +567,32 @@ class StockTransfer
     }
 
     /**
+     * Get last received movement quantity for a SKU at a warehouse (TRANSFER_IN or IN)
+     * @param string $sku
+     * @param int $warehouse_id
+     * @return int
+     */
+    public function getLastReceivedQty($sku, $warehouse_id)
+    {
+        $query = "SELECT quantity FROM vp_stock_movements 
+                  WHERE sku = ? AND warehouse_id = ? AND movement_type IN ('TRANSFER_IN','IN') 
+                  ORDER BY id DESC LIMIT 1";
+
+        $stmt = $this->db->prepare($query);
+        if (!$stmt) {
+            return 0;
+        }
+
+        $stmt->bind_param('si', $sku, $warehouse_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        $stmt->close();
+
+        return $row ? (int)$row['quantity'] : 0;
+    }
+
+    /**
      * Get paginated list of stock transfers with item details.
      *
      * @param int $limit

@@ -57,7 +57,7 @@
                 $depth = $product['prod_length'] ?? '';
                 $lengthUnit = $product['length_unit'] ?? '';
                 $material = $product['material'] ?? '';
-                $prevReceived = $product['local_stock'] ?? '';
+                $prevReceived = isset($item['previously_received_qty']) ? (int)$item['previously_received_qty'] : ($product['local_stock'] ?? 0);
             ?>
             <div class="custom-card p-5">
                 <div class="flex flex-col sm:flex-row gap-5 mb-5">

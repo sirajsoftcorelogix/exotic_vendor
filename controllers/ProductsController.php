@@ -1262,10 +1262,21 @@ class ProductsController {
         is_login();
         global $conn;
         
-        header('Content-Type: application/json');
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $xhr = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        $wantsJson = $xhr || stripos($contentType, 'application/json') !== false || stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false;
+
+        if ($wantsJson) {
+            header('Content-Type: application/json');
+        }
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            $payload = ['success' => false, 'message' => 'Invalid request method'];
+            if ($wantsJson) {
+                echo json_encode($payload);
+            } else {
+                header('Location: ?page=products&action=stock_transfer');
+            }
             exit;
         }
         
@@ -1427,16 +1438,28 @@ class ProductsController {
             // Keep stock movements in sync with updated item quantities
             $stockTransferModel->syncTransferOutMovements($transferOrderNoToUse, $from_warehouse, $data['items'], $transferData['user_id']);
 
-            echo json_encode([
+            $result = [
                 'success' => true,
                 'message' => $updated ? 'Stock transfer updated successfully' : 'Stock transfer updated (no changes)',
                 'transfer_order_no' => $transferOrderNoToUse
-            ]);
+            ];
+
+            if (!$wantsJson) {
+                header('Location: ?page=products&action=stock_transfer');
+                exit;
+            }
+
+            echo json_encode($result);
             exit;
         }
 
         // Call model to create transfer
         $result = $stockTransferModel->createTransfer($transferData);
+
+        if (!$wantsJson) {
+            header('Location: ?page=products&action=stock_transfer');
+            exit;
+        }
         
         echo json_encode($result);
         exit;

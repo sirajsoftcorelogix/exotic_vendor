@@ -28,6 +28,18 @@ class StockTransferGrnController {
             return;
         }
 
+        // Make sure previously received qty is based on actual last TRANSFER_IN/IN movement
+        if (!empty($transfer['items']) && !empty($transfer['to_warehouse'])) {
+            foreach ($transfer['items'] as &$item) {
+                $itemSku = trim($item['sku'] ?? '');
+                $item['previously_received_qty'] = 0;
+                if ($itemSku !== '') {
+                    $item['previously_received_qty'] = (int)$this->stockTransferModel->getLastReceivedQty($itemSku, (int)$transfer['to_warehouse']);
+                }
+            }
+            unset($item);
+        }
+
         // Provide a list of users for the "received by" dropdown.
         $users = $this->usersModel->getAllUsers();
 
