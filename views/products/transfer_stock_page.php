@@ -17,7 +17,13 @@ if (empty($transferOrderNo)) {
     </div>
 
     <!-- Main Form -->
-    <form id="transferStockForm" class="space-y-6" method="POST" action="?page=products&action=process_transfer_stock">
+    <?php
+        $currentUserId = $_SESSION['user']['id'] ?? 0;
+        $isEditMode = !empty($transfer['id']);
+        $selectedRequestedBy = $isEditMode ? ((int)($transfer['requested_by'] ?? 0)) : ((int)($transfer['requested_by'] ?? $currentUserId));
+        $selectedDispatchBy = $isEditMode ? ((int)($transfer['dispatch_by'] ?? 0)) : ((int)($transfer['dispatch_by'] ?? $currentUserId));
+    ?>
+    <form id="transferStockForm" class="space-y-6" method="POST" enctype="multipart/form-data" action="?page=products&action=process_transfer_stock">
         <!-- Header Info Section -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-6">
@@ -42,7 +48,7 @@ if (empty($transferOrderNo)) {
                     <select id="requested_by" name="requested_by" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
                         <option value="">-- Select User --</option>
                         <?php foreach ($users as $user): ?>
-                            <option value="<?php echo htmlspecialchars($user['id']); ?>" <?php echo (!empty($transfer['requested_by']) && $transfer['requested_by'] == $user['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($user['name']); ?></option>
+                            <option value="<?php echo htmlspecialchars($user['id']); ?>" <?php echo ((int)$user['id'] === $selectedRequestedBy ? 'selected' : ''); ?>><?php echo htmlspecialchars($user['name']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -51,7 +57,9 @@ if (empty($transferOrderNo)) {
                     <select id="dispatch_by" name="dispatch_by" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
                         <option value="">-- Select User --</option>
                         <?php foreach ($users as $user): ?>
-                            <option value="<?php echo htmlspecialchars($user['id']); ?>" <?php echo (!empty($transfer['dispatch_by']) && $transfer['dispatch_by'] == $user['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($user['name']); ?></option>
+                            <?php $dispatchBy = isset($transfer['dispatch_by']) && (int)$transfer['dispatch_by'] > 0 ? (int)$transfer['dispatch_by'] : null; ?>
+                            <?php $defaultDispatch = $dispatchBy ?? (int)$currentUserId; ?>
+                            <option value="<?php echo htmlspecialchars($user['id']); ?>" <?php echo ((int)$user['id'] === $defaultDispatch ? 'selected' : ''); ?>><?php echo htmlspecialchars($user['name']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -175,13 +183,11 @@ if (empty($transferOrderNo)) {
             
             <div class="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-6">
                 <div class="flex flex-col">
-                    <label class="text-sm font-semibold text-gray-700 mb-2">E-Way Bill File</label>
-                    <div class="flex gap-2">
-                        <input type="text" name="eway_bill_file" placeholder="E-Way Bill File" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
-                        <button type="button" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition">
-                            <i class="fas fa-folder-open"></i> Browse
-                        </button>
-                    </div>
+                    <label class="text-sm font-semibold text-gray-700 mb-2">E-Way Bill</label>
+                    <input type="file" id="eway_bill_file" name="eway_bill_file" accept="application/pdf,image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
+                    <input type="hidden" name="existing_eway_bill_file" id="existing_eway_bill_file" value="<?php echo htmlspecialchars($transfer['eway_bill_file'] ?? ''); ?>">
+                    <input type="hidden" name="remove_eway_bill_file" id="remove_eway_bill_file" value="0">
+                    <div id="ewayBillPreview" class="mt-2"></div>
                 </div>
                 <div class="flex flex-col">
                     <label class="text-sm font-semibold text-gray-700 mb-2">Driver Name</label>
@@ -201,21 +207,6 @@ if (empty($transferOrderNo)) {
         <!-- Footer Options -->
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                 <div class="flex flex-col gap-6">
-                    <div class="flex flex-wrap gap-6">
-                        <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                            <input type="checkbox" id="pickup_list" name="create_pickup_list" <?php echo (!empty($transfer['create_pickup_list']) ? 'checked' : ''); ?> class="h-4 w-4 text-orange-500 border-gray-300 rounded">
-                            Create Pickup List
-                        </label>
-                        <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                            <input type="checkbox" id="picking_slip" name="create_picking_slip" <?php echo (!empty($transfer['create_picking_slip']) ? 'checked' : ''); ?> class="h-4 w-4 text-orange-500 border-gray-300 rounded">
-                            Create Picking Slip
-                        </label>
-                        <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                            <input type="checkbox" id="delivery_challan" name="create_delivery_challan" <?php echo (!empty($transfer['create_delivery_challan']) ? 'checked' : ''); ?> class="h-4 w-4 text-orange-500 border-gray-300 rounded">
-                            Create Delivery Challan
-                        </label>
-                    </div>
-
                     <div class="flex flex-wrap justify-end gap-4">
                         <button type="button" id="saveDraftBtn" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition">
                             <i class="fas fa-save"></i> Save as Draft
@@ -304,6 +295,59 @@ if (empty($transferOrderNo)) {
             }
         }
 
+        // E-Way Bill preview + preloaded file (if editing)
+        const ewayInput = document.getElementById('eway_bill_file');
+        const ewayPreview = document.getElementById('ewayBillPreview');
+        const existingEwayInput = document.getElementById('existing_eway_bill_file');
+        const removeEwayInput = document.getElementById('remove_eway_bill_file');
+
+        function showEwayPreview(fileUrl, fileName, isExisting = false) {
+            if (!ewayPreview) return;
+            let html = '<div class="border border-gray-300 rounded-lg p-3 bg-gray-50">';
+            html += '<div class="flex items-center justify-between gap-3 mb-2">';
+            html += '<span class="text-sm font-medium text-gray-700">' + (fileName || 'Uploaded E-Way Bill') + '</span>';
+            html += '<button type="button" id="removeEwayBtn" class="text-sm text-red-600 hover:text-red-800">Remove</button>';
+            html += '</div>';
+
+            const lower = (fileUrl || '').toLowerCase();
+            if (lower.endsWith('.pdf')) {
+                html += '<embed src="' + fileUrl + '" type="application/pdf" width="100%" height="240px" />';
+            } else if (fileUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                html += '<img src="' + fileUrl + '" class="max-w-full max-h-[240px] object-contain rounded" alt="E-Way Bill" />';
+            } else if (isExisting) {
+                html += '<a href="' + fileUrl + '" target="_blank" class="text-sm text-blue-600 hover:underline">Download file</a>';
+            } else {
+                html += '<span class="text-sm text-gray-700">Uploaded file: ' + fileName + '</span>';
+            }
+            html += '</div>';
+            ewayPreview.innerHTML = html;
+
+            document.getElementById('removeEwayBtn').addEventListener('click', function() {
+                existingEwayInput.value = '';
+                removeEwayInput.value = '1';
+                ewayPreview.innerHTML = '';
+                ewayInput.value = '';
+            });
+        }
+
+        if (existingEwayInput && existingEwayInput.value) {
+            const existingUrl = existingEwayInput.value;
+            showEwayPreview(existingUrl, existingUrl.split('/').pop(), true);
+        }
+
+        if (ewayInput) {
+            ewayInput.addEventListener('change', function () {
+                removeEwayInput.value = '0';
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
+                    const fileUrl = URL.createObjectURL(file);
+                    showEwayPreview(fileUrl, file.name);
+                } else {
+                    ewayPreview.innerHTML = '';
+                }
+            });
+        }
+
         // Fetch and set last warehouse as default source warehouse when creating a new transfer
         if (!isEdit) {
             fetch('?page=products&action=get_last_warehouse', {
@@ -386,37 +430,14 @@ if (empty($transferOrderNo)) {
             return;
         }
         
-        const transferIdInput = document.querySelector('input[name="transfer_id"]');
+        const formData = new FormData(document.getElementById('transferStockForm'));
         fetch('?page=products&action=process_transfer_stock', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
             },
-            body: JSON.stringify({
-                transfer_id: transferIdInput ? parseInt(transferIdInput.value) : 0,
-                transfer_order_no: document.querySelector('input[name="transfer_order_no"]').value,
-                from_warehouse: fromWarehouse,
-                to_warehouse: toWarehouse,
-                product_ids: document.querySelector('input[name="product_ids"]').value,
-                dispatch_date: document.getElementById('dispatch_date').value,
-                est_delivery_date: document.getElementById('est_delivery_date').value,
-                requested_by: document.getElementById('requested_by').value,
-                dispatch_by: document.getElementById('dispatch_by').value,
-                items: Array.from(document.querySelectorAll('.item-row')).map(row => ({
-                    item_code: row.querySelector('input[name="item_code[]"]').value,
-                    sku: row.querySelector('input[name="sku[]"]').value,
-                    transfer_qty: parseInt(row.querySelector('input[name="transfer_qty[]"]').value) || 0,
-                    item_notes: row.querySelector('textarea[name="item_notes[]"]').value || ''
-                })),
-                booking_no: document.querySelector('input[name="booking_no"]').value,
-                vehicle_no: document.querySelector('input[name="vehicle_no"]').value,
-                vehicle_type: document.querySelector('input[name="vehicle_type"]').value,
-                driver_name: document.querySelector('input[name="driver_name"]').value,
-                driver_mobile: document.querySelector('input[name="driver_mobile"]').value,
-                create_pickup_list: document.getElementById('pickup_list').checked,
-                create_picking_slip: document.getElementById('picking_slip').checked,
-                create_delivery_challan: document.getElementById('delivery_challan').checked
-            })
+            body: formData
         })
         .then(response => response.json())
         .then(data => {

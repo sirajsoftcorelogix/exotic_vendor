@@ -6,6 +6,19 @@ class StockTransfer
     public function __construct($db)
     {
         $this->db = $db;
+        $this->ensureTransferTableSchema();
+    }
+    
+    /**
+     * Ensure vp_stock_transfer has eway_bill_file column.
+     */
+    private function ensureTransferTableSchema()
+    {
+        $columnCheckSql = "SHOW COLUMNS FROM vp_stock_transfer LIKE 'eway_bill_file'";
+        $result = $this->db->query($columnCheckSql);
+        if ($result && $result->num_rows === 0) {
+            $this->db->query("ALTER TABLE vp_stock_transfer ADD COLUMN eway_bill_file VARCHAR(1024) DEFAULT NULL");
+        }
     }
     
     /**
@@ -27,8 +40,8 @@ class StockTransfer
             $insertTransferSQL = "INSERT INTO vp_stock_transfer 
                 (transfer_order_no, from_warehouse, to_warehouse, dispatch_date, est_delivery_date, 
                  requested_by, dispatch_by, booking_no, vehicle_no, vehicle_type, driver_name, driver_mobile, 
-                 create_pickup_list, create_picking_slip, create_delivery_challan, status, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                 eway_bill_file, create_pickup_list, create_picking_slip, create_delivery_challan, status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $stmt = $this->db->prepare($insertTransferSQL);
             if (!$stmt) {
@@ -46,15 +59,16 @@ class StockTransfer
             $vehicle_type = $data['vehicle_type'] ?? '';
             $driver_name = $data['driver_name'] ?? '';
             $driver_mobile = $data['driver_mobile'] ?? '';
-            $pickup_list = isset($data['create_pickup_list']) ? 1 : 0;
-            $picking_slip = isset($data['create_picking_slip']) ? 1 : 0;
-            $delivery_challan = isset($data['create_delivery_challan']) ? 1 : 0;
+            $eway_bill_file = $data['eway_bill_file'] ?? '';
+            $pickup_list = 0;
+            $picking_slip = 0;
+            $delivery_challan = 0;
             $status_pending = 'pending';
             $created_by = (int)($data['user_id'] ?? 1);
             
-            // Type string: s i i s s i i s s s s s i i i s i
+            // Type string: s i i s s i i s s s s s s i i i s i
             $stmt->bind_param(
-                'siissiisssssiiisi',
+                'siissiissssssiiisi',
                 $transfer_order_no,
                 $from_warehouse,
                 $to_warehouse,
@@ -67,6 +81,7 @@ class StockTransfer
                 $vehicle_type,
                 $driver_name,
                 $driver_mobile,
+                $eway_bill_file,
                 $pickup_list,
                 $picking_slip,
                 $delivery_challan,
@@ -784,6 +799,7 @@ class StockTransfer
             'vehicle_type',
             'driver_name',
             'driver_mobile',
+            'eway_bill_file',
             'status'
         ];
 

@@ -119,6 +119,9 @@ class ProductsController {
             return;
         }
 
+        $existingFile = $_POST['existing_eway_bill_file'] ?? '';
+        $ewayBillFile = $this->handleEwayBillFileUpload($existingFile);
+
         $data = [
             'dispatch_date' => $_POST['dispatch_date'] ?? '',
             'est_delivery_date' => $_POST['est_delivery_date'] ?? '',
@@ -132,6 +135,7 @@ class ProductsController {
             'driver_name' => $_POST['driver_name'] ?? '',
             'driver_mobile' => $_POST['driver_mobile'] ?? '',
             'status' => $_POST['status'] ?? '',
+            'eway_bill_file' => $ewayBillFile,
         ];
 
         $stockTransferModel->updateTransfer($transferId, $data);
@@ -1404,6 +1408,10 @@ class ProductsController {
             }
         }
         
+        // Handle E-Way Bill file upload/retain/remove
+        $existingFile = isset($data['existing_eway_bill_file']) ? trim($data['existing_eway_bill_file']) : '';
+        $ewayBillFile = $this->handleEwayBillFileUpload($existingFile);
+
         // Prepare data for model
         $transferData = [
             'transfer_id' => $transferId,
@@ -1419,9 +1427,7 @@ class ProductsController {
             'vehicle_type' => isset($data['vehicle_type']) ? trim($data['vehicle_type']) : '',
             'driver_name' => isset($data['driver_name']) ? trim($data['driver_name']) : '',
             'driver_mobile' => isset($data['driver_mobile']) ? trim($data['driver_mobile']) : '',
-            'create_pickup_list' => isset($data['create_pickup_list']) ? 1 : 0,
-            'create_picking_slip' => isset($data['create_picking_slip']) ? 1 : 0,
-            'create_delivery_challan' => isset($data['create_delivery_challan']) ? 1 : 0,
+            'eway_bill_file' => $ewayBillFile,
             'items' => $data['items'],
             'user_id' => $_SESSION['user_id'] ?? 1
         ];
@@ -1465,6 +1471,51 @@ class ProductsController {
         exit;
     }
     
+    private function handleEwayBillFileUpload($existingFile = '')
+    {
+        $rootPath = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..');
+        $uploadDir = $rootPath . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'stock_trasfer_e_bill';
+
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $ewayBillFile = $existingFile;
+
+        $remove = isset($_POST['remove_eway_bill_file']) && ($_POST['remove_eway_bill_file'] === '1' || $_POST['remove_eway_bill_file'] === 'on');
+
+        if ($remove && !empty($existingFile)) {
+            $existingPath = $rootPath . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $existingFile);
+            if (is_file($existingPath)) {
+                @unlink($existingPath);
+            }
+            $ewayBillFile = '';
+        }
+
+        if (isset($_FILES['eway_bill_file']) && isset($_FILES['eway_bill_file']['tmp_name']) && is_uploaded_file($_FILES['eway_bill_file']['tmp_name'])) {
+            $file = $_FILES['eway_bill_file'];
+            if ($file['error'] === UPLOAD_ERR_OK) {
+                if (!empty($existingFile)) {
+                    $oldPath = $rootPath . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $existingFile);
+                    if (is_file($oldPath)) {
+                        @unlink($oldPath);
+                    }
+                }
+
+                $originalName = basename($file['name']);
+                $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $filename = uniqid('eway_', true) . '_' . $safeName;
+                $targetPath = $uploadDir . DIRECTORY_SEPARATOR . $filename;
+
+                if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                    $ewayBillFile = 'uploads/stock_trasfer_e_bill/' . $filename;
+                }
+            }
+        }
+
+        return $ewayBillFile;
+    }
+
     public function getLastWarehouse() {
         header('Content-Type: application/json');
         global $conn;
