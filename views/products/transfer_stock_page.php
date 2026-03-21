@@ -518,29 +518,66 @@ if (empty($transferOrderNo)) {
         });
     });
 
-    const addItemModal = document.getElementById('addItemModal');
-    const addItemBtn = document.getElementById('addItemBtn');
-    const addItemModalClose = document.getElementById('addItemModalClose');
-    const addItemSearchBtn = document.getElementById('addItemSearchBtn');
-    const addItemSearchInput = document.getElementById('addItemSearchInput');
-    const addItemSearchMessage = document.getElementById('addItemSearchMessage');
-    const addItemSearchResult = document.getElementById('addItemSearchResult');
-    const itemsTableBody = document.getElementById('itemsTableBody');
+    let addItemModal = null;
+    let addItemBtn = null;
+    let addItemModalClose = null;
+    let addItemSearchBtn = null;
+    let addItemSearchInput = null;
+    let addItemSearchMessage = null;
+    let addItemSearchResult = null;
+    let itemsTableBody = null;
 
-    function openAddItemModal() {
-        if (!addItemModal) return;
-        addItemSearchInput.value = '';
-        addItemSearchMessage.classList.add('hidden');
-        addItemSearchResult.innerHTML = '';
-        addItemModal.classList.remove('hidden');
-        addItemModal.classList.add('flex');
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+        addItemModal = document.getElementById('addItemModal');
+        addItemBtn = document.getElementById('addItemBtn');
+        addItemModalClose = document.getElementById('addItemModalClose');
+        addItemSearchBtn = document.getElementById('addItemSearchBtn');
+        addItemSearchInput = document.getElementById('addItemSearchInput');
+        addItemSearchMessage = document.getElementById('addItemSearchMessage');
+        addItemSearchResult = document.getElementById('addItemSearchResult');
+        itemsTableBody = document.getElementById('itemsTableBody');
 
-    function closeAddItemModal() {
-        if (!addItemModal) return;
-        addItemModal.classList.add('hidden');
-        addItemModal.classList.remove('flex');
-    }
+        function openAddItemModal() {
+            if (!addItemModal) return;
+            addItemSearchInput.value = '';
+            addItemSearchMessage.classList.add('hidden');
+            addItemSearchResult.innerHTML = '';
+            addItemModal.classList.remove('hidden');
+            addItemModal.classList.add('flex');
+        }
+
+        function closeAddItemModal() {
+            if (!addItemModal) return;
+            addItemModal.classList.add('hidden');
+            addItemModal.classList.remove('flex');
+        }
+
+        if (addItemBtn) addItemBtn.addEventListener('click', openAddItemModal);
+        if (addItemModalClose) addItemModalClose.addEventListener('click', closeAddItemModal);
+        if (addItemModal) {
+            addItemModal.addEventListener('click', function(event) {
+                if (event.target === addItemModal) closeAddItemModal();
+            });
+        }
+
+        if (addItemSearchBtn) addItemSearchBtn.addEventListener('click', searchAddItem);
+        if (addItemSearchInput) addItemSearchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchAddItem();
+            }
+        });
+
+        if (itemsTableBody) {
+            itemsTableBody.addEventListener('click', function(e) {
+                const btn = e.target.closest('.delete-item-btn');
+                if (!btn) return;
+                const row = btn.closest('tr');
+                if (row) row.remove();
+            });
+        }
+    });
+
 
     function decodeHtml(html) {
         const txt = document.createElement('textarea');
@@ -549,6 +586,7 @@ if (empty($transferOrderNo)) {
     }
 
     function addNewItemToTable(product) {
+        const itemsTableBody = document.getElementById('itemsTableBody');
         if (!itemsTableBody || !product) return;
 
         const existingSku = Array.from(itemsTableBody.querySelectorAll('input[name="sku[]"]')).some(i => i.value.trim() === product.sku);
@@ -603,11 +641,6 @@ if (empty($transferOrderNo)) {
         }
     }
 
-    if (addItemBtn) addItemBtn.addEventListener('click', openAddItemModal);
-    if (addItemModalClose) addItemModalClose.addEventListener('click', closeAddItemModal);
-    if (addItemModal) addItemModal.addEventListener('click', function(event) {
-        if (event.target === addItemModal) closeAddItemModal();
-    });
 
     async function searchAddItem() {
         if (!addItemSearchInput || !addItemSearchMessage || !addItemSearchResult) return;
@@ -669,21 +702,5 @@ if (empty($transferOrderNo)) {
 
     }
 
-    if (addItemSearchBtn) addItemSearchBtn.addEventListener('click', searchAddItem);
-    if (addItemSearchInput) addItemSearchInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            searchAddItem();
-        }
-    });
-
-    if (itemsTableBody) {
-        itemsTableBody.addEventListener('click', function(e) {
-            const btn = e.target.closest('.delete-item-btn');
-            if (!btn) return;
-            const row = btn.closest('tr');
-            if (row) row.remove();
-        });
-    }
 </script>
 
