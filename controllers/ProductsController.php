@@ -449,7 +449,7 @@ class ProductsController {
         }
 
         return json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
-        // exit;
+        exit;
     }
     public function getProductDetailsHTML() {
         is_login();
