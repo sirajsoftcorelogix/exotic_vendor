@@ -1,10 +1,70 @@
 <div class="container mx-auto p-4">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-semibold text-gray-900">Stock Transfer History</h1>
-        <a href="?page=products&action=list" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition">
+        <a href="?page=products&action=transfer_stock" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition">
             <i class="fas fa-plus"></i>
             Create Stock Transfer
         </a>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4">
+        <form method="GET" action="" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <input type="hidden" name="page" value="products">
+            <input type="hidden" name="action" value="stock_transfer">
+
+            <div>
+                <label class="text-xs font-semibold text-gray-600">TO Number</label>
+                <input type="text" name="transfer_order_no" value="<?= htmlspecialchars($data['filters']['transfer_order_no'] ?? '') ?>" class="mt-1 w-full px-3 py-2 border rounded-lg text-sm" placeholder="TO-..">
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Dispatch Date</label>
+                <input type="date" name="dispatch_date" value="<?= htmlspecialchars($data['filters']['dispatch_date'] ?? '') ?>" class="mt-1 w-full px-3 py-2 border rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Requested By</label>
+                <select name="requested_by" class="mt-1 w-full px-3 py-2 border rounded-lg text-sm">
+                    <option value="">All</option>
+                    <?php foreach ($data['users'] ?? [] as $user): ?>
+                        <option value="<?= (int)$user['id'] ?>" <?= (isset($data['filters']['requested_by']) && (int)$data['filters']['requested_by'] === (int)$user['id']) ? 'selected' : '' ?>><?= htmlspecialchars($user['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Dispatch By</label>
+                <select name="dispatch_by" class="mt-1 w-full px-3 py-2 border rounded-lg text-sm">
+                    <option value="">All</option>
+                    <?php foreach ($data['users'] ?? [] as $user): ?>
+                        <option value="<?= (int)$user['id'] ?>" <?= (isset($data['filters']['dispatch_by']) && (int)$data['filters']['dispatch_by'] === (int)$user['id']) ? 'selected' : '' ?>><?= htmlspecialchars($user['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Source Location</label>
+                <select name="from_warehouse" class="mt-1 w-full px-3 py-2 border rounded-lg text-sm">
+                    <option value="">All</option>
+                    <?php foreach ($data['warehouses'] ?? [] as $wh): ?>
+                        <option value="<?= (int)$wh['id'] ?>" <?= (isset($data['filters']['from_warehouse']) && (int)$data['filters']['from_warehouse'] === (int)$wh['id']) ? 'selected' : '' ?>><?= htmlspecialchars($wh['address_title']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Destination Location</label>
+                <select name="to_warehouse" class="mt-1 w-full px-3 py-2 border rounded-lg text-sm">
+                    <option value="">All</option>
+                    <?php foreach ($data['warehouses'] ?? [] as $wh): ?>
+                        <option value="<?= (int)$wh['id'] ?>" <?= (isset($data['filters']['to_warehouse']) && (int)$data['filters']['to_warehouse'] === (int)$wh['id']) ? 'selected' : '' ?>><?= htmlspecialchars($wh['address_title']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Item Number</label>
+                <input type="text" name="item_number" value="<?= htmlspecialchars($data['filters']['item_number'] ?? '') ?>" class="mt-1 w-full px-3 py-2 border rounded-lg text-sm" placeholder="Item code or SKU">
+            </div>
+            <div class="md:col-span-4 flex items-end gap-2">
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Search</button>
+                <a href="?page=products&action=stock_transfer_list" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Reset</a>
+            </div>
+        </form>
     </div>
 
     <div class="overflow-x-auto bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -30,7 +90,7 @@
                     <?php foreach ($data['transfers'] as $transfer): ?>
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 font-medium text-gray-800"><?php echo htmlspecialchars($transfer['transfer_order_no']); ?></td>
-                            <td class="px-6 py-4 text-sm text-gray-600"><?php echo htmlspecialchars($transfer['dispatch_date']); ?></td>
+                            <td class="px-6 py-4 text-sm text-gray-600"><?php echo !empty($transfer['dispatch_date']) ? date('j F Y', strtotime($transfer['dispatch_date'])) : ''; ?></td>
                             <td class="px-6 py-4 text-sm text-gray-600"><?php echo htmlspecialchars($transfer['requested_by_name'] ?? ''); ?></td>
                             <td class="px-6 py-4 text-sm text-gray-600"><?php echo htmlspecialchars($transfer['dispatch_by_name'] ?? ''); ?></td>
                             <td class="px-6 py-4 text-sm text-gray-600"><?php echo htmlspecialchars($transfer['source_name'] ?? ''); ?></td>

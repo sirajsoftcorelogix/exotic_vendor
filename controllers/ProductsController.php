@@ -52,13 +52,46 @@ class ProductsController {
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50;
         $offset = ($page_no - 1) * $limit;
 
-        $transferData = $stockTransferModel->listTransfers($limit, $offset);
+        $filters = [
+            'transfer_order_no' => trim($_GET['transfer_order_no'] ?? ''),
+            'dispatch_date' => trim($_GET['dispatch_date'] ?? ''),
+            'requested_by' => isset($_GET['requested_by']) ? (int)$_GET['requested_by'] : 0,
+            'dispatch_by' => isset($_GET['dispatch_by']) ? (int)$_GET['dispatch_by'] : 0,
+            'from_warehouse' => isset($_GET['from_warehouse']) ? (int)$_GET['from_warehouse'] : 0,
+            'to_warehouse' => isset($_GET['to_warehouse']) ? (int)$_GET['to_warehouse'] : 0,
+            'item_number' => trim($_GET['item_number'] ?? ''),
+        ];
+
+        $transferData = $stockTransferModel->listTransfers($limit, $offset, $filters);
+
+        // Pull users for filters
+        $users = [];
+        $userQuery = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
+        $userResult = mysqli_query($conn, $userQuery);
+        if ($userResult) {
+            while ($row = mysqli_fetch_assoc($userResult)) {
+                $users[] = $row;
+            }
+        }
+
+        // Pull warehouses for filters
+        $warehouses = [];
+        $warehouseQuery = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+        $warehouseResult = mysqli_query($conn, $warehouseQuery);
+        if ($warehouseResult) {
+            while ($row = mysqli_fetch_assoc($warehouseResult)) {
+                $warehouses[] = $row;
+            }
+        }
 
         $data = [
             'transfers' => $transferData['records'],
             'page_no' => $page_no,
             'total_records' => $transferData['total'],
-            'limit' => $limit
+            'limit' => $limit,
+            'filters' => $filters,
+            'users' => $users,
+            'warehouses' => $warehouses,
         ];
 
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
@@ -122,11 +155,19 @@ class ProductsController {
         $existingFile = $_POST['existing_eway_bill_file'] ?? '';
         $ewayBillFile = $this->handleEwayBillFileUpload($existingFile);
 
+        $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
+        $toWarehouse = isset($_POST['to_warehouse']) ? (int)$_POST['to_warehouse'] : 0;
+
+        if ($fromWarehouse <= 0 || $toWarehouse <= 0 || $fromWarehouse === $toWarehouse) {
+            renderTemplateClean('views/errors/error.php', ['message' => 'Source and destination warehouses must be different'], 'Validation error');
+            return;
+        }
+
         $data = [
             'dispatch_date' => $_POST['dispatch_date'] ?? '',
             'est_delivery_date' => $_POST['est_delivery_date'] ?? '',
-            'from_warehouse' => isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0,
-            'to_warehouse' => isset($_POST['to_warehouse']) ? (int)$_POST['to_warehouse'] : 0,
+            'from_warehouse' => $fromWarehouse,
+            'to_warehouse' => $toWarehouse,
             'requested_by' => isset($_POST['requested_by']) ? (int)$_POST['requested_by'] : 0,
             'dispatch_by' => isset($_POST['dispatch_by']) ? (int)$_POST['dispatch_by'] : 0,
             'booking_no' => $_POST['booking_no'] ?? '',
@@ -475,6 +516,37 @@ class ProductsController {
         }
         exit;
     }
+
+    public function searchProduct() {
+        is_login();
+        global $productModel;
+        $q = isset($_GET['q']) ? trim($_GET['q']) : '';
+
+        if ($q === '') {
+            echo json_encode(['success' => false, 'message' => 'Please provide item code or SKU']);
+            exit;
+        }
+
+        // search SKU or item code partial-match
+        $products = $productModel->searchProductsBySkuOrItemCode($q);
+
+        if (!$products || count($products) === 0) {
+            // fallback exact item code
+            $productExactList = $productModel->getProductByItemCode($q);
+            if (!empty($productExactList)) {
+                $products = is_array($productExactList) ? $productExactList : [$productExactList];
+            }
+        }
+
+        if (!$products || count($products) === 0) {
+            echo json_encode(['success' => false, 'message' => 'Product not found']);
+            exit;
+        }
+
+        echo json_encode(['success' => true, 'products' => $products]);
+        exit;
+    }
+
     public function addVendorMap() {
         is_login();
         global $productModel;
@@ -1163,35 +1235,26 @@ class ProductsController {
         is_login();
         global $productModel, $conn;
 
-        $product_ids = isset($_GET['product_ids']) ? $_GET['product_ids'] : '';
+        $product_ids = isset($_GET['product_ids']) ? trim($_GET['product_ids']) : '';
         $transfer_id = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
 
-        if (empty($product_ids)) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'No products selected for transfer.'], 'Error');
-            exit;
-        }
-
-        // Convert comma-separated IDs to array
-        $ids = array_map('intval', array_filter(explode(',', $product_ids)));
-
-        if (empty($ids)) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'Invalid product IDs.'], 'Error');
-            exit;
-        }
-
-        // Fetch product details
         $products = [];
-        foreach ($ids as $id) {
-            $product = $productModel->getProduct($id);
-            if ($product) {
-                $products[] = $product;
+
+        if (!empty($product_ids)) {
+            // Convert comma-separated IDs to array
+            $ids = array_map('intval', array_filter(explode(',', $product_ids)));
+            if (!empty($ids)) {
+                // Fetch product details
+                foreach ($ids as $id) {
+                    $product = $productModel->getProduct($id);
+                    if ($product) {
+                        $products[] = $product;
+                    }
+                }
             }
         }
 
-        if (empty($products)) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'Products not found.'], 'Error');
-            exit;
-        }
+        // No products selected is allowed for empty transfer creation.
 
         // Fetch warehouses from exotic_address table
         $warehouses = [];
@@ -1356,17 +1419,19 @@ class ProductsController {
         
         $hasItems = false;
         foreach ($data['items'] as $item) {
-            if ((int)$item['transfer_qty'] > 0) {
-                $hasItems = true;
-                break;
+            $transfer_qty = isset($item['transfer_qty']) ? (int)$item['transfer_qty'] : 0;
+            if ($transfer_qty <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Transfer quantity must be greater than zero for all selected items']);
+                exit;
             }
+            $hasItems = true;
         }
-        
+
         if (!$hasItems) {
             echo json_encode(['success' => false, 'message' => 'Please enter transfer quantity for at least one item']);
             exit;
         }
-        
+
         // Determine transfer ID (if editing existing transfer) before validating items.
         $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
 

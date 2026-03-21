@@ -22,6 +22,7 @@ if (empty($transferOrderNo)) {
         $isEditMode = !empty($transfer['id']);
         $selectedRequestedBy = $isEditMode ? ((int)($transfer['requested_by'] ?? 0)) : ((int)($transfer['requested_by'] ?? $currentUserId));
         $selectedDispatchBy = $isEditMode ? ((int)($transfer['dispatch_by'] ?? 0)) : ((int)($transfer['dispatch_by'] ?? $currentUserId));
+        $defaultDispatchDate = !empty($transfer['dispatch_date']) ? $transfer['dispatch_date'] : date('Y-m-d');
     ?>
     <form id="transferStockForm" class="space-y-6" method="POST" enctype="multipart/form-data" action="?page=products&action=process_transfer_stock">
         <!-- Header Info Section -->
@@ -37,7 +38,8 @@ if (empty($transferOrderNo)) {
                 </div>
                 <div class="flex flex-col">
                     <label class="text-sm font-semibold text-gray-700 mb-2">Dispatch Date <span class="text-red-500">*</span></label>
-                    <input type="date" id="dispatch_date" name="dispatch_date" value="<?php echo htmlspecialchars($transfer['dispatch_date'] ?? ''); ?>" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
+                    <input type="date" id="dispatch_date" name="dispatch_date" value="<?php echo htmlspecialchars($defaultDispatchDate); ?>" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
+                    <p id="dispatchDateFormatted" class="text-xs text-gray-500 mt-1"></p>
                 </div>
                 <div class="flex flex-col">
                     <label class="text-sm font-semibold text-gray-700 mb-2">Est Delivery Date <span class="text-red-500">*</span></label>
@@ -142,7 +144,7 @@ if (empty($transferOrderNo)) {
                                     <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Available</div>
                                     <div class="bg-gray-100 px-2 py-1 rounded text-xs text-gray-700 mb-2"><?php echo htmlspecialchars($product['local_stock'] ?? 0); ?></div>
                                     <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Transfer</div>
-                                    <input type="number" name="transfer_qty[]" min="0" max="<?php echo htmlspecialchars($product['local_stock'] ?? 0); ?>" value="<?php echo htmlspecialchars($product['transfer_qty'] ?? 0); ?>" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
+                                    <input type="number" name="transfer_qty[]" min="1" max="<?php echo htmlspecialchars($product['local_stock'] ?? 0); ?>" data-available="<?php echo htmlspecialchars($product['local_stock'] ?? 0); ?>" value="<?php echo htmlspecialchars($product['transfer_qty'] ?? 0); ?>" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
                                 </td>
                                 <td class="px-4 py-3 border-b border-gray-200">
                                     <textarea name="item_notes[]" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y min-h-[60px]"><?php echo htmlspecialchars($product['item_notes'] ?? ''); ?></textarea>
@@ -156,6 +158,31 @@ if (empty($transferOrderNo)) {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <div class="mb-6 flex justify-end">
+            <button id="addItemBtn" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
+                <i class="fas fa-plus"></i> Add Item
+            </button>
+        </div>
+
+        <!-- Add Item Modal -->
+        <div id="addItemModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+            <div class="bg-white rounded-lg shadow-lg w-[90%] max-w-2xl p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold">Add Product to Transfer</h2>
+                    <button type="button" id="addItemModalClose" class="text-gray-500 hover:text-gray-800">✕</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <input type="text" id="addItemSearchInput" placeholder="Enter item code or SKU" class="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    <button id="addItemSearchBtn" type="button" class="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">Search</button>
+                </div>
+
+                <div id="addItemSearchMessage" class="text-sm text-red-600 mb-3 hidden"></div>
+
+                <div id="addItemSearchResult" class="space-y-3"></div>
             </div>
         </div>
 
@@ -208,9 +235,6 @@ if (empty($transferOrderNo)) {
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                 <div class="flex flex-col gap-6">
                     <div class="flex flex-wrap justify-end gap-4">
-                        <button type="button" id="saveDraftBtn" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition">
-                            <i class="fas fa-save"></i> Save as Draft
-                        </button>
                         <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition">
                         <i class="fas fa-check"></i> Submit
                     </button>
@@ -219,7 +243,7 @@ if (empty($transferOrderNo)) {
         </div>
 
         <!-- Hidden field -->
-        <input type="hidden" name="product_ids" value="<?php echo htmlspecialchars($product_ids); ?>">
+        <input type="hidden" id="product_ids" name="product_ids" value="<?php echo htmlspecialchars($product_ids); ?>">
     </form>
 </div>
 
@@ -400,10 +424,23 @@ if (empty($transferOrderNo)) {
         });
     });
 
-    // Save as Draft
-    document.getElementById('saveDraftBtn').addEventListener('click', function() {
-        alert('Transfer order saved as draft!');
-    });
+    function formatDateLabel(dateString) {
+        if (!dateString) return '';
+        const d = new Date(dateString);
+        if (Number.isNaN(d.getTime())) return dateString;
+        const options = { day: 'numeric', month: 'long', year: 'numeric' };
+        return d.toLocaleDateString('en-GB', options); // 21 March 2026
+    }
+
+    const dispatchDateInput = document.getElementById('dispatch_date');
+    const dispatchDateFormatted = document.getElementById('dispatchDateFormatted');
+    if (dispatchDateInput && dispatchDateFormatted) {
+        const updateFormatted = () => {
+            dispatchDateFormatted.textContent = formatDateLabel(dispatchDateInput.value);
+        };
+        dispatchDateInput.addEventListener('change', updateFormatted);
+        updateFormatted();
+    }
 
     // Form submission
     document.getElementById('transferStockForm').addEventListener('submit', function(e) {
@@ -423,13 +460,39 @@ if (empty($transferOrderNo)) {
         }
 
         const transferQtys = document.querySelectorAll('input[name="transfer_qty[]"]');
-        const hasItems = Array.from(transferQtys).some(input => parseInt(input.value) > 0);
-        
-        if (!hasItems) {
+        let hasValidQty = false;
+
+        for (const input of transferQtys) {
+            const val = parseInt(input.value, 10);
+            const available = parseInt(input.dataset.available, 10);
+
+            if (isNaN(val)) {
+                alert('Please enter a valid transfer quantity for each item.');
+                return;
+            }
+
+            if (val <= 0) {
+                alert('Transfer quantity must be greater than zero for each item used in transfer.');
+                input.focus();
+                return;
+            }
+
+            if (!isNaN(available) && val > available) {
+                alert(`Transfer quantity for an item cannot exceed available stock (${available}).`);
+                input.focus();
+                return;
+            }
+
+            if (val > 0) {
+                hasValidQty = true;
+            }
+        }
+
+        if (!hasValidQty) {
             alert('Please enter transfer quantity for at least one item');
             return;
         }
-        
+
         const formData = new FormData(document.getElementById('transferStockForm'));
         fetch('?page=products&action=process_transfer_stock', {
             method: 'POST',
@@ -454,5 +517,173 @@ if (empty($transferOrderNo)) {
             alert('An error occurred: ' + error.message);
         });
     });
+
+    const addItemModal = document.getElementById('addItemModal');
+    const addItemBtn = document.getElementById('addItemBtn');
+    const addItemModalClose = document.getElementById('addItemModalClose');
+    const addItemSearchBtn = document.getElementById('addItemSearchBtn');
+    const addItemSearchInput = document.getElementById('addItemSearchInput');
+    const addItemSearchMessage = document.getElementById('addItemSearchMessage');
+    const addItemSearchResult = document.getElementById('addItemSearchResult');
+    const itemsTableBody = document.getElementById('itemsTableBody');
+
+    function openAddItemModal() {
+        if (!addItemModal) return;
+        addItemSearchInput.value = '';
+        addItemSearchMessage.classList.add('hidden');
+        addItemSearchResult.innerHTML = '';
+        addItemModal.classList.remove('hidden');
+        addItemModal.classList.add('flex');
+    }
+
+    function closeAddItemModal() {
+        if (!addItemModal) return;
+        addItemModal.classList.add('hidden');
+        addItemModal.classList.remove('flex');
+    }
+
+    function decodeHtml(html) {
+        const txt = document.createElement('textarea');
+        txt.innerHTML = html;
+        return txt.value;
+    }
+
+    function addNewItemToTable(product) {
+        if (!itemsTableBody || !product) return;
+
+        const existingSku = Array.from(itemsTableBody.querySelectorAll('input[name="sku[]"]')).some(i => i.value.trim() === product.sku);
+        if (existingSku) {
+            alert('This product is already in the transfer list.');
+            return;
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = 'item-row';
+
+        tr.innerHTML = `
+            <td class="px-4 py-3 border-b border-gray-200">
+                <input type="text" value="${decodeHtml(product.item_code || product.itemcode || '')}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-sm text-gray-700 cursor-not-allowed">
+                <input type="hidden" name="item_code[]" value="${decodeHtml(product.item_code || product.itemcode || '')}">
+            </td>
+            <td class="px-4 py-3 border-b border-gray-200">
+                <input type="text" value="${decodeHtml(product.sku || '')}" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-sm text-gray-700 cursor-not-allowed">
+                <input type="hidden" name="sku[]" value="${decodeHtml(product.sku || '')}">
+            </td>
+            <td class="px-4 py-3 border-b border-gray-200">
+                <div class="bg-gray-100 p-3 rounded-md text-sm leading-relaxed">${decodeHtml(product.title || product.item_name || '')}</div>
+                <input type="hidden" name="title[]" value="${decodeHtml(product.title || product.item_name || '')}">
+            </td>
+            <td class="px-4 py-3 border-b border-gray-200 text-center">
+                <img src="${decodeHtml(product.image || 'https://via.placeholder.com/60x80?text=No+Image')}" alt="Item" class="w-14 h-20 object-contain border border-gray-200 rounded bg-white" onerror="this.src='https://via.placeholder.com/60x80?text=No+Image'">
+            </td>
+            <td class="px-4 py-3 border-b border-gray-200">
+                <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Available</div>
+                <div class="bg-gray-100 px-2 py-1 rounded text-xs text-gray-700 mb-2">${parseInt(product.local_stock ?? product.stock ?? 0)}</div>
+                <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Transfer</div>
+                <input type="number" name="transfer_qty[]" min="1" max="${parseInt(product.local_stock ?? product.stock ?? 0)}" data-available="${parseInt(product.local_stock ?? product.stock ?? 0)}" value="1" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500">
+            </td>
+            <td class="px-4 py-3 border-b border-gray-200">
+                <textarea name="item_notes[]" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y min-h-[60px]"></textarea>
+            </td>
+            <td class="px-4 py-3 border-b border-gray-200 text-center">
+                <button type="button" class="text-gray-400 hover:text-red-500 transition delete-item-btn" aria-label="Delete item"><i class="fas fa-trash-alt"></i></button>
+            </td>
+        `;
+
+        itemsTableBody.appendChild(tr);
+
+        const productIdsInput = document.getElementById('product_ids');
+        if (productIdsInput) {
+            const existingIds = productIdsInput.value ? productIdsInput.value.split(',').map(id => id.trim()).filter(Boolean) : [];
+            const newId = product.id ? String(product.id) : '';
+            if (newId && !existingIds.includes(newId)) {
+                existingIds.push(newId);
+                productIdsInput.value = existingIds.join(',');
+            }
+        }
+    }
+
+    if (addItemBtn) addItemBtn.addEventListener('click', openAddItemModal);
+    if (addItemModalClose) addItemModalClose.addEventListener('click', closeAddItemModal);
+    if (addItemModal) addItemModal.addEventListener('click', function(event) {
+        if (event.target === addItemModal) closeAddItemModal();
+    });
+
+    async function searchAddItem() {
+        if (!addItemSearchInput || !addItemSearchMessage || !addItemSearchResult) return;
+        const query = addItemSearchInput.value.trim();
+        addItemSearchMessage.classList.add('hidden');
+        addItemSearchResult.innerHTML = '';
+
+        if (!query) {
+            addItemSearchMessage.textContent = 'Please enter item code or SKU to search.';
+            addItemSearchMessage.classList.remove('hidden');
+            return;
+        }
+
+        const resp = await fetch(`?page=products&action=search_product&q=${encodeURIComponent(query)}`, {
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            addItemSearchMessage.textContent = data.message || 'Product not found';
+            addItemSearchMessage.classList.remove('hidden');
+            return;
+        }
+
+        const products = Array.isArray(data.products) ? data.products : [];
+        if (products.length === 0) {
+            addItemSearchMessage.textContent = 'Product not found';
+            addItemSearchMessage.classList.remove('hidden');
+            return;
+        }
+
+        addItemSearchResult.innerHTML = '';
+
+        for (const prod of products) {
+            const stock = parseInt(prod.local_stock ?? prod.stock ?? 0, 10);
+            const img = prod.image ? prod.image : 'https://via.placeholder.com/60x80?text=No+Image';
+            const card = document.createElement('div');
+            card.className = 'bg-gray-50 border border-gray-200 p-3 rounded-lg flex gap-3 items-center justify-between';
+            card.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <img src="${decodeHtml(img)}" class="w-16 h-20 object-contain border border-gray-200 rounded" onerror="this.src='https://via.placeholder.com/60x80?text=No+Image'">
+                    <div>
+                        <div class="font-semibold text-gray-800">${decodeHtml(prod.title || prod.item_name || '')}</div>
+                        <div class="text-xs text-gray-600">Item Code: ${decodeHtml(prod.item_code || prod.itemcode || '')}</div>
+                        <div class="text-xs text-gray-600">SKU: ${decodeHtml(prod.sku || '')}</div>
+                        <div class="text-xs text-gray-600">Available: ${stock}</div>
+                    </div>
+                </div>
+                <button type="button" class="addSearchedProductBtn px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">Add Item</button>
+            `;
+
+            const addBtn = card.querySelector('.addSearchedProductBtn');
+            addBtn.addEventListener('click', function() {
+                addNewItemToTable(prod);
+                closeAddItemModal();
+            });
+
+            addItemSearchResult.appendChild(card);
+        }
+
+    }
+
+    if (addItemSearchBtn) addItemSearchBtn.addEventListener('click', searchAddItem);
+    if (addItemSearchInput) addItemSearchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchAddItem();
+        }
+    });
+
+    if (itemsTableBody) {
+        itemsTableBody.addEventListener('click', function(e) {
+            const btn = e.target.closest('.delete-item-btn');
+            if (!btn) return;
+            const row = btn.closest('tr');
+            if (row) row.remove();
+        });
+    }
 </script>
 

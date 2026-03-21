@@ -617,14 +617,77 @@ class StockTransfer
      *   'total' => int total transfer count
      * ]
      */
-    public function listTransfers($limit = 50, $offset = 0)
+    public function listTransfers($limit = 50, $offset = 0, $filters = [])
     {
+        // Build where clause from filters
+        $whereClauses = [];
+        $params = [];
+        $types = '';
+
+        if (!empty($filters['transfer_order_no'])) {
+            $whereClauses[] = 't.transfer_order_no LIKE ?';
+            $params[] = '%' . $filters['transfer_order_no'] . '%';
+            $types .= 's';
+        }
+        if (!empty($filters['dispatch_date'])) {
+            $whereClauses[] = 't.dispatch_date = ?';
+            $params[] = $filters['dispatch_date'];
+            $types .= 's';
+        }
+        if (!empty($filters['requested_by'])) {
+            $whereClauses[] = 't.requested_by = ?';
+            $params[] = (int)$filters['requested_by'];
+            $types .= 'i';
+        }
+        if (!empty($filters['dispatch_by'])) {
+            $whereClauses[] = 't.dispatch_by = ?';
+            $params[] = (int)$filters['dispatch_by'];
+            $types .= 'i';
+        }
+        if (!empty($filters['from_warehouse'])) {
+            $whereClauses[] = 't.from_warehouse = ?';
+            $params[] = (int)$filters['from_warehouse'];
+            $types .= 'i';
+        }
+        if (!empty($filters['to_warehouse'])) {
+            $whereClauses[] = 't.to_warehouse = ?';
+            $params[] = (int)$filters['to_warehouse'];
+            $types .= 'i';
+        }
+        $itemFilter = !empty($filters['item_number']) ? trim($filters['item_number']) : '';
+        $itemExistsClause = '';
+        if ($itemFilter !== '') {
+            $itemExistsClause = "EXISTS (SELECT 1 FROM vp_item_stock_transfer i WHERE i.transfer_order_no = t.transfer_order_no AND (i.item_code LIKE ? OR i.sku LIKE ?))";
+            $params[] = '%' . $itemFilter . '%';
+            $params[] = '%' . $itemFilter . '%';
+            $types .= 'ss';
+        }
+
+        if ($itemExistsClause !== '') {
+            $whereClauses[] = $itemExistsClause;
+        }
+
+        $where = '';
+        if (!empty($whereClauses)) {
+            $where = ' WHERE ' . implode(' AND ', $whereClauses);
+        }
+
         // Total count for pagination
-        $countSql = "SELECT COUNT(*) AS total FROM vp_stock_transfer";
+        $countSql = "SELECT COUNT(*) AS total FROM vp_stock_transfer t" . $where;
         $countStmt = $this->db->prepare($countSql);
         if (!$countStmt) {
             throw new Exception('Prepare error: ' . $this->db->error);
         }
+
+        if (!empty($params)) {
+            $bindCountParams = array_merge([$types], $params);
+            $refs = [];
+            foreach ($bindCountParams as $key => $value) {
+                $refs[$key] = &$bindCountParams[$key];
+            }
+            call_user_func_array([$countStmt, 'bind_param'], $refs);
+        }
+
         $countStmt->execute();
         $countResult = $countStmt->get_result();
         $totalRow = $countResult->fetch_assoc();
@@ -642,6 +705,7 @@ class StockTransfer
                 LEFT JOIN exotic_address d ON d.id = t.to_warehouse
                 LEFT JOIN vp_users ru ON ru.id = t.requested_by
                 LEFT JOIN vp_users du ON du.id = t.dispatch_by
+                " . $where . "
                 ORDER BY t.id DESC
                 LIMIT ? OFFSET ?";
 
@@ -649,7 +713,26 @@ class StockTransfer
         if (!$stmt) {
             throw new Exception('Prepare error: ' . $this->db->error);
         }
-        $stmt->bind_param('ii', $limit, $offset);
+
+        // Bind params for main query
+        if (!empty($params)) {
+            $bindParams = $params;
+            $bindTypes = $types;
+        } else {
+            $bindParams = [];
+            $bindTypes = '';
+        }
+        $bindTypes .= 'ii';
+        $bindParams[] = $limit;
+        $bindParams[] = $offset;
+
+        $bindArray = array_merge([$bindTypes], $bindParams);
+        $refs = [];
+        foreach ($bindArray as $key => $value) {
+            $refs[$key] = &$bindArray[$key];
+        }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+
         $stmt->execute();
         $result = $stmt->get_result();
         $transfers = [];
@@ -665,12 +748,11 @@ class StockTransfer
         if (!empty($transferNos)) {
             // Fetch items for these transfers
             $placeholders = implode(',', array_fill(0, count($transferNos), '?'));
-            $types = str_repeat('s', count($transferNos));
             $itemSql = "SELECT transfer_order_no, product_id, sku, item_code, transfer_qty, item_notes FROM vp_item_stock_transfer WHERE transfer_order_no IN ($placeholders) ORDER BY id ASC";
             $itemStmt = $this->db->prepare($itemSql);
             if ($itemStmt) {
-                // bind_param requires references, so we build a reference array
-                $bindParams = array_merge([$types], $transferNos);
+                $itemTypes = str_repeat('s', count($transferNos));
+                $bindParams = array_merge([$itemTypes], $transferNos);
                 $refs = [];
                 foreach ($bindParams as $key => $value) {
                     $refs[$key] = &$bindParams[$key];

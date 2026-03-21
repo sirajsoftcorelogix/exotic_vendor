@@ -508,6 +508,9 @@ switch ($page) {
             case 'stock_transfer':
                 $controller->stock_transfer_list();
                 break;
+            case 'search_product':
+                $controller->searchProduct();
+                break;
             default:
                 $controller->product_list();
                 break;
