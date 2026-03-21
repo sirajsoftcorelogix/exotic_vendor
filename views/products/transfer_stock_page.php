@@ -527,30 +527,37 @@ if (empty($transferOrderNo)) {
     let addItemSearchResult = null;
     let itemsTableBody = null;
 
+    function openAddItemModal() {
+        const addItemModal = document.getElementById('addItemModal');
+        const addItemSearchInput = document.getElementById('addItemSearchInput');
+        const addItemSearchMessage = document.getElementById('addItemSearchMessage');
+        const addItemSearchResult = document.getElementById('addItemSearchResult');
+
+        if (!addItemModal || !addItemSearchInput || !addItemSearchMessage || !addItemSearchResult) return;
+
+        addItemSearchInput.value = '';
+        addItemSearchMessage.classList.add('hidden');
+        addItemSearchResult.innerHTML = '';
+        addItemModal.classList.remove('hidden');
+        addItemModal.classList.add('flex');
+    }
+
+    function closeAddItemModal() {
+        const addItemModal = document.getElementById('addItemModal');
+        if (!addItemModal) return;
+        addItemModal.classList.add('hidden');
+        addItemModal.classList.remove('flex');
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
-        addItemModal = document.getElementById('addItemModal');
-        addItemBtn = document.getElementById('addItemBtn');
-        addItemModalClose = document.getElementById('addItemModalClose');
-        addItemSearchBtn = document.getElementById('addItemSearchBtn');
-        addItemSearchInput = document.getElementById('addItemSearchInput');
-        addItemSearchMessage = document.getElementById('addItemSearchMessage');
-        addItemSearchResult = document.getElementById('addItemSearchResult');
-        itemsTableBody = document.getElementById('itemsTableBody');
-
-        function openAddItemModal() {
-            if (!addItemModal) return;
-            addItemSearchInput.value = '';
-            addItemSearchMessage.classList.add('hidden');
-            addItemSearchResult.innerHTML = '';
-            addItemModal.classList.remove('hidden');
-            addItemModal.classList.add('flex');
-        }
-
-        function closeAddItemModal() {
-            if (!addItemModal) return;
-            addItemModal.classList.add('hidden');
-            addItemModal.classList.remove('flex');
-        }
+        const addItemModal = document.getElementById('addItemModal');
+        const addItemBtn = document.getElementById('addItemBtn');
+        const addItemModalClose = document.getElementById('addItemModalClose');
+        const addItemSearchBtn = document.getElementById('addItemSearchBtn');
+        const addItemSearchInput = document.getElementById('addItemSearchInput');
+        const addItemSearchMessage = document.getElementById('addItemSearchMessage');
+        const addItemSearchResult = document.getElementById('addItemSearchResult');
+        const itemsTableBody = document.getElementById('itemsTableBody');
 
         if (addItemBtn) addItemBtn.addEventListener('click', openAddItemModal);
         if (addItemModalClose) addItemModalClose.addEventListener('click', closeAddItemModal);
