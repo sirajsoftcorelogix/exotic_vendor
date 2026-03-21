@@ -162,7 +162,7 @@ if (empty($transferOrderNo)) {
         </div>
 
         <div class="mb-6 flex justify-end">
-            <button id="addItemBtn" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
+            <button id="addItemBtn" type="button" onclick="openAddItemModal()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
                 <i class="fas fa-plus"></i> Add Item
             </button>
         </div>
