@@ -171,5 +171,23 @@
                 }
             });
         }
+
+        const editForm = document.querySelector('form[action="?page=products&action=stock_transfer_update"]');
+        if (editForm) {
+            editForm.addEventListener('submit', function(e) {
+                const fromWarehouse = parseInt(editForm.querySelector('select[name="from_warehouse"]').value, 10);
+                const toWarehouse = parseInt(editForm.querySelector('select[name="to_warehouse"]').value, 10);
+                if (!fromWarehouse || !toWarehouse) {
+                    alert('Please select both source and destination warehouses');
+                    e.preventDefault();
+                    return;
+                }
+                if (fromWarehouse === toWarehouse) {
+                    alert('Source and destination warehouses must be different');
+                    e.preventDefault();
+                    return;
+                }
+            });
+        }
     </script>
 </div>
