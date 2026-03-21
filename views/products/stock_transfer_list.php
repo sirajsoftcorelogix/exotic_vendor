@@ -62,7 +62,7 @@
             </div>
             <div class="md:col-span-4 flex items-end gap-2">
                 <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Search</button>
-                <a href="?page=products&action=stock_transfer_list" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Reset</a>
+                <a href="?page=products&action=stock_transfer" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">Reset</a>
             </div>
         </form>
     </div>
