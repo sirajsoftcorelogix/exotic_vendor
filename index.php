@@ -204,6 +204,26 @@ switch ($page) {
             case 'payment_list':
                 $controller->paymentList();
                 break;
+            case 'api_update_order_status':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->updateOrderStatus();
+                break;
+            case 'api_bulk_update_order_status':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->bulkUpdateOrderStatus();
+                break;
+            case 'api_order_status_history':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->getOrderStatusHistory();
+                break;
+            case 'api_generate_token':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->generateToken();
+                break;
             default:
                 $controller->index();
                 break;
@@ -502,6 +522,15 @@ switch ($page) {
             case 'get_last_warehouse':
                 $controller->getLastWarehouse();
                 break;
+            case 'get_transfer_order_no':
+                $controller->getTransferOrderNo();
+                break;
+            case 'stock_transfer':
+                $controller->stock_transfer_list();
+                break;
+            case 'search_product':
+                $controller->searchProduct();
+                break;
             default:
                 $controller->product_list();
                 break;
@@ -730,6 +759,22 @@ switch ($page) {
         }
         break;
 
+    case 'stock_transfer_grns':
+        require_once 'controllers/StockTransferGrnController.php';
+        $controller = new StockTransferGrnController($conn);
+        switch ($action) {
+            case 'create':
+                $controller->create();
+                break;
+            case 'create_post':
+                $controller->createPost();
+                break;
+            default:
+                $controller->create();
+                break;
+        }
+        break;
+
     case 'pos_register':
 
         require_once 'controllers/POSRegisterController.php';
@@ -915,6 +960,7 @@ switch ($page) {
                 break;
         }
         break;
+<<<<<<< HEAD
     case 'payments':
 
         require_once 'controllers/PaymentsController.php';
@@ -1090,4 +1136,7 @@ switch ($page) {
         break;
 
        
+=======
+
+>>>>>>> 25dcce4f0c55f35a0b1226fe56258cd8946036fe
 }

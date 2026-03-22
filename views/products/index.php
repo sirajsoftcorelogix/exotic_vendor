@@ -128,7 +128,7 @@
                     <a href="javascript:void(0)" id="importProductsBtn" title="Import products" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Import Products</a>
                     <a href="javascript:void(0)" id="bulkUpdateBtn" title="Update stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Products</a>
                     <a href="javascript:void(0)" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
-                    <a href="javascript:void(0)" id="action-transfer-stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add Transfer Stock</a>
+                    <a href="javascript:void(0)" id="action-transfer-stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Transfer Stock</a>
                 </div>
             </div>
             <!-- <button id="importProductsBtn" title="Import products" class="flex right-0 top-0 bg-amber-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-amber-700 transition">

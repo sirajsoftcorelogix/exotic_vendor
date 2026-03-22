@@ -246,7 +246,7 @@ class Invoice {
         }
         return 0;
     }
-    public function getAllInvoicesPaginated($limit, $offset, $filters = []) {
+    public function  getAllInvoicesPaginated($limit, $offset, $filters = []) {
         // join dispatch details so we can filter on its columns
         $sql  = "SELECT DISTINCT i.*, c.id AS customer_id, c.name, c.email, c.phone
                 FROM vp_invoices i
@@ -325,11 +325,39 @@ class Invoice {
             $whereClause[] = "i.payment_mode = '" . $this->db->real_escape_string($filters['payment_mode']) . "'";
         }
         if (isset($filters['status']) && $filters['status'] !== '') {
-            $whereClause[] = "i.status = '" . $this->db->real_escape_string($filters['status']) . "'";
+            $whereClause[] = "d.shipment_status = '" . $this->db->real_escape_string($filters['status']) . "'";
         }
         if (isset($filters['category']) && $filters['category'] !== '') {
             $whereClause[] = "d.groupname LIKE '%" . $this->db->real_escape_string($filters['category']) . "%'";
         }
+        if (isset($filters['invoice_value_min']) && is_numeric($filters['invoice_value_min'])) {
+            $whereClause[] = "i.total_amount >= " . floatval($filters['invoice_value_min']);
+        }
+        if (isset($filters['invoice_value_max']) && is_numeric($filters['invoice_value_max'])) {
+            $whereClause[] = "i.total_amount <= " . floatval($filters['invoice_value_max']);
+        }
+        if (isset($filters['batch_no']) && $filters['batch_no'] !== '') {
+            $whereClause[] = "i.batch_no = '" . $this->db->real_escape_string($filters['batch_no']) . "'";
+        }
+        if (isset($filters['item_code']) && $filters['item_code'] !== '') {
+            $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_code LIKE '%" . $this->db->real_escape_string($filters['item_code']) . "%')"; 
+
+        }
+        if (isset($filters['created_by']) && $filters['created_by'] !== '') {
+            $whereClause[] = "d.created_by = " . intval($filters['created_by']);
+        }
+        if (isset($filters['item_name']) && $filters['item_name'] !== '') {
+            $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_name LIKE '%" . $this->db->real_escape_string($filters['item_name']) . "%')";
+            
+        }
+        //Box Weight
+        if (isset($filters['box_weight_min']) && is_numeric($filters['box_weight_min'])) {
+            $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_dispatch_details WHERE weight >= " . floatval($filters['box_weight_min']) . ")";
+        }
+        if (isset($filters['box_weight_max']) && is_numeric($filters['box_weight_max'])) {
+            $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_dispatch_details WHERE weight <= " . floatval($filters['box_weight_max']) . ")";
+        }
+
 
         if (!empty($whereClause)) {
             $sql .= "WHERE " . implode(" AND ", $whereClause) . " ";
