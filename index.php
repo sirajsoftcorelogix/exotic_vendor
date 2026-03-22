@@ -204,6 +204,26 @@ switch ($page) {
             case 'payment_list':
                 $controller->paymentList();
                 break;
+            case 'api_update_order_status':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->updateOrderStatus();
+                break;
+            case 'api_bulk_update_order_status':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->bulkUpdateOrderStatus();
+                break;
+            case 'api_order_status_history':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->getOrderStatusHistory();
+                break;
+            case 'api_generate_token':
+                require_once 'controllers/OrdersAPIController.php';
+                $apiController = new OrdersAPIController($conn);
+                $apiController->generateToken();
+                break;
             default:
                 $controller->index();
                 break;
