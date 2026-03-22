@@ -960,7 +960,7 @@ switch ($page) {
                 break;
         }
         break;
-<<<<<<< HEAD
+
     case 'payments':
 
         require_once 'controllers/PaymentsController.php';
@@ -1135,8 +1135,4 @@ switch ($page) {
         }
         break;
 
-       
-=======
-
->>>>>>> 25dcce4f0c55f35a0b1226fe56258cd8946036fe
 }
