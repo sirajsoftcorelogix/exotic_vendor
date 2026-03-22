@@ -6,6 +6,19 @@ class StockTransfer
     public function __construct($db)
     {
         $this->db = $db;
+        $this->ensureTransferTableSchema();
+    }
+    
+    /**
+     * Ensure vp_stock_transfer has eway_bill_file column.
+     */
+    private function ensureTransferTableSchema()
+    {
+        $columnCheckSql = "SHOW COLUMNS FROM vp_stock_transfer LIKE 'eway_bill_file'";
+        $result = $this->db->query($columnCheckSql);
+        if ($result && $result->num_rows === 0) {
+            $this->db->query("ALTER TABLE vp_stock_transfer ADD COLUMN eway_bill_file VARCHAR(1024) DEFAULT NULL");
+        }
     }
     
     /**
@@ -27,8 +40,8 @@ class StockTransfer
             $insertTransferSQL = "INSERT INTO vp_stock_transfer 
                 (transfer_order_no, from_warehouse, to_warehouse, dispatch_date, est_delivery_date, 
                  requested_by, dispatch_by, booking_no, vehicle_no, vehicle_type, driver_name, driver_mobile, 
-                 create_pickup_list, create_picking_slip, create_delivery_challan, status, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                 eway_bill_file, create_pickup_list, create_picking_slip, create_delivery_challan, status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $stmt = $this->db->prepare($insertTransferSQL);
             if (!$stmt) {
@@ -46,15 +59,16 @@ class StockTransfer
             $vehicle_type = $data['vehicle_type'] ?? '';
             $driver_name = $data['driver_name'] ?? '';
             $driver_mobile = $data['driver_mobile'] ?? '';
-            $pickup_list = isset($data['create_pickup_list']) ? 1 : 0;
-            $picking_slip = isset($data['create_picking_slip']) ? 1 : 0;
-            $delivery_challan = isset($data['create_delivery_challan']) ? 1 : 0;
+            $eway_bill_file = $data['eway_bill_file'] ?? '';
+            $pickup_list = 0;
+            $picking_slip = 0;
+            $delivery_challan = 0;
             $status_pending = 'pending';
             $created_by = (int)($data['user_id'] ?? 1);
             
-            // Type string: s i i s s i i s s s s s i i i s i
+            // Type string: s i i s s i i s s s s s s i i i s i
             $stmt->bind_param(
-                'siissiisssssiiisi',
+                'siissiissssssiiisi',
                 $transfer_order_no,
                 $from_warehouse,
                 $to_warehouse,
@@ -67,6 +81,7 @@ class StockTransfer
                 $vehicle_type,
                 $driver_name,
                 $driver_mobile,
+                $eway_bill_file,
                 $pickup_list,
                 $picking_slip,
                 $delivery_challan,
@@ -474,6 +489,18 @@ class StockTransfer
         // Format counter with leading zeros
         return $basePrefix . str_pad($counter, 4, '0', STR_PAD_LEFT);
       }  
+
+    /**
+     * Get next unique transfer order number (public API wrapper)
+     * @param int $from_warehouse
+     * @param int $to_warehouse
+     * @return string
+     */
+    public function getNextTransferOrderNo($from_warehouse, $to_warehouse)
+    {
+        return $this->generateUniqueTransferOrderNo((int)$from_warehouse, (int)$to_warehouse);
+    }
+
     /**
      * Validate that transfer quantity doesn't exceed available stock
      * @param string $sku Product SKU
@@ -555,6 +582,32 @@ class StockTransfer
     }
 
     /**
+     * Get last received movement quantity for a SKU at a warehouse (TRANSFER_IN or IN)
+     * @param string $sku
+     * @param int $warehouse_id
+     * @return int
+     */
+    public function getLastReceivedQty($sku, $warehouse_id)
+    {
+        $query = "SELECT quantity FROM vp_stock_movements 
+                  WHERE sku = ? AND warehouse_id = ? AND movement_type IN ('TRANSFER_IN','IN') 
+                  ORDER BY id DESC LIMIT 1";
+
+        $stmt = $this->db->prepare($query);
+        if (!$stmt) {
+            return 0;
+        }
+
+        $stmt->bind_param('si', $sku, $warehouse_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        $stmt->close();
+
+        return $row ? (int)$row['quantity'] : 0;
+    }
+
+    /**
      * Get paginated list of stock transfers with item details.
      *
      * @param int $limit
@@ -564,14 +617,77 @@ class StockTransfer
      *   'total' => int total transfer count
      * ]
      */
-    public function listTransfers($limit = 50, $offset = 0)
+    public function listTransfers($limit = 50, $offset = 0, $filters = [])
     {
+        // Build where clause from filters
+        $whereClauses = [];
+        $params = [];
+        $types = '';
+
+        if (!empty($filters['transfer_order_no'])) {
+            $whereClauses[] = 't.transfer_order_no LIKE ?';
+            $params[] = '%' . $filters['transfer_order_no'] . '%';
+            $types .= 's';
+        }
+        if (!empty($filters['dispatch_date'])) {
+            $whereClauses[] = 't.dispatch_date = ?';
+            $params[] = $filters['dispatch_date'];
+            $types .= 's';
+        }
+        if (!empty($filters['requested_by'])) {
+            $whereClauses[] = 't.requested_by = ?';
+            $params[] = (int)$filters['requested_by'];
+            $types .= 'i';
+        }
+        if (!empty($filters['dispatch_by'])) {
+            $whereClauses[] = 't.dispatch_by = ?';
+            $params[] = (int)$filters['dispatch_by'];
+            $types .= 'i';
+        }
+        if (!empty($filters['from_warehouse'])) {
+            $whereClauses[] = 't.from_warehouse = ?';
+            $params[] = (int)$filters['from_warehouse'];
+            $types .= 'i';
+        }
+        if (!empty($filters['to_warehouse'])) {
+            $whereClauses[] = 't.to_warehouse = ?';
+            $params[] = (int)$filters['to_warehouse'];
+            $types .= 'i';
+        }
+        $itemFilter = !empty($filters['item_number']) ? trim($filters['item_number']) : '';
+        $itemExistsClause = '';
+        if ($itemFilter !== '') {
+            $itemExistsClause = "EXISTS (SELECT 1 FROM vp_item_stock_transfer i WHERE i.transfer_order_no = t.transfer_order_no AND (i.item_code LIKE ? OR i.sku LIKE ?))";
+            $params[] = '%' . $itemFilter . '%';
+            $params[] = '%' . $itemFilter . '%';
+            $types .= 'ss';
+        }
+
+        if ($itemExistsClause !== '') {
+            $whereClauses[] = $itemExistsClause;
+        }
+
+        $where = '';
+        if (!empty($whereClauses)) {
+            $where = ' WHERE ' . implode(' AND ', $whereClauses);
+        }
+
         // Total count for pagination
-        $countSql = "SELECT COUNT(*) AS total FROM vp_stock_transfer";
+        $countSql = "SELECT COUNT(*) AS total FROM vp_stock_transfer t" . $where;
         $countStmt = $this->db->prepare($countSql);
         if (!$countStmt) {
             throw new Exception('Prepare error: ' . $this->db->error);
         }
+
+        if (!empty($params)) {
+            $bindCountParams = array_merge([$types], $params);
+            $refs = [];
+            foreach ($bindCountParams as $key => $value) {
+                $refs[$key] = &$bindCountParams[$key];
+            }
+            call_user_func_array([$countStmt, 'bind_param'], $refs);
+        }
+
         $countStmt->execute();
         $countResult = $countStmt->get_result();
         $totalRow = $countResult->fetch_assoc();
@@ -589,6 +705,7 @@ class StockTransfer
                 LEFT JOIN exotic_address d ON d.id = t.to_warehouse
                 LEFT JOIN vp_users ru ON ru.id = t.requested_by
                 LEFT JOIN vp_users du ON du.id = t.dispatch_by
+                " . $where . "
                 ORDER BY t.id DESC
                 LIMIT ? OFFSET ?";
 
@@ -596,7 +713,26 @@ class StockTransfer
         if (!$stmt) {
             throw new Exception('Prepare error: ' . $this->db->error);
         }
-        $stmt->bind_param('ii', $limit, $offset);
+
+        // Bind params for main query
+        if (!empty($params)) {
+            $bindParams = $params;
+            $bindTypes = $types;
+        } else {
+            $bindParams = [];
+            $bindTypes = '';
+        }
+        $bindTypes .= 'ii';
+        $bindParams[] = $limit;
+        $bindParams[] = $offset;
+
+        $bindArray = array_merge([$bindTypes], $bindParams);
+        $refs = [];
+        foreach ($bindArray as $key => $value) {
+            $refs[$key] = &$bindArray[$key];
+        }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+
         $stmt->execute();
         $result = $stmt->get_result();
         $transfers = [];
@@ -612,12 +748,11 @@ class StockTransfer
         if (!empty($transferNos)) {
             // Fetch items for these transfers
             $placeholders = implode(',', array_fill(0, count($transferNos), '?'));
-            $types = str_repeat('s', count($transferNos));
             $itemSql = "SELECT transfer_order_no, product_id, sku, item_code, transfer_qty, item_notes FROM vp_item_stock_transfer WHERE transfer_order_no IN ($placeholders) ORDER BY id ASC";
             $itemStmt = $this->db->prepare($itemSql);
             if ($itemStmt) {
-                // bind_param requires references, so we build a reference array
-                $bindParams = array_merge([$types], $transferNos);
+                $itemTypes = str_repeat('s', count($transferNos));
+                $bindParams = array_merge([$itemTypes], $transferNos);
                 $refs = [];
                 foreach ($bindParams as $key => $value) {
                     $refs[$key] = &$bindParams[$key];
@@ -746,6 +881,7 @@ class StockTransfer
             'vehicle_type',
             'driver_name',
             'driver_mobile',
+            'eway_bill_file',
             'status'
         ];
 

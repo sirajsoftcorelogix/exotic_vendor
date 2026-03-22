@@ -522,8 +522,14 @@ switch ($page) {
             case 'get_last_warehouse':
                 $controller->getLastWarehouse();
                 break;
+            case 'get_transfer_order_no':
+                $controller->getTransferOrderNo();
+                break;
             case 'stock_transfer':
                 $controller->stock_transfer_list();
+                break;
+            case 'search_product':
+                $controller->searchProduct();
                 break;
             default:
                 $controller->product_list();

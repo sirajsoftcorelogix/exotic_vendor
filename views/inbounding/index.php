@@ -536,14 +536,18 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             
             $hasEditedPhotos = false;
             $hasRawPhotos = false;
+            $hasPublished = false;
 
             if (!empty($tc['stat_logs'])) {
                 foreach ($tc['stat_logs'] as $log) {
-                    if ($log['stat'] === 'Editing' || $log['stat'] === 'Published') {
+                    if ($log['stat'] === 'Editing') {
                         $hasEditedPhotos = true;
                     }
                     if ($log['stat'] === 'Photoshoot') {
                         $hasRawPhotos = true;
+                    }
+                    if ($log['stat'] === 'Published') {
+                        $hasPublished = true;
                     }
                 }
             }
@@ -551,9 +555,10 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             // Define classes
             $editedBtnClass = $hasEditedPhotos ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
             $rawBtnClass    = $hasRawPhotos    ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
+            $tileBorderClass = $hasPublished ? 'border-4 border-green-500' : 'border border-[rgba(229,229,229,1)]';
             ?>
 
-            <div class="accordion-item bg-white rounded-[16px] border border-[rgba(229,229,229,1)] shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
+            <div class="accordion-item bg-white rounded-[16px] <?= $tileBorderClass ?> shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
                 
                 <div class="px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-3 cursor-pointer toggle-btn relative z-20 bg-white rounded-[16px]">
                     
