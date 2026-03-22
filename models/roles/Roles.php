@@ -180,7 +180,7 @@ class Roles {
         ];
     }
     public function deleteRecord($role_id) {
-        $query = "SELECT COUNT(*) AS total FROM vp_users WHERE role_id = $role_id";
+        $query = "SELECT COUNT(*) AS total FROM vp_users WHERE role_id = $role_id AND is_deleted = 0";
         $result = $this->conn->query($query);
         $data = mysqli_fetch_assoc($result);
         if ($data['total'] > 0) {

@@ -22,7 +22,7 @@ class purchaseListComment
               c.created_at,
               u.name AS user_name
             FROM purchase_list_comments c
-            LEFT JOIN vp_users u ON u.id = c.user_id
+            LEFT JOIN vp_users u ON u.id = c.user_id AND u.is_deleted = 0
             WHERE c.purchase_list_id = ?
             ORDER BY c.created_at ASC, c.id ASC
         ";
@@ -72,7 +72,7 @@ class purchaseListComment
               c.created_at,
               u.name AS user_name
             FROM purchase_list_comments c
-            LEFT JOIN vp_users u ON u.id = c.user_id
+            LEFT JOIN vp_users u ON u.id = c.user_id AND u.is_deleted = 0
             WHERE c.id = ?
             LIMIT 1
         ";
