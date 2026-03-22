@@ -326,6 +326,22 @@ class product
         $res = $stmt->get_result()->fetch_assoc();
         return $res;
     }
+
+    public function searchProductsBySkuOrItemCode($query)
+    {
+        $q = '%' . $query . '%';
+        $sql = "SELECT * FROM vp_products WHERE sku LIKE ? OR item_code LIKE ? ORDER BY item_code ASC LIMIT 20";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ss', $q, $q);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        return $rows;
+    }
+
     public function createProduct($data)
     {
         $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
