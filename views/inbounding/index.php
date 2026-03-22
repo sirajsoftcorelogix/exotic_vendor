@@ -555,7 +555,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             // Define classes
             $editedBtnClass = $hasEditedPhotos ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
             $rawBtnClass    = $hasRawPhotos    ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
-            $tileBorderClass = $hasPublished ? 'border-2 border-green-500' : 'border border-[rgba(229,229,229,1)]';
+            $tileBorderClass = $hasPublished ? 'border-4 border-green-500' : 'border border-[rgba(229,229,229,1)]';
             ?>
 
             <div class="accordion-item bg-white rounded-[16px] <?= $tileBorderClass ?> shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
