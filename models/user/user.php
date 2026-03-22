@@ -246,7 +246,7 @@ class User
         $stmt->bind_param('i', $id);
         if ($stmt->execute()) {
             // Unassign all dispatches created by this user
-            $this->unassignUserOrders($id);
+            // $this->unassignUserOrders($id);
             return ['success' => true, 'message' => 'User '. $id .' deleted successfully'];
         }
         return ['success' => false, 'error' => 'Failed: ' . $stmt->error];
