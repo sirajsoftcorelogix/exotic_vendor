@@ -16,24 +16,17 @@
                     <span class="type-label-small w-32">From</span>
                     <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['source_name'] ?? '') ?></span>
                 </div>
-                <div class="flex">
-                    <span class="type-label-small w-32">To</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['dest_name'] ?? '') ?></span>
-                </div>
+                
             </div>
 
             <div class="space-y-0">
                 <div class="flex">
                     <span class="type-label-small w-32">Dispatch Date</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['dispatch_date'] ?? '') ?></span>
+                    <span class="type-data-small">: &nbsp; <?= !empty($transfer['dispatch_date']) ? date('j F Y', strtotime($transfer['dispatch_date'])) : '' ?></span>
                 </div>
                 <div class="flex">
-                    <span class="type-label-small w-32">Requested By</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['requested_by_name'] ?? '') ?></span>
-                </div>
-                <div class="flex">
-                    <span class="type-label-small w-32">Dispatched By</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['dispatch_by_name'] ?? '') ?></span>
+                    <span class="type-label-small w-32">To</span>
+                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['dest_name'] ?? '') ?></span>
                 </div>
             </div>
         </div>
@@ -57,7 +50,7 @@
                 $depth = $product['prod_length'] ?? '';
                 $lengthUnit = $product['length_unit'] ?? '';
                 $material = $product['material'] ?? '';
-                $prevReceived = $product['local_stock'] ?? '';
+                $prevReceived = isset($item['previously_received_qty']) ? (int)$item['previously_received_qty'] : ($product['local_stock'] ?? 0);
             ?>
             <div class="custom-card p-5">
                 <div class="flex flex-col sm:flex-row gap-5 mb-5">

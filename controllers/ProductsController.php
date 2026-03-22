@@ -52,13 +52,46 @@ class ProductsController {
         $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50;
         $offset = ($page_no - 1) * $limit;
 
-        $transferData = $stockTransferModel->listTransfers($limit, $offset);
+        $filters = [
+            'transfer_order_no' => trim($_GET['transfer_order_no'] ?? ''),
+            'dispatch_date' => trim($_GET['dispatch_date'] ?? ''),
+            'requested_by' => isset($_GET['requested_by']) ? (int)$_GET['requested_by'] : 0,
+            'dispatch_by' => isset($_GET['dispatch_by']) ? (int)$_GET['dispatch_by'] : 0,
+            'from_warehouse' => isset($_GET['from_warehouse']) ? (int)$_GET['from_warehouse'] : 0,
+            'to_warehouse' => isset($_GET['to_warehouse']) ? (int)$_GET['to_warehouse'] : 0,
+            'item_number' => trim($_GET['item_number'] ?? ''),
+        ];
+
+        $transferData = $stockTransferModel->listTransfers($limit, $offset, $filters);
+
+        // Pull users for filters
+        $users = [];
+        $userQuery = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
+        $userResult = mysqli_query($conn, $userQuery);
+        if ($userResult) {
+            while ($row = mysqli_fetch_assoc($userResult)) {
+                $users[] = $row;
+            }
+        }
+
+        // Pull warehouses for filters
+        $warehouses = [];
+        $warehouseQuery = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
+        $warehouseResult = mysqli_query($conn, $warehouseQuery);
+        if ($warehouseResult) {
+            while ($row = mysqli_fetch_assoc($warehouseResult)) {
+                $warehouses[] = $row;
+            }
+        }
 
         $data = [
             'transfers' => $transferData['records'],
             'page_no' => $page_no,
             'total_records' => $transferData['total'],
-            'limit' => $limit
+            'limit' => $limit,
+            'filters' => $filters,
+            'users' => $users,
+            'warehouses' => $warehouses,
         ];
 
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
@@ -82,6 +115,11 @@ class ProductsController {
         if (!$transfer) {
             renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Stock transfer not found']], 'Error');
             return;
+        }
+
+        // Fallback for missing transfer_order_no in old records
+        if (empty($transfer['transfer_order_no']) && !empty($transfer['from_warehouse']) && !empty($transfer['to_warehouse'])) {
+            $transfer['transfer_order_no'] = $stockTransferModel->generateUniqueTransferOrderNo((int)$transfer['from_warehouse'], (int)$transfer['to_warehouse']);
         }
 
         // Provide warehouse list for editing
@@ -114,11 +152,22 @@ class ProductsController {
             return;
         }
 
+        $existingFile = $_POST['existing_eway_bill_file'] ?? '';
+        $ewayBillFile = $this->handleEwayBillFileUpload($existingFile);
+
+        $fromWarehouse = isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0;
+        $toWarehouse = isset($_POST['to_warehouse']) ? (int)$_POST['to_warehouse'] : 0;
+
+        if ($fromWarehouse <= 0 || $toWarehouse <= 0 || $fromWarehouse === $toWarehouse) {
+            renderTemplateClean('views/errors/error.php', ['message' => 'Source and destination warehouses must be different'], 'Validation error');
+            return;
+        }
+
         $data = [
             'dispatch_date' => $_POST['dispatch_date'] ?? '',
             'est_delivery_date' => $_POST['est_delivery_date'] ?? '',
-            'from_warehouse' => isset($_POST['from_warehouse']) ? (int)$_POST['from_warehouse'] : 0,
-            'to_warehouse' => isset($_POST['to_warehouse']) ? (int)$_POST['to_warehouse'] : 0,
+            'from_warehouse' => $fromWarehouse,
+            'to_warehouse' => $toWarehouse,
             'requested_by' => isset($_POST['requested_by']) ? (int)$_POST['requested_by'] : 0,
             'dispatch_by' => isset($_POST['dispatch_by']) ? (int)$_POST['dispatch_by'] : 0,
             'booking_no' => $_POST['booking_no'] ?? '',
@@ -127,6 +176,7 @@ class ProductsController {
             'driver_name' => $_POST['driver_name'] ?? '',
             'driver_mobile' => $_POST['driver_mobile'] ?? '',
             'status' => $_POST['status'] ?? '',
+            'eway_bill_file' => $ewayBillFile,
         ];
 
         $stockTransferModel->updateTransfer($transferId, $data);
@@ -439,7 +489,7 @@ class ProductsController {
             usleep(100000); // 100ms
         }
 
-        echo json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
+        return json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
         exit;
     }
     public function getProductDetailsHTML() {
@@ -466,6 +516,37 @@ class ProductsController {
         }
         exit;
     }
+
+    public function searchProduct() {
+        is_login();
+        global $productModel;
+        $q = isset($_GET['q']) ? trim($_GET['q']) : '';
+
+        if ($q === '') {
+            echo json_encode(['success' => false, 'message' => 'Please provide item code or SKU']);
+            exit;
+        }
+
+        // search SKU or item code partial-match
+        $products = $productModel->searchProductsBySkuOrItemCode($q);
+
+        if (!$products || count($products) === 0) {
+            // fallback exact item code
+            $productExactList = $productModel->getProductByItemCode($q);
+            if (!empty($productExactList)) {
+                $products = is_array($productExactList) ? $productExactList : [$productExactList];
+            }
+        }
+
+        if (!$products || count($products) === 0) {
+            echo json_encode(['success' => false, 'message' => 'Product not found']);
+            exit;
+        }
+
+        echo json_encode(['success' => true, 'products' => $products]);
+        exit;
+    }
+
     public function addVendorMap() {
         is_login();
         global $productModel;
@@ -1154,35 +1235,26 @@ class ProductsController {
         is_login();
         global $productModel, $conn;
 
-        $product_ids = isset($_GET['product_ids']) ? $_GET['product_ids'] : '';
+        $product_ids = isset($_GET['product_ids']) ? trim($_GET['product_ids']) : '';
         $transfer_id = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
 
-        if (empty($product_ids)) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'No products selected for transfer.'], 'Error');
-            exit;
-        }
-
-        // Convert comma-separated IDs to array
-        $ids = array_map('intval', array_filter(explode(',', $product_ids)));
-
-        if (empty($ids)) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'Invalid product IDs.'], 'Error');
-            exit;
-        }
-
-        // Fetch product details
         $products = [];
-        foreach ($ids as $id) {
-            $product = $productModel->getProduct($id);
-            if ($product) {
-                $products[] = $product;
+
+        if (!empty($product_ids)) {
+            // Convert comma-separated IDs to array
+            $ids = array_map('intval', array_filter(explode(',', $product_ids)));
+            if (!empty($ids)) {
+                // Fetch product details
+                foreach ($ids as $id) {
+                    $product = $productModel->getProduct($id);
+                    if ($product) {
+                        $products[] = $product;
+                    }
+                }
             }
         }
 
-        if (empty($products)) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'Products not found.'], 'Error');
-            exit;
-        }
+        // No products selected is allowed for empty transfer creation.
 
         // Fetch warehouses from exotic_address table
         $warehouses = [];
@@ -1211,6 +1283,11 @@ class ProductsController {
             $stockTransferModel = new StockTransfer($conn);
             $transfer = $stockTransferModel->getTransferById($transfer_id);
             if ($transfer) {
+                // Fallback: ensure transfer order number is set in edit mode
+                if (empty($transfer['transfer_order_no']) && !empty($transfer['from_warehouse']) && !empty($transfer['to_warehouse'])) {
+                    $transfer['transfer_order_no'] = $stockTransferModel->generateUniqueTransferOrderNo((int)$transfer['from_warehouse'], (int)$transfer['to_warehouse']);
+                }
+
                 // Build a map of items keyed by product_id so we can prefill quantities/notes
                 $itemsByProduct = [];
                 foreach ($transfer['items'] as $item) {
@@ -1252,20 +1329,60 @@ class ProductsController {
         is_login();
         global $conn;
         
-        header('Content-Type: application/json');
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $xhr = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        $wantsJson = $xhr || stripos($contentType, 'application/json') !== false || stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false;
+
+        if ($wantsJson) {
+            header('Content-Type: application/json');
+        }
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            $payload = ['success' => false, 'message' => 'Invalid request method'];
+            if ($wantsJson) {
+                echo json_encode($payload);
+            } else {
+                header('Location: ?page=products&action=stock_transfer');
+            }
             exit;
         }
         
-        // Get JSON payload
+        // Get JSON payload or fallback to standard POST data
         $raw = file_get_contents('php://input');
         $data = json_decode($raw, true);
-        
+        if (!is_array($data) || empty($data)) {
+            $data = $_POST;
+        }
+
+        // if item arrays are provided separately, build items array
+        if (empty($data['items']) && !empty($data['item_code']) && is_array($data['item_code']) && is_array($data['sku'])) {
+            $items = [];
+            $count = max(count($data['item_code']), count($data['sku']), count($data['transfer_qty'] ?? []), count($data['item_notes'] ?? []));
+            for ($i = 0; $i < $count; $i++) {
+                $items[] = [
+                    'item_code' => $data['item_code'][$i] ?? '',
+                    'sku' => $data['sku'][$i] ?? '',
+                    'transfer_qty' => isset($data['transfer_qty'][$i]) ? $data['transfer_qty'][$i] : 0,
+                    'item_notes' => $data['item_notes'][$i] ?? '',
+                    'product_id' => isset($data['product_id'][$i]) ? $data['product_id'][$i] : 0,
+                    'title' => isset($data['title'][$i]) ? $data['title'][$i] : ''
+                ];
+            }
+            $data['items'] = $items;
+        }
+
         // Validate input
         $transfer_order_no = isset($data['transfer_order_no']) ? trim($data['transfer_order_no']) : '';
         $product_ids = isset($data['product_ids']) ? trim($data['product_ids']) : '';
+
+        // fallback transfer order from existing transfer when editing
+        $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
+        if (empty($transfer_order_no) && $transferId > 0) {
+            $existingTransfer = $stockTransferModel->getTransferById($transferId);
+            if (!empty($existingTransfer['transfer_order_no'])) {
+                $transfer_order_no = $existingTransfer['transfer_order_no'];
+            }
+        }
         $from_warehouse = isset($data['from_warehouse']) ? intval($data['from_warehouse']) : 0;
         $to_warehouse = isset($data['to_warehouse']) ? intval($data['to_warehouse']) : 0;
         $dispatch_date = isset($data['dispatch_date']) ? trim($data['dispatch_date']) : '';
@@ -1302,17 +1419,19 @@ class ProductsController {
         
         $hasItems = false;
         foreach ($data['items'] as $item) {
-            if ((int)$item['transfer_qty'] > 0) {
-                $hasItems = true;
-                break;
+            $transfer_qty = isset($item['transfer_qty']) ? (int)$item['transfer_qty'] : 0;
+            if ($transfer_qty <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Transfer quantity must be greater than zero for all selected items']);
+                exit;
             }
+            $hasItems = true;
         }
-        
+
         if (!$hasItems) {
             echo json_encode(['success' => false, 'message' => 'Please enter transfer quantity for at least one item']);
             exit;
         }
-        
+
         // Determine transfer ID (if editing existing transfer) before validating items.
         $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
 
@@ -1354,6 +1473,10 @@ class ProductsController {
             }
         }
         
+        // Handle E-Way Bill file upload/retain/remove
+        $existingFile = isset($data['existing_eway_bill_file']) ? trim($data['existing_eway_bill_file']) : '';
+        $ewayBillFile = $this->handleEwayBillFileUpload($existingFile);
+
         // Prepare data for model
         $transferData = [
             'transfer_id' => $transferId,
@@ -1369,9 +1492,7 @@ class ProductsController {
             'vehicle_type' => isset($data['vehicle_type']) ? trim($data['vehicle_type']) : '',
             'driver_name' => isset($data['driver_name']) ? trim($data['driver_name']) : '',
             'driver_mobile' => isset($data['driver_mobile']) ? trim($data['driver_mobile']) : '',
-            'create_pickup_list' => isset($data['create_pickup_list']) ? 1 : 0,
-            'create_picking_slip' => isset($data['create_picking_slip']) ? 1 : 0,
-            'create_delivery_challan' => isset($data['create_delivery_challan']) ? 1 : 0,
+            'eway_bill_file' => $ewayBillFile,
             'items' => $data['items'],
             'user_id' => $_SESSION['user_id'] ?? 1
         ];
@@ -1388,21 +1509,78 @@ class ProductsController {
             // Keep stock movements in sync with updated item quantities
             $stockTransferModel->syncTransferOutMovements($transferOrderNoToUse, $from_warehouse, $data['items'], $transferData['user_id']);
 
-            echo json_encode([
+            $result = [
                 'success' => true,
                 'message' => $updated ? 'Stock transfer updated successfully' : 'Stock transfer updated (no changes)',
                 'transfer_order_no' => $transferOrderNoToUse
-            ]);
+            ];
+
+            if (!$wantsJson) {
+                header('Location: ?page=products&action=stock_transfer');
+                exit;
+            }
+
+            echo json_encode($result);
             exit;
         }
 
         // Call model to create transfer
         $result = $stockTransferModel->createTransfer($transferData);
+
+        if (!$wantsJson) {
+            header('Location: ?page=products&action=stock_transfer');
+            exit;
+        }
         
         echo json_encode($result);
         exit;
     }
     
+    private function handleEwayBillFileUpload($existingFile = '')
+    {
+        $rootPath = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..');
+        $uploadDir = $rootPath . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'stock_trasfer_e_bill';
+
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $ewayBillFile = $existingFile;
+
+        $remove = isset($_POST['remove_eway_bill_file']) && ($_POST['remove_eway_bill_file'] === '1' || $_POST['remove_eway_bill_file'] === 'on');
+
+        if ($remove && !empty($existingFile)) {
+            $existingPath = $rootPath . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $existingFile);
+            if (is_file($existingPath)) {
+                @unlink($existingPath);
+            }
+            $ewayBillFile = '';
+        }
+
+        if (isset($_FILES['eway_bill_file']) && isset($_FILES['eway_bill_file']['tmp_name']) && is_uploaded_file($_FILES['eway_bill_file']['tmp_name'])) {
+            $file = $_FILES['eway_bill_file'];
+            if ($file['error'] === UPLOAD_ERR_OK) {
+                if (!empty($existingFile)) {
+                    $oldPath = $rootPath . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $existingFile);
+                    if (is_file($oldPath)) {
+                        @unlink($oldPath);
+                    }
+                }
+
+                $originalName = basename($file['name']);
+                $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $filename = uniqid('eway_', true) . '_' . $safeName;
+                $targetPath = $uploadDir . DIRECTORY_SEPARATOR . $filename;
+
+                if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                    $ewayBillFile = 'uploads/stock_trasfer_e_bill/' . $filename;
+                }
+            }
+        }
+
+        return $ewayBillFile;
+    }
+
     public function getLastWarehouse() {
         header('Content-Type: application/json');
         global $conn;
@@ -1423,6 +1601,30 @@ class ProductsController {
                 'success' => false,
                 'warehouse_id' => null
             ]);
+        }
+        exit;
+    }
+
+    public function getTransferOrderNo() {
+        header('Content-Type: application/json');
+        global $conn;
+
+        $fromWarehouse = isset($_GET['from_warehouse']) ? (int)$_GET['from_warehouse'] : 0;
+        $toWarehouse = isset($_GET['to_warehouse']) ? (int)$_GET['to_warehouse'] : 0;
+
+        if ($fromWarehouse <= 0 || $toWarehouse <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid warehouse selection']);
+            exit;
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        try {
+            $nextOrderNo = $stockTransferModel->getNextTransferOrderNo($fromWarehouse, $toWarehouse);
+            echo json_encode(['success' => true, 'transfer_order_no' => $nextOrderNo]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
     }
