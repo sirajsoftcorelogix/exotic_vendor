@@ -341,16 +341,17 @@ class OrdersAPIController {
 
                     $update_data = ['status' => $status];
                     $updated = $commanModel->updateRecord('vp_orders', $update_data, $order_id);
-
+                    $log = '';
                     if ($updated) {
                         $logData = [
                             'order_id' => $order_id,
                             'status' => 'Status: ' . $status,
-                            'changed_by' => $_SESSION['user']['id'] ?? 0,
+                            'changed_by' => $_SESSION['user']['id'] ?? 15,
                             'api_response' => NULL,
                             'change_date' => date('Y-m-d H:i:s')
                         ];
-                        $commanModel->add_order_status_log($logData);
+                        $log = $commanModel->add_order_status_log($logData);
+                        $results['log'][] = $log;
                         $results['successful']++;
                     } else {
                         $results['failed']++;

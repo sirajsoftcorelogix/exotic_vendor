@@ -957,7 +957,7 @@ class LogisticsIntegration {
     public function __construct($username, $password) {
         $this->username = $username;
         $this->password = $password;
-        $this->apiUrl = 'http://yourserver.com';
+        $this->apiUrl = 'https://seller.exoticindia.com/';
     }
 
     private function getToken() {
