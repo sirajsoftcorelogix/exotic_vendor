@@ -326,6 +326,38 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 <option value="no" <?= ($data['filters']['in_house'] ?? '') == 'no' ? 'selected' : '' ?>>No</option>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Photoshoot</label>
+                            <select name="log_photoshoot" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_photoshoot'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_photoshoot'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Photo Edit</label>
+                            <select name="log_editing" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_editing'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_editing'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data Entry</label>
+                            <select name="log_data_entry" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_data_entry'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_data_entry'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Published</label>
+                            <select name="log_published" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_published'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_published'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
                         <div class="block text-xs font-bold text-gray-500 uppercase mb-1">
                             <div class="w-full">
                                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Item Code</label>
@@ -391,6 +423,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 value="<?= htmlspecialchars($_GET['published_to'] ?? '') ?>"
                                 id="published_to">
                         </div>
+                        
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -1015,7 +1048,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         if(document.getElementById('filter_group')) new TomSelect("#filter_group", config);
         
         // Auto-open filter panel if any filter is applied (optional UX improvement)
-        <?php if(!empty($data['filters']['vendor_code']) || !empty($data['filters']['received_by_user_id']) || !empty($data['filters']['updated_by_user_id']) || !empty($data['filters']['group_name']) || !empty($data['filters']['status_step'])): ?>
+        <?php if(!empty($data['filters']['vendor_code']) || !empty($data['filters']['received_by_user_id']) || !empty($data['filters']['updated_by_user_id']) || !empty($data['filters']['group_name']) || !empty($data['filters']['status_step']) || !empty($data['filters']['log_photoshoot']) || !empty($data['filters']['log_editing']) || !empty($data['filters']['log_data_entry']) || !empty($data['filters']['log_published'])): ?>
             toggleFilterPanel();
         <?php endif; ?>
     });
