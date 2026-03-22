@@ -134,6 +134,9 @@ class OrdersAPIController {
      * Update order status via API
      * POST parameters:
      * - order_number (required): Order number (will be used to fetch order_id)
+     * - item_code (required): Product item code
+     * - color (optional): Product color
+     * - size (optional): Product size
      * - status (required): New order status
      * - remarks (optional): Order remarks/notes
      * - esd (optional): Expected Ship Date
@@ -168,12 +171,20 @@ class OrdersAPIController {
         }
 
         // Validate required fields
+        $statusList = $ordersModel->adminOrderStatusList('true');
         $order_number = isset($input['order_number']) ? trim($input['order_number']) : '';
-        $status = isset($input['status']) ? trim($input['status']) : '';
+        $item_code = isset($input['item_code']) ? trim($input['item_code']) : '';
+        $status = (!empty($statusList[$input['status']]) ? $statusList[$input['status']] : 'pending');
 
         if (empty($order_number)) {
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Invalid or missing order_number.']);
+            exit;
+        }
+
+        if (empty($item_code)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Invalid or missing item_code.']);
             exit;
         }
 
@@ -184,6 +195,8 @@ class OrdersAPIController {
         }
 
         // Get optional fields
+        $color = isset($input['color']) ? trim($input['color']) : NULL;
+        $size = isset($input['size']) ? trim($input['size']) : NULL;
         $remarks = isset($input['remarks']) ? trim($input['remarks']) : NULL;
         $esd = isset($input['esd']) ? trim($input['esd']) : NULL;
         $priority = isset($input['priority']) ? trim($input['priority']) : NULL;
@@ -196,59 +209,95 @@ class OrdersAPIController {
             echo json_encode(['success' => false, 'message' => 'Order not found with order_number: ' . $order_number]);
             exit;
         }
-        
-        //$order_id = (int)$order['id'];
-
-        // Store previous values for logging
-        $previous_status = $order['status'] ?? '';
-        // $previous_esd = $order['esd'] ?? '';
-        // $previous_priority = $order['priority'] ?? '';
-        // $previous_remarks = $order['remarks'] ?? '';
-        // $previous_agent = $order['agent_id'] ?? NULL;
 
         try {
-            // Prepare update data
-            $update_data = [
-                'status' => $status,
-                'remarks' => $remarks,
-                'priority' => $priority,
-                'agent_id' => $agent_id
-            ];
+            // Find the specific order item by item_code, color, size
+            $order_item_found = false;
+            $order_item_id = null;
+            $previous_status = null;
 
-            // Only include ESD if provided and valid
-            if ($esd !== NULL && $esd !== '') {
-                $update_data['esd'] = $esd;
-            }
-            foreach($order AS $key => $value) {
+            foreach($order as $item) {
+                $matches = true;
                 
-                $order_id = $value['id'];
-                // Update order status
-                //$updated = $ordersModel->updateStatus($order_id, $update_data);
-                $updated = $commanModel->updateRecord('vp_orders', ['status' => $status], $order_id);
-                if (!$updated) {
-                    throw new Exception('Failed to update order status in database.');
+                // Check if item_code matches
+                if ($item['sku'] !== $item_code && $item['item_code'] !== $item_code) {
+                    $matches = false;
                 }
-
-                // Log status change if status changed
-                if ($status !== $previous_status) {
-                    $logData = [
-                        'order_id' => $order_id,
-                        'status' => 'Status: ' . $status,
-                        'changed_by' => $_SESSION['user']['id'] ?? 15, // Default to 15 if user ID not available
-                        'api_response' => NULL,
-                        'change_date' => date('Y-m-d H:i:s')
-                    ];
-                    $commanModel->add_order_status_log($logData);
+                
+                // Check color if provided
+                if ($matches && $color !== NULL && isset($item['color']) && $item['color'] !== $color) {
+                    $matches = false;
+                }
+                
+                // Check size if provided
+                if ($matches && $size !== NULL && isset($item['size']) && $item['size'] !== $size) {
+                    $matches = false;
+                }
+                
+                if ($matches) {
+                    $order_item_found = true;
+                    $order_item_id = $item['id'];
+                    $previous_status = $item['status'] ?? '';
+                    break;
                 }
             }
-           
+
+            if (!$order_item_found) {
+                http_response_code(404);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order item not found. Item Code: ' . $item_code . 
+                                (($color) ? ', Color: ' . $color : '') .
+                                (($size) ? ', Size: ' . $size : '')
+                ]);
+                exit;
+            }
+
+            // Prepare update data
+            $update_data = ['status' => $status];
+
+            // Add optional fields if provided
+            // if ($remarks !== NULL && $remarks !== '') {
+            //     $update_data['remarks'] = $remarks;
+            // }
+            // if ($esd !== NULL && $esd !== '') {
+            //     $update_data['esd'] = $esd;
+            // }
+            // if ($priority !== NULL && $priority !== '') {
+            //     $update_data['priority'] = $priority;
+            // }
+            // if ($agent_id !== NULL && $agent_id > 0) {
+            //     $update_data['agent_id'] = $agent_id;
+            // }
+
+            // Update the specific order item
+            $updated = $commanModel->updateRecord('vp_order_items', $update_data, $order_item_id);
+
+            if (!$updated) {
+                throw new Exception('Failed to update order item in database.');
+            }
+
+            // Log status change if status changed
+            if ($status !== $previous_status) {
+                $logData = [
+                    'order_id' => $order[0]['order_id'] ?? $order[0]['id'],
+                    'status' => 'Item Status: [' . $item_code . '] ' . $status,
+                    'changed_by' => $_SESSION['user']['id'] ?? 62,
+                    'api_response' => NULL,
+                    'change_date' => date('Y-m-d H:i:s')
+                ];
+                $commanModel->add_order_status_log($logData);
+            }
 
             http_response_code(200);
             echo json_encode([
                 'success' => true,
-                'message' => 'Order status updated successfully.',
+                'message' => 'Order item status updated successfully.',
                 'data' => [
                     'order_number' => $order_number,
+                    'item_code' => $item_code,
+                    'color' => $color,
+                    'size' => $size,
                     'previous_status' => $previous_status,
                     'new_status' => $status,
                     'updated_at' => date('Y-m-d H:i:s')
@@ -258,7 +307,7 @@ class OrdersAPIController {
             http_response_code(500);
             echo json_encode([
                 'success' => false,
-                'message' => 'Error updating order status: ' . $e->getMessage()
+                'message' => 'Error updating order item status: ' . $e->getMessage()
             ]);
         }
 
