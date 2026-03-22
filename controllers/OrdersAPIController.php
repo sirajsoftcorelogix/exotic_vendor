@@ -236,7 +236,7 @@ class OrdersAPIController {
                 
                 if ($matches) {
                     $order_item_found = true;
-                    $order_item_id = $item['id'];
+                    $order_id = $item['id'];
                     $previous_status = $item['status'] ?? '';
                     break;
                 }
@@ -271,7 +271,7 @@ class OrdersAPIController {
             // }
 
             // Update the specific order item
-            $updated = $commanModel->updateRecord('vp_order_items', $update_data, $order_item_id);
+            $updated = $commanModel->updateRecord('vp_orders', $update_data, $order_id);
 
             if (!$updated) {
                 throw new Exception('Failed to update order item in database.');
