@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS `order_api_tokens` (
   `last_used` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
-  KEY `is_active` (`is_active`)
+  KEY `is_active` (`is_active`)  
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create index for faster token lookups

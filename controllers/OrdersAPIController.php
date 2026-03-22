@@ -196,15 +196,15 @@ class OrdersAPIController {
             echo json_encode(['success' => false, 'message' => 'Order not found with order_number: ' . $order_number]);
             exit;
         }
-
-        $order_id = (int)$order['id'];
+        
+        //$order_id = (int)$order['id'];
 
         // Store previous values for logging
         $previous_status = $order['status'] ?? '';
-        $previous_esd = $order['esd'] ?? '';
-        $previous_priority = $order['priority'] ?? '';
-        $previous_remarks = $order['remarks'] ?? '';
-        $previous_agent = $order['agent_id'] ?? NULL;
+        // $previous_esd = $order['esd'] ?? '';
+        // $previous_priority = $order['priority'] ?? '';
+        // $previous_remarks = $order['remarks'] ?? '';
+        // $previous_agent = $order['agent_id'] ?? NULL;
 
         try {
             // Prepare update data
@@ -219,90 +219,36 @@ class OrdersAPIController {
             if ($esd !== NULL && $esd !== '') {
                 $update_data['esd'] = $esd;
             }
+            foreach($order AS $key => $value) {
+                
+                $order_id = $value['id'];
+                // Update order status
+                //$updated = $ordersModel->updateStatus($order_id, $update_data);
+                $updated = $commanModel->updateRecord('vp_orders', ['status' => $status], $order_id);
+                if (!$updated) {
+                    throw new Exception('Failed to update order status in database.');
+                }
 
-            // Update order status
-            $updated = $ordersModel->updateStatus($order_id, $update_data);
-
-            if (!$updated) {
-                throw new Exception('Failed to update order status in database.');
-            }
-
-            // Log status change if status changed
-            if ($status !== $previous_status) {
-                $logData = [
-                    'order_id' => $order_id,
-                    'status' => 'Status: ' . $status,
-                    'changed_by' => $_SESSION['user']['id'] ?? 0,
-                    'api_response' => NULL,
-                    'change_date' => date('Y-m-d H:i:s')
-                ];
-                $commanModel->add_order_status_log($logData);
-            }
-
-            // Log agent change if agent changed
-            if ($agent_id !== $previous_agent) {
-                $agent_name = $commanModel->getUserNameById($agent_id) ?? 'Unknown';
-                $agentLogData = [
-                    'order_id' => $order_id,
-                    'status' => 'Agent: ' . $agent_name,
-                    'changed_by' => $_SESSION['user']['id'] ?? 0,
-                    'api_response' => NULL,
-                    'change_date' => date('Y-m-d H:i:s')
-                ];
-                $commanModel->add_order_status_log($agentLogData);
-
-                // Update agent assignment date
-                $commanModel->updateRecord('vp_orders', ['agent_assign_date' => date('Y-m-d H:i:s')], $order_id);
-
-                // Send notification to assigned agent
-                if ($agent_id > 0) {
-                    $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number=' . $order['order_number']);
-                    insertNotification($agent_id, 'Order Assigned', 'Order <a href="' . $link . '" class="text-blue-600 hover:underline" target="_blank">' . $order['order_number'] . '</a> has been assigned to you for processing.', $link);
+                // Log status change if status changed
+                if ($status !== $previous_status) {
+                    $logData = [
+                        'order_id' => $order_id,
+                        'status' => 'Status: ' . $status,
+                        'changed_by' => $_SESSION['user']['id'] ?? 15, // Default to 15 if user ID not available
+                        'api_response' => NULL,
+                        'change_date' => date('Y-m-d H:i:s')
+                    ];
+                    $commanModel->add_order_status_log($logData);
                 }
             }
-
-            // Log ESD change if ESD changed
-            if ($esd !== $previous_esd) {
-                $esdLogData = [
-                    'order_id' => $order_id,
-                    'status' => 'ESD: ' . ($esd ?? 'N/A'),
-                    'changed_by' => $_SESSION['user']['id'] ?? 0,
-                    'api_response' => NULL,
-                    'change_date' => date('Y-m-d H:i:s')
-                ];
-                $commanModel->add_order_status_log($esdLogData);
-            }
-
-            // Log priority change if priority changed
-            if ($priority !== $previous_priority) {
-                $priorityLogData = [
-                    'order_id' => $order_id,
-                    'status' => 'Priority: ' . ($priority ?? 'N/A'),
-                    'changed_by' => $_SESSION['user']['id'] ?? 0,
-                    'api_response' => NULL,
-                    'change_date' => date('Y-m-d H:i:s')
-                ];
-                $commanModel->add_order_status_log($priorityLogData);
-            }
-
-            // Log remarks change if remarks changed
-            if ($remarks !== $previous_remarks) {
-                $remarksLogData = [
-                    'order_id' => $order_id,
-                    'status' => 'Notes updated.',
-                    'changed_by' => $_SESSION['user']['id'] ?? 0,
-                    'api_response' => NULL,
-                    'change_date' => date('Y-m-d H:i:s')
-                ];
-                $commanModel->add_order_status_log($remarksLogData);
-            }
+           
 
             http_response_code(200);
             echo json_encode([
                 'success' => true,
                 'message' => 'Order status updated successfully.',
                 'data' => [
-                    'order_id' => $order_id,
+                    'order_number' => $order_number,
                     'previous_status' => $previous_status,
                     'new_status' => $status,
                     'updated_at' => date('Y-m-d H:i:s')
@@ -390,25 +336,26 @@ class OrdersAPIController {
                     $results['errors'][] = "Order not found with number: {$order_number}";
                     continue;
                 }
+                foreach($order AS $key=>$value){
+                    $order_id = (int)$value['id'];
 
-                $order_id = (int)$order['id'];
+                    $update_data = ['status' => $status];
+                    $updated = $commanModel->updateRecord('vp_orders', $update_data, $order_id);
 
-                $update_data = ['status' => $status];
-                $updated = $ordersModel->updateStatus($order_id, $update_data);
-
-                if ($updated) {
-                    $logData = [
-                        'order_id' => $order_id,
-                        'status' => 'Status: ' . $status,
-                        'changed_by' => $_SESSION['user']['id'] ?? 0,
-                        'api_response' => NULL,
-                        'change_date' => date('Y-m-d H:i:s')
-                    ];
-                    $commanModel->add_order_status_log($logData);
-                    $results['successful']++;
-                } else {
-                    $results['failed']++;
-                    $results['errors'][] = "Failed to update order ID {$order_id}.";
+                    if ($updated) {
+                        $logData = [
+                            'order_id' => $order_id,
+                            'status' => 'Status: ' . $status,
+                            'changed_by' => $_SESSION['user']['id'] ?? 0,
+                            'api_response' => NULL,
+                            'change_date' => date('Y-m-d H:i:s')
+                        ];
+                        $commanModel->add_order_status_log($logData);
+                        $results['successful']++;
+                    } else {
+                        $results['failed']++;
+                        $results['errors'][] = "Failed to update order ID {$order_id}.";
+                    }
                 }
             }
 
