@@ -281,7 +281,7 @@ class OrdersAPIController {
             if ($status !== $previous_status) {
                 $logData = [
                     'order_id' => $order[0]['order_id'] ?? $order[0]['id'],
-                    'status' => 'Item Status: [' . $item_code . '] ' . $status,
+                    'status' => 'Item Status: ' . $status,
                     'changed_by' => $_SESSION['user']['id'] ?? 62,
                     'api_response' => NULL,
                     'change_date' => date('Y-m-d H:i:s')
