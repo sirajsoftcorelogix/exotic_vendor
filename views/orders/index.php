@@ -559,6 +559,9 @@
                         <!-- <button type="button" id="clear-button" onclick="clearFilters()" class="w-full bg-gray-800 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700 transition duration-150">Clear</button> -->
                         <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 px-2 rounded-md shadow-sm hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150">Search</button>
                     </div>
+                    <input type="hidden" name="page" value="orders">
+                    <input type="hidden" name="action" value="list">
+                    <input type="hidden" name="options" id="options" value="<?php echo isset($_GET['options']) ? htmlspecialchars($_GET['options']) : ''; ?>">
                 </form>
 
                 <!-- Save Search Controls -->
