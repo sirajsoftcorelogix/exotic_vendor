@@ -124,7 +124,7 @@ class Tables {
     }
     //get order status log
     public function get_order_status_log($order_id) {
-        $sql = "SELECT osl.*, u.name AS changed_by_username FROM vp_order_status_log osl JOIN vp_users u ON osl.changed_by = u.id WHERE osl.order_id = ? ORDER BY osl.id ASC";
+        $sql = "SELECT osl.*, u.name AS changed_by_username FROM vp_order_status_log osl JOIN vp_users u ON osl.changed_by = u.id WHERE osl.order_id = ? AND u.is_deleted = 0 ORDER BY osl.id ASC";
         $stmt = $this->ci->prepare($sql);
         $stmt->bind_param('i', $order_id);
         $stmt->execute();
@@ -190,7 +190,7 @@ class Tables {
     }
     public function get_staff_list() {
         //$sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND role_id ='4'";
-        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1";
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND is_deleted = 0";
         $stmt = $this->ci->prepare($sql);        
         $stmt->execute();
         $result = $stmt->get_result();
@@ -203,7 +203,7 @@ class Tables {
         return $data;
     }
     public function getUserNameById($user_id) {
-        $sql = "SELECT name FROM vp_users WHERE id = ? LIMIT 1";
+        $sql = "SELECT name FROM vp_users WHERE id = ? AND is_deleted = 0 LIMIT 1";
         $stmt = $this->ci->prepare($sql);
         $stmt->bind_param('i', $user_id);
         $stmt->execute();

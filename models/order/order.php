@@ -12,13 +12,24 @@ class Order{
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
-		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0
 		WHERE 1=1";
 		
         $params = [];
         if (!empty($filters['order_number'])) {
-            $sql .= " AND vp_orders.order_number LIKE ?";
-            $params[] = '%' . $filters['order_number'] . '%';
+            // Support comma-separated order numbers
+            $orderNumbers = is_array($filters['order_number']) 
+                ? $filters['order_number'] 
+                : array_map('trim', explode(',', $filters['order_number']));
+            $orderNumbers = array_filter($orderNumbers); // Remove empty values
+            
+            if (!empty($orderNumbers)) {
+                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+                $sql .= " AND vp_orders.order_number IN ($placeholders)";
+                foreach ($orderNumbers as $orderNum) {
+                    $params[] = $orderNum;
+                }
+            }
         }
         if (!empty($filters['item_code'])) {
             $sql .= " AND vp_orders.item_code LIKE ?";
@@ -143,6 +154,16 @@ class Order{
             $sql .= " AND vp_orders.status != 'shipped'";
         }
         //echo $sql;
+        //sortdaterange
+        if (!empty($filters['sortdaterange'])) {
+            if ($filters['sortdaterange'] === 'last_7_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_30_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_90_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
+            }
+        }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             //agent assignment date desc
@@ -151,7 +172,11 @@ class Order{
             }else{
             $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
             }
-        } else {
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
+            $sql .= " ORDER BY vp_orders.esd DESC";
+        } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
+            $sql .= " ORDER BY vp_orders.esd ASC";
+        }else {
             //agent assignment date desc
             if(!empty($filters['agent'])){
                 $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
@@ -159,6 +184,9 @@ class Order{
                 $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
             }
         }
+        
+        //ship_by_date_desc 	esd
+        
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
@@ -184,12 +212,23 @@ class Order{
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
-		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0
 		WHERE 1=1";
         $params = [];
         if (!empty($filters['order_number'])) {
-            $sql .= " AND order_number LIKE ?";
-            $params[] = '%' . $filters['order_number'] . '%';
+            // Support comma-separated order numbers
+            $orderNumbers = is_array($filters['order_number']) 
+                ? $filters['order_number'] 
+                : array_map('trim', explode(',', $filters['order_number']));
+            $orderNumbers = array_filter($orderNumbers); // Remove empty values
+            
+            if (!empty($orderNumbers)) {
+                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+                $sql .= " AND vp_orders.order_number IN ($placeholders)";
+                foreach ($orderNumbers as $orderNum) {
+                    $params[] = $orderNum;
+                }
+            }
         }
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
@@ -308,9 +347,22 @@ class Order{
         if (!empty($filters['unshipped'])) {
             $sql .= " AND vp_orders.status != 'shipped'";
         }
+        if (!empty($filters['sortdaterange'])) {
+            if ($filters['sortdaterange'] === 'last_7_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_30_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+            } elseif ($filters['sortdaterange'] === 'last_90_days') {
+                $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
+            }
+        }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_desc') {
+            $sql .= " ORDER BY vp_orders.esd DESC";
+        } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
+            $sql .= " ORDER BY vp_orders.esd ASC";
         } else {
             $sql .= " ORDER BY order_date DESC"; // Default sort order
         }

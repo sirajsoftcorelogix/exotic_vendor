@@ -75,7 +75,7 @@ class OrdersController {
         if(!empty($_GET['options']) && $_GET['options'] == 'express'){
             $filters['options'] = 'express';  
         }
-        if (!empty($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc'])) {
+        if (!empty($_GET['sort'])) {
             $filters['sort'] = strtolower($_GET['sort']);
         } else {
             $filters['sort'] = 'desc'; // Default sort order
@@ -107,7 +107,10 @@ class OrdersController {
         if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {
             $filters['unshipped'] = true;  
         }
-        
+        //sort-date-range
+        if (!empty($_GET['sortdaterange'])) {
+            $filters['sortdaterange'] = $_GET['sortdaterange'];  
+        }
         
 
         //order status list
