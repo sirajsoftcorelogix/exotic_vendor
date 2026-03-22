@@ -132,6 +132,24 @@ class Inbounding {
             $assignedId = (int)$filters['assigned_user_id'];
             $where[] = "vi.assigned_to_user_id = $assignedId";
         }
+        // 16. Stat log presence (yes = has log row, no = never reached)
+        $statLogFilters = [
+            'log_photoshoot'   => 'Photoshoot',
+            'log_editing'      => 'Editing',
+            'log_data_entry'   => 'Data Entry',
+            'log_published'    => 'Published',
+        ];
+        foreach ($statLogFilters as $filterKey => $statValue) {
+            if (empty($filters[$filterKey]) || !in_array($filters[$filterKey], ['yes', 'no'], true)) {
+                continue;
+            }
+            $statEsc = $this->conn->real_escape_string($statValue);
+            if ($filters[$filterKey] === 'yes') {
+                $where[] = "vi.id IN (SELECT i_id FROM inbound_logs WHERE stat = '$statEsc')";
+            } else {
+                $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$statEsc')";
+            }
+        }
         // Combine WHERE clauses
         $whereSql = "";
         if (!empty($where)) {
