@@ -710,11 +710,18 @@
             </div>
             </div>
             <div class="ml-auto flex items-center space-x-4">
-            <span class="text-sm bg-white border border-gray-300 rounded-md px-2 py-1 cursor-pointer" onclick="clearSelectedOrders()" title="Clear selected orders">Clear All </span>
-            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">
-                    
-                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Sort By New to Old</option>
-                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Sort By Old to New</option>
+            <span class="text-sm bg-white border border-gray-300 rounded-md px-2 py-1 cursor-pointer" onclick="clearSelectedOrders()" title="Clear selected orders">ClearAll </span>
+            <select id="sort-date-range" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sortdaterange=' + this.value + '&<?= $query_string ?>';">
+                <option value="">All Dates</option>
+                <option value="last_7_days" <?= (isset($_GET['sortdaterange']) && $_GET['sortdaterange'] === 'last_7_days') ? 'selected' : '' ?>>Last 7 Days</option>
+                <option value="last_30_days" <?= (isset($_GET['sortdaterange']) && $_GET['sortdaterange'] === 'last_30_days') ? 'selected' : '' ?>>Last 30 Days</option>
+                <option value="last_90_days" <?= (isset($_GET['sortdaterange']) && $_GET['sortdaterange'] === 'last_90_days') ? 'selected' : '' ?>>Last 90 Days</option>
+            </select>
+            <select id="sort-order" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white" onchange="location.href='?page=orders&action=list&sort=' + this.value + '&<?= $query_string ?>';">                    
+                    <option value="desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'desc') ? 'selected' : '' ?>>Order Date (Descending)</option>
+                    <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Order Date (Ascending)</option>                    
+                    <option value="ship_by_date_desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'ship_by_date_desc') ? 'selected' : '' ?>>Ship-by Date (Descending)</option>
+                    <option value="ship_by_date_asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'ship_by_date_asc') ? 'selected' : '' ?>>Ship-by Date (Ascending)</option>
             </select>
             <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                 onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
@@ -826,7 +833,7 @@
                         } elseif (is_array($options)) {
                             $optionsArr = $options;
                         }
-                        if (strtolower($order['payment_type']) == 'cod') {
+                        if (!empty($order['payment_type']) && strtolower($order['payment_type']) == 'cod') {
                             $bordercolor = 'border-4 border-yellow-300';
                         }
                         if (!empty($optionsArr)) {

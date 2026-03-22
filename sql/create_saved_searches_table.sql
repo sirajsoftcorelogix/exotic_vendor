@@ -386,3 +386,4 @@ ALTER TABLE `vp_order_info` ADD INDEX idx_order_number (order_number);
 ALTER TABLE `vp_invoices` CHANGE `status` `status` ENUM('draft','final','cancelled') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft';
 
 ALTER TABLE `vp_products` ADD `add_ons` TEXT NULL AFTER `notes`;
+ALTER TABLE `vp_users` ADD COLUMN `is_deleted` TINYINT(1) NOT NULL DEFAULT 0 AFTER `warehouse_id`;
