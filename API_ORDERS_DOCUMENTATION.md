@@ -175,7 +175,7 @@ curl -X POST "http://yourserver.com/index.php?page=orders&action=api_update_orde
   -d "item_code=BOOK-SKU-123" \
   -d "color=Red" \
   -d "size=M" \
-  -d "status=shipped" \
+  -d "status=5" \
   -d "esd=2026-03-25" \
   -d "priority=high" \
   -d "remarks=Item packed and ready"
