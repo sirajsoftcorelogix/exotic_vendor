@@ -1,0 +1,1572 @@
+<?php
+
+class Order
+{
+    private $db;
+    public function __construct($db)
+    {
+        $this->db = $db;
+    }
+    public function getAllOrders($filters = [], $limit = 50, $offset = 0)
+    {
+
+        //$sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
+        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name 
+		FROM vp_orders 
+		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
+		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		WHERE 1=1 AND IFNULL(vp_orders.payment_type,'') = 'offline'";
+
+        $params = [];
+        if (!empty($filters['order_number'])) {
+            $sql .= " AND vp_orders.order_number LIKE ?";
+            $params[] = '%' . $filters['order_number'] . '%';
+        }
+        if (!empty($filters['item_code'])) {
+            $sql .= " AND vp_orders.item_code LIKE ?";
+            $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['po_no'])) {
+            $sql .= " AND vp_orders.po_number LIKE ?";
+            $params[] = '%' . $filters['po_no'] . '%';
+        }
+        if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
+            $sql .= " AND vp_orders.order_date BETWEEN ? AND ?";
+            $params[] = $filters['order_from'] . ' 00:00:00';
+            $params[] = $filters['order_till'] . ' 23:59:59';
+        }
+        if (!empty($filters['title'])) {
+            $sql .= " AND vp_orders.title LIKE ?";
+            $params[] = '%' . $filters['title'] . '%';
+        }
+        if (!empty($filters['min_amount'])) {
+            $sql .= " AND vp_orders.total_price >= ?";
+            $params[] = $filters['min_amount'];
+        }
+        if (!empty($filters['max_amount'])) {
+            $sql .= " AND vp_orders.total_price <= ?";
+            $params[] = $filters['max_amount'];
+        }
+        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
+            if ($filters['status_filter'] === 'pending') {
+                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                $sql .= " AND vp_orders.status = 'pending'";
+            } elseif ($filters['status_filter'] === 'processed') {
+                //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+            } elseif ($filters['status_filter'] === 'dispatch') {
+                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
+            } elseif ($filters['status_filter'] === 'shipped') {
+                $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                //array of statuses
+                if (is_array($filters['status_filter'])) {
+                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
+                    $sql .= " AND vp_orders.status IN ($placeholders)";
+                    foreach ($filters['status_filter'] as $status) {
+                        $params[] = $status;
+                    }
+                } else {
+                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
+                }
+            }
+        }
+        if (!empty($filters['country'])) {
+            if ($filters['country'] == 'overseas') {
+                $sql .= " AND (vp_orders.shipping_country != 'IN' AND vp_orders.country != 'IN')";
+            } else {
+                $sql .= " AND (vp_orders.shipping_country = '" . $filters['country'] . "' OR vp_orders.country = '" . $filters['country'] . "' )";
+            }
+            //$params[] = '%' . $filters['country'] . '%';
+        }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            //$sql .= " AND vp_orders.groupname LIKE ?";
+            //$params[] = '%' . $filters['category'] . '%';
+            $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
+            $sql .= " AND vp_orders.groupname IN ($placeholders)";
+            foreach ($filters['category'] as $category) {
+                $params[] = $category;
+            }
+        }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
+        }
+        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            //array of payment types
+            if (is_array($filters['payment_type'])) {
+                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
+                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
+                foreach ($filters['payment_type'] as $payment_type) {
+                    $params[] = $payment_type;
+                }
+            } else {
+                $sql .= " AND vp_orders.payment_type = ?";
+                $params[] = $filters['payment_type'];
+            }
+        }
+        if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
+            //$sql .= " AND vp_users.id = ?";
+            //$params[] = $filters['staff_name'];
+            $placeholders = implode(',', array_fill(0, count($filters['staff_name']), '?'));
+            $sql .= " AND vp_users.id IN ($placeholders)";
+            foreach ($filters['staff_name'] as $staff_name) {
+                $params[] = $staff_name;
+            }
+        }
+        if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
+            $sql .= " AND vp_orders.priority = ?";
+            $params[] = $filters['priority'];
+        }
+        if (!empty($filters['vendor_id'])) {
+            $sql .= " AND vp_vendors.id = ?";
+            $params[] = $filters['vendor_id'];
+        }
+        if (!empty($filters['agent'])) {
+            if (is_array($filters['agent'])) {
+                $placeholders = implode(',', array_fill(0, count($filters['agent']), '?'));
+                $sql .= " AND vp_orders.agent_id IN ($placeholders)";
+                foreach ($filters['agent'] as $agent) {
+                    $params[] = $agent;
+                }
+            } else {
+                $sql .= " AND vp_orders.status NOT IN ('shipped','cancelled') AND vp_orders.agent_id = ?";
+                $params[] = $filters['agent'];
+            }
+        }
+        if (!empty($filters['publisher'])) {
+            $sql .= " AND vp_orders.publisher LIKE ?";
+            $params[] = '%' . $filters['publisher'] . '%';
+        }
+        if (!empty($filters['author'])) {
+            $sql .= " AND vp_orders.author LIKE ?";
+            $params[] = '%' . $filters['author'] . '%';
+        }
+        if (!empty($filters['unshipped'])) {
+            $sql .= " AND vp_orders.status != 'shipped'";
+        }
+        //echo $sql;
+        // Add sorting based on filter
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            //agent assignment date desc
+            if (!empty($filters['agent'])) {
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']);
+            } else {
+                $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+            }
+        } else {
+            //agent assignment date desc
+            if (!empty($filters['agent'])) {
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
+            } else {
+                $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+            }
+        }
+
+        $sql .= " LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        //echo $sql;
+        // Add limit and offset to params and types
+        $params[] = $limit;
+        $params[] = $offset;
+        $types = str_repeat('s', count($params) - 2) . 'ii';
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orders = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orders[] = $row;
+            }
+        }
+        return $orders;
+    }
+    public function getOrdersCount($filters = [])
+    {
+        //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
+        $sql = "SELECT COUNT(*) as count 
+		FROM vp_orders 
+		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
+		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		WHERE 1=1";
+        $params = [];
+        if (!empty($filters['order_number'])) {
+            $sql .= " AND order_number LIKE ?";
+            $params[] = '%' . $filters['order_number'] . '%';
+        }
+        if (!empty($filters['item_code'])) {
+            $sql .= " AND item_code LIKE ?";
+            $params[] = '%' . $filters['item_code'] . '%';
+        }
+        if (!empty($filters['po_no'])) {
+            $sql .= " AND vp_orders.po_number LIKE ?";
+            $params[] = '%' . $filters['po_no'] . '%';
+        }
+        if (!empty($filters['order_from']) && !empty($filters['order_till'])) {
+            $sql .= " AND order_date BETWEEN ? AND ?";
+            $params[] = $filters['order_from'] . ' 00:00:00';
+            $params[] = $filters['order_till'] . ' 23:59:59';
+        }
+        if (!empty($filters['title'])) {
+            $sql .= " AND title LIKE ?";
+            $params[] = '%' . $filters['title'] . '%';
+        }
+        if (!empty($filters['min_amount'])) {
+            $sql .= " AND total_price >= ?";
+            $params[] = $filters['min_amount'];
+        }
+        if (!empty($filters['max_amount'])) {
+            $sql .= " AND total_price <= ?";
+            $params[] = $filters['max_amount'];
+        }
+        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
+            if ($filters['status_filter'] === 'pending') {
+                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
+                $sql .= " AND vp_orders.status = 'pending'";
+            } elseif ($filters['status_filter'] === 'processed') {
+                //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
+                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
+            } elseif ($filters['status_filter'] === 'dispatch') {
+                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
+            } elseif ($filters['status_filter'] === 'shipped') {
+                $sql .= " AND vp_orders.status = 'shipped'";
+            } elseif (!empty($filters['status_filter'])) {
+                //array of statuses
+                if (is_array($filters['status_filter'])) {
+                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
+                    $sql .= " AND vp_orders.status IN ($placeholders)";
+                    foreach ($filters['status_filter'] as $status) {
+                        $params[] = $status;
+                    }
+                } else {
+                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
+                }
+            }
+        }
+        if (!empty($filters['country'])) {
+            $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
+            //$params[] = '%' . $filters['country'] . '%';
+        }
+        if (!empty($filters['category']) && $filters['category'] !== 'all') {
+            //$sql .= " AND groupname LIKE ?";
+            //$params[] = '%' . $filters['category'] . '%';
+            $placeholders = implode(',', array_fill(0, count($filters['category']), '?'));
+            $sql .= " AND vp_orders.groupname IN ($placeholders)";
+            foreach ($filters['category'] as $category) {
+                $params[] = $category;
+            }
+        }
+        if (!empty($filters['options']) && $filters['options'] === 'express') {
+            $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
+        }
+        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
+            if (is_array($filters['payment_type'])) {
+                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
+                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
+                foreach ($filters['payment_type'] as $payment_type) {
+                    $params[] = $payment_type;
+                }
+            } else {
+                $sql .= " AND payment_type = ?";
+                $params[] = $filters['payment_type'];
+            }
+        }
+        if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
+            //$sql .= " AND vp_users.id = ?";
+            //$params[] = $filters['staff_name'];
+            $placeholders = implode(',', array_fill(0, count($filters['staff_name']), '?'));
+            $sql .= " AND vp_users.id IN ($placeholders)";
+            foreach ($filters['staff_name'] as $staff_name) {
+                $params[] = $staff_name;
+            }
+        }
+        if (!empty($filters['priority']) && $filters['priority'] !== 'all') {
+            $sql .= " AND priority = ?";
+            $params[] = $filters['priority'];
+        }
+        if (!empty($filters['vendor_id'])) {
+            $sql .= " AND vp_vendors.id = ?";
+            $params[] = $filters['vendor_id'];
+        }
+        if (!empty($filters['agent'])) {
+            if (is_array($filters['agent'])) {
+                $placeholders = implode(',', array_fill(0, count($filters['agent']), '?'));
+                $sql .= " AND vp_orders.agent_id IN ($placeholders)";
+                foreach ($filters['agent'] as $agent) {
+                    $params[] = $agent;
+                }
+            } else {
+                $sql .= " AND vp_orders.status NOT IN ('shipped','cancelled') AND vp_orders.agent_id = ?";
+                $params[] = $filters['agent'];
+            }
+        }
+        if (!empty($filters['publisher'])) {
+            $sql .= " AND vp_orders.publisher LIKE ?";
+            $params[] = '%' . $filters['publisher'] . '%';
+        }
+        if (!empty($filters['author'])) {
+            $sql .= " AND vp_orders.author LIKE ?";
+            $params[] = '%' . $filters['author'] . '%';
+        }
+        if (!empty($filters['unshipped'])) {
+            $sql .= " AND vp_orders.status != 'shipped'";
+        }
+        // Add sorting based on filter
+        if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
+            $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
+        } else {
+            $sql .= " ORDER BY order_date DESC"; // Default sort order
+        }
+
+        $stmt = $this->db->prepare($sql);
+        if ($params) {
+            $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return (int)$row['count'];
+        }
+        return 0;
+    }
+    public function getOrderById($id)
+    {
+        $sql = "SELECT * FROM vp_orders WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    /*public function insertOrder($data) {
+        //print_r($data);
+        //echo "<br>";
+        // Assuming $data is an associative array with keys matching the database columns
+        if(empty($data['order_number'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        if(!empty($data)) {
+        $sql = "INSERT INTO vp_orders (order_number, title, item_code, size, color, description, image, marketplace_vendor, quantity, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssssssssis', 
+            $data['order_number'], 
+            $data['title'],
+            $data['item_code'],
+            $data['size'],
+            $data['color'],
+            $data['description'],
+            $data['image'],
+            $data['marketplace_vendor'],
+            $data['quantity'],
+            $data['options']
+        );
+        $stmt->execute();
+        if ($stmt->error) {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+        return $stmt->insert_id;
+
+        } else {
+            return false;
+        }
+    }*/
+    public function insertOrder($data)
+    {
+        //print_array($data);
+        //echo "<br>";
+        // Assuming $data is an associative array with keys matching the database columns
+        if (empty($data) || !is_array($data)) {
+            return ['success' => false, 'message' => 'Data is empty or not an array.'];
+        }
+        $required = ['order_number', 'item_code'];
+        foreach ($required as $field) {
+            if (empty($data[$field])) {
+                return ['success' => false, 'message' => "Missing required field: {$field}"];
+            }
+        }
+
+        // ✅ Check for duplicate combination
+        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1";
+        $checkStmt = $this->db->prepare($checkSql);
+        $checkStmt->bind_param('sss', $data['order_number'], $data['item_code'], $data['sku']);
+        $checkStmt->execute();
+        $checkStmt->bind_result($count);
+        $checkStmt->fetch();
+        $checkStmt->close();
+
+        if ($count > 0) {
+            return ['success' => false, 'message' => 'Duplicate ' . $data['order_number'] . '-' . $data['item_code'] . ' order_number + item_code combination.'];
+        }
+
+        // Insert
+        $table_name = 'vp_orders';
+        $InsertFields = [
+            'sku',
+            'order_number',
+            'shipping_country',
+            'title',
+            'description',
+            'item_code',
+            'size',
+            'color',
+            'groupname',
+            'subcategories',
+            'currency',
+            'itemprice',
+            'finalprice',
+            'image',
+            'marketplace_vendor',
+            'quantity',
+            'options',
+            'gst',
+            'hsn',
+            'local_stock',
+            'cost_price',
+            'location',
+            'order_date',
+            'processed_time',
+            'numsold',
+            'product_weight',
+            'product_weight_unit',
+            'prod_height',
+            'prod_width',
+            'prod_length',
+            'length_unit',
+            'backorder_status',
+            'backorder_percent',
+            'backorder_delay',
+            'payment_type',
+            'coupon',
+            'coupon_reduce',
+            'giftvoucher',
+            'giftvoucher_reduce',
+            'credit',
+            'vendor',
+            'country',
+            'material',
+            'status',
+            'esd',
+            'agent_id',
+            'publisher',
+            'author',
+            'shippingfee',
+            'sourcingfee',
+            'customer_id'
+        ];
+
+        // Build SQL query
+        $columns = implode(', ', $InsertFields);
+        $placeholders = rtrim(str_repeat('?, ', count($InsertFields)), ', ');
+        $sql = "INSERT INTO {$table_name} ({$columns}) VALUES ({$placeholders})";
+        //$this->db->set_charset('utf8mb4');
+        //$this->db->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        //var_dump(mysqli_character_set_name(Database::getConnection()));
+        //exit;
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'error' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        $types = '';
+        $values = [];
+        foreach ($InsertFields as $field) {
+            if (is_string($data[$field])) {
+                if (strlen($data[$field]) > 255) {
+                    // Truncate the string to the specified length
+                    $data[$field] = substr($data[$field], 0, 255);
+                    // Optionally, append an ellipsis
+                    $data[$field] .= '...';
+                }
+            }
+            $value = isset($data[$field]) ? $data[$field] : null;
+            // If the incoming value is an array, encode it to JSON to avoid "Array to string conversion"
+            if (is_array($value)) {
+                $value = json_encode($value);
+            }
+            $values[] = $value;
+
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value) || is_double($value)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        // Bind dynamically
+        $stmt->bind_param($types, ...$values);
+        //set_charset('utf8mb4')
+        //$this->db->set_charset('utf8mb4');
+
+        // After execute
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+        $insertId = $this->db->insert_id; // ✅ use db object, not stmt
+        $stmt->close();
+        return ['success' => true, 'insert_id' => $insertId];
+    }
+
+    public function updateOrderStatus($id, $status, $po_number, $po_id = null, $deliveryDueDate = null)
+    {
+        // Validate inputs
+        if (empty($id) || empty($status)) {
+            return ['success' => false, 'message' => 'ID or status is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET status = ?, po_number = ?, po_id = ?, delivery_due_date = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $stmt->bind_param('ssisi', $status, $po_number, $po_id, $deliveryDueDate, $id);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        if ($affectedRows === 0) {
+            return ['success' => false, 'message' => 'No record updated. ID may not exist.'];
+        }
+
+        return ['success' => true, 'message' => 'Status updated successfully.'];
+    }
+
+    public function getOrderItems($searchTerm)
+    {
+        $sql = "SELECT * FROM vp_orders WHERE status = 'pending' AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
+        $stmt = $this->db->prepare($sql);
+        $searchTerm = "%{$searchTerm}%";
+        $stmt->bind_param('sss', $searchTerm, $searchTerm, $searchTerm);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = [
+                    'id' => $row['id'],
+                    'sku' => $row['sku'],
+                    'order_number' => $row['order_number'],
+                    'order_date' => $row['order_date'],
+                    'item_code' => $row['item_code'],
+                    'title' => $row['title'],
+                    //'price' => $row['unit_price'],
+                    'gst' => $row['gst'],
+                    'hsn' => $row['hsn'],
+                    'description' => $row['description'],
+                    'image' => $row['image'],
+                    // 'marketplace_vendor' => $row['marketplace_vendor'],
+                    'quantity' => $row['quantity'],
+                    'options' => $row['options'],
+                    'order_date' => $row['order_date'],
+                    'color' => $row['color'],
+                    'size' => $row['size'],
+                    'itemprice' => $row['itemprice'],
+                    'cost_price' => $row['cost_price'],
+                    'local_stock' => $row['local_stock'],
+                    //'leadtime' => $row['leadtime'],                     
+                    'numsold' => $row['numsold'],
+                    //'numsold_india' => $row['numsold_india'], 
+                    //'numsold_global' => $row['numsold_global'],                     
+                    //'instock_leadtime' => $row['instock_leadtime'],
+                    //'fba_in' => $row['fba_in'], 
+                    //'fba_us' => $row['fba_us'], 
+                    //'lastsold' => $row['lastsold'],
+                ];
+            }
+        }
+        return $orderItems;
+    }
+
+    public function getOrderItemsByCustomerId($customer_id, $searchTerm = '', $itemIds = [])
+    {
+        $sql = "SELECT * FROM vp_orders WHERE customer_id = ? AND (invoice_id IS NULL OR invoice_id = '')";
+        if (!empty($searchTerm)) {
+            $sql .= " AND (order_number LIKE ? OR item_code LIKE ? OR title LIKE ?)";
+        }
+        if (!empty($itemIds)) {
+            $placeholders = implode(',', array_fill(0, count($itemIds), '?'));
+            $sql .= " AND id IN ($placeholders)";
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $types = 'i';
+        $params = [$customer_id];
+        if (!empty($searchTerm)) {
+            $searchTerm = "%{$searchTerm}%";
+            $types .= 'sss';
+            $params = array_merge($params, [$searchTerm, $searchTerm, $searchTerm]);
+        }
+        if (!empty($itemIds)) {
+            foreach ($itemIds as $id) {
+                $types .= 'i';
+                $params[] = (int)$id;
+            }
+        }
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orderItems = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orderItems[] = $row;
+            }
+        }
+        return $orderItems;
+    }
+    public function updateOrderStatusByPO($po_id, $status)
+    {
+        $sql = "UPDATE vp_orders SET status = ? WHERE po_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('si', $status, $po_id);
+        return $stmt->execute();
+    }
+    public function orderImportLog($data)
+    {
+        if (empty($data['start_time'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        $sql = "INSERT INTO order_import_log (start_time) VALUES (?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $data['start_time']);
+
+        if ($stmt->execute()) {
+            return ['success' => true, 'insert_id' => $stmt->insert_id];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+
+    public function updateOrderImportLog($log_id, $data)
+    {
+        if (empty($log_id) || empty($data['end_time'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        $sql = "UPDATE order_import_log SET end_time = ?, successful_imports = ?, total_orders = ?, error = ?, max_ordered_time = ?, add_product_log = ?, log_details = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssdisssd', $data['end_time'], $data['successful_imports'], $data['total_orders'], $data['error'], $data['max_ordered_time'], $data['add_product_log'], $data['log_details'], $log_id);
+        if ($stmt->execute()) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function getLastImportLog()
+    {
+        $sql = "SELECT * FROM order_import_log ORDER BY id DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function addProducts($data)
+    {
+        if (empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        // Check for existing products with the same item_code
+        $existingProducts = [];
+        $sql = "SELECT * FROM vp_products WHERE item_code = ? AND color = ? AND size = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $data['item_code'], $data['color'], $data['size']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $existingProducts[] = $row;
+        }
+        if (!empty($existingProducts)) {
+            return ['success' => false, 'message' => 'Product with item_code ' . $data['item_code'] . ' and color ' . $data['color'] . ' and size ' . $data['size'] . ' already exists.'];
+        }
+
+        if (!empty($data)) {
+            if (strlen($data['author']) > 255) {
+                // Truncate the string to the specified length
+                $data['author'] = substr($data['author'], 0, 255);
+                // Optionally, append an ellipsis
+                $data['author'] .= '...';
+            }
+
+            $sql = "INSERT INTO vp_products (sku, item_code, title, description, size, color, groupname, subcategories, itemprice, finalprice, image, gst, hsn, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, cost_price,publisher,author,shippingfee,sourcingfee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param(
+                'ssssssssiissdisiiisissii',
+                $data['sku'],
+                $data['item_code'],
+                $data['title'],
+                $data['description'],
+                $data['size'],
+                $data['color'],
+                $data['groupname'],
+                $data['subcategories'],
+                $data['itemprice'],
+                $data['finalprice'],
+                $data['image'],
+                $data['gst'],
+                $data['hsn'],
+                $data['product_weight'],
+                $data['product_weight_unit'],
+                $data['prod_height'],
+                $data['prod_width'],
+                $data['prod_length'],
+                $data['length_unit'],
+                $data['cost_price'],
+                $data['publisher'],
+                $data['author'],
+                $data['shippingfee'],
+                $data['sourcingfee']
+            );
+            $stmt->execute();
+            if ($stmt->error) {
+                return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+            }
+            //return $stmt->insert_id;
+            return ['success' => true, 'message' => 'Product added successfully.', 'insert_id' => $stmt->insert_id];
+        } else {
+            return false;
+        }
+    }
+    function updateStatus($order_id, $data)
+    {
+        if (empty($order_id) || empty($data['status'])) {
+            return ['success' => false, 'message' => 'Required fields are missing.'];
+        }
+        $sql = "UPDATE vp_orders SET status = ?, remarks = ?, esd = ?, priority = ?, agent_id = ? WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssssii', $data['status'], $data['remarks'], $data['esd'], $data['priority'], $data['agent_id'], $order_id);
+        if ($stmt->execute()) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    function getOrderByOrderNumber($order_number)
+    {
+        $sql = "SELECT * FROM vp_orders WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            // If only one row is found, return an associative array for backward compatibility,
+            // otherwise return all matching rows as an array of associative arrays.
+            /*if ($result->num_rows === 1) {
+                return $result->fetch_assoc();
+            }*/
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return null;
+    }
+    function getRemarksByOrderNumber($order_number)
+    {
+        $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    function getfullOrderJournyByNumber($order_number)
+    {
+        $sql = "SELECT * FROM vp_order_journey_log WHERE order_number = ? ORDER BY created_on ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $journey = [];
+        while ($row = $result->fetch_assoc()) {
+            $journey[] = $row;
+        }
+        return $journey;
+    }
+    function getCustomerNameAndEmailByOrderNumber($order_number)
+    {
+        $sql = "
+            SELECT 
+                c.name  AS customer_name,
+                c.phone AS customer_phone,
+                c.email AS customer_email
+            FROM vp_order_info o
+            LEFT JOIN vp_customers c ON o.customer_id = c.id
+            WHERE o.order_number = ?";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function updateOrderRemarks($order_number, $remarks)
+    {
+        $order_number = trim($order_number);
+        $remarks      = trim($remarks);
+
+        if (empty($order_number)) {
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'Order number is required'
+            ];
+        }
+        // Optional: Check if record exists first (similar to your get method)
+        $checkSql = "SELECT order_number FROM vp_order_info WHERE order_number = ?";
+        $checkStmt = $this->db->prepare($checkSql);
+        $checkStmt->bind_param("s", $order_number);
+        $checkStmt->execute();
+        $result = $checkStmt->get_result();
+        $exists = $result->num_rows > 0;
+        $checkStmt->close();
+
+        if (!$exists) {
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'No order found with order_number: ' . $order_number
+            ];
+        }
+
+        // Perform the update (same style as your other queries)
+        $sql = "UPDATE vp_order_info SET remarks = ? WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'Prepare failed: ' . $this->db->error
+            ];
+        }
+
+        $stmt->bind_param("ss", $remarks, $order_number);
+        $executed = $stmt->execute();
+
+        if (!$executed) {
+            $error = $stmt->error;
+            $stmt->close();
+            return [
+                'success'       => false,
+                'affected_rows' => 0,
+                'message'       => 'Execute failed: ' . $error
+            ];
+        }
+
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        return [
+            'success'       => true,
+            'affected_rows' => $affected,
+            'message'       => $affected > 0 ? 'Remarks updated successfully' : 'No changes made (value was already the same)'
+        ];
+    }
+    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '')
+    {
+
+        // Update customer (main operation)
+        $sql = "
+            UPDATE vp_customers c
+            INNER JOIN vp_orders o ON o.customer_id = c.id
+            SET c.name = ?, c.phone = ?
+            WHERE o.order_number = ?
+        ";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => $this->db->error];
+        }
+        $stmt->bind_param('sss', $name, $phone, $order_number);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => $stmt->error];
+        }
+
+        // Update address – don't fail the whole operation if this fails
+        $sql_addr = "
+            UPDATE vp_order_info 
+            SET address_line1 = ?, address_line2 = ? , city = ?, zipcode = ?, country = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_zipcode = ?, shipping_country = ?
+            WHERE order_number = ?
+        ";
+        $stmt_addr = $this->db->prepare($sql_addr);
+        if ($stmt_addr) {
+            $stmt_addr->bind_param('sssssssssss', $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $order_number);
+            $stmt_addr->execute();  // ← ignore result
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Customer information updated successfully!'
+        ];
+    }
+    function adminOrderStatusList($admin = true)
+    {
+        $sql = "SELECT * FROM vp_order_status WHERE admin_id != 0 ORDER BY id ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $result->fetch_all(MYSQLI_ASSOC);
+        }
+        //array list with slug as key
+        $statusList = [];
+        foreach ($result as $row) {
+            $statusList[$row['admin_id']] = $row['slug'];
+        }
+        return $statusList;
+    }
+    function updateImportedOrder($data)
+    {
+        // Validate inputs
+        if (empty($data['order_number']) || empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Order number or item code is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET 
+                shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
+                groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, gst = ?, hsn = ?, 
+                local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
+                numsold = ?, product_weight = ?, product_weight_unit = ?,
+                prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
+                backorder_status = ?, backorder_percent = ?, backorder_delay = ?,
+                payment_type = ?, coupon = ?, coupon_reduce = ?, giftvoucher = ?, giftvoucher_reduce = ?,
+                credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?, updated_at = ?
+                WHERE order_number = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        // Prepare values in the same order as the SQL placeholders
+        $values = [
+            $data['shipping_country'],
+            $data['title'],
+            $data['description'],
+            $data['size'],
+            $data['color'],
+            $data['groupname'],
+            $data['subcategories'],
+            $data['currency'],
+            $data['itemprice'],
+            $data['finalprice'],
+            $data['image'],
+            $data['marketplace_vendor'],
+            $data['quantity'],
+            json_encode($data['options']),
+            $data['gst'],
+            $data['hsn'],
+            $data['local_stock'],
+            $data['cost_price'],
+            $data['location'],
+            $data['order_date'],
+            $data['processed_time'],
+            $data['numsold'],
+            $data['product_weight'],
+            $data['product_weight_unit'],
+            $data['prod_height'],
+            $data['prod_width'],
+            $data['prod_length'],
+            $data['length_unit'],
+            $data['backorder_status'],
+            $data['backorder_percent'],
+            $data['backorder_delay'],
+            $data['payment_type'],
+            $data['coupon'],
+            $data['coupon_reduce'],
+            $data['giftvoucher'],
+            $data['giftvoucher_reduce'],
+            $data['credit'],
+            $data['vendor'],
+            $data['country'],
+            $data['material'],
+            $data['status'],
+            $data['esd'],
+            $data['updated_at'],
+            $data['order_number'],
+            $data['item_code']
+        ];
+
+        // Build types string dynamically based on actual PHP types
+        $types = '';
+        foreach ($values as $val) {
+            if (is_int($val)) {
+                $types .= 'i';
+            } elseif (is_float($val) || is_double($val)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        // mysqli_stmt::bind_param requires arguments passed by reference when using call_user_func_array
+        $refs = [];
+        foreach ($values as $key => $value) {
+            $refs[$key] = &$values[$key];
+        }
+        array_unshift($refs, $types);
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        // print binded parameters for debugging
+        //print_array($refs);        
+
+        //foreach ($refs as $ref) {
+        //if ($ref === $types) continue; // Skip types string
+        //echo $ref . "\n";
+        //}
+        //print_r($stmt);
+        //comment the below line after execution on 09-06-2024
+        // if ($stmt->execute()) {
+        //     return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        // } else {
+        //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        // }
+    }
+    function skuUpdateImportedOrder($data)
+    {
+        // Validate inputs
+        if (empty($data['order_number']) || empty($data['item_code'])) {
+            return ['success' => false, 'message' => 'Order number or item code is missing.'];
+        }
+
+        // Prepare SQL statement
+        $sql = "UPDATE vp_orders SET 
+                sku = ?, updated_at = ?
+                WHERE order_number = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        // Prepare values in the same order as the SQL placeholders
+        $values = [
+            $data['sku'],
+            $data['updated_at'],
+            $data['order_number'],
+            $data['item_code']
+        ];
+
+        // Build types string dynamically based on actual PHP types
+        $types = '';
+        foreach ($values as $val) {
+            if (is_int($val)) {
+                $types .= 'i';
+            } elseif (is_float($val) || is_double($val)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        // mysqli_stmt::bind_param requires arguments passed by reference when using call_user_func_array
+        $refs = [];
+        foreach ($values as $key => $value) {
+            $refs[$key] = &$values[$key];
+        }
+        array_unshift($refs, $types);
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        // print binded parameters for debugging
+        //print_array($refs);        
+
+        // foreach ($refs as $ref) {
+        //     if ($ref === $types) continue; // Skip types string
+        //     echo $ref . "\n";
+        // }
+        //print_r($stmt);
+        //comment the below line after execution on 09-06-2024
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function getPaymentTypes()
+    {
+        $sql = "SELECT DISTINCT payment_type FROM `vp_orders` WHERE 1;";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $paymentTypes = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                if (!empty($row['payment_type'])) {
+                    $paymentTypes[$row['payment_type']] = str_replace('_', ' ', $row['payment_type']);
+                }
+            }
+        }
+        return $paymentTypes;
+    }
+    public function addVendorIfNotExists($vendor_name)
+    {
+        // Check if vendor already exists
+        $sql = "SELECT id FROM vp_vendors WHERE vendor_name = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $vendor_name);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return ['success' => true, 'vendor_id' => $row['id'], 'message' => 'Vendor already exists.'];
+        }
+
+        // Insert new vendor
+        $sql = "INSERT INTO vp_vendors (vendor_name) VALUES (?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $vendor_name);
+        if ($stmt->execute()) {
+            return ['success' => true, 'vendor_id' => $stmt->insert_id, 'message' => 'Vendor added successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function fetchOrdersForUpdate()
+    {
+        //1= shipped !=cancelled !=return ORDERS
+        $sql = "SELECT * FROM vp_orders WHERE status != 'shipped' AND status != 'cancelled' AND status != 'return' AND status = 'pending' ORDER BY order_date";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $orders = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $orders[] = $row['order_number'];
+            }
+        }
+        return array_unique($orders);
+    }
+    public function importedStatusUpdate($data)
+    {
+        $sql = "UPDATE vp_orders SET status = ?, update_flag = 1, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ssss', $data['status'], $data['updated_at'], $data['sku'], $data['order_number']);
+        if ($stmt->execute()) {
+            return ['success' => true, 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'sku' => $data['sku'], 'message' => 'Order status updated successfully.', 'item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function importedStatusUpdate2($data)
+    {
+        $sql = "UPDATE vp_orders SET update_flag = 2, updated_at = ? WHERE sku = ? AND order_number = ? AND (po_number IS NULL OR po_number = '')";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $data['updated_at'], $data['sku'], $data['order_number']);
+        if ($stmt->execute()) {
+            return ['success' => true, 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'sku' => $data['sku'], 'message' => 'Order status updated successfully.', 'item_code' => $data['item_code']];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function updateStatusBulk($order_ids, $status)
+    {
+        if (empty($order_ids) || !is_array($order_ids) || empty($status)) {
+            return ['success' => false, 'message' => 'Order IDs or status is missing or invalid.'];
+        }
+
+        // Prepare placeholders for the IN clause
+        $placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+        $sql = "UPDATE vp_orders SET status = ? WHERE id IN ($placeholders)";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $types = str_repeat('i', count($order_ids));
+        $params = array_merge([$status], $order_ids);
+        $stmt->bind_param('s' . $types, ...$params);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Status updated successfully for ' . $affectedRows . ' orders.'];
+    }
+    public function updateAgentBulk($order_ids, $agent_id)
+    {
+        if (empty($order_ids) || !is_array($order_ids) || empty($agent_id)) {
+            return ['success' => false, 'message' => 'Order IDs or agent_id is missing or invalid.'];
+        }
+
+        // Prepare placeholders for the IN clause
+        $placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+        $sql = "UPDATE vp_orders SET agent_id = ? WHERE id IN ($placeholders)";
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $types = str_repeat('i', count($order_ids));
+        $params = array_merge([$agent_id], $order_ids);
+        $stmt->bind_param('s' . $types, ...$params);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Agent updated successfully for ' . $affectedRows . ' orders.'];
+    }
+    function insertAddressInfo(array $data, $customer_id = null)
+    {
+        //print_array($data);
+        //print_array($data['address_info']);
+        // order_number is required for this function to work, as it's the primary key for address_info table
+        if (empty($data['orderid'])) {
+            return ['success' => false, 'message' => 'Order ID is required to insert address info'];
+        }
+        //duplicate check
+        $sql_check = "SELECT order_number FROM vp_order_info WHERE order_number = ?";
+        $stmt_check = $this->db->prepare($sql_check);
+        if (!$stmt_check) {
+            //throw new Exception("Prepare failed for duplicate check: " . $this->db->error);
+            return ['success' => false, 'message' => 'Database error: ' . $this->db->error];
+        }
+        $stmt_check->bind_param('s', $data['orderid']);
+        $stmt_check->execute();
+        $result = $stmt_check->get_result();
+        if ($result && $result->num_rows > 0) {
+            //throw new Exception("Address info already exists for order ID: " . $data['orderid']);
+            return ['success' => false, 'message' => 'Address info already exists for order ID: ' . $data['orderid']];
+        }
+        // Allowed columns (safety whitelist)
+        $columns = [
+            'order_number',
+            'customer_id',
+            'first_name',
+            'last_name',
+            'company',
+            'address_line1',
+            'address_line2',
+            'city',
+            'state',
+            'state_iso',
+            'state_code',
+            'country',
+            'zipcode',
+            'mobile',
+            'email',
+            'gstin',
+            'shipping_first_name',
+            'shipping_last_name',
+            'shipping_company',
+            'shipping_address_line1',
+            'shipping_address_line2',
+            'shipping_city',
+            'shipping_state',
+            'shipping_state_iso',
+            'shipping_state_code',
+            'shipping_country',
+            'shipping_zipcode',
+            'shipping_mobile',
+            'shipping_email',
+            'total',
+            'giftvoucher',
+            'giftvoucher_reduce',
+            'transid',
+            'currency',
+            'payment_type',
+            'coupon',
+            'coupon_reduce',
+            'credit'
+        ];
+
+        $insertCols   = [];
+        $placeholders = [];
+        $values       = [];
+        $types        = '';
+
+        foreach ($columns as $col) {
+            if (array_key_exists($col, $data['address_info'])) {
+                $insertCols[]   = $col;
+                $placeholders[] = '?';
+                $values[]       = $data['address_info'][$col];
+                $types         .= 's'; // all strings (safe for phone, zip, email)
+            }
+        }
+        //order_number add 
+        if ($data['orderid'] !== null) {
+            $insertCols[]   = 'order_number';
+            $placeholders[] = '?';
+            $values[]       = $data['orderid'];
+            $types         .= 's';
+        }
+
+        //customer_id add
+        if ($customer_id !== null) {
+            $insertCols[]   = 'customer_id';
+            $placeholders[] = '?';
+            $values[]       = $customer_id;
+            $types         .= 'i'; // integer
+        }
+
+        //total add
+        if (isset($data['total'])) {
+            $insertCols[]   = 'total';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['total']);
+            $types         .= 'd'; // decimal
+        }
+        //giftvoucher add
+        if (isset($data['giftvoucher'])) {
+            $insertCols[]   = 'giftvoucher';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['giftvoucher']);
+            $types         .= 'd'; // decimal
+        }
+        //giftvoucher_reduce add
+        if (isset($data['giftvoucher_reduce'])) {
+            $insertCols[]   = 'giftvoucher_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['giftvoucher_reduce']);
+            $types         .= 'd'; // decimal
+        }
+        //transid add
+        if (isset($data['transid'])) {
+            $insertCols[]   = 'transid';
+            $placeholders[] = '?';
+            $values[]       = $data['transid'];
+            $types         .= 's'; // string
+        }
+        //currency add
+        if (isset($data['currency'])) {
+            $insertCols[]   = 'currency';
+            $placeholders[] = '?';
+            $values[]       = $data['currency'];
+            $types         .= 's'; // string
+        }
+        //payment_type add
+        if (isset($data['payment_type'])) {
+            $insertCols[]   = 'payment_type';
+            $placeholders[] = '?';
+            $values[]       = $data['payment_type'];
+            $types         .= 's'; // string
+        }
+        //coupon add
+        if (isset($data['coupon'])) {
+            $insertCols[]   = 'coupon';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['coupon']);
+            $types         .= 'd'; // decimal
+        }
+        //coupon_reduce add
+        if (isset($data['coupon_reduce'])) {
+            $insertCols[]   = 'coupon_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['coupon_reduce']);
+            $types         .= 'd'; // decimal
+        }
+        //credit add
+        if (isset($data['credit'])) {
+            $insertCols[]   = 'credit';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['credit']);
+            $types         .= 'd'; // decimal
+        }
+
+
+        if (empty($insertCols)) {
+            throw new Exception("No valid data provided for insert");
+        }
+
+        $sql = sprintf(
+            "INSERT INTO vp_order_info (%s) VALUES (%s)",
+            implode(',', $insertCols),
+            implode(',', $placeholders)
+        );
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Prepare failed: " . $this->db->error);
+        }
+
+        // mysqli requires references
+        $bindParams = [];
+        $bindParams[] = $types;
+        foreach ($values as $key => $value) {
+            $bindParams[] = &$values[$key];
+        }
+
+        call_user_func_array([$stmt, 'bind_param'], $bindParams);
+        //echo $stmt->$sql;
+        if (!$stmt->execute()) {
+            throw new Exception("Execute failed: " . $stmt->error);
+        }
+
+        return $stmt->insert_id;
+    }
+    public function getAddressInfoByOrderNumber($order_number)
+    {
+        $sql = "SELECT * FROM address_info WHERE order_number = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
+    public function addCustomerIfNotExists($data)
+    {
+        $customer_fname = isset($data['address_info']['first_name']) ? $data['address_info']['first_name'] : '';
+        $customer_lname = isset($data['address_info']['last_name']) ? $data['address_info']['last_name'] : '';
+        $customer_name = trim($customer_fname . ' ' . $customer_lname);
+        $customer_email = isset($data['address_info']['email']) ? $data['address_info']['email'] : '';
+        $customer_phone = isset($data['address_info']['mobile']) ? $data['address_info']['mobile'] : '';
+        // Check if customer already exists
+        $sql = "SELECT id FROM vp_customers WHERE email = ? AND phone = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ss', $customer_email, $customer_phone);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return ['success' => true, 'customer_id' => $row['id'], 'message' => 'Customer already exists.'];
+        }
+
+        // Insert new customer
+        $sql = "INSERT INTO vp_customers (name, email, phone) VALUES (?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('sss', $customer_name, $customer_email, $customer_phone);
+        if ($stmt->execute()) {
+            return ['success' => true, 'customer_id' => $stmt->insert_id, 'message' => 'Customer added successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function updateOrderByOrderNumber($order_number, $data)
+    {
+        // Validate inputs
+        if (empty($order_number) || empty($data)) {
+            return ['success' => false, 'message' => 'Order number or data is missing.'];
+        }
+
+        // Prepare SQL statement
+        $setClauses = [];
+        $values = [];
+        $types = '';
+
+        foreach ($data as $key => $value) {
+            $setClauses[] = "$key = ?";
+            $values[] = $value;
+
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value) || is_double($value)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        $sql = "UPDATE vp_orders SET " . implode(', ', $setClauses) . " WHERE order_number = ?";
+        $values[] = $order_number;
+        $types .= 's';
+
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $stmt->bind_param($types, ...$values);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Order updated successfully. Affected rows: ' . $affectedRows];
+    }
+    public function getAgentAssignmentDate($order_id, $agent_id)
+    {
+        $sql = "SELECT change_date FROM vp_order_status_log WHERE order_id = ? ORDER BY change_date DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            return $row['change_date'];
+        }
+        return null;
+    }
+    public function mapVendorToProduct($vendor_id, $item_code)
+    {
+        // Check if mapping already exists
+        $sql = "SELECT id FROM vp_vendor_product_mapping WHERE vendor_id = ? AND item_code = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $vendor_id, $item_code);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return ['success' => true, 'message' => 'Mapping already exists.'];
+        }
+
+        // Insert new mapping
+        $sql = "INSERT INTO vp_vendor_product_mapping (vendor_id, item_code) VALUES (?, ?)";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('ii', $vendor_id, $item_code);
+        if ($stmt->execute()) {
+            return ['success' => true, 'message' => 'Vendor mapped to product successfully.'];
+        } else {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+    }
+    public function invoiceExists($order_number)
+    {
+        $sql = "SELECT vp_invoices.id FROM vp_invoices join vp_invoice_items on vp_invoices.id = vp_invoice_items.invoice_id WHERE vp_invoice_items.order_number = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return ($result && $result->num_rows > 0);
+    }
+}

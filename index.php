@@ -915,4 +915,179 @@ switch ($page) {
                 break;
         }
         break;
+    case 'payments':
+
+        require_once 'controllers/PaymentsController.php';
+        $controller = new PaymentsController();
+
+        switch ($action) {
+
+            case 'list':
+                $controller->index();
+                break;
+
+            case 'list_ajax':
+                $controller->list_ajax();
+                break;
+
+            case 'view':
+                $controller->view();
+                break;
+
+            case 'delete':
+                $controller->delete();
+                break;
+
+            case 'receipt':
+                $controller->receipt();
+                break;
+
+            case 'add_payment':
+                $controller->add_payment();
+                break;
+
+            case 'save_payment':
+                $controller->save_payment();
+                break;
+
+            case 'get_payment_summary':
+                $controller->get_payment_summary();
+                break;
+
+            case 'create_from_payment':
+                $controller->create_from_payment();
+                break;
+
+            /*  NEW ROUTES */
+            case 'get_single_payment':
+                $controller->get_single_payment();
+                break;
+
+            case 'update_payment':
+                $controller->update_payment();
+                break;
+
+            default:
+                $controller->index();
+                break;
+        }
+    case 'posinvoice':
+
+        require_once 'controllers/PosInvoiceController.php';
+        $controller = new PosInvoiceController();
+
+        switch ($action) {
+
+            case 'list':
+                $controller->index();
+                break;
+
+            case 'list_ajax':
+                $controller->list_ajax();
+                break;
+
+            case 'delete':
+                $controller->delete();
+                break;
+
+            case 'preview':
+                $controller->preview();
+                break;
+
+            case 'create_auto_from_order':
+                $controller->create_auto_from_order();
+                break;
+
+            case 'create_from_payment':
+                $controller->create_from_payment();
+                break;
+
+            case 'get_single_invoice':
+                $controller->get_single_invoice();
+                break;
+
+            case 'update_status':
+                $controller->update_status();
+                break;
+
+            case 'generate_pdf':
+                $controller->generate_pdf();
+                break;
+
+            default:
+                $controller->index();
+                break;
+        }
+         case 'posorders':
+        require_once 'controllers/PosOrdersController.php';
+        $controller = new PosOrdersController($conn);
+        switch ($action) {
+            case 'import':
+                $controller->importOrders();
+                break;
+            case 'list':
+                $controller->index();
+                break;
+            case 'view':
+                $controller->viewOrder();
+                break;
+            case 'get_order_details':
+                $controller->getOrderDetails();
+                break;
+            case 'import_orders':
+                $controller->importOrders();
+                break;
+            case 'update_status':
+                $controller->updateStatus();
+                break;
+            case 'get_order_details_html':
+                $controller->getOrderDetailsHTML();
+                break;
+            case 'get_order_details_for_dispatch':
+                $controller->getOrderDetailsForDispatch();
+                break;
+            case 'get_order_items_for_dispatch':
+                $controller->getOrderItemsForDispatch();
+                break;
+
+            case 'update_note_ajax':
+                $controller->updateNoteAjax();
+                break;
+            case 'update_name_email_ajax':
+                $controller->updateNameEmailAjax();
+                break;
+            case 'update_import':
+                $controller->skuUpdateImportedOrders();
+                break;
+            case 'update_import_bulk':
+                $controller->ordersStatusImportBulk();
+                break;
+            case 'bulk_update_status':
+                $controller->bulkUpdateStatus();
+                break;
+            case 'bulk_assign_order':
+                $controller->bulkAssignOrder();
+                break;
+            case 'get_orders_customer_id':
+                $controller->getOrdersCustomerId();
+                break;
+            case 'saveSearch':
+                $controller->saveSearch();
+                break;
+            case 'deleteSearch':
+                $controller->deleteSearch();
+                break;
+            case 'invoice_list':
+                $controller->invoiceList();
+                break;
+            case 'payment_list':
+                $controller->paymentList();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
+       
 }

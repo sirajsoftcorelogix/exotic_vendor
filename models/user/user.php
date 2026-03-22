@@ -411,7 +411,7 @@ $where";
         
         $sql = "SELECT id, address_title 
             FROM exotic_address 
-            WHERE id = ? AND is_active = 0 
+            WHERE id = ? AND is_active = 1 
             LIMIT 1";
 
         $stmt = $this->db->prepare($sql);
