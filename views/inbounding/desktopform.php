@@ -48,23 +48,12 @@
         overflow: hidden; /* Crucial Fix */
     }
     .draggable-item {
-        cursor: grab;
         user-select: none;
-    }
-    .draggable-item:active {
-        cursor: grabbing;
     }
     /* Stop native image drag so only the card reorder runs (avoids broken URLs / ghost drag) */
     .draggable-item img {
         -webkit-user-drag: none;
         user-select: none;
-    }
-    /* SortableJS (gallery shuffle) */
-    .photo-sortable-ghost {
-        opacity: 0.45;
-    }
-    .photo-sortable-chosen {
-        cursor: grabbing;
     }
     .custom-scrollbar::-webkit-scrollbar { height: 14px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border: 1px solid #ccc; border-radius: 2px; }
@@ -470,8 +459,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     (<?= htmlspecialchars($data['form2']['color'] ?? '') ?> - <?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
             </div>
-            <div class="w-full mb-5 overflow-hidden">
-                <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1">
+            <div class="w-full mb-5 min-w-0">
+                <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:</label>
+                <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Use the arrow buttons on each card to reorder within this row. Use the dropdown under each image to move it to another gallery (main item or a variation).</p>
+                <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1" data-gallery-label="Main item">
                     <?php 
                     if (!empty($grouped_images['-1'])) {
                         foreach($grouped_images['-1'] as $img) { renderPhotoCard($img, '-1'); }
@@ -649,9 +640,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </label>
                         </div>
                         
-                        <div class="grow overflow-hidden">
+                        <div class="grow min-w-0">
                             <label class="block text-xs font-bold text-[#555] mb-1">Gallery Photos:</label>
-                            <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[100px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="<?= $var['id'] ?>">
+                            <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Use the arrow buttons on each card to reorder within this row. Use the dropdown under each image to move it to another gallery (main item or a variation).</p>
+                            <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[100px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="<?= htmlspecialchars((string)$var['id']) ?>" data-gallery-label="<?= htmlspecialchars('Variation: ' . trim(($var['color'] ?? '') . ' / ' . ($var['size'] ?? '')), ENT_QUOTES) ?>">
                                 <?php 
                                 if (!empty($grouped_images[$var['id']])) {
                                     foreach($grouped_images[$var['id']] as $img) { renderPhotoCard($img, $var['id']); }
@@ -849,15 +841,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         $fullUrl  = base_url($fullPath);
         $popupUrlJson = json_encode($fullUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
     ?>
-        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group cursor-grab active:cursor-grabbing shadow-sm" 
+        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group shadow-sm shrink-0 w-[118px]" 
              draggable="false" 
              data-id="<?php echo $img['id']; ?>">
-            
-            <div class="absolute top-1 right-1 text-gray-400 p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-            </div>
 
-            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" 
+            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-1" 
                  onclick="openImagePopup(<?php echo $popupUrlJson; ?>)">
                 <img src="<?php echo htmlspecialchars($thumbUrl); ?>" 
                      alt=""
@@ -866,9 +854,14 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                      class="max-w-full max-h-full object-contain cursor-pointer select-none">
             </div>
 
-            <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
-                <?php echo $img['file_name']; ?>
+            <span class="text-[11px] text-[#666] truncate w-full text-center mb-1" title="<?php echo htmlspecialchars($img['file_name']); ?>">
+                <?php echo htmlspecialchars($img['file_name']); ?>
             </span>
+            <div class="flex flex-wrap gap-0.5 w-full justify-center items-center">
+                <button type="button" class="photo-nudge-btn px-1 py-0.5 text-[10px] font-bold leading-none border border-gray-300 rounded bg-gray-50 hover:bg-gray-100 text-gray-700" data-dir="left" title="Move left in this row">&#9664;</button>
+                <button type="button" class="photo-nudge-btn px-1 py-0.5 text-[10px] font-bold leading-none border border-gray-300 rounded bg-gray-50 hover:bg-gray-100 text-gray-700" data-dir="right" title="Move right in this row">&#9654;</button>
+                <select class="photo-gallery-move text-[10px] border border-gray-300 rounded py-0.5 max-w-[6.5rem] bg-white" title="Move to another gallery"></select>
+            </div>
             <input type="hidden" name="photo_order[<?php echo $img['id']; ?>]" value="<?php echo $img['display_order']; ?>" class="order-input">
             <input type="hidden" name="photo_variation[<?php echo $img['id']; ?>]" value="<?php echo $varId; ?>" class="variation-input">
         </div>
@@ -1637,11 +1630,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         });
     }
 </script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var sortableByGrid = new WeakMap();
-
     /**
      * One global display_order sequence for all item_images on the form (main grid then each variant grid in DOM order).
      */
@@ -1667,43 +1657,86 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function refreshPhotoGroupSortables() {
-        if (typeof Sortable === 'undefined') {
-            return;
-        }
-        document.querySelectorAll('.photo-group-grid').forEach(function (grid) {
-            var existing = sortableByGrid.get(grid);
-            if (existing) {
-                existing.destroy();
-                sortableByGrid.delete(grid);
-            }
-        });
-        document.querySelectorAll('.photo-group-grid').forEach(function (grid) {
-            var instance = Sortable.create(grid, {
-                group: 'inbound-photos',
-                animation: 150,
-                direction: 'horizontal',
-                draggable: '.draggable-item',
-                filter: 'img',
-                preventOnFilter: true,
-                emptyInsertThreshold: 48,
-                ghostClass: 'photo-sortable-ghost',
-                chosenClass: 'photo-sortable-chosen',
-                onEnd: function (evt) {
-                    if (evt.from === evt.to && evt.oldIndex === evt.newIndex) {
-                        return;
-                    }
-                    applyVariationIdFromGrid(evt.item, evt.to);
-                    syncPhotoDisplayOrdersBeforeSubmit();
-                }
-            });
-            sortableByGrid.set(grid, instance);
+    function galleryRowItems(grid) {
+        return Array.prototype.slice.call(grid.children).filter(function (n) {
+            return n.classList && n.classList.contains('draggable-item');
         });
     }
-    window.refreshPhotoGroupSortables = refreshPhotoGroupSortables;
 
-    const productForm = document.getElementById('product_form');
+    function findPhotoGridByVarId(varId) {
+        var want = String(varId);
+        var grids = document.querySelectorAll('.photo-group-grid');
+        for (var i = 0; i < grids.length; i++) {
+            if (grids[i].getAttribute('data-var-id') === want) {
+                return grids[i];
+            }
+        }
+        return null;
+    }
+
+    function refreshPhotoGalleryMoveSelects() {
+        var grids = document.querySelectorAll('.photo-group-grid');
+        document.querySelectorAll('.draggable-item .photo-gallery-move').forEach(function (sel) {
+            var item = sel.closest('.draggable-item');
+            var grid = item && item.closest('.photo-group-grid');
+            var currentId = grid ? grid.getAttribute('data-var-id') : '';
+            while (sel.firstChild) {
+                sel.removeChild(sel.firstChild);
+            }
+            grids.forEach(function (g) {
+                var id = g.getAttribute('data-var-id');
+                var label = g.getAttribute('data-gallery-label') || ('Gallery ' + id);
+                var opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = label;
+                sel.appendChild(opt);
+            });
+            if (currentId !== null && currentId !== '') {
+                sel.value = currentId;
+            }
+        });
+    }
+    window.refreshPhotoGalleryMoveSelects = refreshPhotoGalleryMoveSelects;
+    window.refreshPhotoGroupSortables = refreshPhotoGalleryMoveSelects;
+
+    var productForm = document.getElementById('product_form');
     if (productForm) {
+        productForm.addEventListener('click', function (e) {
+            var btn = e.target.closest('.photo-nudge-btn');
+            if (!btn || !productForm.contains(btn)) return;
+            var item = btn.closest('.draggable-item');
+            var grid = item && item.closest('.photo-group-grid');
+            if (!item || !grid) return;
+            var dir = btn.getAttribute('data-dir');
+            var items = galleryRowItems(grid);
+            var i = items.indexOf(item);
+            if (i < 0) return;
+            if (dir === 'left' && i > 0) {
+                grid.insertBefore(item, items[i - 1]);
+            } else if (dir === 'right' && i < items.length - 1) {
+                var next = items[i + 1];
+                grid.insertBefore(item, next.nextSibling);
+            }
+            syncPhotoDisplayOrdersBeforeSubmit();
+        });
+
+        productForm.addEventListener('change', function (e) {
+            var sel = e.target.closest('.photo-gallery-move');
+            if (!sel || !productForm.contains(sel)) return;
+            var item = sel.closest('.draggable-item');
+            var fromGrid = item && item.closest('.photo-group-grid');
+            if (!item || !fromGrid) return;
+            var targetId = sel.value;
+            var fromId = fromGrid.getAttribute('data-var-id');
+            if (targetId === fromId) return;
+            var targetGrid = findPhotoGridByVarId(targetId);
+            if (!targetGrid) return;
+            targetGrid.appendChild(item);
+            applyVariationIdFromGrid(item, targetGrid);
+            syncPhotoDisplayOrdersBeforeSubmit();
+            refreshPhotoGalleryMoveSelects();
+        });
+
         productForm.addEventListener('submit', function (e) {
             if (productForm.dataset.submitting === '1') {
                 e.preventDefault();
@@ -1718,7 +1751,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, true);
     }
 
-    refreshPhotoGroupSortables();
+    refreshPhotoGalleryMoveSelects();
 });
 </script>
 <script>
