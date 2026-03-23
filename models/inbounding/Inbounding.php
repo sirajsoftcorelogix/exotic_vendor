@@ -487,6 +487,39 @@ class Inbounding {
         // Execute and return result
         return $stmt->execute();
     }
+
+    /** Delete gallery row + file only if it belongs to the given inbound item (safe for POSTed ids). */
+    public function delete_image_for_item($img_id, $item_id) {
+        $img_id = (int) $img_id;
+        $item_id = (int) $item_id;
+        if ($img_id <= 0 || $item_id <= 0) {
+            return false;
+        }
+        $sql_select = "SELECT file_name FROM item_images WHERE id = ? AND item_id = ?";
+        $stmt = $this->conn->prepare($sql_select);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param("ii", $img_id, $item_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $path = __DIR__ . '/../uploads/itm_img/' . $row['file_name'];
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+        $stmt->close();
+
+        $sql_delete = "DELETE FROM item_images WHERE id = ? AND item_id = ?";
+        $stmt = $this->conn->prepare($sql_delete);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param("ii", $img_id, $item_id);
+        return $stmt->execute();
+    }
+
     public function get_item_code($item_id){
         $result = $this->conn->query("SELECT Item_code FROM `vp_inbound` WHERE id = $item_id");
         $id = intval($item_id);
@@ -1051,6 +1084,29 @@ class Inbounding {
         return ['success' => false, 'message' => $stmt->error];
       }
 
+    /**
+     * Remove item_images rows that belong to a variation strip (variation_id > 0) but whose
+     * variation row no longer exists for this inbound item. Uses DB truth, not POST ids —
+     * avoids wiping the wrong galleries when max_input_vars truncates variations[] fields.
+     */
+    public function deleteOrphanVariationGalleryImages($it_id) {
+        $it_id = (int) $it_id;
+        if ($it_id <= 0) {
+            return false;
+        }
+        $sql = "DELETE ii FROM item_images ii
+                LEFT JOIN vp_variations v ON v.id = ii.variation_id AND v.it_id = ii.item_id
+                WHERE ii.item_id = ?
+                  AND ii.variation_id > 0
+                  AND v.id IS NULL";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param("i", $it_id);
+        return $stmt->execute();
+    }
+
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $item_code) {
         $submittedIds = [];
@@ -1064,12 +1120,11 @@ class Inbounding {
         }
 
         $safe_it_id = (int)$it_id;
+        // Never DELETE item_images using POST-derived id lists — incomplete POSTs delete the wrong rows.
         if (!empty($submittedIds)) {
             $idsStr = implode(',', $submittedIds);
-            $this->conn->query("DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id NOT IN ($idsStr) AND variation_id > 0");
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)");
         } else {
-            $this->conn->query("DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id > 0");
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
         }
 
@@ -1146,6 +1201,9 @@ class Inbounding {
                 $stmtInsert->execute();
             }
         }
+
+        $this->deleteOrphanVariationGalleryImages($safe_it_id);
+
         return true;
     }
 
