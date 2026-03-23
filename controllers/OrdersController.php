@@ -681,7 +681,7 @@ class OrdersController {
             }
             if ($order) {
                 if ($type === 'inner')
-                    renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
+                    renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks]);
                 else
                     renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
             } else {
