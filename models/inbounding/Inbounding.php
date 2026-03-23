@@ -487,6 +487,39 @@ class Inbounding {
         // Execute and return result
         return $stmt->execute();
     }
+
+    /** Delete gallery row + file only if it belongs to the given inbound item (safe for POSTed ids). */
+    public function delete_image_for_item($img_id, $item_id) {
+        $img_id = (int) $img_id;
+        $item_id = (int) $item_id;
+        if ($img_id <= 0 || $item_id <= 0) {
+            return false;
+        }
+        $sql_select = "SELECT file_name FROM item_images WHERE id = ? AND item_id = ?";
+        $stmt = $this->conn->prepare($sql_select);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param("ii", $img_id, $item_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $path = __DIR__ . '/../uploads/itm_img/' . $row['file_name'];
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+        $stmt->close();
+
+        $sql_delete = "DELETE FROM item_images WHERE id = ? AND item_id = ?";
+        $stmt = $this->conn->prepare($sql_delete);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param("ii", $img_id, $item_id);
+        return $stmt->execute();
+    }
+
     public function get_item_code($item_id){
         $result = $this->conn->query("SELECT Item_code FROM `vp_inbound` WHERE id = $item_id");
         $id = intval($item_id);

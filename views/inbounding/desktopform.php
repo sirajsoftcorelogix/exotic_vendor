@@ -278,6 +278,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     <form id="product_form" action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
     <input type="hidden" name="save_action" id="hidden_save_action" value="">
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
+        <div id="deleted-gallery-images-markers" class="hidden" aria-hidden="true"></div>
         <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
             <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
                 <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
@@ -461,7 +462,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             </div>
             <div class="w-full mb-5 min-w-0">
                 <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:</label>
-                <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier.</p>
+                <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier. Use <strong>&times;</strong> on a card to remove that image from the product (deletes file on save).</p>
                 <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1" data-gallery-label="Main item">
                     <?php 
                     if (!empty($grouped_images['-1'])) {
@@ -642,7 +643,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         
                         <div class="grow min-w-0">
                             <label class="block text-xs font-bold text-[#555] mb-1">Gallery Photos:</label>
-                            <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier.</p>
+                            <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier. Use <strong>&times;</strong> on a card to remove that image (deletes file on save).</p>
                             <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[100px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="<?= htmlspecialchars((string)$var['id']) ?>" data-gallery-label="<?= htmlspecialchars('Variation: ' . trim(($var['color'] ?? '') . ' / ' . ($var['size'] ?? '')), ENT_QUOTES) ?>">
                                 <?php 
                                 if (!empty($grouped_images[$var['id']])) {
@@ -844,6 +845,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group shadow-sm shrink-0 w-[132px]" 
              draggable="false" 
              data-id="<?php echo (int) $img['id']; ?>">
+            <button type="button"
+                    class="photo-remove-btn absolute top-0.5 left-0.5 z-20 w-6 h-6 flex items-center justify-center rounded bg-white border border-red-200 text-red-600 text-sm font-bold leading-none shadow-sm hover:bg-red-50"
+                    title="Remove image (saved when you submit the form)"
+                    data-image-id="<?php echo (int) $img['id']; ?>"
+                    aria-label="Remove gallery image">&times;</button>
 
             <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-1" 
                  onclick="openImagePopup(<?php echo $popupUrlJson; ?>)">
@@ -1640,6 +1646,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var productForm = document.getElementById('product_form');
     if (productForm) {
+        productForm.addEventListener('click', function (e) {
+            var removeBtn = e.target.closest('.photo-remove-btn');
+            if (!removeBtn || !productForm.contains(removeBtn)) return;
+            var imageId = removeBtn.getAttribute('data-image-id');
+            if (!imageId) return;
+            if (!window.confirm('Remove this gallery image from the product? It will be permanently deleted when you save the form.')) {
+                return;
+            }
+            var card = removeBtn.closest('.draggable-item');
+            if (!card) return;
+            var bucket = document.getElementById('deleted-gallery-images-markers');
+            if (bucket) {
+                var marker = document.createElement('input');
+                marker.type = 'hidden';
+                marker.name = 'delete_gallery_image_ids[]';
+                marker.value = imageId;
+                bucket.appendChild(marker);
+            }
+            card.remove();
+        });
+
         productForm.addEventListener('submit', function (e) {
             if (productForm.dataset.submitting === '1') {
                 e.preventDefault();
