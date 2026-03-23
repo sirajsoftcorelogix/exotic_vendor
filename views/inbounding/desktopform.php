@@ -13,6 +13,11 @@
     .draggable-item:active {
         cursor: grabbing;
     }
+    /* Stop native image drag so only the card reorder runs (avoids broken URLs / ghost drag) */
+    .draggable-item img {
+        -webkit-user-drag: none;
+        user-select: none;
+    }
     .custom-scrollbar::-webkit-scrollbar { height: 14px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border: 1px solid #ccc; border-radius: 2px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #666; border: 2px solid #e0e0e0; border-radius: 4px; }
@@ -790,11 +795,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     function renderPhotoCard($img, $varId) {
         $fullPath = "uploads/itm_img/" . $img['file_name'];
 
-        // 2. Pass the FULL PATH to the generator
-        $thumbSrc = getThumbnail($fullPath); 
-        
-        // 3. Keep original for the popup
-        $originalSrc = $fullPath; 
+        // 2. Pass the FULL PATH to the generator (filesystem-relative)
+        $thumbSrc = getThumbnail($fullPath);
+        $thumbUrl = base_url($thumbSrc);
+        $fullUrl  = base_url($fullPath);
+        $popupUrlJson = json_encode($fullUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
     ?>
         <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group cursor-grab active:cursor-grabbing shadow-sm" 
              draggable="true" 
@@ -805,10 +810,12 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             </div>
 
             <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" 
-                 onclick="openImagePopup('<?php echo $originalSrc; ?>')">
-                <img src="<?php echo $thumbSrc; ?>" 
+                 onclick="openImagePopup(<?php echo $popupUrlJson; ?>)">
+                <img src="<?php echo htmlspecialchars($thumbUrl); ?>" 
+                     alt=""
+                     draggable="false"
                      loading="lazy" 
-                     class="max-w-full max-h-full object-contain cursor-pointer">
+                     class="max-w-full max-h-full object-contain cursor-pointer select-none">
             </div>
 
             <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
