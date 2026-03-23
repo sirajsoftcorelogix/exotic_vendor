@@ -348,7 +348,7 @@ class Inbounding {
     public function getitem_imgs($item_id) {
         $item_id = intval($item_id);
         // Added ORDER BY display_order ASC so images appear in the correct sequence
-        $result = $this->conn->query("SELECT * FROM `item_images` WHERE item_id = $item_id ORDER BY display_order ASC");
+        $result = $this->conn->query("SELECT * FROM `item_images` WHERE item_id = $item_id ORDER BY display_order ASC, id ASC");
         
         $images = [];
         if ($result) {
