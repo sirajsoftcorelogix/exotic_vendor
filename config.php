@@ -21,7 +21,7 @@ return [
   'LIVE_API_BASE'  => 'https://seller.exoticindia.com/api',
   'LIVE_WS_URL'    => 'wss://seller.exoticindia.com/ws/',
 
-  'WS_PORT' => 8082
+  'WS_PORT' => 8082,
   //'WS_PORT' => 8081
 
   /**
