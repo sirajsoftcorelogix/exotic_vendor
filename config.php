@@ -24,5 +24,13 @@ return [
   'WS_PORT' => 8082
   //'WS_PORT' => 8081
 
+  /**
+   * Optional: allow running scripts/backfill_published_inbound_logs.php in the browser.
+   * Set to a long random string, then call:
+   *   .../scripts/backfill_published_inbound_logs.php?key=YOUR_STRING
+   *   .../scripts/backfill_published_inbound_logs.php?key=YOUR_STRING&execute=1
+   * Leave empty to disable web access (use CLI only).
+   */
+  'backfill_logs_web_key' => '',
 
  ];
