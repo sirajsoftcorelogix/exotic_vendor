@@ -30,7 +30,11 @@ class InboundingController {
             'created_from'          => $_GET['created_from'] ?? '',
             'created_to'            => $_GET['created_to'] ?? '',
             'published_from'        => $_GET['published_from'] ?? '',
-            'published_to'          => $_GET['published_to'] ?? ''
+            'published_to'          => $_GET['published_to'] ?? '',
+            'log_photoshoot'        => $_GET['log_photoshoot'] ?? '',
+            'log_editing'           => $_GET['log_editing'] ?? '',
+            'log_data_entry'        => $_GET['log_data_entry'] ?? '',
+            'log_published'         => $_GET['log_published'] ?? ''
         ];
         $sort = $_GET['sort'] ?? '';
         // 2. Pagination Logic

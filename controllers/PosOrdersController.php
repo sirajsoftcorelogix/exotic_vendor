@@ -1,8 +1,8 @@
 <?php 
-require_once 'models/order/order.php';
+require_once 'models/posorder/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
-require_once 'models/order/po_invoice.php';
+require_once 'models/posorder/po_invoice.php';
 require_once 'models/product/product.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
@@ -11,7 +11,7 @@ $poInvoiceModel = new POInvoice($conn);
 $productModel = new Product($conn);
 global $root_path;
 global $domain;
-class OrdersController { 
+class PosOrdersController { 
      
     public function index() {
         is_login();
@@ -75,7 +75,7 @@ class OrdersController {
         if(!empty($_GET['options']) && $_GET['options'] == 'express'){
             $filters['options'] = 'express';  
         }
-        if (!empty($_GET['sort'])) {
+        if (!empty($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc'])) {
             $filters['sort'] = strtolower($_GET['sort']);
         } else {
             $filters['sort'] = 'desc'; // Default sort order
@@ -107,10 +107,7 @@ class OrdersController {
         if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {
             $filters['unshipped'] = true;  
         }
-        //sort-date-range
-        if (!empty($_GET['sortdaterange'])) {
-            $filters['sortdaterange'] = $_GET['sortdaterange'];  
-        }
+        
         
 
         //order status list
@@ -148,7 +145,7 @@ class OrdersController {
         }
 
         // Render the orders view
-        renderTemplate('views/orders/index.php', [
+        renderTemplate('views/posorders/index.php', [
             'orders' => $orders,
             'total_orders' => $total_orders,
             'total_pages' => $total_pages,
@@ -170,7 +167,7 @@ class OrdersController {
         if ($id > 0) {
             $order = $ordersModel->getOrderById($id); 
             if ($order) {
-                renderTemplate('views/orders/view_order.php', ['order' => $order], 'View Order');
+                renderTemplate('views/posorders/view_order.php', ['order' => $order], 'View Order');
             } else {
                 renderTemplate('views/errors/not_found.php', [], 'Order Not Found');
             }   
@@ -184,10 +181,10 @@ class OrdersController {
         //is_login();
         global $ordersModel;
         global $productModel;
-        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
-            http_response_code(403); // Forbidden
-            die('Unauthorized access.');
-        }
+        // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+        //     http_response_code(403); // Forbidden
+        //     die('Unauthorized access.');
+        // }
         //order status list
         $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
@@ -447,7 +444,7 @@ class OrdersController {
             $ordersModel->updateOrderImportLog($log_id, $log_update_data);
         }
         //print_array($result);
-        renderTemplateClean('views/orders/import_result.php', [
+        renderTemplateClean('views/posorders/import_result.php', [
             'imported' => $imported,
             'result' => $result,
             'total' => $totalorder,
@@ -462,7 +459,7 @@ class OrdersController {
         if ($id > 0) {
             $order = $ordersModel->getOrderById($id);
             if ($order) {
-                renderTemplate('views/orders/create_purchase_order.php', ['order' => $order], 'Create Purchase Order');
+                renderTemplate('views/posorders/create_purchase_order.php', ['order' => $order], 'Create Purchase Order');
             } else {
                 renderTemplate('views/errors/not_found.php', [], 'Order Not Found');
             }
@@ -681,9 +678,9 @@ class OrdersController {
             }
             if ($order) {
                 if ($type === 'inner')
-                    renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks]);
+                    renderPartial('views/posorders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
                 else
-                    renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
+                    renderTemplate('views/posorders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
             } else {
                 echo '<p>Order details not found.</p>';
             }
@@ -694,10 +691,10 @@ class OrdersController {
     }
     public function updateImportedOrders() {        
         global $ordersModel;
-        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
-            http_response_code(403); // Forbidden
-            die('Unauthorized access.');
-        }
+        // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+        //     http_response_code(403); // Forbidden
+        //     die('Unauthorized access.');
+        // }
         //order status list
         $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
@@ -877,7 +874,7 @@ class OrdersController {
         //print_r($result);
         //update log end time and imported count
         
-        renderTemplateClean('views/orders/import_update_result.php', [
+        renderTemplateClean('views/posorders/import_update_result.php', [
             'imported' => $imported,
             'result' => $result,
             'total' => $totalorder,
@@ -888,10 +885,10 @@ class OrdersController {
         //ini_set('max_execution_time', 300);
         //set_time_limit(300);  
         global $ordersModel;
-        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
-            http_response_code(403); // Forbidden
-            die('Unauthorized access.');
-        }
+        // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+        //     http_response_code(403); // Forbidden
+        //     die('Unauthorized access.');
+        // }
         //order status list
        // $statusList = $ordersModel->adminOrderStatusList('true');
         //last order log fetch
@@ -991,7 +988,7 @@ class OrdersController {
         //print_r($result);
         //update log end time and imported count
         
-        renderTemplateClean('views/orders/import_update_result.php', [
+        renderTemplateClean('views/posorders/import_update_result.php', [
             'imported' => $imported,
             'result' => $result,
             'total' => $totalorder,
@@ -1003,10 +1000,10 @@ class OrdersController {
         ini_set('max_execution_time', 3000);
         set_time_limit(3000);  
         global $ordersModel;
-        if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
-            http_response_code(403); // Forbidden
-            die('Unauthorized access.');
-        }
+        // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
+        //     http_response_code(403); // Forbidden
+        //     die('Unauthorized access.');
+        // }
         //fetch order 
         $odr = $ordersModel->fetchOrdersForUpdate();
         //order status list
@@ -1115,7 +1112,7 @@ class OrdersController {
         //print_r($result);
         //update log end time and imported count
         
-        renderTemplateClean('views/orders/import_update_result.php', [
+        renderTemplateClean('views/posorders/import_update_result.php', [
             'imported' => $imported,
             'result' => $result,
             'total' => $totalorder,

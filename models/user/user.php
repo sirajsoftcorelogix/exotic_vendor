@@ -12,7 +12,7 @@ class User
     }
     public function login($login, $password)
     {
-        $sql = "SELECT * FROM vp_users WHERE email = ? OR phone = ?";
+        $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND is_deleted = 0";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ss', $login, $login);
         $stmt->execute();
@@ -52,7 +52,7 @@ class User
     }
     public function findByLogin($login)
     {
-        $sql = "SELECT * FROM vp_users WHERE email = ? OR phone = ?";
+        $sql = "SELECT * FROM vp_users WHERE (email = ? OR phone = ?) AND is_deleted = 0";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ss', $login, $login);
         $stmt->execute();
@@ -76,7 +76,7 @@ class User
             FROM vp_users u
             LEFT JOIN exotic_address ea 
                 ON u.warehouse_id = ea.id
-            WHERE u.id = ?
+            WHERE u.id = ? AND u.is_deleted = 0
             LIMIT 1";
 
         $stmt = $this->db->prepare($sql);
@@ -240,18 +240,57 @@ class User
     }
     public function delete($id)
     {
-        $sql = "DELETE FROM vp_users WHERE id = ?";
+        // Soft delete: mark user as deleted and unassign all orders
+        $sql = "UPDATE vp_users SET is_deleted = 1, updated_at = NOW() WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $id);
         if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'User deleted successfully.'];
+            // Unassign all dispatches created by this user
+            // $this->unassignUserOrders($id);
+            return ['success' => true, 'message' => 'User '. $id .' deleted successfully'];
         }
         return ['success' => false, 'error' => 'Failed: ' . $stmt->error];
+    }
+
+    public function unassignUserOrders($id)
+    {
+        // Unassign all vp_oprders Agent_id to null
+        $sql = "UPDATE vp_orders SET agent_id = NULL WHERE agent_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+
+        // Unassign all invoices created by this user
+        $sql = "UPDATE vp_invoices SET created_by = NULL WHERE created_by = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+
+        // Unassign all dispatches created by this user
+        $sql = "UPDATE vp_dispatch_details SET created_by = NULL WHERE created_by = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+
+         // Unassign all purchase_orders to null
+        $sql = "UPDATE purchase_orders SET user_id = NULL WHERE user_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        
+        // Unassign all vendor created by this user
+        $sql = "UPDATE vp_vendors SET agent_id = NULL WHERE agent_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+
+
+        return true;
     }
     public function getAll($search = '', $sort_by = 'id', $sort_order = 'asc', $limit = 20, $offset = 0)
     {
         $search = '%' . $this->db->real_escape_string($search) . '%';
-        $sql = "SELECT * FROM vp_users WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?) ORDER BY $sort_by $sort_order LIMIT ? OFFSET ?";
+        $sql = "SELECT * FROM vp_users WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?) AND is_deleted = 0 ORDER BY $sort_by $sort_order LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('ssiii', $search, $search, $search, $limit, $offset);
         $stmt->execute();
@@ -261,7 +300,7 @@ class User
     public function countAll($search = '')
     {
         $search = '%' . $this->db->real_escape_string($search) . '%';
-        $sql = "SELECT COUNT(*) FROM vp_users WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+        $sql = "SELECT COUNT(*) FROM vp_users WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?) AND is_deleted = 0";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $search, $search, $search);
         $stmt->execute();
@@ -270,7 +309,7 @@ class User
     }
     public function getAllUsers()
     {
-        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
+        $sql = "SELECT id, name FROM vp_users WHERE is_active = 1 AND is_deleted = 0 ORDER BY name ASC";
         $result = $this->db->query($sql);
         $users = [];
         while ($row = $result->fetch_assoc()) {
@@ -295,38 +334,38 @@ class User
             }
         }
         // 🔹 Build search condition
-        $where = "";
+        $where = " WHERE vu.is_deleted = 0";
         if (!empty($search) && is_numeric($role_filter) && is_numeric($status_filter)) {
             $search = $this->db->real_escape_string($search);
             $role_filter = $this->db->real_escape_string($role_filter);
             $status_filter = $this->db->real_escape_string($status_filter);
-            $where = "WHERE (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.role_id = '$role_filter' AND vu.is_active = '$status_filter'";
+            $where .= " AND (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.role_id = '$role_filter' AND vu.is_active = '$status_filter'";
         } elseif (!empty($search) && is_numeric($role_filter)) {
             $search = $this->db->real_escape_string($search);
             $role_filter = $this->db->real_escape_string($role_filter);
-            $where = "WHERE (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.role_id = '$role_filter'";
+            $where .= " AND (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.role_id = '$role_filter'";
         } elseif (!empty($search) && is_numeric($status_filter)) {
             $search = $this->db->real_escape_string($search);
             $status_filter = $this->db->real_escape_string($status_filter);
-            $where = "WHERE (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.is_active = '$status_filter'";
+            $where .= " AND (vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%') AND vu.is_active = '$status_filter'";
         } elseif (is_numeric($role_filter) && is_numeric($status_filter)) {
             $role_filter = $this->db->real_escape_string($role_filter);
             $status_filter = $this->db->real_escape_string($status_filter);
-            $where = "WHERE vu.role_id = '$role_filter' AND vu.is_active = '$status_filter'";
+            $where .= " AND vu.role_id = '$role_filter' AND vu.is_active = '$status_filter'";
         } else {
             if (!empty($search)) {
                 $search = $this->db->real_escape_string($search);
-                $where = "WHERE vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%'";
+                $where .= " AND vu.name LIKE '%$search%' OR vu.email LIKE '%$search%' OR vu.phone LIKE '%$search%'";
             }
 
             if (is_numeric($role_filter)) {
                 $search = $this->db->real_escape_string($role_filter);
-                $where = "WHERE vu.role_id = '$role_filter'";
+                $where .= " AND vu.role_id = '$role_filter'";
             }
 
             if (is_numeric($status_filter)) {
                 $search = $this->db->real_escape_string($status_filter);
-                $where = "WHERE vu.is_active = '$status_filter'";
+                $where .= " AND vu.is_active = '$status_filter'";
             }
         }
         // total records
@@ -345,7 +384,7 @@ $where";
 
         // fetch data
         // $sql = "SELECT vu.*, GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names FROM vp_users AS vu LEFT JOIN vp_user_team_mapping AS vutm ON vu.id = vutm.user_id LEFT JOIN vp_teams AS vt ON vutm.team_id = vt.id $where GROUP BY vu.id LIMIT $limit OFFSET $offset;";
-        $sql = "SELECT 
+       $sql = "SELECT 
         vu.*, 
         ea.address_title AS warehouse_name,
         GROUP_CONCAT(vt.team_name SEPARATOR ', ') AS team_names 
@@ -411,7 +450,7 @@ $where";
         
         $sql = "SELECT id, address_title 
             FROM exotic_address 
-            WHERE id = ? AND is_active = 0 
+            WHERE id = ? AND is_active = 1 
             LIMIT 1";
 
         $stmt = $this->db->prepare($sql);

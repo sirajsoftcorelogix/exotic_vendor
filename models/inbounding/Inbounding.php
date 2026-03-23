@@ -132,6 +132,24 @@ class Inbounding {
             $assignedId = (int)$filters['assigned_user_id'];
             $where[] = "vi.assigned_to_user_id = $assignedId";
         }
+        // 16. Stat log presence (yes = has log row, no = never reached)
+        $statLogFilters = [
+            'log_photoshoot'   => 'Photoshoot',
+            'log_editing'      => 'Editing',
+            'log_data_entry'   => 'Data Entry',
+            'log_published'    => 'Published',
+        ];
+        foreach ($statLogFilters as $filterKey => $statValue) {
+            if (empty($filters[$filterKey]) || !in_array($filters[$filterKey], ['yes', 'no'], true)) {
+                continue;
+            }
+            $statEsc = $this->conn->real_escape_string($statValue);
+            if ($filters[$filterKey] === 'yes') {
+                $where[] = "vi.id IN (SELECT i_id FROM inbound_logs WHERE stat = '$statEsc')";
+            } else {
+                $where[] = "vi.id NOT IN (SELECT i_id FROM inbound_logs WHERE stat = '$statEsc')";
+            }
+        }
         // Combine WHERE clauses
         $whereSql = "";
         if (!empty($where)) {
@@ -176,7 +194,19 @@ class Inbounding {
         // Fetch Data (Added JOIN and specific SELECT)
         // We select vi.* (all inbound data) AND c.display_name as 'group_name_display'
         // (I used 'group_name_display' to avoid conflict, or you can overwrite 'group_name' if you prefer)
-        $sql = "SELECT vi.*, c.display_name as group_name_display 
+        $sql = "SELECT vi.*, c.display_name as group_name_display,
+                (SELECT ii.file_name
+                 FROM item_images ii
+                 WHERE ii.item_id = vi.id
+                   AND TRIM(COALESCE(ii.file_name, '')) <> ''
+                 ORDER BY
+                   CASE
+                     WHEN ii.variation_id IS NULL OR ii.variation_id IN (-1, 0, '-1', '') THEN 0
+                     ELSE 1
+                   END,
+                   ii.display_order ASC,
+                   ii.id ASC
+                 LIMIT 1) AS _list_gallery_file
                 FROM vp_inbound as vi
                 LEFT JOIN category as c ON vi.group_name = c.category
                 $whereSql 
@@ -191,6 +221,14 @@ class Inbounding {
             
             // If you want the main 'group_name' key to be the human readable name, uncomment this:
             // $row['group_name'] = $row['group_name_display']; 
+
+            $gf = trim((string) ($row['_list_gallery_file'] ?? ''));
+            if ($gf !== '') {
+                $row['list_product_thumb_path'] = 'uploads/itm_img/' . $row['_list_gallery_file'];
+            } else {
+                $row['list_product_thumb_path'] = (string) ($row['product_photo'] ?? '');
+            }
+            unset($row['_list_gallery_file']);
 
             // Fetch logs
             $log_sql = "SELECT il.*, u.name FROM inbound_logs as il LEFT JOIN vp_users as u on il.userid_log=u.id WHERE il.i_id = $current_id";
@@ -310,7 +348,7 @@ class Inbounding {
     public function getitem_imgs($item_id) {
         $item_id = intval($item_id);
         // Added ORDER BY display_order ASC so images appear in the correct sequence
-        $result = $this->conn->query("SELECT * FROM `item_images` WHERE item_id = $item_id ORDER BY display_order ASC");
+        $result = $this->conn->query("SELECT * FROM `item_images` WHERE item_id = $item_id ORDER BY display_order ASC, id ASC");
         
         $images = [];
         if ($result) {

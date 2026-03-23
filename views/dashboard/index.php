@@ -198,7 +198,7 @@
 			<?php } */?>
         </tbody>
     </table>
-	<?php if ($data['total_pages'] > 1): ?>
+	<?php if (($total_pages ?? 0) > 1): ?>
 		<nav aria-label="Page navigation" class="mt-3">
 		<ul class="pagination justify-content-center">
 		<!-- Previous Button -->

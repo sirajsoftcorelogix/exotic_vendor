@@ -767,7 +767,8 @@ class InvoicesController
 
             echo json_encode([
                 'success' => true,
-                'html' => $html
+                'html' => $html,
+               'invoice_id' => $invoice['id']
             ]);
             exit;
         } catch (Exception $e) {

@@ -59,13 +59,6 @@
         -webkit-user-drag: none;
         user-select: none;
     }
-    /* SortableJS (gallery shuffle) */
-    .photo-sortable-ghost {
-        opacity: 0.45;
-    }
-    .photo-sortable-chosen {
-        cursor: grabbing;
-    }
     .custom-scrollbar::-webkit-scrollbar { height: 14px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border: 1px solid #ccc; border-radius: 2px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #666; border: 2px solid #e0e0e0; border-radius: 4px; }
@@ -850,7 +843,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         $popupUrlJson = json_encode($fullUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
     ?>
         <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group cursor-grab active:cursor-grabbing shadow-sm" 
-             draggable="false" 
+             draggable="true" 
              data-id="<?php echo $img['id']; ?>">
             
             <div class="absolute top-1 right-1 text-gray-400 p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
@@ -1637,19 +1630,23 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         });
     }
 </script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var sortableByGrid = new WeakMap();
+    
+    let draggedItem = null;
+    let placeholder = document.createElement('div');
+    placeholder.className = 'border-2 border-dashed border-[#d97824] rounded-[4px] bg-orange-50 min-w-[100px] h-32';
 
     /**
      * One global display_order sequence for all item_images on the form (main grid then each variant grid in DOM order).
+     * Avoids duplicate order numbers across strips — duplicate orders made ORDER BY display_order unstable and could
+     * mis-order renames / loads after a quick save-as-draft during drag.
      */
     function syncPhotoDisplayOrdersBeforeSubmit() {
-        var seq = 1;
+        let seq = 1;
         document.querySelectorAll('.photo-group-grid').forEach(function (container) {
             container.querySelectorAll('.draggable-item').forEach(function (item) {
-                var input = item.querySelector('.order-input');
+                const input = item.querySelector('.order-input');
                 if (input) {
                     input.value = String(seq++);
                 }
@@ -1657,50 +1654,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     window.syncPhotoDisplayOrdersBeforeSubmit = syncPhotoDisplayOrdersBeforeSubmit;
-
-    function applyVariationIdFromGrid(item, grid) {
-        if (!item || !grid) return;
-        var newVarId = grid.getAttribute('data-var-id');
-        var varInput = item.querySelector('.variation-input');
-        if (varInput) {
-            varInput.value = newVarId;
-        }
-    }
-
-    function refreshPhotoGroupSortables() {
-        if (typeof Sortable === 'undefined') {
-            return;
-        }
-        document.querySelectorAll('.photo-group-grid').forEach(function (grid) {
-            var existing = sortableByGrid.get(grid);
-            if (existing) {
-                existing.destroy();
-                sortableByGrid.delete(grid);
-            }
-        });
-        document.querySelectorAll('.photo-group-grid').forEach(function (grid) {
-            var instance = Sortable.create(grid, {
-                group: 'inbound-photos',
-                animation: 150,
-                direction: 'horizontal',
-                draggable: '.draggable-item',
-                filter: 'img',
-                preventOnFilter: true,
-                emptyInsertThreshold: 48,
-                ghostClass: 'photo-sortable-ghost',
-                chosenClass: 'photo-sortable-chosen',
-                onEnd: function (evt) {
-                    if (evt.from === evt.to && evt.oldIndex === evt.newIndex) {
-                        return;
-                    }
-                    applyVariationIdFromGrid(evt.item, evt.to);
-                    syncPhotoDisplayOrdersBeforeSubmit();
-                }
-            });
-            sortableByGrid.set(grid, instance);
-        });
-    }
-    window.refreshPhotoGroupSortables = refreshPhotoGroupSortables;
 
     const productForm = document.getElementById('product_form');
     if (productForm) {
@@ -1718,7 +1671,84 @@ document.addEventListener('DOMContentLoaded', function() {
         }, true);
     }
 
-    refreshPhotoGroupSortables();
+    // 1. DRAG START
+    document.addEventListener('dragstart', function(e) {
+        const item = e.target.closest('.draggable-item');
+        if (!item) return;
+        
+        draggedItem = item;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', ''); // Required for Firefox
+        
+        // Use a timeout to hide the original item so the "ghost" image remains visible
+        setTimeout(() => {
+            item.classList.add('hidden');
+        }, 0);
+    });
+
+    // 2. DRAG OVER (Smooth Insertion)
+    document.addEventListener('dragover', function(e) {
+        const container = e.target.closest('.photo-group-grid');
+        if (!container || !draggedItem) return;
+
+        e.preventDefault(); // Allow dropping
+        const afterElement = getDragAfterElement(container, e.clientX);
+        
+        // Move the placeholder to show where the item will land
+        if (afterElement == null) {
+            container.appendChild(placeholder);
+        } else {
+            container.insertBefore(placeholder, afterElement);
+        }
+    });
+
+    // 3. DROP
+    document.addEventListener('drop', function(e) {
+        const container = e.target.closest('.photo-group-grid');
+        if (!container || !draggedItem) return;
+        
+        e.preventDefault();
+
+        // A. Move the actual item to the placeholder's position
+        placeholder.parentNode.insertBefore(draggedItem, placeholder);
+        draggedItem.classList.remove('hidden');
+        placeholder.remove();
+
+        // B. Update the Hidden Variation ID for the moved item
+        const newVarId = container.getAttribute('data-var-id');
+        const varInput = draggedItem.querySelector('.variation-input');
+        if(varInput) {
+            varInput.value = newVarId;
+        }
+
+        // C. Recalculate display_order for every strip + global unique sequence (fixes source grid after a move-out)
+        syncPhotoDisplayOrdersBeforeSubmit();
+    });
+
+    // 4. DRAG END (Cleanup if dropped outside)
+    document.addEventListener('dragend', function(e) {
+        if (draggedItem) {
+            draggedItem.classList.remove('hidden');
+            placeholder.remove();
+        }
+        draggedItem = null;
+    });
+
+    // --- HELPER: Find the gap between items based on mouse X position ---
+    function getDragAfterElement(container, x) {
+        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.hidden)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = x - box.left - box.width / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
 });
 </script>
 <script>
@@ -2565,7 +2595,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const clone = template.content.cloneNode(true);
         updateNames(clone, newId);
         container.appendChild(clone);
-        if (window.refreshPhotoGroupSortables) window.refreshPhotoGroupSortables();
     };
     // 2. EVENT DELEGATION
     container.addEventListener('click', function(e) {
@@ -2575,7 +2604,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const card = e.target.closest('.variation-card');
             if(card && confirm('Remove this variation card?')) {
                 card.remove();
-                if (window.refreshPhotoGroupSortables) window.refreshPhotoGroupSortables();
             }
         }
         // --- CLONE LOGIC ---
@@ -2646,7 +2674,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // END FIX
             // ---------------------------------------------------------
             container.appendChild(newCard);
-            if (window.refreshPhotoGroupSortables) window.refreshPhotoGroupSortables();
             
             // Scroll to new item
             newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });

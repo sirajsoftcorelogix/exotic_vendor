@@ -11,13 +11,13 @@ endforeach;
 <div class="max-w-4xl mx-auto text-white rounded-lg grid grid-cols-2 p-4" style="background-color: rgba(208, 103, 6, 1);">
     <div>
         <?php /* $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number='.$order[0]['order_number']); */ ?>
-        <?php $link = 'index.php?page=orders&action=get_order_details_html&type=outer&order_number='.$order[0]['order_number']; ?>
+        <?php $link = 'index.php?page=posorders&action=get_order_details_html&type=outer&order_number='.$order[0]['order_number']; ?>
         <p><span class="font-bold">Order number : </span><span class=""><a href="<?php echo $link; ?>" class="text-blue-600 hover:underline" target="_blank"><?php echo $order[0]['order_number']; ?></a></span></p>
         <p><span class="font-bold">Order Date : </span><span class=""><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
         </p>
     </div>
     <div>
-        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($orderremarks['total'], 2); ?> <?php echo $currency; ?></span></p>
+        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($total_price, 2); ?> <?php echo $currency; ?></span></p>
         <p><span class="font-bold">Payment Mode : </span><span class=""><?php echo $order[0]['payment_type']; ?></span></p>
     </div>
 </div>

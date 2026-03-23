@@ -326,6 +326,38 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 <option value="no" <?= ($data['filters']['in_house'] ?? '') == 'no' ? 'selected' : '' ?>>No</option>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Photoshoot</label>
+                            <select name="log_photoshoot" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_photoshoot'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_photoshoot'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Photo Edit</label>
+                            <select name="log_editing" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_editing'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_editing'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data Entry</label>
+                            <select name="log_data_entry" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_data_entry'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_data_entry'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Published</label>
+                            <select name="log_published" class="w-full h-[40px] border border-gray-300 rounded-lg px-3 bg-white focus:outline-none focus:border-orange-500 cursor-pointer">
+                                <option value="">All</option>
+                                <option value="yes" <?= ($data['filters']['log_published'] ?? '') === 'yes' ? 'selected' : '' ?>>Yes</option>
+                                <option value="no" <?= ($data['filters']['log_published'] ?? '') === 'no' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
                         <div class="block text-xs font-bold text-gray-500 uppercase mb-1">
                             <div class="w-full">
                                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Item Code</label>
@@ -391,6 +423,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 value="<?= htmlspecialchars($_GET['published_to'] ?? '') ?>"
                                 id="published_to">
                         </div>
+                        
                     </div>
 
                     <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -536,14 +569,18 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             
             $hasEditedPhotos = false;
             $hasRawPhotos = false;
+            $hasPublished = false;
 
             if (!empty($tc['stat_logs'])) {
                 foreach ($tc['stat_logs'] as $log) {
-                    if ($log['stat'] === 'Editing' || $log['stat'] === 'Published') {
+                    if ($log['stat'] === 'Editing') {
                         $hasEditedPhotos = true;
                     }
                     if ($log['stat'] === 'Photoshoot') {
                         $hasRawPhotos = true;
+                    }
+                    if ($log['stat'] === 'Published') {
+                        $hasPublished = true;
                     }
                 }
             }
@@ -551,9 +588,10 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             // Define classes
             $editedBtnClass = $hasEditedPhotos ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
             $rawBtnClass    = $hasRawPhotos    ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
+            $tileBorderClass = $hasPublished ? 'border-4 border-green-500' : 'border border-[rgba(229,229,229,1)]';
             ?>
 
-            <div class="accordion-item bg-white rounded-[16px] border border-[rgba(229,229,229,1)] shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
+            <div class="accordion-item bg-white rounded-[16px] <?= $tileBorderClass ?> shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
                 
                 <div class="px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-3 cursor-pointer toggle-btn relative z-20 bg-white rounded-[16px]">
                     
@@ -572,16 +610,19 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                             
                             <div class="flex gap-3 shrink-0 justify-center md:justify-start" onclick="event.stopPropagation()">
                                 <?php 
-                                    $prodThumb = !empty($tc['product_photo']) ? base_url(getThumbnail($tc['product_photo'])) : '';
-                                    $prodFull = !empty($tc['product_photo']) ? base_url($tc['product_photo']) : '';
+                                    $prodPath = $tc['list_product_thumb_path'] ?? ($tc['product_photo'] ?? '');
+                                    $prodThumb = !empty($prodPath) ? base_url(getThumbnail($prodPath)) : '';
+                                    $prodFull = !empty($prodPath) ? base_url($prodPath) : '';
                                 ?>
-                                <div class="w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center overflow-hidden cursor-zoom-in hover:opacity-80 transition"
+                                <div class="w-20 h-28 shrink-0 rounded-lg border-2 border-gray-400 bg-white p-1 shadow-md ring-1 ring-gray-300/60 cursor-zoom-in hover:shadow-lg hover:border-gray-500 transition"
                                      onclick="openImagePopup('<?= $prodFull ?>')">
+                                    <div class="w-full h-full rounded-md overflow-hidden bg-gray-50 flex items-center justify-center">
                                     <?php if(!empty($prodThumb)): ?>
                                         <img src="<?= $prodThumb ?>" class="w-full h-full object-cover">
                                     <?php else: ?>
                                         <i data-lucide="image" class="w-8 h-8 text-gray-300"></i>
                                     <?php endif; ?>
+                                    </div>
                                 </div>
 
                                 <?php 
@@ -602,21 +643,25 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 ?>
                                 
                                 <?php if($isPdf): ?>
-                                    <div class="relative w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition"
+                                    <div class="relative w-20 h-28 shrink-0 rounded-lg border-2 border-gray-400 bg-white p-1 shadow-md ring-1 ring-gray-300/60 flex flex-col items-center justify-center cursor-pointer hover:shadow-lg hover:border-gray-500 transition"
                                          onclick="window.open('<?= $invFull ?>', '_blank')">
+                                        <div class="w-full h-full rounded-md overflow-hidden bg-gray-50 flex flex-col items-center justify-center">
                                         <i data-lucide="file-text" class="w-8 h-8 text-red-500 mb-1"></i>
                                         <span class="text-[9px] font-bold text-gray-600">PDF</span>
-                                        <div class="absolute top-1 right-1 bg-red-500 text-white text-[8px] px-1 rounded shadow-sm">PDF</div>
+                                        </div>
+                                        <div class="absolute top-1.5 right-1.5 bg-red-500 text-white text-[8px] px-1 rounded shadow-sm">PDF</div>
                                     </div>
                                 <?php else: ?>
-                                    <div class="relative w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center overflow-hidden cursor-zoom-in hover:opacity-80 transition"
+                                    <div class="relative w-20 h-28 shrink-0 rounded-lg border-2 border-gray-400 bg-white p-1 shadow-md ring-1 ring-gray-300/60 cursor-zoom-in hover:shadow-lg hover:border-gray-500 transition"
                                          onclick="openImagePopup('<?= $invFull ?>')">
+                                        <div class="w-full h-full rounded-md overflow-hidden bg-gray-50 flex items-center justify-center">
                                         <?php if(!empty($invThumb)): ?>
                                             <img src="<?= $invThumb ?>" class="w-full h-full object-cover">
                                         <?php else: ?>
                                             <i data-lucide="file-text" class="w-8 h-8 text-gray-300"></i>
                                         <?php endif; ?>
-                                        <div class="absolute top-1 right-1 bg-orange-400 text-white text-[8px] px-1 rounded shadow-sm">Doc</div>
+                                        </div>
+                                        <div class="absolute top-1.5 right-1.5 bg-orange-400 text-white text-[8px] px-1 rounded shadow-sm">Doc</div>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -1010,7 +1055,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         if(document.getElementById('filter_group')) new TomSelect("#filter_group", config);
         
         // Auto-open filter panel if any filter is applied (optional UX improvement)
-        <?php if(!empty($data['filters']['vendor_code']) || !empty($data['filters']['received_by_user_id']) || !empty($data['filters']['updated_by_user_id']) || !empty($data['filters']['group_name']) || !empty($data['filters']['status_step'])): ?>
+        <?php if(!empty($data['filters']['vendor_code']) || !empty($data['filters']['received_by_user_id']) || !empty($data['filters']['updated_by_user_id']) || !empty($data['filters']['group_name']) || !empty($data['filters']['status_step']) || !empty($data['filters']['log_photoshoot']) || !empty($data['filters']['log_editing']) || !empty($data['filters']['log_data_entry']) || !empty($data['filters']['log_published'])): ?>
             toggleFilterPanel();
         <?php endif; ?>
     });
