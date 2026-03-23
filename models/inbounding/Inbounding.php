@@ -1084,6 +1084,29 @@ class Inbounding {
         return ['success' => false, 'message' => $stmt->error];
       }
 
+    /**
+     * Remove item_images rows that belong to a variation strip (variation_id > 0) but whose
+     * variation row no longer exists for this inbound item. Uses DB truth, not POST ids —
+     * avoids wiping the wrong galleries when max_input_vars truncates variations[] fields.
+     */
+    public function deleteOrphanVariationGalleryImages($it_id) {
+        $it_id = (int) $it_id;
+        if ($it_id <= 0) {
+            return false;
+        }
+        $sql = "DELETE ii FROM item_images ii
+                LEFT JOIN vp_variations v ON v.id = ii.variation_id AND v.it_id = ii.item_id
+                WHERE ii.item_id = ?
+                  AND ii.variation_id > 0
+                  AND v.id IS NULL";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param("i", $it_id);
+        return $stmt->execute();
+    }
+
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
     public function saveVariations($it_id, $variations, $item_code) {
         $submittedIds = [];
@@ -1097,12 +1120,11 @@ class Inbounding {
         }
 
         $safe_it_id = (int)$it_id;
+        // Never DELETE item_images using POST-derived id lists — incomplete POSTs delete the wrong rows.
         if (!empty($submittedIds)) {
             $idsStr = implode(',', $submittedIds);
-            $this->conn->query("DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id NOT IN ($idsStr) AND variation_id > 0");
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)");
         } else {
-            $this->conn->query("DELETE FROM item_images WHERE item_id = $safe_it_id AND variation_id > 0");
             $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
         }
 
@@ -1179,6 +1201,9 @@ class Inbounding {
                 $stmtInsert->execute();
             }
         }
+
+        $this->deleteOrphanVariationGalleryImages($safe_it_id);
+
         return true;
     }
 
