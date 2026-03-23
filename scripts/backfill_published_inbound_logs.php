@@ -105,7 +105,8 @@ $sql = "
 SELECT DISTINCT vi.id AS i_id,
        COALESCE(NULLIF(vi.updated_by_user_id, 0), {$fallbackSql}) AS userid_log
 FROM vp_inbound vi
-INNER JOIN vp_products p ON TRIM(p.item_code) = TRIM(vi.Item_code)
+INNER JOIN vp_products p
+  ON TRIM(p.item_code) COLLATE utf8mb4_unicode_ci = TRIM(vi.Item_code) COLLATE utf8mb4_unicode_ci
 WHERE TRIM(COALESCE(vi.Item_code, '')) <> ''
   AND NOT EXISTS (
     SELECT 1 FROM inbound_logs il
