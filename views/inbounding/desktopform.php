@@ -1,5 +1,16 @@
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+    window.safeTomSelect = function (el, options) {
+        if (el == null) return null;
+        if (typeof el === 'string') el = document.querySelector(el);
+        if (!el) return null;
+        if (el.tomselect) return el.tomselect;
+        return new TomSelect(el, options);
+    };
+})();
+</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <style>
@@ -1724,7 +1735,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- INITIALIZE TOM SELECT FOR PARENT ITEM (skip if already initialized, e.g. hot reload / duplicate scripts) ---
     let tomSelectInstance = null;
     if (selectElement) {
-        tomSelectInstance = selectElement.tomselect ? selectElement.tomselect : new TomSelect(selectElement, {
+        tomSelectInstance = window.safeTomSelect(selectElement, {
         valueField: 'item_code',
         labelField: 'title',
         searchField: ['item_code', 'title'], 
@@ -1824,8 +1835,8 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         function initTomSelectById(id, opts) {
             const el = document.getElementById(id);
-            if (el && !el.tomselect) {
-                new TomSelect(el, opts);
+            if (el && typeof window.safeTomSelect === 'function') {
+                window.safeTomSelect(el, opts);
             }
         }
         initTomSelectById('vendor_code', commonConfig);
@@ -1927,18 +1938,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     let sGroupTs = null;
 
-    if(sGroupSelectEl) {
-        // Reuse instance if exists, otherwise create
-        if (sGroupSelectEl.tomselect) sGroupTs = sGroupSelectEl.tomselect;
-        else sGroupTs = new TomSelect(sGroupSelectEl, config);
-
-        sGroupTs.on('change', function(groupValue) {
-            // Clear downstream selections on group change
-            searchPreSelected.cat.clear(); 
-            searchPreSelected.sub.clear(); 
-            searchPreSelected.subsub.clear();        
-            updateSearchCatList(groupValue);
-        });
+    if (sGroupSelectEl && typeof window.safeTomSelect === 'function') {
+        const hadTs = !!sGroupSelectEl.tomselect;
+        sGroupTs = window.safeTomSelect(sGroupSelectEl, config);
+        if (sGroupTs && !hadTs) {
+            sGroupTs.on('change', function (groupValue) {
+                searchPreSelected.cat.clear();
+                searchPreSelected.sub.clear();
+                searchPreSelected.subsub.clear();
+                updateSearchCatList(groupValue);
+            });
+        }
     }
 
     // --- HELPER: Create HTML for a Checkbox Item ---
@@ -2907,19 +2917,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // 3. Init TomSelect for Search Group
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     let sGroupTs = null;
-    if (sGroupSelectEl) {
-        // Reuse instance if first search block already initialized (duplicate DOMContentLoaded blocks on this page)
-        if (sGroupSelectEl.tomselect) {
-            sGroupTs = sGroupSelectEl.tomselect;
-        } else {
-            sGroupTs = new TomSelect(sGroupSelectEl, config);
-            sGroupTs.on('change', function(groupValue) {
-                searchPreSelected.cat.clear();
-                searchPreSelected.sub.clear();
-                searchPreSelected.subsub.clear();
-                updateSearchCatList(groupValue);
-            });
-        }
+    if (sGroupSelectEl && typeof window.safeTomSelect === 'function') {
+        sGroupTs = window.safeTomSelect(sGroupSelectEl, config);
     }
     // --- HELPER: Create Checkbox ---
     function createSearchCheckbox(item, inputName, selectedSet, onChangeCallback) {
@@ -3059,8 +3058,8 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     // CHANGED: Target the 'keywords_input' instead of 'search_term_input'
     const keywordInput = document.getElementById('keywords_input');
-    if (keywordInput && !keywordInput.tomselect) {
-        new TomSelect(keywordInput, {
+    if (keywordInput && typeof window.safeTomSelect === 'function') {
+        window.safeTomSelect(keywordInput, {
             create: true,               // Allow user to type new text
             createOnBlur: true,         // Create tag if user clicks away
             delimiter: ',',             // Store in DB separated by commas
@@ -3185,17 +3184,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const config = { create: false, sortField: { field: "text", direction: "asc" }, controlInput: null };
     let groupTs = null;
 
-    if(groupSelectEl) {
-        if(groupSelectEl.tomselect) groupTs = groupSelectEl.tomselect;
-        else groupTs = new TomSelect(groupSelectEl, config);
-
-        groupTs.on('change', function(groupValue) {
-            // Clear downstream selections on manual change
-            groupingPreSelected.cat.clear(); 
-            groupingPreSelected.sub.clear(); 
-            groupingPreSelected.subsub.clear();        
-            updateGroupingCatList(groupValue);
-        });
+    if (groupSelectEl && typeof window.safeTomSelect === 'function') {
+        const hadTs = !!groupSelectEl.tomselect;
+        groupTs = window.safeTomSelect(groupSelectEl, config);
+        if (groupTs && !hadTs) {
+            groupTs.on('change', function (groupValue) {
+                groupingPreSelected.cat.clear();
+                groupingPreSelected.sub.clear();
+                groupingPreSelected.subsub.clear();
+                updateGroupingCatList(groupValue);
+            });
+        }
     }
 
     // --- HELPER: Create Checkbox ---
