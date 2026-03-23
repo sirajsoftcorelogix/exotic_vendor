@@ -278,7 +278,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     <form id="product_form" action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
     <input type="hidden" name="save_action" id="hidden_save_action" value="">
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
-        <div id="deleted-gallery-images-markers" class="hidden" aria-hidden="true"></div>
+        <input type="hidden" name="delete_gallery_image_ids_csv" id="delete_gallery_image_ids_csv" value="">
         <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
             <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
                 <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
@@ -1656,13 +1656,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             var card = removeBtn.closest('.draggable-item');
             if (!card) return;
-            var bucket = document.getElementById('deleted-gallery-images-markers');
-            if (bucket) {
-                var marker = document.createElement('input');
-                marker.type = 'hidden';
-                marker.name = 'delete_gallery_image_ids[]';
-                marker.value = imageId;
-                bucket.appendChild(marker);
+            var csvInput = document.getElementById('delete_gallery_image_ids_csv');
+            if (csvInput) {
+                var ids = csvInput.value ? csvInput.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+                if (ids.indexOf(String(imageId)) < 0) {
+                    ids.push(String(imageId));
+                }
+                csvInput.value = ids.join(',');
             }
             card.remove();
         });

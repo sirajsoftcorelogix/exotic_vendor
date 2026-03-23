@@ -953,10 +953,33 @@ class InboundingController {
     public function updatedesktopform() {
         global $inboundingModel;
         // 1. Setup & Checks
-        $id = $_GET['id'] ?? 0;
+        $id = (int) ($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            echo "Invalid record.";
+            exit;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            header('Location: ' . base_url('?page=inbounding&action=desktopform&id=' . $id));
+            exit;
+        }
+
         $oldData = $inboundingModel->getform1data($id);
 
         if (!$oldData) { echo "Record not found."; exit; }
+
+        // Gallery deletions first (single CSV field avoids PHP max_input_vars dropping many delete_gallery_image_ids[] fields on large forms)
+        $delCsv = trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? ''));
+        if ($delCsv !== '') {
+            foreach (array_filter(array_map('intval', explode(',', $delCsv))) as $delId) {
+                if ($delId > 0) {
+                    $inboundingModel->delete_image_for_item($delId, $id);
+                }
+            }
+        } elseif (!empty($_POST['delete_gallery_image_ids']) && is_array($_POST['delete_gallery_image_ids'])) {
+            foreach ($_POST['delete_gallery_image_ids'] as $delId) {
+                $inboundingModel->delete_image_for_item((int) $delId, $id);
+            }
+        }
 
         // --- Main Invoice File Upload Logic ---
         $invoicePath = $oldData['form1']['invoice_image'] ?? '';
@@ -1124,13 +1147,6 @@ class InboundingController {
         }
         unset($variant);
         $inboundingModel->saveVariations($id, $allVariations, $item_code,$item_code);
-
-        // 5a. Gallery image deletions (desktop form — scoped to this inbound id)
-        if (!empty($_POST['delete_gallery_image_ids']) && is_array($_POST['delete_gallery_image_ids'])) {
-            foreach ($_POST['delete_gallery_image_ids'] as $delId) {
-                $inboundingModel->delete_image_for_item((int) $delId, (int) $id);
-            }
-        }
 
         // 5. Update Image Order & Assignment
         if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
