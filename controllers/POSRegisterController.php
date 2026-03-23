@@ -20,7 +20,7 @@ class POSRegisterController
         require_once 'models/customer/Customer.php';
         global $conn;   // use existing DB connection
         $usersModel = new User($conn);   //  create instance
-   
+
         $warehouseName = 'No Warehouse';
 
         if (!empty($_SESSION['warehouse_id'])) {
@@ -332,90 +332,18 @@ class POSRegisterController
 
         return ['data' => json_decode($response, true) ?: [], 'code' => $httpCode];
     }
-    public function exotic_api_call_new($endpoint, $method = 'GET', $params = [], $postData = null)
-    {
-        $url = 'https://www.exoticindia.com/api' . $endpoint;
-
-        if ($params) {
-            $url .= '?' . http_build_query($params);
-        }
-
-        $ch = curl_init($url);
-
-        $headers = [
-            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-            'x-api-deviceid: POS-Store_1',
-            'x-api-appplayerid: POS-Web-Terminal',
-            'x-api-countrycode: IN',
-            'User-Agent: ExoticPOS-Web/1.0'
-        ];
-
-        if (!empty($_SESSION['x_api_euid'])) {
-            $headers[] = 'x-api-euid: ' . $_SESSION['x_api_euid'];
-        }
-
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-
-        /* CAPTURE RESPONSE HEADERS */
-        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) {
-            $len = strlen($header);
-            $header = explode(':', $header, 2);
-
-            if (count($header) < 2) return $len;
-
-            $name = strtolower(trim($header[0]));
-            $value = trim($header[1]);
-
-            if ($name == 'x-api-euid') {
-                $_SESSION['x_api_euid'] = $value;
-            }
-
-            if ($name == 'x-api-etd') {
-                $_SESSION['x_api_etd'] = $value;
-            }
-
-            if ($name == 'x-api-browsehistory') {
-                $_SESSION['x_api_browsehistory'] = $value;
-            }
-
-            return $len;
-        });
-
-        if ($method == 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-
-            if (is_array($postData)) {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData); // multipart
-            } else {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            }
-        }
-
-        $response = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        curl_close($ch);
-
-        return [
-            'data' => json_decode($response, true),
-            'code' => $code,
-            'raw'  => $response
-        ];
-    }
 
 
     public function get_cart()
     {
         $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-
+        $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
         $res = $this->exotic_api_call(
             '/cart/retrieve',
             'GET',
             [
                 'discountcoupondetails' => $coupon,
-                'giftvoucherdetails' => ''
+                'giftvoucherdetails' => $voucher
             ]
         );
 
@@ -489,7 +417,7 @@ class POSRegisterController
             header("Location: ?page=pos_register");
             exit;
         }
-
+        $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
         $coupon = '';
 
         if (!empty($_SESSION['discount_coupon'])) {
@@ -506,7 +434,8 @@ class POSRegisterController
             'qty'      => max(1, (int)$qty),
             'variation' => trim($variation),
             'options'  => trim($options),
-            'discountcoupondetails' => $coupon
+            'discountcoupondetails' => $coupon,
+            'giftvoucherdetails' => $voucher
         ]);
 
         $result = $this->exotic_api_call('/cart/add', 'POST', [], $postData);
@@ -602,9 +531,6 @@ class POSRegisterController
         exit;
     }
 
-
-
-
     public function create_order()
     {
         global $conn;
@@ -652,12 +578,7 @@ class POSRegisterController
         /* ---------- STEP 1 : EXISTING CUSTOMER ---------- */
         if ($customerId > 0) {
 
-            $stmt = $conn->prepare("
-        SELECT * FROM vp_order_info
-        WHERE customer_id = ?
-        ORDER BY id DESC
-        LIMIT 1
-    ");
+            $stmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
             $stmt->bind_param("i", $customerId);
             $stmt->execute();
             $info = $stmt->get_result()->fetch_assoc();
@@ -790,18 +711,63 @@ class POSRegisterController
                 "api" => $result
             ]);
             exit;
+        } else {
+            $orderId = $result['data']['orderid'];
+            // $orderNumber = $result['data']['ordernumber'] ?? $orderId;
+            $orderNumber = $result['data']['orderid'];
+            $warehouseId = $_SESSION['warehouse_id'];
+            $userId = $_SESSION['user']['id'];
+            $paymentStage = $_POST['payment_stage'];
+            $paymentType = $_POST['payment_type'];
+            $amount = $_POST['amount'];
+            $transactionId = $_POST['transaction_id'];
+            $note = $_POST['note'];
+            $paymentDate = date('Y-m-d');
+            $stmt = $conn->prepare("
+            INSERT INTO pos_payments 
+            (order_id, order_number, customer_id, warehouse_id, user_id,payment_stage, payment_mode, amount, transaction_id, note, payment_date)VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+
+            // $stmt->bind_param(
+            //     "isiisssdsss",
+            //     $orderId,
+            //     $orderNumber,
+            //     $customerId,
+            //     $_SESSION['warehouse_id'],
+            //     $_SESSION['user']['id'],
+            //     $_POST['payment_stage'],
+            //     $_POST['payment_type'],
+            //     $_POST['amount'],
+            //     $_POST['transaction_id'],
+            //     $_POST['note'],
+            //     date('Y-m-d')
+            // );
+$stmt->bind_param(
+    "isiisssdsss",
+    $orderId,
+    $orderNumber,
+    $customerId,
+    $warehouseId,
+    $userId,
+    $paymentStage,
+    $paymentType,
+    $amount,
+    $transactionId,
+    $note,
+    $paymentDate
+);
+            $stmt->execute();
         }
 
         unset($_SESSION['discount_coupon']);
         unset($_SESSION['pos_customer_form']);
         unset($_SESSION['pos_customer_id']);
+        // echo '<pre>'; print_r($result); exit;
         echo json_encode([
             "success" => true,
             "orderid" => $result['data']['orderid']
         ]);
     }
 
-   
     public function add_customer()
     {
         global $conn;
@@ -891,5 +857,40 @@ class POSRegisterController
         ]);
         exit;
     }
-    
+    public function apply_gift_voucher()
+    {
+        $voucherId = $_POST['voucher'] ?? '';
+
+        if (empty($voucherId)) {
+            $_SESSION['coupon_message'] = "Voucher code required";
+            $_SESSION['coupon_status'] = "error";
+            header("Location: ?page=pos_register");
+            exit;
+        }
+
+        $result = $this->exotic_api_call(
+            '/cart/addgiftvoucher',
+            'GET',
+            [
+                'voucherid' => $voucherId
+            ]
+        );
+
+        $response = $result['data'] ?? [];
+
+        if (!empty($response) && !isset($response['error'])) {
+
+            $_SESSION['gift_voucher'] = $response;
+
+            $_SESSION['coupon_message'] = "Gift voucher applied successfully";
+            $_SESSION['coupon_status'] = "success";
+        } else {
+
+            $_SESSION['coupon_message'] = $response['error'] ?? "Invalid gift voucher";
+            $_SESSION['coupon_status'] = "error";
+        }
+
+        header("Location: ?page=pos_register");
+        exit;
+    }
 }
