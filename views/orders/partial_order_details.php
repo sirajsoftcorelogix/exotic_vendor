@@ -17,7 +17,7 @@ endforeach;
         </p>
     </div>
     <div>
-        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($total_price, 2); ?> <?php echo $currency; ?></span></p>
+        <p><span class="font-bold">Total Order Value : </span><span class=""><?php echo number_format($orderremarks['total'], 2); ?> <?php echo $currency; ?></span></p>
         <p><span class="font-bold">Payment Mode : </span><span class=""><?php echo $order[0]['payment_type']; ?></span></p>
     </div>
 </div>

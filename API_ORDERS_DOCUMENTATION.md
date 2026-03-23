@@ -137,7 +137,7 @@ curl -X POST "http://yourserver.com/index.php?page=orders&action=api_generate_to
 
 ---
 
-## 1. Update Single Order Status
+## 1. Update Single Order Item Status
 
 ### Endpoint
 ```
@@ -145,7 +145,7 @@ POST ?page=orders&action=api_update_order_status
 ```
 
 ### Description
-Update the status of a single order with optional metadata (remarks, ESD, priority, agent assignment).
+Update the status of a specific order item based on order number, item code, color, and size with optional metadata (remarks, ESD, priority, agent assignment).
 
 ### Request
 
@@ -157,22 +157,28 @@ Update the status of a single order with optional metadata (remarks, ESD, priori
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `order_number` | string | Yes | The order number (will be used to fetch order_id) |
-| `status` | string | Yes | New order status (e.g., 'pending', 'processing', 'shipped') |
-| `remarks` | string | No | Notes or comments about the order |
+| `order_number` | string | Yes | The order number |
+| `item_code` | string | Yes | Product item code (SKU) |
+| `color` | string | No | Product color (used for item matching) |
+| `size` | string | No | Product size (used for item matching) |
+| `status` | string | Yes | New item status (e.g., 'pending', 'processing', 'shipped') |
+| `remarks` | string | No | Notes or comments about the item |
 | `esd` | string | No | Expected Ship Date (format: YYYY-MM-DD) |
-| `priority` | string | No | Order priority level |
-| `agent_id` | integer | No | ID of the agent to assign the order to |
+| `priority` | string | No | Item priority level |
+| `agent_id` | integer | No | ID of the agent to assign the item to |
 
 ### Example Request (Form Data with Bearer Token)
 ```bash
 curl -X POST "http://yourserver.com/index.php?page=orders&action=api_update_order_status" \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -d "order_number=ORD-2026-001" \
-  -d "status=shipped" \
+  -d "item_code=BOOK-SKU-123" \
+  -d "color=Red" \
+  -d "size=M" \
+  -d "status=5" \
   -d "esd=2026-03-25" \
   -d "priority=high" \
-  -d "remarks=Order ready for dispatch"
+  -d "remarks=Item packed and ready"
 ```
 
 ### Example Request (JSON with Bearer Token)
@@ -182,31 +188,49 @@ curl -X POST "http://yourserver.com/index.php?page=orders&action=api_update_orde
   -H "Content-Type: application/json" \
   -d '{
     "order_number": "ORD-2026-001",
+    "item_code": "BOOK-SKU-123",
+    "color": "Red",
+    "size": "M",
     "status": "shipped",
     "esd": "2026-03-25",
     "priority": "high",
-    "remarks": "Order ready for dispatch"
+    "remarks": "Item packed and ready"
   }'
 ```
 
 ### Example Request (Query Parameter Token)
 ```bash
 curl -X POST "http://yourserver.com/index.php?page=orders&action=api_update_order_status&api_token=YOUR_API_TOKEN" \
-  -d "order_number=ORD-2026-001" \
-  -d "status=shipped"
+  -H "Content-Type: application/json" \
+  -d '{
+    "order_number": "ORD-2026-001",
+    "item_code": "BOOK-SKU-123",
+    "status": "shipped"
+  }'
 ```
 
 ### Response (Success - 200)
 ```json
 {
   "success": true,
-  "message": "Order status updated successfully.",
+  "message": "Order item status updated successfully.",
   "data": {
-    "order_id": 123,
+    "order_number": "ORD-2026-001",
+    "item_code": "BOOK-SKU-123",
+    "color": "Red",
+    "size": "M",
     "previous_status": "processing",
     "new_status": "shipped",
     "updated_at": "2026-03-22 14:30:00"
   }
+}
+```
+
+### Response (Error - Item Not Found - 404)
+```json
+{
+  "success": false,
+  "message": "Order item not found. Item Code: BOOK-SKU-123, Color: Red, Size: M"
 }
 ```
 
@@ -460,7 +484,7 @@ const generateToken = async () => {
 // Use token in API calls
 const apiToken = 'YOUR_API_TOKEN_HERE';
 
-// Update single order
+// Update single order item
 fetch('index.php?page=orders&action=api_update_order_status', {
   method: 'POST',
   headers: {
@@ -469,6 +493,9 @@ fetch('index.php?page=orders&action=api_update_order_status', {
   },
   body: JSON.stringify({
     order_number: 'ORD-2026-001',
+    item_code: 'BOOK-SKU-123',
+    color: 'Red',
+    size: 'M',
     status: 'shipped',
     remarks: 'Dispatched via carrier'
   })
@@ -505,7 +532,7 @@ fetch(`index.php?page=orders&action=api_order_status_history&order_number=ORD-20
 ```php
 $apiToken = 'YOUR_API_TOKEN_HERE';
 
-// Update single order
+// Update single order item
 $ch = curl_init('http://yourserver.com/index.php?page=orders&action=api_update_order_status');
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -514,8 +541,11 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
 ]);
 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
   'order_number' => 'ORD-2026-001',
+  'item_code' => 'BOOK-SKU-123',
+  'color' => 'Red',
+  'size' => 'M',
   'status' => 'shipped',
-  'remarks' => 'Ready for dispatch'
+  'remarks' => 'Item ready for dispatch'
 ]));
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 $response = curl_exec($ch);
@@ -837,7 +867,10 @@ if result['success']:
     update_result = api.update_order_status(
         'ORD-2026-001',
         'shipped',
-        remarks='Order dispatched',
+        item_code='BOOK-SKU-123',
+        color='Red',
+        size='M',
+        remarks='Item dispatched',
         esd='2026-03-25'
     )
     print(update_result)
