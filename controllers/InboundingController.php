@@ -1125,6 +1125,13 @@ class InboundingController {
         unset($variant);
         $inboundingModel->saveVariations($id, $allVariations, $item_code,$item_code);
 
+        // 5a. Gallery image deletions (desktop form — scoped to this inbound id)
+        if (!empty($_POST['delete_gallery_image_ids']) && is_array($_POST['delete_gallery_image_ids'])) {
+            foreach ($_POST['delete_gallery_image_ids'] as $delId) {
+                $inboundingModel->delete_image_for_item((int) $delId, (int) $id);
+            }
+        }
+
         // 5. Update Image Order & Assignment
         if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
             foreach ($_POST['photo_order'] as $img_id => $order_num) {
