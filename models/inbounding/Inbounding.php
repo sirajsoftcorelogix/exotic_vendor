@@ -194,7 +194,19 @@ class Inbounding {
         // Fetch Data (Added JOIN and specific SELECT)
         // We select vi.* (all inbound data) AND c.display_name as 'group_name_display'
         // (I used 'group_name_display' to avoid conflict, or you can overwrite 'group_name' if you prefer)
-        $sql = "SELECT vi.*, c.display_name as group_name_display 
+        $sql = "SELECT vi.*, c.display_name as group_name_display,
+                (SELECT ii.file_name
+                 FROM item_images ii
+                 WHERE ii.item_id = vi.id
+                   AND TRIM(COALESCE(ii.file_name, '')) <> ''
+                 ORDER BY
+                   CASE
+                     WHEN ii.variation_id IS NULL OR ii.variation_id IN (-1, 0, '-1', '') THEN 0
+                     ELSE 1
+                   END,
+                   ii.display_order ASC,
+                   ii.id ASC
+                 LIMIT 1) AS _list_gallery_file
                 FROM vp_inbound as vi
                 LEFT JOIN category as c ON vi.group_name = c.category
                 $whereSql 
@@ -209,6 +221,14 @@ class Inbounding {
             
             // If you want the main 'group_name' key to be the human readable name, uncomment this:
             // $row['group_name'] = $row['group_name_display']; 
+
+            $gf = trim((string) ($row['_list_gallery_file'] ?? ''));
+            if ($gf !== '') {
+                $row['list_product_thumb_path'] = 'uploads/itm_img/' . $row['_list_gallery_file'];
+            } else {
+                $row['list_product_thumb_path'] = (string) ($row['product_photo'] ?? '');
+            }
+            unset($row['_list_gallery_file']);
 
             // Fetch logs
             $log_sql = "SELECT il.*, u.name FROM inbound_logs as il LEFT JOIN vp_users as u on il.userid_log=u.id WHERE il.i_id = $current_id";

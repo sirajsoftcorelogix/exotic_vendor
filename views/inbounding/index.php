@@ -610,8 +610,9 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                             
                             <div class="flex gap-3 shrink-0 justify-center md:justify-start" onclick="event.stopPropagation()">
                                 <?php 
-                                    $prodThumb = !empty($tc['product_photo']) ? base_url(getThumbnail($tc['product_photo'])) : '';
-                                    $prodFull = !empty($tc['product_photo']) ? base_url($tc['product_photo']) : '';
+                                    $prodPath = $tc['list_product_thumb_path'] ?? ($tc['product_photo'] ?? '');
+                                    $prodThumb = !empty($prodPath) ? base_url(getThumbnail($prodPath)) : '';
+                                    $prodFull = !empty($prodPath) ? base_url($prodPath) : '';
                                 ?>
                                 <div class="w-20 h-28 bg-gray-50 rounded-lg shadow-sm border border-gray-200 flex items-center justify-center overflow-hidden cursor-zoom-in hover:opacity-80 transition"
                                      onclick="openImagePopup('<?= $prodFull ?>')">
