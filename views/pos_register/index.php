@@ -383,7 +383,44 @@
             <option value="150">Gift Wrap (+₹150)</option>
             <option value="500">Insurance (+₹500)</option>
           </select> -->
+          <?php $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? ''; ?>
 
+          <?php if (empty($voucher)): ?>
+
+            <!-- <form method="POST" action="?page=pos_register&action=apply-gift-voucher" class="flex gap-2 mt-2">
+
+              <input
+                name="voucher"
+                class="w-2/3 rounded-lg border px-2 py-2 text-xs"
+                placeholder="Gift Voucher Code">
+
+              <button
+                type="submit"
+                class="w-1/3 rounded-lg bg-blue-600 px-4 py-2 text-xs text-white">
+                Apply
+              </button>
+
+            </form> -->
+
+          <?php else: ?>
+
+            <!-- <div class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mt-2">
+
+              <span class="text-[11px] text-blue-700 font-semibold">
+                Voucher Applied
+              </span>
+
+              <form method="POST" action="?page=pos_register&action=remove-gift-voucher">
+                <button
+                  type="submit"
+                  class="text-[11px] text-red-600 font-semibold hover:underline">
+                  Remove
+                </button>
+              </form>
+
+            </div> -->
+
+          <?php endif; ?>
           <!-- TOTALS -->
           <div class="pt-2 border-t space-y-1.5">
             <?php if (!empty($cartData['discount'])): ?>
@@ -428,7 +465,12 @@
 
   </main>
 </div>
-
+<!-- <a
+  href="/?page=invoices&action=generate_pdf&invoice_id=33"
+  target="_blank"
+  class="px-4 py-2 bg-green-600 text-white rounded">
+  TEST PRINT
+</a> -->
 <!-- Product Modal -->
 <div id="productModal" class="fixed inset-0 z-[9999] hidden">
   <!-- overlay -->
@@ -710,6 +752,7 @@
           <select name="payment_type" id="payment_mode"
             class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
 
+            <option value="offline">Offline</option>
             <option value="cod">Cash</option>
             <option value="bank_transfer">Bank Transfer</option>
             <option value="pos_machine">POS Machine</option>
@@ -805,7 +848,14 @@
     <div id="invoicePreviewContent" class="p-4"></div>
     <div class="sticky bottom-0 bg-gray-100 p-4 border-t flex justify-end space-x-2">
       <button type="button" onclick="closePreviewModal()" class="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500">Close</button>
-      <button type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Print</button>
+      <!-- <button type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Print</button> -->
+      <a
+        id="printInvoiceBtn"
+        href="#"
+        target="_blank"
+        class="px-4 py-2 bg-blue-600 text-white rounded">
+        Print
+      </a>
     </div>
   </div>
 </div>
@@ -849,6 +899,7 @@
       });
   }
 
+ 
   function previewInvoiceFromOrder(orderNumber) {
 
     fetch('?page=invoices&action=preview', {
@@ -864,19 +915,30 @@
       .then(data => {
 
         if (!data.success) {
-          showToast(data.message || "Preview failed", "red");
+          showToast("Preview failed", "red");
           return;
         }
-
+        console.log(data, 'data')
         document.getElementById('invoicePreviewContent').innerHTML = data.html;
         document.getElementById('invoicePreviewModal').classList.remove('hidden');
+
+        //  SET PRINT LINK
+        if (data.invoice_id) {
+
+          document.getElementById("printInvoiceBtn").href =
+            "/?page=invoices&action=generate_pdf&invoice_id=" + data.invoice_id;
+
+        } else {
+
+          console.error("Invoice ID missing in preview response");
+
+        }
 
       })
       .catch(err => {
         console.error(err);
         showToast("Preview error", "red");
       });
-
   }
 
   function openInvoicePreview(invoice_id) {
@@ -898,6 +960,8 @@
 
         document.getElementById('invoicePreviewContent').innerHTML = data.html;
         document.getElementById('invoicePreviewModal').classList.remove('hidden');
+        document.getElementById("printInvoiceBtn").href =
+          "/?page=invoices&action=generate_pdf&invoice_id=" + invoice_id;
 
       });
 
@@ -996,74 +1060,106 @@
   document.addEventListener("DOMContentLoaded", function() {
 
     document.getElementById("placeOrderBtn").addEventListener("click", function() {
+
       let customerId = document.getElementById("customerSelect").value;
 
       if (!customerId) {
-
         showToast("⚠ Please select customer first", "red");
-
         document.getElementById("customerSelect").focus();
-
         return;
       }
-      let paymentType = document.getElementById("payment_mode").value
-      let paymentStage = document.getElementById("payment_stage").value
-      let paymentAmount = document.getElementById("payment_amount").value
-      let transactionId = document.getElementById("transaction_id").value
-      let note = document.querySelector("textarea[name='note']").value
 
-      /* GET CUSTOMER FORM DATA */
-      // let formData = new FormData(document.getElementById("customerForm"))
-      let form = document.getElementById("customerForm");
-      let formData = new FormData();
-      for (let key in customerData) {
-        formData.append(key, customerData[key]);
+      let paymentStage = document.getElementById("payment_stage").value;
+      let paymentAmount = parseFloat(document.getElementById("payment_amount").value);
+      let grandTotal = parseFloat("<?= $cartData['grand_total'] ?? 0 ?>");
+
+      if (!paymentAmount || paymentAmount <= 0) {
+        showToast("⚠ Payment amount must be greater than 0", "red");
+        return;
       }
-      for (let element of form.elements) {
-        if (element.name) {
-          formData.append(element.name, element.value);
+
+      //  FINAL PAYMENT STRICT VALIDATION
+      if (paymentStage === "final") {
+
+        if (paymentAmount < grandTotal) {
+          showToast("⚠ Final payment must be FULL amount ₹ " + grandTotal, "red");
+          return;
         }
+
+        if (paymentAmount > grandTotal) {
+          showToast("⚠ Over payment not allowed", "red");
+          return;
+        }
+
       }
-      for (let pair of formData.entries()) {
-        // console.log(pair[0] + ":", pair[1]);
+
+      //  PARTIAL VALIDATION
+      if (paymentStage === "partial" || paymentStage === "advance") {
+
+        if (paymentAmount >= grandTotal) {
+          showToast("⚠ Partial payment must be less than total ₹ " + grandTotal, "red");
+          return;
+        }
+
       }
 
-      formData.append("action", "create_order")
-      formData.append("payment_type", paymentType)
-      formData.append("payment_stage", paymentStage)
-      formData.append("amount", paymentAmount)
-      formData.append("transaction_id", transactionId)
-      formData.append("note", note)
-      formData.append("customer_id", $('#customerSelect').val());
-
-      fetch("?page=pos_register&action=create-order", {
-          method: "POST",
-          body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
-
-          if (data.success) {
-
-            closePaymentModal();
-            showToast("✓ Order Created", "green");
-
-            importOrder(data.orderid, function() {
-
-
-              autoCreateInvoiceThenPreview(data.orderid);
-              previewInvoiceFromOrder(data.orderid);
-            });
-
-          } else {
-            alert(data.message || "Order failed");
-          }
-
-        })
-
-    })
+      // continue existing code
+      createOrderNow();
+    });
   });
 
+  function createOrderNow() {
+
+    let paymentType = document.getElementById("payment_mode").value;
+    let paymentStage = document.getElementById("payment_stage").value;
+    let paymentAmount = document.getElementById("payment_amount").value;
+    let transactionId = document.getElementById("transaction_id").value;
+    let note = document.querySelector("textarea[name='note']").value;
+
+    let form = document.getElementById("customerForm");
+    let formData = new FormData();
+
+    for (let key in customerData) {
+      formData.append(key, customerData[key]);
+    }
+
+    for (let element of form.elements) {
+      if (element.name) {
+        formData.append(element.name, element.value);
+      }
+    }
+
+    formData.append("action", "create_order");
+    formData.append("payment_type", paymentType);
+    formData.append("payment_stage", paymentStage);
+    formData.append("amount", paymentAmount);
+    formData.append("transaction_id", transactionId);
+    formData.append("note", note);
+    formData.append("customer_id", $('#customerSelect').val());
+
+    fetch("?page=pos_register&action=create-order", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+
+        if (data.success) {
+
+          closePaymentModal();
+          showToast("✓ Order Created", "green");
+
+          importOrder(data.orderid, function() {
+            autoCreateInvoiceThenPreview(data.orderid);
+          });
+
+        } else {
+          showToast(data.message || "Order failed", "red");
+        }
+
+      });
+
+  }
 
   function importOrder(orderid, callback = null) {
 
