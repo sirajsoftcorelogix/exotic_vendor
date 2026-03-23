@@ -198,6 +198,39 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
 
     return $thumbPath;
 }
+
+/**
+ * Relative path for sidebar thumbnail: first base (Main) gallery image from item_images, else ''.
+ * Uses the same variation grouping rules as the Item Photos grid below.
+ */
+function desktopform_item_image_thumb_path(array $item_photos, array $variations): string {
+    $grouped_keys = ['-1' => true];
+    foreach ($variations as $var) {
+        if (isset($var['id'])) {
+            $grouped_keys[$var['id']] = true;
+        }
+    }
+    foreach ($item_photos as $img) {
+        $fn = trim((string) ($img['file_name'] ?? ''));
+        if ($fn === '') {
+            continue;
+        }
+        $v_id = $img['variation_id'] ?? '-1';
+        if ($v_id === '' || $v_id === null || !isset($grouped_keys[$v_id])) {
+            $v_id = '-1';
+        }
+        if ($v_id === '-1' || $v_id === -1) {
+            return 'uploads/itm_img/' . $img['file_name'];
+        }
+    }
+    foreach ($item_photos as $img) {
+        $fn = trim((string) ($img['file_name'] ?? ''));
+        if ($fn !== '') {
+            return 'uploads/itm_img/' . $img['file_name'];
+        }
+    }
+    return '';
+}
 ?>
 <div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
     <form id="product_form" action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
@@ -207,15 +240,23 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
                 <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
                     <?php 
-                        $mainPhoto = $data['form2']['product_photo'] ?? ''; 
-                        $hasMainPhoto = !empty($mainPhoto);
+                        $mainPhoto = $data['form2']['product_photo'] ?? '';
+                        $item_photos_for_thumb = $data['images'] ?? [];
+                        if (!isset($data['form2']['variations'])) {
+                            global $inboundingModel;
+                            $variations_for_thumb = $inboundingModel->getVariations($record_id);
+                        } else {
+                            $variations_for_thumb = $data['form2']['variations'];
+                        }
+                        $itemImageRelPath = desktopform_item_image_thumb_path($item_photos_for_thumb, $variations_for_thumb);
+                        $displayPhotoPath = $itemImageRelPath !== '' ? $itemImageRelPath : $mainPhoto;
+                        $hasMainPhoto = !empty($displayPhotoPath);
 
-                        // FIX: Just pass the full path. The function will find the folder.
-                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($mainPhoto)) : '';
+                        $mainPhotoThumb = $hasMainPhoto ? base_url(getThumbnail($displayPhotoPath)) : '';
                     ?>
                     <img id="main_photo_preview" 
                          src="<?= $mainPhotoThumb ?>" 
-                         onclick="openImagePopup('<?= $hasMainPhoto ? base_url($mainPhoto) : '' ?>')"
+                         onclick="openImagePopup('<?= $hasMainPhoto ? base_url($displayPhotoPath) : '' ?>')"
                          class="w-full h-full object-contain cursor-zoom-in absolute inset-0 z-10"
                          style="<?= $hasMainPhoto ? '' : 'display: none;' ?>">
                     <div id="main_photo_placeholder"
