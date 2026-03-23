@@ -1596,6 +1596,40 @@ document.addEventListener('DOMContentLoaded', function() {
     let placeholder = document.createElement('div');
     placeholder.className = 'border-2 border-dashed border-[#d97824] rounded-[4px] bg-orange-50 min-w-[100px] h-32';
 
+    /**
+     * One global display_order sequence for all item_images on the form (main grid then each variant grid in DOM order).
+     * Avoids duplicate order numbers across strips — duplicate orders made ORDER BY display_order unstable and could
+     * mis-order renames / loads after a quick save-as-draft during drag.
+     */
+    function syncPhotoDisplayOrdersBeforeSubmit() {
+        let seq = 1;
+        document.querySelectorAll('.photo-group-grid').forEach(function (container) {
+            container.querySelectorAll('.draggable-item').forEach(function (item) {
+                const input = item.querySelector('.order-input');
+                if (input) {
+                    input.value = String(seq++);
+                }
+            });
+        });
+    }
+    window.syncPhotoDisplayOrdersBeforeSubmit = syncPhotoDisplayOrdersBeforeSubmit;
+
+    const productForm = document.getElementById('product_form');
+    if (productForm) {
+        productForm.addEventListener('submit', function (e) {
+            if (productForm.dataset.submitting === '1') {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+            }
+            syncPhotoDisplayOrdersBeforeSubmit();
+            productForm.dataset.submitting = '1';
+            document.querySelectorAll('button[onclick*="validateAndSubmit"]').forEach(function (btn) {
+                btn.disabled = true;
+            });
+        }, true);
+    }
+
     // 1. DRAG START
     document.addEventListener('dragstart', function(e) {
         const item = e.target.closest('.draggable-item');
@@ -1646,8 +1680,8 @@ document.addEventListener('DOMContentLoaded', function() {
             varInput.value = newVarId;
         }
 
-        // C. Recalculate Sort Order for ALL images in the grid
-        updateOrderInputs(container);
+        // C. Recalculate display_order for every strip + global unique sequence (fixes source grid after a move-out)
+        syncPhotoDisplayOrdersBeforeSubmit();
     });
 
     // 4. DRAG END (Cleanup if dropped outside)
@@ -1674,16 +1708,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-    // --- HELPER: Update the numeric order inputs (1, 2, 3...) ---
-    function updateOrderInputs(container) {
-        const items = container.querySelectorAll('.draggable-item');
-        items.forEach((item, index) => {
-            const input = item.querySelector('.order-input');
-            if(input) {
-                input.value = index + 1; // 1-based indexing for display order
-            }
-        });
-    }
 });
 </script>
 <script>
