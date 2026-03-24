@@ -51,7 +51,7 @@ class OrdersAPIController {
      * @param string $token The API token to validate
      * @return bool True if token is valid, false otherwise
      */
-    private function isValidToken($token) {
+    public function isValidToken($token) {
         global $conn;
 
         // Validate token against order_api_tokens table
