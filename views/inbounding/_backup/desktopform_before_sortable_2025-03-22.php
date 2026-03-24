@@ -48,7 +48,11 @@
         overflow: hidden; /* Crucial Fix */
     }
     .draggable-item {
+        cursor: grab;
         user-select: none;
+    }
+    .draggable-item:active {
+        cursor: grabbing;
     }
     /* Stop native image drag so only the card reorder runs (avoids broken URLs / ghost drag) */
     .draggable-item img {
@@ -278,7 +282,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     <form id="product_form" action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
     <input type="hidden" name="save_action" id="hidden_save_action" value="">
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
-        <input type="hidden" name="delete_gallery_image_ids_csv" id="delete_gallery_image_ids_csv" value="">
         <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
             <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
                 <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
@@ -460,10 +463,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     (<?= htmlspecialchars($data['form2']['color'] ?? '') ?> - <?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
             </div>
-            <div class="w-full mb-5 min-w-0">
-                <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:</label>
-                <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier. Use <strong>&times;</strong> on a card to remove that image from the product (deletes file on save).</p>
-                <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1" data-gallery-label="Main item">
+            <div class="w-full mb-5 overflow-hidden">
+                <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1">
                     <?php 
                     if (!empty($grouped_images['-1'])) {
                         foreach($grouped_images['-1'] as $img) { renderPhotoCard($img, '-1'); }
@@ -641,10 +642,9 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </label>
                         </div>
                         
-                        <div class="grow min-w-0">
+                        <div class="grow overflow-hidden">
                             <label class="block text-xs font-bold text-[#555] mb-1">Gallery Photos:</label>
-                            <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier. Use <strong>&times;</strong> on a card to remove that image (deletes file on save).</p>
-                            <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[100px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="<?= htmlspecialchars((string)$var['id']) ?>" data-gallery-label="<?= htmlspecialchars('Variation: ' . trim(($var['color'] ?? '') . ' / ' . ($var['size'] ?? '')), ENT_QUOTES) ?>">
+                            <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[100px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="<?= $var['id'] ?>">
                                 <?php 
                                 if (!empty($grouped_images[$var['id']])) {
                                     foreach($grouped_images[$var['id']] as $img) { renderPhotoCard($img, $var['id']); }
@@ -842,16 +842,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         $fullUrl  = base_url($fullPath);
         $popupUrlJson = json_encode($fullUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
     ?>
-        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group shadow-sm shrink-0 w-[132px]" 
-             draggable="false" 
-             data-id="<?php echo (int) $img['id']; ?>">
-            <button type="button"
-                    class="photo-remove-btn absolute top-0.5 left-0.5 z-20 w-6 h-6 flex items-center justify-center rounded bg-white border border-red-200 text-red-600 text-sm font-bold leading-none shadow-sm hover:bg-red-50"
-                    title="Remove image (saved when you submit the form)"
-                    data-image-id="<?php echo (int) $img['id']; ?>"
-                    aria-label="Remove gallery image">&times;</button>
+        <div class="draggable-item relative border border-[#ddd] rounded-[4px] p-2 bg-white flex flex-col items-center group cursor-grab active:cursor-grabbing shadow-sm" 
+             draggable="true" 
+             data-id="<?php echo $img['id']; ?>">
+            
+            <div class="absolute top-1 right-1 text-gray-400 p-1 bg-white rounded shadow-sm opacity-50 group-hover:opacity-100 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+            </div>
 
-            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-1" 
+            <div class="w-full h-32 bg-white flex items-center justify-center overflow-hidden rounded-[2px] border border-[#eee] mb-2" 
                  onclick="openImagePopup(<?php echo $popupUrlJson; ?>)">
                 <img src="<?php echo htmlspecialchars($thumbUrl); ?>" 
                      alt=""
@@ -860,18 +859,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                      class="max-w-full max-h-full object-contain cursor-pointer select-none">
             </div>
 
-            <span class="text-[10px] text-[#666] truncate w-full text-center mb-1.5" title="<?php echo htmlspecialchars($img['file_name']); ?>">
-                <?php echo htmlspecialchars($img['file_name']); ?>
+            <span class="text-[11px] text-[#666] truncate w-full text-center" title="<?php echo $img['file_name']; ?>">
+                <?php echo $img['file_name']; ?>
             </span>
-            <label class="w-full text-[9px] font-bold text-[#555] mb-0.5">Sort order</label>
-            <input type="number"
-                   name="photo_order[<?php echo (int) $img['id']; ?>]"
-                   value="<?php echo (int) ($img['display_order'] ?? 0); ?>"
-                   min="0"
-                   step="1"
-                   inputmode="numeric"
-                   class="order-input w-full h-8 border border-[#ccc] rounded-[3px] px-1.5 text-center text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">
-            <input type="hidden" name="photo_variation[<?php echo (int) $img['id']; ?>]" value="<?php echo htmlspecialchars((string) $varId, ENT_QUOTES, 'UTF-8'); ?>" class="variation-input">
+            <input type="hidden" name="photo_order[<?php echo $img['id']; ?>]" value="<?php echo $img['display_order']; ?>" class="order-input">
+            <input type="hidden" name="photo_variation[<?php echo $img['id']; ?>]" value="<?php echo $varId; ?>" class="variation-input">
         </div>
     <?php } ?>
         <div class="mt-[15px] md:mx-5">
@@ -1640,45 +1632,123 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    window.syncPhotoDisplayOrdersBeforeSubmit = function () {};
-    window.refreshPhotoGalleryMoveSelects = function () {};
-    window.refreshPhotoGroupSortables = function () {};
+    
+    let draggedItem = null;
+    let placeholder = document.createElement('div');
+    placeholder.className = 'border-2 border-dashed border-[#d97824] rounded-[4px] bg-orange-50 min-w-[100px] h-32';
 
-    var productForm = document.getElementById('product_form');
-    if (productForm) {
-        productForm.addEventListener('click', function (e) {
-            var removeBtn = e.target.closest('.photo-remove-btn');
-            if (!removeBtn || !productForm.contains(removeBtn)) return;
-            var imageId = removeBtn.getAttribute('data-image-id');
-            if (!imageId) return;
-            if (!window.confirm('Remove this gallery image from the product? It will be permanently deleted when you save the form.')) {
-                return;
-            }
-            var card = removeBtn.closest('.draggable-item');
-            if (!card) return;
-            var csvInput = document.getElementById('delete_gallery_image_ids_csv');
-            if (csvInput) {
-                var ids = csvInput.value ? csvInput.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
-                if (ids.indexOf(String(imageId)) < 0) {
-                    ids.push(String(imageId));
+    /**
+     * One global display_order sequence for all item_images on the form (main grid then each variant grid in DOM order).
+     * Avoids duplicate order numbers across strips — duplicate orders made ORDER BY display_order unstable and could
+     * mis-order renames / loads after a quick save-as-draft during drag.
+     */
+    function syncPhotoDisplayOrdersBeforeSubmit() {
+        let seq = 1;
+        document.querySelectorAll('.photo-group-grid').forEach(function (container) {
+            container.querySelectorAll('.draggable-item').forEach(function (item) {
+                const input = item.querySelector('.order-input');
+                if (input) {
+                    input.value = String(seq++);
                 }
-                csvInput.value = ids.join(',');
-            }
-            card.remove();
+            });
         });
+    }
+    window.syncPhotoDisplayOrdersBeforeSubmit = syncPhotoDisplayOrdersBeforeSubmit;
 
+    const productForm = document.getElementById('product_form');
+    if (productForm) {
         productForm.addEventListener('submit', function (e) {
             if (productForm.dataset.submitting === '1') {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 return false;
             }
+            syncPhotoDisplayOrdersBeforeSubmit();
             productForm.dataset.submitting = '1';
             document.querySelectorAll('button[onclick*="validateAndSubmit"]').forEach(function (btn) {
                 btn.disabled = true;
             });
         }, true);
     }
+
+    // 1. DRAG START
+    document.addEventListener('dragstart', function(e) {
+        const item = e.target.closest('.draggable-item');
+        if (!item) return;
+        
+        draggedItem = item;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', ''); // Required for Firefox
+        
+        // Use a timeout to hide the original item so the "ghost" image remains visible
+        setTimeout(() => {
+            item.classList.add('hidden');
+        }, 0);
+    });
+
+    // 2. DRAG OVER (Smooth Insertion)
+    document.addEventListener('dragover', function(e) {
+        const container = e.target.closest('.photo-group-grid');
+        if (!container || !draggedItem) return;
+
+        e.preventDefault(); // Allow dropping
+        const afterElement = getDragAfterElement(container, e.clientX);
+        
+        // Move the placeholder to show where the item will land
+        if (afterElement == null) {
+            container.appendChild(placeholder);
+        } else {
+            container.insertBefore(placeholder, afterElement);
+        }
+    });
+
+    // 3. DROP
+    document.addEventListener('drop', function(e) {
+        const container = e.target.closest('.photo-group-grid');
+        if (!container || !draggedItem) return;
+        
+        e.preventDefault();
+
+        // A. Move the actual item to the placeholder's position
+        placeholder.parentNode.insertBefore(draggedItem, placeholder);
+        draggedItem.classList.remove('hidden');
+        placeholder.remove();
+
+        // B. Update the Hidden Variation ID for the moved item
+        const newVarId = container.getAttribute('data-var-id');
+        const varInput = draggedItem.querySelector('.variation-input');
+        if(varInput) {
+            varInput.value = newVarId;
+        }
+
+        // C. Recalculate display_order for every strip + global unique sequence (fixes source grid after a move-out)
+        syncPhotoDisplayOrdersBeforeSubmit();
+    });
+
+    // 4. DRAG END (Cleanup if dropped outside)
+    document.addEventListener('dragend', function(e) {
+        if (draggedItem) {
+            draggedItem.classList.remove('hidden');
+            placeholder.remove();
+        }
+        draggedItem = null;
+    });
+
+    // --- HELPER: Find the gap between items based on mouse X position ---
+    function getDragAfterElement(container, x) {
+        const draggableElements = [...container.querySelectorAll('.draggable-item:not(.hidden)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = x - box.left - box.width / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
 });
 </script>
 <script>

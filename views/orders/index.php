@@ -725,6 +725,10 @@
                     <option value="asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'asc') ? 'selected' : '' ?>>Order Date (Ascending)</option>                    
                     <option value="ship_by_date_desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'ship_by_date_desc') ? 'selected' : '' ?>>Ship-by Date (Descending)</option>
                     <option value="ship_by_date_asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'ship_by_date_asc') ? 'selected' : '' ?>>Ship-by Date (Ascending)</option>
+                    <option value="agent_assign_date_desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'agent_assign_date_desc') ? 'selected' : '' ?>>Agent Assign Date (Descending)</option>
+                    <option value="agent_assign_date_asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'agent_assign_date_asc') ? 'selected' : '' ?>>Agent Assign Date (Ascending)</option>                   
+                    <option value="cancel_date_desc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'cancel_date_desc') ? 'selected' : '' ?>>Cancel Date (Descending)</option>
+                    <option value="cancel_date_asc" <?= (isset($_GET['sort']) && $_GET['sort'] === 'cancel_date_asc') ? 'selected' : '' ?>>Cancel Date (Ascending)</option>
             </select>
             <select id="rows-per-page" class="text-sm items-right pagination-select px-2 py-1.5 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white"
                 onchange="location.href='?page=orders&page_no=1&limit=' + this.value + '<?= $query_string ?>';">
