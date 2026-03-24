@@ -164,6 +164,13 @@ class Order{
                 $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
             }
         }
+
+        if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        }
+
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             //agent assignment date desc
@@ -176,7 +183,15 @@ class Order{
             $sql .= " ORDER BY vp_orders.esd DESC";
         } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
             $sql .= " ORDER BY vp_orders.esd ASC";
-        }else {
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " ORDER BY vp_orders.updated_at DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " ORDER BY vp_orders.updated_at ASC";
+        } else {
             //agent assignment date desc
             if(!empty($filters['agent'])){
                 $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
@@ -356,6 +371,11 @@ class Order{
                 $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
             }
         }
+        if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             $sql .= " ORDER BY order_date " . strtoupper($filters['sort']);
@@ -363,6 +383,14 @@ class Order{
             $sql .= " ORDER BY vp_orders.esd DESC";
         } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
             $sql .= " ORDER BY vp_orders.esd ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " ORDER BY vp_orders.updated_at DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " ORDER BY vp_orders.updated_at ASC";
         } else {
             $sql .= " ORDER BY order_date DESC"; // Default sort order
         }
