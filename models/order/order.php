@@ -506,7 +506,8 @@ class Order{
             'author',
             'shippingfee',
             'sourcingfee',
-            'customer_id'
+            'customer_id',
+            'warehouse_id'
         ];
 
         // Build SQL query
