@@ -200,8 +200,7 @@ class Order{
             }
         }
         
-        //ship_by_date_desc 	esd
-        
+        //ship_by_date_desc 	esd        
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
