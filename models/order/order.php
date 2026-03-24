@@ -180,6 +180,10 @@ class Order{
             $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
         } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
             $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " ORDER BY vp_orders.updated_at DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " ORDER BY vp_orders.updated_at ASC";
         } else {
             //agent assignment date desc
             if(!empty($filters['agent'])){
@@ -367,6 +371,14 @@ class Order{
             $sql .= " ORDER BY vp_orders.esd DESC";
         } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
             $sql .= " ORDER BY vp_orders.esd ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " ORDER BY vp_orders.updated_at DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " ORDER BY vp_orders.updated_at ASC";
         } else {
             $sql .= " ORDER BY order_date DESC"; // Default sort order
         }
