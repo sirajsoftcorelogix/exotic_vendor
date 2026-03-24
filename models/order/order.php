@@ -164,6 +164,13 @@ class Order{
                 $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
             }
         }
+
+        if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        }
+
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             //agent assignment date desc
@@ -363,6 +370,11 @@ class Order{
             } elseif ($filters['sortdaterange'] === 'last_90_days') {
                 $sql .= " AND vp_orders.order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)";
             }
+        }
+        if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_desc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'cancel_date_asc') {
+            $sql .= " AND vp_orders.status = 'cancelled'";
         }
         // Add sorting based on filter
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
