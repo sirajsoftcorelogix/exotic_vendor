@@ -902,7 +902,7 @@ class InvoicesController
             while ($row = $result->fetch_assoc()) {
                 $items[] = $row;
             }
-
+$warehouse_id = $items[0]['warehouse_id'] ?? 0;
             // ===== GET ADDRESS INFO =====
             $sql2 = "SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1";
             $stmt2 = $conn->prepare($sql2);
@@ -919,6 +919,7 @@ class InvoicesController
             $_POST = [
                 'invoice_date' => date('Y-m-d'),
                 'customer_id' => $items[0]['customer_id'],
+                 'warehouse_id' => $warehouse_id,
                 'vp_order_info_id' => $info['id'],
                 'status' => 'final',
                 'subtotal' => 0,
