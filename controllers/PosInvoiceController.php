@@ -3,7 +3,7 @@ require_once 'models/invoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
-require_once 'models/customer/customer.php';
+require_once 'models/customer/Customer.php';
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
 $usersModel = new User($conn);
