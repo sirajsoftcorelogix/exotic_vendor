@@ -14,27 +14,29 @@ class PosInvoiceController
     /* ===============================
        PAGE LOAD
     =============================== */
-   public function index()
-{
-    global $conn;
+    public function index()
+    {
+        global $conn;
 
-    $customerModel = new Customer($conn);
+        $customerModel = new Customer($conn);
 
-    $customers = $customerModel->getAllCustomers(1000, 0, []);
+        $customers = $customerModel->getAllCustomers(1000, 0, []);
 
-    renderTemplate('views/posinvoice/index.php', [
-        'customers' => $customers
-    ]);
-}
+        renderTemplate('views/posinvoice/index.php', [
+            'customers' => $customers
+        ]);
+    }
 
     /* ===============================
        AJAX LIST
     =============================== */
-  public function list_ajax()
-{
-    global $conn;
-
-    $sql = "
+    public function list_ajax()
+    {
+        global $conn;
+  
+        $warehouseId = $_SESSION['warehouse_id'] ?? 0;
+       
+        $sql = "
     SELECT 
         i.id,
         i.invoice_number,
@@ -66,55 +68,55 @@ class PosInvoiceController
 
     LEFT JOIN vp_customers c 
         ON c.id = i.customer_id
-WHERE IFNULL(o.payment_type,'') = 'offline' 
+WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($warehouseId) . "
     ";
 
-    if (!empty($_GET['order_number'])) {
-        $sql .= " AND o.order_number LIKE '%" . $conn->real_escape_string($_GET['order_number']) . "%'";
+        if (!empty($_GET['order_number'])) {
+            $sql .= " AND o.order_number LIKE '%" . $conn->real_escape_string($_GET['order_number']) . "%'";
+        }
+
+        if (!empty($_GET['status'])) {
+            $sql .= " AND i.status = '" . $conn->real_escape_string($_GET['status']) . "'";
+        }
+
+        if (!empty($_GET['from_date'])) {
+            $sql .= " AND i.invoice_date >= '" . $_GET['from_date'] . "'";
+        }
+
+        if (!empty($_GET['to_date'])) {
+            $sql .= " AND i.invoice_date <= '" . $_GET['to_date'] . "'";
+        }
+
+        if (!empty($_GET['type'])) {
+            $sql .= " AND o.payment_type = '" . $conn->real_escape_string($_GET['type']) . "'";
+        }
+
+        if (!empty($_GET['customer_id'])) {
+            $sql .= " AND i.customer_id = " . intval($_GET['customer_id']);
+        }
+
+        if (!empty($_GET['amount_min'])) {
+            $sql .= " AND i.total_amount >= " . floatval($_GET['amount_min']);
+        }
+
+        if (!empty($_GET['amount_max'])) {
+            $sql .= " AND i.total_amount <= " . floatval($_GET['amount_max']);
+        }
+
+
+        $sql .= " ORDER BY i.id DESC";
+
+        $res = $conn->query($sql);
+
+        $data = [];
+
+        while ($row = $res->fetch_assoc()) {
+            $data[] = $row;
+        }
+
+        echo json_encode($data);
+        exit;
     }
-
-    if (!empty($_GET['status'])) {
-        $sql .= " AND i.status = '" . $conn->real_escape_string($_GET['status']) . "'";
-    }
-
-    if (!empty($_GET['from_date'])) {
-        $sql .= " AND i.invoice_date >= '" . $_GET['from_date'] . "'";
-    }
-
-    if (!empty($_GET['to_date'])) {
-        $sql .= " AND i.invoice_date <= '" . $_GET['to_date'] . "'";
-    }
-
-    if (!empty($_GET['type'])) {
-        $sql .= " AND o.payment_type = '" . $conn->real_escape_string($_GET['type']) . "'";
-    }
-
-    if (!empty($_GET['customer_id'])) {
-        $sql .= " AND i.customer_id = " . intval($_GET['customer_id']);
-    }
-
-    if (!empty($_GET['amount_min'])) {
-        $sql .= " AND i.total_amount >= " . floatval($_GET['amount_min']);
-    }
-
-    if (!empty($_GET['amount_max'])) {
-        $sql .= " AND i.total_amount <= " . floatval($_GET['amount_max']);
-    }
-
-
-    $sql .= " ORDER BY i.id DESC";
-
-    $res = $conn->query($sql);
-
-    $data = [];
-
-    while ($row = $res->fetch_assoc()) {
-        $data[] = $row;
-    }
-
-    echo json_encode($data);
-    exit;
-}
     /* ===============================
        DELETE
     =============================== */
