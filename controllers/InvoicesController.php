@@ -965,4 +965,288 @@ class InvoicesController
             exit;
         }
     }
+
+
+
+
+
+    /**
+     * Download invoice(s) as Busy XML
+     * - Single invoice: /download.php?invoice_id=X&token=Y
+     * - Batch by date: /download.php?date=YYYY-MM-DD&token=Y (returns ZIP with all invoices for that date)
+     */
+    public function downloadBusyXml()
+    {
+        global $conn;
+        require_once 'controllers/OrdersAPIController.php';
+        $ordersApi = new OrdersAPIController($conn);
+
+        try {
+            // Get parameters
+            $invoiceId = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
+            $token = isset($_GET['token']) ? trim($_GET['token']) : '';
+            $date = isset($_GET['date']) ? trim($_GET['date']) : '';
+            $format = isset($_GET['format']) ? trim($_GET['format']) : 'zip'; // zip or consolidated
+            
+            if (!$token) {
+                http_response_code(400);
+                exit('Bad request: Missing token');
+            }
+
+            // Validate token
+            if(!$ordersApi->isValidToken($token)) {
+                http_response_code(403);
+                exit('Unauthorized');
+            }
+
+            require_once 'generate-xml.php';
+            global $invoiceModel;
+
+            // Mode 1: Single invoice download
+            if ($invoiceId > 0) {
+                return $this->downloadSingleInvoiceXml($invoiceId);
+            }
+
+            // Mode 2: Batch download by date
+            if (!empty($date)) {
+                return $this->downloadBatchInvoiceXml($date, $format);
+            }
+
+            // If neither invoice_id nor date provided
+            http_response_code(400);
+            exit('Bad request: Must provide either invoice_id or date parameter');
+
+        } catch (Exception $e) {
+            http_response_code(500);
+            exit('Error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Download single invoice as XML
+     */
+    private function downloadSingleInvoiceXml($invoiceId)
+    {
+        global $invoiceModel;
+        
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            http_response_code(404);
+            exit('Invoice not found');
+        }
+
+        $items = $invoiceModel->getInvoiceItems($invoiceId);
+        
+        // Add calculated tax totals
+        $invoice['sgst'] = array_sum(array_column($items, 'sgst'));
+        $invoice['cgst'] = array_sum(array_column($items, 'cgst'));
+        $invoice['igst'] = array_sum(array_column($items, 'igst'));
+        
+        // Generate XML
+        require_once 'generate-xml.php';
+        $generator = new BusyXmlGenerator();
+        $xml = $generator->generate($invoice, $items);
+
+        // Stream as downloadable file
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . 
+               htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.xml"');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        echo $xml;
+        exit;
+    }
+
+    /**
+     * Download batch invoices for a date as ZIP or consolidated XML
+     */
+    private function downloadBatchInvoiceXml($date, $format = 'zip')
+    {
+        global $invoiceModel, $conn;
+
+        // Validate date format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            http_response_code(400);
+            exit('Bad request: Invalid date format. Use YYYY-MM-DD');
+        }
+
+        // Fetch all invoices for the given date
+        $sql = "SELECT id FROM vp_invoices WHERE DATE(invoice_date) = ? ORDER BY invoice_date ASC";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            http_response_code(500);
+            exit('Database error: ' . $conn->error);
+        }
+
+        $stmt->bind_param("s", $date);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $invoiceIds = [];
+        while ($row = $result->fetch_assoc()) {
+            $invoiceIds[] = $row['id'];
+        }
+
+        if (empty($invoiceIds)) {
+            http_response_code(404);
+            exit('No invoices found for date: ' . $date);
+        }
+
+        require_once 'generate-xml.php';
+
+        if ($format === 'consolidated') {
+            return $this->downloadConsolidatedXml($invoiceIds, $date);
+        } else {
+            return $this->downloadZipArchive($invoiceIds, $date);
+        }
+    }
+
+    /**
+     * Download invoices as consolidated single XML file
+     */
+    private function downloadConsolidatedXml($invoiceIds, $date)
+    {
+        global $invoiceModel;
+
+        $allVouchers = [];
+
+        // Collect all invoice data
+        foreach ($invoiceIds as $invoiceId) {
+            $invoice = $invoiceModel->getInvoiceById($invoiceId);
+            $items = $invoiceModel->getInvoiceItems($invoiceId);
+
+            if ($invoice && !empty($items)) {
+                $invoice['sgst'] = array_sum(array_column($items, 'sgst'));
+                $invoice['cgst'] = array_sum(array_column($items, 'cgst'));
+                $invoice['igst'] = array_sum(array_column($items, 'igst'));
+                $allVouchers[] = ['invoice' => $invoice, 'items' => $items];
+            }
+        }
+
+        if (empty($allVouchers)) {
+            http_response_code(404);
+            exit('No valid invoices found');
+        }
+
+        // Generate consolidated XML
+        $generator = new BusyXmlGenerator();
+        $xml = $generator->generateConsolidated($allVouchers);
+
+        // Stream as downloadable file
+        $filename = 'invoices_' . $date . '_busy.xml';
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . htmlspecialchars($filename) . '"');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        echo $xml;
+        exit;
+    }
+
+    /**
+     * Download invoices as ZIP archive with individual XML files
+     */
+    private function downloadZipArchive($invoiceIds, $date)
+    {
+        global $invoiceModel;
+
+        require_once 'generate-xml.php';
+
+        // Create temporary directory for XML files
+        $tempDir = sys_get_temp_dir() . '/busy_xml_' . uniqid();
+        if (!mkdir($tempDir, 0755, true)) {
+            http_response_code(500);
+            exit('Failed to create temporary directory');
+        }
+
+        $generator = new BusyXmlGenerator();
+        $xmlFiles = [];
+
+        try {
+            // Generate XML for each invoice
+            foreach ($invoiceIds as $invoiceId) {
+                $invoice = $invoiceModel->getInvoiceById($invoiceId);
+                $items = $invoiceModel->getInvoiceItems($invoiceId);
+
+                if ($invoice && !empty($items)) {
+                    $invoice['sgst'] = array_sum(array_column($items, 'sgst'));
+                    $invoice['cgst'] = array_sum(array_column($items, 'cgst'));
+                    $invoice['igst'] = array_sum(array_column($items, 'igst'));
+
+                    $xml = $generator->generate($invoice, $items);
+                    $filename = $invoice['invoice_number'] ?? ('invoice_' . $invoiceId);
+                    // Sanitize filename by removing path separators and invalid characters
+                    $sanitized_filename = preg_replace('/[\/\\:*?"<>|]/', '_', $filename);
+                    $filepath = $tempDir . '/' . $sanitized_filename . '.xml';
+
+                    if (file_put_contents($filepath, $xml) === false) {
+                        throw new Exception('Failed to write XML file: ' . $filename);
+                    }
+
+                    $xmlFiles[] = ['path' => $filepath, 'name' => basename($filepath)];
+                }
+            }
+
+            if (empty($xmlFiles)) {
+                http_response_code(404);
+                exit('No valid invoices found');
+            }
+
+            // Create ZIP archive
+            $zipFile = $tempDir . '/invoices_' . $date . '.zip';
+            $zip = new \ZipArchive();
+
+            if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+                throw new Exception('Failed to create ZIP archive');
+            }
+
+            // Add XML files to ZIP
+            foreach ($xmlFiles as $file) {
+                $zip->addFile($file['path'], $file['name']);
+            }
+
+            if (!$zip->close()) {
+                throw new Exception('Failed to close ZIP archive');
+            }
+
+            // Stream ZIP file
+            if (!file_exists($zipFile)) {
+                throw new Exception('ZIP file not created');
+            }
+
+            $filesize = filesize($zipFile);
+            header('Content-Type: application/zip');
+            header('Content-Disposition: attachment; filename="invoices_' . $date . '.zip"');
+            header('Content-Length: ' . $filesize);
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+
+            readfile($zipFile);
+
+            // Cleanup temporary files
+            foreach ($xmlFiles as $file) {
+                @unlink($file['path']);
+            }
+            @unlink($zipFile);
+            @rmdir($tempDir);
+
+            exit;
+
+        } catch (Exception $e) {
+            // Cleanup on error
+            foreach ($xmlFiles as $file) {
+                @unlink($file['path']);
+            }
+            @unlink($zipFile ?? '');
+            @rmdir($tempDir);
+
+            http_response_code(500);
+            exit('Error: ' . $e->getMessage());
+        }
+    }
+
 }
