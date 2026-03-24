@@ -176,7 +176,11 @@ class Order{
             $sql .= " ORDER BY vp_orders.esd DESC";
         } elseif (!empty($filters['sort']) && $filters['sort'] === 'ship_by_date_asc') {
             $sql .= " ORDER BY vp_orders.esd ASC";
-        }else {
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_desc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date DESC";
+        } else if (!empty($filters['sort']) && $filters['sort'] === 'agent_assign_date_asc') {
+            $sql .= " ORDER BY vp_orders.agent_assign_date ASC";
+        } else {
             //agent assignment date desc
             if(!empty($filters['agent'])){
                 $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
