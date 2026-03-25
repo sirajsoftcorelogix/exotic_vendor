@@ -1110,7 +1110,7 @@ class InboundingController {
             'marketplace'         => $_POST['marketplace'] ?? ' ',
             'india_net_qty' => trim((string)($_POST['india_net_qty'] ?? '')) === '' ? 0 : (int) $_POST['india_net_qty'],
             'lead_time_days' => trim((string)($_POST['lead_time_days'] ?? '')) === '' ? 0 : (int) $_POST['lead_time_days'],
-            'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
+            'in_stock_leadtime_days' => trim((string)($_POST['in_stock_leadtime_days'] ?? '')) === '' ? 0 : (int) $_POST['in_stock_leadtime_days'],
             'optionals'   => $icons_val, 
             'back_order'          => $back_order_input,
             'backorder_percent'   => $percent_val,
