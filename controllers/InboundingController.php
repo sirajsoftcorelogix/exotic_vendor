@@ -1481,6 +1481,8 @@ class InboundingController {
         // This ensures that even if renaming was skipped before, it happens now
         $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
     }
+
+    
     public function printInboundLabel(){
         is_login();
         global $inboundingModel;
@@ -1606,7 +1608,7 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
         $stock_price_temp[0]['usd'] = $data['data']['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+        $stock_price_temp[0]['permanently_available'] = (($data['data']['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N'
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
@@ -1658,7 +1660,7 @@ class InboundingController {
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 'Y' : 'N';
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
@@ -1701,10 +1703,9 @@ class InboundingController {
             // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
             // If you need a clickable URL for a browser, change this to your website URL.
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $domain = $_SERVER['HTTP_HOST'];
-
-            $baseUrl = $protocol . '://' . $domain;
-            $imgDir = $baseUrl.'/uploads/itm_img/'; 
+            $httpHost = $_SERVER['HTTP_HOST'] ?? '';
+            $siteImageBase = $protocol . '://' . $httpHost;
+            $imgDir = $siteImageBase . '/uploads/itm_img/'; 
             // 1. Get the list of filenames
             $raw_images = array_column($data['data']['img'], 'file_name');
 
