@@ -902,7 +902,7 @@ class InvoicesController
             while ($row = $result->fetch_assoc()) {
                 $items[] = $row;
             }
-$warehouse_id = $items[0]['warehouse_id'] ?? 0;
+
             // ===== GET ADDRESS INFO =====
             $sql2 = "SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1";
             $stmt2 = $conn->prepare($sql2);
@@ -919,7 +919,6 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
             $_POST = [
                 'invoice_date' => date('Y-m-d'),
                 'customer_id' => $items[0]['customer_id'],
-                 'warehouse_id' => $warehouse_id,
                 'vp_order_info_id' => $info['id'],
                 'status' => 'final',
                 'subtotal' => 0,
@@ -986,8 +985,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
             // Get parameters
             $invoiceId = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
             $token = isset($_GET['token']) ? trim($_GET['token']) : '';
-            // if date is not provided, default to previous's date for batch download
-            $date = isset($_GET['date']) ? trim($_GET['date']) : date('Y-m-d', strtotime('-1 day'));
+            $date = isset($_GET['date']) ? trim($_GET['date']) : '';
             $format = isset($_GET['format']) ? trim($_GET['format']) : 'zip'; // zip or consolidated
             
             if (!$token) {
@@ -1052,7 +1050,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
         // Stream as downloadable file
         header('Content-Type: application/xml; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . 
-               htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.xml"');
+               htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.txt"');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('Expires: 0');
@@ -1137,7 +1135,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
         $xml = $generator->generateConsolidated($allVouchers);
 
         // Stream as downloadable file
-        $filename = 'invoices_' . $date . '_busy.xml';
+        $filename = 'invoices_' . $date . '_busy.txt';
         header('Content-Type: application/xml; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . htmlspecialchars($filename) . '"');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -1210,7 +1208,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
                     $filename = $invoice['invoice_number'] ?? ('invoice_' . $invoiceId);
                     // Sanitize filename by removing path separators and invalid characters
                     $sanitized_filename = preg_replace('/[\/\\:*?"<>|]/', '_', $filename);
-                    $filepath = $tempDir . '/' . $sanitized_filename . '.TXT';
+                    $filepath = $tempDir . '/' . $sanitized_filename . '.txt';
 
                     if (file_put_contents($filepath, $xml) === false) {
                         throw new Exception('Failed to write XML file: ' . $filename);
