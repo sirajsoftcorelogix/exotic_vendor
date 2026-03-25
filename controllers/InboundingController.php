@@ -1108,7 +1108,7 @@ class InboundingController {
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'marketplace'         => $_POST['marketplace'] ?? ' ',
-            'india_net_qty'       => $_POST['india_net_qty'] ?? '',
+            'india_net_qty'       => $_POST['india_net_qty'] ?? '0',
             'lead_time_days'      => $_POST['lead_time_days'] ?? '',
             'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
             'optionals'   => $icons_val, 
