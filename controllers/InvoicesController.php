@@ -986,7 +986,8 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
             // Get parameters
             $invoiceId = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
             $token = isset($_GET['token']) ? trim($_GET['token']) : '';
-            $date = isset($_GET['date']) ? trim($_GET['date']) : '';
+            // if date is not provided, default to previous's date for batch download
+            $date = isset($_GET['date']) ? trim($_GET['date']) : date('Y-m-d', strtotime('-1 day'));
             $format = isset($_GET['format']) ? trim($_GET['format']) : 'zip'; // zip or consolidated
             
             if (!$token) {
