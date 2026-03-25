@@ -1,116 +1,8 @@
 <?php
 class Inbounding {
     private $conn;
-
-    /** @var array<string, mixed>|null */
-    private static $permanentlyAvailableMeta = null;
-
     public function __construct($db) {
         $this->conn = $db;
-    }
-
-    /**
-     * SHOW COLUMNS row as assoc (works without mysqlnd via bind_result).
-     *
-     * @return ?array<string, string|null>
-     */
-    private function fetchShowColumnsRow(mysqli_stmt $stmt): ?array {
-        $res = $stmt->get_result();
-        if ($res) {
-            $row = $res->fetch_assoc();
-
-            return $row ?: null;
-        }
-        $stmt->store_result();
-        $field = $type = $null = $key = $default = $extra = null;
-        if ($stmt->field_count >= 6 && $stmt->bind_result($field, $type, $null, $key, $default, $extra) && $stmt->fetch()) {
-            return [
-                'Field' => $field,
-                'Type' => $type,
-                'Null' => $null,
-                'Key' => $key,
-                'Default' => $default,
-                'Extra' => $extra,
-            ];
-        }
-
-        return null;
-    }
-
-    /**
-     * Resolves vp_inbound.permanently_available Type via SHOW COLUMNS (runtime),
-     * then coerces form values to an exact DB literal (int, enum member, or Y/N).
-     */
-    private function getPermanentlyAvailableMeta(): array {
-        if (self::$permanentlyAvailableMeta !== null) {
-            return self::$permanentlyAvailableMeta;
-        }
-        $fallback = ['kind' => 'yn', 'enum_values' => null, 'type_raw' => null];
-        $stmt = $this->conn->prepare('SHOW COLUMNS FROM `vp_inbound` LIKE ?');
-        if (!$stmt) {
-            self::$permanentlyAvailableMeta = $fallback;
-            return self::$permanentlyAvailableMeta;
-        }
-        $col = 'permanently_available';
-        $stmt->bind_param('s', $col);
-        if (!$stmt->execute()) {
-            $stmt->close();
-            self::$permanentlyAvailableMeta = $fallback;
-            return self::$permanentlyAvailableMeta;
-        }
-        $row = $this->fetchShowColumnsRow($stmt);
-        $stmt->close();
-        if (!$row || empty($row['Type'])) {
-            self::$permanentlyAvailableMeta = $fallback;
-            return self::$permanentlyAvailableMeta;
-        }
-        $t = trim((string) $row['Type']);
-        $tl = strtolower($t);
-        if (preg_match('/^(tinyint|smallint|mediumint|int|bigint|bit)\b/', $tl)) {
-            self::$permanentlyAvailableMeta = ['kind' => 'int', 'enum_values' => null, 'type_raw' => $t];
-            return self::$permanentlyAvailableMeta;
-        }
-        if (preg_match('/^enum\\((.*)\\)\\s*$/i', $t, $em)) {
-            preg_match_all("/'((?:\\\\.|[^'\\\\])*)'/", $em[1], $m);
-            $vals = $m[1];
-            self::$permanentlyAvailableMeta = ['kind' => 'enum', 'enum_values' => $vals, 'type_raw' => $t];
-            return self::$permanentlyAvailableMeta;
-        }
-        self::$permanentlyAvailableMeta = ['kind' => 'yn', 'enum_values' => null, 'type_raw' => $t];
-        return self::$permanentlyAvailableMeta;
-    }
-
-    private function coercePermanentlyAvailableValue($raw) {
-        $yes = $raw === 'Y' || $raw === 1 || $raw === '1' || $raw === true;
-        $meta = $this->getPermanentlyAvailableMeta();
-        if ($meta['kind'] === 'int') {
-            $out = $yes ? 1 : 0;
-        } elseif ($meta['kind'] === 'enum' && is_array($meta['enum_values']) && count($meta['enum_values']) === 2) {
-            $a = $meta['enum_values'][0];
-            $b = $meta['enum_values'][1];
-            $truthy = static function ($x) {
-                $s = (string) $x;
-                $u = strtoupper($s);
-                return $u === 'Y' || $u === 'YES' || $u === 'TRUE' || $s === '1' || $x === 1;
-            };
-            $aT = $truthy($a);
-            $bT = $truthy($b);
-            if ($aT && !$bT) {
-                $out = $yes ? $a : $b;
-            } elseif (!$aT && $bT) {
-                $out = $yes ? $b : $a;
-            } elseif ($a === '0' && $b === '1') {
-                $out = $yes ? '1' : '0';
-            } elseif ($a === '1' && $b === '0') {
-                $out = $yes ? $a : $b;
-            } else {
-                $out = $yes ? $b : $a;
-            }
-        } else {
-            $out = $yes ? 'Y' : 'N';
-        }
-
-        return $out;
     }
     // models/inbounding/InboundingModel.php (or wherever your getAll is defined)
 
@@ -967,11 +859,7 @@ class Inbounding {
     public function updatedesktopform($id, $data) {
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
-
-        if (array_key_exists('permanently_available', $data)) {
-            $data['permanently_available'] = $this->coercePermanentlyAvailableValue($data['permanently_available']);
-        }
-
+        
         $cols = []; 
         $values = []; 
         $types = "";
@@ -980,19 +868,16 @@ class Inbounding {
             // FIX: Removed "$val !== ''" check.
             // Now, empty strings WILL be included in the UPDATE query.
             if ($val === null) {
-                $cols[] = "`{$key}` = NULL";
+                $cols[] = "$key = NULL";
                 continue;
             }
-            $cols[] = "`{$key}` = ?";
+            $cols[] = "$key = ?";
             $values[] = $val;
-
-            if (is_int($val)) {
-                $types .= "i";
-            } elseif (is_float($val)) {
-                $types .= "d";
-            } else {
-                $types .= "s";
-            }
+                
+            // Type logic: integers, floats, or default to string
+            if (is_int($val)) $types .= "i";
+            elseif (is_float($val)) $types .= "d";
+            else $types .= "s"; 
         }
         // $cols[] = "modifydate = "NOW();
         if (empty($cols)) return ['success' => true, 'message' => "No changes detected."];
