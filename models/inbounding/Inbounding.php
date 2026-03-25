@@ -867,14 +867,19 @@ class Inbounding {
         foreach ($data as $key => $val) {
             // FIX: Removed "$val !== ''" check.
             // Now, empty strings WILL be included in the UPDATE query.
-            if ($val !== null) { 
-                $cols[] = "$key = ?";
-                $values[] = $val;
-                
-                // Type logic: integers, floats, or default to string
-                if (is_int($val)) $types .= "i";
-                elseif (is_float($val)) $types .= "d";
-                else $types .= "s"; 
+            if ($val === null) {
+                $cols[] = "`{$key}` = NULL";
+                continue;
+            }
+            $cols[] = "`{$key}` = ?";
+            $values[] = $val;
+
+            if (is_int($val)) {
+                $types .= "i";
+            } elseif (is_float($val)) {
+                $types .= "d";
+            } else {
+                $types .= "s";
             }
         }
         // $cols[] = "modifydate = "NOW();
