@@ -716,19 +716,29 @@ class Inbounding {
         $result = $this->conn->query($sql);
         $inbounding = $result ? $result->fetch_assoc() : [];
 
-        // 2. Fetch Helper Tables (Users, Vendors, Materials, etc.)
-        $user = $this->conn->query("SELECT * FROM `vp_users`")->fetch_all(MYSQLI_ASSOC);
-        $vendors = $this->conn->query("SELECT * FROM `vp_vendors`")->fetch_all(MYSQLI_ASSOC);
-        $material = $this->conn->query("SELECT * FROM `material`")->fetch_all(MYSQLI_ASSOC);
-        $category = $this->conn->query("SELECT * FROM `category`")->fetch_all(MYSQLI_ASSOC);
-        $address = $this->conn->query("SELECT * FROM `exotic_address`")->fetch_all(MYSQLI_ASSOC);
+        // 2. Helper lists: only columns used by desktopform (smaller rows / less mysqld work than SELECT *)
+        $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
+        $user = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        $r = $this->conn->query("SELECT id, vendor_name FROM `vp_vendors` ORDER BY vendor_name ASC");
+        $vendors = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        $r = $this->conn->query("SELECT id, material_name FROM `material` ORDER BY material_name ASC");
+        $material = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        $r = $this->conn->query(
+            "SELECT id, category, display_name, parent, is_active FROM `category` ORDER BY parent, display_name"
+        );
+        $category = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        $r = $this->conn->query("SELECT id, address_title FROM `exotic_address` ORDER BY address_title ASC");
+        $address = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
-        // 3. NEW: Fetch Variations linked to this item
+        // 3. Variations for this item (also on form2 so the view does not call getVariations() again)
         $variations = [];
         $sqlVar = "SELECT * FROM `vp_variations` WHERE it_id = $id ORDER BY id ASC";
         $resVar = $this->conn->query($sqlVar);
-        if($resVar) {
+        if ($resVar) {
             $variations = $resVar->fetch_all(MYSQLI_ASSOC);
+        }
+        if ($inbounding !== []) {
+            $inbounding['variations'] = $variations;
         }
 
         return [
@@ -738,7 +748,6 @@ class Inbounding {
             'material'   => $material,
             'category'   => $category,
             'address'    => $address,
-            'variations' => $variations // <--- Added this
         ];
     }
     public function getform2($id) {
