@@ -519,6 +519,7 @@ class ProductsController {
 
     public function searchProduct() {
         is_login();
+        header('Content-Type: application/json');
         global $productModel;
         $q = isset($_GET['q']) ? trim($_GET['q']) : '';
 
