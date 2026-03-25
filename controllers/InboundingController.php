@@ -1608,26 +1608,14 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
         $stock_price_temp[0]['usd'] = $data['data']['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = (($data['data']['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N'
+        $stock_price_temp[0]['permanently_available'] = (($data['data']['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N';
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
         $stock_price_temp[0]['youtube_links'] = '';
         $stock_price_temp[0]['sketchfab_links'] = '';
-        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? 0;
+        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? '';
 
-        // Variation Records [1..n]
-        if (!empty($data['data']['var_rows'])) {
-            $i = 0;
-            foreach ($data['data']['var_rows'] as $key => $value) {
-                $i++;
-                $stock_price_temp[$i]['size'] = $value['size'];
-                $stock_price_temp[$i]['color'] = $value['color'];
-                $stock_price_temp[$i]['marketplace_vendor'] = $data['data']['Marketplace'];
-                $stock_price_temp[$i]['item_level'] = 'variation';
-                $stock_price_temp[$i]['colormap'] = $value['colormaps'];
-                $stock_price_temp[$i]['product_weight'] = $value['weight'];
-                $stock_price_temp[$i]['product_weight_unit'] = 'kg';
                 $stock_price_temp[$i]['prod_length'] = $value['depth'];
                 $stock_price_temp[$i]['prod_width'] = $value['width'];
                 $stock_price_temp[$i]['prod_height'] = $value['height'];
