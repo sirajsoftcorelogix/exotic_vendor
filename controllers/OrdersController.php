@@ -430,7 +430,7 @@ class OrdersController {
            //print_array($order);exit;
         }
         //print_array($pdata);
-        //print_r($result);
+        print_r($result);
         //update log end time and imported count
         if($log_id > 0){
             $log_update_data = [
