@@ -282,12 +282,77 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        $data['form2']['gecolormaps'] = $this->gecolormaps();
-        $data['form2']['optionals_data'] = $this->getoptionals();
-        $data['form2']['getimgdir'] = $this->getimgdir();
+        $vendorApis = $this->fetchDesktopformVendorApisParallel();
+        $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
+        $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
+        $data['form2']['getimgdir'] = $vendorApis['getimgdir'];
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
+    }
+
+    /**
+     * Fetches colormaps, optionals, and image-directories in parallel (same wall time as one round-trip).
+     *
+     * @return array{gecolormaps: mixed, optionals_data: mixed, getimgdir: mixed}
+     */
+    private function fetchDesktopformVendorApisParallel(): array {
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json',
+        ];
+        $endpoints = [
+            'gecolormaps' => 'https://www.exoticindia.com/vendor-api/product/colormaps',
+            'optionals_data' => 'https://www.exoticindia.com/vendor-api/product/optionals',
+            'getimgdir' => 'https://www.exoticindia.com/vendor-api/product/image-directories',
+        ];
+        $mh = curl_multi_init();
+        $handles = [];
+        foreach ($endpoints as $key => $url) {
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_HTTPGET => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_SSL_VERIFYPEER => false,
+            ]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$key] = $ch;
+        }
+        $running = null;
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
+
+        $out = [
+            'gecolormaps' => false,
+            'optionals_data' => false,
+            'getimgdir' => false,
+        ];
+        foreach ($handles as $key => $ch) {
+            if (curl_errno($ch)) {
+                error_log('cURL Error (' . $key . '): ' . curl_error($ch));
+            } else {
+                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $response = curl_multi_getcontent($ch);
+                if ($httpCode === 200) {
+                    $out[$key] = json_decode($response, true);
+                } else {
+                    error_log('API HTTP Status (' . $key . '): ' . $httpCode . ' - Response: ' . $response);
+                }
+            }
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+
+        return $out;
     }
     function getimgdir() {
         $url = 'https://www.exoticindia.com/vendor-api/product/image-directories';
@@ -1081,14 +1146,14 @@ class InboundingController {
             'sub_category_code'   => $sub_cat_val, 
             'sub_sub_category_code' => $sub_sub_val,
             'added_date'    => $_POST['added_date'] ?? '',
-            'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
-            'updated_by_user_id'  => $_POST['updated_by_user_id'] ?? '',
+            'received_by_user_id' => trim((string) ($_POST['received_by_user_id'] ?? '')) === '' ? null : (int) $_POST['received_by_user_id'],
+            'updated_by_user_id'  => trim((string) ($_POST['updated_by_user_id'] ?? '')) === '' ? null : (int) $_POST['updated_by_user_id'],
             'invoice_no'          => $_POST['invoice_no'] ?? '',
             'material_code'       => $_POST['material_code'] ?? '',
             'product_title'       => $_POST['product_title'] ?? '',
             'key_words'           => $_POST['key_words'] ?? '',
             'snippet_description' => $_POST['snippet_description'] ?? '',
-            'vendor_code' => ($_POST['vendor_code'] === '') ? null : $_POST['vendor_code'],
+            'vendor_code' => trim((string) ($_POST['vendor_code'] ?? '')) === '' ? null : $_POST['vendor_code'],
             'cp'                  => $_POST['cp'] ?? '',
             'price_india_mrp'     => $_POST['price_india_mrp'] ?? '',
             'price_india'         => $_POST['price_india'] ?? '',
@@ -1104,20 +1169,20 @@ class InboundingController {
             'size'                => $_POST['size'] ?? '',
             'color'               => $_POST['color'] ?? '',
             'quantity_received'   => $_POST['quantity_received'] ?? '',
-            'permanently_available'=> $_POST['permanently_available'] ?? '',
+            'permanently_available' => (($_POST['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'marketplace'         => $_POST['marketplace'] ?? ' ',
-            'india_net_qty'       => $_POST['india_net_qty'] ?? '',
-            'lead_time_days'      => $_POST['lead_time_days'] ?? '',
-            'in_stock_leadtime_days' => $_POST['in_stock_leadtime_days'] ?? '',
+            'india_net_qty' => trim((string)($_POST['india_net_qty'] ?? '')) === '' ? 0 : (int) $_POST['india_net_qty'],
+            'lead_time_days' => trim((string)($_POST['lead_time_days'] ?? '')) === '' ? 0 : (int) $_POST['lead_time_days'],
+            'in_stock_leadtime_days' => trim((string)($_POST['in_stock_leadtime_days'] ?? '')) === '' ? 0 : (int) $_POST['in_stock_leadtime_days'],
             'optionals'   => $icons_val, 
             'back_order'          => $back_order_input,
             'backorder_percent'   => $percent_val,
             'backorder_day'       => $day_val,
-            'us_block'            => $_POST['us_block'] ?? '',
-            'dimention_unit'      => $_POST['dimention_unit'] ?? '',
-            'weight_unit'         => $_POST['weight_unit'] ?? '',
+            'us_block' => (strtoupper($_POST['us_block'] ?? '') === 'Y') ? 'Y' : 'N',
+            'dimention_unit'      => $_POST['dimention_unit'] ?? 'cm',
+            'weight_unit'         => $_POST['weight_unit'] ?? 'kg',
             'feedback'         => $_POST['feedback'] ?? '',
         ];
         
@@ -1416,6 +1481,8 @@ class InboundingController {
         // This ensures that even if renaming was skipped before, it happens now
         $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
     }
+
+    
     public function printInboundLabel(){
         is_login();
         global $inboundingModel;
@@ -1428,6 +1495,9 @@ class InboundingController {
         include 'views/inbounding/label_inbound.php';
     }
     public function inbound_product_publish(){
+        // #region agent log
+        @file_put_contents(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'debug-0ab0a5.log', json_encode(['sessionId' => '0ab0a5', 'hypothesisId' => 'H1', 'location' => 'InboundingController.php:inbound_product_publish:entry', 'message' => 'method entered after parse fix', 'timestamp' => (int) round(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
+        // #endregion
         is_login();
         if (ob_get_level() === 0) {
             ob_start();
@@ -1541,13 +1611,13 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
         $stock_price_temp[0]['usd'] = $data['data']['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+        $stock_price_temp[0]['permanently_available'] = (($data['data']['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N';
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
         $stock_price_temp[0]['youtube_links'] = '';
         $stock_price_temp[0]['sketchfab_links'] = '';
-        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? 0;
+        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? '';
 
         // Variation Records [1..n]
         if (!empty($data['data']['var_rows'])) {
@@ -1593,7 +1663,7 @@ class InboundingController {
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 'Y' : 'N';
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
@@ -1605,7 +1675,7 @@ class InboundingController {
             // ========================================================================
             // LOGIC: When Parent is "N" and has variations, add main data as a copy
             // ========================================================================
-            if ($data['data']['is_variant'] == 'N') {
+            if ($data['data']['is_variant'] == 'N') {   // if parent is not a variant, add the parent as a variation
                 // Clone the base item (stock_price_temp[0]) and add it to the end as another variation
                 // This ensures the parent product data is also included in the variations array
                 $i++;
@@ -1636,10 +1706,9 @@ class InboundingController {
             // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
             // If you need a clickable URL for a browser, change this to your website URL.
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $domain = $_SERVER['HTTP_HOST'];
-
-            $baseUrl = $protocol . '://' . $domain;
-            $imgDir = $baseUrl.'/uploads/itm_img/'; 
+            $httpHost = $_SERVER['HTTP_HOST'] ?? '';
+            $siteImageBase = $protocol . '://' . $httpHost;
+            $imgDir = $siteImageBase . '/uploads/itm_img/'; 
             // 1. Get the list of filenames
             $raw_images = array_column($data['data']['img'], 'file_name');
 
