@@ -2325,9 +2325,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
         if (catChecked === 0) errors.push("Please select at least one 'Category'.");
 
+        // Marketplace sourcing: no local stock — skip main quantity_received check
+        const hasMarketplaceVendor = getVal('marketplace') !== '';
+
         // --- 2. MAIN ITEM ---
-        const mainQty = parseFloat(getVal('quantity_received')) || 0;
-        if (mainQty < 0) errors.push("Main Item: 'Quantity' must be at least 1.");
+        if (!hasMarketplaceVendor) {
+            const mainQty = parseFloat(getVal('quantity_received')) || 0;
+            if (mainQty < 0) errors.push("Main Item: 'Quantity' must be at least 1.");
+        }
 
         if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
         if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
