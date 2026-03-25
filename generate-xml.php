@@ -107,7 +107,10 @@ class BusyXmlGenerator
         // Format and return XML
         $dom = dom_import_simplexml($xml)->ownerDocument;
         $dom->formatOutput = true;
-        return $dom->saveXML();
+        // return $dom->saveXML();
+        $xmlOutput = $dom->saveXML();
+        // Remove XML declaration
+        return preg_replace('/<\?xml[^?]*\?>\n?/', '', $xmlOutput, 1);
     }
 
     /**
