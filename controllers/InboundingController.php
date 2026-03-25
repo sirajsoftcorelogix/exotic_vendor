@@ -1495,6 +1495,9 @@ class InboundingController {
         include 'views/inbounding/label_inbound.php';
     }
     public function inbound_product_publish(){
+        // #region agent log
+        @file_put_contents(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'debug-0ab0a5.log', json_encode(['sessionId' => '0ab0a5', 'hypothesisId' => 'H1', 'location' => 'InboundingController.php:inbound_product_publish:entry', 'message' => 'method entered after parse fix', 'timestamp' => (int) round(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
+        // #endregion
         is_login();
         if (ob_get_level() === 0) {
             ob_start();
@@ -1616,6 +1619,18 @@ class InboundingController {
         $stock_price_temp[0]['sketchfab_links'] = '';
         $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? '';
 
+        // Variation Records [1..n]
+        if (!empty($data['data']['var_rows'])) {
+            $i = 0;
+            foreach ($data['data']['var_rows'] as $key => $value) {
+                $i++;
+                $stock_price_temp[$i]['size'] = $value['size'];
+                $stock_price_temp[$i]['color'] = $value['color'];
+                $stock_price_temp[$i]['marketplace_vendor'] = $data['data']['Marketplace'];
+                $stock_price_temp[$i]['item_level'] = 'variation';
+                $stock_price_temp[$i]['colormap'] = $value['colormaps'];
+                $stock_price_temp[$i]['product_weight'] = $value['weight'];
+                $stock_price_temp[$i]['product_weight_unit'] = 'kg';
                 $stock_price_temp[$i]['prod_length'] = $value['depth'];
                 $stock_price_temp[$i]['prod_width'] = $value['width'];
                 $stock_price_temp[$i]['prod_height'] = $value['height'];
@@ -1660,7 +1675,7 @@ class InboundingController {
             // ========================================================================
             // LOGIC: When Parent is "N" and has variations, add main data as a copy
             // ========================================================================
-            if($data['data']['is_variant'] == 'N'){   // if parent is not a variant, add the parent as a variation
+            if ($data['data']['is_variant'] == 'N') {   // if parent is not a variant, add the parent as a variation
                 // Clone the base item (stock_price_temp[0]) and add it to the end as another variation
                 // This ensures the parent product data is also included in the variations array
                 $i++;
