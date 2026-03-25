@@ -1104,7 +1104,7 @@ class InboundingController {
             'size'                => $_POST['size'] ?? '',
             'color'               => $_POST['color'] ?? '',
             'quantity_received'   => $_POST['quantity_received'] ?? '',
-            'permanently_available'=> $_POST['permanently_available'] ?? '',
+            'permanently_available' => (($_POST['permanently_available'] ?? 'N') === 'Y') ? 'Y' : 'N',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'marketplace'         => $_POST['marketplace'] ?? ' ',
