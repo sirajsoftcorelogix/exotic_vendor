@@ -244,7 +244,7 @@ class OrdersController {
         
         $error = curl_error($ch);
         curl_close($ch);
-        // print_r($error);
+        print_r($error);
         // print_r($headers);
         // print_r($response);
         if ($response === false) {
