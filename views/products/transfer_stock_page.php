@@ -162,7 +162,7 @@ if (empty($transferOrderNo)) {
         </div>
 
         <div class="mb-6 flex justify-end">
-            <button id="addItemBtn" type="button" onclick="openAddItemModal()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
+            <button id="addItemBtn" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
                 <i class="fas fa-plus"></i> Add Item
             </button>
         </div>
@@ -252,10 +252,13 @@ if (empty($transferOrderNo)) {
 <script>
     // Warehouse address mapping and data
     const warehouseData = {
-        <?php foreach ($warehouses as $warehouse): ?>
-            <?php echo $warehouse['id']; ?>: {
-                name: '<?php echo htmlspecialchars($warehouse['address_title']); ?>',
-                address: '<?php echo htmlspecialchars($warehouse['address']); ?>'
+        <?php foreach ($warehouses as $warehouse): 
+            $name = trim($warehouse['address_title'] ?? '');
+            $addr = trim($warehouse['address'] ?? '');
+        ?>
+            <?php echo (int)$warehouse['id']; ?>: {
+                name: <?php echo json_encode($name, JSON_UNESCAPED_UNICODE); ?>,
+                address: <?php echo json_encode($addr, JSON_UNESCAPED_UNICODE); ?>
             },
         <?php endforeach; ?>
     };
