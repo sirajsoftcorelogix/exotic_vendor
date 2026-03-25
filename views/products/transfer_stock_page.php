@@ -162,7 +162,7 @@ if (empty($transferOrderNo)) {
         </div>
 
         <div class="mb-6 flex justify-end">
-            <button id="addItemBtn" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
+            <button id="addItemBtn" type="button" onclick="window.openAddItemModal ? openAddItemModal() : null" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
                 <i class="fas fa-plus"></i> Add Item
             </button>
         </div>
@@ -539,7 +539,7 @@ if (empty($transferOrderNo)) {
     let addItemSearchResult = null;
     let itemsTableBody = null;
 
-    function openAddItemModal() {
+    window.openAddItemModal = function() {
         const addItemModal = document.getElementById('addItemModal');
         const addItemSearchInput = document.getElementById('addItemSearchInput');
         const addItemSearchMessage = document.getElementById('addItemSearchMessage');
@@ -552,14 +552,14 @@ if (empty($transferOrderNo)) {
         addItemSearchResult.innerHTML = '';
         addItemModal.classList.remove('hidden');
         addItemModal.classList.add('flex');
-    }
+    };
 
-    function closeAddItemModal() {
+    window.closeAddItemModal = function() {
         const addItemModal = document.getElementById('addItemModal');
         if (!addItemModal) return;
         addItemModal.classList.add('hidden');
         addItemModal.classList.remove('flex');
-    }
+    };
 
     document.addEventListener('DOMContentLoaded', function() {
         addItemModal = document.getElementById('addItemModal');
