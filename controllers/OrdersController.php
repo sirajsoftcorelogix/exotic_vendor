@@ -235,11 +235,17 @@ class OrdersController {
         // Initialize cURL
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POST, true);
-
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        
+        // Connection timeout settings
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);      // 30 second connection timeout
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);             // 60 second total timeout
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);   // Disable peer verification (for development)
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);       // Disable hostname verification (for development)
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+        
         $response = curl_exec($ch);
         
         $error = curl_error($ch);
@@ -275,6 +281,14 @@ class OrdersController {
                 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                
+                // Connection timeout settings
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);      // 30 second connection timeout
+                curl_setopt($ch, CURLOPT_TIMEOUT, 60);             // 60 second total timeout
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);   // Disable peer verification (for development)
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);       // Disable hostname verification (for development)
+                curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                
                 $response = curl_exec($ch);
                 $error = curl_error($ch);
                 curl_close($ch);
