@@ -1116,7 +1116,7 @@ class InboundingController {
             'backorder_percent'   => $percent_val,
             'backorder_day'       => $day_val,
             'us_block' => (strtoupper($_POST['us_block'] ?? '') === 'Y') ? 'Y' : 'N',
-            'dimention_unit'      => $_POST['dimention_unit'] ?? 'inch',
+            'dimention_unit'      => $_POST['dimention_unit'] ?? 'cm',
             'weight_unit'         => $_POST['weight_unit'] ?? 'kg',
             'feedback'         => $_POST['feedback'] ?? '',
         ];
