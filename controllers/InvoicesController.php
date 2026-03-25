@@ -1171,8 +1171,36 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
             // Generate XML for each invoice
             foreach ($invoiceIds as $invoiceId) {
                 $invoice = $invoiceModel->getInvoiceById($invoiceId);
+                // add address info to invoice data
+                if ($invoice) {
+                    global $commanModel;
+                    $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+                    if ($customer) {
+                        $invoice['customer_name'] = $customer['first_name'] . ' ' . $customer['last_name'];
+                        $invoice['customer_address1'] = trim(($customer['address_line1'] ?? ''));
+                        $invoice['customer_address2'] = trim(($customer['address_line2'] ?? ''));
+                        $invoice['customer_address3'] = trim(($customer['city'] ?? ''));
+                        $invoice['customer_address4'] = trim(($customer['state'] ?? ''));
+                        $invoice['customer_state'] = trim(($customer['state'] ?? ''));
+                        $invoice['customer_zipcode'] = trim(($customer['zipcode'] ?? ''));
+                        $invoice['customer_mobile'] = trim(($customer['mobile'] ?? ''));
+                        $invoice['customer_email'] = trim(($customer['email'] ?? ''));
+                        $invoice['customer_gstin'] = trim(($customer['gstin'] ?? ''));
+                    } else {
+                        $invoice['customer_name'] = '';
+                        $invoice['customer_address1'] = '';
+                        $invoice['customer_address2'] = '';
+                        $invoice['customer_address3'] = '';
+                        $invoice['customer_address4'] = '';
+                        $invoice['customer_state'] = '';
+                        $invoice['customer_zipcode'] = '';
+                        $invoice['customer_mobile'] = '';
+                        $invoice['customer_email'] = '';
+                        $invoice['customer_gstin'] = '';
+                    }
+                }
                 $items = $invoiceModel->getInvoiceItems($invoiceId);
-
+                $invoice['total_qty'] = array_sum(array_column($items, 'quantity'));
                 if ($invoice && !empty($items)) {
                     $invoice['sgst'] = array_sum(array_column($items, 'sgst'));
                     $invoice['cgst'] = array_sum(array_column($items, 'cgst'));
@@ -1182,7 +1210,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
                     $filename = $invoice['invoice_number'] ?? ('invoice_' . $invoiceId);
                     // Sanitize filename by removing path separators and invalid characters
                     $sanitized_filename = preg_replace('/[\/\\:*?"<>|]/', '_', $filename);
-                    $filepath = $tempDir . '/' . $sanitized_filename . '.xml';
+                    $filepath = $tempDir . '/' . $sanitized_filename . '.TXT';
 
                     if (file_put_contents($filepath, $xml) === false) {
                         throw new Exception('Failed to write XML file: ' . $filename);
