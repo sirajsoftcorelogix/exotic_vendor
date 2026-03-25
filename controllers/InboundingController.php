@@ -1660,7 +1660,7 @@ class InboundingController {
             // ========================================================================
             // LOGIC: When Parent is "N" and has variations, add main data as a copy
             // ========================================================================
-            if ($data['data']['is_variant'] == 'N') {
+            if($data['data']['is_variant'] == 'N') {   // if parent is not a variant, add the parent as a variation
                 // Clone the base item (stock_price_temp[0]) and add it to the end as another variation
                 // This ensures the parent product data is also included in the variations array
                 $i++;
