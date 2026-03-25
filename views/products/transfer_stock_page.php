@@ -162,7 +162,7 @@ if (empty($transferOrderNo)) {
         </div>
 
         <div class="mb-6 flex justify-end">
-            <button id="addItemBtn" type="button" onclick="openAddItemModal()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
+            <button id="addItemBtn" type="button" onclick="window.openAddItemModal ? openAddItemModal() : null" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">
                 <i class="fas fa-plus"></i> Add Item
             </button>
         </div>
@@ -252,10 +252,13 @@ if (empty($transferOrderNo)) {
 <script>
     // Warehouse address mapping and data
     const warehouseData = {
-        <?php foreach ($warehouses as $warehouse): ?>
-            <?php echo $warehouse['id']; ?>: {
-                name: '<?php echo htmlspecialchars($warehouse['address_title']); ?>',
-                address: '<?php echo htmlspecialchars($warehouse['address']); ?>'
+        <?php foreach ($warehouses as $warehouse): 
+            $name = trim($warehouse['address_title'] ?? '');
+            $addr = trim($warehouse['address'] ?? '');
+        ?>
+            <?php echo (int)$warehouse['id']; ?>: {
+                name: <?php echo json_encode($name, JSON_UNESCAPED_UNICODE); ?>,
+                address: <?php echo json_encode($addr, JSON_UNESCAPED_UNICODE); ?>
             },
         <?php endforeach; ?>
     };
@@ -271,8 +274,15 @@ if (empty($transferOrderNo)) {
         return 'TO-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
     }
 
+    function apiUrl(action, query = '') {
+        const basePath = window.location.pathname.replace(/\/$/, '');
+        return `${basePath}?page=products&action=${encodeURIComponent(action)}${query}`;
+    }
+
     function fetchNextTransferOrderNo(fromWarehouse, toWarehouse) {
-        return fetch(`?page=products&action=get_transfer_order_no&from_warehouse=${encodeURIComponent(fromWarehouse)}&to_warehouse=${encodeURIComponent(toWarehouse)}`)
+        return fetch(apiUrl('get_transfer_order_no', `&from_warehouse=${encodeURIComponent(fromWarehouse)}&to_warehouse=${encodeURIComponent(toWarehouse)}`), {
+            credentials: 'same-origin'
+        })
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.transfer_order_no) {
@@ -374,8 +384,9 @@ if (empty($transferOrderNo)) {
 
         // Fetch and set last warehouse as default source warehouse when creating a new transfer
         if (!isEdit) {
-            fetch('?page=products&action=get_last_warehouse', {
-                method: 'GET'
+            fetch(apiUrl('get_last_warehouse'), {
+                method: 'GET',
+                credentials: 'same-origin'
             })
             .then(response => response.json())
             .then(data => {
@@ -494,8 +505,9 @@ if (empty($transferOrderNo)) {
         }
 
         const formData = new FormData(document.getElementById('transferStockForm'));
-        fetch('?page=products&action=process_transfer_stock', {
+        fetch(apiUrl('process_transfer_stock'), {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'
@@ -527,7 +539,7 @@ if (empty($transferOrderNo)) {
     let addItemSearchResult = null;
     let itemsTableBody = null;
 
-    function openAddItemModal() {
+    window.openAddItemModal = function() {
         const addItemModal = document.getElementById('addItemModal');
         const addItemSearchInput = document.getElementById('addItemSearchInput');
         const addItemSearchMessage = document.getElementById('addItemSearchMessage');
@@ -540,24 +552,24 @@ if (empty($transferOrderNo)) {
         addItemSearchResult.innerHTML = '';
         addItemModal.classList.remove('hidden');
         addItemModal.classList.add('flex');
-    }
+    };
 
-    function closeAddItemModal() {
+    window.closeAddItemModal = function() {
         const addItemModal = document.getElementById('addItemModal');
         if (!addItemModal) return;
         addItemModal.classList.add('hidden');
         addItemModal.classList.remove('flex');
-    }
+    };
 
     document.addEventListener('DOMContentLoaded', function() {
-        const addItemModal = document.getElementById('addItemModal');
-        const addItemBtn = document.getElementById('addItemBtn');
-        const addItemModalClose = document.getElementById('addItemModalClose');
-        const addItemSearchBtn = document.getElementById('addItemSearchBtn');
-        const addItemSearchInput = document.getElementById('addItemSearchInput');
-        const addItemSearchMessage = document.getElementById('addItemSearchMessage');
-        const addItemSearchResult = document.getElementById('addItemSearchResult');
-        const itemsTableBody = document.getElementById('itemsTableBody');
+        addItemModal = document.getElementById('addItemModal');
+        addItemBtn = document.getElementById('addItemBtn');
+        addItemModalClose = document.getElementById('addItemModalClose');
+        addItemSearchBtn = document.getElementById('addItemSearchBtn');
+        addItemSearchInput = document.getElementById('addItemSearchInput');
+        addItemSearchMessage = document.getElementById('addItemSearchMessage');
+        addItemSearchResult = document.getElementById('addItemSearchResult');
+        itemsTableBody = document.getElementById('itemsTableBody');
 
         if (addItemBtn) addItemBtn.addEventListener('click', openAddItemModal);
         if (addItemModalClose) addItemModalClose.addEventListener('click', closeAddItemModal);
@@ -661,8 +673,9 @@ if (empty($transferOrderNo)) {
             return;
         }
 
-        const resp = await fetch(`?page=products&action=search_product&q=${encodeURIComponent(query)}`, {
-            headers: { 'Accept': 'application/json' }
+        const resp = await fetch(apiUrl('search_product', `&q=${encodeURIComponent(query)}`), {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
         });
         const data = await resp.json();
         if (!data.success) {
