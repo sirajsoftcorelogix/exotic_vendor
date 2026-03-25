@@ -282,12 +282,77 @@ class InboundingController {
         $id = $_GET['id'] ?? 0;
         $data = array();
         $data = $inboundingModel->getform2data($id);
-        $data['form2']['gecolormaps'] = $this->gecolormaps();
-        $data['form2']['optionals_data'] = $this->getoptionals();
-        $data['form2']['getimgdir'] = $this->getimgdir();
+        $vendorApis = $this->fetchDesktopformVendorApisParallel();
+        $data['form2']['gecolormaps'] = $vendorApis['gecolormaps'];
+        $data['form2']['optionals_data'] = $vendorApis['optionals_data'];
+        $data['form2']['getimgdir'] = $vendorApis['getimgdir'];
         $data['images'] = $inboundingModel->getitem_imgs($id);
         $data['markup_list'] = $inboundingModel->getMarkupData();
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
+    }
+
+    /**
+     * Fetches colormaps, optionals, and image-directories in parallel (same wall time as one round-trip).
+     *
+     * @return array{gecolormaps: mixed, optionals_data: mixed, getimgdir: mixed}
+     */
+    private function fetchDesktopformVendorApisParallel(): array {
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json',
+        ];
+        $endpoints = [
+            'gecolormaps' => 'https://www.exoticindia.com/vendor-api/product/colormaps',
+            'optionals_data' => 'https://www.exoticindia.com/vendor-api/product/optionals',
+            'getimgdir' => 'https://www.exoticindia.com/vendor-api/product/image-directories',
+        ];
+        $mh = curl_multi_init();
+        $handles = [];
+        foreach ($endpoints as $key => $url) {
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_HTTPGET => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_SSL_VERIFYPEER => false,
+            ]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$key] = $ch;
+        }
+        $running = null;
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
+
+        $out = [
+            'gecolormaps' => false,
+            'optionals_data' => false,
+            'getimgdir' => false,
+        ];
+        foreach ($handles as $key => $ch) {
+            if (curl_errno($ch)) {
+                error_log('cURL Error (' . $key . '): ' . curl_error($ch));
+            } else {
+                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $response = curl_multi_getcontent($ch);
+                if ($httpCode === 200) {
+                    $out[$key] = json_decode($response, true);
+                } else {
+                    error_log('API HTTP Status (' . $key . '): ' . $httpCode . ' - Response: ' . $response);
+                }
+            }
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+
+        return $out;
     }
     function getimgdir() {
         $url = 'https://www.exoticindia.com/vendor-api/product/image-directories';
