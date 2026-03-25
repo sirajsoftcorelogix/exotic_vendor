@@ -1495,9 +1495,6 @@ class InboundingController {
         include 'views/inbounding/label_inbound.php';
     }
     public function inbound_product_publish(){
-        // #region agent log
-        @file_put_contents(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'debug-0ab0a5.log', json_encode(['sessionId' => '0ab0a5', 'hypothesisId' => 'H1', 'location' => 'InboundingController.php:inbound_product_publish:entry', 'message' => 'method entered after parse fix', 'timestamp' => (int) round(microtime(true) * 1000)]) . "\n", FILE_APPEND | LOCK_EX);
-        // #endregion
         is_login();
         if (ob_get_level() === 0) {
             ob_start();
