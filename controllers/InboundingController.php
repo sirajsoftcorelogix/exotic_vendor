@@ -1481,6 +1481,8 @@ class InboundingController {
         // This ensures that even if renaming was skipped before, it happens now
         $this->renameImagesToItemCode($id, $item_code, $currentDataForRename);
     }
+
+    
     public function printInboundLabel(){
         is_login();
         global $inboundingModel;
@@ -1606,26 +1608,14 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
         $stock_price_temp[0]['usd'] = $data['data']['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+        $stock_price_temp[0]['permanently_available'] = (($data['data']['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N';
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
         $stock_price_temp[0]['youtube_links'] = '';
         $stock_price_temp[0]['sketchfab_links'] = '';
-        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? 0;
+        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? '';
 
-        // Variation Records [1..n]
-        if (!empty($data['data']['var_rows'])) {
-            $i = 0;
-            foreach ($data['data']['var_rows'] as $key => $value) {
-                $i++;
-                $stock_price_temp[$i]['size'] = $value['size'];
-                $stock_price_temp[$i]['color'] = $value['color'];
-                $stock_price_temp[$i]['marketplace_vendor'] = $data['data']['Marketplace'];
-                $stock_price_temp[$i]['item_level'] = 'variation';
-                $stock_price_temp[$i]['colormap'] = $value['colormaps'];
-                $stock_price_temp[$i]['product_weight'] = $value['weight'];
-                $stock_price_temp[$i]['product_weight_unit'] = 'kg';
                 $stock_price_temp[$i]['prod_length'] = $value['depth'];
                 $stock_price_temp[$i]['prod_width'] = $value['width'];
                 $stock_price_temp[$i]['prod_height'] = $value['height'];
@@ -1658,7 +1648,7 @@ class InboundingController {
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 1 : 0;
+                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 'Y' : 'N';
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
@@ -1701,10 +1691,9 @@ class InboundingController {
             // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
             // If you need a clickable URL for a browser, change this to your website URL.
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $domain = $_SERVER['HTTP_HOST'];
-
-            $baseUrl = $protocol . '://' . $domain;
-            $imgDir = $baseUrl.'/uploads/itm_img/'; 
+            $httpHost = $_SERVER['HTTP_HOST'] ?? '';
+            $siteImageBase = $protocol . '://' . $httpHost;
+            $imgDir = $siteImageBase . '/uploads/itm_img/'; 
             // 1. Get the list of filenames
             $raw_images = array_column($data['data']['img'], 'file_name');
 
