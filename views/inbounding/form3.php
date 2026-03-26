@@ -60,7 +60,7 @@ if (!empty($raw_categories)) {
         }
     }
 }
-print_array($display_categories);
+//print_array($display_categories);
 // --- DEFINE SIZE OPTIONS ---
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
