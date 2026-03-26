@@ -70,7 +70,16 @@
                 <?php $qty = (int)($r['stock_qty'] ?? 0); ?>
                 <tr class="border-t">
                   <td class="px-3 py-2">
-                    <img src="<?= htmlspecialchars($r['image'] ?: 'https://dummyimage.com/64x64/e5e7eb/6b7280&text=No+Image') ?>" class="h-10 w-10 rounded object-cover bg-slate-100">
+                    <?php
+                      $imgUrl = $r['image'] ?: 'https://dummyimage.com/256x256/e5e7eb/6b7280&text=No+Image';
+                    ?>
+                    <img
+                      src="<?= htmlspecialchars($imgUrl) ?>"
+                      data-full-img="<?= htmlspecialchars($imgUrl) ?>"
+                      class="h-10 w-10 rounded object-cover bg-slate-100 cursor-pointer hover:opacity-90 transition"
+                      alt="Product image"
+                      loading="lazy"
+                      onclick="openStockReportImage(this)">
                   </td>
                   <td class="px-3 py-2 font-semibold text-slate-700"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
                   <td class="px-3 py-2"><?= htmlspecialchars($r['sku'] ?? '') ?></td>
@@ -95,3 +104,58 @@
     </div>
   </main>
 </div>
+
+<!-- Image Expand Modal -->
+<div
+  id="stockReportImgModal"
+  class="fixed inset-0 hidden z-50 items-center justify-center bg-black/60 p-4"
+  role="dialog"
+  aria-modal="true">
+  <div class="relative bg-white rounded-xl shadow-2xl max-w-[95vw]">
+    <button
+      type="button"
+      class="absolute -top-3 -right-3 bg-white rounded-full border border-slate-200 w-9 h-9 flex items-center justify-center text-slate-700 hover:bg-slate-50"
+      onclick="closeStockReportImage()"
+      aria-label="Close">
+      <span class="text-xl leading-none">&times;</span>
+    </button>
+    <img
+      id="stockReportImgModalImg"
+      src=""
+      alt="Expanded product image"
+      class="max-h-[80vh] max-w-[95vw] object-contain rounded-xl">
+  </div>
+</div>
+
+<script>
+  function openStockReportImage(imgEl) {
+    const modal = document.getElementById('stockReportImgModal');
+    const modalImg = document.getElementById('stockReportImgModalImg');
+    const full = imgEl.getAttribute('data-full-img') || imgEl.src;
+    modalImg.src = full;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeStockReportImage() {
+    const modal = document.getElementById('stockReportImgModal');
+    const modalImg = document.getElementById('stockReportImgModalImg');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    modalImg.src = '';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('stockReportImgModal');
+    if (!modal) return;
+
+    modal.addEventListener('click', (e) => {
+      // Backdrop click closes (but clicks inside the image box should not)
+      if (e.target === modal) closeStockReportImage();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeStockReportImage();
+    });
+  });
+</script>
