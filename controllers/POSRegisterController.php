@@ -108,6 +108,7 @@ class POSRegisterController
             'category' => $_GET['category'] ?? 'allProducts',
             'stock_status' => $_GET['stock_status'] ?? 'all',
             'limit' => $_GET['limit'] ?? 200,
+            'warehouse_id' => $_SESSION['warehouse_id'] ?? null,
         ];
 
         $categories = ['allProducts' => 'All Products'] + getCategories();
