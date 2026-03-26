@@ -1315,10 +1315,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
                             <?php
                             $permRaw = $data['form2']['permanently_available'] ?? '0';
-                            $perm = ($permRaw === 'Y') ? '1' : '0';
+                            $perm = ($permRaw === '1') ? '1' : '0';
                             ?>
-                            <option value="N" <?= ($perm == '0') ? 'selected' : '' ?>>No</option>
-                            <option value="Y" <?= ($perm == '1') ? 'selected' : '' ?>>Yes</option>
+                            <option value="0" <?= ($perm == '0') ? 'selected' : '' ?>>No</option>
+                            <option value="1" <?= ($perm == '1') ? 'selected' : '' ?>>Yes</option>
                         </select>
                     </div>
                     <div class="w-full min-w-0">
