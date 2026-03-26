@@ -1314,8 +1314,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
                             <?php
-                            $permRaw = $data['form2']['permanently_available'] ?? 'N';
-                            $perm = ($permRaw === 'Y') ? 'Y' : 'N';
+                            $permRaw = $data['form2']['permanently_available'] ?? '0';
+                            $perm = ($permRaw === 'Y') ? '1' : '0';
                             ?>
                             <option value="N" <?= ($perm == 'N') ? 'selected' : '' ?>>No</option>
                             <option value="Y" <?= ($perm == 'Y') ? 'selected' : '' ?>>Yes</option>
