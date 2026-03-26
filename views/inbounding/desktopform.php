@@ -1317,8 +1317,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             $permRaw = $data['form2']['permanently_available'] ?? '0';
                             $perm = ($permRaw === '1') ? '1' : '0';
                             ?>
-                            <option value="0" <?= ($perm == '0') ? 'selected' : '0' ?>>No</option>
-                            <option value="1" <?= ($perm == '1') ? 'selected' : '1' ?>>Yes</option>
+                            <option value="0" <?= ($perm == '0') ? 'selected' : '' ?>>No</option>
+                            <option value="1" <?= ($perm == '1') ? 'selected' : '' ?>>Yes</option>
                         </select>
                     </div>
                     <div class="w-full min-w-0">
