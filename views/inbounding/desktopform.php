@@ -2330,7 +2330,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 		if (!hasMarketplaceVendor) {
 			const mainQty = parseFloat(getVal('quantity_received')) || 0;
-
 			// Ensure at least 1
 			if (mainQty < 1) {
 				errors.push("Main Item: 'Quantity' must be at least 1.");
