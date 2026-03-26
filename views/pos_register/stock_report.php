@@ -57,14 +57,13 @@
               <th class="px-3 py-2 text-left">Title</th>
               <th class="px-3 py-2 text-left">Category</th>
               <th class="px-3 py-2 text-left">Stock</th>
-              <th class="px-3 py-2 text-left">Min Stock</th>
               <th class="px-3 py-2 text-left">Sell Price</th>
             </tr>
           </thead>
           <tbody>
             <?php if (empty($rows)): ?>
               <tr>
-                <td colspan="8" class="px-3 py-8 text-center text-slate-400">No stock records found.</td>
+                <td colspan="7" class="px-3 py-8 text-center text-slate-400">No stock records found.</td>
               </tr>
             <?php else: ?>
               <?php foreach ($rows as $r): ?>
@@ -86,7 +85,6 @@
                       <span class="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
                     <?php endif; ?>
                   </td>
-                  <td class="px-3 py-2"><?= htmlspecialchars((string)($r['min_stock'] ?? 0)) ?></td>
                   <td class="px-3 py-2"><?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
                 </tr>
               <?php endforeach; ?>
