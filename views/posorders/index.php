@@ -611,7 +611,12 @@
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=posorders&action=list&status=pending'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'pending') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">
-                        <span class="px-1 text-md">Unprocessed</span>
+                        <div class="flex items-center justify-center gap-2">
+                            <span class="px-1 text-md">Unprocessed</span>
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                <?= (int)($pending_orders_count ?? 0) ?>
+                            </span>
+                        </div>
                         <div class="underline-pill w-full absolute left-0 bottom-[-4px]"></div>
                     </a>
                     <a href="<?php echo base_url('?page=posorders&action=list&status=processed'); ?>" class="tab <?php echo (isset($_GET['status']) && $_GET['status'] === 'processed') ? 'tab-active' : ''; ?> text-gray-500 hover:text-gray-700 text-center relative py-4">

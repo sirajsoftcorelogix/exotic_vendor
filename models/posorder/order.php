@@ -184,12 +184,15 @@ class Order
     public function getOrdersCount($filters = [])
     {
         //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
+        $warehouseId = $_SESSION['warehouse_id'] ?? 0;
         $sql = "SELECT COUNT(*) as count 
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
 		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
-		WHERE 1=1";
+		WHERE 1=1
+		  AND IFNULL(vp_orders.payment_type,'') = 'offline'
+		  AND vp_orders.warehouse_id = " . intval($warehouseId);
         $params = [];
         if (!empty($filters['order_number'])) {
             $sql .= " AND order_number LIKE ?";
