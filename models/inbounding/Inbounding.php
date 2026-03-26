@@ -719,14 +719,16 @@ class Inbounding {
         // 2. Helper lists: only columns used by desktopform (smaller rows / less mysqld work than SELECT *)
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
         $user = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        
         $r = $this->conn->query("SELECT id, vendor_name FROM `vp_vendors` ORDER BY vendor_name ASC");
         $vendors = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        
         $r = $this->conn->query("SELECT id, material_name FROM `material` ORDER BY material_name ASC");
         $material = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
-        $r = $this->conn->query(
-            "SELECT id, category, display_name, parent, is_active FROM `category` ORDER BY parent, display_name"
-        );
+        
+        $r = $this->conn->query("SELECT id, category, display_name, parent, is_active FROM `category` ORDER BY parent, display_name");
         $category = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+
         $r = $this->conn->query("SELECT id, address_title FROM `exotic_address` ORDER BY address_title ASC");
         $address = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
@@ -1508,7 +1510,7 @@ class Inbounding {
         // 3. Loop through your data array
         foreach ($data as $row) {
             // Mapping array keys to variables
-            $product_id   = $row['product_id'];
+           echo  $product_id   = $row['product_id']; break;
             $sku          = $row['sku'];
             $item_code    = $row['Item_code'];
             $size         = $row['size'] ?? ''; 
