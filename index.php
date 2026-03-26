@@ -792,6 +792,9 @@ switch ($page) {
             case 'products-ajax':
                 $controller->productsAjax();
                 break;
+            case 'stock-report':
+                $controller->stockReport();
+                break;
 
             case 'cart-add':
                 $controller->add_to_cart();
