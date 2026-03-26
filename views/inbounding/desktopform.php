@@ -1341,6 +1341,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </select>
                     </div>
                     <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Lead Time:</label>
+                        <div class="relative w-full">
+                            <input type="text" name="lead_time_days" 
+                                   value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '10') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
+                        </div>
+                    </div>
+                    <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
                                 name="back_order" id="back_order_select" onchange="toggleBackOrderFields()">
@@ -1367,15 +1376,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Lead Time:</label>
-                        <div class="relative w-full">
-                            <input type="text" name="lead_time_days" 
-                                   value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '10') ?>" 
-                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
-                        </div>
-                    </div>
+                    
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">In Stock Lead Time:</label>
                         <div class="relative w-full">
@@ -2426,7 +2427,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isSuccess) {
                 // Show success with download button
                 let html = '<div style="text-align: center;">';
-                html += '<p>Form saved and product published successfully.</p>';
+                html += '<p>Form saved and product uploaded successfully.</p>';
                 if (data.log_file) {
                     html += '<div style="margin-top: 15px;">';
                     html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
@@ -2438,7 +2439,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '</div>';
                 
                 Swal.fire({
-                    title: 'Published!',
+                    title: 'Uploaded!',
                     html: html,
                     icon: 'success'
                 }).then(() => window.location.reload());
