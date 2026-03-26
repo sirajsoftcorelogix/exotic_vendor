@@ -2357,8 +2357,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 return input ? input.value.trim() : '';
             };
 
-            const vQty = parseFloat(getCardVal('quantity')) || 0;
-            if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
+            const hasMarketplaceVendor = getVal('marketplace') !== '';
+
+            if (!hasMarketplaceVendor) {
+                const mainQty = parseFloat(getVal('quantity_received')) || 0;
+                // Ensure at least 1
+                if (mainQty < 1) {
+                    errors.push("Main Item: 'Quantity' must be at least 1.");
+                }
+            }
 
             if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
             if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
@@ -3406,7 +3413,7 @@ function validateAndSubmit(actionType) {
 
     // --- 2. MAIN ITEM VALIDATION ---
      // Marketplace sourcing: no local stock — skip main quantity_received check
-		const hasMarketplaceVendor = getVal('marketplace') !== '';
+	const hasMarketplaceVendor = getVal('marketplace') !== '';
 
     if (!hasMarketplaceVendor) {
         const mainQty = parseFloat(getVal('quantity_received')) || 0;
@@ -3444,9 +3451,14 @@ function validateAndSubmit(actionType) {
             return input ? input.value.trim() : '';
         };
 
-        const vQty = parseFloat(getCardVal('quantity')) || 0;
-        if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
-
+        const hasMarketplaceVendor = getVal('marketplace') !== '';
+		if (!hasMarketplaceVendor) {
+			const mainQty = parseFloat(getVal('quantity_received')) || 0;
+			// Ensure at least 1
+			if (mainQty < 1) {
+				errors.push("Main Item: 'Quantity' must be at least 1.");
+			}
+		}
         // UPDATED: Check for 0.00 inside variations
         if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
         if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
