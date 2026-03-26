@@ -1500,10 +1500,65 @@ class InboundingController {
             ob_start();
         }
         global $inboundingModel;
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         $API_data = array();
 
+        // Convert PHP warnings/notices into JSON errors and persist to publish logs.
+        $self = $this;
+        set_error_handler(function ($severity, $message, $file, $line) use (&$id, &$API_data, $self) {
+            if (!(error_reporting() & $severity)) {
+                return false;
+            }
+            $logFileData = $self->logPublishProcess([
+                'item_code' => $API_data['itemcode'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'php_warning',
+                'error_message' => $message . ' in ' . $file . ':' . $line,
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Publish failed due to PHP warning.',
+                'debug' => $message . ' in ' . basename($file) . ':' . $line,
+                'log_file' => $logFileData['filename']
+            ]);
+            exit;
+        });
+
+        register_shutdown_function(function () use (&$id, &$API_data, $self) {
+            $error = error_get_last();
+            if (!$error) {
+                return;
+            }
+            $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+            if (!in_array($error['type'], $fatalTypes, true)) {
+                return;
+            }
+            $logFileData = $self->logPublishProcess([
+                'item_code' => $API_data['itemcode'] ?? '',
+                'inbound_id' => $id,
+                'status' => 'failed',
+                'error_type' => 'php_fatal',
+                'error_message' => $error['message'] . ' in ' . $error['file'] . ':' . $error['line'],
+                'request_data' => $API_data,
+                'user_id' => $_SESSION['user']['id'] ?? 'unknown'
+            ]);
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Publish failed due to fatal PHP error.',
+                'debug' => $error['message'],
+                'log_file' => $logFileData['filename']
+            ]);
+            exit;
+        });
+
         // top level data
-        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         $data1 = $inboundingModel->getpublishdata($id);
         if (
             empty($id) ||
