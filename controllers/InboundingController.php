@@ -1505,14 +1505,41 @@ class InboundingController {
         // top level data
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         $data1 = $inboundingModel->getpublishdata($id);
+        if (
+            empty($id) ||
+            !is_array($data1) ||
+            !isset($data1['data']) ||
+            !is_array($data1['data']) ||
+            empty($data1['data']['Item_code']) ||
+            !isset($data1['data']['is_variant'])
+        ) {
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Publish data not found or incomplete for this inbound record.',
+                'inbound_id' => $id
+            ]);
+            exit;
+        }
         $this->ensureImagesAreRenamed(
             $id, 
             $data1['data']['Item_code'], 
             $data1['data']['is_variant'], 
-            $data1['data']['color'], 
-            $data1['data']['size']
+            $data1['data']['color'] ?? '', 
+            $data1['data']['size'] ?? ''
         );
         $data = $inboundingModel->getpublishdata($id);
+        if (!is_array($data) || !isset($data['data']) || !is_array($data['data'])) {
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Publish data is missing for this inbound record.',
+                'inbound_id' => $id
+            ]);
+            exit;
+        }
 
         // --- HELPER: Get Current Date in Y-m-d format ---
         $current_date_formatted = date("Y-m-d"); 
