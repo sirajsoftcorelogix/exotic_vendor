@@ -34,7 +34,8 @@ if ($is_variant === 'N') {
     $item_code_value = '';
 }
 
-$raw_categories = $data['category'] ?? []; 
+//$raw_categories = $data['category'] ?? [];
+$raw_categories = $data['category']['category'] ?? [];
 $icon_map = [
     'sculptures'    => 'fa-solid fa-monument',
     'book'          => 'fa-solid fa-book',

@@ -1542,26 +1542,29 @@ class InboundingController {
         }
 
         // --- HELPER: Get Current Date in Y-m-d format ---
-        $current_date_formatted = date("Y-m-d"); 
-        // 1. Add all other fields FIRST
-        $API_data['itemcode'] = $data['data']['Item_code'];
-        $API_data['groupname'] = $data['data']['groupname'];
-        $API_data['category'] = $data['data']['final_cat_ids'];
+        $current_date_formatted = date("Y-m-d");
+        $d = $data['data'];
+        // 1. Add all other fields FIRST (use safe defaults to prevent warnings)
+        $API_data['itemcode'] = $d['Item_code'] ?? '';
+        $API_data['groupname'] = $d['groupname'] ?? '';
+        $API_data['category'] = $d['final_cat_ids'] ?? '';
         $API_data['itemtype'] ='product';
-        $API_data['title'] = $data['data']['product_title'];
+        $API_data['title'] = $d['product_title'] ?? '';
         $API_data['status'] = 1;
-        $API_data['snippet_description'] = $data['data']['snippet_description'];
+        $API_data['snippet_description'] = $d['snippet_description'] ?? '';
         // $API_data['creator'] = $data['data']['received_by_user_id'];
         // $API_data['optionals'] = $data['data']['optionals'];
-        $API_data['india_net_qty'] = (int)$data['data']['india_net_qty'];
-        $API_data['keywords'] = $data['data']['key_words'];
+        $API_data['india_net_qty'] = (int)($d['india_net_qty'] ?? 0);
+        $API_data['keywords'] = $d['key_words'] ?? '';
         // Convert 'Y' to 1, and 'N' (or anything else) to 0
-        $API_data['usblock']    = ($data['data']['us_block'] === 'Y') ? 1 : 0;
-        $API_data['indiablock'] = ($data['data']['india_block'] === 'Y') ? 1 : 0;
-        $API_data['hscode'] = $data['data']['hsn_code'];
-        $API_data['date_first_added'] = date("Y-m-d", strtotime($data['data']['gate_entry_date_time']));
-        $API_data['search_term'] = $data['data']['search_term'];
-        $raw_string = $data['data']['search_category_string'];
+        $API_data['usblock']    = (($d['us_block'] ?? 'N') === 'Y') ? 1 : 0;
+        $API_data['indiablock'] = (($d['india_block'] ?? 'N') === 'Y') ? 1 : 0;
+        $API_data['hscode'] = $d['hsn_code'] ?? '';
+        $gateEntry = $d['gate_entry_date_time'] ?? '';
+        $gateTs = $gateEntry !== '' ? strtotime($gateEntry) : false;
+        $API_data['date_first_added'] = $gateTs ? date("Y-m-d", $gateTs) : date("Y-m-d");
+        $API_data['search_term'] = $d['search_term'] ?? '';
+        $raw_string = $d['search_category_string'] ?? '';
         // if (trim($raw_string, '|') !== '') {
         //     $API_data['search_category'] = ltrim($raw_string, '|');            
         // }
@@ -1571,16 +1574,16 @@ class InboundingController {
         $API_data['long_description'] = '';
         $API_data['long_description_india'] = '';
         $API_data['aplus_content_ids'] = '';
-        if (isset($data['data']['optionals']) && !empty($data['data']['optionals'])) {
-            $API_data['optionals'] = str_replace(',', '|', $data['data']['optionals']);
+        if (!empty($d['optionals'])) {
+            $API_data['optionals'] = str_replace(',', '|', $d['optionals']);
         }
-        $API_data['material'] = $data['data']['material_name'];
-        $API_data['discrete_vendors'][0]['vendor'] = $data['data']['vendor_code'];
+        $API_data['material'] = $d['material_name'] ?? '';
+        $API_data['discrete_vendors'][0]['vendor'] = $d['vendor_code'] ?? '';
         $API_data['discrete_vendors'][0]['priority'] = 1;
         $stock_price_temp = array();
-        if ($data['data']['is_variant'] == 'N') {
+        if (($d['is_variant'] ?? 'N') == 'N') {
             
-            if (!empty($data['data']['var_rows'])) {
+            if (!empty($d['var_rows'])) {
                 $stock_price_temp[0]['size'] = "";
                 $stock_price_temp[0]['color'] = "";
                 $stock_price_temp[0]['item_level'] = 'parent';
@@ -1590,36 +1593,36 @@ class InboundingController {
                 $stock_price_temp[0]['item_level'] = 'standalone';
             }
         }else{
-            $stock_price_temp[0]['size'] = $data['data']['size'];
-            $stock_price_temp[0]['color'] = $data['data']['color'];
+            $stock_price_temp[0]['size'] = $d['size'] ?? '';
+            $stock_price_temp[0]['color'] = $d['color'] ?? '';
             $stock_price_temp[0]['item_level'] = 'variation';
         }
-        $stock_price_temp[0]['marketplace_vendor'] = $data['data']['Marketplace'];
-        $stock_price_temp[0]['colormap'] = $data['data']['colormaps'];
-        $stock_price_temp[0]['product_weight'] = $data['data']['weight'];
+        $stock_price_temp[0]['marketplace_vendor'] = $d['Marketplace'] ?? '';
+        $stock_price_temp[0]['colormap'] = $d['colormaps'] ?? '';
+        $stock_price_temp[0]['product_weight'] = $d['weight'] ?? '';
         $stock_price_temp[0]['product_weight_unit'] = 'kg';
-        $stock_price_temp[0]['prod_length'] = $data['data']['depth'];
-        $stock_price_temp[0]['prod_width'] = $data['data']['width'];
-        $stock_price_temp[0]['prod_height'] = $data['data']['height'];
+        $stock_price_temp[0]['prod_length'] = $d['depth'] ?? '';
+        $stock_price_temp[0]['prod_width'] = $d['width'] ?? '';
+        $stock_price_temp[0]['prod_height'] = $d['height'] ?? '';
         $stock_price_temp[0]['length_unit'] = 'inch';
-        $input_date = $data['data']['added_date'] ?? null;
+        $input_date = $d['added_date'] ?? null;
         if (!empty($input_date) && $input_date != '0000-00-00') {
             $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($input_date));
         } else {
             $stock_price_temp[0]['date_added'] = date('Y-m-d');
         } 
         $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
-        $stock_price_temp[0]['local_stock'] = $data['data']['quantity_received'];
+        $stock_price_temp[0]['local_stock'] = $d['quantity_received'] ?? 0;
         $stock_price_temp[0]['flex_status'] = '0';
         $stock_price_temp[0]['fba_in'] = '0';
         $stock_price_temp[0]['fba_us'] = '0';
         $stock_price_temp[0]['fba_eu'] = '0';
         $stock_price_temp[0]['vendor_us'] = '0';
-        $stock_price_temp[0]['price'] = (int) $data['data']['usd_price'];
-        $stock_price_temp[0]['price_india'] = (int) $data['data']['price_india'];
-        $stock_price_temp[0]['price_india_suggested'] = (int) $data['data']['price_india'];
-        $stock_price_temp[0]['mrp_india'] = (int) $data['data']['price_india_mrp'];
-        $stock_price_temp[0]['gst'] = $data['data']['gst_rate'];
+        $stock_price_temp[0]['price'] = (int)($d['usd_price'] ?? 0);
+        $stock_price_temp[0]['price_india'] = (int)($d['price_india'] ?? 0);
+        $stock_price_temp[0]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
+        $stock_price_temp[0]['mrp_india'] = (int)($d['price_india_mrp'] ?? 0);
+        $stock_price_temp[0]['gst'] = $d['gst_rate'] ?? '';
         $stock_price_temp[0]['permanent_discount'] = '1';
         $stock_price_temp[0]['discount_global'] = '0';
         $stock_price_temp[0]['today_global'] = '0';
@@ -1627,15 +1630,15 @@ class InboundingController {
         $stock_price_temp[0]['today_india'] = '0';
         $stock_price_temp[0]['upc'] = '';
         $stock_price_temp[0]['asin'] = '';
-        $stock_price_temp[0]['location'] = $data['data']['store_location'];
+        $stock_price_temp[0]['location'] = $d['store_location'] ?? '';
         $stock_price_temp[0]['topurchase'] = '0';
-        $stock_price_temp[0]['backorder_percent'] = $data['data']['backorder_percent'];
-        $stock_price_temp[0]['backorder_weeks'] = $data['data']['backorder_day'];
-        $stock_price_temp[0]['leadtime'] = $data['data']['lead_time_days'];
-        $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
-        $stock_price_temp[0]['cp'] = $data['data']['cp'];
-        $stock_price_temp[0]['usd'] = $data['data']['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = (($data['data']['permanently_available'] ?? '0') === '1') ? '1' : '0';
+        $stock_price_temp[0]['backorder_percent'] = $d['backorder_percent'] ?? '';
+        $stock_price_temp[0]['backorder_weeks'] = $d['backorder_day'] ?? '';
+        $stock_price_temp[0]['leadtime'] = $d['lead_time_days'] ?? '';
+        $stock_price_temp[0]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
+        $stock_price_temp[0]['cp'] = $d['cp'] ?? 0;
+        $stock_price_temp[0]['usd'] = $d['usd_price'] ?? 0;
+        $stock_price_temp[0]['permanently_available'] = (($d['permanently_available'] ?? '0') === '1') ? '1' : '0';
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
@@ -1644,34 +1647,34 @@ class InboundingController {
         $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? '';
 
         // Variation Records [1..n]
-        if (!empty($data['data']['var_rows'])) {
+        if (!empty($d['var_rows'])) {
             $i = 0;
-            foreach ($data['data']['var_rows'] as $key => $value) {
+            foreach ($d['var_rows'] as $key => $value) {
                 $i++;
-                $stock_price_temp[$i]['size'] = $value['size'];
-                $stock_price_temp[$i]['color'] = $value['color'];
-                $stock_price_temp[$i]['marketplace_vendor'] = $data['data']['Marketplace'];
+                $stock_price_temp[$i]['size'] = $value['size'] ?? '';
+                $stock_price_temp[$i]['color'] = $value['color'] ?? '';
+                $stock_price_temp[$i]['marketplace_vendor'] = $d['Marketplace'] ?? '';
                 $stock_price_temp[$i]['item_level'] = 'variation';
-                $stock_price_temp[$i]['colormap'] = $value['colormaps'];
-                $stock_price_temp[$i]['product_weight'] = $value['weight'];
+                $stock_price_temp[$i]['colormap'] = $value['colormaps'] ?? '';
+                $stock_price_temp[$i]['product_weight'] = $value['weight'] ?? '';
                 $stock_price_temp[$i]['product_weight_unit'] = 'kg';
-                $stock_price_temp[$i]['prod_length'] = $value['depth'];
-                $stock_price_temp[$i]['prod_width'] = $value['width'];
-                $stock_price_temp[$i]['prod_height'] = $value['height'];
+                $stock_price_temp[$i]['prod_length'] = $value['depth'] ?? '';
+                $stock_price_temp[$i]['prod_width'] = $value['width'] ?? '';
+                $stock_price_temp[$i]['prod_height'] = $value['height'] ?? '';
                 $stock_price_temp[$i]['length_unit'] = 'inch';
-                $stock_price_temp[$i]['date_added'] = $data['data']['added_date']; 
+                $stock_price_temp[$i]['date_added'] = $d['added_date'] ?? ''; 
                 $stock_price_temp[$i]['stock_date_added'] = date("Y-m-d", strtotime($current_date_formatted));
-                $stock_price_temp[$i]['local_stock'] = $value['quantity_received'];
+                $stock_price_temp[$i]['local_stock'] = $value['quantity_received'] ?? 0;
                 $stock_price_temp[$i]['flex_status'] = '0';
                 $stock_price_temp[$i]['fba_in'] = '0';
                 $stock_price_temp[$i]['fba_us'] = '0';
                 $stock_price_temp[$i]['fba_eu'] = '0';
                 $stock_price_temp[$i]['vendor_us'] = '0';
-                $stock_price_temp[$i]['price'] = (int) $value['usd_price'];
-                $stock_price_temp[$i]['price_india'] = (int) $value['price_india'];
-                $stock_price_temp[$i]['price_india_suggested'] = (int) $data['data']['price_india'];
-                $stock_price_temp[$i]['mrp_india'] = (int) $value['price_india_mrp'];
-                $stock_price_temp[$i]['gst'] = $value['gst_rate'];
+                $stock_price_temp[$i]['price'] = (int)($value['usd_price'] ?? 0);
+                $stock_price_temp[$i]['price_india'] = (int)($value['price_india'] ?? 0);
+                $stock_price_temp[$i]['price_india_suggested'] = (int)($d['price_india'] ?? 0);
+                $stock_price_temp[$i]['mrp_india'] = (int)($value['price_india_mrp'] ?? 0);
+                $stock_price_temp[$i]['gst'] = $value['gst_rate'] ?? '';
                 $stock_price_temp[$i]['permanent_discount'] = '1';
                 $stock_price_temp[$i]['discount_global'] = '0';
                 $stock_price_temp[$i]['today_global'] = '0';
@@ -1679,15 +1682,15 @@ class InboundingController {
                 $stock_price_temp[$i]['today_india'] = '0';
                 $stock_price_temp[$i]['upc'] = '';
                 $stock_price_temp[$i]['asin'] = '';
-                $stock_price_temp[$i]['location'] = $value['store_location'];
+                $stock_price_temp[$i]['location'] = $value['store_location'] ?? '';
                 $stock_price_temp[$i]['topurchase'] = '0';
-                $stock_price_temp[$i]['backorder_percent'] = $data['data']['backorder_percent'];
-                $stock_price_temp[$i]['backorder_weeks'] = $data['data']['backorder_day'];
-                $stock_price_temp[$i]['leadtime'] = $data['data']['lead_time_days'];
-                $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
-                $stock_price_temp[$i]['cp'] = $value['cp'];
+                $stock_price_temp[$i]['backorder_percent'] = $d['backorder_percent'] ?? '';
+                $stock_price_temp[$i]['backorder_weeks'] = $d['backorder_day'] ?? '';
+                $stock_price_temp[$i]['leadtime'] = $d['lead_time_days'] ?? '';
+                $stock_price_temp[$i]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
+                $stock_price_temp[$i]['cp'] = $value['cp'] ?? 0;
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = (($data['data']['permanently_available'] ?? '0') === '1') ? '1' : '0';
+                $stock_price_temp[$i]['permanently_available'] = (($d['permanently_available'] ?? '0') === '1') ? '1' : '0';
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
@@ -1699,14 +1702,14 @@ class InboundingController {
             // ========================================================================
             // LOGIC: When Parent is "N" and has variations, add main data as a copy
             // ========================================================================
-            if ($data['data']['is_variant'] == 'N') {   // if parent is not a variant, add the parent as a variation
+            if (($d['is_variant'] ?? 'N') == 'N') {   // if parent is not a variant, add the parent as a variation
                 // Clone the base item (stock_price_temp[0]) and add it to the end as another variation
                 // This ensures the parent product data is also included in the variations array
                 $i++;
                 $stock_price_temp[$i] = $stock_price_temp[0];
                 $stock_price_temp[$i]['item_level'] = 'variation'; // Change item level from 'parent' to 'variation'
-                $stock_price_temp[$i]['size'] = $data['data']['size'];
-                $stock_price_temp[$i]['color'] = $data['data']['color'];
+                $stock_price_temp[$i]['size'] = $d['size'] ?? '';
+                $stock_price_temp[$i]['color'] = $d['color'] ?? '';
             }
         }
 
@@ -1717,15 +1720,15 @@ class InboundingController {
 
         // 4. Handle Images (The major fix)
        
-        $isVariant = $data['data']['is_variant']; // <-- FIX: Define $isVariant here    
+        $isVariant = $d['is_variant'] ?? 'N'; // <-- FIX: Define $isVariant here    
 
         $images_payload = array();
         $img_directory = ($isVariant == 'N') ? ($data['data']['image_directory'] ?? '') : ''; 
         $images_payload['image_directory'] = $img_directory;
         $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
-        if (!empty($data['data']['img'])) {
-            $images_payload['image_directory'] = $data['data']['image_directory'] ?? '';
+        if (!empty($d['img'])) {
+            $images_payload['image_directory'] = $d['image_directory'] ?? '';
             
             // WARNING: __DIR__ creates a server file path (e.g., /var/www/html/...). 
             // If you need a clickable URL for a browser, change this to your website URL.
@@ -1734,7 +1737,7 @@ class InboundingController {
             $siteImageBase = $protocol . '://' . $httpHost;
             $imgDir = $siteImageBase . '/uploads/itm_img/'; 
             // 1. Get the list of filenames
-            $raw_images = array_column($data['data']['img'], 'file_name');
+            $raw_images = array_column($d['img'], 'file_name');
 
             // 2. Concatenate $imgDir to each filename
             $images_payload['images'] = array_map(function($filename) use ($imgDir) {
