@@ -303,4 +303,84 @@ class pos
             'data'            => $rows
         ];
     }
+
+    public function getStockReport(array $filters = []): array
+    {
+        $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
+        $search = trim((string)($filters['search'] ?? ''));
+        $category = trim((string)($filters['category'] ?? ''));
+        $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
+        $limit = isset($filters['limit']) ? (int)$filters['limit'] : 200;
+        if ($limit < 1) {
+            $limit = 200;
+        }
+        if ($limit > 1000) {
+            $limit = 1000;
+        }
+
+        $where = " WHERE p.is_active = 1 ";
+        $params = [$warehouseId];
+        $types = "i";
+
+        if ($category !== '' && $category !== 'allProducts') {
+            $where .= " AND p.groupname = ? ";
+            $params[] = $category;
+            $types .= "s";
+        }
+
+        if ($search !== '') {
+            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ";
+            $like = '%' . $search . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $types .= "sss";
+        }
+
+        if ($stockStatus === 'out') {
+            $where .= " AND COALESCE(sm.running_stock, 0) = 0 ";
+        } elseif ($stockStatus === 'low') {
+            $where .= " AND COALESCE(sm.running_stock, 0) BETWEEN 1 AND 5 ";
+        } elseif ($stockStatus === 'in') {
+            $where .= " AND COALESCE(sm.running_stock, 0) > 0 ";
+        }
+
+        $sql = "
+            SELECT
+                p.id,
+                p.item_code,
+                p.sku,
+                p.title,
+                p.groupname,
+                p.size,
+                p.color,
+                p.image,
+                p.itemprice AS sell_price,
+                p.cost_price,
+                COALESCE(sm.running_stock, 0) AS stock_qty
+            FROM vp_products p
+            LEFT JOIN (
+                SELECT sm1.product_id, sm1.running_stock
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT product_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY product_id
+                ) latest ON latest.max_id = sm1.id
+            ) sm ON sm.product_id = p.id
+            $where
+            ORDER BY stock_qty ASC, p.title ASC
+            LIMIT $limit
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        return $rows;
+    }
 }
