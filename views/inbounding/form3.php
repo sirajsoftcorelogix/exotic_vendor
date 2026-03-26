@@ -34,9 +34,7 @@ if ($is_variant === 'N') {
     $item_code_value = '';
 }
 
-//$raw_categories = $data['category'] ?? [];
 $raw_categories = $data['category'] ?? [];
-print_array($raw_categories);
 $icon_map = [
     'sculptures'    => 'fa-solid fa-monument',
     'book'          => 'fa-solid fa-book',
@@ -61,7 +59,7 @@ if (!empty($raw_categories)) {
         }
     }
 }
-
+print_array($display_categories);
 // --- DEFINE SIZE OPTIONS ---
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
