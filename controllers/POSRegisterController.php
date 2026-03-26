@@ -90,6 +90,37 @@ class POSRegisterController
         ]);
     }
 
+    public function stockReport()
+    {
+        is_login();
+        require_once 'models/user/user.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        $warehouseName = 'No Warehouse';
+        if (!empty($_SESSION['warehouse_id'])) {
+            $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
+            $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
+        }
+
+        $filters = [
+            'search' => $_GET['search'] ?? '',
+            'category' => $_GET['category'] ?? 'allProducts',
+            'stock_status' => $_GET['stock_status'] ?? 'all',
+            'limit' => $_GET['limit'] ?? 200,
+        ];
+
+        $categories = ['allProducts' => 'All Products'] + getCategories();
+        $rows = $this->pos->getStockReport($filters);
+
+        renderTemplate('views/pos_register/stock_report.php', [
+            'warehouse_name' => $warehouseName,
+            'categories' => $categories,
+            'filters' => $filters,
+            'rows' => $rows
+        ]);
+    }
+
     /**
      * DataTables AJAX endpoint for products list
      */
