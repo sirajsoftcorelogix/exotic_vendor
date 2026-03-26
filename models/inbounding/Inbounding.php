@@ -733,8 +733,9 @@ class Inbounding {
         $address = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
         // 3. Variations for this item (also on form2 so the view does not call getVariations() again)
+        // NOTE: Get quantity alias as 'quantity' for view compatibility
         $variations = [];
-        $sqlVar = "SELECT * FROM `vp_variations` WHERE it_id = $id ORDER BY id ASC";
+        $sqlVar = "SELECT id, color, size, quantity_received, quantity_received AS quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps, dimensions, upc FROM `vp_variations` WHERE it_id = $id ORDER BY id ASC";
         $resVar = $this->conn->query($sqlVar);
         if ($resVar) {
             $variations = $resVar->fetch_all(MYSQLI_ASSOC);
@@ -1037,6 +1038,7 @@ class Inbounding {
         $cp    = (float) ($data['cp'] ?? 0);
         $photo   = $data['product_photo'] ?? '';
         $wh    = $data['store_location'] ?? '';
+        $temp_code = $data['temp_code'] ?? '';
        
         $p_ind   = (float) ($data['price_india'] ?? 0);
         $p_mrp   = (float) ($data['price_india_mrp'] ?? 0);
@@ -1047,7 +1049,7 @@ class Inbounding {
             SET dimensions=?,gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
-              received_by_user_id = ?, temp_code = ?, product_photo = ?,
+              received_by_user_id = ?, product_photo = ?,
               store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, modified_at = NOW()
             WHERE id = ?";
 
@@ -1059,7 +1061,7 @@ class Inbounding {
         // 3. Correct Bind Param Types
         // s = string, d = double (float), i = integer
         // String map: sssss dddd ss d i i sss d d s i
-        $types = "sisssssssddddssdissssddsi";
+        $types = "sisssssssddddssdissssdds";
 
         $stmt->bind_param(
             $types,
@@ -1081,13 +1083,12 @@ class Inbounding {
             $cp,                  // 13
             $qty,                 // 14
             $data['received_by_user_id'], // 15
-            $temp_code,           // 16 (WAS MISSING)
-            $photo,               // 17
-            $wh,                  // 18
-            $p_ind,               // 19
-            $p_mrp,               // 20
-            $colormaps,           // 21
-            $id                   // 22
+            $photo,               // 16
+            $wh,                  // 17
+            $p_ind,               // 18
+            $p_mrp,               // 19
+            $colormaps,           // 20
+            $id                   // 21
         );
 
         if ($stmt->execute()) {
@@ -1158,7 +1159,8 @@ class Inbounding {
 
             $id   = $var['id'] ?? null;
             $img  = $var['photo'] ?? '';
-            $qty  = (int)($var['quantity'] ?? 0);
+            // Support both old and new naming conventions to avoid quantity mismatch.
+            $qty  = (int)($var['quantity'] ?? $var['quantity_received'] ?? 0);
             $cp   = (float)($var['cp'] ?? 0);
             $h    = (float)($var['height'] ?? 0);
             $w    = (float)($var['width'] ?? 0);
