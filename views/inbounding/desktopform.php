@@ -502,12 +502,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                               value="<?= htmlspecialchars((isset($data['form2']['store_location']) && trim((string)$data['form2']['store_location']) !== '') ? $data['form2']['store_location'] : '4th Floor') ?>" 
-                               name="store_location">
-                    </div>
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
@@ -578,6 +572,13 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </div>
                     </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                               value="<?= htmlspecialchars((isset($data['form2']['store_location']) && trim((string)$data['form2']['store_location']) !== '') ? $data['form2']['store_location'] : '4th Floor') ?>" 
+                               name="store_location">
+                    </div>
+                    
                 </div>
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                     <div class="text-right min-w-[100px]">
@@ -701,6 +702,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                             
                             <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
+                            
                         </div>
                         <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                             <div class="text-right min-w-[100px]">
@@ -815,6 +817,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <option value="">Select Color Map</option>
                     </select>
                 </div>
+                <!-- move_store_location_here -->
             </div>
             <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                 <div class="text-right min-w-[100px]">
@@ -1341,15 +1344,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </select>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Lead Time:</label>
-                        <div class="relative w-full">
-                            <input type="text" name="lead_time_days" 
-                                   value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '10') ?>" 
-                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
-                        </div>
-                    </div>
-                    <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Back Order:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
                                 name="back_order" id="back_order_select" onchange="toggleBackOrderFields()">
@@ -1376,7 +1370,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
                         </div>
                     </div>
-                    
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Lead Time:</label>
+                        <div class="relative w-full">
+                            <input type="text" name="lead_time_days" 
+                                   value="<?= htmlspecialchars($data['form2']['lead_time_days'] ?? '10') ?>" 
+                                   class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
+                        </div>
+                    </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">In Stock Lead Time:</label>
                         <div class="relative w-full">
