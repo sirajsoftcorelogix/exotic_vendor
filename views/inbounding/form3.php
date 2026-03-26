@@ -49,9 +49,9 @@ $icon_map = [
 $display_categories = [];
 if (!empty($raw_categories)) {
     foreach ($raw_categories as $cat) {
-        print_array($cat);
+        //print_array($cat);
         if (isset($cat['parent']) && $cat['parent'] == 0) {
-            $iconClass = $icon_map[$cat['name']] ?? $icon_map['default'];
+            $iconClass = $icon_map[$cat['display_name']] ?? $icon_map['default'];
             $display_categories[] = [
                 'value' => $cat['category'],    
                 'label' => $cat['display_name'], 
