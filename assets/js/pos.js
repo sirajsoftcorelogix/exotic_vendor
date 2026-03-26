@@ -84,14 +84,15 @@ $(function () {
   $overlay.on('click', closeModal);
   $close.on('click', closeModal);
   $closeBtn.on('click', closeModal);
-function setModalQty(qty) {
-  const q = Math.max(1, parseInt(qty || 1, 10));
+  function setModalQty(qty) {
+    const q = Math.max(1, parseInt(qty || 1, 10));
 
-  $pmQtyVal.text(q);
+    $pmQtyVal.text(q);
 
-  // IMPORTANT: update hidden field
-  $('#modal_qty').val(q);
-}
+    // IMPORTANT: update hidden field
+    $('#modal_qty').val(q);
+
+  }
 
   function getModalQty() {
     return Math.max(1, parseInt($pmQtyVal.text() || '1', 10));
@@ -113,6 +114,35 @@ function setModalQty(qty) {
 
     const imgSrc = p.image || 'https://dummyimage.com/500x500/e5e7eb/6b7280&text=No+Image';
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
+    $('#modal_product_code').val(p.item_code || p.code || p.id || '');
+
+    //  SET QTY
+    setModalQty(1);
+
+    // SET VARIATION (FINAL FIX)
+    let size = (p.size && p.size !== '0') ? String(p.size).trim() : '';
+    let color = (p.color && p.color !== '0') ? String(p.color).trim() : '';
+
+    let variation = '';
+
+    // build variation properly
+    if (!size && color) {
+      variation = ':' + color;
+    } else if (size && !color) {
+      variation = size + ':';
+    } else if (size && color) {
+      variation = size + ':' + color;
+    }
+
+    // fallback (VERY IMPORTANT for your case)
+    if (!variation && p.color) {
+      variation = ':' + p.color;
+    }
+
+    // final set
+    $('#modal_variation').val(variation);
+
+
 
     const badges = [];
     if (isMeaningful(p.item_code)) badges.push(`<span class="rounded-md bg-orange-100 px-2 py-1 text-[10px] text-orange-700">Code: ${p.item_code}</span>`);
@@ -328,17 +358,10 @@ function setModalQty(qty) {
   // Initial load – products only
   resetAndLoad();
 });
-function renderProductModal(p, key) {
-  // ... your existing code ...
-$('#modal_product_code').val(p.item_code || p.code || p.id || '');
-setModalQty(1); // this already updates modal_qty
-  // Add this line at the end of renderProductModal
-  // $('#modal_product_code').val(p.item_code || p.code || '');
-  // $('#modal_qty').val(getModalQty());
-}
+
 // In pos.js, add this
-$('#addonSelect').on('change', function() {
-    let val = $(this).val();
-    let optionsStr = val !== '0' ? 'OPTIONALS_GIFTWRAP:blank:' + val : '';
-    $('#modal_options').val(optionsStr);  // add <input type="hidden" name="options" id="modal_options"> in form
+$('#addonSelect').on('change', function () {
+  let val = $(this).val();
+  let optionsStr = val !== '0' ? 'OPTIONALS_GIFTWRAP:blank:' + val : '';
+  $('#modal_options').val(optionsStr);  // add <input type="hidden" name="options" id="modal_options"> in form
 });

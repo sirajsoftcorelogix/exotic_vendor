@@ -543,6 +543,7 @@
               <input type="hidden" name="code" id="modal_product_code">
               <input type="hidden" name="qty" id="modal_qty" value="1">
               <input type="hidden" name="options" id="modal_options">
+              <input type="hidden" name="variation" id="modal_variation">
               <button type="submit"
                 class="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
                 Add to Cart
@@ -745,7 +746,7 @@
           </select>
         </div>
 
-        <!-- Payment Mode -->
+        <!-- Payment Mode
         <div>
           <label class="text-xs text-gray-600">Payment Mode</label>
 
@@ -762,7 +763,8 @@
             <option value="demand_draft">Demand Draft</option>
 
           </select>
-        </div>
+        </div> -->
+              <input type="hidden" name="payment_type" id="payment_mode" value="offline">
 
         <!-- Payment Date -->
         <div>
@@ -1418,7 +1420,7 @@
       return;
     }
 
-    fetch("?page=pos_register&action=apply-custom-discount", {
+    fetch("?page=pos_register&action=apply_custom_discount", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded"

@@ -404,51 +404,67 @@ class POSRegisterController
         ];
     }
 
-
     public function add_to_cart()
     {
         $code      = $_POST['code'] ?? '';
         $qty       = $_POST['qty'] ?? 1;
-        $variation = $_POST['variation'] ?? '';
+        $variation = trim($_POST['variation'] ?? '');
         $options   = $_POST['options'] ?? '';
         $buyNow    = false;
-
-        if (empty(trim($code))) {
+        // echo '<pre>';
+        // print_r($options);
+        // exit;
+        if (empty($code)) {
             header("Location: ?page=pos_register");
             exit;
         }
+
         $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
-        $coupon = '';
+        $coupon  = '';
 
         if (!empty($_SESSION['discount_coupon'])) {
-            if (is_array($_SESSION['discount_coupon'])) {
-                $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-            } else {
-                $coupon = $_SESSION['discount_coupon'];
-            }
+            $coupon = is_array($_SESSION['discount_coupon'])
+                ? ($_SESSION['discount_coupon']['discountcoupondetails'] ?? '')
+                : $_SESSION['discount_coupon'];
         }
 
-        $postData = http_build_query([
+        $postArray = [
             'buynow'   => $buyNow ? 1 : 0,
             'code'     => trim($code),
             'qty'      => max(1, (int)$qty),
-            'variation' => trim($variation),
-            'options'  => trim($options),
             'discountcoupondetails' => $coupon,
-            'giftvoucherdetails' => $voucher
-        ]);
+            'giftvoucherdetails'    => $voucher
+        ];
+        // ✅ Variation handling
+        if (!empty($variation)) {
+
+            if (strpos($variation, ':') === false || $variation === ':') {
+                header("Location: ?page=pos_register&error=invalid_variation");
+                exit;
+            }
+
+            list($size, $color) = explode(':', $variation) + ['', ''];
+            $variation = trim($size) . ':' . trim($color);
+
+            $postArray['variation'] = $variation;
+        }
+
+
+        if (!empty($options)) {
+            $postArray['options'] = trim($options);
+        }
+
+        $postData = http_build_query($postArray);
 
         $result = $this->exotic_api_call('/cart/add', 'POST', [], $postData);
 
-        // optional: check success
-        if (!empty($result['data']['cartref'])) {
-            // item added
+        if (empty($result['data']['cartref'])) {
+            $_SESSION['cart_error'] = $result['data']['error'] ?? 'Cart add failed';
         }
 
         header("Location: ?page=pos_register");
         exit;
     }
-
     public function change_qty()
     {
         $cartref = $_POST['cartref'] ?? '';
@@ -741,20 +757,20 @@ class POSRegisterController
             //     $_POST['note'],
             //     date('Y-m-d')
             // );
-$stmt->bind_param(
-    "isiisssdsss",
-    $orderId,
-    $orderNumber,
-    $customerId,
-    $warehouseId,
-    $userId,
-    $paymentStage,
-    $paymentType,
-    $amount,
-    $transactionId,
-    $note,
-    $paymentDate
-);
+            $stmt->bind_param(
+                "isiisssdsss",
+                $orderId,
+                $orderNumber,
+                $customerId,
+                $warehouseId,
+                $userId,
+                $paymentStage,
+                $paymentType,
+                $amount,
+                $transactionId,
+                $note,
+                $paymentDate
+            );
             $stmt->execute();
         }
 
@@ -847,7 +863,7 @@ $stmt->bind_param(
         $amount = floatval($amount);
 
         $this->exotic_api_call(
-            '/cart/addcustomdiscount',
+            'api/cart/addcustomdiscount',
             'GET',
             ['custom_reduce' => $amount]
         );
