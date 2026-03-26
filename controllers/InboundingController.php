@@ -1169,7 +1169,7 @@ class InboundingController {
             'size'                => $_POST['size'] ?? '',
             'color'               => $_POST['color'] ?? '',
             'quantity_received'   => $_POST['quantity_received'] ?? '',
-            'permanently_available' => (($_POST['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N',
+            'permanently_available' => $_POST['permanently_available'] ?? '0',
             'ware_house_code'     => $_POST['ware_house_code'] ?? '',
             'store_location'      => $_POST['store_location'] ?? '',
             'marketplace'         => $_POST['marketplace'] ?? ' ',
@@ -1608,7 +1608,7 @@ class InboundingController {
         $stock_price_temp[0]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
         $stock_price_temp[0]['cp'] = $data['data']['cp'];
         $stock_price_temp[0]['usd'] = $data['data']['usd_price'] ?? 0;
-        $stock_price_temp[0]['permanently_available'] = (($data['data']['permanently_available'] ?? 'N') === 'Y') ? 'Y' :'N';
+        $stock_price_temp[0]['permanently_available'] = $data['data']['permanently_available'] ?? '0';
         $stock_price_temp[0]['amazon_sold'] = '0';
         $stock_price_temp[0]['amazon_leadtime'] = '10';
         $stock_price_temp[0]['amazon_itemcode_alias'] = '';
@@ -1660,7 +1660,7 @@ class InboundingController {
                 $stock_price_temp[$i]['instock_leadtime'] = $data['data']['in_stock_leadtime_days'];
                 $stock_price_temp[$i]['cp'] = $value['cp'];
                 $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = ($data['data']['permanently_available'] === 'Y') ? 'Y' : 'N';
+                $stock_price_temp[$i]['permanently_available'] = $data['data']['permanently_available'] ?? '0';
                 $stock_price_temp[$i]['amazon_sold'] = '0';
                 $stock_price_temp[$i]['amazon_leadtime'] = '10';
                 $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
