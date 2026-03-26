@@ -3405,9 +3405,16 @@ function validateAndSubmit(actionType) {
     if (catChecked === 0) errors.push("Please select at least one 'Category'.");
 
     // --- 2. MAIN ITEM VALIDATION ---
-    const mainQty = parseFloat(getVal('quantity_received')) || 0;
-    if (mainQty < 1) errors.push("Main Item: 'Quantity' must be at least 1.");
+     // Marketplace sourcing: no local stock — skip main quantity_received check
+		const hasMarketplaceVendor = getVal('marketplace') !== '';
 
+    if (!hasMarketplaceVendor) {
+        const mainQty = parseFloat(getVal('quantity_received')) || 0;
+        // Ensure at least 1
+        if (mainQty < 1) {
+            errors.push("Main Item: 'Quantity' must be at least 1.");
+        }
+    }
     // UPDATED: Check for 0.00
     if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
     if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
