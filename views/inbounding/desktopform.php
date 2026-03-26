@@ -666,7 +666,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
                                 <?php echo renderSizeField("variations[{$var['id']}][size]", $var['size'], $is_clothing_initial, $sizeOptions); ?>
                             </div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? $var['quantity_received'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">CP:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Price India:</label>
@@ -2576,7 +2576,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateNames(newCard, newId);
             // Set values
             const fields = ['height', 'width', 'depth', 'weight', 'size', 'color', 
-                            'quantity_received', 'cp', 'price_india', 'price_india_mrp', 'usd_price', 'hsn_code', 
+                            'quantity', 'cp', 'price_india', 'price_india_mrp', 'usd_price', 'hsn_code', 
                             'gst_rate', 'ware_house_code', 'store_location'];
             fields.forEach(field => {
                 const el = newCard.querySelector(`[name$="[${field}]"]`);
