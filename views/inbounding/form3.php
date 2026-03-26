@@ -34,8 +34,7 @@ if ($is_variant === 'N') {
     $item_code_value = '';
 }
 
-//$raw_categories = $data['category'] ?? [];
-$raw_categories = $data['category']['category'] ?? [];
+$raw_categories = $data['category'] ?? [];
 $icon_map = [
     'sculptures'    => 'fa-solid fa-monument',
     'book'          => 'fa-solid fa-book',
@@ -50,8 +49,9 @@ $icon_map = [
 $display_categories = [];
 if (!empty($raw_categories)) {
     foreach ($raw_categories as $cat) {
-        if (isset($cat['parent_id']) && $cat['parent_id'] == 0) {
-            $iconClass = $icon_map[$cat['name']] ?? $icon_map['default'];
+        //print_array($cat);
+        if (isset($cat['parent']) && $cat['parent'] == 0) {
+            $iconClass = $icon_map[$cat['display_name']] ?? $icon_map['default'];
             $display_categories[] = [
                 'value' => $cat['category'],    
                 'label' => $cat['display_name'], 
@@ -60,7 +60,7 @@ if (!empty($raw_categories)) {
         }
     }
 }
-
+//print_array($display_categories);
 // --- DEFINE SIZE OPTIONS ---
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
