@@ -1920,7 +1920,7 @@ class InboundingController {
             header('Content-Type: application/json');
             echo json_encode([
                 'status' => 'success', 
-                'message' => 'Product Published Successfully!',
+                'message' => 'Product Upoaded Successfully!',
                 'log_file' => $logFileData['filename']
             ]);
         } else {
