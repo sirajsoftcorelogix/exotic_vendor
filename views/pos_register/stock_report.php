@@ -57,7 +57,7 @@
               <th class="px-3 py-2 text-left">Title</th>
               <th class="px-3 py-2 text-left">Category</th>
               <th class="px-3 py-2 text-left">Stock</th>
-              <th class="px-3 py-2 text-left">Cost Price</th>
+              <th class="px-3 py-2 text-left">Min Stock</th>
               <th class="px-3 py-2 text-left">Sell Price</th>
             </tr>
           </thead>
@@ -86,7 +86,7 @@
                       <span class="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
                     <?php endif; ?>
                   </td>
-                  <td class="px-3 py-2"><?= number_format((float)($r['cost_price'] ?? 0), 2) ?></td>
+                  <td class="px-3 py-2"><?= htmlspecialchars((string)($r['min_stock'] ?? 0)) ?></td>
                   <td class="px-3 py-2"><?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
                 </tr>
               <?php endforeach; ?>

@@ -357,6 +357,7 @@ class pos
                 p.image,
                 p.itemprice AS sell_price,
                 p.cost_price,
+                p.min_stock AS min_stock,
                 sm.running_stock AS stock_qty
             FROM vp_stock_movements sm
             LEFT JOIN vp_stock_movements sm_newer
