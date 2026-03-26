@@ -36,6 +36,7 @@ if ($is_variant === 'N') {
 
 //$raw_categories = $data['category'] ?? [];
 $raw_categories = $data['category']['category'] ?? [];
+print_array($data);
 $icon_map = [
     'sculptures'    => 'fa-solid fa-monument',
     'book'          => 'fa-solid fa-book',
