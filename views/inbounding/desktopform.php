@@ -502,12 +502,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span>
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
-                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
-                               value="<?= htmlspecialchars($data['form2']['store_location'] ?? '') ?>" 
-                               name="store_location">
-                    </div>
                     <div class="w-full min-w-0">
                         <label class="block text-xs font-bold text-[#555] mb-1">Colour:</label>
                         <input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($data['form2']['color'] ?? '') ?>" name="color">
@@ -578,6 +572,13 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </div>
                     </div>
                     <?php echo renderColorMapField('colormaps', $data['form2']['colormaps'] ?? ''); ?>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Store Location:</label>
+                        <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" 
+                               value="<?= htmlspecialchars((isset($data['form2']['store_location']) && trim((string)$data['form2']['store_location']) !== '') ? $data['form2']['store_location'] : '4th Floor') ?>" 
+                               name="store_location">
+                    </div>
+                    
                 </div>
                 <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                     <div class="text-right min-w-[100px]">
@@ -659,7 +660,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Width:</label><div class="relative w-full"><input type="text" class="calc-w w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['width'] ?? '') ?>" name="variations[<?= $var['id'] ?>][width]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['depth'] ?? '') ?>" name="variations[<?= $var['id'] ?>][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['weight'] ?? '') ?>" name="variations[<?= $var['id'] ?>][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
-                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['store_location'] ?? '') ?>" name="variations[<?= $var['id'] ?>][store_location]"></div>
+                            <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Store Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars((isset($var['store_location']) && trim((string)$var['store_location']) !== '') ? $var['store_location'] : '4th Floor') ?>" name="variations[<?= $var['id'] ?>][store_location]"></div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
@@ -701,6 +702,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <input type="hidden" name="variations[<?= $var['id'] ?>][id]" value="<?= $var['id'] ?>">
                             
                             <?php echo renderColorMapField("variations[{$var['id']}][colormaps]", $var['colormaps'] ?? ''); ?>
+                            
                         </div>
                         <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                             <div class="text-right min-w-[100px]">
@@ -766,7 +768,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Depth:</label><div class="relative w-full"><input type="text" class="calc-d w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][depth]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">inch</span></div></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Weight:</label><div class="relative w-full"><input type="text" class="calc-wt w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][weight]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">kg</span></div></div>
                 
-                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][store_location]"></div>
+                <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Store Location:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][store_location]" value="4th Floor"></div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
                 <div class="w-full min-w-0 size-wrapper-js">
                     <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
@@ -815,6 +817,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <option value="">Select Color Map</option>
                     </select>
                 </div>
+                <!-- move_store_location_here -->
             </div>
             <div class="flex flex-wrap justify-end items-center mt-6 gap-6 border-t border-dashed border-gray-300 pt-4">
                 <div class="text-right min-w-[100px]">
@@ -2426,7 +2429,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isSuccess) {
                 // Show success with download button
                 let html = '<div style="text-align: center;">';
-                html += '<p>Form saved and product published successfully.</p>';
+                html += '<p>Form saved and product uploaded successfully.</p>';
                 if (data.log_file) {
                     html += '<div style="margin-top: 15px;">';
                     html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
@@ -2438,7 +2441,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '</div>';
                 
                 Swal.fire({
-                    title: 'Published!',
+                    title: 'Uploaded!',
                     html: html,
                     icon: 'success'
                 }).then(() => window.location.reload());

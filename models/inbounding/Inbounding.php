@@ -719,14 +719,16 @@ class Inbounding {
         // 2. Helper lists: only columns used by desktopform (smaller rows / less mysqld work than SELECT *)
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
         $user = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        
         $r = $this->conn->query("SELECT id, vendor_name FROM `vp_vendors` ORDER BY vendor_name ASC");
         $vendors = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+        
         $r = $this->conn->query("SELECT id, material_name FROM `material` ORDER BY material_name ASC");
         $material = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
-        $r = $this->conn->query(
-            "SELECT id, category, display_name, parent, is_active FROM `category` ORDER BY parent, display_name"
-        );
+        
+        $r = $this->conn->query("SELECT id, category, display_name, parent, is_active FROM `category` ORDER BY parent, display_name");
         $category = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+
         $r = $this->conn->query("SELECT id, address_title FROM `exotic_address` ORDER BY address_title ASC");
         $address = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
@@ -1508,14 +1510,26 @@ class Inbounding {
         // 3. Loop through your data array
         foreach ($data as $row) {
             // Mapping array keys to variables
-            $product_id   = $row['product_id'];
-            $sku          = $row['sku'];
-            $item_code    = $row['Item_code'];
-            $size         = $row['size'] ?? ''; 
+            $product_id   = isset($row['product_id']) ? (int)$row['product_id'] : 0;
+            $sku          = $row['sku'] ?? '';
+            $item_code    = $row['Item_code'] ?? '';
+            $size         = $row['size'] ?? '';
             $color        = $row['color'] ?? '';
-            $warehouse_id = $row['ware_house_code'] ?? 1;
-            $quantity     = $row['quantity_received'];
-            $running      = $row['quantity_received']; // Per your requirement
+            $warehouse_id = isset($row['ware_house_code']) ? (int)$row['ware_house_code'] : 1;
+            $quantity     = isset($row['quantity_received']) ? (int)$row['quantity_received'] : 0;
+            $running      = $quantity; // Per your requirement
+
+            // Recover missing product_id using SKU/item code.
+            if ($product_id <= 0 && $sku !== '') {
+                $product_id = (int)$this->getProductBysku($sku);
+            }
+            if ($product_id <= 0 && $item_code !== '') {
+                $product_id = (int)$this->getProductByItemcode($item_code);
+            }
+            if ($product_id <= 0) {
+                error_log("Skipping stock movement row: missing product_id for sku={$sku}, item_code={$item_code}");
+                continue;
+            }
 
             // 4. Bind parameters 
             // i = integer, s = string
