@@ -306,7 +306,7 @@ class pos
 
     public function getStockReport(array $filters = []): array
     {
-        $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
+        $warehouseId = isset($filters['warehouse_id']) ? (int)$filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0);
         $search = trim((string)($filters['search'] ?? ''));
         $category = trim((string)($filters['category'] ?? ''));
         $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
@@ -318,7 +318,7 @@ class pos
             $limit = 1000;
         }
 
-        $where = " WHERE p.is_active = 1 ";
+        $where = " WHERE sm.warehouse_id = ? AND sm_newer.id IS NULL AND p.is_active = 1 ";
         $params = [$warehouseId];
         $types = "i";
 
@@ -338,11 +338,11 @@ class pos
         }
 
         if ($stockStatus === 'out') {
-            $where .= " AND COALESCE(sm.running_stock, 0) = 0 ";
+            $where .= " AND sm.running_stock = 0 ";
         } elseif ($stockStatus === 'low') {
-            $where .= " AND COALESCE(sm.running_stock, 0) BETWEEN 1 AND 5 ";
+            $where .= " AND sm.running_stock BETWEEN 1 AND 5 ";
         } elseif ($stockStatus === 'in') {
-            $where .= " AND COALESCE(sm.running_stock, 0) > 0 ";
+            $where .= " AND sm.running_stock > 0 ";
         }
 
         $sql = "
@@ -357,18 +357,14 @@ class pos
                 p.image,
                 p.itemprice AS sell_price,
                 p.cost_price,
-                COALESCE(sm.running_stock, 0) AS stock_qty
-            FROM vp_products p
-            LEFT JOIN (
-                SELECT sm1.product_id, sm1.running_stock
-                FROM vp_stock_movements sm1
-                INNER JOIN (
-                    SELECT product_id, MAX(id) AS max_id
-                    FROM vp_stock_movements
-                    WHERE warehouse_id = ?
-                    GROUP BY product_id
-                ) latest ON latest.max_id = sm1.id
-            ) sm ON sm.product_id = p.id
+                sm.running_stock AS stock_qty
+            FROM vp_stock_movements sm
+            LEFT JOIN vp_stock_movements sm_newer
+                ON sm.product_id = sm_newer.product_id
+               AND sm.warehouse_id = sm_newer.warehouse_id
+               AND sm.id < sm_newer.id
+            INNER JOIN vp_products p
+                ON p.id = sm.product_id
             $where
             ORDER BY stock_qty ASC, p.title ASC
             LIMIT $limit
