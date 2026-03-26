@@ -1314,11 +1314,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Permanently Available:</label>
                         <select class="w-full h-[32px] border border-[#ccc] rounded-[3px] px-[10px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="permanently_available">
                             <?php
-                            $permRaw = $data['form2']['permanently_available'] ?? 'N';
-                            $perm = ($permRaw === 'Y') ? 'Y' : 'N';
+                            $permRaw = $data['form2']['permanently_available'] ?? '0';
+                            $perm = ($permRaw === '1') ? '1' : '0';
                             ?>
-                            <option value="N" <?= ($perm == 'N') ? 'selected' : '' ?>>No</option>
-                            <option value="Y" <?= ($perm == 'Y') ? 'selected' : '' ?>>Yes</option>
+                            <option value="0" <?= ($perm == '0') ? 'selected' : '' ?>>No</option>
+                            <option value="1" <?= ($perm == '1') ? 'selected' : '' ?>>Yes</option>
                         </select>
                     </div>
                     <div class="w-full min-w-0">
@@ -2326,13 +2326,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (catChecked === 0) errors.push("Please select at least one 'Category'.");
 
         // Marketplace sourcing: no local stock — skip main quantity_received check
-        const hasMarketplaceVendor = getVal('marketplace') !== '';
+		const hasMarketplaceVendor = getVal('marketplace') !== '';
 
-        // --- 2. MAIN ITEM ---
-        if (!hasMarketplaceVendor) {
-            const mainQty = parseFloat(getVal('quantity_received')) || 0;
-            if (mainQty < 0) errors.push("Main Item: 'Quantity' must be at least 1.");
-        }
+		if (!hasMarketplaceVendor) {
+			const mainQty = parseFloat(getVal('quantity_received')) || 0;
+			// Ensure at least 1
+			if (mainQty < 1) {
+				errors.push("Main Item: 'Quantity' must be at least 1.");
+			}
+		}
 
         if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
         if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
@@ -2355,8 +2357,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 return input ? input.value.trim() : '';
             };
 
-            const vQty = parseFloat(getCardVal('quantity')) || 0;
-            if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
+            const hasMarketplaceVendor = getVal('marketplace') !== '';
+
+            if (!hasMarketplaceVendor) {
+                const mainQty = parseFloat(getVal('quantity_received')) || 0;
+                // Ensure at least 1
+                if (mainQty < 1) {
+                    errors.push("Main Item: 'Quantity' must be at least 1.");
+                }
+            }
 
             if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
             if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
@@ -3403,9 +3412,16 @@ function validateAndSubmit(actionType) {
     if (catChecked === 0) errors.push("Please select at least one 'Category'.");
 
     // --- 2. MAIN ITEM VALIDATION ---
-    const mainQty = parseFloat(getVal('quantity_received')) || 0;
-    if (mainQty < 1) errors.push("Main Item: 'Quantity' must be at least 1.");
+     // Marketplace sourcing: no local stock — skip main quantity_received check
+	const hasMarketplaceVendor = getVal('marketplace') !== '';
 
+    if (!hasMarketplaceVendor) {
+        const mainQty = parseFloat(getVal('quantity_received')) || 0;
+        // Ensure at least 1
+        if (mainQty < 1) {
+            errors.push("Main Item: 'Quantity' must be at least 1.");
+        }
+    }
     // UPDATED: Check for 0.00
     if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
     if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
@@ -3435,9 +3451,14 @@ function validateAndSubmit(actionType) {
             return input ? input.value.trim() : '';
         };
 
-        const vQty = parseFloat(getCardVal('quantity')) || 0;
-        if (vQty < 1) errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
-
+        const hasMarketplaceVendor = getVal('marketplace') !== '';
+		if (!hasMarketplaceVendor) {
+			const mainQty = parseFloat(getVal('quantity_received')) || 0;
+			// Ensure at least 1
+			if (mainQty < 1) {
+				errors.push("Main Item: 'Quantity' must be at least 1.");
+			}
+		}
         // UPDATED: Check for 0.00 inside variations
         if (isInvalidPrice(getCardVal('cp'))) errors.push(`${cardTitle}: 'CP' must be greater than 0.`);
         if (isInvalidPrice(getCardVal('price_india'))) errors.push(`${cardTitle}: 'Price India' must be greater than 0.`);
