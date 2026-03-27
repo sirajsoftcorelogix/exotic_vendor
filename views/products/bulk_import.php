@@ -46,6 +46,31 @@
   </div>
 </div>
 
+<!-- Blocking overlay -->
+<div id="blockingOverlay" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-xl bg-white shadow-2xl border p-5">
+      <div class="flex items-start gap-3">
+        <div class="mt-0.5 h-10 w-10 shrink-0 rounded-full bg-amber-100 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2" />
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div id="overlayTitle" class="font-semibold text-gray-800">Please wait…</div>
+          <div id="overlayMessage" class="mt-1 text-sm text-gray-600">Working on your request.</div>
+          <div class="mt-3 h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-full w-1/3 bg-amber-600 animate-pulse"></div>
+          </div>
+          <div class="mt-3 text-xs text-gray-500">Do not refresh or close this tab while it is running.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   (function() {
     let currentJobId = <?= (int)($job_id ?? 0) ?>;
@@ -55,6 +80,34 @@
     const panel = document.getElementById('jobPanel');
     const startBtn = document.getElementById('startProcessBtn');
     const refreshBtn = document.getElementById('refreshStatusBtn');
+    const fileInput = document.getElementById('item_codes_file');
+    const overlay = document.getElementById('blockingOverlay');
+
+    function setUiDisabled(disabled) {
+      const btns = document.querySelectorAll('button, a, input, select, textarea');
+      btns.forEach(el => {
+        if (el.id === 'blockingOverlay') return;
+        if (el.tagName === 'A') {
+          el.setAttribute('data-prev-pointer', el.style.pointerEvents || '');
+          el.style.pointerEvents = disabled ? 'none' : (el.getAttribute('data-prev-pointer') || '');
+          el.style.opacity = disabled ? '0.6' : '';
+        } else {
+          el.disabled = disabled;
+        }
+      });
+    }
+
+    function showOverlay(title, message) {
+      document.getElementById('overlayTitle').textContent = title || 'Please wait…';
+      document.getElementById('overlayMessage').textContent = message || 'Working on your request.';
+      overlay.classList.remove('hidden');
+      setUiDisabled(true);
+    }
+
+    function hideOverlay() {
+      overlay.classList.add('hidden');
+      setUiDisabled(false);
+    }
 
     function setBadge(status) {
       const badge = document.getElementById('jobStatusBadge');
@@ -100,6 +153,7 @@
 
     async function processLoop() {
       if (!currentJobId) return;
+      showOverlay('Processing import…', 'Importing item codes in batches of 50. This may take some time for large files.');
       processing = true;
       startBtn.disabled = true;
       startBtn.textContent = 'Processing...';
@@ -127,21 +181,31 @@
         startBtn.disabled = false;
         startBtn.textContent = 'Start / Resume Processing';
         processing = false;
+        hideOverlay();
       }
     }
 
     form.addEventListener('submit', async function(e) {
       e.preventDefault();
-      const fd = new FormData(form);
-      const res = await fetch('?page=products&action=bulk_import_upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!data.success) {
-        alert(data.message || 'Upload failed');
+      if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        alert('Please select a file.');
         return;
       }
-      currentJobId = data.job_id;
-      history.replaceState({}, '', `?page=products&action=bulk_import&job_id=${currentJobId}`);
-      await fetchStatus();
+      showOverlay('Uploading file…', 'Uploading and validating your file. Please wait.');
+      const fd = new FormData(form);
+      try {
+        const res = await fetch('?page=products&action=bulk_import_upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message || 'Upload failed');
+          return;
+        }
+        currentJobId = data.job_id;
+        history.replaceState({}, '', `?page=products&action=bulk_import&job_id=${currentJobId}`);
+        await fetchStatus();
+      } finally {
+        hideOverlay();
+      }
     });
 
     startBtn.addEventListener('click', processLoop);
