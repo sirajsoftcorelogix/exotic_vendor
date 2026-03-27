@@ -400,6 +400,7 @@ class OrdersController {
                     }
                     //customer id add
                     $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
+                    $rdata['warehouse_id'] = 0; // Default warehouse, can be updated later based on logic
 					$totalorder++;                
                     
                     $data = $ordersModel->insertOrder($rdata);
@@ -1646,7 +1647,7 @@ class OrdersController {
                 $items_html .= '
                 <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">
                     <td class="p-2">
-                        <input type="checkbox" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
+                        <input type="checkbox" name="order_ids[]" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
                     <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') .'</td>
