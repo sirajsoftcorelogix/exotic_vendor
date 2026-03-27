@@ -46,6 +46,31 @@ class product
         if (!empty($filters['vendor_name'])) {
             $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
         }
+        if (!empty($filters['groupname'])) {
+            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+        }
+        if (!empty($filters['sku'])) {
+            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+        }
+        if (!empty($filters['size'])) {
+            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+        }
+        if (!empty($filters['color'])) {
+            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+        }
+        if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
+            $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
+        }
+        if (isset($filters['permanently_available']) && $filters['permanently_available'] !== '') {
+            $search .= "AND vp_products.permanently_available = " . ((int)$filters['permanently_available'] ? 1 : 0);
+        }
+        if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
+            if ((int)$filters['low_stock'] === 1) {
+                $search .= "AND vp_products.local_stock <= IFNULL(vp_products.min_stock, 0)";
+            } else {
+                $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
+            }
+        }
 
 
         $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE 1=1 $search order by vp_products.id DESC LIMIT ? OFFSET ?");
@@ -68,6 +93,31 @@ class product
         }
         if (!empty($filters['vendor_name'])) {
             $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
+        }
+        if (!empty($filters['groupname'])) {
+            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+        }
+        if (!empty($filters['sku'])) {
+            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+        }
+        if (!empty($filters['size'])) {
+            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+        }
+        if (!empty($filters['color'])) {
+            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+        }
+        if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
+            $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
+        }
+        if (isset($filters['permanently_available']) && $filters['permanently_available'] !== '') {
+            $search .= "AND vp_products.permanently_available = " . ((int)$filters['permanently_available'] ? 1 : 0);
+        }
+        if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
+            if ((int)$filters['low_stock'] === 1) {
+                $search .= "AND vp_products.local_stock <= IFNULL(vp_products.min_stock, 0)";
+            } else {
+                $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
+            }
         }
         $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM vp_products WHERE 1=1 $search");
         if ($stmt === false) {

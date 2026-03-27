@@ -65,6 +65,42 @@
                     <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
                     <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-48 overflow-auto " style="display:none; top:100%;"></div>
                 </div>
+                <div>
+                    <label for="item-group" class="block text-sm font-medium text-gray-600 mb-1">Item Group / Category</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['item_group'] ?? '') ?>" name="item_group" id="item-group" placeholder="Item Group / Category" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <div>
+                    <label for="sku" class="block text-sm font-medium text-gray-600 mb-1">SKU</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['sku'] ?? '') ?>" name="sku" id="sku" placeholder="SKU" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <div>
+                    <label for="low_stock" class="block text-sm font-medium text-gray-600 mb-1">Low Stock</label>
+                    <select id="low_stock" name="low_stock" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="">-Select-</option>
+                        <option value="1" <?= (isset($_GET['low_stock']) && $_GET['low_stock'] === '1') ? 'selected' : '' ?>>Yes</option>
+                        <option value="0" <?= (isset($_GET['low_stock']) && $_GET['low_stock'] === '0') ? 'selected' : '' ?>>No</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="permanently_available" class="block text-sm font-medium text-gray-600 mb-1">Permanently Available</label>
+                    <select id="permanently_available" name="permanently_available" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="">-Select-</option>
+                        <option value="1" <?= (isset($_GET['permanently_available']) && $_GET['permanently_available'] === '1') ? 'selected' : '' ?>>Yes</option>
+                        <option value="0" <?= (isset($_GET['permanently_available']) && $_GET['permanently_available'] === '0') ? 'selected' : '' ?>>No</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="size" class="block text-sm font-medium text-gray-600 mb-1">Size</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['size'] ?? '') ?>" name="size" id="size" placeholder="Size" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <div>
+                    <label for="color" class="block text-sm font-medium text-gray-600 mb-1">Color</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['color'] ?? '') ?>" name="color" id="color" placeholder="Color" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <div>
+                    <label for="local_stock" class="block text-sm font-medium text-gray-600 mb-1">Local Stock</label>
+                    <input type="number" value="<?= htmlspecialchars($_GET['local_stock'] ?? '') ?>" name="local_stock" id="local_stock" placeholder="Local Stock" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
                 <!-- <div>
                     <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
                     <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">

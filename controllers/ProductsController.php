@@ -26,6 +26,27 @@ class ProductsController {
         if (!empty($_GET['vendor_name']) && !empty($_GET['vendor_id'])) {
             $filters['vendor_name'] = $_GET['vendor_name'];            
         }
+        if (!empty($_GET['item_group'])) {
+            $filters['groupname'] = trim($_GET['item_group']);
+        }
+        if (!empty($_GET['sku'])) {
+            $filters['sku'] = trim($_GET['sku']);
+        }
+        if (isset($_GET['low_stock']) && $_GET['low_stock'] !== '') {
+            $filters['low_stock'] = (int)$_GET['low_stock'] ? 1 : 0;
+        }
+        if (isset($_GET['permanently_available']) && $_GET['permanently_available'] !== '') {
+            $filters['permanently_available'] = (int)$_GET['permanently_available'] ? 1 : 0;
+        }
+        if (!empty($_GET['size'])) {
+            $filters['size'] = trim($_GET['size']);
+        }
+        if (!empty($_GET['color'])) {
+            $filters['color'] = trim($_GET['color']);
+        }
+        if (isset($_GET['local_stock']) && $_GET['local_stock'] !== '') {
+            $filters['local_stock'] = (int)$_GET['local_stock'];
+        }
         $products_data = $productModel->getAllProducts($limit, $offset, $filters);
         // Assuming a method countAllProducts exists to get total count
         $total_records = $productModel->countAllProducts($filters);
