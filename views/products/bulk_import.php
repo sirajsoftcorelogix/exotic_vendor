@@ -230,8 +230,12 @@
         showResult('error', 'Validation Error', 'File size must be 10 MB or less.');
         return;
       }
+      // Build FormData before showProgress(): setDisabled() marks inputs disabled, and
+      // disabled fields are omitted from new FormData(form), so the file would not upload.
+      const fd = new FormData();
+      const file = fileInput.files[0];
+      fd.append('item_codes_file', file, file.name);
       showProgress('Uploading file…', 'Uploading and validating your file.');
-      const fd = new FormData(form);
       try {
         const data = await fetchJson('?page=products&action=bulk_import_upload', { method: 'POST', body: fd });
         if (!data.success) {
