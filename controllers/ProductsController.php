@@ -498,8 +498,109 @@ class ProductsController {
 
     public function bulkImportScreen() {
         is_login();
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $jobs = [];
+        $sql = "SELECT j.*, u.name AS created_by_name
+                FROM product_import_jobs j
+                LEFT JOIN vp_users u ON u.id = j.created_by
+                ORDER BY j.id DESC
+                LIMIT 100";
+        $res = mysqli_query($conn, $sql);
+        if ($res) {
+            while ($row = mysqli_fetch_assoc($res)) {
+                $jobs[] = $row;
+            }
+        }
+
+        renderTemplate('views/products/bulk_import.php', ['jobs' => $jobs], 'Bulk Product Import');
+    }
+
+    public function bulkImportDetail() {
+        is_login();
+        global $conn;
+        $this->ensureBulkImportTables();
+
         $jobId = isset($_GET['job_id']) ? (int)$_GET['job_id'] : 0;
-        renderTemplate('views/products/bulk_import.php', ['job_id' => $jobId], 'Bulk Product Import');
+        if ($jobId <= 0) {
+            header('Location: ?page=products&action=bulk_import');
+            exit;
+        }
+
+        $this->refreshImportJobCounts($jobId);
+
+        $job = null;
+        $stmtJob = $conn->prepare("SELECT j.*, u.name AS created_by_name FROM product_import_jobs j LEFT JOIN vp_users u ON u.id = j.created_by WHERE j.id = ? LIMIT 1");
+        $stmtJob->bind_param('i', $jobId);
+        $stmtJob->execute();
+        $jobRes = $stmtJob->get_result();
+        $job = $jobRes ? $jobRes->fetch_assoc() : null;
+        $stmtJob->close();
+        if (!$job) {
+            header('Location: ?page=products&action=bulk_import');
+            exit;
+        }
+
+        $statusFilter = trim((string)($_GET['status'] ?? 'all'));
+        $allowed = ['all', 'pending', 'processing', 'success', 'failed'];
+        if (!in_array($statusFilter, $allowed, true)) {
+            $statusFilter = 'all';
+        }
+
+        $pageNo = isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
+        if (!in_array($limit, [50, 100, 200, 500], true)) {
+            $limit = 100;
+        }
+        $offset = ($pageNo - 1) * $limit;
+
+        $where = " WHERE job_id = ? ";
+        if ($statusFilter !== 'all') {
+            $where .= " AND status = ? ";
+        }
+
+        $countSql = "SELECT COUNT(*) AS cnt FROM product_import_items $where";
+        $countStmt = $conn->prepare($countSql);
+        if ($statusFilter !== 'all') {
+            $countStmt->bind_param('is', $jobId, $statusFilter);
+        } else {
+            $countStmt->bind_param('i', $jobId);
+        }
+        $countStmt->execute();
+        $countRes = $countStmt->get_result()->fetch_assoc();
+        $countStmt->close();
+        $totalItems = (int)($countRes['cnt'] ?? 0);
+        $totalPages = $limit > 0 ? (int)ceil($totalItems / $limit) : 1;
+
+        $rows = [];
+        $listSql = "SELECT id, item_code, status, attempt_count, error_message, created_at, updated_at, processed_at
+                    FROM product_import_items
+                    $where
+                    ORDER BY id ASC
+                    LIMIT $limit OFFSET $offset";
+        $listStmt = $conn->prepare($listSql);
+        if ($statusFilter !== 'all') {
+            $listStmt->bind_param('is', $jobId, $statusFilter);
+        } else {
+            $listStmt->bind_param('i', $jobId);
+        }
+        $listStmt->execute();
+        $listRes = $listStmt->get_result();
+        while ($listRes && ($row = $listRes->fetch_assoc())) {
+            $rows[] = $row;
+        }
+        $listStmt->close();
+
+        renderTemplate('views/products/bulk_import_detail.php', [
+            'job' => $job,
+            'rows' => $rows,
+            'status_filter' => $statusFilter,
+            'page_no' => $pageNo,
+            'limit' => $limit,
+            'total_items' => $totalItems,
+            'total_pages' => $totalPages
+        ], 'Bulk Import Detail');
     }
 
     private function ensureBulkImportTables() {
@@ -834,6 +935,48 @@ class ProductsController {
         $stmt->close();
 
         echo json_encode(['success' => true, 'job_id' => $jobId, 'stats' => $stats, 'failed_preview' => $failed]);
+        exit;
+    }
+
+    public function bulkImportRetry() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true) ?: $_POST;
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        $retryType = trim((string)($payload['retry_type'] ?? 'failed')); // failed|pending|all
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+        if (!in_array($retryType, ['failed', 'pending', 'all'], true)) {
+            $retryType = 'failed';
+        }
+
+        $where = "job_id = ?";
+        if ($retryType === 'failed') {
+            $where .= " AND status = 'failed'";
+        } elseif ($retryType === 'pending') {
+            $where .= " AND status = 'pending'";
+        } else {
+            $where .= " AND status IN ('failed','pending')";
+        }
+
+        $sql = "UPDATE product_import_items
+                SET status = 'pending', error_message = NULL, processed_at = NULL, updated_at = NOW()
+                WHERE $where";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $jobId);
+        $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        $stats = $this->refreshImportJobCounts($jobId);
+        echo json_encode(['success' => true, 'message' => 'Retry queue updated.', 'affected' => $affected, 'stats' => $stats]);
         exit;
     }
     public function getProductDetailsHTML() {

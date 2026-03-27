@@ -432,6 +432,9 @@ switch ($page) {
             case 'bulk_import':
                 $controller->bulkImportScreen();
                 break;
+            case 'bulk_import_detail':
+                $controller->bulkImportDetail();
+                break;
             case 'bulk_import_upload':
                 $controller->bulkImportUpload();
                 break;
@@ -440,6 +443,9 @@ switch ($page) {
                 break;
             case 'bulk_import_process_batch':
                 $controller->bulkImportProcessBatch();
+                break;
+            case 'bulk_import_retry':
+                $controller->bulkImportRetry();
                 break;
             case 'get_product_details_html':
                 $controller->getProductDetailsHTML();
