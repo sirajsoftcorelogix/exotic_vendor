@@ -118,6 +118,18 @@
     <div class="w-full max-w-md rounded-xl bg-white shadow-2xl border p-5">
       <div id="overlayTitle" class="font-semibold text-gray-800 mb-1">Please wait…</div>
       <div id="overlayMessage" class="text-sm text-gray-600">Processing your request.</div>
+      <div id="overlayProgressWrap" class="mt-3">
+        <div class="flex items-center gap-2 mb-2">
+          <svg id="overlaySpinner" class="h-4 w-4 text-amber-600 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"></circle>
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+          <span id="overlayProgressText" class="text-xs text-gray-500">Please wait...</span>
+        </div>
+        <div class="w-full h-2 rounded bg-gray-200 overflow-hidden">
+          <div id="overlayProgressBar" class="h-2 w-1/3 bg-amber-600 rounded animate-pulse"></div>
+        </div>
+      </div>
       <textarea id="overlayDetails" class="mt-3 hidden w-full border rounded p-2 text-xs text-gray-700 h-28" readonly></textarea>
       <div id="overlayActions" class="mt-3 hidden flex gap-2 justify-end">
         <button id="overlayCopyBtn" type="button" class="px-3 py-1 text-xs rounded border hover:bg-gray-50">Copy</button>
@@ -137,6 +149,9 @@
     const overlayActions = document.getElementById('overlayActions');
     const overlayCopyBtn = document.getElementById('overlayCopyBtn');
     const overlayOkBtn = document.getElementById('overlayOkBtn');
+    const overlayProgressWrap = document.getElementById('overlayProgressWrap');
+    const overlayProgressBar = document.getElementById('overlayProgressBar');
+    const overlayProgressText = document.getElementById('overlayProgressText');
 
     function disableUi(disabled) {
       document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
@@ -152,6 +167,10 @@
     function showProgress(title, message) {
       overlayTitle.textContent = title || 'Please wait…';
       overlayMessage.textContent = message || 'Processing your request.';
+      overlayProgressWrap.classList.remove('hidden');
+      overlayProgressText.textContent = 'Please wait...';
+      overlayProgressBar.style.width = '35%';
+      overlayProgressBar.classList.add('animate-pulse');
       overlayDetails.value = '';
       overlayDetails.classList.add('hidden');
       overlayActions.classList.add('hidden');
@@ -167,6 +186,7 @@
     function showResult(type, title, message, details) {
       overlayTitle.textContent = title || (type === 'error' ? 'Error' : 'Success');
       overlayMessage.textContent = message || '';
+      overlayProgressWrap.classList.add('hidden');
       overlayDetails.value = details || '';
       if (details) {
         overlayDetails.classList.remove('hidden');
@@ -243,6 +263,11 @@
       const processed = stats.processed_items ?? 0;
       const pct = total > 0 ? Math.round((processed * 100) / total) : 0;
       document.getElementById('progressBar').style.width = pct + '%';
+      if (!overlay.classList.contains('hidden')) {
+        overlayProgressBar.classList.remove('animate-pulse');
+        overlayProgressBar.style.width = pct + '%';
+        overlayProgressText.textContent = `${processed}/${total} processed (${pct}%)`;
+      }
     }
 
     async function fetchStatus() {

@@ -81,6 +81,18 @@
     <div class="w-full max-w-md rounded-xl bg-white shadow-2xl border p-5">
       <div id="popupTitle" class="font-semibold text-gray-800 mb-1">Uploading file…</div>
       <div id="popupMessage" class="text-sm text-gray-600">Please wait, do not refresh the page.</div>
+      <div id="popupProgressWrap" class="mt-3">
+        <div class="flex items-center gap-2 mb-2">
+          <svg class="h-4 w-4 text-amber-600 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"></circle>
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+          <span class="text-xs text-gray-500">Please wait...</span>
+        </div>
+        <div class="w-full h-2 rounded bg-gray-200 overflow-hidden">
+          <div id="popupProgressBar" class="h-2 w-1/3 bg-amber-600 rounded animate-pulse"></div>
+        </div>
+      </div>
       <textarea id="popupDetails" class="mt-3 hidden w-full border rounded p-2 text-xs text-gray-700 h-28" readonly></textarea>
       <div id="popupActions" class="mt-3 hidden flex gap-2 justify-end">
         <button id="popupCopyBtn" type="button" class="px-3 py-1 text-xs rounded border hover:bg-gray-50">Copy</button>
@@ -102,6 +114,8 @@
     const popupActions = document.getElementById('popupActions');
     const popupCopyBtn = document.getElementById('popupCopyBtn');
     const popupOkBtn = document.getElementById('popupOkBtn');
+    const popupProgressWrap = document.getElementById('popupProgressWrap');
+    const popupProgressBar = document.getElementById('popupProgressBar');
 
     function setDisabled(disabled) {
       document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
@@ -118,6 +132,9 @@
     function showProgress(title, message) {
       popupTitle.textContent = title || 'Please wait…';
       popupMessage.textContent = message || 'Processing your request.';
+      popupProgressWrap.classList.remove('hidden');
+      popupProgressBar.style.width = '35%';
+      popupProgressBar.classList.add('animate-pulse');
       popupDetails.value = '';
       popupDetails.classList.add('hidden');
       popupActions.classList.add('hidden');
@@ -133,6 +150,7 @@
     function showResult(type, title, message, details) {
       popupTitle.textContent = title || (type === 'error' ? 'Error' : 'Success');
       popupMessage.textContent = message || '';
+      popupProgressWrap.classList.add('hidden');
       popupDetails.value = details || '';
       if (details) {
         popupDetails.classList.remove('hidden');
