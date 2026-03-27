@@ -47,6 +47,9 @@ class ProductsController {
         if (isset($_GET['local_stock']) && $_GET['local_stock'] !== '') {
             $filters['local_stock'] = (int)$_GET['local_stock'];
         }
+        if (!empty($_GET['marketplace'])) {
+            $filters['marketplace'] = trim($_GET['marketplace']);
+        }
         $products_data = $productModel->getAllProducts($limit, $offset, $filters);
         // Assuming a method countAllProducts exists to get total count
         $total_records = $productModel->countAllProducts($filters);
