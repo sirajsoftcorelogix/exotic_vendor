@@ -369,7 +369,9 @@ class ProductsController {
             $item['item_code'] = $code;
             $item['sku'] = $apiItem['sku'] ?? '';
             $item['title'] = $apiItem['title'] ?? '';
-            $item['image'] = 'https://cdn.exoticindia.com/images/products/original/'.$apiItem['image'] ?? '';
+            $item['image'] = (!empty($apiItem['image']))
+                ? ('https://cdn.exoticindia.com/images/products/original/' . $apiItem['image'])
+                : '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
             $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
             $item['itemprice'] = isset($apiItem['price']) ? floatval($apiItem['price']) : (isset($apiItem['itemprice']) ? floatval($apiItem['itemprice']) : 0.0);
@@ -624,6 +626,14 @@ class ProductsController {
 
     public function bulkImportUpload() {
         is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
         header('Content-Type: application/json');
         global $conn;
         $this->ensureBulkImportTables();
@@ -707,6 +717,14 @@ class ProductsController {
 
     public function bulkImportProcessBatch() {
         is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
         header('Content-Type: application/json');
         global $conn;
         $this->ensureBulkImportTables();
@@ -785,6 +803,14 @@ class ProductsController {
 
     public function bulkImportStatus() {
         is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
         header('Content-Type: application/json');
         global $conn;
         $this->ensureBulkImportTables();
