@@ -489,7 +489,7 @@ class ProductsController {
             usleep(100000); // 100ms
         }
 
-        return json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
+        echo json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
         exit;
     }
     public function getProductDetailsHTML() {
