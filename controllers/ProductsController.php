@@ -749,6 +749,27 @@ class ProductsController {
         return array_values(array_unique($clean));
     }
 
+    private function bulkImportUploadErrorMessage(int $code): string {
+        switch ($code) {
+            case UPLOAD_ERR_INI_SIZE:
+                return 'File exceeds the server upload limit (upload_max_filesize in php.ini). Ask your host to raise it, or split the file.';
+            case UPLOAD_ERR_FORM_SIZE:
+                return 'File exceeds the maximum size allowed by the form.';
+            case UPLOAD_ERR_PARTIAL:
+                return 'The file was only partially uploaded. Check your connection and try again.';
+            case UPLOAD_ERR_NO_FILE:
+                return 'No file was received. Ensure you chose a file, keep the tab open during upload, and that the form is not blocked by a browser extension.';
+            case UPLOAD_ERR_NO_TMP_DIR:
+                return 'Server misconfiguration: missing temporary folder for uploads (check upload_tmp_dir in php.ini).';
+            case UPLOAD_ERR_CANT_WRITE:
+                return 'Server could not write the uploaded file to disk.';
+            case UPLOAD_ERR_EXTENSION:
+                return 'A PHP extension stopped the file upload.';
+            default:
+                return 'Upload failed (PHP error code ' . $code . ').';
+        }
+    }
+
     public function bulkImportUpload() {
         is_login();
         if (ob_get_level() === 0) { ob_start(); }
@@ -763,8 +784,23 @@ class ProductsController {
         global $conn;
         $this->ensureBulkImportTables();
 
-        if (!isset($_FILES['item_codes_file']) || $_FILES['item_codes_file']['error'] !== UPLOAD_ERR_OK) {
-            echo json_encode(['success' => false, 'message' => 'Please upload a valid file.']);
+        if (!isset($_FILES['item_codes_file'])) {
+            $iniUpload = ini_get('upload_max_filesize') ?: 'unknown';
+            $iniPost = ini_get('post_max_size') ?: 'unknown';
+            echo json_encode([
+                'success' => false,
+                'message' => 'No file upload was received. Confirm the request is POST with multipart data and the field name is item_codes_file.',
+                'debug' => 'PHP limits: upload_max_filesize=' . $iniUpload . ', post_max_size=' . $iniPost,
+            ]);
+            exit;
+        }
+        $uploadErr = (int)($_FILES['item_codes_file']['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($uploadErr !== UPLOAD_ERR_OK) {
+            echo json_encode([
+                'success' => false,
+                'message' => $this->bulkImportUploadErrorMessage($uploadErr),
+                'upload_error' => $uploadErr,
+            ]);
             exit;
         }
 
@@ -814,7 +850,7 @@ class ProductsController {
                     SUM(CASE WHEN status IN ('success','failed') THEN 1 ELSE 0 END) AS processed_items,
                     SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success_items,
                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_items,
-                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_items
+                    SUM(CASE WHEN status IN ('pending','processing') THEN 1 ELSE 0 END) AS pending_items
                 FROM product_import_items
                 WHERE job_id = ?";
         $stmt = $conn->prepare($sql);
@@ -869,7 +905,8 @@ class ProductsController {
 
         $ids = [];
         $codes = [];
-        $stmtPick = $conn->prepare("SELECT id, item_code FROM product_import_items WHERE job_id = ? AND status = 'pending' ORDER BY id ASC LIMIT 50");
+        // Pending first, then rows stuck in "processing" (browser closed / fatal mid-batch)
+        $stmtPick = $conn->prepare("SELECT id, item_code FROM product_import_items WHERE job_id = ? AND status IN ('pending','processing') ORDER BY (status = 'processing') ASC, id ASC LIMIT 50");
         $stmtPick->bind_param('i', $jobId);
         $stmtPick->execute();
         $res = $stmtPick->get_result();
@@ -970,12 +1007,25 @@ class ProductsController {
     public function bulkImportRetry() {
         is_login();
         if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
         header('Content-Type: application/json');
         global $conn;
         $this->ensureBulkImportTables();
 
         $raw = file_get_contents('php://input');
-        $payload = json_decode($raw, true) ?: $_POST;
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        if (!is_array($payload)) {
+            $payload = [];
+        }
         $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
         $retryType = trim((string)($payload['retry_type'] ?? 'failed')); // failed|pending|all
         if ($jobId <= 0) {
@@ -986,26 +1036,66 @@ class ProductsController {
             $retryType = 'failed';
         }
 
+        $itemIds = [];
+        if (!empty($payload['item_ids']) && is_array($payload['item_ids'])) {
+            foreach ($payload['item_ids'] as $rid) {
+                $i = (int)$rid;
+                if ($i > 0) {
+                    $itemIds[$i] = true;
+                }
+            }
+        }
+        $itemIds = array_keys($itemIds);
+
         $where = "job_id = ?";
-        if ($retryType === 'failed') {
+        if (!empty($itemIds)) {
+            // Per-row retry: only failed lines for this job
+            $idList = implode(',', $itemIds);
+            $where .= " AND status = 'failed' AND id IN ($idList)";
+        } elseif ($retryType === 'failed') {
             $where .= " AND status = 'failed'";
         } elseif ($retryType === 'pending') {
-            $where .= " AND status = 'pending'";
+            // Re-queue rows still waiting or stuck mid-batch (browser closed / fatal error)
+            $where .= " AND status IN ('pending','processing')";
         } else {
-            $where .= " AND status IN ('failed','pending')";
+            $where .= " AND status IN ('failed','pending','processing')";
         }
+
+        $cntSql = "SELECT COUNT(*) AS c FROM product_import_items WHERE $where";
+        $cntStmt = $conn->prepare($cntSql);
+        $cntStmt->bind_param('i', $jobId);
+        $cntStmt->execute();
+        $matched = (int)($cntStmt->get_result()->fetch_assoc()['c'] ?? 0);
+        $cntStmt->close();
 
         $sql = "UPDATE product_import_items
                 SET status = 'pending', error_message = NULL, processed_at = NULL, updated_at = NOW()
                 WHERE $where";
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            echo json_encode(['success' => false, 'message' => 'Prepare failed: ' . $conn->error]);
+            exit;
+        }
         $stmt->bind_param('i', $jobId);
-        $stmt->execute();
-        $affected = $stmt->affected_rows;
+        if (!$stmt->execute()) {
+            echo json_encode(['success' => false, 'message' => 'Update failed: ' . $stmt->error]);
+            $stmt->close();
+            exit;
+        }
+        $affected = (int)$stmt->affected_rows;
         $stmt->close();
 
         $stats = $this->refreshImportJobCounts($jobId);
-        echo json_encode(['success' => true, 'message' => 'Retry queue updated.', 'affected' => $affected, 'stats' => $stats]);
+        $msg = $matched === 0
+            ? 'No matching rows to reset for this retry type.'
+            : 'Retry queue updated.';
+        echo json_encode([
+            'success' => true,
+            'message' => $msg,
+            'matched' => $matched,
+            'affected' => $affected,
+            'stats' => $stats
+        ]);
         exit;
     }
 
