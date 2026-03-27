@@ -9,7 +9,7 @@
       Level 1: Upload Excel/CSV and track all import jobs. Click any row to view item-code level details.
     </p>
 
-    <form id="bulkImportForm" class="border rounded-lg p-4 bg-gray-50 mb-6">
+    <form id="bulkImportForm" class="border rounded-lg p-4 bg-gray-50 mb-6" enctype="multipart/form-data" method="post">
       <label class="block text-sm font-medium text-gray-700 mb-2">Upload CSV / XLSX</label>
       <div class="flex flex-wrap gap-3 items-center">
         <input type="file" name="item_codes_file" id="item_codes_file" accept=".csv,.xlsx" class="block w-full text-sm max-w-lg" required>
@@ -59,6 +59,9 @@
                 <td class="px-3 py-2"><?= htmlspecialchars($j['updated_at'] ?? '') ?></td>
                 <td class="px-3 py-2">
                   <a href="?page=products&action=bulk_import_detail&job_id=<?= (int)$j['id'] ?>" class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">View Details</a>
+                  <?php if ((int)($j['failed_items'] ?? 0) > 0): ?>
+                    <button type="button" class="js-retry-failed-job ml-1 px-2 py-1 text-xs rounded border border-amber-700 text-amber-800 hover:bg-amber-50" data-job-id="<?= (int)$j['id'] ?>" title="Move all failed rows back to pending">Retry failed</button>
+                  <?php endif; ?>
                   <?php
                     $canDelete = ((int)$j['success_items'] === 0) && ((int)$j['failed_items'] === 0) && (($j['status'] ?? 'pending') !== 'processing');
                   ?>
@@ -243,6 +246,36 @@
         const details = extractServerError(e2, 'Upload failed');
         showResult('error', 'Upload Failed', 'Could not process server response.', details);
       }
+    });
+
+    document.querySelectorAll('.js-retry-failed-job').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const jobId = parseInt(btn.getAttribute('data-job-id') || '0', 10);
+        if (!jobId) return;
+        if (!confirm('Reset all failed rows for this job to pending so they can be imported again?')) return;
+        showProgress('Retrying failed imports…', 'Moving failed rows back to the queue.');
+        try {
+          const data = await fetchJson('?page=products&action=bulk_import_retry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: jobId, retry_type: 'failed' })
+          });
+          if (!data.success) {
+            const detailText = [data.message || 'Retry failed', data.debug || ''].filter(Boolean).join('\n');
+            showResult('error', 'Retry Failed', data.message || 'Retry failed', detailText);
+            return;
+          }
+          const detail = (typeof data.matched === 'number')
+            ? `Failed rows reset: ${data.matched}. Open job details and use Start / Resume Processing to run the import.`
+            : '';
+          showResult('success', 'Failed rows queued', data.message || 'Retry queue updated.', detail);
+          await new Promise(r => setTimeout(r, 400));
+          window.location.reload();
+        } catch (e4) {
+          const details = extractServerError(e4, 'Retry failed');
+          showResult('error', 'Retry Failed', 'Could not process server response.', details);
+        }
+      });
     });
 
     document.querySelectorAll('.js-delete-job').forEach(function(btn) {
