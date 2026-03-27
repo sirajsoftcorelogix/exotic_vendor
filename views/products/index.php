@@ -67,7 +67,17 @@
                 </div>
                 <div>
                     <label for="item-group" class="block text-sm font-medium text-gray-600 mb-1">Item Group / Category</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['item_group'] ?? '') ?>" name="item_group" id="item-group" placeholder="Item Group / Category" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <select name="item_group" id="item-group" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                        <option value="">-Select-</option>
+                        <?php
+                            $groups = ['sculptures', 'book', 'jewelry', 'textiles', 'paintings'];
+                            $selectedGroup = (string)($_GET['item_group'] ?? '');
+                            foreach ($groups as $g) {
+                                $sel = ($selectedGroup === $g) ? 'selected' : '';
+                                echo '<option value="' . htmlspecialchars($g) . '" ' . $sel . '>' . htmlspecialchars($g) . '</option>';
+                            }
+                        ?>
+                    </select>
                 </div>
                 <div>
                     <label for="sku" class="block text-sm font-medium text-gray-600 mb-1">SKU</label>
