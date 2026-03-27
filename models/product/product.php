@@ -2,6 +2,20 @@
 class product
 {
     private $db;
+    private $vpProductsCols = null;
+    private function vpProductsHasColumn(string $col): bool
+    {
+        if ($this->vpProductsCols === null) {
+            $this->vpProductsCols = [];
+            $res = $this->db->query("SHOW COLUMNS FROM vp_products");
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    if (!empty($row['Field'])) $this->vpProductsCols[$row['Field']] = true;
+                }
+            }
+        }
+        return isset($this->vpProductsCols[$col]);
+    }
     private function normalizeIntValue($value, $default = 0)
     {
         if ($value === null) return (int)$default;
@@ -71,6 +85,14 @@ class product
                 $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
             }
         }
+        if (!empty($filters['marketplace'])) {
+            $mp = $filters['marketplace'];
+            if ($this->vpProductsHasColumn('marketplace_vendor')) {
+                $search .= "AND vp_products.marketplace_vendor like '%" . $mp . "%'";
+            } elseif ($this->vpProductsHasColumn('marketplace')) {
+                $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
+            }
+        }
 
 
         $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE 1=1 $search order by vp_products.id DESC LIMIT ? OFFSET ?");
@@ -117,6 +139,14 @@ class product
                 $search .= "AND vp_products.local_stock <= IFNULL(vp_products.min_stock, 0)";
             } else {
                 $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
+            }
+        }
+        if (!empty($filters['marketplace'])) {
+            $mp = $filters['marketplace'];
+            if ($this->vpProductsHasColumn('marketplace_vendor')) {
+                $search .= "AND vp_products.marketplace_vendor like '%" . $mp . "%'";
+            } elseif ($this->vpProductsHasColumn('marketplace')) {
+                $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
             }
         }
         $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM vp_products WHERE 1=1 $search");

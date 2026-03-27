@@ -101,6 +101,10 @@
                     <label for="local_stock" class="block text-sm font-medium text-gray-600 mb-1">Local Stock</label>
                     <input type="number" value="<?= htmlspecialchars($_GET['local_stock'] ?? '') ?>" name="local_stock" id="local_stock" placeholder="Local Stock" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
+                <div>
+                    <label for="marketplace" class="block text-sm font-medium text-gray-600 mb-1">Marketplace</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['marketplace'] ?? '') ?>" name="marketplace" id="marketplace" placeholder="Marketplace" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                </div>
                 <!-- <div>
                     <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
                     <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
