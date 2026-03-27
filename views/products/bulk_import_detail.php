@@ -36,7 +36,7 @@
     <div class="flex flex-wrap gap-2 mb-4">
       <button id="startProcessBtn" type="button" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm font-semibold">Start / Resume Processing</button>
       <button id="refreshStatusBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Refresh Status</button>
-      <button id="retryFailedBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry Failed</button>
+      <button id="retryFailedBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry all failed</button>
       <button id="retryPendingBtn" type="button" class="px-4 py-2 border rounded hover:bg-gray-50 text-sm">Retry Pending</button>
     </div>
 
@@ -73,6 +73,7 @@
             <th class="px-3 py-2 text-left">Attempts</th>
             <th class="px-3 py-2 text-left">Error</th>
             <th class="px-3 py-2 text-left">Updated</th>
+            <th class="px-3 py-2 text-left">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -94,6 +95,13 @@
                 <td class="px-3 py-2"><?= (int)($r['attempt_count'] ?? 0) ?></td>
                 <td class="px-3 py-2 text-red-700 text-xs"><?= htmlspecialchars($r['error_message'] ?? '') ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['updated_at'] ?? '') ?></td>
+                <td class="px-3 py-2">
+                  <?php if ($st === 'failed'): ?>
+                    <button type="button" class="js-retry-item px-2 py-1 text-xs rounded border border-amber-700 text-amber-800 hover:bg-amber-50" data-item-id="<?= (int)$r['id'] ?>">Retry</button>
+                  <?php else: ?>
+                    <span class="text-gray-400 text-xs">—</span>
+                  <?php endif; ?>
+                </td>
               </tr>
             <?php endforeach; ?>
           <?php endif; ?>
@@ -277,20 +285,41 @@
       return data;
     }
 
-    async function retry(type) {
-      showProgress('Updating retry queue…', 'Marking selected records for retry.');
+    async function retry(type, itemIds) {
+      const rowRetry = Array.isArray(itemIds) && itemIds.length > 0;
+      showProgress(
+        rowRetry ? 'Retrying import…' : 'Updating retry queue…',
+        rowRetry ? 'Re-queuing selected item(s).' : 'Marking selected records for retry.'
+      );
       try {
+        const body = { job_id: jobId, retry_type: type };
+        if (rowRetry) body.item_ids = itemIds;
         const data = await fetchJson('?page=products&action=bulk_import_retry', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ job_id: jobId, retry_type: type })
+          body: JSON.stringify(body)
         });
         if (!data.success) {
           const detailText = [data.message || 'Retry failed', data.debug || ''].filter(Boolean).join('\n');
           showResult('error', 'Retry Failed', data.message || 'Retry failed', detailText);
           return;
         }
-        showResult('success', 'Retry Updated', data.message || 'Retry queue updated.');
+        const retryMsg = data.message || 'Retry queue updated.';
+        let retryDetail = '';
+        if (typeof data.matched === 'number' && data.matched === 0) {
+          if (rowRetry) {
+            retryDetail = 'This row was not updated (wrong id, wrong job, or status is not failed).';
+          } else if (type === 'failed') {
+            retryDetail = 'No failed rows to reset. Use filters to confirm failed lines, or retry a single row from the Actions column.';
+          } else if (type === 'pending') {
+            retryDetail = 'No pending or in-progress rows to reset. Use "Start / Resume Processing" to continue, or "Retry all failed" for failed rows.';
+          } else {
+            retryDetail = 'No matching rows for this retry.';
+          }
+        } else if (typeof data.matched === 'number') {
+          retryDetail = `Rows reset: ${data.matched} (DB updated: ${data.affected ?? '-'}). Then click Start / Resume Processing to import again.`;
+        }
+        showResult('success', 'Retry Updated', retryMsg, retryDetail);
         await new Promise(r => setTimeout(r, 350));
         await fetchStatus();
         window.location.reload();
@@ -345,6 +374,13 @@
     });
     document.getElementById('retryPendingBtn').addEventListener('click', function() {
       retry('pending');
+    });
+    document.querySelectorAll('.js-retry-item').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const id = parseInt(btn.getAttribute('data-item-id') || '0', 10);
+        if (!id) return;
+        retry('failed', [id]);
+      });
     });
   })();
 </script>
