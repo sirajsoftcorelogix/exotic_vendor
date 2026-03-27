@@ -2,6 +2,18 @@
 class product
 {
     private $db;
+    private function normalizeIntValue($value, $default = 0)
+    {
+        if ($value === null) return (int)$default;
+        if (is_int($value)) return $value;
+        if (is_float($value)) return (int)$value;
+        $str = trim((string)$value);
+        if ($str === '') return (int)$default;
+        if (preg_match('/-?\d+/', $str, $m)) {
+            return (int)$m[0];
+        }
+        return (int)$default;
+    }
     public function __construct($db)
     {
         $this->db = $db;
@@ -34,6 +46,31 @@ class product
         if (!empty($filters['vendor_name'])) {
             $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
         }
+        if (!empty($filters['groupname'])) {
+            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+        }
+        if (!empty($filters['sku'])) {
+            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+        }
+        if (!empty($filters['size'])) {
+            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+        }
+        if (!empty($filters['color'])) {
+            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+        }
+        if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
+            $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
+        }
+        if (isset($filters['permanently_available']) && $filters['permanently_available'] !== '') {
+            $search .= "AND vp_products.permanently_available = " . ((int)$filters['permanently_available'] ? 1 : 0);
+        }
+        if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
+            if ((int)$filters['low_stock'] === 1) {
+                $search .= "AND vp_products.local_stock <= IFNULL(vp_products.min_stock, 0)";
+            } else {
+                $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
+            }
+        }
 
 
         $stmt = $this->db->prepare("SELECT * FROM vp_products WHERE 1=1 $search order by vp_products.id DESC LIMIT ? OFFSET ?");
@@ -56,6 +93,31 @@ class product
         }
         if (!empty($filters['vendor_name'])) {
             $search .= "AND vp_products.vendor like '%" . $filters['vendor_name'] . "%'";
+        }
+        if (!empty($filters['groupname'])) {
+            $search .= "AND vp_products.groupname like '%" . $filters['groupname'] . "%'";
+        }
+        if (!empty($filters['sku'])) {
+            $search .= "AND vp_products.sku like '%" . $filters['sku'] . "%'";
+        }
+        if (!empty($filters['size'])) {
+            $search .= "AND vp_products.size like '%" . $filters['size'] . "%'";
+        }
+        if (!empty($filters['color'])) {
+            $search .= "AND vp_products.color like '%" . $filters['color'] . "%'";
+        }
+        if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
+            $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
+        }
+        if (isset($filters['permanently_available']) && $filters['permanently_available'] !== '') {
+            $search .= "AND vp_products.permanently_available = " . ((int)$filters['permanently_available'] ? 1 : 0);
+        }
+        if (isset($filters['low_stock']) && $filters['low_stock'] !== '') {
+            if ((int)$filters['low_stock'] === 1) {
+                $search .= "AND vp_products.local_stock <= IFNULL(vp_products.min_stock, 0)";
+            } else {
+                $search .= "AND vp_products.local_stock > IFNULL(vp_products.min_stock, 0)";
+            }
         }
         $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM vp_products WHERE 1=1 $search");
         if ($stmt === false) {
@@ -166,8 +228,8 @@ class product
                     $location = isset($product['location']) ? $product['location'] : '';
                     $fba_in = isset($product['fba_in']) ? (int)$product['fba_in'] : 0;
                     $fba_us = isset($product['fba_us']) ? (int)$product['fba_us'] : 0;
-                    $leadtime = isset($product['leadtime']) ? (int)$product['leadtime'] : '';
-                    $instock_leadtime = isset($product['instock_leadtime']) ? (int)$product['instock_leadtime'] : '';
+                    $leadtime = $this->normalizeIntValue($product['leadtime'] ?? null, 0);
+                    $instock_leadtime = $this->normalizeIntValue($product['instock_leadtime'] ?? null, 0);
                     $permanently_available = isset($product['permanently_available']) ? (int)$product['permanently_available'] : 0;
                     $numsold = isset($product['numsold']) ? (int)$product['numsold'] : 0;
                     $numsold_india = isset($product['numsold_india']) ? (int)$product['numsold_india'] : 0;
@@ -245,8 +307,8 @@ class product
                             $location = isset($variation['location']) ? $variation['location'] : '';
                             $fba_in = isset($variation['fba_in']) ? (int)$variation['fba_in'] : 0;
                             $fba_us = isset($variation['fba_us']) ? (int)$variation['fba_us'] : 0;
-                            $leadtime = isset($variation['leadtime']) ? $variation['leadtime'] : '';
-                            $instock_leadtime = isset($variation['instock_leadtime']) ? $variation['instock_leadtime'] : '';
+                            $leadtime = $this->normalizeIntValue($variation['leadtime'] ?? null, 0);
+                            $instock_leadtime = $this->normalizeIntValue($variation['instock_leadtime'] ?? null, 0);
                             $permanently_available = isset($variation['permanently_available']) ? (int)$variation['permanently_available'] : 0;
                             $numsold = isset($variation['numsold']) ? (int)$variation['numsold'] : 0;
                             $numsold_india = isset($variation['numsold_india']) ? (int)$variation['numsold_india'] : 0;
@@ -344,6 +406,8 @@ class product
 
     public function createProduct($data)
     {
+        $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
+        $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
         $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
@@ -400,6 +464,8 @@ class product
     }
     public function updateProduct($id, $data)
     {
+        $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
+        $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
         $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param(

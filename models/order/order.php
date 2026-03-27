@@ -817,6 +817,47 @@ class Order{
         }
         return null;
     }
+
+    /**
+     * Get specific order items by their IDs
+     * @param array $order_ids Array of order IDs to fetch
+     * @return array|null Array of matching order records or null if none found
+     */
+    function getOrdersByIds($order_ids) {
+        if (empty($order_ids) || !is_array($order_ids)) {
+            return null;
+        }
+
+        // Convert all IDs to integers for safety
+        $order_ids = array_map('intval', $order_ids);
+        $order_ids = array_filter($order_ids); // Remove zero values
+
+        if (empty($order_ids)) {
+            return null;
+        }
+
+        // Create placeholders for parameterized query
+        $placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+        $sql = "SELECT * FROM vp_orders WHERE id IN ($placeholders)";
+        
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+
+        // Build type string for bind_param (all integers)
+        $types = str_repeat('i', count($order_ids));
+        $stmt->bind_param($types, ...$order_ids);
+        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return null;
+    }
+
     function getRemarksByOrderNumber($order_number) {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
         $stmt = $this->db->prepare($sql);

@@ -429,6 +429,27 @@ switch ($page) {
             case 'import_api_call':
                 $controller->importApiCall();
                 break;
+            case 'bulk_import':
+                $controller->bulkImportScreen();
+                break;
+            case 'bulk_import_detail':
+                $controller->bulkImportDetail();
+                break;
+            case 'bulk_import_upload':
+                $controller->bulkImportUpload();
+                break;
+            case 'bulk_import_status':
+                $controller->bulkImportStatus();
+                break;
+            case 'bulk_import_process_batch':
+                $controller->bulkImportProcessBatch();
+                break;
+            case 'bulk_import_retry':
+                $controller->bulkImportRetry();
+                break;
+            case 'bulk_import_delete':
+                $controller->bulkImportDelete();
+                break;
             case 'get_product_details_html':
                 $controller->getProductDetailsHTML();
                 break;

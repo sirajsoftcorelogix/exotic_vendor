@@ -26,6 +26,27 @@ class ProductsController {
         if (!empty($_GET['vendor_name']) && !empty($_GET['vendor_id'])) {
             $filters['vendor_name'] = $_GET['vendor_name'];            
         }
+        if (!empty($_GET['item_group'])) {
+            $filters['groupname'] = trim($_GET['item_group']);
+        }
+        if (!empty($_GET['sku'])) {
+            $filters['sku'] = trim($_GET['sku']);
+        }
+        if (isset($_GET['low_stock']) && $_GET['low_stock'] !== '') {
+            $filters['low_stock'] = (int)$_GET['low_stock'] ? 1 : 0;
+        }
+        if (isset($_GET['permanently_available']) && $_GET['permanently_available'] !== '') {
+            $filters['permanently_available'] = (int)$_GET['permanently_available'] ? 1 : 0;
+        }
+        if (!empty($_GET['size'])) {
+            $filters['size'] = trim($_GET['size']);
+        }
+        if (!empty($_GET['color'])) {
+            $filters['color'] = trim($_GET['color']);
+        }
+        if (isset($_GET['local_stock']) && $_GET['local_stock'] !== '') {
+            $filters['local_stock'] = (int)$_GET['local_stock'];
+        }
         $products_data = $productModel->getAllProducts($limit, $offset, $filters);
         // Assuming a method countAllProducts exists to get total count
         $total_records = $productModel->countAllProducts($filters);
@@ -267,8 +288,17 @@ class ProductsController {
     }
     public function importApiCall($manualCodes = null) {
         global $productModel;
+        $internalCall = ($manualCodes !== null);
+        $respond = function(array $payload) use ($internalCall) {
+            if ($internalCall) {
+                return $payload;
+            }
+            header('Content-Type: application/json');
+            echo json_encode($payload);
+            exit;
+        };
         // Accept JSON body or form-data
-        if ($manualCodes !== null) {
+        if ($internalCall) {
             // Called from PHP: $ProductsController->importApiCall([$itemCode])
             $itemCodes = $manualCodes;
         } else {
@@ -277,25 +307,21 @@ class ProductsController {
             $payload = json_decode($raw, true);
             
             if (!$payload || !isset($payload['itemCodes'])) {
-                echo json_encode(['success' => false, 'message' => 'Invalid request.']);
-                exit;
+                return $respond(['success' => false, 'message' => 'Invalid request.']);
             }
             $itemCodes = $payload['itemCodes'];
         }
         if (!is_array($itemCodes)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid itemCodes.']);
-            exit;
+            return $respond(['success' => false, 'message' => 'Invalid itemCodes.']);
         }
         // Filter and normalize
         $codes = array_values(array_unique(array_map('trim', array_filter($itemCodes))));
         $codes = array_filter($codes);
         if (count($codes) === 0) {
-            echo json_encode(['success' => false, 'message' => 'No item codes provided.']);
-            exit;
+            return $respond(['success' => false, 'message' => 'No item codes provided.']);
         }
         if (count($codes) > 50) {
-            echo json_encode(['success' => false, 'message' => 'Maximum 50 SKUs allowed.']);
-            exit;
+            return $respond(['success' => false, 'message' => 'Maximum 50 SKUs allowed.']);
         }
         
         //exit;
@@ -324,14 +350,12 @@ class ProductsController {
         curl_close($ch);
 
         if ($response === false) {
-            echo json_encode(['success' => false, 'message' => 'API request failed: ' . $error]);
-            exit;
+            return $respond(['success' => false, 'message' => 'API request failed: ' . $error]);
         }
 
         $apiResult = json_decode($response, true);
         if (!is_array($apiResult)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid API response format.']);
-            exit;
+            return $respond(['success' => false, 'message' => 'Invalid API response format.']);
         }
         // print_array($apiResult);
         // exit;
@@ -350,8 +374,7 @@ class ProductsController {
         $items = $apiResult; 
         //print_array($items);
         if (count($items) === 0) {
-            echo json_encode(['success' => false, 'message' => 'No items found in API response.']);
-            exit;
+            return $respond(['success' => false, 'message' => 'No items found in API response.']);
         }
         
         foreach ($items as $apiItem) {
@@ -367,7 +390,9 @@ class ProductsController {
             $item['item_code'] = $code;
             $item['sku'] = $apiItem['sku'] ?? '';
             $item['title'] = $apiItem['title'] ?? '';
-            $item['image'] = 'https://cdn.exoticindia.com/images/products/original/'.$apiItem['image'] ?? '';
+            $item['image'] = (!empty($apiItem['image']))
+                ? ('https://cdn.exoticindia.com/images/products/original/' . $apiItem['image'])
+                : '';
             $item['groupname'] = $apiItem['groupname'] ?? '';
             $item['local_stock'] = isset($apiItem['local_stock']) ? (int)$apiItem['local_stock'] : (isset($apiItem['stock']) ? (int)$apiItem['stock'] : 0);
             $item['itemprice'] = isset($apiItem['price']) ? floatval($apiItem['price']) : (isset($apiItem['itemprice']) ? floatval($apiItem['itemprice']) : 0.0);
@@ -489,7 +514,551 @@ class ProductsController {
             usleep(100000); // 100ms
         }
 
-        return json_encode(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
+        return $respond(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
+    }
+
+    public function bulkImportScreen() {
+        is_login();
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $jobs = [];
+        $sql = "SELECT j.*, u.name AS created_by_name
+                FROM product_import_jobs j
+                LEFT JOIN vp_users u ON u.id = j.created_by
+                ORDER BY j.id DESC
+                LIMIT 100";
+        $res = mysqli_query($conn, $sql);
+        if ($res) {
+            while ($row = mysqli_fetch_assoc($res)) {
+                $jobs[] = $row;
+            }
+        }
+
+        renderTemplate('views/products/bulk_import.php', ['jobs' => $jobs], 'Bulk Product Import');
+    }
+
+    public function bulkImportDetail() {
+        is_login();
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $jobId = isset($_GET['job_id']) ? (int)$_GET['job_id'] : 0;
+        if ($jobId <= 0) {
+            header('Location: ?page=products&action=bulk_import');
+            exit;
+        }
+
+        $this->refreshImportJobCounts($jobId);
+
+        $job = null;
+        $stmtJob = $conn->prepare("SELECT j.*, u.name AS created_by_name FROM product_import_jobs j LEFT JOIN vp_users u ON u.id = j.created_by WHERE j.id = ? LIMIT 1");
+        $stmtJob->bind_param('i', $jobId);
+        $stmtJob->execute();
+        $jobRes = $stmtJob->get_result();
+        $job = $jobRes ? $jobRes->fetch_assoc() : null;
+        $stmtJob->close();
+        if (!$job) {
+            header('Location: ?page=products&action=bulk_import');
+            exit;
+        }
+
+        $statusFilter = trim((string)($_GET['status'] ?? 'all'));
+        $allowed = ['all', 'pending', 'processing', 'success', 'failed'];
+        if (!in_array($statusFilter, $allowed, true)) {
+            $statusFilter = 'all';
+        }
+
+        $pageNo = isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
+        if (!in_array($limit, [50, 100, 200, 500], true)) {
+            $limit = 100;
+        }
+        $offset = ($pageNo - 1) * $limit;
+
+        $where = " WHERE job_id = ? ";
+        if ($statusFilter !== 'all') {
+            $where .= " AND status = ? ";
+        }
+
+        $countSql = "SELECT COUNT(*) AS cnt FROM product_import_items $where";
+        $countStmt = $conn->prepare($countSql);
+        if ($statusFilter !== 'all') {
+            $countStmt->bind_param('is', $jobId, $statusFilter);
+        } else {
+            $countStmt->bind_param('i', $jobId);
+        }
+        $countStmt->execute();
+        $countRes = $countStmt->get_result()->fetch_assoc();
+        $countStmt->close();
+        $totalItems = (int)($countRes['cnt'] ?? 0);
+        $totalPages = $limit > 0 ? (int)ceil($totalItems / $limit) : 1;
+
+        $rows = [];
+        $listSql = "SELECT id, item_code, status, attempt_count, error_message, created_at, updated_at, processed_at
+                    FROM product_import_items
+                    $where
+                    ORDER BY id ASC
+                    LIMIT $limit OFFSET $offset";
+        $listStmt = $conn->prepare($listSql);
+        if ($statusFilter !== 'all') {
+            $listStmt->bind_param('is', $jobId, $statusFilter);
+        } else {
+            $listStmt->bind_param('i', $jobId);
+        }
+        $listStmt->execute();
+        $listRes = $listStmt->get_result();
+        while ($listRes && ($row = $listRes->fetch_assoc())) {
+            $rows[] = $row;
+        }
+        $listStmt->close();
+
+        renderTemplate('views/products/bulk_import_detail.php', [
+            'job' => $job,
+            'rows' => $rows,
+            'status_filter' => $statusFilter,
+            'page_no' => $pageNo,
+            'limit' => $limit,
+            'total_items' => $totalItems,
+            'total_pages' => $totalPages
+        ], 'Bulk Import Detail');
+    }
+
+    private function ensureBulkImportTables() {
+        global $conn;
+        $sqlJobs = "CREATE TABLE IF NOT EXISTS product_import_jobs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            file_name VARCHAR(255) NOT NULL,
+            created_by INT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            total_items INT NOT NULL DEFAULT 0,
+            processed_items INT NOT NULL DEFAULT 0,
+            success_items INT NOT NULL DEFAULT 0,
+            failed_items INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        mysqli_query($conn, $sqlJobs);
+
+        $sqlItems = "CREATE TABLE IF NOT EXISTS product_import_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            job_id INT NOT NULL,
+            item_code VARCHAR(100) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            attempt_count INT NOT NULL DEFAULT 0,
+            error_message TEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            processed_at DATETIME NULL,
+            INDEX idx_job_status (job_id, status),
+            UNIQUE KEY uniq_job_item (job_id, item_code),
+            CONSTRAINT fk_product_import_items_job FOREIGN KEY (job_id) REFERENCES product_import_jobs(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        mysqli_query($conn, $sqlItems);
+    }
+
+    private function parseCodesFromCsv(string $filePath): array {
+        $codes = [];
+        $handle = fopen($filePath, 'r');
+        if (!$handle) return $codes;
+        while (($row = fgetcsv($handle)) !== false) {
+            if (!isset($row[0])) continue;
+            $val = trim((string)$row[0]);
+            if ($val !== '') $codes[] = $val;
+        }
+        fclose($handle);
+        return $codes;
+    }
+
+    private function parseCodesFromXlsx(string $filePath): array {
+        $codes = [];
+        if (!class_exists('ZipArchive')) {
+            return $codes;
+        }
+        $zip = new ZipArchive();
+        if ($zip->open($filePath) !== true) {
+            return $codes;
+        }
+
+        $sharedStrings = [];
+        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($sharedXml !== false) {
+            $sx = @simplexml_load_string($sharedXml);
+            if ($sx && isset($sx->si)) {
+                foreach ($sx->si as $si) {
+                    $text = '';
+                    if (isset($si->t)) {
+                        $text = (string)$si->t;
+                    } elseif (isset($si->r)) {
+                        foreach ($si->r as $run) {
+                            $text .= (string)$run->t;
+                        }
+                    }
+                    $sharedStrings[] = $text;
+                }
+            }
+        }
+
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        if ($sheetXml === false) {
+            $zip->close();
+            return $codes;
+        }
+        $sheet = @simplexml_load_string($sheetXml);
+        if ($sheet && isset($sheet->sheetData->row)) {
+            foreach ($sheet->sheetData->row as $row) {
+                $firstCellValue = '';
+                foreach ($row->c as $c) {
+                    $ref = (string)$c['r'];
+                    if ($ref !== '' && strpos($ref, 'A') !== 0) {
+                        continue;
+                    }
+                    $t = (string)$c['t'];
+                    if ($t === 's') {
+                        $idx = (int)$c->v;
+                        $firstCellValue = $sharedStrings[$idx] ?? '';
+                    } elseif ($t === 'inlineStr') {
+                        $firstCellValue = (string)$c->is->t;
+                    } else {
+                        $firstCellValue = isset($c->v) ? (string)$c->v : '';
+                    }
+                    break;
+                }
+                $v = trim($firstCellValue);
+                if ($v !== '') $codes[] = $v;
+            }
+        }
+        $zip->close();
+        return $codes;
+    }
+
+    private function normalizeItemCodes(array $codes): array {
+        $clean = [];
+        foreach ($codes as $code) {
+            $v = trim((string)$code);
+            if ($v === '') continue;
+            $lower = strtolower($v);
+            if (in_array($lower, ['item_code', 'itemcode', 'sku', 'item code'], true)) {
+                continue;
+            }
+            $clean[] = $v;
+        }
+        return array_values(array_unique($clean));
+    }
+
+    public function bulkImportUpload() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        if (!isset($_FILES['item_codes_file']) || $_FILES['item_codes_file']['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['success' => false, 'message' => 'Please upload a valid file.']);
+            exit;
+        }
+
+        $file = $_FILES['item_codes_file'];
+        $maxFileBytes = 10 * 1024 * 1024; // 10 MB
+        if ((int)($file['size'] ?? 0) > $maxFileBytes) {
+            echo json_encode(['success' => false, 'message' => 'File size must be 10 MB or less.']);
+            exit;
+        }
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'xlsx'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Only .csv and .xlsx files are supported.']);
+            exit;
+        }
+
+        $codes = $ext === 'csv' ? $this->parseCodesFromCsv($file['tmp_name']) : $this->parseCodesFromXlsx($file['tmp_name']);
+        $codes = $this->normalizeItemCodes($codes);
+        if (empty($codes)) {
+            echo json_encode(['success' => false, 'message' => 'No item codes found in file.']);
+            exit;
+        }
+
+        $createdBy = (int)($_SESSION['user']['id'] ?? 0);
+        $fileName = basename((string)$file['name']);
+        $stmtJob = $conn->prepare("INSERT INTO product_import_jobs (file_name, created_by, status, total_items) VALUES (?, ?, 'pending', ?)");
+        $total = count($codes);
+        $stmtJob->bind_param('sii', $fileName, $createdBy, $total);
+        $stmtJob->execute();
+        $jobId = (int)$stmtJob->insert_id;
+        $stmtJob->close();
+
+        $stmtItem = $conn->prepare("INSERT IGNORE INTO product_import_items (job_id, item_code, status) VALUES (?, ?, 'pending')");
+        foreach ($codes as $code) {
+            $stmtItem->bind_param('is', $jobId, $code);
+            $stmtItem->execute();
+        }
+        $stmtItem->close();
+
+        echo json_encode(['success' => true, 'job_id' => $jobId, 'total_items' => $total]);
+        exit;
+    }
+
+    private function refreshImportJobCounts(int $jobId): array {
+        global $conn;
+        $sql = "SELECT
+                    COUNT(*) AS total_items,
+                    SUM(CASE WHEN status IN ('success','failed') THEN 1 ELSE 0 END) AS processed_items,
+                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success_items,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_items,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_items
+                FROM product_import_items
+                WHERE job_id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $jobId);
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        $total = (int)($res['total_items'] ?? 0);
+        $processed = (int)($res['processed_items'] ?? 0);
+        $success = (int)($res['success_items'] ?? 0);
+        $failed = (int)($res['failed_items'] ?? 0);
+        $pending = (int)($res['pending_items'] ?? 0);
+        $status = $pending > 0 ? ($processed > 0 ? 'processing' : 'pending') : 'completed';
+
+        $up = $conn->prepare("UPDATE product_import_jobs SET total_items=?, processed_items=?, success_items=?, failed_items=?, status=? WHERE id=?");
+        $up->bind_param('iiiisi', $total, $processed, $success, $failed, $status, $jobId);
+        $up->execute();
+        $up->close();
+
+        return [
+            'total_items' => $total,
+            'processed_items' => $processed,
+            'success_items' => $success,
+            'failed_items' => $failed,
+            'pending_items' => $pending,
+            'status' => $status
+        ];
+    }
+
+    public function bulkImportProcessBatch() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true) ?: $_POST;
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $ids = [];
+        $codes = [];
+        $stmtPick = $conn->prepare("SELECT id, item_code FROM product_import_items WHERE job_id = ? AND status = 'pending' ORDER BY id ASC LIMIT 50");
+        $stmtPick->bind_param('i', $jobId);
+        $stmtPick->execute();
+        $res = $stmtPick->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $ids[] = (int)$row['id'];
+            $codes[] = $row['item_code'];
+        }
+        $stmtPick->close();
+
+        if (empty($ids)) {
+            $stats = $this->refreshImportJobCounts($jobId);
+            echo json_encode(['success' => true, 'message' => 'No pending codes left.', 'batch_size' => 0, 'stats' => $stats]);
+            exit;
+        }
+
+        $idList = implode(',', array_map('intval', $ids));
+        mysqli_query($conn, "UPDATE product_import_items SET status='processing', attempt_count=attempt_count+1, updated_at=NOW() WHERE id IN ($idList)");
+
+        $result = $this->importApiCall($codes);
+        if (!is_array($result) || !isset($result['success'])) {
+            $result = ['success' => false, 'message' => 'Batch import returned invalid response.', 'failed' => $codes];
+        }
+
+        if (!empty($result['success'])) {
+            $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
+            foreach ($ids as $idx => $id) {
+                $code = $codes[$idx];
+                $isFailed = in_array($code, $failedCodes, true);
+                if ($isFailed) {
+                    $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                    $err = 'Failed to import from API response.';
+                    $stmtF->bind_param('si', $err, $id);
+                    $stmtF->execute();
+                    $stmtF->close();
+                } else {
+                    $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
+                    $stmtS->bind_param('i', $id);
+                    $stmtS->execute();
+                    $stmtS->close();
+                }
+            }
+        } else {
+            $error = (string)($result['message'] ?? 'Batch API failed.');
+            foreach ($ids as $id) {
+                $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                $stmtF->bind_param('si', $error, $id);
+                $stmtF->execute();
+                $stmtF->close();
+            }
+        }
+
+        $stats = $this->refreshImportJobCounts($jobId);
+        echo json_encode([
+            'success' => true,
+            'batch_size' => count($ids),
+            'import_result' => $result,
+            'stats' => $stats
+        ]);
+        exit;
+    }
+
+    public function bulkImportStatus() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $jobId = isset($_GET['job_id']) ? (int)$_GET['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $stats = $this->refreshImportJobCounts($jobId);
+
+        $failed = [];
+        $stmt = $conn->prepare("SELECT item_code, error_message FROM product_import_items WHERE job_id = ? AND status='failed' ORDER BY updated_at DESC LIMIT 20");
+        $stmt->bind_param('i', $jobId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $failed[] = $row;
+        }
+        $stmt->close();
+
+        echo json_encode(['success' => true, 'job_id' => $jobId, 'stats' => $stats, 'failed_preview' => $failed]);
+        exit;
+    }
+
+    public function bulkImportRetry() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true) ?: $_POST;
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        $retryType = trim((string)($payload['retry_type'] ?? 'failed')); // failed|pending|all
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+        if (!in_array($retryType, ['failed', 'pending', 'all'], true)) {
+            $retryType = 'failed';
+        }
+
+        $where = "job_id = ?";
+        if ($retryType === 'failed') {
+            $where .= " AND status = 'failed'";
+        } elseif ($retryType === 'pending') {
+            $where .= " AND status = 'pending'";
+        } else {
+            $where .= " AND status IN ('failed','pending')";
+        }
+
+        $sql = "UPDATE product_import_items
+                SET status = 'pending', error_message = NULL, processed_at = NULL, updated_at = NOW()
+                WHERE $where";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $jobId);
+        $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        $stats = $this->refreshImportJobCounts($jobId);
+        echo json_encode(['success' => true, 'message' => 'Retry queue updated.', 'affected' => $affected, 'stats' => $stats]);
+        exit;
+    }
+
+    public function bulkImportDelete() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true) ?: $_POST;
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $stmtCheck = $conn->prepare("SELECT COUNT(*) AS cnt FROM product_import_items WHERE job_id = ? AND status IN ('processing','success','failed')");
+        $stmtCheck->bind_param('i', $jobId);
+        $stmtCheck->execute();
+        $checkRes = $stmtCheck->get_result()->fetch_assoc();
+        $stmtCheck->close();
+        $hasProcessed = (int)($checkRes['cnt'] ?? 0) > 0;
+        if ($hasProcessed) {
+            echo json_encode(['success' => false, 'message' => 'Only fully unprocessed jobs can be deleted.']);
+            exit;
+        }
+
+        mysqli_begin_transaction($conn);
+        try {
+            $stmtItems = $conn->prepare("DELETE FROM product_import_items WHERE job_id = ?");
+            $stmtItems->bind_param('i', $jobId);
+            $stmtItems->execute();
+            $stmtItems->close();
+
+            $stmtJob = $conn->prepare("DELETE FROM product_import_jobs WHERE id = ?");
+            $stmtJob->bind_param('i', $jobId);
+            $stmtJob->execute();
+            $deletedJobs = $stmtJob->affected_rows;
+            $stmtJob->close();
+
+            if ($deletedJobs <= 0) {
+                mysqli_rollback($conn);
+                echo json_encode(['success' => false, 'message' => 'Job not found or already deleted.']);
+                exit;
+            }
+
+            mysqli_commit($conn);
+            echo json_encode(['success' => true, 'message' => 'Unprocessed import job deleted successfully.']);
+            exit;
+        } catch (Throwable $e) {
+            mysqli_rollback($conn);
+            echo json_encode(['success' => false, 'message' => 'Failed to delete import job.', 'debug' => $e->getMessage()]);
+            exit;
+        }
     }
     public function getProductDetailsHTML() {
         is_login();

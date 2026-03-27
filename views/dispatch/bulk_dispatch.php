@@ -741,6 +741,16 @@
                             if (summary) summary.insertAdjacentElement('beforebegin', itemRow);
                         }
                         added++;
+                        
+                        // Update order_ids attribute on the current box with all item IDs
+                        if (currentBox && itemId) {
+                            const existingOrderIds = currentBox.getAttribute('order_ids') || '';
+                            const orderIdsArray = existingOrderIds ? existingOrderIds.split(',').filter(id => id) : [];
+                            if (!orderIdsArray.includes(itemId)) {
+                                orderIdsArray.push(itemId);
+                            }
+                            currentBox.setAttribute('order_ids', orderIdsArray.join(','));
+                        }
                     }
                 });
                 if (added > 0) {
@@ -940,6 +950,21 @@
             if (itemRow) {
                 // Get the box element to update totals
                 const boxElement = itemRow.closest('[data-order-number]');
+                
+                // Remove item ID from order_ids attribute
+                if (boxElement) {
+                    const itemId = itemRow.getAttribute('data-item-id');
+                    if (itemId) {
+                        const existingOrderIds = boxElement.getAttribute('order_ids') || '';
+                        const orderIdsArray = existingOrderIds.split(',').filter(id => id && id !== itemId);
+                        if (orderIdsArray.length > 0) {
+                            boxElement.setAttribute('order_ids', orderIdsArray.join(','));
+                        } else {
+                            boxElement.removeAttribute('order_ids');
+                        }
+                    }
+                }
+                
                 itemRow.remove();
                 // Update totals after removing the item
                 if (boxElement) {
@@ -980,6 +1005,19 @@
                     option.className = 'px-4 py-2 cursor-pointer hover:bg-orange-100 text-sm';
                     option.textContent = 'Box ' + (index + 1);
                     option.addEventListener('click', function() {
+                        const itemId = itemRow.getAttribute('data-item-id');
+                        
+                        // Remove item ID from source box order_ids
+                        if (itemId && currentBoxElement) {
+                            const sourceOrderIds = currentBoxElement.getAttribute('order_ids') || '';
+                            const sourceIdsArray = sourceOrderIds.split(',').filter(id => id && id !== itemId);
+                            if (sourceIdsArray.length > 0) {
+                                currentBoxElement.setAttribute('order_ids', sourceIdsArray.join(','));
+                            } else {
+                                currentBoxElement.removeAttribute('order_ids');
+                            }
+                        }
+                        
                         const targetItemsContainer = box.querySelector('.items-container');
                         if (targetItemsContainer) {
                             targetItemsContainer.appendChild(itemRow);
@@ -987,6 +1025,17 @@
                             const summary = box.querySelector('.px-4.py-3');
                             if (summary) summary.insertAdjacentElement('beforebegin', itemRow);
                         }
+                        
+                        // Add item ID to destination box order_ids
+                        if (itemId && box) {
+                            const targetOrderIds = box.getAttribute('order_ids') || '';
+                            const targetIdsArray = targetOrderIds ? targetOrderIds.split(',').filter(id => id) : [];
+                            if (!targetIdsArray.includes(itemId)) {
+                                targetIdsArray.push(itemId);
+                            }
+                            box.setAttribute('order_ids', targetIdsArray.join(','));
+                        }
+                        
                         // Update totals for source and destination boxes
                         updateBoxTotals(currentBoxElement);
                         updateBoxTotals(box);
@@ -1039,7 +1088,7 @@
                 const customer_id = orderBox.getAttribute('data-customer-id');
                 const customer_name = orderBox.getAttribute('data-customer-name');
 
-                // Collect all boxes for this order
+                // Collect all boxes for this order and track order_ids
                 const boxes = [];
                 const boxElements = orderSection.querySelectorAll('[data-order-number]');
                 
@@ -1086,10 +1135,22 @@
                 });
 
                 if (boxes.length > 0) {
+                    // Collect order_ids from all boxes in this order
+                    const allOrderIds = new Set();
+                    boxElements.forEach(boxElement => {
+                        const order_ids_attr = boxElement.getAttribute('order_ids') || '';
+                        if (order_ids_attr) {
+                            order_ids_attr.split(',').filter(id => id).forEach(id => allOrderIds.add(id));
+                        }
+                    });
+                    
+                    const order_ids = Array.from(allOrderIds);
+                    
                     orders.push({
                         order_number: order_number,
                         customer_id: customer_id,
                         customer_name: customer_name,
+                        order_ids: order_ids,  // Include order IDs from all boxes
                         boxes: boxes
                     });
                 }
