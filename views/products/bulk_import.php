@@ -84,7 +84,7 @@
       <textarea id="popupDetails" class="mt-3 hidden w-full border rounded p-2 text-xs text-gray-700 h-28" readonly></textarea>
       <div id="popupActions" class="mt-3 hidden flex gap-2 justify-end">
         <button id="popupCopyBtn" type="button" class="px-3 py-1 text-xs rounded border hover:bg-gray-50">Copy</button>
-        <button id="popupOkBtn" type="button" class="px-3 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">OK</button>
+        <button id="popupOkBtn" type="button" class="px-3 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">Close</button>
       </div>
     </div>
   </div>
@@ -105,6 +105,7 @@
 
     function setDisabled(disabled) {
       document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
+        if (el.closest('#blockingOverlay')) return;
         if (el.tagName === 'A') {
           el.style.pointerEvents = disabled ? 'none' : '';
           el.style.opacity = disabled ? '0.6' : '';
@@ -145,10 +146,13 @@
 
     function extractServerError(err, fallback) {
       if (!err) return fallback || 'Something went wrong.';
-      if (err.message && /Unexpected token/i.test(err.message) && err.rawText) {
+      if (err.rawText && String(err.rawText).trim() !== '') {
+        return String(err.rawText);
+      }
+      if (err.message && /Unexpected token|non-JSON/i.test(err.message) && err.rawText) {
         return `${fallback || 'Invalid JSON response'}\n\n${err.rawText}`;
       }
-      return err.message || fallback || 'Something went wrong.';
+      return [err.message || fallback || 'Something went wrong.', err.stack || ''].filter(Boolean).join('\n');
     }
 
     async function fetchJson(url, options) {
@@ -157,18 +161,38 @@
       try {
         return JSON.parse(rawText);
       } catch (e) {
-        const err = new Error('Server returned non-JSON response.');
+        const err = new Error(`Server returned non-JSON response. HTTP ${res.status}`);
         err.rawText = rawText;
+        err.httpStatus = res.status;
         throw err;
       }
     }
 
-    popupCopyBtn.addEventListener('click', async function() {
+    function copyTextFallback(text) {
+      popupDetails.classList.remove('hidden');
+      popupDetails.value = text || '';
+      popupDetails.focus();
+      popupDetails.select();
       try {
-        await navigator.clipboard.writeText(popupDetails.value || popupMessage.textContent || '');
-        popupMessage.textContent = 'Copied to clipboard.';
+        return document.execCommand('copy');
       } catch (e) {
-        popupMessage.textContent = 'Copy failed. Please select and copy manually.';
+        return false;
+      }
+    }
+
+    popupCopyBtn.addEventListener('click', async function() {
+      const textToCopy = popupDetails.value || popupMessage.textContent || '';
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(textToCopy);
+          popupMessage.textContent = 'Copied to clipboard.';
+          return;
+        }
+        const ok = copyTextFallback(textToCopy);
+        popupMessage.textContent = ok ? 'Copied to clipboard.' : 'Copy failed. Please select text and copy manually.';
+      } catch (e) {
+        const ok = copyTextFallback(textToCopy);
+        popupMessage.textContent = ok ? 'Copied to clipboard.' : 'Copy failed. Please select text and copy manually.';
       }
     });
     popupOkBtn.addEventListener('click', function() {
