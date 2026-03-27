@@ -745,6 +745,11 @@ class ProductsController {
         }
 
         $file = $_FILES['item_codes_file'];
+        $maxFileBytes = 10 * 1024 * 1024; // 10 MB
+        if ((int)($file['size'] ?? 0) > $maxFileBytes) {
+            echo json_encode(['success' => false, 'message' => 'File size must be 10 MB or less.']);
+            exit;
+        }
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, ['csv', 'xlsx'], true)) {
             echo json_encode(['success' => false, 'message' => 'Only .csv and .xlsx files are supported.']);
@@ -978,6 +983,61 @@ class ProductsController {
         $stats = $this->refreshImportJobCounts($jobId);
         echo json_encode(['success' => true, 'message' => 'Retry queue updated.', 'affected' => $affected, 'stats' => $stats]);
         exit;
+    }
+
+    public function bulkImportDelete() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true) ?: $_POST;
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $stmtCheck = $conn->prepare("SELECT COUNT(*) AS cnt FROM product_import_items WHERE job_id = ? AND status IN ('processing','success','failed')");
+        $stmtCheck->bind_param('i', $jobId);
+        $stmtCheck->execute();
+        $checkRes = $stmtCheck->get_result()->fetch_assoc();
+        $stmtCheck->close();
+        $hasProcessed = (int)($checkRes['cnt'] ?? 0) > 0;
+        if ($hasProcessed) {
+            echo json_encode(['success' => false, 'message' => 'Only fully unprocessed jobs can be deleted.']);
+            exit;
+        }
+
+        mysqli_begin_transaction($conn);
+        try {
+            $stmtItems = $conn->prepare("DELETE FROM product_import_items WHERE job_id = ?");
+            $stmtItems->bind_param('i', $jobId);
+            $stmtItems->execute();
+            $stmtItems->close();
+
+            $stmtJob = $conn->prepare("DELETE FROM product_import_jobs WHERE id = ?");
+            $stmtJob->bind_param('i', $jobId);
+            $stmtJob->execute();
+            $deletedJobs = $stmtJob->affected_rows;
+            $stmtJob->close();
+
+            if ($deletedJobs <= 0) {
+                mysqli_rollback($conn);
+                echo json_encode(['success' => false, 'message' => 'Job not found or already deleted.']);
+                exit;
+            }
+
+            mysqli_commit($conn);
+            echo json_encode(['success' => true, 'message' => 'Unprocessed import job deleted successfully.']);
+            exit;
+        } catch (Throwable $e) {
+            mysqli_rollback($conn);
+            echo json_encode(['success' => false, 'message' => 'Failed to delete import job.', 'debug' => $e->getMessage()]);
+            exit;
+        }
     }
     public function getProductDetailsHTML() {
         is_login();

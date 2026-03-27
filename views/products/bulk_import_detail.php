@@ -118,6 +118,11 @@
     <div class="w-full max-w-md rounded-xl bg-white shadow-2xl border p-5">
       <div id="overlayTitle" class="font-semibold text-gray-800 mb-1">Please wait…</div>
       <div id="overlayMessage" class="text-sm text-gray-600">Processing your request.</div>
+      <textarea id="overlayDetails" class="mt-3 hidden w-full border rounded p-2 text-xs text-gray-700 h-28" readonly></textarea>
+      <div id="overlayActions" class="mt-3 hidden flex gap-2 justify-end">
+        <button id="overlayCopyBtn" type="button" class="px-3 py-1 text-xs rounded border hover:bg-gray-50">Copy</button>
+        <button id="overlayOkBtn" type="button" class="px-3 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">OK</button>
+      </div>
     </div>
   </div>
 </div>
@@ -126,6 +131,12 @@
   (function() {
     const jobId = <?= $jobId ?>;
     const overlay = document.getElementById('blockingOverlay');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const overlayMessage = document.getElementById('overlayMessage');
+    const overlayDetails = document.getElementById('overlayDetails');
+    const overlayActions = document.getElementById('overlayActions');
+    const overlayCopyBtn = document.getElementById('overlayCopyBtn');
+    const overlayOkBtn = document.getElementById('overlayOkBtn');
 
     function disableUi(disabled) {
       document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
@@ -137,16 +148,66 @@
         }
       });
     }
-    function showOverlay(title, message) {
-      document.getElementById('overlayTitle').textContent = title || 'Please wait…';
-      document.getElementById('overlayMessage').textContent = message || 'Processing your request.';
+    function showProgress(title, message) {
+      overlayTitle.textContent = title || 'Please wait…';
+      overlayMessage.textContent = message || 'Processing your request.';
+      overlayDetails.value = '';
+      overlayDetails.classList.add('hidden');
+      overlayActions.classList.add('hidden');
       overlay.classList.remove('hidden');
       disableUi(true);
     }
+
     function hideOverlay() {
       overlay.classList.add('hidden');
       disableUi(false);
     }
+
+    function showResult(type, title, message, details) {
+      overlayTitle.textContent = title || (type === 'error' ? 'Error' : 'Success');
+      overlayMessage.textContent = message || '';
+      overlayDetails.value = details || '';
+      if (details) {
+        overlayDetails.classList.remove('hidden');
+      } else {
+        overlayDetails.classList.add('hidden');
+      }
+      overlayActions.classList.remove('hidden');
+      overlay.classList.remove('hidden');
+      disableUi(true);
+    }
+
+    function extractServerError(err, fallback) {
+      if (!err) return fallback || 'Something went wrong.';
+      if (err.message && /Unexpected token/i.test(err.message) && err.rawText) {
+        return `${fallback || 'Invalid JSON response'}\n\n${err.rawText}`;
+      }
+      return err.message || fallback || 'Something went wrong.';
+    }
+
+    async function fetchJson(url, options) {
+      const res = await fetch(url, options || {});
+      const rawText = await res.text();
+      try {
+        return JSON.parse(rawText);
+      } catch (e) {
+        const err = new Error('Server returned non-JSON response.');
+        err.rawText = rawText;
+        throw err;
+      }
+    }
+
+    overlayCopyBtn.addEventListener('click', async function() {
+      try {
+        await navigator.clipboard.writeText(overlayDetails.value || overlayMessage.textContent || '');
+        overlayMessage.textContent = 'Copied to clipboard.';
+      } catch (e) {
+        overlayMessage.textContent = 'Copy failed. Please select and copy manually.';
+      }
+    });
+    overlayOkBtn.addEventListener('click', function() {
+      hideOverlay();
+    });
 
     function renderStats(stats) {
       document.getElementById('totalItems').textContent = stats.total_items ?? 0;
@@ -161,63 +222,80 @@
     }
 
     async function fetchStatus() {
-      const res = await fetch(`?page=products&action=bulk_import_status&job_id=${jobId}`);
-      const data = await res.json();
+      const data = await fetchJson(`?page=products&action=bulk_import_status&job_id=${jobId}`);
       if (!data.success) throw new Error(data.message || 'Failed to fetch status');
       renderStats(data.stats || {});
       return data;
     }
 
     async function retry(type) {
-      showOverlay('Updating retry queue…', 'Marking selected records for retry.');
+      showProgress('Updating retry queue…', 'Marking selected records for retry.');
       try {
-        const res = await fetch('?page=products&action=bulk_import_retry', {
+        const data = await fetchJson('?page=products&action=bulk_import_retry', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({ job_id: jobId, retry_type: type })
         });
-        const data = await res.json();
-        if (!data.success) throw new Error(data.message || 'Retry failed');
+        if (!data.success) {
+          const detailText = [data.message || 'Retry failed', data.debug || ''].filter(Boolean).join('\n');
+          showResult('error', 'Retry Failed', data.message || 'Retry failed', detailText);
+          return;
+        }
+        showResult('success', 'Retry Updated', data.message || 'Retry queue updated.');
+        await new Promise(r => setTimeout(r, 350));
         await fetchStatus();
         window.location.reload();
-      } finally {
-        hideOverlay();
+      } catch (e) {
+        const details = extractServerError(e, 'Retry failed');
+        showResult('error', 'Retry Failed', 'Could not process server response.', details);
       }
     }
 
     async function processLoop() {
-      showOverlay('Processing import…', 'Importing item codes in batches of 50.');
+      showProgress('Processing import…', 'Importing item codes in batches of 50.');
       try {
         while (true) {
-          const res = await fetch('?page=products&action=bulk_import_process_batch', {
+          const data = await fetchJson('?page=products&action=bulk_import_process_batch', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ job_id: jobId })
           });
-          const data = await res.json();
-          if (!data.success) throw new Error(data.message || 'Batch failed');
+          if (!data.success) {
+            const detailText = [data.message || 'Batch failed', data.debug || ''].filter(Boolean).join('\n');
+            showResult('error', 'Processing Failed', data.message || 'Batch failed', detailText);
+            return;
+          }
           const stats = data.stats || {};
           renderStats(stats);
           if ((stats.pending_items ?? 0) <= 0) break;
           await new Promise(r => setTimeout(r, 350));
         }
+        showResult('success', 'Processing Complete', 'All pending item codes are processed.');
+        await new Promise(r => setTimeout(r, 350));
         window.location.reload();
-      } finally {
-        hideOverlay();
+      } catch (e) {
+        const details = extractServerError(e, 'Processing failed');
+        showResult('error', 'Processing Failed', 'Could not process server response.', details);
       }
     }
 
     document.getElementById('refreshStatusBtn').addEventListener('click', function() {
-      fetchStatus().catch(e => alert(e.message || 'Status fetch failed'));
+      showProgress('Refreshing status…', 'Fetching latest job summary.');
+      fetchStatus()
+        .then(() => showResult('success', 'Status Refreshed', 'Latest status loaded successfully.'))
+        .catch(e => {
+          const details = extractServerError(e, 'Status fetch failed');
+          showResult('error', 'Status Fetch Failed', 'Could not process server response.', details);
+        });
     });
     document.getElementById('startProcessBtn').addEventListener('click', function() {
-      processLoop().catch(e => alert(e.message || 'Processing failed'));
+      processLoop();
     });
     document.getElementById('retryFailedBtn').addEventListener('click', function() {
-      retry('failed').catch(e => alert(e.message || 'Retry failed'));
+      retry('failed');
     });
     document.getElementById('retryPendingBtn').addEventListener('click', function() {
-      retry('pending').catch(e => alert(e.message || 'Retry failed'));
+      retry('pending');
     });
   })();
 </script>

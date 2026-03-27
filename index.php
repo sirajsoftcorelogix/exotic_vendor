@@ -447,6 +447,9 @@ switch ($page) {
             case 'bulk_import_retry':
                 $controller->bulkImportRetry();
                 break;
+            case 'bulk_import_delete':
+                $controller->bulkImportDelete();
+                break;
             case 'get_product_details_html':
                 $controller->getProductDetailsHTML();
                 break;
