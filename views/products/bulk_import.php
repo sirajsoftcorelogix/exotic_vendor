@@ -15,7 +15,7 @@
         <input type="file" name="item_codes_file" id="item_codes_file" accept=".csv,.xlsx" class="block w-full text-sm max-w-lg" required>
         <button type="submit" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm font-semibold">Upload & Create Job</button>
       </div>
-      <div class="text-xs text-gray-500 mt-2">Expected format: first column contains item codes.</div>
+      <div class="text-xs text-gray-500 mt-2">Expected format: first column contains item codes. Max file size: 10 MB.</div>
     </form>
 
     <div class="overflow-x-auto rounded-lg border">
@@ -59,6 +59,12 @@
                 <td class="px-3 py-2"><?= htmlspecialchars($j['updated_at'] ?? '') ?></td>
                 <td class="px-3 py-2">
                   <a href="?page=products&action=bulk_import_detail&job_id=<?= (int)$j['id'] ?>" class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">View Details</a>
+                  <?php
+                    $canDelete = ((int)$j['success_items'] === 0) && ((int)$j['failed_items'] === 0) && (($j['status'] ?? 'pending') !== 'processing');
+                  ?>
+                  <?php if ($canDelete): ?>
+                    <button type="button" class="js-delete-job ml-1 px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" data-job-id="<?= (int)$j['id'] ?>">Delete</button>
+                  <?php endif; ?>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -73,17 +79,29 @@
   <div class="absolute inset-0 bg-black/40"></div>
   <div class="absolute inset-0 flex items-center justify-center p-4">
     <div class="w-full max-w-md rounded-xl bg-white shadow-2xl border p-5">
-      <div class="font-semibold text-gray-800 mb-1">Uploading file…</div>
-      <div class="text-sm text-gray-600">Please wait, do not refresh the page.</div>
+      <div id="popupTitle" class="font-semibold text-gray-800 mb-1">Uploading file…</div>
+      <div id="popupMessage" class="text-sm text-gray-600">Please wait, do not refresh the page.</div>
+      <textarea id="popupDetails" class="mt-3 hidden w-full border rounded p-2 text-xs text-gray-700 h-28" readonly></textarea>
+      <div id="popupActions" class="mt-3 hidden flex gap-2 justify-end">
+        <button id="popupCopyBtn" type="button" class="px-3 py-1 text-xs rounded border hover:bg-gray-50">Copy</button>
+        <button id="popupOkBtn" type="button" class="px-3 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">OK</button>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
   (function() {
+    const MAX_FILE_BYTES = 10 * 1024 * 1024;
     const form = document.getElementById('bulkImportForm');
     const fileInput = document.getElementById('item_codes_file');
     const overlay = document.getElementById('blockingOverlay');
+    const popupTitle = document.getElementById('popupTitle');
+    const popupMessage = document.getElementById('popupMessage');
+    const popupDetails = document.getElementById('popupDetails');
+    const popupActions = document.getElementById('popupActions');
+    const popupCopyBtn = document.getElementById('popupCopyBtn');
+    const popupOkBtn = document.getElementById('popupOkBtn');
 
     function setDisabled(disabled) {
       document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
@@ -96,36 +114,120 @@
       });
     }
 
-    function showOverlay() {
+    function showProgress(title, message) {
+      popupTitle.textContent = title || 'Please wait…';
+      popupMessage.textContent = message || 'Processing your request.';
+      popupDetails.value = '';
+      popupDetails.classList.add('hidden');
+      popupActions.classList.add('hidden');
       overlay.classList.remove('hidden');
       setDisabled(true);
     }
-    function hideOverlay() {
+
+    function hidePopup() {
       overlay.classList.add('hidden');
       setDisabled(false);
     }
 
+    function showResult(type, title, message, details) {
+      popupTitle.textContent = title || (type === 'error' ? 'Error' : 'Success');
+      popupMessage.textContent = message || '';
+      popupDetails.value = details || '';
+      if (details) {
+        popupDetails.classList.remove('hidden');
+      } else {
+        popupDetails.classList.add('hidden');
+      }
+      popupActions.classList.remove('hidden');
+      overlay.classList.remove('hidden');
+      setDisabled(true);
+    }
+
+    function extractServerError(err, fallback) {
+      if (!err) return fallback || 'Something went wrong.';
+      if (err.message && /Unexpected token/i.test(err.message) && err.rawText) {
+        return `${fallback || 'Invalid JSON response'}\n\n${err.rawText}`;
+      }
+      return err.message || fallback || 'Something went wrong.';
+    }
+
+    async function fetchJson(url, options) {
+      const res = await fetch(url, options || {});
+      const rawText = await res.text();
+      try {
+        return JSON.parse(rawText);
+      } catch (e) {
+        const err = new Error('Server returned non-JSON response.');
+        err.rawText = rawText;
+        throw err;
+      }
+    }
+
+    popupCopyBtn.addEventListener('click', async function() {
+      try {
+        await navigator.clipboard.writeText(popupDetails.value || popupMessage.textContent || '');
+        popupMessage.textContent = 'Copied to clipboard.';
+      } catch (e) {
+        popupMessage.textContent = 'Copy failed. Please select and copy manually.';
+      }
+    });
+    popupOkBtn.addEventListener('click', function() {
+      hidePopup();
+    });
+
     form.addEventListener('submit', async function(e) {
       e.preventDefault();
       if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-        alert('Please select a file.');
+        showResult('error', 'Validation Error', 'Please select a file.');
         return;
       }
-      showOverlay();
+      if ((fileInput.files[0].size || 0) > MAX_FILE_BYTES) {
+        showResult('error', 'Validation Error', 'File size must be 10 MB or less.');
+        return;
+      }
+      showProgress('Uploading file…', 'Uploading and validating your file.');
       const fd = new FormData(form);
       try {
-        const res = await fetch('?page=products&action=bulk_import_upload', { method: 'POST', body: fd });
-        const data = await res.json();
+        const data = await fetchJson('?page=products&action=bulk_import_upload', { method: 'POST', body: fd });
         if (!data.success) {
-          alert(data.message || 'Upload failed');
+          const detailText = [data.message || 'Upload failed', data.debug || ''].filter(Boolean).join('\n');
+          showResult('error', 'Upload Failed', data.message || 'Upload failed', detailText);
           return;
         }
+        showResult('success', 'Upload Successful', `Job #${data.job_id} created successfully.`);
+        await new Promise(r => setTimeout(r, 350));
         window.location.href = `?page=products&action=bulk_import_detail&job_id=${data.job_id}`;
       } catch (e2) {
-        alert(e2.message || 'Upload failed');
-      } finally {
-        hideOverlay();
+        const details = extractServerError(e2, 'Upload failed');
+        showResult('error', 'Upload Failed', 'Could not process server response.', details);
       }
+    });
+
+    document.querySelectorAll('.js-delete-job').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const jobId = parseInt(btn.getAttribute('data-job-id') || '0', 10);
+        if (!jobId) return;
+        if (!confirm('Delete this unprocessed import job? This will remove uploaded codes for this file.')) return;
+        showProgress('Deleting job…', 'Removing unprocessed import job.');
+        try {
+          const data = await fetchJson('?page=products&action=bulk_import_delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: jobId })
+          });
+          if (!data.success) {
+            const detailText = [data.message || 'Delete failed', data.debug || ''].filter(Boolean).join('\n');
+            showResult('error', 'Delete Failed', data.message || 'Delete failed', detailText);
+            return;
+          }
+          showResult('success', 'Delete Successful', data.message || 'Job deleted successfully.');
+          await new Promise(r => setTimeout(r, 350));
+          window.location.reload();
+        } catch (e3) {
+          const details = extractServerError(e3, 'Delete failed');
+          showResult('error', 'Delete Failed', 'Could not process server response.', details);
+        }
+      });
     });
   })();
 </script>
