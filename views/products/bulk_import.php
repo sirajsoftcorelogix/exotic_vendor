@@ -9,7 +9,7 @@
       Level 1: Upload Excel/CSV and track all import jobs. Click any row to view item-code level details.
     </p>
 
-    <form id="bulkImportForm" class="border rounded-lg p-4 bg-gray-50 mb-6">
+    <form id="bulkImportForm" class="border rounded-lg p-4 bg-gray-50 mb-6" enctype="multipart/form-data" method="post">
       <label class="block text-sm font-medium text-gray-700 mb-2">Upload CSV / XLSX</label>
       <div class="flex flex-wrap gap-3 items-center">
         <input type="file" name="item_codes_file" id="item_codes_file" accept=".csv,.xlsx" class="block w-full text-sm max-w-lg" required>

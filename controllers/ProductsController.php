@@ -749,6 +749,27 @@ class ProductsController {
         return array_values(array_unique($clean));
     }
 
+    private function bulkImportUploadErrorMessage(int $code): string {
+        switch ($code) {
+            case UPLOAD_ERR_INI_SIZE:
+                return 'File exceeds the server upload limit (upload_max_filesize in php.ini). Ask your host to raise it, or split the file.';
+            case UPLOAD_ERR_FORM_SIZE:
+                return 'File exceeds the maximum size allowed by the form.';
+            case UPLOAD_ERR_PARTIAL:
+                return 'The file was only partially uploaded. Check your connection and try again.';
+            case UPLOAD_ERR_NO_FILE:
+                return 'No file was received. Ensure you chose a file, keep the tab open during upload, and that the form is not blocked by a browser extension.';
+            case UPLOAD_ERR_NO_TMP_DIR:
+                return 'Server misconfiguration: missing temporary folder for uploads (check upload_tmp_dir in php.ini).';
+            case UPLOAD_ERR_CANT_WRITE:
+                return 'Server could not write the uploaded file to disk.';
+            case UPLOAD_ERR_EXTENSION:
+                return 'A PHP extension stopped the file upload.';
+            default:
+                return 'Upload failed (PHP error code ' . $code . ').';
+        }
+    }
+
     public function bulkImportUpload() {
         is_login();
         if (ob_get_level() === 0) { ob_start(); }
@@ -763,8 +784,23 @@ class ProductsController {
         global $conn;
         $this->ensureBulkImportTables();
 
-        if (!isset($_FILES['item_codes_file']) || $_FILES['item_codes_file']['error'] !== UPLOAD_ERR_OK) {
-            echo json_encode(['success' => false, 'message' => 'Please upload a valid file.']);
+        if (!isset($_FILES['item_codes_file'])) {
+            $iniUpload = ini_get('upload_max_filesize') ?: 'unknown';
+            $iniPost = ini_get('post_max_size') ?: 'unknown';
+            echo json_encode([
+                'success' => false,
+                'message' => 'No file upload was received. Confirm the request is POST with multipart data and the field name is item_codes_file.',
+                'debug' => 'PHP limits: upload_max_filesize=' . $iniUpload . ', post_max_size=' . $iniPost,
+            ]);
+            exit;
+        }
+        $uploadErr = (int)($_FILES['item_codes_file']['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($uploadErr !== UPLOAD_ERR_OK) {
+            echo json_encode([
+                'success' => false,
+                'message' => $this->bulkImportUploadErrorMessage($uploadErr),
+                'upload_error' => $uploadErr,
+            ]);
             exit;
         }
 
