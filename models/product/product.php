@@ -28,6 +28,39 @@ class product
         }
         return (int)$default;
     }
+
+    /**
+     * vp_products may still use utf8mb3 while the app connects as utf8mb4.
+     * MySQL 8 then rejects some prepared-statement binds with:
+     * "Conversion from collation utf8mb3_general_ci into utf8mb4_general_ci impossible".
+     * Temporarily use the legacy client charset for this statement batch.
+     *
+     * Long-term fix: ALTER TABLE vp_products CONVERT TO CHARACTER SET utf8mb4 ...
+     */
+    private function runWithVpProductsClientCharset(callable $fn)
+    {
+        if (!($this->db instanceof mysqli)) {
+            return $fn();
+        }
+        $prev = (string)$this->db->character_set_name();
+        $setLegacy = static function (mysqli $db): void {
+            if (@$db->set_charset('utf8mb3')) {
+                return;
+            }
+            @$db->set_charset('utf8');
+        };
+        $setLegacy($this->db);
+        try {
+            return $fn();
+        } finally {
+            if ($prev !== '') {
+                @$this->db->set_charset($prev);
+            } else {
+                @$this->db->set_charset('utf8mb4');
+            }
+        }
+    }
+
     public function __construct($db)
     {
         $this->db = $db;
@@ -234,6 +267,7 @@ class product
     }
     public function updateProductFromApi($productData)
     {
+        return $this->runWithVpProductsClientCharset(function () use ($productData) {
         $updatedCount = 0;
         // print_array($productData);
         // exit;
@@ -399,6 +433,7 @@ class product
             }
         }
         return ['success' => true, 'updated_count' => $updatedCount, 'message' => 'Products updated successfully.'];
+        });
     }
     public function findByItemCodeSizeColor($code, $size, $color)
     {
@@ -438,111 +473,117 @@ class product
     {
         $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
         $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
-        $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
+        return $this->runWithVpProductsClientCharset(function () use ($data) {
+            $sql = "INSERT INTO vp_products (item_code, sku, size, color, title, image, local_stock, itemprice, finalprice,  groupname, material, cost_price, gst, hsn, description, asin, upc, location, fba_in, fba_us, leadtime, instock_leadtime, permanently_available, numsold, numsold_india, numsold_global, lastsold, vendor, shippingfee, sourcingfee, price, price_india, price_india_suggested, mrp_india, permanent_discount, discount_global, discount_india, product_weight, product_weight_unit, prod_height, prod_width, prod_length, length_unit, created_on, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param(
-            'ssssssdddsssisssssssssssssisddddddddddsiiisss',
-            $data['item_code'],
-            $data['sku'],
-            $data['size'],
-            $data['color'],
-            $data['title'],
-            $data['image'],
-            $data['local_stock'],
-            $data['itemprice'],
-            $data['finalprice'],
-            $data['groupname'],
-            $data['material'],
-            $data['cost_price'],
-            $data['gst'],
-            $data['hsn'],
-            $data['description'],
-            $data['asin'],
-            $data['upc'],
-            $data['location'],
-            $data['fba_in'],
-            $data['fba_us'],
-            $data['leadtime'],
-            $data['instock_leadtime'],
-            $data['permanently_available'],
-            $data['numsold'],
-            $data['numsold_india'],
-            $data['numsold_global'],
-            $data['lastsold'],
-            $data['vendor'],
-            $data['shippingfee'],
-            $data['sourcingfee'],
-            $data['price'],
-            $data['price_india'],
-            $data['price_india_suggested'],
-            $data['mrp_india'],
-            $data['permanent_discount'],
-            $data['discount_global'],
-            $data['discount_india'],
-            $data['product_weight'],
-            $data['product_weight_unit'],
-            $data['prod_height'],
-            $data['prod_width'],
-            $data['prod_length'],
-            $data['length_unit'],
-            $data['created_at'],
-            $data['updated_at']
-        );
-        if ($stmt->execute()) return $this->db->insert_id;
-        return false;
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param(
+                'ssssssdddsssisssssssssssssisddddddddddsiiisss',
+                $data['item_code'],
+                $data['sku'],
+                $data['size'],
+                $data['color'],
+                $data['title'],
+                $data['image'],
+                $data['local_stock'],
+                $data['itemprice'],
+                $data['finalprice'],
+                $data['groupname'],
+                $data['material'],
+                $data['cost_price'],
+                $data['gst'],
+                $data['hsn'],
+                $data['description'],
+                $data['asin'],
+                $data['upc'],
+                $data['location'],
+                $data['fba_in'],
+                $data['fba_us'],
+                $data['leadtime'],
+                $data['instock_leadtime'],
+                $data['permanently_available'],
+                $data['numsold'],
+                $data['numsold_india'],
+                $data['numsold_global'],
+                $data['lastsold'],
+                $data['vendor'],
+                $data['shippingfee'],
+                $data['sourcingfee'],
+                $data['price'],
+                $data['price_india'],
+                $data['price_india_suggested'],
+                $data['mrp_india'],
+                $data['permanent_discount'],
+                $data['discount_global'],
+                $data['discount_india'],
+                $data['product_weight'],
+                $data['product_weight_unit'],
+                $data['prod_height'],
+                $data['prod_width'],
+                $data['prod_length'],
+                $data['length_unit'],
+                $data['created_at'],
+                $data['updated_at']
+            );
+            if ($stmt->execute()) {
+                return $this->db->insert_id;
+            }
+            return false;
+        });
     }
     public function updateProduct($id, $data)
     {
         $data['leadtime'] = $this->normalizeIntValue($data['leadtime'] ?? null, 0);
         $data['instock_leadtime'] = $this->normalizeIntValue($data['instock_leadtime'] ?? null, 0);
-        $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param(
-            'ssiddssddsssssiissiiiiisddddddddddsdddssi',
-            $data['title'],
-            $data['image'],
-            $data['local_stock'],
-            $data['itemprice'],
-            $data['finalprice'],
-            $data['groupname'],
-            $data['material'],
-            $data['cost_price'],
-            $data['gst'],
-            $data['hsn'],
-            $data['description'],
-            $data['asin'],
-            $data['upc'],
-            $data['location'],
-            $data['fba_in'],
-            $data['fba_us'],
-            $data['leadtime'],
-            $data['instock_leadtime'],
-            $data['permanently_available'],
-            $data['numsold'],
-            $data['numsold_india'],
-            $data['numsold_global'],
-            $data['lastsold'],
-            $data['vendor'],
-            $data['shippingfee'],
-            $data['sourcingfee'],
-            $data['price'],
-            $data['price_india'],
-            $data['price_india_suggested'],
-            $data['mrp_india'],
-            $data['permanent_discount'],
-            $data['discount_global'],
-            $data['discount_india'],
-            $data['product_weight'],
-            $data['product_weight_unit'],
-            $data['prod_height'],
-            $data['prod_width'],
-            $data['prod_length'],
-            $data['length_unit'],
-            $data['updated_at'],
-            $id
-        );
-        return $stmt->execute();
+        return $this->runWithVpProductsClientCharset(function () use ($id, $data) {
+            $sql = "UPDATE vp_products SET title=?, image=?, local_stock=?, itemprice=?, finalprice=?,  groupname=?, material=?, cost_price=?, gst=?, hsn=?, description=?, asin=?, upc=?, location=?, fba_in=?, fba_us=?, leadtime=?, instock_leadtime=?, permanently_available=?, numsold=?, numsold_india=?, numsold_global=?, lastsold=?, vendor=?, shippingfee=?, sourcingfee=?, price=?, price_india=?, price_india_suggested=?, mrp_india=?, permanent_discount=?, discount_global=?, discount_india=?, product_weight=?, product_weight_unit=?, prod_height=?, prod_width=?, prod_length=?, length_unit=?, updated_at=? WHERE id = ?";
+            $stmt = $this->db->prepare($sql);
+            $stmt->bind_param(
+                'ssiddssddsssssiissiiiiisddddddddddsdddssi',
+                $data['title'],
+                $data['image'],
+                $data['local_stock'],
+                $data['itemprice'],
+                $data['finalprice'],
+                $data['groupname'],
+                $data['material'],
+                $data['cost_price'],
+                $data['gst'],
+                $data['hsn'],
+                $data['description'],
+                $data['asin'],
+                $data['upc'],
+                $data['location'],
+                $data['fba_in'],
+                $data['fba_us'],
+                $data['leadtime'],
+                $data['instock_leadtime'],
+                $data['permanently_available'],
+                $data['numsold'],
+                $data['numsold_india'],
+                $data['numsold_global'],
+                $data['lastsold'],
+                $data['vendor'],
+                $data['shippingfee'],
+                $data['sourcingfee'],
+                $data['price'],
+                $data['price_india'],
+                $data['price_india_suggested'],
+                $data['mrp_india'],
+                $data['permanent_discount'],
+                $data['discount_global'],
+                $data['discount_india'],
+                $data['product_weight'],
+                $data['product_weight_unit'],
+                $data['prod_height'],
+                $data['prod_width'],
+                $data['prod_length'],
+                $data['length_unit'],
+                $data['updated_at'],
+                $id
+            );
+            return $stmt->execute();
+        });
     }
     public function getProductByItemCode($item_code)
     {
@@ -1790,15 +1831,19 @@ class product
     }
     public function updateProductNotes($product_id, $notes)
     {
-        $sql = "UPDATE vp_products SET notes = ?, updated_at = NOW() WHERE id = ?";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
-        $id = (int)$product_id;
-        $stmt->bind_param('si', $notes, $id);
-        if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Notes updated successfully'];
-        }
-        return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+        return $this->runWithVpProductsClientCharset(function () use ($product_id, $notes) {
+            $sql = "UPDATE vp_products SET notes = ?, updated_at = NOW() WHERE id = ?";
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+            }
+            $id = (int)$product_id;
+            $stmt->bind_param('si', $notes, $id);
+            if ($stmt->execute()) {
+                return ['success' => true, 'message' => 'Notes updated successfully'];
+            }
+            return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
+        });
     }
     public function getVariantsByItemCode($item_code)
     {
