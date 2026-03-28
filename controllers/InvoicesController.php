@@ -998,6 +998,10 @@ class InvoicesController
                 http_response_code(403);
                 exit('Unauthorized');
             }
+            //date if blank then set to privious day
+            if(empty($date)){
+                $date = date('Y-m-d', strtotime('-1 day'));
+            }
 
             require_once 'generate-xml.php';
             global $invoiceModel;
