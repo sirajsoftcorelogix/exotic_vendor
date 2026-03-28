@@ -19,7 +19,7 @@ $viewUrl = function (int $id) {
 
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-            <h1 class="text-2xl font-normal text-gray-800">POS customers</h1>
+            <h1 class="text-2xl font-normal text-gray-800">Customers</h1>
             <?php if (!empty($warehouse_id)): ?>
                 <p class="text-sm text-gray-500 mt-1">Warehouse: <span class="text-gray-700 font-medium"><?= htmlspecialchars($warehouse_name ?? '') ?></span></p>
             <?php else: ?>
