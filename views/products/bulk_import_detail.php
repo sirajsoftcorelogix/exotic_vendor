@@ -230,6 +230,54 @@
       }
     }
 
+    /**
+     * Same as fetchJson but retries when the browser gets no usable response (timeouts, "Failed to fetch")
+     * or when the proxy returns 502/503/504. Backoff caps so the tab can recover without clicking Resume.
+     */
+    async function fetchJsonWithAutoRetry(url, options, onRetry) {
+      const baseDelayMs = 2000;
+      const maxDelayMs = 45000;
+      let delayMs = baseDelayMs;
+      let attempt = 0;
+      const opts = Object.assign({ cache: 'no-store' }, options || {});
+      while (true) {
+        try {
+          const res = await fetch(url, opts);
+          const rawText = await res.text();
+          const retryableHttp = res.status === 502 || res.status === 503 || res.status === 504;
+          let data;
+          try {
+            data = JSON.parse(rawText);
+          } catch (parseErr) {
+            if (retryableHttp) {
+              attempt += 1;
+              if (typeof onRetry === 'function') {
+                onRetry({ attempt, delayMs, reason: 'http', status: res.status });
+              }
+              await new Promise(function(r) { setTimeout(r, delayMs); });
+              delayMs = Math.min(maxDelayMs, Math.floor(delayMs * 1.5));
+              continue;
+            }
+            const err = new Error('Server returned non-JSON response. HTTP ' + res.status);
+            err.rawText = rawText;
+            err.httpStatus = res.status;
+            throw err;
+          }
+          return data;
+        } catch (e) {
+          if (e && e.httpStatus) {
+            throw e;
+          }
+          attempt += 1;
+          if (typeof onRetry === 'function') {
+            onRetry({ attempt, delayMs, reason: 'network', status: null, error: e });
+          }
+          await new Promise(function(r) { setTimeout(r, delayMs); });
+          delayMs = Math.min(maxDelayMs, Math.floor(delayMs * 1.5));
+        }
+      }
+    }
+
     function copyTextFallback(text) {
       overlayDetails.classList.remove('hidden');
       overlayDetails.value = text || '';
@@ -330,14 +378,29 @@
     }
 
     async function processLoop() {
-      showProgress('Processing import…', 'Importing item codes in batches of 50.');
+      showProgress(
+        'Processing import…',
+        'Importing item codes in batches of 50. If the connection drops or the server times out, this page will retry automatically.'
+      );
       try {
         while (true) {
-          const data = await fetchJson('?page=products&action=bulk_import_process_batch', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ job_id: jobId })
-          });
+          const data = await fetchJsonWithAutoRetry(
+            '?page=products&action=bulk_import_process_batch',
+            {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ job_id: jobId })
+            },
+            function(info) {
+              var sec = Math.max(1, Math.round(info.delayMs / 1000));
+              overlayMessage.textContent =
+                'Temporary network or server timeout (attempt ' + info.attempt + '). Retrying in about ' + sec + 's… ' +
+                'You can leave this tab open; no need to click Resume.';
+              overlayProgressText.textContent =
+                (info.reason === 'http' ? 'Gateway error ' + info.status : 'Connection lost') +
+                ' — auto-retry ' + info.attempt;
+            }
+          );
           if (!data.success) {
             const detailText = [data.message || 'Batch failed', data.debug || ''].filter(Boolean).join('\n');
             showResult('error', 'Processing Failed', data.message || 'Batch failed', detailText);
@@ -345,6 +408,9 @@
           }
           const stats = data.stats || {};
           renderStats(stats);
+          overlayMessage.textContent =
+            'Importing item codes in batches of 50. If the connection drops or the server times out, this page will retry automatically.';
+          overlayProgressText.textContent = 'In progress…';
           if ((stats.pending_items ?? 0) <= 0) break;
           await new Promise(r => setTimeout(r, 350));
         }
