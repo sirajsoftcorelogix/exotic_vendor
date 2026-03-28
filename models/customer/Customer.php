@@ -333,7 +333,8 @@ class Customer
                     vc.phone,
                     COALESCE(SUM(o.finalprice), 0) AS total_order_amount,
                     MAX(o.order_date) AS last_purchase_date,
-                    MAX(o.currency) AS currency
+                    MAX(o.currency) AS currency,
+                    COUNT(DISTINCT o.order_number) AS order_count
                 FROM vp_customers vc
                 INNER JOIN (
                     SELECT customer_id FROM pos_payments 
@@ -427,7 +428,8 @@ class Customer
                     vc.phone,
                     COALESCE(SUM(o.finalprice), 0) AS total_order_amount,
                     MAX(o.order_date) AS last_purchase_date,
-                    MAX(o.currency) AS currency
+                    MAX(o.currency) AS currency,
+                    COUNT(DISTINCT o.order_number) AS order_count
                 FROM vp_customers vc
                 LEFT JOIN vp_orders o ON o.customer_id = vc.id
                 $searchSql
@@ -557,5 +559,34 @@ class Customer
         $ok = $stmt->get_result()->num_rows > 0;
         $stmt->close();
         return $ok;
+    }
+
+    /**
+     * Same visibility rules as customer list (admin = all, or POS scope when $adminFilterWarehouseId set;
+     * non-admin = session POS warehouse).
+     */
+    public function isCustomerViewableInListContext(
+        int $customerId,
+        bool $isAdmin,
+        int $warehouseId,
+        bool $customerAlreadyLoaded = false,
+        int $adminFilterWarehouseId = 0
+    ): bool {
+        if ($customerId <= 0) {
+            return false;
+        }
+        if (!$customerAlreadyLoaded && !$this->getCustomerById($customerId)) {
+            return false;
+        }
+        if ($isAdmin) {
+            if ($adminFilterWarehouseId > 0) {
+                return $this->isCustomerInPosWarehouse($customerId, $adminFilterWarehouseId);
+            }
+            return true;
+        }
+        if ($warehouseId > 0) {
+            return $this->isCustomerInPosWarehouse($customerId, $warehouseId);
+        }
+        return false;
     }
 }

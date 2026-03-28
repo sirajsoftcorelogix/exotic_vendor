@@ -50,19 +50,46 @@ class CustomerController {
 
         $isAdminCustomerList = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
 
+        $filterWarehouseId = 0;
+
         $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
         $warehouseName = '';
+        $warehouses = [];
+        $adminFilterWarehouseName = '';
+        require_once 'models/user/user.php';
+        $usersModel = new User($GLOBALS['conn']);
         if ($warehouseId > 0) {
-            require_once 'models/user/user.php';
-            $usersModel = new User($GLOBALS['conn']);
             $wh = $usersModel->getWarehouseById($warehouseId);
             $warehouseName = $wh['address_title'] ?? ('Warehouse #' . $warehouseId);
         }
+        if ($isAdminCustomerList) {
+            $warehouses = $usersModel->getAllWarehouses();
+            if (isset($_GET['filter_warehouse_id'])) {
+                $rawWh = (int)$_GET['filter_warehouse_id'];
+                if ($rawWh > 0) {
+                    $validWhIds = array_map('intval', array_column($warehouses, 'id'));
+                    if (in_array($rawWh, $validWhIds, true)) {
+                        $filterWarehouseId = $rawWh;
+                    }
+                }
+            }
+            if ($filterWarehouseId > 0) {
+                $whF = $usersModel->getWarehouseById($filterWarehouseId);
+                $adminFilterWarehouseName = $whF['address_title'] ?? ('Warehouse #' . $filterWarehouseId);
+            }
+        }
+
+        $filters['filter_warehouse_id'] = $filterWarehouseId;
 
         $search = isset($filters['search']) ? trim((string)$filters['search']) : '';
         if ($isAdminCustomerList) {
-            $customers = $customerModel->getAllCustomersWithPurchaseStats($search, $limit, $offset);
-            $total_records = $customerModel->countAllCustomersWithPurchaseStats($search);
+            if ($filterWarehouseId > 0) {
+                $customers = $customerModel->getPosCustomersForWarehouse($filterWarehouseId, $search, $limit, $offset);
+                $total_records = $customerModel->countPosCustomersForWarehouse($filterWarehouseId, $search);
+            } else {
+                $customers = $customerModel->getAllCustomersWithPurchaseStats($search, $limit, $offset);
+                $total_records = $customerModel->countAllCustomersWithPurchaseStats($search);
+            }
         } elseif ($warehouseId > 0) {
             $customers = $customerModel->getPosCustomersForWarehouse($warehouseId, $search, $limit, $offset);
             $total_records = $customerModel->countPosCustomersForWarehouse($warehouseId, $search);
@@ -84,6 +111,8 @@ class CustomerController {
             'warehouse_id' => $warehouseId,
             'warehouse_name' => $warehouseName,
             'is_admin_customer_list' => $isAdminCustomerList,
+            'warehouses' => $warehouses,
+            'admin_filter_warehouse_name' => $adminFilterWarehouseName,
             'flash' => $flash,
         ];
 
@@ -139,6 +168,28 @@ class CustomerController {
         $customer = $customerModel->getCustomerById($customerId);
         if (!$customer) {
             header("Location: " . base_url('?page=customer&action=list'));
+            exit;
+        }
+        $isAdmin = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+        $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
+        $adminListWh = 0;
+        if ($isAdmin && isset($_GET['list_wh'])) {
+            $rawListWh = (int)$_GET['list_wh'];
+            if ($rawListWh > 0) {
+                require_once 'models/user/user.php';
+                $usersModelView = new User($GLOBALS['conn']);
+                $validIds = array_map('intval', array_column($usersModelView->getAllWarehouses(), 'id'));
+                if (in_array($rawListWh, $validIds, true)) {
+                    $adminListWh = $rawListWh;
+                }
+            }
+        }
+        if (!$customerModel->isCustomerViewableInListContext((int)$customerId, $isAdmin, $warehouseId, true, $adminListWh)) {
+            $_SESSION['customer_pos_list_flash'] = [
+                'type' => 'error',
+                'message' => 'You do not have access to this customer.',
+            ];
+            header('Location: ' . base_url('?page=customer&action=list'));
             exit;
         }
         //print_array($customer);
