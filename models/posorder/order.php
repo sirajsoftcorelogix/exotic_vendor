@@ -150,16 +150,16 @@ class Order
         if (!empty($filters['sort']) && in_array(strtolower($filters['sort']), ['asc', 'desc'])) {
             //agent assignment date desc
             if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort']);
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date " . strtoupper($filters['sort'] . 'vp_orders.order_number');
             } else {
-                $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort']);
+                $sql .= " ORDER BY vp_orders.order_date " . strtoupper($filters['sort'] . 'vp_orders.order_number' );
             }
         } else {
             //agent assignment date desc
             if (!empty($filters['agent'])) {
-                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC"; // Default sort order
+                $sql .= " ORDER BY vp_orders.agent_assign_date DESC, vp_orders.order_date DESC vp_orders.order_number "; // Default sort order
             } else {
-                $sql .= " ORDER BY vp_orders.order_date DESC"; // Default sort order
+                $sql .= " ORDER BY vp_orders.order_date DESC vp_orders.order_number"; // Default sort order
             }
         }
 
