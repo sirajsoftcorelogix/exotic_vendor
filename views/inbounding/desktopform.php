@@ -562,7 +562,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     <div class="lg:col-span-2 w-full min-w-0">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Dimensions:</label>
                         <div class="relative flex items-center w-full">
-                            <input type="text" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['dimensions'] ?? '') ?>" name="dimensions" placeholder="Dimensions">
+                            <input type="text" id="dimensions" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['dimensions'] ?? '') ?>" name="dimensions" placeholder="Dimensions">
                         </div>
                     </div>
                     <div class="flex-1">
@@ -2160,6 +2160,94 @@ document.addEventListener('DOMContentLoaded', function() {
     const detailsElement = document.getElementById('courier_calc_details');
     // New Element for Volumetric Weight
     const volDisplayElement = document.getElementById('volumetric_weight_display');
+
+    // Dimensions field auto-fill logic (from height/width/depth)
+    const dimensionsInput = document.getElementById('dimensions');
+    let dimensionsManualEdit = dimensionsInput && dimensionsInput.value.trim() !== '';
+
+    const formatDimensionsText = (h, w, d) => {
+        const hh = (h || '').trim();
+        const ww = (w || '').trim();
+        const dd = (d || '').trim();
+        if (!hh && !ww && !dd) {
+            return '';
+        }
+        return `${hh || '0'} Inches Height X ${ww || '0'} Inches Width X ${dd || '0'} Inches Depth`;
+    };
+
+    const updateDimensionsField = () => {
+        if (!dimensionsInput) {
+            return;
+        }
+
+        if (dimensionsManualEdit) {
+            return;
+        }
+
+        const newValue = formatDimensionsText(
+            heightInput ? heightInput.value : '',
+            widthInput ? widthInput.value : '',
+            depthInput ? depthInput.value : ''
+        );
+
+        dimensionsInput.value = newValue;
+    };
+
+    if (dimensionsInput) {
+        dimensionsInput.addEventListener('input', () => {
+            dimensionsManualEdit = true;
+        });
+    }
+
+    [heightInput, widthInput, depthInput].forEach((field) => {
+        if (field) {
+            field.addEventListener('input', () => {
+                dimensionsManualEdit = false;
+                updateDimensionsField();
+            });
+        }
+    });
+
+    // initial dimensions fill
+    updateDimensionsField();
+
+    const setupVariationDimensionsCard = (card) => {
+        if (!card || card.dataset.dimsAutoSetup === '1') return;
+        card.dataset.dimsAutoSetup = '1';
+
+        const h = card.querySelector('.calc-h');
+        const w = card.querySelector('.calc-w');
+        const d = card.querySelector('.calc-d');
+        const dim = card.querySelector('input[name$="[dimensions]"]');
+        let manual = false;
+
+        if (!dim) return;
+        dim.addEventListener('input', () => { manual = true; });
+
+        const update = () => {
+            if (manual) return;
+            const formatted = formatDimensionsText(h ? h.value : '', w ? w.value : '', d ? d.value : '');
+            dim.value = formatted;
+        };
+
+        [h, w, d].forEach((field) => {
+            if (field) {
+                field.addEventListener('input', () => {
+                    manual = false;
+                    update();
+                });
+            }
+        });
+
+        update();
+    };
+
+    const initAllVariationDimensions = () => {
+        document.querySelectorAll('.variation-card').forEach(setupVariationDimensionsCard);
+    };
+
+    initAllVariationDimensions();
+
     function calculateCourierPrice() {
         if (!heightInput || !widthInput || !depthInput || !weightInput) return;
         // 1. Get Raw Values
@@ -2545,6 +2633,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const clone = template.content.cloneNode(true);
         updateNames(clone, newId);
         container.appendChild(clone);
+
+        // Ensure new variation card also gets dimension auto-fill
+        const newCard = container.lastElementChild;
+        if (newCard) {
+            setupVariationDimensionsCard(newCard);
+        }
     };
     // 2. EVENT DELEGATION
     container.addEventListener('click', function(e) {
