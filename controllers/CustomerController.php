@@ -48,20 +48,65 @@ class CustomerController {
             $filters['state'] = trim($_GET['state']);
         }
 
-        $customers = $customerModel->getAllCustomers($limit, $offset, $filters);
-        $total_records = $customerModel->countAllCustomers($filters);
-        
+        $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
+        $warehouseName = '';
+        if ($warehouseId > 0) {
+            require_once 'models/user/user.php';
+            $usersModel = new User($GLOBALS['conn']);
+            $wh = $usersModel->getWarehouseById($warehouseId);
+            $warehouseName = $wh['address_title'] ?? ('Warehouse #' . $warehouseId);
+        }
+
+        $search = isset($filters['search']) ? trim((string)$filters['search']) : '';
+        $customers = $warehouseId > 0
+            ? $customerModel->getPosCustomersForWarehouse($warehouseId, $search, $limit, $offset)
+            : [];
+        $total_records = $warehouseId > 0
+            ? $customerModel->countPosCustomersForWarehouse($warehouseId, $search)
+            : 0;
+
+        $flash = $_SESSION['customer_pos_list_flash'] ?? null;
+        unset($_SESSION['customer_pos_list_flash']);
+
         $data = [
             'customers' => $customers,
             'page_no' => $page,
-            'total_pages' => ceil($total_records / $limit),
+            'total_pages' => $limit > 0 ? (int)ceil($total_records / $limit) : 1,
             'total_records' => $total_records,
             'limit' => $limit,
-            'filters' => $filters
+            'filters' => $filters,
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => $warehouseName,
+            'flash' => $flash,
         ];
-        
-        renderTemplate('views/customer/list.php', $data, 'Customers');
+
+        renderTemplate('views/customer/list.php', $data, 'POS Customers');
     }
+
+    public function delete_customer()
+    {
+        is_login();
+        global $customerModel;
+        $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
+        if ($warehouseId <= 0 || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . base_url('?page=customer&action=list'));
+            exit;
+        }
+        $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+        if ($customerId <= 0 || !$customerModel->isCustomerInPosWarehouse($customerId, $warehouseId)) {
+            $_SESSION['customer_pos_list_flash'] = ['type' => 'error', 'message' => 'Invalid customer for this POS.'];
+            header('Location: ' . base_url('?page=customer&action=list'));
+            exit;
+        }
+        $res = $customerModel->deleteCustomer($customerId);
+        $_SESSION['customer_pos_list_flash'] = [
+            'type' => $res['success'] ? 'success' : 'error',
+            'message' => $res['message'] ?? '',
+        ];
+        header('Location: ' . base_url('?page=customer&action=list'));
+        exit;
+    }
+
     public function view() {
         is_login();
         global $customerModel;
