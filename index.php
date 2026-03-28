@@ -787,14 +787,20 @@ switch ($page) {
         require_once 'controllers/StockTransferGrnController.php';
         $controller = new StockTransferGrnController($conn);
         switch ($action) {
+            case 'list':
+                $controller->listGrns();
+                break;
             case 'create':
                 $controller->create();
                 break;
             case 'create_post':
                 $controller->createPost();
                 break;
+            case 'delete':
+                $controller->delete();
+                break;
             default:
-                $controller->create();
+                $controller->listGrns();
                 break;
         }
         break;
