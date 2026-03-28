@@ -18,7 +18,6 @@
             <div class="flex items-center gap-2">
                 <label for="boxSizeApply" class="text-gray-700 font-medium">Box Size</label>
                 <select id="boxSizeApply" class="border border-gray-300 rounded px-2 py-1 text-sm w-28">
-                    <!-- <option value="">Custom Size</option> -->
                     <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
                     <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
                     <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
@@ -33,6 +32,7 @@
                     <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
                     <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
                     <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
+                    <option value="CUSTOM">Custom Size</option>
                 </select>
             </div>
             <button id="boxSizeApplyBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-1 rounded text-sm">
@@ -181,6 +181,45 @@
     </div>
 
 </div>
+
+<!-- Custom Box Size Modal -->
+<div id="customBoxSizeModal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative z-10 w-full max-w-md bg-white shadow-lg border border-gray-300 mx-3 rounded">
+        <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-orange-500 text-white rounded-t">
+            <h2 class="font-semibold text-sm">Enter Custom Box Dimensions</h2>
+            <button type="button" data-close-custom-modal aria-label="Close" class="text-white text-xl leading-none px-2 hover:text-white/90">&times;</button>
+        </div>
+
+        <div class="px-4 py-4">
+            <div class="space-y-3">
+                <div>
+                    <label for="modalCustomLength" class="block text-gray-700 font-medium text-sm mb-1">Length (inches)</label>
+                    <input id="modalCustomLength" type="number" placeholder="22" class="w-full border border-gray-300 rounded px-3 py-2 text-sm" step="0.5"/>
+                </div>
+                <div>
+                    <label for="modalCustomWidth" class="block text-gray-700 font-medium text-sm mb-1">Width (inches)</label>
+                    <input id="modalCustomWidth" type="number" placeholder="17" class="w-full border border-gray-300 rounded px-3 py-2 text-sm" step="0.5"/>
+                </div>
+                <div>
+                    <label for="modalCustomHeight" class="block text-gray-700 font-medium text-sm mb-1">Height (inches)</label>
+                    <input id="modalCustomHeight" type="number" placeholder="5" class="w-full border border-gray-300 rounded px-3 py-2 text-sm" step="0.5"/>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-3">Enter dimensions in inches. All fields are required.</p>
+        </div>
+
+        <div class="px-4 py-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b">
+            <button type="button" data-close-custom-modal class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded text-sm">
+                Cancel
+            </button>
+            <button type="button" id="applyCustomBoxSizeBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm">
+                Apply to All
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     (function () {
         const modal = document.getElementById('selectItemsModal');
@@ -629,6 +668,7 @@
                                             <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
                                             <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
                                             <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
+                                            <option value="CUSTOM" data-length="" data-width="" data-height="">Custom Size</option>
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-2">
@@ -873,6 +913,7 @@
                                             <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
                                             <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
                                             <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
+                                            <option value="CUSTOM" data-length="" data-width="" data-height="">Custom Size</option>
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-2">
@@ -1267,9 +1308,7 @@
                                     <td class="p-2 border-b border-gray-200 text-right">
                                         ${dispatch.awb_code ? `<a href="${dispatch.label_url || '#'}" target="_blank" class="text-blue-600 hover:underline">${dispatch.awb_code}</a>` : '-'}
                                     </td>
-                                    <td class="p-2 border-b border-gray-200 text-right">
-                                        <button class="text-blue-600 hover:text-blue-800 text-sm font-semibold" onclick="alert('View dispatch: ${dispatch.dispatch_id}')">View</button>
-                                    </td>
+                                   
                                 `;
                                 dispatchListBody.appendChild(row);
                             });
@@ -1387,17 +1426,114 @@
         });
     }
 
-    // Handle Apply to All button for box size
+    // Handle custom box size modal
+    const customBoxSizeModal = document.getElementById('customBoxSizeModal');
+    const boxSizeSelect = document.getElementById('boxSizeApply');
+    
+    // Open modal when CUSTOM is selected
+    if (boxSizeSelect) {
+        boxSizeSelect.addEventListener('change', function() {
+            if (this.value === 'CUSTOM') {
+                // Clear previous values
+                document.getElementById('modalCustomLength').value = '';
+                document.getElementById('modalCustomWidth').value = '';
+                document.getElementById('modalCustomHeight').value = '';
+                // Show modal
+                customBoxSizeModal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            }
+        });
+    }
+
+    // Close custom modal button handlers
+    const closeCustomModalBtns = document.querySelectorAll('[data-close-custom-modal]');
+    closeCustomModalBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            customBoxSizeModal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+            // Reset box size select if modal was closed without applying
+            boxSizeSelect.value = 'R-1';
+        });
+    });
+
+    // Close modal when clicking backdrop
+    customBoxSizeModal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+            boxSizeSelect.value = 'R-1';
+        }
+    });
+
+    // Handle Apply to All button for custom box size (from modal)
+    const applyCustomBoxSizeBtn = document.getElementById('applyCustomBoxSizeBtn');
+    if (applyCustomBoxSizeBtn) {
+        applyCustomBoxSizeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            // Get custom dimensions from modal
+            const customLength = parseFloat(document.getElementById('modalCustomLength').value);
+            const customWidth = parseFloat(document.getElementById('modalCustomWidth').value);
+            const customHeight = parseFloat(document.getElementById('modalCustomHeight').value);
+
+            // Validate dimensions
+            if (isNaN(customLength) || isNaN(customWidth) || isNaN(customHeight) || 
+                customLength <= 0 || customWidth <= 0 || customHeight <= 0) {
+                showAlert('Please enter valid dimensions for all fields', 'warning');
+                return;
+            }
+
+            // Check if modal was opened from individual box select or main "Apply to All"
+            if (window._targetBoxSelect) {
+                // Single box - set custom size on this specific box
+                window._targetBoxSelect.setAttribute('data-custom-length', customLength);
+                window._targetBoxSelect.setAttribute('data-custom-width', customWidth);
+                window._targetBoxSelect.setAttribute('data-custom-height', customHeight);
+                window._targetBoxSelect = null;
+                
+                showAlert(`✓ Applied custom box size (${customLength}x${customWidth}x${customHeight}in)`, 'success');
+            } else {
+                // Apply to all boxes
+                const container = document.getElementById('invDispatchesContainer');
+                const boxSizeSelects = container.querySelectorAll('.BoxSize');
+
+                if (boxSizeSelects.length === 0) {
+                    showAlert('No boxes found to update', 'warning');
+                    return;
+                }
+
+                // Update all box size selects with CUSTOM and store dimensions
+                boxSizeSelects.forEach(select => {
+                    select.value = 'CUSTOM';
+                    select.setAttribute('data-custom-length', customLength);
+                    select.setAttribute('data-custom-width', customWidth);
+                    select.setAttribute('data-custom-height', customHeight);
+                });
+
+                showAlert(`✓ Applied custom box size (${customLength}x${customWidth}x${customHeight}in) to all ${boxSizeSelects.length} boxes`, 'success');
+            }
+
+            // Close modal
+            customBoxSizeModal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        });
+    }
+
+    // Handle Apply to All button for standard box size
     const boxSizeApplyBtn = document.getElementById('boxSizeApplyBtn');
     if (boxSizeApplyBtn) {
         boxSizeApplyBtn.addEventListener('click', function(e) {
             e.preventDefault();
 
-            const boxSizeSelect = document.getElementById('boxSizeApply');
             const selectedSize = boxSizeSelect.value;
 
             if (!selectedSize) {
                 showAlert('Please select a box size', 'warning');
+                return;
+            }
+
+            if (selectedSize === 'CUSTOM') {
+                showAlert('Please use the custom size modal first', 'info');
                 return;
             }
 
@@ -1413,11 +1549,31 @@
             // Update all box size selects
             boxSizeSelects.forEach(select => {
                 select.value = selectedSize;
+                // Clear custom attributes if switching back to standard size
+                select.removeAttribute('data-custom-length');
+                select.removeAttribute('data-custom-width');
+                select.removeAttribute('data-custom-height');
             });
 
             showAlert(`✓ Applied box size "${selectedSize}" to all ${boxSizeSelects.length} boxes`, 'success');
         });
     }
+
+    // Handle individual box size changes (for CUSTOM size selection)
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('BoxSize') && e.target.value === 'CUSTOM') {
+            // Show modal for custom size input
+            document.getElementById('modalCustomLength').value = e.target.getAttribute('data-custom-length') || '';
+            document.getElementById('modalCustomWidth').value = e.target.getAttribute('data-custom-width') || '';
+            document.getElementById('modalCustomHeight').value = e.target.getAttribute('data-custom-height') || '';
+            
+            // Store reference to the selected box element for later use
+            window._targetBoxSelect = e.target;
+            
+            customBoxSizeModal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+    });
 
     // Handle Apply to All button for weight
     const weightApplyBtn = document.getElementById('weightApplyBtn');

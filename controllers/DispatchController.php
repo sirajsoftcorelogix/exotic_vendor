@@ -1253,8 +1253,11 @@ class DispatchController {
                     'total_amount' => $total_amount
                 ];
                 
-                // Update order status to invoiced      
-                $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
+                // Update order status to invoiced
+                foreach ($orders as $item) {  
+                    $ordersModel->updateOrderById($item['id'], ['invoice_id' => $invoiceId]);
+                }    
+                //$ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
                        
                 // Create dispatch records for each box
                 foreach ($boxes as $boxIndex => $boxData) {
@@ -1279,10 +1282,18 @@ class DispatchController {
                         'R-14' => ['length' => 14, 'width' => 12, 'height' => 10]
                     ];
                        
-                    // Get dimensions from mapping
-                    $length = $box_size_mapping[$box_size]['length'] ?? 0;
-                    $width = $box_size_mapping[$box_size]['width'] ?? 0;
-                    $height = $box_size_mapping[$box_size]['height'] ?? 0;
+                    // Get dimensions from mapping or custom values
+                    if ($box_size === 'CUSTOM' || isset($boxData['custom_length'])) {
+                        // Custom box size - use provided dimensions
+                        $length = floatval($boxData['custom_length'] ?? 0);
+                        $width = floatval($boxData['custom_width'] ?? 0);
+                        $height = floatval($boxData['custom_height'] ?? 0);
+                    } else {
+                        // Standard box size - use mapping
+                        $length = $box_size_mapping[$box_size]['length'] ?? 0;
+                        $width = $box_size_mapping[$box_size]['width'] ?? 0;
+                        $height = $box_size_mapping[$box_size]['height'] ?? 0;
+                    }
                     $volumetric_weight = ($length * $width * $height) / 5000;
                     $dispatchData = [
                         'invoice_id' => $invoiceId,
@@ -1462,10 +1473,18 @@ class DispatchController {
                         'R-13' => ['length' => 11, 'width' => 8, 'height' => 5], 'R-14' => ['length' => 14, 'width' => 12, 'height' => 10]
                     ];
                     $boxSize = $boxData['box_size'] ?? 'R-1';
-                    $dims = $box_size_mapping[$boxSize] ?? null;
-                    $length = (float)($boxData['length'] ?? $dispatchInfo['length'] ?? $dims['length'] ?? 0);
-                    $width = (float)($boxData['width'] ?? $dispatchInfo['width'] ?? $dims['width'] ?? 0);
-                    $height = (float)($boxData['height'] ?? $dispatchInfo['height'] ?? $dims['height'] ?? 0);
+                    
+                    // Determine dimensions: custom > boxData > dispatchInfo > mapping
+                    if ($boxSize === 'CUSTOM' || isset($boxData['custom_length'])) {
+                        $length = (float)($boxData['custom_length'] ?? $boxData['length'] ?? $dispatchInfo['length'] ?? 0);
+                        $width = (float)($boxData['custom_width'] ?? $boxData['width'] ?? $dispatchInfo['width'] ?? 0);
+                        $height = (float)($boxData['custom_height'] ?? $boxData['height'] ?? $dispatchInfo['height'] ?? 0);
+                    } else {
+                        $dims = $box_size_mapping[$boxSize] ?? null;
+                        $length = (float)($boxData['length'] ?? $dispatchInfo['length'] ?? $dims['length'] ?? 0);
+                        $width = (float)($boxData['width'] ?? $dispatchInfo['width'] ?? $dims['width'] ?? 0);
+                        $height = (float)($boxData['height'] ?? $dispatchInfo['height'] ?? $dims['height'] ?? 0);
+                    }
                     $volumetric_weight = ($length * $width * $height) / 5000;
                     $weight = (float)($boxData['weight'] ?? $dispatchInfo['weight'] ?? $totalBillableWeight ?: 0.5);
 
