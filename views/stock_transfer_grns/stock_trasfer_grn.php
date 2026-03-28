@@ -82,6 +82,15 @@
 
                         <div class="grid grid-cols-2 gap-x-4 gap-y-0">
                             <div class="flex items-baseline">
+                                <span class="type-label-small w-20 shrink-0">SKU</span>
+                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['sku'] ?? 'N/A') ?></span>
+                            </div>
+                            <div class="flex items-baseline">
+                                <span class="type-label-small w-20 shrink-0">Item Code</span>
+                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['item_code'] ?? 'N/A') ?></span>
+                            </div>
+
+                            <div class="flex items-baseline">
                                 <span class="type-label-small w-20 shrink-0">Quantity</span>
                                 <span class="type-data-small">: &nbsp; <?= htmlspecialchars($quantity) ?></span>
                             </div>
