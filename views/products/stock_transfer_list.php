@@ -125,12 +125,18 @@
                                     }
                                     $productIdsParam = urlencode(implode(',', array_unique($productIds)));
                                 ?>
-                                <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transfer['id']); ?>&product_ids=<?php echo $productIdsParam; ?>" class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition">
-                                    <i class="fas fa-edit"></i> Edit
-                                </a>
-                                <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo urlencode($transfer['id']); ?>" class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition">
-                                    <i class="fas fa-file-invoice"></i> GRN
-                                </a>
+                                <div class="flex flex-wrap gap-2">
+                                    <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transfer['id']); ?>&product_ids=<?php echo $productIdsParam; ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition shadow-sm min-w-[96px] justify-center">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo urlencode($transfer['id']); ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold hover:bg-orange-600 transition shadow-sm min-w-[96px] justify-center">
+                                        <i class="fas fa-file-invoice"></i> Add GRN
+                                    </a>
+                                    <br class="w-full" />
+                                    <a href="?page=stock_transfer_grns&action=list&transfer_id=<?php echo urlencode($transfer['id']); ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition shadow-sm min-w-[96px] justify-center mt-2">
+                                        <i class="fas fa-list"></i> View GRNs
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
