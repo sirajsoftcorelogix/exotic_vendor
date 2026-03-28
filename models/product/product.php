@@ -28,6 +28,7 @@ class product
         }
         return (int)$default;
     }
+
     public function __construct($db)
     {
         $this->db = $db;
@@ -489,7 +490,9 @@ class product
             $data['created_at'],
             $data['updated_at']
         );
-        if ($stmt->execute()) return $this->db->insert_id;
+        if ($stmt->execute()) {
+            return $this->db->insert_id;
+        }
         return false;
     }
     public function updateProduct($id, $data)
@@ -1792,7 +1795,9 @@ class product
     {
         $sql = "UPDATE vp_products SET notes = ?, updated_at = NOW() WHERE id = ?";
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
         $id = (int)$product_id;
         $stmt->bind_param('si', $notes, $id);
         if ($stmt->execute()) {

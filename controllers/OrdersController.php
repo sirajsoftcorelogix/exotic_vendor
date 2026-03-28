@@ -1598,13 +1598,13 @@ class OrdersController {
         }
         //check if invoice already exists for the order number, if yes return error
         
-        if ($ordersModel->invoiceExists($order_number)) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Invoice already exists for this order number'
-            ]);
-            exit;
-        }
+        // if ($ordersModel->invoiceExists($order_number)) {
+        //     echo json_encode([
+        //         'success' => false,
+        //         'message' => 'Invoice already exists for this order number'
+        //     ]);
+        //     exit;
+        // }
 
         try {
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
@@ -1638,6 +1638,10 @@ class OrdersController {
 
             $items_html = '';
             foreach ($orders as $order) {
+                //skip item if order status is cancelled or returned or invoice already exists for the order number
+                if (in_array(strtolower($order['order_status'] ?? ''), ['cancelled', 'returned']) || $order['invoice_id'] > 0 || $order['invoice_id'] !== null) {
+                    continue;
+                }
                 $quantity = $order['quantity'] ?? 0;
                 $product_weight = (float)($order['product_weight'] ?? 0);
                 $gst = $order['gst'] ?? 0;
