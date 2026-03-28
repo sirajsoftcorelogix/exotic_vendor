@@ -406,6 +406,85 @@ class Customer
         return (int)($row['c'] ?? 0);
     }
 
+    /** All customers with purchase totals across all orders (admin list). */
+    public function getAllCustomersWithPurchaseStats(string $search, int $limit, int $offset): array
+    {
+        $search = trim($search);
+        $params = [];
+        $types = '';
+        $searchSql = '';
+        if ($search !== '') {
+            $term = '%' . $search . '%';
+            $searchSql = ' WHERE (vc.name LIKE ? OR vc.email LIKE ? OR vc.phone LIKE ?) ';
+            $params = [$term, $term, $term];
+            $types = 'sss';
+        }
+
+        $sql = "SELECT 
+                    vc.id,
+                    vc.name,
+                    vc.email,
+                    vc.phone,
+                    COALESCE(SUM(o.finalprice), 0) AS total_order_amount,
+                    MAX(o.order_date) AS last_purchase_date,
+                    MAX(o.currency) AS currency
+                FROM vp_customers vc
+                LEFT JOIN vp_orders o ON o.customer_id = vc.id
+                $searchSql
+                GROUP BY vc.id, vc.name, vc.email, vc.phone
+                ORDER BY vc.id DESC
+                LIMIT ? OFFSET ?";
+
+        $params[] = $limit;
+        $params[] = $offset;
+        $types .= 'ii';
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        if ($types !== '') {
+            $stmt->bind_param($types, ...$params);
+        }
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $rows;
+    }
+
+    public function countAllCustomersWithPurchaseStats(string $search): int
+    {
+        $search = trim($search);
+        $params = [];
+        $types = '';
+        $searchSql = '';
+        if ($search !== '') {
+            $term = '%' . $search . '%';
+            $searchSql = ' WHERE (vc.name LIKE ? OR vc.email LIKE ? OR vc.phone LIKE ?) ';
+            $params = [$term, $term, $term];
+            $types = 'sss';
+        }
+
+        $sql = "SELECT COUNT(*) AS c FROM (
+                    SELECT vc.id
+                    FROM vp_customers vc
+                    $searchSql
+                    GROUP BY vc.id
+                ) t";
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        if ($types !== '') {
+            $stmt->bind_param($types, ...$params);
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return (int)($row['c'] ?? 0);
+    }
+
     public function countOrdersForCustomer(int $customerId): int
     {
         $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_orders WHERE customer_id = ?');

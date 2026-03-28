@@ -6,6 +6,8 @@ $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 50;
 $page_no = isset($page_no) ? max(1, (int)$page_no) : 1;
 $total_pages = isset($total_pages) ? max(1, (int)$total_pages) : 1;
 $total_records = isset($total_records) ? (int)$total_records : 0;
+$is_admin_customer_list = !empty($is_admin_customer_list);
+$has_list_scope = $is_admin_customer_list || !empty($warehouse_id);
 $viewUrl = function (int $id) {
     return base_url('?page=customer&action=view&customer_id=' . $id);
 };
@@ -17,16 +19,53 @@ $viewUrl = function (int $id) {
         </div>
     <?php endif; ?>
 
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-            <h1 class="text-2xl font-normal text-gray-800">Customers</h1>
-            <?php if (!empty($warehouse_id)): ?>
-                <p class="text-sm text-gray-500 mt-1">Warehouse: <span class="text-gray-700 font-medium"><?= htmlspecialchars($warehouse_name ?? '') ?></span></p>
-            <?php else: ?>
-                <p class="text-sm text-amber-700 mt-1">Select a POS warehouse (same session as the register) to see customers for that store.</p>
+    <header class="relative overflow-hidden rounded-2xl border border-amber-100/90 bg-gradient-to-br from-amber-50/95 via-white to-orange-50/80 shadow-sm mb-8">
+        <div class="pointer-events-none absolute -top-24 right-0 h-56 w-56 rounded-full bg-gradient-to-bl from-orange-200/25 to-transparent sm:h-72 sm:w-72"></div>
+        <div class="pointer-events-none absolute bottom-0 left-0 h-32 w-32 rounded-full bg-amber-100/40 blur-2xl"></div>
+        <div class="relative flex flex-col gap-8 px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-10">
+            <div class="flex min-w-0 flex-1 items-start gap-4 sm:gap-5">
+                <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#d97706] to-[#b45309] text-white shadow-lg shadow-amber-900/20 sm:h-16 sm:w-16">
+                    <svg class="h-8 w-8 sm:h-9 sm:w-9 opacity-95" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </div>
+                <div class="min-w-0 pt-0.5">
+                    <div class="flex flex-wrap items-center gap-2 gap-y-1">
+                        <h1 class="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">Customers</h1>
+                        <?php if ($is_admin_customer_list): ?>
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-900 ring-1 ring-inset ring-amber-200/80">Admin · all locations</span>
+                        <?php elseif (!empty($warehouse_id)): ?>
+                            <span class="inline-flex items-center rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-amber-200/60 shadow-sm">POS scope</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($is_admin_customer_list): ?>
+                        <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">Every customer in the system. Search by name, email, or phone. Purchase totals include all orders.</p>
+                    <?php elseif (!empty($warehouse_id)): ?>
+                        <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
+                            Showing customers linked to your current store.
+                            <span class="font-medium text-gray-800"><?= htmlspecialchars($warehouse_name ?? '') ?></span>
+                        </p>
+                    <?php else: ?>
+                        <p class="mt-2 max-w-xl text-sm leading-relaxed text-amber-900/80">Open the POS register and select a warehouse, then return here to see customers for that store.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php if ($has_list_scope): ?>
+                <div class="flex shrink-0 flex-wrap gap-3 sm:justify-end">
+                    <div class="rounded-xl border border-amber-100/90 bg-white/90 px-5 py-3 text-center shadow-sm backdrop-blur-sm sm:min-w-[7.5rem]">
+                        <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-500">This page</p>
+                        <p class="mt-0.5 text-2xl font-bold tabular-nums text-gray-900"><?= number_format(count($customers ?? [])) ?></p>
+                        <p class="text-xs text-gray-500">cards shown</p>
+                    </div>
+                    <div class="rounded-xl border border-amber-200/60 bg-gradient-to-br from-[#d97706] to-[#b45309] px-5 py-3 text-center text-white shadow-md shadow-amber-900/15 sm:min-w-[7.5rem]">
+                        <p class="text-[10px] font-semibold uppercase tracking-wider text-white/90">Total</p>
+                        <p class="mt-0.5 text-2xl font-bold tabular-nums"><?= number_format($total_records) ?></p>
+                        <p class="text-xs text-white/80">matching</p>
+                    </div>
+                </div>
             <?php endif; ?>
         </div>
-    </div>
+    </header>
 
     <form method="GET" action="<?= htmlspecialchars(base_url('')) ?>" class="mb-8">
         <input type="hidden" name="page" value="customer">
@@ -58,10 +97,10 @@ $viewUrl = function (int $id) {
     </form>
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        <?php if (empty($warehouse_id)): ?>
+        <?php if (!$has_list_scope): ?>
             <div class="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border border-gray-100">No warehouse context — open POS with a warehouse selected, then return here.</div>
         <?php elseif (empty($customers)): ?>
-            <div class="col-span-full text-center py-12 text-gray-500">No customers found for this POS.</div>
+            <div class="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-200"><?= $searchVal !== '' ? 'No customers match your search.' : 'No customers found.' ?></div>
         <?php else: ?>
             <?php foreach ($customers as $c): ?>
                 <?php
@@ -80,7 +119,7 @@ $viewUrl = function (int $id) {
                                 <p class="text-xs text-gray-500 mt-0.5">ID <?= (int)$c['id'] ?></p>
                             </div>
                         </div>
-                        <?php if (!empty($warehouse_id)): ?>
+                        <?php if ($has_list_scope): ?>
                             <form method="post" action="<?= htmlspecialchars(base_url('?page=customer&action=delete_customer')) ?>" class="inline shrink-0" onsubmit="return confirm('Delete this customer? This cannot be undone.');">
                                 <input type="hidden" name="customer_id" value="<?= (int)$c['id'] ?>">
                                 <button type="submit" class="p-1.5 text-red-500 hover:text-red-700 rounded" title="Delete">
@@ -111,7 +150,7 @@ $viewUrl = function (int $id) {
         <?php endif; ?>
     </div>
 
-    <?php if (!empty($warehouse_id) && $total_pages > 1): ?>
+    <?php if ($has_list_scope && $total_pages > 1): ?>
         <?php
         $queryParams = array_merge($_GET, ['page' => 'customer', 'action' => 'list', 'limit' => $limit]);
         ?>

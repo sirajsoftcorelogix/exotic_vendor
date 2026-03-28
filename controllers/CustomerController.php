@@ -48,6 +48,8 @@ class CustomerController {
             $filters['state'] = trim($_GET['state']);
         }
 
+        $isAdminCustomerList = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+
         $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
         $warehouseName = '';
         if ($warehouseId > 0) {
@@ -58,12 +60,16 @@ class CustomerController {
         }
 
         $search = isset($filters['search']) ? trim((string)$filters['search']) : '';
-        $customers = $warehouseId > 0
-            ? $customerModel->getPosCustomersForWarehouse($warehouseId, $search, $limit, $offset)
-            : [];
-        $total_records = $warehouseId > 0
-            ? $customerModel->countPosCustomersForWarehouse($warehouseId, $search)
-            : 0;
+        if ($isAdminCustomerList) {
+            $customers = $customerModel->getAllCustomersWithPurchaseStats($search, $limit, $offset);
+            $total_records = $customerModel->countAllCustomersWithPurchaseStats($search);
+        } elseif ($warehouseId > 0) {
+            $customers = $customerModel->getPosCustomersForWarehouse($warehouseId, $search, $limit, $offset);
+            $total_records = $customerModel->countPosCustomersForWarehouse($warehouseId, $search);
+        } else {
+            $customers = [];
+            $total_records = 0;
+        }
 
         $flash = $_SESSION['customer_pos_list_flash'] ?? null;
         unset($_SESSION['customer_pos_list_flash']);
@@ -77,23 +83,34 @@ class CustomerController {
             'filters' => $filters,
             'warehouse_id' => $warehouseId,
             'warehouse_name' => $warehouseName,
+            'is_admin_customer_list' => $isAdminCustomerList,
             'flash' => $flash,
         ];
 
-        renderTemplate('views/customer/list.php', $data, 'POS Customers');
+        renderTemplate('views/customer/list.php', $data, 'Customers');
     }
 
     public function delete_customer()
     {
         is_login();
         global $customerModel;
+        $isAdmin = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
         $warehouseId = isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0;
-        if ($warehouseId <= 0 || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . base_url('?page=customer&action=list'));
+            exit;
+        }
+        if (!$isAdmin && $warehouseId <= 0) {
             header('Location: ' . base_url('?page=customer&action=list'));
             exit;
         }
         $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
-        if ($customerId <= 0 || !$customerModel->isCustomerInPosWarehouse($customerId, $warehouseId)) {
+        if ($customerId <= 0) {
+            $_SESSION['customer_pos_list_flash'] = ['type' => 'error', 'message' => 'Invalid customer.'];
+            header('Location: ' . base_url('?page=customer&action=list'));
+            exit;
+        }
+        if (!$isAdmin && !$customerModel->isCustomerInPosWarehouse($customerId, $warehouseId)) {
             $_SESSION['customer_pos_list_flash'] = ['type' => 'error', 'message' => 'Invalid customer for this POS.'];
             header('Location: ' . base_url('?page=customer&action=list'));
             exit;
