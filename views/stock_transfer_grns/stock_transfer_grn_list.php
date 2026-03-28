@@ -23,6 +23,8 @@
                     <tr class="text-xs font-bold text-gray-700">
                         <th class="px-4 py-2">GRN ID</th>
                         <th class="px-4 py-2">Transfer Order</th>
+                        <th class="px-4 py-2">SKU</th>
+                        <th class="px-4 py-2">Item Code</th>
                         <th class="px-4 py-2">Received Date</th>
                         <th class="px-4 py-2">Received By</th>
                         <th class="px-4 py-2">Location</th>
@@ -38,6 +40,8 @@
                         <tr>
                             <td class="px-4 py-2"><?php echo (int)$grn['id']; ?></td>
                             <td class="px-4 py-2"><?php echo htmlspecialchars($grn['transfer_order_no'] ?? ''); ?></td>
+                            <td class="px-4 py-2"><?php echo htmlspecialchars($grn['sku'] ?? ''); ?></td>
+                            <td class="px-4 py-2"><?php echo htmlspecialchars($grn['item_code'] ?? ''); ?></td>
                             <td class="px-4 py-2"><?php echo !empty($grn['received_date']) ? date('j M Y', strtotime($grn['received_date'])) : '-'; ?></td>
                             <td class="px-4 py-2"><?php echo htmlspecialchars($grn['received_by_name'] ?? ''); ?></td>
                             <td class="px-4 py-2"><?php echo htmlspecialchars($grn['location_name'] ?? ''); ?></td>
