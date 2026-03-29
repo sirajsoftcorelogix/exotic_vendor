@@ -1104,7 +1104,8 @@ class DispatchController {
             echo json_encode(['success' => false, 'message' => 'No orders provided']);
             exit;
         }
-
+        //print_array($input);
+        //exit;
         // Generate unique batch number
         $batch_no = 'BATCH-' . date('YmdHis') . '-' . mt_rand(10000, 99999);
         
@@ -1119,6 +1120,7 @@ class DispatchController {
                 $customer_id = $orderData['customer_id'] ?? null;
                 $customer_name = $orderData['customer_name'] ?? null;
                 $boxes = $orderData['boxes'] ?? [];
+                $order_ids = $orderData['order_ids'] ?? [];  // Specific order IDs to include
 
                 if (!$order_number || !$customer_id) {
                     $errors[] = "Invalid order data: missing order number or customer id";
@@ -1126,10 +1128,22 @@ class DispatchController {
                 }
 
                 // Get order items from database
-                $orders = $ordersModel->getOrderByOrderNumber($order_number);
-                if (empty($orders)) {
-                    $errors[] = "Order #$order_number not found";
-                    continue;
+                // If specific order_ids are provided, fetch only those items
+                // Otherwise, fetch all items for the order_number
+                if (!empty($order_ids) && is_array($order_ids)) {
+                    // Fetch specific order items by IDs
+                    $orders = $ordersModel->getOrdersByIds($order_ids);
+                    if (empty($orders)) {
+                        $errors[] = "No items found for specified order IDs in order #$order_number";
+                        continue;
+                    }
+                } else {
+                    // Fallback: fetch all items for the order number
+                    //$orders = $ordersModel->getOrderByOrderNumber($order_number);
+                    if (empty($orders)) {
+                        $errors[] = "Order #$order_number not found";
+                        continue;
+                    }
                 }
 
                 // Get vp_order_info for address (getDispatchAddress uses vp_order_info id, not vp_orders id)
@@ -1186,6 +1200,16 @@ class DispatchController {
                     continue;
                 }
 
+                // Map items to box numbers based on $boxes
+                $itemBoxMap = [];
+                foreach ($boxes as $boxIndex => $boxData) {
+                    $box_no = $boxIndex + 1;
+                    $boxItems = $boxData['items'] ?? [];
+                    foreach ($boxItems as $itemId) {
+                        $itemBoxMap[$itemId] = $box_no;
+                    }
+                }
+
                 // Create invoice items
                 foreach ($orders as $order) {
                     $quantity = $order['quantity'] ?? 0;
@@ -1194,6 +1218,9 @@ class DispatchController {
                     $item_total = $quantity * $finalprice;
                     $tax_amount_item = ($item_total * $gst) / 100;
 
+                    // Determine box_no from boxes mapping, default to 1 if not found
+                    $item_box_no = isset($itemBoxMap[$order['id']]) ? $itemBoxMap[$order['id']] : 1;
+
                     $itemData = [
                         'invoice_id' => $invoiceId,
                         'order_number' => $order_number,
@@ -1201,7 +1228,7 @@ class DispatchController {
                         'hsn' => $order['hsn_code'] ?? '',
                         'item_name' => $order['title'] ?? 'Product',
                         'description' => '',
-                        'box_no' => $order['box_no'] ?? '1',
+                        'box_no' => $item_box_no,
                         'quantity' => $quantity,
                         'unit_price' => $finalprice,
                         'tax_rate' => $gst,
@@ -1226,8 +1253,11 @@ class DispatchController {
                     'total_amount' => $total_amount
                 ];
                 
-                // Update order status to invoiced      
-                $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
+                // Update order status to invoiced
+                foreach ($orders as $item) {  
+                    $ordersModel->updateOrderById($item['id'], ['invoice_id' => $invoiceId]);
+                }    
+                //$ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
                        
                 // Create dispatch records for each box
                 foreach ($boxes as $boxIndex => $boxData) {
@@ -1252,10 +1282,18 @@ class DispatchController {
                         'R-14' => ['length' => 14, 'width' => 12, 'height' => 10]
                     ];
                        
-                    // Get dimensions from mapping
-                    $length = $box_size_mapping[$box_size]['length'] ?? 0;
-                    $width = $box_size_mapping[$box_size]['width'] ?? 0;
-                    $height = $box_size_mapping[$box_size]['height'] ?? 0;
+                    // Get dimensions from mapping or custom values
+                    if ($box_size === 'CUSTOM' || isset($boxData['custom_length'])) {
+                        // Custom box size - use provided dimensions
+                        $length = floatval($boxData['custom_length'] ?? 0);
+                        $width = floatval($boxData['custom_width'] ?? 0);
+                        $height = floatval($boxData['custom_height'] ?? 0);
+                    } else {
+                        // Standard box size - use mapping
+                        $length = $box_size_mapping[$box_size]['length'] ?? 0;
+                        $width = $box_size_mapping[$box_size]['width'] ?? 0;
+                        $height = $box_size_mapping[$box_size]['height'] ?? 0;
+                    }
                     $volumetric_weight = ($length * $width * $height) / 5000;
                     $dispatchData = [
                         'invoice_id' => $invoiceId,
@@ -1435,10 +1473,18 @@ class DispatchController {
                         'R-13' => ['length' => 11, 'width' => 8, 'height' => 5], 'R-14' => ['length' => 14, 'width' => 12, 'height' => 10]
                     ];
                     $boxSize = $boxData['box_size'] ?? 'R-1';
-                    $dims = $box_size_mapping[$boxSize] ?? null;
-                    $length = (float)($boxData['length'] ?? $dispatchInfo['length'] ?? $dims['length'] ?? 0);
-                    $width = (float)($boxData['width'] ?? $dispatchInfo['width'] ?? $dims['width'] ?? 0);
-                    $height = (float)($boxData['height'] ?? $dispatchInfo['height'] ?? $dims['height'] ?? 0);
+                    
+                    // Determine dimensions: custom > boxData > dispatchInfo > mapping
+                    if ($boxSize === 'CUSTOM' || isset($boxData['custom_length'])) {
+                        $length = (float)($boxData['custom_length'] ?? $boxData['length'] ?? $dispatchInfo['length'] ?? 0);
+                        $width = (float)($boxData['custom_width'] ?? $boxData['width'] ?? $dispatchInfo['width'] ?? 0);
+                        $height = (float)($boxData['custom_height'] ?? $boxData['height'] ?? $dispatchInfo['height'] ?? 0);
+                    } else {
+                        $dims = $box_size_mapping[$boxSize] ?? null;
+                        $length = (float)($boxData['length'] ?? $dispatchInfo['length'] ?? $dims['length'] ?? 0);
+                        $width = (float)($boxData['width'] ?? $dispatchInfo['width'] ?? $dims['width'] ?? 0);
+                        $height = (float)($boxData['height'] ?? $dispatchInfo['height'] ?? $dims['height'] ?? 0);
+                    }
                     $volumetric_weight = ($length * $width * $height) / 5000;
                     $weight = (float)($boxData['weight'] ?? $dispatchInfo['weight'] ?? $totalBillableWeight ?: 0.5);
 

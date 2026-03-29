@@ -200,8 +200,7 @@ class Order{
             }
         }
         
-        //ship_by_date_desc 	esd
-        
+        //ship_by_date_desc 	esd        
        
         $sql .= " LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
@@ -818,6 +817,47 @@ class Order{
         }
         return null;
     }
+
+    /**
+     * Get specific order items by their IDs
+     * @param array $order_ids Array of order IDs to fetch
+     * @return array|null Array of matching order records or null if none found
+     */
+    function getOrdersByIds($order_ids) {
+        if (empty($order_ids) || !is_array($order_ids)) {
+            return null;
+        }
+
+        // Convert all IDs to integers for safety
+        $order_ids = array_map('intval', $order_ids);
+        $order_ids = array_filter($order_ids); // Remove zero values
+
+        if (empty($order_ids)) {
+            return null;
+        }
+
+        // Create placeholders for parameterized query
+        $placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+        $sql = "SELECT * FROM vp_orders WHERE id IN ($placeholders)";
+        
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+
+        // Build type string for bind_param (all integers)
+        $types = str_repeat('i', count($order_ids));
+        $stmt->bind_param($types, ...$order_ids);
+        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+        return null;
+    }
+
     function getRemarksByOrderNumber($order_number) {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
         $stmt = $this->db->prepare($sql);
@@ -1525,6 +1565,55 @@ class Order{
         $stmt->execute();
         $result = $stmt->get_result();
         return ($result && $result->num_rows > 0);
+    }
+    public function updateOrderById($order_id, $data) {
+        // Validate inputs
+        if (empty($order_id) || empty($data)) {
+            return ['success' => false, 'message' => 'Order ID or data is missing.'];
+        }
+
+        // Prepare SQL statement
+        $setClauses = [];
+        $values = [];
+        $types = '';
+
+        foreach ($data as $key => $value) {
+            $setClauses[] = "$key = ?";
+            $values[] = $value;
+
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value) || is_double($value)) {
+                $types .= 'd';
+            } else {
+                // treat null and other types as string
+                $types .= 's';
+            }
+        }
+
+        $sql = "UPDATE vp_orders SET " . implode(', ', $setClauses) . " WHERE id = ?";
+        $values[] = $order_id;
+        $types .= 'i';
+
+        $stmt = $this->db->prepare($sql);
+
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+
+        // Bind parameters
+        $stmt->bind_param($types, ...$values);
+
+        // Execute and check result
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Execute failed: ' . $stmt->error];
+        }
+
+        $affectedRows = $stmt->affected_rows;
+        $stmt->close();
+
+        return ['success' => true, 'message' => 'Order updated successfully. Affected rows: ' . $affectedRows];
     }
 }
 ?>

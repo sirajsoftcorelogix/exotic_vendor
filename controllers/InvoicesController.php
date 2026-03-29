@@ -902,7 +902,7 @@ class InvoicesController
             while ($row = $result->fetch_assoc()) {
                 $items[] = $row;
             }
-$warehouse_id = $items[0]['warehouse_id'] ?? 0;
+
             // ===== GET ADDRESS INFO =====
             $sql2 = "SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1";
             $stmt2 = $conn->prepare($sql2);
@@ -919,7 +919,6 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
             $_POST = [
                 'invoice_date' => date('Y-m-d'),
                 'customer_id' => $items[0]['customer_id'],
-                 'warehouse_id' => $warehouse_id,
                 'vp_order_info_id' => $info['id'],
                 'status' => 'final',
                 'subtotal' => 0,
@@ -999,6 +998,10 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
                 http_response_code(403);
                 exit('Unauthorized');
             }
+            //date if blank then set to privious day
+            if(empty($date)){
+                $date = date('Y-m-d', strtotime('-1 day'));
+            }
 
             require_once 'generate-xml.php';
             global $invoiceModel;
@@ -1051,7 +1054,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
         // Stream as downloadable file
         header('Content-Type: application/xml; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . 
-               htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.xml"');
+               htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.txt"');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('Expires: 0');
@@ -1136,7 +1139,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
         $xml = $generator->generateConsolidated($allVouchers);
 
         // Stream as downloadable file
-        $filename = 'invoices_' . $date . '_busy.xml';
+        $filename = 'invoices_' . $date . '_busy.txt';
         header('Content-Type: application/xml; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . htmlspecialchars($filename) . '"');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -1170,8 +1173,37 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
             // Generate XML for each invoice
             foreach ($invoiceIds as $invoiceId) {
                 $invoice = $invoiceModel->getInvoiceById($invoiceId);
+                // add address info to invoice data
+                if ($invoice) {
+                    global $commanModel;
+                    $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+                    if ($customer) {
+                        $invoice['customer_name'] = $customer['first_name'] . ' ' . $customer['last_name'];
+                        $invoice['customer_address1'] = trim(($customer['address_line1'] ?? ''));
+                        $invoice['customer_address2'] = trim(($customer['address_line2'] ?? ''));
+                        $invoice['customer_address3'] = trim(($customer['city'] ?? ''));
+                        $invoice['customer_address4'] = trim(($customer['state'] ?? ''));
+                        $invoice['customer_state'] = trim(($customer['state'] ?? ''));
+                        $invoice['customer_zipcode'] = trim(($customer['zipcode'] ?? ''));
+                        $invoice['customer_mobile'] = trim(($customer['mobile'] ?? ''));
+                        $invoice['customer_email'] = trim(($customer['email'] ?? ''));
+                        $invoice['customer_gstin'] = trim(($customer['gstin'] ?? ''));
+                    } else {
+                        $invoice['customer_name'] = '';
+                        $invoice['customer_address1'] = '';
+                        $invoice['customer_address2'] = '';
+                        $invoice['customer_address3'] = '';
+                        $invoice['customer_address4'] = '';
+                        $invoice['customer_state'] = '';
+                        $invoice['customer_zipcode'] = '';
+                        $invoice['customer_mobile'] = '';
+                        $invoice['customer_email'] = '';
+                        $invoice['customer_gstin'] = '';
+                    }
+                    $invoice['narration'] = $invoice['customer_name'] .' '. ($invoice['customer_address1'] ?? '') .' '. ($invoice['customer_address2'] ?? '') .' '. ($invoice['customer_address3'] ?? '') .' '. ($invoice['customer_address4'] ?? '');
+                }
                 $items = $invoiceModel->getInvoiceItems($invoiceId);
-
+                $invoice['total_qty'] = array_sum(array_column($items, 'quantity'));
                 if ($invoice && !empty($items)) {
                     $invoice['sgst'] = array_sum(array_column($items, 'sgst'));
                     $invoice['cgst'] = array_sum(array_column($items, 'cgst'));
@@ -1181,7 +1213,7 @@ $warehouse_id = $items[0]['warehouse_id'] ?? 0;
                     $filename = $invoice['invoice_number'] ?? ('invoice_' . $invoiceId);
                     // Sanitize filename by removing path separators and invalid characters
                     $sanitized_filename = preg_replace('/[\/\\:*?"<>|]/', '_', $filename);
-                    $filepath = $tempDir . '/' . $sanitized_filename . '.xml';
+                    $filepath = $tempDir . '/' . $sanitized_filename . '.txt';
 
                     if (file_put_contents($filepath, $xml) === false) {
                         throw new Exception('Failed to write XML file: ' . $filename);

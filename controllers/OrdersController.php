@@ -400,6 +400,7 @@ class OrdersController {
                     }
                     //customer id add
                     $rdata['customer_id'] = $customerdata['customer_id'] ?? 0;
+                    $rdata['warehouse_id'] = 0; // Default warehouse, can be updated later based on logic
 					$totalorder++;                
                     
                     $data = $ordersModel->insertOrder($rdata);
@@ -1597,13 +1598,13 @@ class OrdersController {
         }
         //check if invoice already exists for the order number, if yes return error
         
-        if ($ordersModel->invoiceExists($order_number)) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Invoice already exists for this order number'
-            ]);
-            exit;
-        }
+        // if ($ordersModel->invoiceExists($order_number)) {
+        //     echo json_encode([
+        //         'success' => false,
+        //         'message' => 'Invoice already exists for this order number'
+        //     ]);
+        //     exit;
+        // }
 
         try {
             $orders = $ordersModel->getOrderByOrderNumber($order_number);
@@ -1637,6 +1638,10 @@ class OrdersController {
 
             $items_html = '';
             foreach ($orders as $order) {
+                //skip item if order status is cancelled or returned or invoice already exists for the order number
+                if (in_array(strtolower($order['order_status'] ?? ''), ['cancelled', 'returned']) || $order['invoice_id'] > 0 || $order['invoice_id'] !== null) {
+                    continue;
+                }
                 $quantity = $order['quantity'] ?? 0;
                 $product_weight = (float)($order['product_weight'] ?? 0);
                 $gst = $order['gst'] ?? 0;
@@ -1646,7 +1651,7 @@ class OrdersController {
                 $items_html .= '
                 <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">
                     <td class="p-2">
-                        <input type="checkbox" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
+                        <input type="checkbox" name="order_ids[]" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
                     <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') .'</td>
