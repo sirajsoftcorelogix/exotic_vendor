@@ -74,7 +74,7 @@ class BusyXmlGenerator
         // Voucher Other Info Details (shipping, transport, etc.)
         $vchOtherInfo = $xml->addChild('VchOtherInfoDetails');
         $vchOtherInfo->addChild('OFInfo');
-        $vchOtherInfo->addChild('Transport', htmlspecialchars($invoice['transport'] ?? 'U'));
+        $vchOtherInfo->addChild('Transport', htmlspecialchars($invoice['transport'] ?? 'others'));
         $vchOtherInfo->addChild('GRNo', htmlspecialchars($invoice['gr_no'] ?? ''));
         $vchOtherInfo->addChild('Station', htmlspecialchars($invoice['station'] ?? ''));
         $vchOtherInfo->addChild('TotalQty', htmlspecialchars($invoice['total_qty'] ?? '0.00'));
@@ -138,8 +138,10 @@ class BusyXmlGenerator
         // Quantity
         $qty = isset($item['quantity']) ? floatval($item['quantity']) : 0.00;
         $itemDetail->addChild('Qty', number_format($qty, 2, '.', ''));
-        $itemDetail->addChild('QtyMainUnit', number_format($qty, 2, '.', ''));
-        $itemDetail->addChild('QtyAltUnit', number_format($qty, 2, '.', ''));
+        // $itemDetail->addChild('QtyMainUnit', number_format($qty, 2, '.', ''));
+        // $itemDetail->addChild('QtyAltUnit', number_format($qty, 2, '.', ''));
+        $itemDetail->addChild('QtyMainUnit', $qty);
+        $itemDetail->addChild('QtyAltUnit', $qty);
         
         $itemDetail->addChild('ItemDescInfo');
         

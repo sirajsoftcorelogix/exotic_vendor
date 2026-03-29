@@ -891,6 +891,40 @@ class StockTransfer
         return $rows;
     }
 
+    public function getReceivedQtyForTransferSku($transferId, $sku, $excludeGrnId = 0)
+    {
+        $transferId = (int)$transferId;
+        $sku = trim($sku);
+        $excludeGrnId = (int)$excludeGrnId;
+
+        if ($transferId <= 0 || $sku === '') {
+            return 0;
+        }
+
+        $sql = "SELECT SUM(qty_received) AS total_received FROM vp_stock_transfer_grns WHERE transfer_id = ? AND sku = ?";
+        if ($excludeGrnId > 0) {
+            $sql .= " AND id != ?";
+        }
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+
+        if ($excludeGrnId > 0) {
+            $stmt->bind_param('isi', $transferId, $sku, $excludeGrnId);
+        } else {
+            $stmt->bind_param('is', $transferId, $sku);
+        }
+
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return isset($row['total_received']) ? (int)$row['total_received'] : 0;
+    }
+
     public function updateTransferGrn($grnId, $data)
     {
         $grnId = (int)$grnId;
@@ -907,6 +941,17 @@ class StockTransfer
         $qtyAcceptable = isset($data['qty_acceptable']) ? (int)$data['qty_acceptable'] : (int)$existingGrn['qty_acceptable'];
         $receivedDate = $data['received_date'] ?? ($existingGrn['received_date'] ?? date('Y-m-d'));
         $remarks = trim($data['remarks'] ?? $existingGrn['remarks'] ?? '');
+
+        $alreadyReceived = $this->getReceivedQtyForTransferSku($existingGrn['transfer_id'], $existingGrn['sku'], $grnId);
+        $maxAllowed = max(0, (int)$existingGrn['transfer_qty'] - $alreadyReceived);
+
+        if ($qtyReceived > $maxAllowed) {
+            $qtyReceived = $maxAllowed;
+        }
+
+        if ($qtyAcceptable > $qtyReceived) {
+            $qtyAcceptable = $qtyReceived;
+        }
 
         $sql = "UPDATE vp_stock_transfer_grns SET qty_received = ?, qty_acceptable = ?, received_date = ?, remarks = ?, updated_at = NOW() WHERE id = ?";
         $stmt = $this->db->prepare($sql);
@@ -1499,12 +1544,28 @@ class StockTransfer
                 $receivedQty = isset($item['received_qty']) ? (int)$item['received_qty'] : 0;
 
                 // Ensure we do not receive more than transferred; enforce max to prevent accidental over-add.
-                if ($transferQty > 0 && $receivedQty > $transferQty) {
+                $alreadyReceived = $this->getReceivedQtyForTransferSku($transferId, $sku);
+                $remainingQty = max(0, $transferQty - $alreadyReceived);
+
+                if ($receivedQty > $remainingQty) {
+                    $this->db->rollback();
+                    return [
+                        'success' => false,
+                        'message' => "Received quantity for SKU '{$sku}' exceeds remaining quantity ({$remainingQty} / {$transferQty})."
+                    ];
+                }
+
+                if ($receivedQty > $transferQty) {
                     $receivedQty = $transferQty;
                 }
 
+                $qtyAcceptable = isset($item['qty_acceptable']) ? (int)$item['qty_acceptable'] : 0;
+                if ($qtyAcceptable > $receivedQty) {
+                    $qtyAcceptable = $receivedQty;
+                }
+
                 $accepted = isset($item['acceptable']) && $item['acceptable'];
-                $acceptableQty = $accepted ? $receivedQty : 0;
+                $acceptableQty = $accepted ? $qtyAcceptable : 0;
                 $itemRemarks = trim($item['remarks'] ?? '');
 
                 // If SKU is missing, fallback to item_code so we can still create movement records

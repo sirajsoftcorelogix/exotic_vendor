@@ -988,6 +988,9 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'delete_customer':
+                $controller->delete_customer();
+                break;
             default:
                 $controller->index();
                 break;

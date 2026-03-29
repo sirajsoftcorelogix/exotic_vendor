@@ -117,7 +117,7 @@
                                 <span class="type-data-small">: &nbsp; <?= htmlspecialchars($depth) ?> <?= htmlspecialchars($lengthUnit) ?></span>
                             </div>
                             <div class="flex items-baseline w-48">
-                                <span class="type-label-small shrink-0">Previously Received Qty</span>
+                                <span class="type-label-small shrink-0">Total Received Qty</span>
                                 <span class="type-data-small">: &nbsp; <?= htmlspecialchars($prevReceived) ?></span>
                             </div>
                         </div>
