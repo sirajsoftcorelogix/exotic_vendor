@@ -733,9 +733,9 @@ class Inbounding {
         $address = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
         // 3. Variations for this item (also on form2 so the view does not call getVariations() again)
-        // NOTE: Get quantity alias as 'quantity' for view compatibility
+        // NOTE: Get all columns plus quantity alias as 'quantity' for view compatibility
         $variations = [];
-        $sqlVar = "SELECT id, color, size, quantity_received, quantity_received AS quantity, cp, variation_image, height, width, depth, weight, store_location, price_india, price_india_mrp, inr_pricing, amazon_price, usd_price, hsn_code, gst_rate, colormaps, dimensions, upc FROM `vp_variations` WHERE it_id = $id ORDER BY id ASC";
+        $sqlVar = "SELECT vp_variations.*, quantity_received AS quantity FROM `vp_variations` WHERE it_id = $id ORDER BY id ASC";
         $resVar = $this->conn->query($sqlVar);
         if ($resVar) {
             $variations = $resVar->fetch_all(MYSQLI_ASSOC);
