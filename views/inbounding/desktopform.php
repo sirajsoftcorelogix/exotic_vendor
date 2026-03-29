@@ -564,6 +564,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <div class="relative flex items-center w-full">
                             <input type="text" id="dimensions" class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[40px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]" value="<?= htmlspecialchars($data['form2']['dimensions'] ?? '') ?>" name="dimensions" placeholder="Dimensions">
                         </div>
+                        <p id="dimensions_wordcount" class="text-[11px] text-[#666] mt-1">0 / 250 words</p>
                     </div>
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">UPC:</label>
@@ -2163,6 +2164,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Dimensions field auto-fill logic (from height/width/depth)
     const dimensionsInput = document.getElementById('dimensions');
+    const dimensionsWordCountLabel = document.getElementById('dimensions_wordcount');
+    const dimensionsWordLimit = 250;
     let dimensionsManualEdit = dimensionsInput && dimensionsInput.value.trim() !== '';
 
     const formatDimensionsText = (h, w, d) => {
@@ -2175,6 +2178,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${hh || '0'} Inches Height X ${ww || '0'} Inches Width X ${dd || '0'} Inches Depth`;
     };
 
+    const limitDimensionsWords = (text) => {
+        if (!text) return '';
+        const words = text.trim().split(/\s+/);
+        if (words.length <= dimensionsWordLimit) {
+            return words.join(' ');
+        }
+        return words.slice(0, dimensionsWordLimit).join(' ');
+    };
+
+    const renderWordCount = () => {
+        if (!dimensionsInput || !dimensionsWordCountLabel) return;
+        const count = dimensionsInput.value.trim() === '' ? 0 : dimensionsInput.value.trim().split(/\s+/).length;
+        dimensionsWordCountLabel.textContent = `${count} / ${dimensionsWordLimit} words`;
+    };
+
     const updateDimensionsField = () => {
         if (!dimensionsInput) {
             return;
@@ -2184,19 +2202,24 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const newValue = formatDimensionsText(
+        let newValue = formatDimensionsText(
             heightInput ? heightInput.value : '',
             widthInput ? widthInput.value : '',
             depthInput ? depthInput.value : ''
         );
 
+        newValue = limitDimensionsWords(newValue);
         dimensionsInput.value = newValue;
+        renderWordCount();
     };
 
     if (dimensionsInput) {
         dimensionsInput.addEventListener('input', () => {
             dimensionsManualEdit = true;
+            dimensionsInput.value = limitDimensionsWords(dimensionsInput.value);
+            renderWordCount();
         });
+        renderWordCount();
     }
 
     [heightInput, widthInput, depthInput].forEach((field) => {

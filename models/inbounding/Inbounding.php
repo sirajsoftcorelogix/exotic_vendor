@@ -1032,6 +1032,12 @@ class Inbounding {
         $feedback = $data['feedback'] ?? '';
         $hsn_code = $data['hsn_code'] ?? '';
         $dimensions = $data['dimensions'] ?? '';
+        // Enforce 250-word limit for dimensions at backend as well
+        $dimensions = trim(preg_replace('/\s+/', ' ', $dimensions));
+        $dimWords = $dimensions === '' ? [] : preg_split('/\s+/', $dimensions);
+        if (count($dimWords) > 250) {
+            $dimensions = implode(' ', array_slice($dimWords, 0, 250));
+        }
        
         $qty    = (int) ($data['quantity_received'] ?? 0);
         $gst_rate    = (int) ($data['gst_rate'] ?? 0);
