@@ -1200,6 +1200,7 @@ class InvoicesController
                         $invoice['customer_email'] = '';
                         $invoice['customer_gstin'] = '';
                     }
+                    $invoice['narration'] = $invoice['customer_name'] .' '. ($invoice['customer_address1'] ?? '') .' '. ($invoice['customer_address2'] ?? '') .' '. ($invoice['customer_address3'] ?? '') .' '. ($invoice['customer_address4'] ?? '');
                 }
                 $items = $invoiceModel->getInvoiceItems($invoiceId);
                 $invoice['total_qty'] = array_sum(array_column($items, 'quantity'));
