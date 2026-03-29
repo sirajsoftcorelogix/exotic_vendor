@@ -355,9 +355,7 @@ switch ($page) {
             case 'fetch_items':
                 $controller->fetchItems();
                 break;
-            case 'CreateAutoFromOrder':
-                $controller->create_auto_from_order();
-                break;
+
             default:
                 $controller->index();
                 break;
@@ -855,8 +853,11 @@ switch ($page) {
             case 'set-customer':
                 $controller->set_customer();
                 break;
-                 case 'apply_custom_discount':
+            case 'apply_custom_discount':
                 $controller->apply_custom_discount();
+                break;
+            case 'remove-custom-discount':
+                $controller->remove_custom_discount();
                 break;
             default:
                 $controller->index();
@@ -1079,10 +1080,10 @@ switch ($page) {
                 $controller->preview();
                 break;
 
-            case 'create_auto_from_order':
+
+            case 'CreateAutoFromOrder':
                 $controller->create_auto_from_order();
                 break;
-
             case 'create_from_payment':
                 $controller->create_from_payment();
                 break;
@@ -1096,14 +1097,14 @@ switch ($page) {
                 break;
 
             case 'generate_pdf':
-                $controller->generate_pdf();
+                $controller->generatePdf();
                 break;
 
             default:
                 $controller->index();
                 break;
         }
-         case 'posorders':
+    case 'posorders':
         require_once 'controllers/PosOrdersController.php';
         $controller = new PosOrdersController($conn);
         switch ($action) {
@@ -1173,5 +1174,4 @@ switch ($page) {
                 break;
         }
         break;
-
 }

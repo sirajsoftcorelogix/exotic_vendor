@@ -363,6 +363,25 @@
             </div>
 
           <?php endif; ?>
+          <?php if (!empty($cartData['custom_discount']) && $cartData['custom_discount'] > 0): ?>
+            <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+
+              <span class="text-[11px] text-green-700 font-semibold">
+                Custom Discount
+                (- <?= currencySymbol($cartData['currency']) ?>
+                <?= number_format($cartData['custom_discount'], 2) ?>)
+              </span>
+
+              <form method="POST" action="?page=pos_register&action=remove-custom-discount">
+                <button
+                  type="submit"
+                  class="text-[11px] text-green-600 font-semibold hover:underline">
+                  Remove
+                </button>
+              </form>
+
+            </div>
+          <?php endif; ?>
           <div id="couponMessage" class="text-[11px]"></div>
           <?php if (isset($_SESSION['coupon_message'])): ?>
 
@@ -468,12 +487,12 @@
 
   </main>
 </div>
-<!-- <a
-  href="/?page=invoices&action=generate_pdf&invoice_id=33"
+<a
+  href="/?page=posinvoice&action=generate_pdf&invoice_id=49"
   target="_blank"
   class="px-4 py-2 bg-green-600 text-white rounded">
   TEST PRINT
-</a> -->
+</a>
 <!-- Product Modal -->
 <div id="productModal" class="fixed inset-0 z-[9999] hidden">
   <!-- overlay -->
@@ -767,7 +786,7 @@
 
           </select>
         </div> -->
-              <input type="hidden" name="payment_type" id="payment_mode" value="offline">
+        <input type="hidden" name="payment_type" id="payment_mode" value="offline">
 
         <!-- Payment Date -->
         <div>
@@ -841,6 +860,46 @@
 
   </div>
 </div>
+<!-- DISCOUNT MODAL -->
+<div id="discountModal" class="fixed inset-0 z-[9999] hidden">
+
+  <div class="absolute inset-0 bg-black/40" onclick="closeDiscountModal()"></div>
+
+  <div class="relative mx-auto mt-40 w-[95%] max-w-md rounded-2xl bg-white shadow-xl p-5">
+
+    <h2 class="text-lg font-semibold mb-4">Apply Discount</h2>
+
+    <!-- TYPE -->
+    <div class="mb-3">
+      <label class="text-xs text-gray-600">Discount Type</label>
+      <select id="discount_type"
+        class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
+        <option value="fixed">Fixed Amount (₹)</option>
+        <option value="percent">Percentage (%)</option>
+      </select>
+    </div>
+
+    <!-- VALUE -->
+    <div class="mb-4">
+      <label class="text-xs text-gray-600">Value</label>
+      <input type="number" id="discount_value"
+        class="w-full mt-1 border rounded-lg px-3 py-2 text-sm"
+        placeholder="Enter value">
+    </div>
+
+    <!-- BUTTONS -->
+    <div class="flex justify-end gap-2">
+      <button onclick="closeDiscountModal()"
+        class="px-4 py-2 bg-gray-300 rounded-lg">Cancel</button>
+
+      <button onclick="applyDiscount()"
+        class="px-4 py-2 bg-orange-600 text-white rounded-lg">
+        Apply
+      </button>
+    </div>
+
+  </div>
+</div>
 <!-- CUSTOMER MODAL -->
 <!-- INVOICE PREVIEW MODAL -->
 
@@ -876,7 +935,7 @@
 <script>
   function autoCreateInvoiceThenPreview(orderid) {
 
-    fetch('?page=invoices&action=CreateAutoFromOrder', {
+    fetch('?page=posinvoice&action=CreateAutoFromOrder', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -904,10 +963,10 @@
       });
   }
 
- 
+
   function previewInvoiceFromOrder(orderNumber) {
 
-    fetch('?page=invoices&action=preview', {
+    fetch('?page=posinvoice&action=preview', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -931,7 +990,7 @@
         if (data.invoice_id) {
 
           document.getElementById("printInvoiceBtn").href =
-            "/?page=invoices&action=generate_pdf&invoice_id=" + data.invoice_id;
+            "/?page=posinvoice&action=generate_pdf&invoice_id=" + data.invoice_id;
 
         } else {
 
@@ -1410,16 +1469,23 @@
 </script>
 
 <script>
+  // OPEN MODAL
   document.getElementById("applyCustomDiscountBtn").addEventListener("click", function() {
+    document.getElementById("discountModal").classList.remove("hidden");
+  });
 
-    let amount = prompt("Enter Discount Amount");
+  function closeDiscountModal() {
+    document.getElementById("discountModal").classList.add("hidden");
+  }
 
-    if (amount === null) return;
+  // APPLY DISCOUNT
+  function applyDiscount() {
 
-    amount = parseFloat(amount);
+    let type = document.getElementById("discount_type").value;
+    let value = parseFloat(document.getElementById("discount_value").value);
 
-    if (isNaN(amount) || amount < 0) {
-      alert("Invalid discount amount");
+    if (!value || value <= 0) {
+      showToast("⚠ Enter valid discount", "red");
       return;
     }
 
@@ -1428,13 +1494,14 @@
         headers: {
           "Content-Type": "application/x-www-form-urlencoded"
         },
-        body: "amount=" + amount
+        body: "type=" + type + "&value=" + value
       })
       .then(res => res.json())
       .then(data => {
 
         if (data.success) {
           showToast("✓ Discount Applied", "green");
+          closeDiscountModal();
           location.reload();
         } else {
           showToast(data.message || "Discount failed", "red");
@@ -1442,5 +1509,5 @@
 
       });
 
-  });
+  }
 </script>
