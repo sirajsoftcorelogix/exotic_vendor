@@ -220,12 +220,44 @@ class StockTransfer
         $lastRow = $result->fetch_assoc();
         $lstmt->close();
         
-        // Calculate new running_stock
-        // For TRANSFER_OUT: subtract the quantity
-        // For other types: add the quantity
+        // If no warehouse-specific history, fallback to last SKU-based history for overall running stock sanity check.
+        if (!$lastRow) {
+            $fallbackSql = "SELECT running_stock, warehouse_id FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
+            $fallbackStmt = $this->db->prepare($fallbackSql);
+            if ($fallbackStmt) {
+                $fallbackStmt->bind_param('s', $sku);
+                $fallbackStmt->execute();
+                $fallbackRes = $fallbackStmt->get_result();
+                $fallbackRow = $fallbackRes ? $fallbackRes->fetch_assoc() : null;
+                $fallbackStmt->close();
+
+                if ($fallbackRow) {
+                    $lastRow = $fallbackRow;
+                }
+            }
+        }
+
         $lastRunningStock = $lastRow ? (int)$lastRow['running_stock'] : 0;
 
-        // Try to get current stock from vp_products if product exists
+        // Fallback: if you're receiving inventory and the global SKU stock is higher than this warehouse, use global stock.
+        $globalStock = 0;
+        $globalSql = "SELECT running_stock FROM vp_stock_movements WHERE sku = ? ORDER BY id DESC LIMIT 1";
+        $globalStmt = $this->db->prepare($globalSql);
+        if ($globalStmt) {
+            $globalStmt->bind_param('s', $sku);
+            $globalStmt->execute();
+            $globalRes = $globalStmt->get_result();
+            $globalRow = $globalRes ? $globalRes->fetch_assoc() : null;
+            $globalStmt->close();
+            if ($globalRow) {
+                $globalStock = (int)$globalRow['running_stock'];
+            }
+        }
+
+        if ($movement_type === 'TRANSFER_IN' && $globalStock > $lastRunningStock) {
+            $lastRunningStock = $globalStock;
+        }
+
         $currentStock = $lastRunningStock;
         $productExists = false;
         $prodStmt = $this->db->prepare("SELECT local_stock FROM vp_products WHERE id = ?");
@@ -241,18 +273,20 @@ class StockTransfer
             $prodStmt->close();
         }
 
-        if ($movement_type === 'TRANSFER_OUT') {
-            $runningStock = $currentStock - $quantity;
-        } else {
-            $runningStock = $currentStock + $quantity;
-        }
-
-        // Prefer last running stock (from movements) if available, to stay consistent
         if ($lastRow) {
+            // Consistent chaining from the last movement in this SKU+warehouse context
             if ($movement_type === 'TRANSFER_OUT') {
                 $runningStock = $lastRunningStock - $quantity;
             } else {
                 $runningStock = $lastRunningStock + $quantity;
+            }
+        } else {
+            // Fallback to product local_stock (or zero) when no movement history exists for this SKU/warehouse
+            $base = $productExists ? $currentStock : 0;
+            if ($movement_type === 'TRANSFER_OUT') {
+                $runningStock = $base - $quantity;
+            } else {
+                $runningStock = $base + $quantity;
             }
         }
 
@@ -778,6 +812,259 @@ class StockTransfer
     }
 
     /**
+     * Get list of GRN rows for a specific stock transfer (or all if $transferId=0)
+     *
+     * @param int $transferId
+     * @return array
+     */
+    public function listTransferGrns($transferId = 0)
+    {
+        $transferId = (int)$transferId;
+        $sql = "SELECT g.*, t.transfer_order_no, w.address_title AS location_name, u.name AS received_by_name
+                FROM vp_stock_transfer_grns g
+                LEFT JOIN vp_stock_transfer t ON t.id = g.transfer_id
+                LEFT JOIN exotic_address w ON w.id = g.location
+                LEFT JOIN vp_users u ON u.id = g.received_by";
+
+        if ($transferId > 0) {
+            $sql .= " WHERE g.transfer_id = ?";
+        }
+
+        $sql .= " ORDER BY g.received_date DESC, g.created_at DESC";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        if ($transferId > 0) {
+            $stmt->bind_param('i', $transferId);
+        }
+
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return $rows;
+    }
+
+    public function getTransferGrnById($grnId)
+    {
+        $grnId = (int)$grnId;
+        if ($grnId <= 0) {
+            return null;
+        }
+
+        $sql = "SELECT * FROM vp_stock_transfer_grns WHERE id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('i', $grnId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $grn = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        return $grn;
+    }
+
+    public function getTransferGrnGroup($transferId, $receivedDate, $receivedBy)
+    {
+        $transferId = (int)$transferId;
+        $receivedBy = (int)$receivedBy;
+
+        $sql = "SELECT * FROM vp_stock_transfer_grns WHERE transfer_id = ? AND received_date = ? AND received_by = ? ORDER BY id ASC";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param('isi', $transferId, $receivedDate, $receivedBy);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return $rows;
+    }
+
+    public function getReceivedQtyForTransferSku($transferId, $sku, $excludeGrnId = 0)
+    {
+        $transferId = (int)$transferId;
+        $sku = trim($sku);
+        $excludeGrnId = (int)$excludeGrnId;
+
+        if ($transferId <= 0 || $sku === '') {
+            return 0;
+        }
+
+        $sql = "SELECT SUM(qty_received) AS total_received FROM vp_stock_transfer_grns WHERE transfer_id = ? AND sku = ?";
+        if ($excludeGrnId > 0) {
+            $sql .= " AND id != ?";
+        }
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+
+        if ($excludeGrnId > 0) {
+            $stmt->bind_param('isi', $transferId, $sku, $excludeGrnId);
+        } else {
+            $stmt->bind_param('is', $transferId, $sku);
+        }
+
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return isset($row['total_received']) ? (int)$row['total_received'] : 0;
+    }
+
+    public function updateTransferGrn($grnId, $data)
+    {
+        $grnId = (int)$grnId;
+        if ($grnId <= 0) {
+            return false;
+        }
+
+        $existingGrn = $this->getTransferGrnById($grnId);
+        if (!$existingGrn) {
+            return false;
+        }
+
+        $qtyReceived = isset($data['qty_received']) ? (int)$data['qty_received'] : (int)$existingGrn['qty_received'];
+        $qtyAcceptable = isset($data['qty_acceptable']) ? (int)$data['qty_acceptable'] : (int)$existingGrn['qty_acceptable'];
+        $receivedDate = $data['received_date'] ?? ($existingGrn['received_date'] ?? date('Y-m-d'));
+        $remarks = trim($data['remarks'] ?? $existingGrn['remarks'] ?? '');
+
+        $alreadyReceived = $this->getReceivedQtyForTransferSku($existingGrn['transfer_id'], $existingGrn['sku'], $grnId);
+        $maxAllowed = max(0, (int)$existingGrn['transfer_qty'] - $alreadyReceived);
+
+        if ($qtyReceived > $maxAllowed) {
+            $qtyReceived = $maxAllowed;
+        }
+
+        if ($qtyAcceptable > $qtyReceived) {
+            $qtyAcceptable = $qtyReceived;
+        }
+
+        $sql = "UPDATE vp_stock_transfer_grns SET qty_received = ?, qty_acceptable = ?, received_date = ?, remarks = ?, updated_at = NOW() WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param('iissi', $qtyReceived, $qtyAcceptable, $receivedDate, $remarks, $grnId);
+        $result = $stmt->execute();
+        $stmt->close();
+
+        if ($result && $qtyReceived !== (int)$existingGrn['qty_received']) {
+            // Adjust linked stock movement for this GRN row.
+            $this->adjustGrnStockMovement($grnId, $qtyReceived);
+        }
+
+        return (bool)$result;
+    }
+
+    public function adjustGrnStockMovement($grnId, $newQty)
+    {
+        $grnId = (int)$grnId;
+        if ($grnId <= 0) {
+            return false;
+        }
+
+        $grn = $this->getTransferGrnById($grnId);
+        if (!$grn) {
+            return false;
+        }
+
+        $oldQty = (int)$grn['qty_received'];
+        $delta = $newQty - $oldQty;
+        if ($delta === 0) {
+            return true;
+        }
+
+        $targetMovement = null;
+        $sql = "SELECT id, quantity, running_stock, sku, warehouse_id FROM vp_stock_movements WHERE ref_type = 'GRN' AND ref_id = ? ORDER BY id DESC LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt) {
+            $stmt->bind_param('i', $grnId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $targetMovement = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+        }
+
+        if (!$targetMovement) {
+            // fallback: maybe older records used transfer_order_no as ref_id
+            $sql = "SELECT id, quantity, running_stock, sku, warehouse_id FROM vp_stock_movements WHERE ref_type = 'GRN' AND ref_id = ? ORDER BY id DESC LIMIT 1";
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $refFallback = $grn['transfer_order_no'] ?? '';
+                $stmt->bind_param('s', $refFallback);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $targetMovement = $res ? $res->fetch_assoc() : null;
+                $stmt->close();
+            }
+        }
+
+        if (!$targetMovement) {
+            return false;
+        }
+
+        $targetId = (int)$targetMovement['id'];
+        $newRunningStock = (int)$targetMovement['running_stock'] + $delta;
+
+        $updateSql = "UPDATE vp_stock_movements SET quantity = ?, running_stock = ? WHERE id = ?";
+        $updateStmt = $this->db->prepare($updateSql);
+        if ($updateStmt) {
+            $updateStmt->bind_param('iii', $newQty, $newRunningStock, $targetId);
+            $updateStmt->execute();
+            $updateStmt->close();
+        }
+
+        $propagateSql = "UPDATE vp_stock_movements SET running_stock = running_stock + ? WHERE sku = ? AND warehouse_id = ? AND id > ?";
+        $propagateStmt = $this->db->prepare($propagateSql);
+        if ($propagateStmt) {
+            $propagateStmt->bind_param('isii', $delta, $targetMovement['sku'], $targetMovement['warehouse_id'], $targetId);
+            $propagateStmt->execute();
+            $propagateStmt->close();
+        }
+
+        if (!empty($targetMovement['sku'])) {
+            $this->syncProductLocalStock($targetMovement['sku'], (int)($grn['product_id'] ?? 0));
+        }
+
+        return true;
+    }
+
+    public function deleteTransferGrn($grnId)
+    {
+        $grnId = (int)$grnId;
+        if ($grnId <= 0) {
+            return false;
+        }
+
+        $sql = "DELETE FROM vp_stock_transfer_grns WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param('i', $grnId);
+        $result = $stmt->execute();
+        $stmt->close();
+
+        return (bool)$result;
+    }
+
+    /**
      * Get a single transfer record (with items) by its ID.
      *
      * @param int $transferId
@@ -1228,7 +1515,11 @@ class StockTransfer
             return ['success' => false, 'message' => 'Please enter received quantity for at least one item'];
         }
 
-        $destinationWarehouse = isset($data['warehouse_id']) && (int)$data['warehouse_id'] > 0 ? (int)$data['warehouse_id'] : (int)$transfer['to_warehouse'];
+        $destinationWarehouse = (int)($transfer['to_warehouse'] ?? 0);
+        if ($destinationWarehouse <= 0 && isset($data['warehouse_id']) && (int)$data['warehouse_id'] > 0) {
+            $destinationWarehouse = (int)$data['warehouse_id'];
+        }
+
         $transferOrderNo = $transfer['transfer_order_no'];
 
         // Ensure required GRN tables exist in the database
@@ -1251,8 +1542,30 @@ class StockTransfer
                 $itemCode = trim($item['item_code'] ?? '');
                 $transferQty = isset($item['transfer_qty']) ? (int)$item['transfer_qty'] : 0;
                 $receivedQty = isset($item['received_qty']) ? (int)$item['received_qty'] : 0;
+
+                // Ensure we do not receive more than transferred; enforce max to prevent accidental over-add.
+                $alreadyReceived = $this->getReceivedQtyForTransferSku($transferId, $sku);
+                $remainingQty = max(0, $transferQty - $alreadyReceived);
+
+                if ($receivedQty > $remainingQty) {
+                    $this->db->rollback();
+                    return [
+                        'success' => false,
+                        'message' => "Received quantity for SKU '{$sku}' exceeds remaining quantity ({$remainingQty} / {$transferQty})."
+                    ];
+                }
+
+                if ($receivedQty > $transferQty) {
+                    $receivedQty = $transferQty;
+                }
+
+                $qtyAcceptable = isset($item['qty_acceptable']) ? (int)$item['qty_acceptable'] : 0;
+                if ($qtyAcceptable > $receivedQty) {
+                    $qtyAcceptable = $receivedQty;
+                }
+
                 $accepted = isset($item['acceptable']) && $item['acceptable'];
-                $acceptableQty = $accepted ? $receivedQty : 0;
+                $acceptableQty = $accepted ? $qtyAcceptable : 0;
                 $itemRemarks = trim($item['remarks'] ?? '');
 
                 // If SKU is missing, fallback to item_code so we can still create movement records
@@ -1304,8 +1617,9 @@ class StockTransfer
                     throw new Exception('Execute error: ' . $itemStmt->error);
                 }
 
+                $currentGrnId = $this->db->insert_id;
                 if ($firstGrnId === null) {
-                    $firstGrnId = $this->db->insert_id;
+                    $firstGrnId = $currentGrnId;
                 }
 
                 // Determine product id (prefer transfer item product id)
@@ -1366,7 +1680,7 @@ class StockTransfer
                     $userId,
                     'GRN',
                     'Received from stock transfer: ' . $transferOrderNo,
-                    $transferOrderNo
+                    $currentGrnId
                 );
             }
 
