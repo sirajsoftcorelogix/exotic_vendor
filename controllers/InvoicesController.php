@@ -1201,6 +1201,8 @@ class InvoicesController
                     }
                     $invoice['narration'] = $invoice['customer_name'] . ' ' . ($invoice['customer_address1'] ?? '') . ' ' . ($invoice['customer_address2'] ?? '') . ' ' . ($invoice['customer_address3'] ?? '') . ' ' . ($invoice['customer_address4'] ?? '');
                 }
+                $address = $commanModel->get_exotic_address();
+                $invoice['exotic_address'] = $address[0]['address'] ?? '';
                 $items = $invoiceModel->getInvoiceItems($invoiceId);
                 $invoice['total_qty'] = array_sum(array_column($items, 'quantity'));
                 if ($invoice && !empty($items)) {
