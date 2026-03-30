@@ -855,6 +855,9 @@ switch ($page) {
             case 'set-customer':
                 $controller->set_customer();
                 break;
+                 case 'apply_custom_discount':
+                $controller->apply_custom_discount();
+                break;
             default:
                 $controller->index();
                 break;
