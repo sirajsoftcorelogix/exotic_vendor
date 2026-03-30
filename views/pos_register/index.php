@@ -90,7 +90,45 @@
             <?php $isFirst = false; ?>
           <?php endforeach; ?>
         </div>
+        <div class="flex flex-wrap items-center gap-3 mt-3">
 
+          <!-- Sort -->
+          <select id="sortBy" class="border rounded-lg px-3 py-2 text-xs">
+            <option value="">Sort By</option>
+            <option value="price_low_high">Price Low → High</option>
+            <option value="price_high_low">Price High → Low</option>
+            <option value="name_asc">Name A → Z</option>
+            <option value="name_desc">Name Z → A</option>
+            <!-- <option value="stock_high_low">Stock High → Low</option> -->
+          </select>
+
+          <!-- Price -->
+          <input type="number" id="minPrice" placeholder="Min ₹"
+            class="border rounded-lg px-3 py-2 text-xs w-24">
+
+          <input type="number" id="maxPrice" placeholder="Max ₹"
+            class="border rounded-lg px-3 py-2 text-xs w-24">
+
+          <!-- Stock -->
+          <!-- <select id="stockFilter" class="border rounded-lg px-3 py-2 text-xs">
+            <option value="">All Stock</option>
+            <option value="in_stock">In Stock</option>
+            <option value="out_stock">Out of Stock</option>
+          </select> -->
+
+          <!-- APPLY BUTTON -->
+          <button id="applyFilterBtn"
+            class="bg-orange-600 text-white px-4 py-2 text-xs rounded-lg hover:bg-orange-700">
+            Apply
+          </button>
+
+          <!-- RESET BUTTON -->
+          <button id="resetFilterBtn"
+            class="bg-gray-200 text-gray-700 px-4 py-2 text-xs rounded-lg hover:bg-gray-300">
+            Reset
+          </button>
+
+        </div>
         <!-- Product Card -->
         <div class="mt-3 h-[70vh] overflow-y-auto no-scrollbar">
           <div
@@ -487,12 +525,12 @@
 
   </main>
 </div>
-<a
+<!-- <a
   href="/?page=posinvoice&action=generate_pdf&invoice_id=49"
   target="_blank"
   class="px-4 py-2 bg-green-600 text-white rounded">
   TEST PRINT
-</a>
+</a> -->
 <!-- Product Modal -->
 <div id="productModal" class="fixed inset-0 z-[9999] hidden">
   <!-- overlay -->
@@ -1510,4 +1548,13 @@
       });
 
   }
+</script>
+<script>
+//   $('#sortBy, #minPrice, #maxPrice, #stockFilter').on('change keyup', function () {
+//   clearTimeout(searchTimeout);
+//   searchTimeout = setTimeout(function () {
+//     resetAndLoad();
+//   }, 400);
+// });
+
 </script>

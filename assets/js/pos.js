@@ -258,7 +258,10 @@ $(function () {
 
     isLoading = true;
     showLoader(true);
-
+    const sortBy = $('#sortBy').val();
+    const minPrice = $('#minPrice').val();
+    const maxPrice = $('#maxPrice').val();
+    const stockFilter = $('#stockFilter').val();
     const productCode = $('#searchCode').val();
     const productName = $('#searchName').val();
     const requestedPage = page;
@@ -272,7 +275,11 @@ $(function () {
         per_page: perPage,
         category: currentCategory,
         product_code: productCode,
-        product_name: productName
+        product_name: productName,
+        sort_by: sortBy,
+        min_price: minPrice,
+        max_price: maxPrice,
+        stock_filter: stockFilter
       },
       success: function (res) {
         const rows = res.data || [];
@@ -302,7 +309,17 @@ $(function () {
     fetchProducts(1, false);
     $scrollWrapper.scrollTop(0);
   }
+  $('#applyFilterBtn').on('click', function () {
+    resetAndLoad();
+  });
 
+  $('#resetFilterBtn').on('click', function () {
+    $('#sortBy').val('');
+    $('#minPrice').val('');
+    $('#maxPrice').val('');
+    $('#stockFilter').val('');
+    resetAndLoad();
+  });
   // ────────────────────────────────────────────────
   // EVENT LISTENERS (only products & modal)
   // ────────────────────────────────────────────────
