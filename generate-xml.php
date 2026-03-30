@@ -176,7 +176,7 @@ class BusyXmlGenerator
         
         // Additional fields
         $itemDetail->addChild('tmpNettPrice', '0');
-        $itemDetail->addChild('MC', htmlspecialchars($invoice['master_name2'] ?? 'Main Store'));
+        $itemDetail->addChild('MC', htmlspecialchars($invoice['exotic_address'] ?? 'Main Store'));
         $itemDetail->addChild('tmpDiscountBasis', '1');
         $itemDetail->addChild('tmpGroupName', htmlspecialchars($item['groupname'] ?? $item['item_name'] ?? ''));
         $itemDetail->addChild('tmpMainUnitName', htmlspecialchars($item['unit'] ?? 'PCS.'));

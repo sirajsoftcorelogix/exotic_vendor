@@ -293,7 +293,7 @@
     function loadPayments() {
 
 
-        let url = `?page=payments&action=list_ajax&from_date=${document.getElementById('from_date').value}&to_date=${document.getElementById('to_date').value}&order_number=${document.getElementById('order_number').value}&payment_mode=${document.getElementById('payment_mode').value}&amount_min=${document.getElementById('amount_min').value}&amount_max=${document.getElementById('amount_max').value}`;
+    let url = `?page=payments&action=list_ajax&from_date=${document.getElementById('from_date').value}&to_date=${document.getElementById('to_date').value}&order_number=${document.getElementById('order_number').value}&payment_mode=${document.getElementById('payment_mode').value}&amount_min=${document.getElementById('amount_min').value}&amount_max=${document.getElementById('amount_max').value}`;
 
 
         fetch(url)

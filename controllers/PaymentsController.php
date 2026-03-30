@@ -1,8 +1,7 @@
 <?php
 
 require_once 'models/user/user.php';
-require_once 'models/user/user.php';
-require_once 'models/invoice/invoice.php';
+require_once 'models/PosInvoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 
@@ -294,6 +293,7 @@ WHERE 1=1
     ");
         $stmt2->bind_param("i", $order_id);
         $stmt2->execute();
+
         $paid = $stmt2->get_result()->fetch_assoc()['paid'] ?? 0;
 
         echo json_encode([
@@ -373,420 +373,60 @@ WHERE 1=1
             $warehouse_id
         );
         $stmt2->execute();
-/* ================= FINAL PAYMENT → UPDATE INVOICE DATE ================= */
+        $paymentId = $conn->insert_id;
 
-if ($stage === 'final') {
+        /* 🔥 FINAL PAYMENT → UPDATE INVOICE */
+        if ($stage === 'final') {
 
-    // get invoice id for this order
-    $inv = $conn->query("
-        SELECT id 
-        FROM vp_invoices 
-        WHERE order_id = $order_id 
-        ORDER BY id DESC 
-        LIMIT 1
-    ")->fetch_assoc();
+            $order_number_safe = $conn->real_escape_string($order_number);
 
-    if ($inv) {
+            $inv = $conn->query("
+            SELECT id 
+            FROM vp_invoices 
+            WHERE order_number = '$order_number_safe'
+            ORDER BY id DESC 
+            LIMIT 1
+        ")->fetch_assoc();
 
-        $conn->query("
-            UPDATE vp_invoices
-            SET invoice_date = NOW(),
-                status = 'final'
-            WHERE id = {$inv['id']}
-        ");
-    }
-}
+            if ($inv) {
+                $conn->query("
+                UPDATE vp_invoices
+                SET status = 'final',
+                    invoice_date = NOW()
+                WHERE id = {$inv['id']}
+            ");
+            }
+        }
+
+        /* ================= FINAL PAYMENT → UPDATE INVOICE DATE ================= */
+
+        //     if ($stage === 'final') {
+
+        //         // get invoice id for this order
+        //         $inv = $conn->query("
+        //     SELECT id 
+        //     FROM vp_invoices 
+        //     WHERE order_id = $order_id 
+        //     ORDER BY id DESC 
+        //     LIMIT 1
+        // ")->fetch_assoc();
+
+        //         if ($inv) {
+
+        //             $conn->query("
+        //         UPDATE vp_invoices
+        //         SET invoice_date = NOW(),
+        //             status = 'final'
+        //         WHERE id = {$inv['id']}
+        //     ");
+        //         }
+        //     }
         echo json_encode(["success" => true]);
         exit;
     }
-    public function CreateAutoFromOrder()
-    {
-        global $conn;
 
-        $data = json_decode(file_get_contents("php://input"), true);
-        $orderId = $data['orderid'] ?? 0;
 
-        if (!$orderId) {
-            echo json_encode(["success" => false, "message" => "Order ID missing"]);
-            exit;
-        }
 
-        /* ===== GET ORDER ===== */
-
-        $order = $conn->query("
-        SELECT *
-        FROM pos_payments
-        WHERE order_id = $orderId
-        ORDER BY id ASC
-        LIMIT 1
-    ")->fetch_assoc();
-
-        if (!$order) {
-            echo json_encode(["success" => false, "message" => "Order not found"]);
-            exit;
-        }
-
-        /* ===== CREATE INVOICE HEADER ===== */
-
-        $conn->query("
-        INSERT INTO vp_invoices
-        (order_id, customer_id, total, created_at)
-        VALUES
-        ($orderId, {$order['customer_id']}, 0, NOW())
-    ");
-
-        $invoiceId = $conn->insert_id;
-
-        /* ===== COPY ITEMS FROM ORDER ITEMS TABLE ===== */
-
-        $items = $conn->query("
-        SELECT *
-        FROM pos_order_items
-        WHERE order_id = $orderId
-    ");
-
-        if ($items->num_rows == 0) {
-            echo json_encode(["success" => false, "message" => "Order has no items"]);
-            exit;
-        }
-
-        $total = 0;
-
-        while ($row = $items->fetch_assoc()) {
-
-            $lineTotal = $row['qty'] * $row['price'];
-            $total += $lineTotal;
-
-            $conn->query("
-            INSERT INTO invoice_items
-            (invoice_id, product_id, qty, price, total)
-            VALUES
-            ($invoiceId, {$row['product_id']}, {$row['qty']}, {$row['price']}, $lineTotal)
-        ");
-        }
-
-        /* ===== UPDATE TOTAL ===== */
-
-        $conn->query("
-        UPDATE vp_invoices
-        SET total = $total
-        WHERE id = $invoiceId
-    ");
-
-        echo json_encode([
-            "success" => true,
-            "invoice_id" => $invoiceId
-        ]);
-    }
-    public function preview()
-    {
-        global $conn;
-
-        $data = json_decode(file_get_contents("php://input"), true);
-        $invoiceId = $data['invoice_id'] ?? 0;
-        echo '<pre>';
-        print_r($invoiceId);
-        exit;
-        if (!$invoiceId) {
-            echo json_encode(["success" => false, "message" => "Invoice ID missing"]);
-            exit;
-        }
-
-        $items = $conn->query("
-        SELECT *
-        FROM invoice_items
-        WHERE invoice_id = $invoiceId
-    ");
-
-        if ($items->num_rows == 0) {
-            echo json_encode([
-                "success" => false,
-                "message" => "No items to preview"
-            ]);
-            exit;
-        }
-
-        ob_start();
-        require "views/invoices/preview_template.php";
-        $html = ob_get_clean();
-
-        echo json_encode([
-            "success" => true,
-            "html" => $html
-        ]);
-    }
-    private function createInvoiceInternal($post)
-    {
-        global $invoiceModel, $ordersModel, $commanModel;
-
-        $invoice_date = $post['invoice_date'];
-        $customer_id = $post['customer_id'];
-        $vp_order_info_id = $post['vp_order_info_id'];
-        $subtotal = $post['subtotal'];
-        $tax_amount = $post['tax_amount'];
-        $discount_amount = $post['discount_amount'];
-        $total_amount = $post['total_amount'];
-
-        // ===== Generate invoice number =====
-        $globalSettings = $commanModel->getRecordById('global_settings', 1);
-        $invoice_prefix = $globalSettings['invoice_prefix'] ?? 'INV';
-        $invoice_series = $globalSettings['invoice_series'] ?? 0;
-        $invoice_series++;
-
-        $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
-
-        $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
-
-        $invoiceData = [
-            'invoice_number' => $invoice_number,
-            'invoice_date' => $invoice_date,
-            'customer_id' => $customer_id,
-            'vp_order_info_id' => $vp_order_info_id,
-            'currency' => 'INR',
-            'subtotal' => $subtotal,
-            'tax_amount' => $tax_amount,
-            'discount_amount' => $discount_amount,
-            'total_amount' => $total_amount,
-            'status' => 'final',
-            'created_by' => $_SESSION['user']['id'] ?? 0,
-            'created_at' => date('Y-m-d H:i:s')
-        ];
-
-        $invoiceId = $invoiceModel->createInvoice($invoiceData);
-
-        if (!$invoiceId) {
-            return ['success' => false, 'message' => 'Invoice create failed'];
-        }
-
-        return [
-            'success' => true,
-            'invoice_id' => $invoiceId,
-            'invoice_number' => $invoice_number
-        ];
-    }
-    public function createPost()
-    {
-        is_login();
-        header('Content-Type: application/json');
-
-        $result = $this->createInvoiceInternal($_POST);
-
-        echo json_encode($result);
-        exit;
-    }
-    public function create_from_payment_bk()
-    {
-        is_login();
-        header('Content-Type: application/json');
-
-        global $conn, $invoiceModel;
-
-        $input = json_decode(file_get_contents('php://input'), true);
-        $paymentId = $input['payment_id'] ?? 0;
-
-        if (!$paymentId) {
-            echo json_encode(['success' => false, 'message' => 'Payment id missing']);
-            exit;
-        }
-
-        //  GET PAYMENT
-        $sql = "SELECT * FROM pos_payments WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $paymentId);
-        $stmt->execute();
-        $payment = $stmt->get_result()->fetch_assoc();
-
-        if (!$payment) {
-            echo json_encode(['success' => false, 'message' => 'Payment not found']);
-            exit;
-        }
-
-        //  GET ORDER ITEMS
-        $sql2 = "SELECT * FROM vp_orders WHERE order_number = ?";
-        $stmt2 = $conn->prepare($sql2);
-        $stmt2->bind_param("s", $payment['order_number']);
-        $stmt2->execute();
-        $itemsRes = $stmt2->get_result();
-
-        if ($itemsRes->num_rows == 0) {
-            echo json_encode(['success' => false, 'message' => 'Order items not found']);
-            exit;
-        }
-
-        $items = [];
-        while ($row = $itemsRes->fetch_assoc()) {
-            $items[] = $row;
-        }
-
-        //  GET ORDER INFO
-        $sql3 = "SELECT id FROM vp_order_info WHERE order_number = ?";
-        $stmt3 = $conn->prepare($sql3);
-        $stmt3->bind_param("s", $payment['order_number']);
-        $stmt3->execute();
-        $info = $stmt3->get_result()->fetch_assoc();
-
-        if (!$info) {
-            echo json_encode(['success' => false, 'message' => 'Order info missing']);
-            exit;
-        }
-
-        //  CREATE INVOICE HEADER
-        $invoiceData = [
-            'invoice_number' => 'INV-' . time(),
-            'invoice_date' => $payment['payment_date'],
-            'customer_id' => $payment['customer_id'],
-            'vp_order_info_id' => $info['id'],
-            'currency' => 'INR',
-            'subtotal' => $payment['amount'],
-            'tax_amount' => 0,
-            'discount_amount' => 0,
-            'total_amount' => $payment['amount'],
-            'status' => 'final',
-            'created_by' => $_SESSION['user']['id']
-        ];
-
-        $invoiceId = $invoiceModel->createInvoice($invoiceData);
-
-        if (!$invoiceId) {
-            echo json_encode(['success' => false, 'message' => 'Invoice header failed']);
-            exit;
-        }
-
-        //  INSERT ITEMS (VERY IMPORTANT)
-        foreach ($items as $it) {
-
-            $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $it['quantity'];
-
-            $itemData = [
-                'invoice_id' => $invoiceId,
-                'order_number' => $it['order_number'],
-                'item_code' => $it['item_code'],
-                'item_name' => $it['title'],
-                'hsn' => $it['hsn'],
-                'quantity' => $it['quantity'],
-                'unit_price' => $unit,
-                'tax_rate' => $it['gst'],
-                'cgst' => ($it['gst'] / 2),
-                'sgst' => ($it['gst'] / 2),
-                'igst' => 0,
-                'tax_amount' => 0,
-                'line_total' => $it['finalprice']
-            ];
-
-            $invoiceModel->createInvoiceItem($itemData);
-        }
-
-        echo json_encode([
-            'success' => true,
-            'invoice_id' => $invoiceId
-        ]);
-        exit;
-    }
-    public function create_from_payment()
-    {
-        is_login();
-        header('Content-Type: application/json');
-
-        global $conn, $invoiceModel;
-
-        $input = json_decode(file_get_contents('php://input'), true);
-        $paymentId = $input['payment_id'] ?? 0;
-
-        if (!$paymentId) {
-            echo json_encode(['success' => false, 'message' => 'Payment id missing']);
-            exit;
-        }
-
-        //  PAYMENT
-        $stmt = $conn->prepare("SELECT * FROM pos_payments WHERE id=?");
-        $stmt->bind_param("i", $paymentId);
-        $stmt->execute();
-        $payment = $stmt->get_result()->fetch_assoc();
-
-        if (!$payment) {
-            echo json_encode(['success' => false, 'message' => 'Payment not found']);
-            exit;
-        }
-
-        //  ORDER ITEMS
-        $stmt2 = $conn->prepare("SELECT * FROM vp_orders WHERE order_number=?");
-        $stmt2->bind_param("s", $payment['order_number']);
-        $stmt2->execute();
-        $itemsRes = $stmt2->get_result();
-
-        $items = [];
-        $orderTotal = 0;
-
-        while ($row = $itemsRes->fetch_assoc()) {
-            $items[] = $row;
-            $orderTotal += $row['finalprice'];
-        }
-
-        if ($orderTotal == 0) {
-            echo json_encode(['success' => false, 'message' => 'Order total zero']);
-            exit;
-        }
-
-        //  PAYMENT RATIO
-        $ratio = $payment['amount'] / $orderTotal;
-
-        //  ORDER INFO
-        $stmt3 = $conn->prepare("SELECT id FROM vp_order_info WHERE order_number=?");
-        $stmt3->bind_param("s", $payment['order_number']);
-        $stmt3->execute();
-        $info = $stmt3->get_result()->fetch_assoc();
-
-        //  CREATE HEADER
-        $invoiceData = [
-            'invoice_number' => 'INV-' . time(),
-            'invoice_date' => $payment['payment_date'],
-            'customer_id' => $payment['customer_id'],
-            'vp_order_info_id' => $info['id'],
-            'currency' => 'INR',
-            'subtotal' => $payment['amount'],
-            'tax_amount' => 0,
-            'discount_amount' => 0,
-            'total_amount' => $payment['amount'],
-            'status' => $payment['payment_stage'],
-            'created_by' => $_SESSION['user']['id']
-        ];
-
-        $invoiceId = $invoiceModel->createInvoice($invoiceData);
-        $upd = $conn->prepare("
-UPDATE pos_payments 
-SET invoice_id = ? 
-WHERE id = ?
-");
-        $upd->bind_param("ii", $invoiceId, $paymentId);
-        $upd->execute();
-        //  INSERT SCALED ITEMS
-        foreach ($items as $it) {
-
-            $scaledPrice = $it['finalprice'] * $ratio;
-            $unit = ($scaledPrice / (1 + ($it['gst'] / 100))) / $it['quantity'];
-
-            $invoiceModel->createInvoiceItem([
-                'invoice_id' => $invoiceId,
-                'order_number' => $it['order_number'],
-                'item_code' => $it['item_code'],
-                'item_name' => $it['title'],
-                'hsn' => $it['hsn'],
-                'quantity' => $it['quantity'],
-                'unit_price' => $unit,
-                'tax_rate' => $it['gst'],
-                'cgst' => $it['gst'] / 2,
-                'sgst' => $it['gst'] / 2,
-                'igst' => 0,
-                'tax_amount' => 0,
-                'line_total' => $scaledPrice
-            ]);
-        }
-
-        echo json_encode([
-            'success' => true,
-            'invoice_id' => $invoiceId
-        ]);
-    }
     public function get_payment_summary()
     {
         global $conn;

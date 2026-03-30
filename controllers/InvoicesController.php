@@ -768,7 +768,7 @@ class InvoicesController
             echo json_encode([
                 'success' => true,
                 'html' => $html,
-               'invoice_id' => $invoice['id']
+                'invoice_id' => $invoice['id']
             ]);
             exit;
         } catch (Exception $e) {
@@ -862,7 +862,7 @@ class InvoicesController
         global $commanModel;
         return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
     }
-    public function create_auto_from_order()
+    public function create_auto_from_order_bk()
     {
         is_login();
         header('Content-Type: application/json');
@@ -965,7 +965,7 @@ class InvoicesController
             exit;
         }
     }
-
+ 
 
 
 
@@ -987,19 +987,19 @@ class InvoicesController
             $token = isset($_GET['token']) ? trim($_GET['token']) : '';
             $date = isset($_GET['date']) ? trim($_GET['date']) : '';
             $format = isset($_GET['format']) ? trim($_GET['format']) : 'zip'; // zip or consolidated
-            
+
             if (!$token) {
                 http_response_code(400);
                 exit('Bad request: Missing token');
             }
 
             // Validate token
-            if(!$ordersApi->isValidToken($token)) {
+            if (!$ordersApi->isValidToken($token)) {
                 http_response_code(403);
                 exit('Unauthorized');
             }
             //date if blank then set to privious day
-            if(empty($date)){
+            if (empty($date)) {
                 $date = date('Y-m-d', strtotime('-1 day'));
             }
 
@@ -1019,7 +1019,6 @@ class InvoicesController
             // If neither invoice_id nor date provided
             http_response_code(400);
             exit('Bad request: Must provide either invoice_id or date parameter');
-
         } catch (Exception $e) {
             http_response_code(500);
             exit('Error: ' . $e->getMessage());
@@ -1032,7 +1031,7 @@ class InvoicesController
     private function downloadSingleInvoiceXml($invoiceId)
     {
         global $invoiceModel;
-        
+
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
         if (!$invoice) {
             http_response_code(404);
@@ -1040,12 +1039,12 @@ class InvoicesController
         }
 
         $items = $invoiceModel->getInvoiceItems($invoiceId);
-        
+
         // Add calculated tax totals
         $invoice['sgst'] = array_sum(array_column($items, 'sgst'));
         $invoice['cgst'] = array_sum(array_column($items, 'cgst'));
         $invoice['igst'] = array_sum(array_column($items, 'igst'));
-        
+
         // Generate XML
         require_once 'generate-xml.php';
         $generator = new BusyXmlGenerator();
@@ -1053,12 +1052,12 @@ class InvoicesController
 
         // Stream as downloadable file
         header('Content-Type: application/xml; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . 
-               htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.txt"');
+        header('Content-Disposition: attachment; filename="' .
+            htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.txt"');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('Expires: 0');
-        
+
         echo $xml;
         exit;
     }
@@ -1200,8 +1199,10 @@ class InvoicesController
                         $invoice['customer_email'] = '';
                         $invoice['customer_gstin'] = '';
                     }
-                    $invoice['narration'] = $invoice['customer_name'] .' '. ($invoice['customer_address1'] ?? '') .' '. ($invoice['customer_address2'] ?? '') .' '. ($invoice['customer_address3'] ?? '') .' '. ($invoice['customer_address4'] ?? '');
+                    $invoice['narration'] = $invoice['customer_name'] . ' ' . ($invoice['customer_address1'] ?? '') . ' ' . ($invoice['customer_address2'] ?? '') . ' ' . ($invoice['customer_address3'] ?? '') . ' ' . ($invoice['customer_address4'] ?? '');
                 }
+                $address = $commanModel->get_exotic_address();
+                $invoice['exotic_address'] = $address[0]['address'] ?? '';
                 $items = $invoiceModel->getInvoiceItems($invoiceId);
                 $invoice['total_qty'] = array_sum(array_column($items, 'quantity'));
                 if ($invoice && !empty($items)) {
@@ -1268,7 +1269,6 @@ class InvoicesController
             @rmdir($tempDir);
 
             exit;
-
         } catch (Exception $e) {
             // Cleanup on error
             foreach ($xmlFiles as $file) {
@@ -1281,5 +1281,4 @@ class InvoicesController
             exit('Error: ' . $e->getMessage());
         }
     }
-
 }

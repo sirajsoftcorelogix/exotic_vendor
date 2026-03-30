@@ -209,7 +209,7 @@ No invoices
 <td class="p-3">${badge}</td>
 
  <td class="p-3 flex gap-4 items-center">
-<a href="/?page=invoices&action=generate_pdf&invoice_id=${i.id}"
+<a href="/?page=posinvoice&action=generate_pdf&invoice_id=${i.id}"
 target="_blank"
 class="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold text-xs">
 
