@@ -569,9 +569,11 @@ class ProductsController {
             exit;
         }
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Product Code', 'SKU', 'Qty', 'Location']);
-        fputcsv($out, ['SAMPLE001', 'SKU-SAMPLE001', '10', 'A-01-01']);
-        fputcsv($out, ['SAMPLE002', '', '5', 'B-02-03']);
+        fputcsv($out, ['Product Code', 'SKU', 'Color', 'Size', 'Qty', 'Location']);
+        fputcsv($out, ['GAN035', '', 'orange', 'xl', '10', 'A-01-01']);
+        fputcsv($out, ['GAN035', '', '', 'xl', '5', 'B-02-03']);
+        fputcsv($out, ['GAN035', '', 'orange', '', '3', 'C-03-03']);
+        fputcsv($out, ['SAMPLE004', 'FIXED-SKU-01', 'red', 'M', '2', 'D-04']);
         fclose($out);
         exit;
     }
@@ -637,7 +639,7 @@ class ProductsController {
         $totalPages = $limit > 0 ? (int)ceil($totalItems / $limit) : 1;
 
         $rows = [];
-        $listSql = "SELECT id, item_code, import_sku, opening_qty, stock_location, status, attempt_count, error_message, created_at, updated_at, processed_at
+        $listSql = "SELECT id, item_code, import_sku, import_color, import_size, opening_qty, stock_location, status, attempt_count, error_message, created_at, updated_at, processed_at
                     FROM product_import_items
                     $where
                     ORDER BY id ASC
@@ -689,6 +691,8 @@ class ProductsController {
             job_id INT NOT NULL,
             item_code VARCHAR(100) NOT NULL,
             import_sku VARCHAR(100) NOT NULL DEFAULT '',
+            import_color VARCHAR(100) NOT NULL DEFAULT '',
+            import_size VARCHAR(100) NOT NULL DEFAULT '',
             opening_qty INT NOT NULL DEFAULT 0,
             stock_location VARCHAR(255) NOT NULL DEFAULT '',
             created_product_ids TEXT NULL,
@@ -722,6 +726,14 @@ class ProductsController {
         $rSkuCol = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_items LIKE 'import_sku'");
         if (!$rSkuCol || mysqli_num_rows($rSkuCol) === 0) {
             @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN import_sku VARCHAR(100) NOT NULL DEFAULT '' AFTER item_code");
+        }
+        $rColColor = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_items LIKE 'import_color'");
+        if (!$rColColor || mysqli_num_rows($rColColor) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN import_color VARCHAR(100) NOT NULL DEFAULT '' AFTER import_sku");
+        }
+        $rColSize = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_items LIKE 'import_size'");
+        if (!$rColSize || mysqli_num_rows($rColSize) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN import_size VARCHAR(100) NOT NULL DEFAULT '' AFTER import_color");
         }
         $rFile = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'file_path'");
         if (!$rFile || mysqli_num_rows($rFile) === 0) {
@@ -768,20 +780,97 @@ class ProductsController {
         return max(0, (int)round((float)$x));
     }
 
-    /**
-     * Legacy CSV/XLSX: column A = product code, B = qty, C = location (no SKU column).
-     */
-    private function bulkImportRowLooksLegacyThreeColumn(array $csvRow, bool $hasColumnD = false): bool {
-        if ($hasColumnD) {
-            return false;
-        }
-        $b = trim((string)($csvRow[1] ?? ''));
+    private function bulkImportCellLooksLikeQty(string $cell): bool {
+        $b = trim($cell);
         if ($b === '') {
             return false;
         }
         $x = str_replace([',', ' ', "\t"], '', $b);
 
         return $x !== '' && is_numeric($x);
+    }
+
+    /**
+     * Effective SKU when upload column B is blank only. If B has a value, that value is used (unchanged).
+     * When B is blank: size/color add segments; when both size and color are blank, returns item_code only
+     * (same as the original “use item code as SKU” behaviour).
+     */
+    private function buildBulkImportAutoSku(string $itemCode, string $size, string $color): string {
+        $itemCode = trim($itemCode);
+        $size = trim($size);
+        $color = trim($color);
+        if ($size !== '' && $color !== '') {
+            return $itemCode . '-' . $size . '-' . $color;
+        }
+        if ($size !== '' && $color === '') {
+            return $itemCode . '-' . $size;
+        }
+        if ($size === '' && $color !== '') {
+            return $itemCode . '--' . $color;
+        }
+
+        return $itemCode;
+    }
+
+    /**
+     * @return array{code:string,sku_raw:string,color:string,size:string,qty:int,location:string}|null
+     */
+    private function parseBulkImportCsvRowParts(array $row): ?array {
+        $code = trim((string)($row[0] ?? ''));
+        if ($code === '') {
+            return null;
+        }
+        $nf = count($row);
+
+        // Legacy: A=code, B=qty, C=location (3 fields or fewer trailing empties)
+        if ($nf <= 3 && $this->bulkImportCellLooksLikeQty((string)($row[1] ?? ''))) {
+            return [
+                'code' => $code,
+                'sku_raw' => '',
+                'color' => '',
+                'size' => '',
+                'qty' => $this->parseBulkQtyFromRaw((string)($row[1] ?? '0')),
+                'location' => trim((string)($row[2] ?? '')),
+            ];
+        }
+
+        // Older 4-column: A=code, B=sku, C=qty, D=location
+        if ($nf === 4 && !array_key_exists(4, $row) && $this->bulkImportCellLooksLikeQty((string)($row[2] ?? ''))) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim((string)($row[1] ?? '')),
+                'color' => '',
+                'size' => '',
+                'qty' => $this->parseBulkQtyFromRaw((string)($row[2] ?? '0')),
+                'location' => trim((string)($row[3] ?? '')),
+            ];
+        }
+
+        // New: A=code, B=sku, C=color, D=size, E=qty, F=location
+        if ($nf >= 5 && array_key_exists(4, $row)) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim((string)($row[1] ?? '')),
+                'color' => trim((string)($row[2] ?? '')),
+                'size' => trim((string)($row[3] ?? '')),
+                'qty' => $this->parseBulkQtyFromRaw((string)($row[4] ?? '0')),
+                'location' => trim((string)($row[5] ?? '')),
+            ];
+        }
+
+        // Only A–D and column C is not qty: treat as code, sku, color, size
+        if ($nf === 4) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim((string)($row[1] ?? '')),
+                'color' => trim((string)($row[2] ?? '')),
+                'size' => trim((string)($row[3] ?? '')),
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
+        return null;
     }
 
     private function parseBulkImportRowsFromCsv(string $filePath): array {
@@ -791,23 +880,18 @@ class ProductsController {
             return $rows;
         }
         while (($row = fgetcsv($handle)) !== false) {
-            $code = trim((string)($row[0] ?? ''));
-            if ($code === '') {
+            $parts = $this->parseBulkImportCsvRowParts($row);
+            if ($parts === null) {
                 continue;
             }
-            $hasFourth = array_key_exists(3, $row);
-            $legacy = $this->bulkImportRowLooksLegacyThreeColumn($row, $hasFourth);
-            if ($legacy) {
-                $sku = $code;
-                $qty = $this->parseBulkQtyFromRaw((string)($row[1] ?? '0'));
-                $loc = trim((string)($row[2] ?? ''));
-            } else {
-                $skuRaw = trim((string)($row[1] ?? ''));
-                $sku = $skuRaw !== '' ? $skuRaw : $code;
-                $qty = $this->parseBulkQtyFromRaw((string)($row[2] ?? '0'));
-                $loc = trim((string)($row[3] ?? ''));
-            }
-            $rows[] = ['code' => $code, 'sku' => $sku, 'qty' => $qty, 'location' => $loc];
+            $rows[] = [
+                'code' => $parts['code'],
+                'sku_raw' => $parts['sku_raw'],
+                'color' => $parts['color'],
+                'size' => $parts['size'],
+                'qty' => $parts['qty'],
+                'location' => $parts['location'],
+            ];
         }
         fclose($handle);
         return $rows;
@@ -881,30 +965,84 @@ class ProductsController {
                     }
                     $byCol[$m[1]] = trim($this->xlsxCellPlainText($c, $sharedStrings));
                 }
-                $code = $byCol['A'] ?? '';
-                if ($code === '') {
+                $parts = $this->parseBulkImportXlsxRowParts($byCol);
+                if ($parts === null) {
                     continue;
                 }
-                $hasD = isset($byCol['D']) && trim((string)$byCol['D']) !== '';
-                $legacy = !$hasD && $this->bulkImportRowLooksLegacyThreeColumn([
-                    1 => $byCol['B'] ?? '',
-                ], false);
-                if ($legacy) {
-                    $sku = $code;
-                    $qty = $this->parseBulkQtyFromRaw($byCol['B'] ?? '0');
-                    $loc = trim((string)($byCol['C'] ?? ''));
-                } else {
-                    $skuRaw = trim((string)($byCol['B'] ?? ''));
-                    $sku = $skuRaw !== '' ? $skuRaw : $code;
-                    $qty = $this->parseBulkQtyFromRaw($byCol['C'] ?? '0');
-                    $loc = trim((string)($byCol['D'] ?? ''));
-                }
-                $rows[] = ['code' => $code, 'sku' => $sku, 'qty' => $qty, 'location' => $loc];
+                $rows[] = [
+                    'code' => $parts['code'],
+                    'sku_raw' => $parts['sku_raw'],
+                    'color' => $parts['color'],
+                    'size' => $parts['size'],
+                    'qty' => $parts['qty'],
+                    'location' => $parts['location'],
+                ];
             }
         }
         $zip->close();
 
         return $rows;
+    }
+
+    /**
+     * @param array<string,mixed> $byCol column letter => cell text
+     * @return array{code:string,sku_raw:string,color:string,size:string,qty:int,location:string}|null
+     */
+    private function parseBulkImportXlsxRowParts(array $byCol): ?array {
+        $code = trim((string)($byCol['A'] ?? ''));
+        if ($code === '') {
+            return null;
+        }
+        $b = (string)($byCol['B'] ?? '');
+        $c = (string)($byCol['C'] ?? '');
+        $hasD = isset($byCol['D']) && trim((string)$byCol['D']) !== '';
+        $hasE = isset($byCol['E']);
+
+        if (!$hasE && !$hasD && $this->bulkImportCellLooksLikeQty($b)) {
+            return [
+                'code' => $code,
+                'sku_raw' => '',
+                'color' => '',
+                'size' => '',
+                'qty' => $this->parseBulkQtyFromRaw($b),
+                'location' => trim((string)($byCol['C'] ?? '')),
+            ];
+        }
+
+        if ($hasD && !$hasE && $this->bulkImportCellLooksLikeQty($c)) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim($b),
+                'color' => '',
+                'size' => '',
+                'qty' => $this->parseBulkQtyFromRaw($c),
+                'location' => trim((string)($byCol['D'] ?? '')),
+            ];
+        }
+
+        if ($hasE) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim($b),
+                'color' => trim($c),
+                'size' => trim((string)($byCol['D'] ?? '')),
+                'qty' => $this->parseBulkQtyFromRaw((string)($byCol['E'] ?? '0')),
+                'location' => trim((string)($byCol['F'] ?? '')),
+            ];
+        }
+
+        if ($hasD) {
+            return [
+                'code' => $code,
+                'sku_raw' => trim($b),
+                'color' => trim($c),
+                'size' => trim((string)($byCol['D'] ?? '')),
+                'qty' => 0,
+                'location' => '',
+            ];
+        }
+
+        return null;
     }
 
     private function normalizeBulkImportRows(array $rows): array {
@@ -921,9 +1059,12 @@ class ProductsController {
             }
             $qty = max(0, (int)($r['qty'] ?? 0));
             $location = trim((string)($r['location'] ?? ''));
-            $skuIn = trim((string)($r['sku'] ?? ''));
-            $sku = $skuIn !== '' ? $skuIn : $code;
-            $outByCode[$code] = ['code' => $code, 'sku' => $sku, 'qty' => $qty, 'location' => $location];
+            $color = trim((string)($r['color'] ?? ''));
+            $size = trim((string)($r['size'] ?? ''));
+            // Explicit SKU in column B wins. Otherwise auto SKU from item_code ± size/color (or item_code alone).
+            $skuIn = trim((string)($r['sku_raw'] ?? $r['sku'] ?? ''));
+            $sku = $skuIn !== '' ? $skuIn : $this->buildBulkImportAutoSku($code, $size, $color);
+            $outByCode[$code] = ['code' => $code, 'sku' => $sku, 'color' => $color, 'size' => $size, 'qty' => $qty, 'location' => $location];
         }
 
         return array_values($outByCode);
@@ -948,14 +1089,20 @@ class ProductsController {
     }
 
     /**
-     * Resolve product row for opening stock using optional SKU (column B); empty SKU uses item_code.
+     * Resolve product for opening stock: match SKU when set, else size/color, else first row for item_code.
      */
-    private function findProductRowForBulkImportStock(mysqli $conn, string $itemCode, string $importSku): ?array {
+    private function findProductRowForBulkImportStock(
+        mysqli $conn,
+        string $itemCode,
+        string $importSku,
+        string $importSize,
+        string $importColor
+    ): ?array {
         $importSku = trim($importSku);
-        if ($importSku === '') {
-            $importSku = $itemCode;
-        }
-        if ($importSku !== $itemCode) {
+        $sz = trim($importSize);
+        $co = trim($importColor);
+
+        if ($importSku !== '') {
             $sql = 'SELECT id, sku, item_code, size, color FROM vp_products WHERE item_code = ? AND sku = ? LIMIT 1';
             $stmt = $conn->prepare($sql);
             if ($stmt) {
@@ -967,6 +1114,23 @@ class ProductsController {
                 if ($row) {
                     return $row;
                 }
+            }
+        }
+
+        $sql2 = "SELECT id, sku, item_code, size, color FROM vp_products
+                 WHERE item_code = ?
+                 AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+                 AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?
+                 LIMIT 1";
+        $stmt2 = $conn->prepare($sql2);
+        if ($stmt2) {
+            $stmt2->bind_param('sss', $itemCode, $sz, $co);
+            $stmt2->execute();
+            $res2 = $stmt2->get_result();
+            $row2 = $res2 ? $res2->fetch_assoc() : null;
+            $stmt2->close();
+            if ($row2) {
+                return $row2;
             }
         }
 
@@ -983,6 +1147,8 @@ class ProductsController {
         int $importItemId,
         string $itemCode,
         string $importSku,
+        string $importSize,
+        string $importColor,
         int $openingQty,
         string $stockLocation,
         int $userId
@@ -1006,9 +1172,9 @@ class ProductsController {
             return null;
         }
 
-        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku);
+        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
         if (!$product) {
-            return 'API import succeeded but no local product row matched this item_code/SKU for opening stock.';
+            return 'API import succeeded but no local product row matched this item_code/SKU/size/color for opening stock.';
         }
         $sku = (string)($product['sku'] ?? '');
         $size = (string)($product['size'] ?? '');
@@ -1125,7 +1291,7 @@ class ProductsController {
         $parsedRows = $ext === 'csv' ? $this->parseBulkImportRowsFromCsv($file['tmp_name']) : $this->parseBulkImportRowsFromXlsx($file['tmp_name']);
         $parsedRows = $this->normalizeBulkImportRows($parsedRows);
         if (empty($parsedRows)) {
-            echo json_encode(['success' => false, 'message' => 'No product codes found in file (column A). Expected: A = product code, B = SKU (optional), C = qty, D = location. Legacy 3 columns: A = code, B = qty, C = location (SKU defaults to code).']);
+            echo json_encode(['success' => false, 'message' => 'No product codes found in file (column A). Expected: A=code, B=SKU (optional), C=color, D=size, E=qty, F=location. If B is empty, SKU = code|code-size|code--color|code-size-color. Legacy: 3 cols code/qty/location or 4 cols code/SKU/qty/location.']);
             exit;
         }
 
@@ -1151,17 +1317,19 @@ class ProductsController {
         $jobId = (int)$stmtJob->insert_id;
         $stmtJob->close();
 
-        $stmtItem = $conn->prepare("INSERT INTO product_import_items (job_id, item_code, import_sku, opening_qty, stock_location, status) VALUES (?, ?, ?, ?, ?, 'pending')
-            ON DUPLICATE KEY UPDATE import_sku = VALUES(import_sku), opening_qty = VALUES(opening_qty), stock_location = VALUES(stock_location), status = 'pending', error_message = NULL, processed_at = NULL");
+        $stmtItem = $conn->prepare("INSERT INTO product_import_items (job_id, item_code, import_sku, import_color, import_size, opening_qty, stock_location, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+            ON DUPLICATE KEY UPDATE import_sku = VALUES(import_sku), import_color = VALUES(import_color), import_size = VALUES(import_size), opening_qty = VALUES(opening_qty), stock_location = VALUES(stock_location), status = 'pending', error_message = NULL, processed_at = NULL");
         foreach ($parsedRows as $pr) {
             $code = $pr['code'];
-            $impSku = (string)($pr['sku'] ?? $code);
+            $impSku = (string)($pr['sku'] ?? '');
+            $ico = trim((string)($pr['color'] ?? ''));
+            $isz = trim((string)($pr['size'] ?? ''));
             if ($impSku === '') {
-                $impSku = $code;
+                $impSku = $this->buildBulkImportAutoSku($code, $isz, $ico);
             }
             $oq = (int)$pr['qty'];
-            $sl = $pr['location'];
-            $stmtItem->bind_param('issis', $jobId, $code, $impSku, $oq, $sl);
+            $sl = (string)($pr['location'] ?? '');
+            $stmtItem->bind_param('issssis', $jobId, $code, $impSku, $ico, $isz, $oq, $sl);
             $stmtItem->execute();
         }
         $stmtItem->close();
@@ -1397,7 +1565,7 @@ class ProductsController {
 
         $picked = [];
         // Pending first, then rows stuck in "processing" (browser closed / fatal mid-batch)
-        $stmtPick = $conn->prepare("SELECT id, item_code, import_sku, opening_qty, stock_location FROM product_import_items WHERE job_id = ? AND status IN ('pending','processing') ORDER BY (status = 'processing') ASC, id ASC LIMIT 50");
+        $stmtPick = $conn->prepare("SELECT id, item_code, import_sku, import_color, import_size, opening_qty, stock_location FROM product_import_items WHERE job_id = ? AND status IN ('pending','processing') ORDER BY (status = 'processing') ASC, id ASC LIMIT 50");
         $stmtPick->bind_param('i', $jobId);
         $stmtPick->execute();
         $res = $stmtPick->get_result();
@@ -1445,8 +1613,10 @@ class ProductsController {
                 $openQty = (int)($rowPick['opening_qty'] ?? 0);
                 $stockLoc = (string)($rowPick['stock_location'] ?? '');
                 $impSku = trim((string)($rowPick['import_sku'] ?? ''));
+                $isz = trim((string)($rowPick['import_size'] ?? ''));
+                $ico = trim((string)($rowPick['import_color'] ?? ''));
                 if ($impSku === '') {
-                    $impSku = (string)$code;
+                    $impSku = $this->buildBulkImportAutoSku((string)$code, $isz, $ico);
                 }
                 $isFailed = in_array($code, $failedCodes, true);
                 if ($isFailed) {
@@ -1477,6 +1647,8 @@ class ProductsController {
                         $id,
                         (string)$code,
                         $impSku,
+                        $isz,
+                        $ico,
                         $openQty,
                         $stockLoc,
                         $batchUserId
