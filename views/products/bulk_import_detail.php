@@ -14,6 +14,7 @@
         <h2 class="text-xl font-semibold text-gray-800">Bulk Import Detail #<?= $jobId ?></h2>
         <p class="text-sm text-gray-600">
           File: <span class="font-medium"><?= htmlspecialchars($job['file_name'] ?? '') ?></span> |
+          Warehouse: <span class="font-medium"><?= htmlspecialchars($job['warehouse_name'] ?? ('#' . (int)($job['warehouse_id'] ?? 0))) ?></span> |
           Imported by: <span class="font-medium"><?= htmlspecialchars($job['created_by_name'] ?? ('User #' . (int)($job['created_by'] ?? 0))) ?></span>
         </p>
       </div>
@@ -69,6 +70,8 @@
           <tr>
             <th class="px-3 py-2 text-left">#</th>
             <th class="px-3 py-2 text-left">Item Code</th>
+            <th class="px-3 py-2 text-right">Qty</th>
+            <th class="px-3 py-2 text-left">Location</th>
             <th class="px-3 py-2 text-left">Status</th>
             <th class="px-3 py-2 text-left">Attempts</th>
             <th class="px-3 py-2 text-left">Error</th>
@@ -78,7 +81,7 @@
         </thead>
         <tbody>
           <?php if (empty($rows)): ?>
-            <tr><td colspan="6" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
+            <tr><td colspan="9" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
           <?php else: ?>
             <?php foreach ($rows as $r): ?>
               <?php
@@ -91,6 +94,8 @@
               <tr class="border-t">
                 <td class="px-3 py-2"><?= (int)$r['id'] ?></td>
                 <td class="px-3 py-2 font-medium"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
+                <td class="px-3 py-2 text-right tabular-nums"><?= (int)($r['opening_qty'] ?? 0) ?></td>
+                <td class="px-3 py-2"><?= htmlspecialchars($r['stock_location'] ?? '') ?></td>
                 <td class="px-3 py-2"><span class="text-xs px-2 py-1 rounded <?= $stClass ?>"><?= htmlspecialchars($st) ?></span></td>
                 <td class="px-3 py-2"><?= (int)($r['attempt_count'] ?? 0) ?></td>
                 <td class="px-3 py-2 text-red-700 text-xs"><?= htmlspecialchars($r['error_message'] ?? '') ?></td>
