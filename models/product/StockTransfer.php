@@ -320,6 +320,38 @@ class StockTransfer
     }
 
     /**
+     * Opening stock line from product bulk import (requires OPENING_STOCK in vp_stock_movements.movement_type enum).
+     */
+    public function recordOpeningStockFromBulkImport(
+        int $product_id,
+        string $sku,
+        string $item_code,
+        string $size,
+        string $color,
+        int $warehouse_id,
+        string $location,
+        int $quantity,
+        int $user_id,
+        string $ref_id
+    ) {
+        return $this->insertStockMovement(
+            $product_id,
+            $sku,
+            $item_code,
+            $warehouse_id,
+            $location,
+            $size,
+            $color,
+            'OPENING_STOCK',
+            $quantity,
+            $user_id,
+            'BULK_IMPORT',
+            'Opening stock from product bulk import',
+            $ref_id
+        );
+    }
+
+    /**
      * Ensure GRN related tables exist before inserting.
      * This avoids "table does not exist" errors on first use.
      */

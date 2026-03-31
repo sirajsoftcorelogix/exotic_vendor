@@ -430,11 +430,17 @@ switch ($page) {
             case 'bulk_import':
                 $controller->bulkImportScreen();
                 break;
+            case 'bulk_import_sample_csv':
+                $controller->bulkImportSampleCsv();
+                break;
             case 'bulk_import_detail':
                 $controller->bulkImportDetail();
                 break;
             case 'bulk_import_upload':
                 $controller->bulkImportUpload();
+                break;
+            case 'bulk_import_revert':
+                $controller->bulkImportRevert();
                 break;
             case 'bulk_import_status':
                 $controller->bulkImportStatus();
