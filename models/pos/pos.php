@@ -26,7 +26,11 @@ class pos
         string $productName = '',
         string $orderColumn = 'title',
         string $orderDir = 'asc',
-        string $category = ''
+        string $category = '',
+        string $productCode = '',
+        $minPrice = '',
+        $maxPrice = '',
+        string $stockFilter = ''
     ): array {
 
         $warehouseId = $_SESSION['warehouse_id'] ?? 0;
@@ -43,6 +47,49 @@ class pos
         $where  = " WHERE p.is_active = 1 ";
         $params = [];
         $types  = "";
+
+        // CATEGORY
+        if (!empty($category) && $category != 'allProducts') {
+            $where .= " AND p.groupname = ? ";
+            $params[] = $category;
+            $types .= "s";
+        }
+
+        // PRODUCT NAME
+        if ($productName !== '') {
+            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ?) ";
+            $params[] = "%{$productName}%";
+            $params[] = "%{$productName}%";
+            $types .= "ss";
+        }
+
+        // PRODUCT CODE (NEW)
+        if ($productCode !== '') {
+            $where .= " AND p.item_code LIKE ? ";
+            $params[] = "%{$productCode}%";
+            $types .= "s";
+        }
+
+        // GLOBAL SEARCH
+        if ($searchValue !== '') {
+            $where .= " AND (p.item_code LIKE ? OR p.title LIKE ?) ";
+            $params[] = "%{$searchValue}%";
+            $params[] = "%{$searchValue}%";
+            $types .= "ss";
+        }
+
+        // PRICE FILTER (NEW)
+        if ($minPrice !== '') {
+            $where .= " AND p.itemprice >= ? ";
+            $params[] = $minPrice;
+            $types .= "d";
+        }
+
+        if ($maxPrice !== '') {
+            $where .= " AND p.itemprice <= ? ";
+            $params[] = $maxPrice;
+            $types .= "d";
+        }
 
         if (!empty($category) && $category != 'allProducts') {
             $where .= " AND p.groupname = ? ";
