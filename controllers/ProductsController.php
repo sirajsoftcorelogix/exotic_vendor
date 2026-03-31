@@ -569,9 +569,9 @@ class ProductsController {
             exit;
         }
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Product Code', 'Qty', 'Location']);
-        fputcsv($out, ['SAMPLE001', '10', 'A-01-01']);
-        fputcsv($out, ['SAMPLE002', '5', 'B-02-03']);
+        fputcsv($out, ['Product Code', 'SKU', 'Qty', 'Location']);
+        fputcsv($out, ['SAMPLE001', 'SKU-SAMPLE001', '10', 'A-01-01']);
+        fputcsv($out, ['SAMPLE002', '', '5', 'B-02-03']);
         fclose($out);
         exit;
     }
@@ -637,7 +637,7 @@ class ProductsController {
         $totalPages = $limit > 0 ? (int)ceil($totalItems / $limit) : 1;
 
         $rows = [];
-        $listSql = "SELECT id, item_code, opening_qty, stock_location, status, attempt_count, error_message, created_at, updated_at, processed_at
+        $listSql = "SELECT id, item_code, import_sku, opening_qty, stock_location, status, attempt_count, error_message, created_at, updated_at, processed_at
                     FROM product_import_items
                     $where
                     ORDER BY id ASC
@@ -688,6 +688,7 @@ class ProductsController {
             id INT AUTO_INCREMENT PRIMARY KEY,
             job_id INT NOT NULL,
             item_code VARCHAR(100) NOT NULL,
+            import_sku VARCHAR(100) NOT NULL DEFAULT '',
             opening_qty INT NOT NULL DEFAULT 0,
             stock_location VARCHAR(255) NOT NULL DEFAULT '',
             created_product_ids TEXT NULL,
@@ -717,6 +718,10 @@ class ProductsController {
         $r = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'warehouse_id'");
         if (!$r || mysqli_num_rows($r) === 0) {
             @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN warehouse_id INT NOT NULL DEFAULT 0 AFTER created_by");
+        }
+        $rSkuCol = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_items LIKE 'import_sku'");
+        if (!$rSkuCol || mysqli_num_rows($rSkuCol) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN import_sku VARCHAR(100) NOT NULL DEFAULT '' AFTER item_code");
         }
         $rFile = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'file_path'");
         if (!$rFile || mysqli_num_rows($rFile) === 0) {
@@ -763,6 +768,22 @@ class ProductsController {
         return max(0, (int)round((float)$x));
     }
 
+    /**
+     * Legacy CSV/XLSX: column A = product code, B = qty, C = location (no SKU column).
+     */
+    private function bulkImportRowLooksLegacyThreeColumn(array $csvRow, bool $hasColumnD = false): bool {
+        if ($hasColumnD) {
+            return false;
+        }
+        $b = trim((string)($csvRow[1] ?? ''));
+        if ($b === '') {
+            return false;
+        }
+        $x = str_replace([',', ' ', "\t"], '', $b);
+
+        return $x !== '' && is_numeric($x);
+    }
+
     private function parseBulkImportRowsFromCsv(string $filePath): array {
         $rows = [];
         $handle = fopen($filePath, 'r');
@@ -774,9 +795,19 @@ class ProductsController {
             if ($code === '') {
                 continue;
             }
-            $qty = $this->parseBulkQtyFromRaw((string)($row[1] ?? '0'));
-            $loc = trim((string)($row[2] ?? ''));
-            $rows[] = ['code' => $code, 'qty' => $qty, 'location' => $loc];
+            $hasFourth = array_key_exists(3, $row);
+            $legacy = $this->bulkImportRowLooksLegacyThreeColumn($row, $hasFourth);
+            if ($legacy) {
+                $sku = $code;
+                $qty = $this->parseBulkQtyFromRaw((string)($row[1] ?? '0'));
+                $loc = trim((string)($row[2] ?? ''));
+            } else {
+                $skuRaw = trim((string)($row[1] ?? ''));
+                $sku = $skuRaw !== '' ? $skuRaw : $code;
+                $qty = $this->parseBulkQtyFromRaw((string)($row[2] ?? '0'));
+                $loc = trim((string)($row[3] ?? ''));
+            }
+            $rows[] = ['code' => $code, 'sku' => $sku, 'qty' => $qty, 'location' => $loc];
         }
         fclose($handle);
         return $rows;
@@ -854,9 +885,21 @@ class ProductsController {
                 if ($code === '') {
                     continue;
                 }
-                $qty = $this->parseBulkQtyFromRaw($byCol['B'] ?? '0');
-                $loc = trim((string)($byCol['C'] ?? ''));
-                $rows[] = ['code' => $code, 'qty' => $qty, 'location' => $loc];
+                $hasD = isset($byCol['D']) && trim((string)$byCol['D']) !== '';
+                $legacy = !$hasD && $this->bulkImportRowLooksLegacyThreeColumn([
+                    1 => $byCol['B'] ?? '',
+                ], false);
+                if ($legacy) {
+                    $sku = $code;
+                    $qty = $this->parseBulkQtyFromRaw($byCol['B'] ?? '0');
+                    $loc = trim((string)($byCol['C'] ?? ''));
+                } else {
+                    $skuRaw = trim((string)($byCol['B'] ?? ''));
+                    $sku = $skuRaw !== '' ? $skuRaw : $code;
+                    $qty = $this->parseBulkQtyFromRaw($byCol['C'] ?? '0');
+                    $loc = trim((string)($byCol['D'] ?? ''));
+                }
+                $rows[] = ['code' => $code, 'sku' => $sku, 'qty' => $qty, 'location' => $loc];
             }
         }
         $zip->close();
@@ -878,7 +921,9 @@ class ProductsController {
             }
             $qty = max(0, (int)($r['qty'] ?? 0));
             $location = trim((string)($r['location'] ?? ''));
-            $outByCode[$code] = ['code' => $code, 'qty' => $qty, 'location' => $location];
+            $skuIn = trim((string)($r['sku'] ?? ''));
+            $sku = $skuIn !== '' ? $skuIn : $code;
+            $outByCode[$code] = ['code' => $code, 'sku' => $sku, 'qty' => $qty, 'location' => $location];
         }
 
         return array_values($outByCode);
@@ -903,6 +948,32 @@ class ProductsController {
     }
 
     /**
+     * Resolve product row for opening stock using optional SKU (column B); empty SKU uses item_code.
+     */
+    private function findProductRowForBulkImportStock(mysqli $conn, string $itemCode, string $importSku): ?array {
+        $importSku = trim($importSku);
+        if ($importSku === '') {
+            $importSku = $itemCode;
+        }
+        if ($importSku !== $itemCode) {
+            $sql = 'SELECT id, sku, item_code, size, color FROM vp_products WHERE item_code = ? AND sku = ? LIMIT 1';
+            $stmt = $conn->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('ss', $itemCode, $importSku);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $row = $res ? $res->fetch_assoc() : null;
+                $stmt->close();
+                if ($row) {
+                    return $row;
+                }
+            }
+        }
+
+        return $this->findProductRowForOpeningStock($conn, $itemCode);
+    }
+
+    /**
      * @return string|null Error message, or null on success / nothing to do
      */
     private function bulkImportApplyOpeningStock(
@@ -911,41 +982,41 @@ class ProductsController {
         int $warehouseId,
         int $importItemId,
         string $itemCode,
+        string $importSku,
         int $openingQty,
         string $stockLocation,
         int $userId
     ): ?string {
-        if ($warehouseId <= 0 || $openingQty <= 0) {
+        if ($warehouseId <= 0) {
             return null;
         }
         $refId = 'import_item:' . $importItemId;
-        $chk = $conn->prepare("SELECT id FROM vp_stock_movements WHERE ref_type = 'BULK_IMPORT' AND ref_id = ? LIMIT 1");
-        if ($chk) {
-            $chk->bind_param('s', $refId);
-            $chk->execute();
-            $dupRes = $chk->get_result();
-            if ($dupRes && $dupRes->num_rows > 0) {
-                $chk->close();
-
-                return null;
-            }
-            $chk->close();
-        }
-
-        $product = $this->findProductRowForOpeningStock($conn, $itemCode);
-        if (!$product) {
-            return 'API import succeeded but no local product row matched this item_code for opening stock.';
-        }
         $loc = trim($stockLocation);
         if ($loc === '') {
             $loc = '-';
+        }
+
+        if ($openingQty <= 0) {
+            try {
+                $stockTransfer->removeBulkImportOpeningByRef($refId);
+            } catch (Exception $e) {
+                return 'Opening stock failed: ' . $e->getMessage();
+            }
+
+            return null;
+        }
+
+        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku);
+        if (!$product) {
+            return 'API import succeeded but no local product row matched this item_code/SKU for opening stock.';
         }
         $sku = (string)($product['sku'] ?? '');
         $size = (string)($product['size'] ?? '');
         $color = (string)($product['color'] ?? '');
         $ic = (string)($product['item_code'] ?? $itemCode);
         try {
-            $stockTransfer->recordOpeningStockFromBulkImport(
+            // Product may already exist (API update path): update same BULK_IMPORT row instead of skipping.
+            $stockTransfer->upsertBulkImportOpeningStock(
                 (int)$product['id'],
                 $sku,
                 $ic,
@@ -1054,7 +1125,7 @@ class ProductsController {
         $parsedRows = $ext === 'csv' ? $this->parseBulkImportRowsFromCsv($file['tmp_name']) : $this->parseBulkImportRowsFromXlsx($file['tmp_name']);
         $parsedRows = $this->normalizeBulkImportRows($parsedRows);
         if (empty($parsedRows)) {
-            echo json_encode(['success' => false, 'message' => 'No product codes found in file (column A). Expected: A = product code, B = qty, C = location.']);
+            echo json_encode(['success' => false, 'message' => 'No product codes found in file (column A). Expected: A = product code, B = SKU (optional), C = qty, D = location. Legacy 3 columns: A = code, B = qty, C = location (SKU defaults to code).']);
             exit;
         }
 
@@ -1080,13 +1151,17 @@ class ProductsController {
         $jobId = (int)$stmtJob->insert_id;
         $stmtJob->close();
 
-        $stmtItem = $conn->prepare("INSERT INTO product_import_items (job_id, item_code, opening_qty, stock_location, status) VALUES (?, ?, ?, ?, 'pending')
-            ON DUPLICATE KEY UPDATE opening_qty = VALUES(opening_qty), stock_location = VALUES(stock_location), status = 'pending', error_message = NULL, processed_at = NULL");
+        $stmtItem = $conn->prepare("INSERT INTO product_import_items (job_id, item_code, import_sku, opening_qty, stock_location, status) VALUES (?, ?, ?, ?, ?, 'pending')
+            ON DUPLICATE KEY UPDATE import_sku = VALUES(import_sku), opening_qty = VALUES(opening_qty), stock_location = VALUES(stock_location), status = 'pending', error_message = NULL, processed_at = NULL");
         foreach ($parsedRows as $pr) {
             $code = $pr['code'];
+            $impSku = (string)($pr['sku'] ?? $code);
+            if ($impSku === '') {
+                $impSku = $code;
+            }
             $oq = (int)$pr['qty'];
             $sl = $pr['location'];
-            $stmtItem->bind_param('isis', $jobId, $code, $oq, $sl);
+            $stmtItem->bind_param('issis', $jobId, $code, $impSku, $oq, $sl);
             $stmtItem->execute();
         }
         $stmtItem->close();
@@ -1322,7 +1397,7 @@ class ProductsController {
 
         $picked = [];
         // Pending first, then rows stuck in "processing" (browser closed / fatal mid-batch)
-        $stmtPick = $conn->prepare("SELECT id, item_code, opening_qty, stock_location FROM product_import_items WHERE job_id = ? AND status IN ('pending','processing') ORDER BY (status = 'processing') ASC, id ASC LIMIT 50");
+        $stmtPick = $conn->prepare("SELECT id, item_code, import_sku, opening_qty, stock_location FROM product_import_items WHERE job_id = ? AND status IN ('pending','processing') ORDER BY (status = 'processing') ASC, id ASC LIMIT 50");
         $stmtPick->bind_param('i', $jobId);
         $stmtPick->execute();
         $res = $stmtPick->get_result();
@@ -1369,6 +1444,10 @@ class ProductsController {
                 $rowPick = $picked[$idx] ?? [];
                 $openQty = (int)($rowPick['opening_qty'] ?? 0);
                 $stockLoc = (string)($rowPick['stock_location'] ?? '');
+                $impSku = trim((string)($rowPick['import_sku'] ?? ''));
+                if ($impSku === '') {
+                    $impSku = (string)$code;
+                }
                 $isFailed = in_array($code, $failedCodes, true);
                 if ($isFailed) {
                     $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
@@ -1397,6 +1476,7 @@ class ProductsController {
                         $jobWarehouseId,
                         $id,
                         (string)$code,
+                        $impSku,
                         $openQty,
                         $stockLoc,
                         $batchUserId
