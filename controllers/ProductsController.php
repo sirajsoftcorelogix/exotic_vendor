@@ -331,6 +331,7 @@ class ProductsController {
         $created = 0;
         $updated = 0;
         $failed = [];
+        $createdIdsByCode = [];
         // prepare comma separated itemcodes (no spaces)
         $itm = implode(',', $codes);
         $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itm);
@@ -452,7 +453,10 @@ class ProductsController {
             else $failed[] = $code;
             } else {            
             $id = $productModel->createProduct($item);
-            if ($id) $created++;
+            if ($id) {
+                $created++;
+                $createdIdsByCode[$code][] = (int)$id;
+            }
             else $failed[] = $code;
             }
             // echo "Processed item code: " . $code . "\n";
@@ -507,7 +511,10 @@ class ProductsController {
                         else $failed[] = $variantItem['item_code'];
                     } else {            
                         $id = $productModel->createProduct($variantItem);
-                        if ($id) $created++;
+                        if ($id) {
+                            $created++;
+                            $createdIdsByCode[$variantItem['item_code']][] = (int)$id;
+                        }
                         else $failed[] = $variantItem['item_code'];
                     }
                 }
@@ -517,7 +524,11 @@ class ProductsController {
             usleep(100000); // 100ms
         }
 
-        return $respond(['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed]);
+        $payload = ['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed];
+        if ($internalCall) {
+            $payload['created_ids_by_code'] = $createdIdsByCode;
+        }
+        return $respond($payload);
     }
 
     public function bulkImportScreen() {
@@ -526,9 +537,10 @@ class ProductsController {
         $this->ensureBulkImportTables();
 
         $jobs = [];
-        $sql = "SELECT j.*, u.name AS created_by_name
+        $sql = "SELECT j.*, u.name AS created_by_name, ea.address_title AS warehouse_name
                 FROM product_import_jobs j
                 LEFT JOIN vp_users u ON u.id = j.created_by
+                LEFT JOIN exotic_address ea ON ea.id = j.warehouse_id
                 ORDER BY j.id DESC
                 LIMIT 100";
         $res = mysqli_query($conn, $sql);
@@ -538,7 +550,30 @@ class ProductsController {
             }
         }
 
-        renderTemplate('views/products/bulk_import.php', ['jobs' => $jobs], 'Bulk Product Import');
+        global $usersModel;
+        $warehouses = $usersModel->getAllWarehouses();
+
+        renderTemplate('views/products/bulk_import.php', [
+            'jobs' => $jobs,
+            'warehouses' => $warehouses,
+        ], 'Bulk Product Import');
+    }
+
+    public function bulkImportSampleCsv() {
+        is_login();
+        $filename = 'bulk_product_import_sample.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['Product Code', 'Qty', 'Location']);
+        fputcsv($out, ['SAMPLE001', '10', 'A-01-01']);
+        fputcsv($out, ['SAMPLE002', '5', 'B-02-03']);
+        fclose($out);
+        exit;
     }
 
     public function bulkImportDetail() {
@@ -555,7 +590,11 @@ class ProductsController {
         $this->refreshImportJobCounts($jobId);
 
         $job = null;
-        $stmtJob = $conn->prepare("SELECT j.*, u.name AS created_by_name FROM product_import_jobs j LEFT JOIN vp_users u ON u.id = j.created_by WHERE j.id = ? LIMIT 1");
+        $stmtJob = $conn->prepare("SELECT j.*, u.name AS created_by_name, ea.address_title AS warehouse_name
+            FROM product_import_jobs j
+            LEFT JOIN vp_users u ON u.id = j.created_by
+            LEFT JOIN exotic_address ea ON ea.id = j.warehouse_id
+            WHERE j.id = ? LIMIT 1");
         $stmtJob->bind_param('i', $jobId);
         $stmtJob->execute();
         $jobRes = $stmtJob->get_result();
@@ -598,7 +637,7 @@ class ProductsController {
         $totalPages = $limit > 0 ? (int)ceil($totalItems / $limit) : 1;
 
         $rows = [];
-        $listSql = "SELECT id, item_code, status, attempt_count, error_message, created_at, updated_at, processed_at
+        $listSql = "SELECT id, item_code, opening_qty, stock_location, status, attempt_count, error_message, created_at, updated_at, processed_at
                     FROM product_import_items
                     $where
                     ORDER BY id ASC
@@ -633,6 +672,8 @@ class ProductsController {
             id INT AUTO_INCREMENT PRIMARY KEY,
             file_name VARCHAR(255) NOT NULL,
             created_by INT NOT NULL,
+            warehouse_id INT NOT NULL DEFAULT 0,
+            file_path VARCHAR(1024) NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             total_items INT NOT NULL DEFAULT 0,
             processed_items INT NOT NULL DEFAULT 0,
@@ -647,6 +688,9 @@ class ProductsController {
             id INT AUTO_INCREMENT PRIMARY KEY,
             job_id INT NOT NULL,
             item_code VARCHAR(100) NOT NULL,
+            opening_qty INT NOT NULL DEFAULT 0,
+            stock_location VARCHAR(255) NOT NULL DEFAULT '',
+            created_product_ids TEXT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             attempt_count INT NOT NULL DEFAULT 0,
             error_message TEXT NULL,
@@ -658,95 +702,266 @@ class ProductsController {
             CONSTRAINT fk_product_import_items_job FOREIGN KEY (job_id) REFERENCES product_import_jobs(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         mysqli_query($conn, $sqlItems);
+
+        $this->ensureBulkImportSchemaPatches($conn);
+        $this->ensureVpStockMovementsOpeningStockEnum($conn);
     }
 
-    private function parseCodesFromCsv(string $filePath): array {
-        $codes = [];
+    /**
+     * Migrate older installs that created import tables before warehouse/qty/location columns existed.
+     */
+    private function ensureBulkImportSchemaPatches($conn): void {
+        if (!$conn) {
+            return;
+        }
+        $r = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'warehouse_id'");
+        if (!$r || mysqli_num_rows($r) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN warehouse_id INT NOT NULL DEFAULT 0 AFTER created_by");
+        }
+        $rFile = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'file_path'");
+        if (!$rFile || mysqli_num_rows($rFile) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN file_path VARCHAR(1024) NULL AFTER warehouse_id");
+        }
+        $r2 = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_items LIKE 'opening_qty'");
+        if (!$r2 || mysqli_num_rows($r2) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN opening_qty INT NOT NULL DEFAULT 0 AFTER item_code");
+            @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN stock_location VARCHAR(255) NOT NULL DEFAULT '' AFTER opening_qty");
+        }
+        $r3 = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_items LIKE 'created_product_ids'");
+        if (!$r3 || mysqli_num_rows($r3) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN created_product_ids TEXT NULL AFTER stock_location");
+        }
+    }
+
+    /**
+     * Allow OPENING_STOCK on vp_stock_movements (idempotent if already present).
+     */
+    private function ensureVpStockMovementsOpeningStockEnum($conn): void {
+        if (!$conn) {
+            return;
+        }
+        $res = @mysqli_query($conn, "SHOW COLUMNS FROM vp_stock_movements LIKE 'movement_type'");
+        if (!$res) {
+            return;
+        }
+        $row = mysqli_fetch_assoc($res);
+        if (!$row) {
+            return;
+        }
+        $type = strtolower((string)($row['Type'] ?? ''));
+        if (strpos($type, 'opening_stock') !== false) {
+            return;
+        }
+        @mysqli_query($conn, "ALTER TABLE vp_stock_movements MODIFY COLUMN movement_type ENUM('IN','OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK') NOT NULL");
+    }
+
+    private function parseBulkQtyFromRaw(string $raw): int {
+        $x = str_replace([',', ' '], '', trim($raw));
+        if ($x === '' || !is_numeric($x)) {
+            return 0;
+        }
+        return max(0, (int)round((float)$x));
+    }
+
+    private function parseBulkImportRowsFromCsv(string $filePath): array {
+        $rows = [];
         $handle = fopen($filePath, 'r');
-        if (!$handle) return $codes;
+        if (!$handle) {
+            return $rows;
+        }
         while (($row = fgetcsv($handle)) !== false) {
-            if (!isset($row[0])) continue;
-            $val = trim((string)$row[0]);
-            if ($val !== '') $codes[] = $val;
+            $code = trim((string)($row[0] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $qty = $this->parseBulkQtyFromRaw((string)($row[1] ?? '0'));
+            $loc = trim((string)($row[2] ?? ''));
+            $rows[] = ['code' => $code, 'qty' => $qty, 'location' => $loc];
         }
         fclose($handle);
-        return $codes;
+        return $rows;
     }
 
-    private function parseCodesFromXlsx(string $filePath): array {
-        $codes = [];
+    private function xlsxLoadSharedStrings(ZipArchive $zip): array {
+        $sharedStrings = [];
+        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($sharedXml === false) {
+            return $sharedStrings;
+        }
+        $sx = @simplexml_load_string($sharedXml);
+        if ($sx && isset($sx->si)) {
+            foreach ($sx->si as $si) {
+                $text = '';
+                if (isset($si->t)) {
+                    $text = (string)$si->t;
+                } elseif (isset($si->r)) {
+                    foreach ($si->r as $run) {
+                        $text .= (string)$run->t;
+                    }
+                }
+                $sharedStrings[] = $text;
+            }
+        }
+        return $sharedStrings;
+    }
+
+    private function xlsxCellPlainText(SimpleXMLElement $c, array $sharedStrings): string {
+        $t = (string)($c['t'] ?? '');
+        if ($t === 's') {
+            $idx = (int)$c->v;
+
+            return (string)($sharedStrings[$idx] ?? '');
+        }
+        if ($t === 'inlineStr') {
+            return isset($c->is->t) ? (string)$c->is->t : '';
+        }
+        if (isset($c->v)) {
+            return (string)$c->v;
+        }
+
+        return '';
+    }
+
+    private function parseBulkImportRowsFromXlsx(string $filePath): array {
+        $rows = [];
         if (!class_exists('ZipArchive')) {
-            return $codes;
+            return $rows;
         }
         $zip = new ZipArchive();
         if ($zip->open($filePath) !== true) {
-            return $codes;
+            return $rows;
         }
 
-        $sharedStrings = [];
-        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
-        if ($sharedXml !== false) {
-            $sx = @simplexml_load_string($sharedXml);
-            if ($sx && isset($sx->si)) {
-                foreach ($sx->si as $si) {
-                    $text = '';
-                    if (isset($si->t)) {
-                        $text = (string)$si->t;
-                    } elseif (isset($si->r)) {
-                        foreach ($si->r as $run) {
-                            $text .= (string)$run->t;
-                        }
-                    }
-                    $sharedStrings[] = $text;
-                }
-            }
-        }
-
+        $sharedStrings = $this->xlsxLoadSharedStrings($zip);
         $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
         if ($sheetXml === false) {
             $zip->close();
-            return $codes;
+
+            return $rows;
         }
         $sheet = @simplexml_load_string($sheetXml);
         if ($sheet && isset($sheet->sheetData->row)) {
             foreach ($sheet->sheetData->row as $row) {
-                $firstCellValue = '';
+                $byCol = [];
                 foreach ($row->c as $c) {
-                    $ref = (string)$c['r'];
-                    if ($ref !== '' && strpos($ref, 'A') !== 0) {
+                    $ref = (string)($c['r'] ?? '');
+                    if ($ref === '' || !preg_match('/^([A-Z]+)/', $ref, $m)) {
                         continue;
                     }
-                    $t = (string)$c['t'];
-                    if ($t === 's') {
-                        $idx = (int)$c->v;
-                        $firstCellValue = $sharedStrings[$idx] ?? '';
-                    } elseif ($t === 'inlineStr') {
-                        $firstCellValue = (string)$c->is->t;
-                    } else {
-                        $firstCellValue = isset($c->v) ? (string)$c->v : '';
-                    }
-                    break;
+                    $byCol[$m[1]] = trim($this->xlsxCellPlainText($c, $sharedStrings));
                 }
-                $v = trim($firstCellValue);
-                if ($v !== '') $codes[] = $v;
+                $code = $byCol['A'] ?? '';
+                if ($code === '') {
+                    continue;
+                }
+                $qty = $this->parseBulkQtyFromRaw($byCol['B'] ?? '0');
+                $loc = trim((string)($byCol['C'] ?? ''));
+                $rows[] = ['code' => $code, 'qty' => $qty, 'location' => $loc];
             }
         }
         $zip->close();
-        return $codes;
+
+        return $rows;
     }
 
-    private function normalizeItemCodes(array $codes): array {
-        $clean = [];
-        foreach ($codes as $code) {
-            $v = trim((string)$code);
-            if ($v === '') continue;
-            $lower = strtolower($v);
-            if (in_array($lower, ['item_code', 'itemcode', 'sku', 'item code'], true)) {
+    private function normalizeBulkImportRows(array $rows): array {
+        $headerCodes = ['item_code', 'itemcode', 'item code', 'sku', 'product code', 'product_code', 'productcode'];
+        $outByCode = [];
+        foreach ($rows as $r) {
+            $code = trim((string)($r['code'] ?? ''));
+            if ($code === '') {
                 continue;
             }
-            $clean[] = $v;
+            $lower = strtolower($code);
+            if (in_array($lower, $headerCodes, true)) {
+                continue;
+            }
+            $qty = max(0, (int)($r['qty'] ?? 0));
+            $location = trim((string)($r['location'] ?? ''));
+            $outByCode[$code] = ['code' => $code, 'qty' => $qty, 'location' => $location];
         }
-        return array_values(array_unique($clean));
+
+        return array_values($outByCode);
+    }
+
+    private function findProductRowForOpeningStock(mysqli $conn, string $itemCode): ?array {
+        $sql = "SELECT id, sku, item_code, size, color FROM vp_products
+                WHERE item_code = ?
+                ORDER BY (CASE WHEN (size IS NULL OR size = '') AND (color IS NULL OR color = '') THEN 0 ELSE 1 END), id ASC
+                LIMIT 1";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $itemCode);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    /**
+     * @return string|null Error message, or null on success / nothing to do
+     */
+    private function bulkImportApplyOpeningStock(
+        mysqli $conn,
+        $stockTransfer,
+        int $warehouseId,
+        int $importItemId,
+        string $itemCode,
+        int $openingQty,
+        string $stockLocation,
+        int $userId
+    ): ?string {
+        if ($warehouseId <= 0 || $openingQty <= 0) {
+            return null;
+        }
+        $refId = 'import_item:' . $importItemId;
+        $chk = $conn->prepare("SELECT id FROM vp_stock_movements WHERE ref_type = 'BULK_IMPORT' AND ref_id = ? LIMIT 1");
+        if ($chk) {
+            $chk->bind_param('s', $refId);
+            $chk->execute();
+            $dupRes = $chk->get_result();
+            if ($dupRes && $dupRes->num_rows > 0) {
+                $chk->close();
+
+                return null;
+            }
+            $chk->close();
+        }
+
+        $product = $this->findProductRowForOpeningStock($conn, $itemCode);
+        if (!$product) {
+            return 'API import succeeded but no local product row matched this item_code for opening stock.';
+        }
+        $loc = trim($stockLocation);
+        if ($loc === '') {
+            $loc = '-';
+        }
+        $sku = (string)($product['sku'] ?? '');
+        $size = (string)($product['size'] ?? '');
+        $color = (string)($product['color'] ?? '');
+        $ic = (string)($product['item_code'] ?? $itemCode);
+        try {
+            $stockTransfer->recordOpeningStockFromBulkImport(
+                (int)$product['id'],
+                $sku,
+                $ic,
+                $size,
+                $color,
+                $warehouseId,
+                $loc,
+                $openingQty,
+                $userId,
+                $refId
+            );
+        } catch (Exception $e) {
+            return 'Opening stock failed: ' . $e->getMessage();
+        }
+
+        return null;
     }
 
     private function bulkImportUploadErrorMessage(int $code): string {
@@ -816,30 +1031,232 @@ class ProductsController {
             exit;
         }
 
-        $codes = $ext === 'csv' ? $this->parseCodesFromCsv($file['tmp_name']) : $this->parseCodesFromXlsx($file['tmp_name']);
-        $codes = $this->normalizeItemCodes($codes);
-        if (empty($codes)) {
-            echo json_encode(['success' => false, 'message' => 'No item codes found in file.']);
+        $warehouseId = isset($_POST['warehouse_id']) ? (int)$_POST['warehouse_id'] : 0;
+        if ($warehouseId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select a warehouse.']);
+            exit;
+        }
+        $whStmt = $conn->prepare('SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1');
+        if (!$whStmt) {
+            echo json_encode(['success' => false, 'message' => 'Could not validate warehouse.']);
+            exit;
+        }
+        $whStmt->bind_param('i', $warehouseId);
+        $whStmt->execute();
+        $whRes = $whStmt->get_result();
+        $whOk = $whRes && $whRes->num_rows > 0;
+        $whStmt->close();
+        if (!$whOk) {
+            echo json_encode(['success' => false, 'message' => 'Invalid or inactive warehouse.']);
+            exit;
+        }
+
+        $parsedRows = $ext === 'csv' ? $this->parseBulkImportRowsFromCsv($file['tmp_name']) : $this->parseBulkImportRowsFromXlsx($file['tmp_name']);
+        $parsedRows = $this->normalizeBulkImportRows($parsedRows);
+        if (empty($parsedRows)) {
+            echo json_encode(['success' => false, 'message' => 'No product codes found in file (column A). Expected: A = product code, B = qty, C = location.']);
             exit;
         }
 
         $createdBy = (int)($_SESSION['user']['id'] ?? 0);
         $fileName = basename((string)$file['name']);
-        $stmtJob = $conn->prepare("INSERT INTO product_import_jobs (file_name, created_by, status, total_items) VALUES (?, ?, 'pending', ?)");
-        $total = count($codes);
-        $stmtJob->bind_param('sii', $fileName, $createdBy, $total);
+
+        // Persist uploaded file so it can be deleted on revert.
+        $uploadDir = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'bulk_import';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0775, true);
+        }
+        $safeOriginal = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $fileName);
+        $storedName = 'job_' . date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . '_' . $safeOriginal;
+        $storedPath = $uploadDir . DIRECTORY_SEPARATOR . $storedName;
+        $storedOk = @move_uploaded_file($file['tmp_name'], $storedPath);
+        $dbFilePath = $storedOk ? ('uploads/bulk_import/' . $storedName) : null;
+
+        // If move failed, parsing was already done from tmp_name; we can still proceed, but revert won't be able to delete the file.
+        $stmtJob = $conn->prepare("INSERT INTO product_import_jobs (file_name, created_by, warehouse_id, file_path, status, total_items) VALUES (?, ?, ?, ?, 'pending', ?)");
+        $total = count($parsedRows);
+        $stmtJob->bind_param('siisi', $fileName, $createdBy, $warehouseId, $dbFilePath, $total);
         $stmtJob->execute();
         $jobId = (int)$stmtJob->insert_id;
         $stmtJob->close();
 
-        $stmtItem = $conn->prepare("INSERT IGNORE INTO product_import_items (job_id, item_code, status) VALUES (?, ?, 'pending')");
-        foreach ($codes as $code) {
-            $stmtItem->bind_param('is', $jobId, $code);
+        $stmtItem = $conn->prepare("INSERT INTO product_import_items (job_id, item_code, opening_qty, stock_location, status) VALUES (?, ?, ?, ?, 'pending')
+            ON DUPLICATE KEY UPDATE opening_qty = VALUES(opening_qty), stock_location = VALUES(stock_location), status = 'pending', error_message = NULL, processed_at = NULL");
+        foreach ($parsedRows as $pr) {
+            $code = $pr['code'];
+            $oq = (int)$pr['qty'];
+            $sl = $pr['location'];
+            $stmtItem->bind_param('isis', $jobId, $code, $oq, $sl);
             $stmtItem->execute();
         }
         $stmtItem->close();
 
         echo json_encode(['success' => true, 'job_id' => $jobId, 'total_items' => $total]);
+        exit;
+    }
+
+    public function bulkImportRevert() {
+        is_login();
+        if (ob_get_level() === 0) { ob_start(); }
+        set_error_handler(function ($severity, $message, $file, $line) {
+            if (!(error_reporting() & $severity)) { return false; }
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'PHP Warning: ' . $message, 'debug' => basename($file) . ':' . $line]);
+            exit;
+        });
+        header('Content-Type: application/json');
+        global $conn;
+        $this->ensureBulkImportTables();
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+        $jobId = isset($payload['job_id']) ? (int)$payload['job_id'] : 0;
+        if ($jobId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid job id.']);
+            exit;
+        }
+
+        $jobStmt = $conn->prepare("SELECT id, status, file_path FROM product_import_jobs WHERE id = ? LIMIT 1");
+        $jobStmt->bind_param('i', $jobId);
+        $jobStmt->execute();
+        $jobRow = $jobStmt->get_result()->fetch_assoc();
+        $jobStmt->close();
+        if (!$jobRow) {
+            echo json_encode(['success' => false, 'message' => 'Import job not found.']);
+            exit;
+        }
+        if (($jobRow['status'] ?? '') === 'processing') {
+            echo json_encode(['success' => false, 'message' => 'This job is processing. Please wait until it finishes, then revert.']);
+            exit;
+        }
+
+        // Collect affected product_ids before deleting movements so we can recalculate local_stock,
+        // and collect products that were created by this job so we can delete them.
+        $prodIds = [];
+        $createdProductIds = [];
+
+        $itemsStmt = $conn->prepare("SELECT created_product_ids FROM product_import_items WHERE job_id = ?");
+        if ($itemsStmt) {
+            $itemsStmt->bind_param('i', $jobId);
+            $itemsStmt->execute();
+            $ires = $itemsStmt->get_result();
+            while ($ires && ($ir = $ires->fetch_assoc())) {
+                $rawIds = (string)($ir['created_product_ids'] ?? '');
+                if ($rawIds !== '') {
+                    $decoded = json_decode($rawIds, true);
+                    if (is_array($decoded)) {
+                        foreach ($decoded as $pid) {
+                            $pid = (int)$pid;
+                            if ($pid > 0) {
+                                $createdProductIds[$pid] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            $itemsStmt->close();
+        }
+        $prodSql = "SELECT DISTINCT sm.product_id
+                    FROM vp_stock_movements sm
+                    INNER JOIN product_import_items pii
+                      ON sm.ref_type = 'BULK_IMPORT'
+                     AND sm.ref_id = CONCAT('import_item:', pii.id)
+                    WHERE pii.job_id = ? AND sm.product_id IS NOT NULL";
+        $pstmt = $conn->prepare($prodSql);
+        if ($pstmt) {
+            $pstmt->bind_param('i', $jobId);
+            $pstmt->execute();
+            $pres = $pstmt->get_result();
+            while ($pres && ($r = $pres->fetch_assoc())) {
+                $pid = (int)($r['product_id'] ?? 0);
+                if ($pid > 0) {
+                    $prodIds[$pid] = true;
+                }
+            }
+            $pstmt->close();
+        }
+
+        // Delete movements created by this import (by ref_id pattern).
+        $delSql = "DELETE sm FROM vp_stock_movements sm
+                   INNER JOIN product_import_items pii
+                     ON sm.ref_type = 'BULK_IMPORT'
+                    AND sm.ref_id = CONCAT('import_item:', pii.id)
+                   WHERE pii.job_id = ?";
+        $dstmt = $conn->prepare($delSql);
+        if (!$dstmt) {
+            echo json_encode(['success' => false, 'message' => 'Could not prepare revert delete statement.']);
+            exit;
+        }
+        $dstmt->bind_param('i', $jobId);
+        $dstmt->execute();
+        $deletedMovements = (int)$dstmt->affected_rows;
+        $dstmt->close();
+
+        // Delete products created by API during this import (best-effort).
+        $deletedProducts = 0;
+        $failedProductDeletes = [];
+        $delProdStmt = $conn->prepare("DELETE FROM vp_products WHERE id = ? LIMIT 1");
+        if ($delProdStmt) {
+            foreach (array_keys($createdProductIds) as $pid) {
+                $pid = (int)$pid;
+                $delProdStmt->bind_param('i', $pid);
+                $ok = $delProdStmt->execute();
+                if ($ok && $delProdStmt->affected_rows > 0) {
+                    $deletedProducts++;
+                } else {
+                    $failedProductDeletes[] = $pid;
+                }
+            }
+            $delProdStmt->close();
+        }
+
+        // Recalculate local_stock for affected products based on latest remaining movement.
+        $recalcStmt = $conn->prepare("SELECT running_stock FROM vp_stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 1");
+        $updStmt = $conn->prepare("UPDATE vp_products SET local_stock = ? WHERE id = ?");
+        if ($recalcStmt && $updStmt) {
+            foreach (array_keys($prodIds) as $pid) {
+                $pid = (int)$pid;
+                $recalcStmt->bind_param('i', $pid);
+                $recalcStmt->execute();
+                $row = $recalcStmt->get_result()->fetch_assoc();
+                $stock = $row ? (int)($row['running_stock'] ?? 0) : 0;
+                $updStmt->bind_param('ii', $stock, $pid);
+                $updStmt->execute();
+            }
+        }
+        if ($recalcStmt) { $recalcStmt->close(); }
+        if ($updStmt) { $updStmt->close(); }
+
+        // Delete job (cascade deletes items).
+        $delJob = $conn->prepare("DELETE FROM product_import_jobs WHERE id = ? LIMIT 1");
+        $delJob->bind_param('i', $jobId);
+        $delJob->execute();
+        $delJob->close();
+
+        // Delete stored upload file, if present.
+        $fileDeleted = false;
+        $filePath = trim((string)($jobRow['file_path'] ?? ''));
+        if ($filePath !== '') {
+            $abs = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . $filePath);
+            $uploadsBase = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'uploads');
+            if ($abs && $uploadsBase && strpos($abs, $uploadsBase) === 0 && is_file($abs)) {
+                $fileDeleted = @unlink($abs);
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Import reverted successfully.',
+            'deleted_movements' => $deletedMovements,
+            'recalculated_products' => count($prodIds),
+            'deleted_products' => $deletedProducts,
+            'failed_product_deletes' => array_values($failedProductDeletes),
+            'file_deleted' => $fileDeleted,
+        ]);
         exit;
     }
 
@@ -903,18 +1320,18 @@ class ProductsController {
             exit;
         }
 
-        $ids = [];
-        $codes = [];
+        $picked = [];
         // Pending first, then rows stuck in "processing" (browser closed / fatal mid-batch)
-        $stmtPick = $conn->prepare("SELECT id, item_code FROM product_import_items WHERE job_id = ? AND status IN ('pending','processing') ORDER BY (status = 'processing') ASC, id ASC LIMIT 50");
+        $stmtPick = $conn->prepare("SELECT id, item_code, opening_qty, stock_location FROM product_import_items WHERE job_id = ? AND status IN ('pending','processing') ORDER BY (status = 'processing') ASC, id ASC LIMIT 50");
         $stmtPick->bind_param('i', $jobId);
         $stmtPick->execute();
         $res = $stmtPick->get_result();
         while ($row = $res->fetch_assoc()) {
-            $ids[] = (int)$row['id'];
-            $codes[] = $row['item_code'];
+            $picked[] = $row;
         }
         $stmtPick->close();
+        $ids = array_map(static function ($r) { return (int)$r['id']; }, $picked);
+        $codes = array_map(static function ($r) { return $r['item_code']; }, $picked);
 
         if (empty($ids)) {
             $stats = $this->refreshImportJobCounts($jobId);
@@ -925,6 +1342,20 @@ class ProductsController {
         $idList = implode(',', array_map('intval', $ids));
         mysqli_query($conn, "UPDATE product_import_items SET status='processing', attempt_count=attempt_count+1, updated_at=NOW() WHERE id IN ($idList)");
 
+        $jobWarehouseId = 0;
+        $jwStmt = $conn->prepare('SELECT warehouse_id FROM product_import_jobs WHERE id = ? LIMIT 1');
+        if ($jwStmt) {
+            $jwStmt->bind_param('i', $jobId);
+            $jwStmt->execute();
+            $jwRow = $jwStmt->get_result()->fetch_assoc();
+            $jwStmt->close();
+            $jobWarehouseId = (int)($jwRow['warehouse_id'] ?? 0);
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        $batchUserId = (int)($_SESSION['user']['id'] ?? 0);
+
         $result = $this->importApiCall($codes);
         if (!is_array($result) || !isset($result['success'])) {
             $result = ['success' => false, 'message' => 'Batch import returned invalid response.', 'failed' => $codes];
@@ -932,8 +1363,12 @@ class ProductsController {
 
         if (!empty($result['success'])) {
             $failedCodes = array_values(array_unique(array_map('strval', $result['failed'] ?? [])));
+            $createdIdsByCode = is_array($result['created_ids_by_code'] ?? null) ? $result['created_ids_by_code'] : [];
             foreach ($ids as $idx => $id) {
                 $code = $codes[$idx];
+                $rowPick = $picked[$idx] ?? [];
+                $openQty = (int)($rowPick['opening_qty'] ?? 0);
+                $stockLoc = (string)($rowPick['stock_location'] ?? '');
                 $isFailed = in_array($code, $failedCodes, true);
                 if ($isFailed) {
                     $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
@@ -942,10 +1377,41 @@ class ProductsController {
                     $stmtF->execute();
                     $stmtF->close();
                 } else {
-                    $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
-                    $stmtS->bind_param('i', $id);
-                    $stmtS->execute();
-                    $stmtS->close();
+                    $createdIds = $createdIdsByCode[$code] ?? [];
+                    if (!is_array($createdIds)) {
+                        $createdIds = [];
+                    }
+                    $createdIds = array_values(array_unique(array_map('intval', $createdIds)));
+                    $createdJson = !empty($createdIds) ? json_encode($createdIds) : null;
+                    if ($createdJson !== null) {
+                        $up = $conn->prepare("UPDATE product_import_items SET created_product_ids = ? WHERE id = ?");
+                        if ($up) {
+                            $up->bind_param('si', $createdJson, $id);
+                            $up->execute();
+                            $up->close();
+                        }
+                    }
+                    $openErr = $this->bulkImportApplyOpeningStock(
+                        $conn,
+                        $stockTransferModel,
+                        $jobWarehouseId,
+                        $id,
+                        (string)$code,
+                        $openQty,
+                        $stockLoc,
+                        $batchUserId
+                    );
+                    if ($openErr !== null) {
+                        $stmtF = $conn->prepare("UPDATE product_import_items SET status='failed', error_message=?, processed_at=NOW() WHERE id=?");
+                        $stmtF->bind_param('si', $openErr, $id);
+                        $stmtF->execute();
+                        $stmtF->close();
+                    } else {
+                        $stmtS = $conn->prepare("UPDATE product_import_items SET status='success', error_message=NULL, processed_at=NOW() WHERE id=?");
+                        $stmtS->bind_param('i', $id);
+                        $stmtS->execute();
+                        $stmtS->close();
+                    }
                 }
             }
         } else {
