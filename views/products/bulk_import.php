@@ -29,8 +29,8 @@
         <button type="submit" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm font-semibold">Upload & Create Job</button>
       </div>
       <div class="text-xs text-gray-500 mt-2">
-        Expected columns: <strong>A</strong> = product code, <strong>B</strong> = SKU (leave blank to use product code), <strong>C</strong> = quantity, <strong>D</strong> = location.
-        Older files with only 3 columns (code, qty, location) still work. Opening stock uses the selected warehouse when import succeeds (qty &gt; 0). Max file size: 10 MB.
+        Columns: <strong>A</strong> code, <strong>B</strong> SKU (blank = auto: <code>code</code>, <code>code-size</code>, <code>code--color</code>, or <code>code-size-color</code>), <strong>C</strong> color, <strong>D</strong> size, <strong>E</strong> qty, <strong>F</strong> location.
+        Older 3-column (code, qty, loc) and 4-column (code, SKU, qty, loc) files still work. Max file size: 10 MB.
         <a href="?page=products&amp;action=bulk_import_sample_csv" class="ml-1 text-amber-700 hover:text-amber-900 underline font-medium">Download sample CSV</a>
       </div>
     </form>
