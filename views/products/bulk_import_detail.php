@@ -71,6 +71,8 @@
             <th class="px-3 py-2 text-left">#</th>
             <th class="px-3 py-2 text-left">Item Code</th>
             <th class="px-3 py-2 text-left">SKU</th>
+            <th class="px-3 py-2 text-left">Color</th>
+            <th class="px-3 py-2 text-left">Size</th>
             <th class="px-3 py-2 text-right">Qty</th>
             <th class="px-3 py-2 text-left">Location</th>
             <th class="px-3 py-2 text-left">Status</th>
@@ -82,7 +84,7 @@
         </thead>
         <tbody>
           <?php if (empty($rows)): ?>
-            <tr><td colspan="9" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
+            <tr><td colspan="12" class="px-3 py-8 text-center text-gray-400">No records found.</td></tr>
           <?php else: ?>
             <?php foreach ($rows as $r): ?>
               <?php
@@ -96,6 +98,8 @@
                 <td class="px-3 py-2"><?= (int)$r['id'] ?></td>
                 <td class="px-3 py-2 font-medium"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['import_sku'] ?? '') ?></td>
+                <td class="px-3 py-2"><?= htmlspecialchars($r['import_color'] ?? '') ?></td>
+                <td class="px-3 py-2"><?= htmlspecialchars($r['import_size'] ?? '') ?></td>
                 <td class="px-3 py-2 text-right tabular-nums"><?= (int)($r['opening_qty'] ?? 0) ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['stock_location'] ?? '') ?></td>
                 <td class="px-3 py-2"><span class="text-xs px-2 py-1 rounded <?= $stClass ?>"><?= htmlspecialchars($st) ?></span></td>
