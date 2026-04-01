@@ -97,6 +97,69 @@ class Stock {
     }
 
     /**
+     * Reverse invoice stock deductions: one IN movement per line (ref_type INVOICE_CANCEL).
+     * Idempotent per product_id + invoice id so cancel invoice / cancel dispatch can both call safely.
+     */
+    public function restoreStockByInvoiceId(int $invoice_id) {
+        $invoice_id = (int)$invoice_id;
+        if ($invoice_id <= 0) {
+            return ['success' => false, 'message' => 'Invalid invoice id'];
+        }
+        $sql = "SELECT product_id, quantity FROM vp_invoice_items WHERE invoice_id = ?";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $stmt->bind_param('i', $invoice_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if (!$result) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Query failed'];
+        }
+        $refStr = (string)$invoice_id;
+        $errors = [];
+        $applied = 0;
+        $skipped = 0;
+        $dupStmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements WHERE ref_type = 'INVOICE_CANCEL' AND ref_id = ? AND product_id = ? LIMIT 1"
+        );
+        if (!$dupStmt) {
+            $stmt->close();
+            return ['success' => false, 'message' => 'Prepare failed (dup check): ' . $this->conn->error];
+        }
+        while ($row = $result->fetch_assoc()) {
+            $prodId = (int)($row['product_id'] ?? 0);
+            $qty = (int) round((float)($row['quantity'] ?? 0));
+            if ($qty <= 0) {
+                continue;
+            }
+            if ($prodId <= 0) {
+                continue;
+            }
+            $dupStmt->bind_param('si', $refStr, $prodId);
+            $dupStmt->execute();
+            $dupRes = $dupStmt->get_result();
+            if ($dupRes && $dupRes->num_rows > 0) {
+                $skipped++;
+                continue;
+            }
+            $res = $this->addStockMovement($prodId, $qty, 'IN', $invoice_id, 'INVOICE_CANCEL');
+            if (empty($res['success'])) {
+                $errors[] = "Product $prodId: " . ($res['message'] ?? 'error');
+            } else {
+                $applied++;
+            }
+        }
+        $dupStmt->close();
+        $stmt->close();
+        if (count($errors)) {
+            return ['success' => false, 'message' => implode('; ', $errors), 'applied' => $applied, 'skipped_lines' => $skipped];
+        }
+        return ['success' => true, 'message' => 'Stock restored for invoice', 'applied' => $applied, 'skipped_lines' => $skipped];
+    }
+
+    /**
      * Generic helper that adjusts stock and writes a movement entry.
      * Delegates most work to the product model.
      */
@@ -123,6 +186,8 @@ class Stock {
             $reason = 'Invoice #' . $refIdStr;
         } elseif ($movement_type === 'OUT' && $refTypeResolved === 'ORDER') {
             $reason = 'Order ' . $refIdStr;
+        } elseif ($movement_type === 'IN' && $refTypeResolved === 'INVOICE_CANCEL') {
+            $reason = 'Invoice cancelled / dispatch cancelled #' . $refIdStr;
         }
 
         $data = [
