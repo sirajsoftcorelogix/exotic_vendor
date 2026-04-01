@@ -683,9 +683,9 @@ class ProductsController {
                         (
                             SELECT p.sku
                             FROM vp_products p
-                            WHERE p.item_code = pii.item_code
-                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '')
-                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '')
+                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
+                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
+                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
                             ORDER BY p.id DESC
                             LIMIT 1
                         ) AS product_sku
