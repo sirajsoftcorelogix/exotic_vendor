@@ -394,6 +394,18 @@ class InvoicesController
                 exit;
             }
 
+            if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled') {
+                http_response_code(403);
+                if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => 'This invoice was cancelled and cannot be downloaded.']);
+                } else {
+                    header('Content-Type: text/plain; charset=utf-8');
+                    echo 'This invoice was cancelled and cannot be downloaded.';
+                }
+                exit;
+            }
+
             //term and conditions fetch
             global $commanModel;
             $firmSettings = $commanModel->getRecordById('global_settings', 1);

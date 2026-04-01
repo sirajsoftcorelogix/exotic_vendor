@@ -414,7 +414,9 @@
                     ⋮
                   </button>
                   <div class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
                     <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download invoice</a>
+                    <?php endif; ?>
                     <?php /*if (!empty($invoice_dispatch[$invoice['id']])): ?>
                       <?php foreach ($invoice_dispatch[$invoice['id']] as $dispatch): ?>
                         <a href="<?php echo $dispatch['label_url']; ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download <Label><?php echo htmlspecialchars($dispatch['awb_code']); ?></Label></a>

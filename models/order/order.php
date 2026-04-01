@@ -21,11 +21,13 @@ class Order{
                  WHERE p2.sku COLLATE utf8mb4_unicode_ci = vp_orders.sku COLLATE utf8mb4_unicode_ci
                    AND vp_orders.sku IS NOT NULL AND TRIM(vp_orders.sku) COLLATE utf8mb4_unicode_ci != ''
                  ORDER BY p2.id ASC LIMIT 1)
-            ) AS catalog_product_id
+            ) AS catalog_product_id,
+            inv.status AS invoice_status
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
 		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0
+		LEFT JOIN vp_invoices inv ON inv.id = vp_orders.invoice_id
 		WHERE 1=1";
 		
         $params = [];
