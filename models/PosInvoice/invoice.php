@@ -65,17 +65,29 @@ class Invoice {
         return false;
     }
 
+    private function ensureInvoiceItemsProductIdColumn(): void {
+        $r = @$this->db->query("SHOW COLUMNS FROM vp_invoice_items LIKE 'product_id'");
+        if ($r && $r->num_rows > 0) {
+            return;
+        }
+        @$this->db->query("ALTER TABLE vp_invoice_items ADD COLUMN product_id INT UNSIGNED NULL DEFAULT NULL AFTER item_code");
+    }
+
     public function createInvoiceItem($data) {
-        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total, image_url, groupname)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $this->ensureInvoiceItemsProductIdColumn();
+        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, product_id, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total, image_url, groupname)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
+        $productId = isset($data['product_id']) ? (int)$data['product_id'] : 0;
+
         $stmt->bind_param(
-            'isssssiddddddddss',
+            'ississssidddddddss',
             $data['invoice_id'],
             $data['order_number'],
             $data['item_code'],
+            $productId,
             $data['hsn'],
             $data['item_name'],
             $data['description'],

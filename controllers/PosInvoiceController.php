@@ -4,6 +4,8 @@ require_once 'models/order/order.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
+require_once 'models/product/product.php';
+require_once 'models/order/stock.php';
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
 $usersModel = new User($conn);
@@ -819,7 +821,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
     public function createPost()
     {
         is_login();
-        global $invoiceModel, $ordersModel, $commanModel;
+        global $invoiceModel, $ordersModel, $commanModel, $conn;
         header('Content-Type: application/json');
         //print_r($_POST);
         //exit;
@@ -914,6 +916,7 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
         // Create invoice items
         $itemCreated = 0;
         $itemsFailed = [];
+        $productModel = new Product($conn);
 
         foreach ($order_numbers as $idx => $order_number) {
             $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
@@ -949,6 +952,10 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
                 'line_total' => $amount + $totalTaxAmount,
                 'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
             ];
+            $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
+                (string)$order_number,
+                (string)($itemData['item_code'] ?? '')
+            );
             //print_r($itemData);
             $result = $invoiceModel->createInvoiceItem($itemData);
             if ($result) {
@@ -981,10 +988,8 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
         }
-        // insert in vp_stock_movements and update stock in vp_stock table
-        foreach ($order_numbers as $order_number) {
-            // $stockModel->updateStockByOrderNumber($order_number);
-        }
+        $stockModel = new Stock($conn);
+        $stockUpdate = $stockModel->updateStockByInvoiceId((int)$invoiceId);
 
         // Clear session
         unset($_SESSION['invoice_items']);
@@ -995,7 +1000,8 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
             'invoice_id' => $invoiceId,
             'invoice_number' => $invoice_number,
             'items_created' => $itemCreated,
-            'items_failed' => $itemsFailed
+            'items_failed' => $itemsFailed,
+            'stock_update' => $stockUpdate,
         ]);
         exit;
     }
