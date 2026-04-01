@@ -2486,7 +2486,7 @@ class ProductsController {
             $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
             $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
-            $order['stock_history'] = $productModel->stock_history($order['sku']);
+            $order['stock_history'] = $productModel->stock_history($order['sku'], 100, 0, (int)$id);
             $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
             $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
             $order['warehouses'] = $productModel->getAllWarehouses();
