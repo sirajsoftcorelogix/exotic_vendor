@@ -3,6 +3,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/invoice/invoice.php';
 require_once 'models/dispatch/dispatch.php';
 require_once 'models/order/order.php';
+require_once __DIR__ . '/../models/order/stock.php';
 $commanModel = new Tables($conn);
 $invoiceModel = new Invoice($conn); 
 $dispatchModel = new Dispatch($conn);
@@ -797,6 +798,7 @@ class DispatchController {
         //shipment id from dispatch record
         $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
 
+        global $conn;
         try {
             foreach ($dispatchRecords as $record) {
                 $shiprocketOrderId = $record['shiprocket_order_id'];
@@ -817,7 +819,22 @@ class DispatchController {
                     //$commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
             }
-            echo json_encode(['success' => true, 'message' => 'Dispatch cancelled successfully']);
+            $stockModel = new Stock($conn);
+            $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
+            if (empty($stockRestore['success'])) {
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Dispatch updated but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
+                    'stock_restore' => $stockRestore,
+                ]);
+                return;
+            }
+            echo json_encode([
+                'success' => true,
+                'message' => 'Dispatch cancelled successfully',
+                'stock_restore' => $stockRestore,
+            ]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Error cancelling dispatch: ' . $e->getMessage()]);
@@ -1037,7 +1054,19 @@ class DispatchController {
         global $dispatchModel;
         global $commanModel;
         global $invoiceModel;
+        global $conn;
         $invoiceId = intval($input['invoice_id']);
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Invoice not found']);
+            return;
+        }
+        $invStatus = strtolower(trim((string)($invoice['status'] ?? '')));
+        if ($invStatus === 'cancelled') {
+            echo json_encode(['success' => true, 'message' => 'Invoice already cancelled']);
+            return;
+        }
         //shipment id from dispatch record
         $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
 
@@ -1060,9 +1089,24 @@ class DispatchController {
                     $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
             }
+            $stockModel = new Stock($conn);
+            $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
+            if (empty($stockRestore['success'])) {
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Shipment cancelled but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
+                    'stock_restore' => $stockRestore,
+                ]);
+                return;
+            }
             //update invoice status to cancelled
             $invoiceModel->updateInvoiceStatus($invoiceId, 'cancelled');
-            echo json_encode(['success' => true, 'message' => 'Invoice cancelled successfully']);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Invoice cancelled successfully',
+                'stock_restore' => $stockRestore,
+            ]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Error cancelling invoice: ' . $e->getMessage()]);
