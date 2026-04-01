@@ -406,18 +406,6 @@ class ProductsController {
             continue;
             }
 
-            // Migration rule: if item_code already exists locally, force update API path.
-            if ($this->productExistsByItemCode($code)) {
-                $updResult = $productModel->updateProductFromApi([$apiItem]);
-                if (is_array($updResult) && (empty($updResult['success']))) {
-                    $failed[] = $code;
-                } else {
-                    $updated++;
-                }
-                usleep(100000); // 100ms
-                continue;
-            }
-
             // map API item to DB fields (adjust as needed)
             $item = [];
             $item['item_code'] = $code;
@@ -565,21 +553,6 @@ class ProductsController {
             $payload['created_ids_by_code'] = $createdIdsByCode;
         }
         return $respond($payload);
-    }
-
-    private function productExistsByItemCode(string $itemCode): bool {
-        global $conn;
-        $stmt = $conn->prepare("SELECT id FROM vp_products WHERE item_code = ? LIMIT 1");
-        if (!$stmt) {
-            return false;
-        }
-        $stmt->bind_param('s', $itemCode);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $exists = $res && $res->num_rows > 0;
-        $stmt->close();
-
-        return $exists;
     }
 
     public function bulkImportScreen() {
@@ -1336,38 +1309,31 @@ class ProductsController {
             $loc = '-';
         }
         $qty = max(0, (int)$openingQty);
-        $runningStock = $qty; // as requested
+        $runningStock = $qty; // new opening line baseline
         $reason = 'Migration From Egreen';
         $refType = 'Egreen';
 
-        // Keep retries idempotent by updating existing identical Egreen opening rows first.
-        $sel = $conn->prepare("SELECT id FROM vp_stock_movements
-            WHERE product_id = ? AND sku = ? AND item_code = ? AND size = ? AND color = ?
-              AND warehouse_id = ? AND location = ? AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
-            ORDER BY id DESC LIMIT 1");
-        if ($sel) {
-            $sel->bind_param('issssis', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc);
-            $sel->execute();
-            $found = $sel->get_result()->fetch_assoc();
-            $sel->close();
-            if ($found && !empty($found['id'])) {
-                $mid = (int)$found['id'];
-                $up = $conn->prepare("UPDATE vp_stock_movements
-                    SET quantity = ?, running_stock = ?, reason = ?, update_by_user = ?, updated_at = NOW()
-                    WHERE id = ?");
-                if (!$up) {
-                    return 'Could not prepare stock movement update.';
-                }
-                $up->bind_param('isiii', $qty, $runningStock, $reason, $userId, $mid);
-                if (!$up->execute()) {
-                    $msg = $up->error;
-                    $up->close();
-                    return 'Stock movement update failed: ' . $msg;
-                }
-                $up->close();
-                return null;
-            }
+        // Re-import: remove prior bulk opening lines for this variant/warehouse, then insert a fresh movement.
+        if (!$conn->begin_transaction()) {
+            return 'Could not start transaction for stock movement.';
         }
+        $del = $conn->prepare("DELETE FROM vp_stock_movements
+            WHERE product_id = ? AND warehouse_id = ? AND item_code = ?
+              AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
+              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?");
+        if (!$del) {
+            $conn->rollback();
+            return 'Could not prepare stock movement delete (refresh).';
+        }
+        $del->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
+        if (!$del->execute()) {
+            $msg = $del->error;
+            $del->close();
+            $conn->rollback();
+            return 'Stock movement delete failed: ' . $msg;
+        }
+        $del->close();
 
         $ins = $conn->prepare("INSERT INTO vp_stock_movements
             (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
@@ -1385,18 +1351,38 @@ class ProductsController {
                 (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
             if (!$ins2) {
+                $conn->rollback();
                 return 'Stock movement insert failed: ' . $msg;
             }
             $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
             if (!$ins2->execute()) {
                 $msg2 = $ins2->error;
                 $ins2->close();
+                $conn->rollback();
                 return 'Stock movement insert failed: ' . $msg2;
             }
             $ins2->close();
-            return null;
+        } else {
+            $ins->close();
         }
-        $ins->close();
+
+        $updL = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+        if (!$updL) {
+            $conn->rollback();
+            return 'Could not prepare product stock update.';
+        }
+        $updL->bind_param('ii', $runningStock, $productId);
+        if (!$updL->execute()) {
+            $err = $updL->error;
+            $updL->close();
+            $conn->rollback();
+            return 'Product local_stock update failed: ' . $err;
+        }
+        $updL->close();
+
+        if (!$conn->commit()) {
+            return 'Could not commit stock movement transaction.';
+        }
         return null;
     }
 
