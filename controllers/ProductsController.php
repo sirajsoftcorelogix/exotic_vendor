@@ -666,10 +666,32 @@ class ProductsController {
         $totalPages = $limit > 0 ? (int)ceil($totalItems / $limit) : 1;
 
         $rows = [];
-        $listSql = "SELECT id, item_code, import_sku, import_color, import_size, opening_qty, stock_location, status, attempt_count, error_message, created_at, updated_at, processed_at
-                    FROM product_import_items
+        $listSql = "SELECT
+                        pii.id,
+                        pii.item_code,
+                        pii.import_sku,
+                        pii.import_color,
+                        pii.import_size,
+                        pii.opening_qty,
+                        pii.stock_location,
+                        pii.status,
+                        pii.attempt_count,
+                        pii.error_message,
+                        pii.created_at,
+                        pii.updated_at,
+                        pii.processed_at,
+                        (
+                            SELECT p.sku
+                            FROM vp_products p
+                            WHERE p.item_code = pii.item_code
+                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '')
+                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '')
+                            ORDER BY p.id DESC
+                            LIMIT 1
+                        ) AS product_sku
+                    FROM product_import_items pii
                     $where
-                    ORDER BY id ASC
+                    ORDER BY pii.id ASC
                     LIMIT $limit OFFSET $offset";
         $listStmt = $conn->prepare($listSql);
         if ($statusFilter !== 'all') {
@@ -1208,7 +1230,7 @@ class ProductsController {
               AND warehouse_id = ? AND location = ? AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
             ORDER BY id DESC LIMIT 1");
         if ($sel) {
-            $sel->bind_param('issssiss', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc);
+            $sel->bind_param('issssis', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc);
             $sel->execute();
             $found = $sel->get_result()->fetch_assoc();
             $sel->close();
