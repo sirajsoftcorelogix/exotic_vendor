@@ -172,7 +172,13 @@
                     <?php endif; ?>
                     
                 </div>
-                <div><?php echo $customer_address[0]['gstin'] ?? "Customer GST : ".$customer_address[0]['gstin']; ?></div>
+                <div><?php
+                    $addr0 = (isset($customer_address) && is_array($customer_address) && isset($customer_address[0]) && is_array($customer_address[0]))
+                        ? $customer_address[0]
+                        : null;
+                    $gstin = $addr0 !== null ? trim((string)($addr0['gstin'] ?? '')) : '';
+                    echo $gstin !== '' ? htmlspecialchars('Customer GST: ' . $gstin) : '';
+                ?></div>
             </div>
 
             <!-- <div class="flex items-center">
