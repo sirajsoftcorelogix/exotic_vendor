@@ -666,10 +666,32 @@ class ProductsController {
         $totalPages = $limit > 0 ? (int)ceil($totalItems / $limit) : 1;
 
         $rows = [];
-        $listSql = "SELECT id, item_code, import_sku, import_color, import_size, opening_qty, stock_location, status, attempt_count, error_message, created_at, updated_at, processed_at
-                    FROM product_import_items
+        $listSql = "SELECT
+                        pii.id,
+                        pii.item_code,
+                        pii.import_sku,
+                        pii.import_color,
+                        pii.import_size,
+                        pii.opening_qty,
+                        pii.stock_location,
+                        pii.status,
+                        pii.attempt_count,
+                        pii.error_message,
+                        pii.created_at,
+                        pii.updated_at,
+                        pii.processed_at,
+                        (
+                            SELECT p.sku
+                            FROM vp_products p
+                            WHERE p.item_code COLLATE utf8mb4_general_ci = pii.item_code COLLATE utf8mb4_general_ci
+                              AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_size), ''), '') COLLATE utf8mb4_general_ci
+                              AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_general_ci <=> IFNULL(NULLIF(TRIM(pii.import_color), ''), '') COLLATE utf8mb4_general_ci
+                            ORDER BY p.id DESC
+                            LIMIT 1
+                        ) AS product_sku
+                    FROM product_import_items pii
                     $where
-                    ORDER BY id ASC
+                    ORDER BY pii.id ASC
                     LIMIT $limit OFFSET $offset";
         $listStmt = $conn->prepare($listSql);
         if ($statusFilter !== 'all') {
@@ -1208,7 +1230,7 @@ class ProductsController {
               AND warehouse_id = ? AND location = ? AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
             ORDER BY id DESC LIMIT 1");
         if ($sel) {
-            $sel->bind_param('issssiss', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc);
+            $sel->bind_param('issssis', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc);
             $sel->execute();
             $found = $sel->get_result()->fetch_assoc();
             $sel->close();
@@ -2464,7 +2486,7 @@ class ProductsController {
             $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
             $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
-            $order['stock_history'] = $productModel->stock_history($order['sku']);
+            $order['stock_history'] = $productModel->stock_history($order['sku'], 100, 0, (int)$id);
             $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
             $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
             $order['warehouses'] = $productModel->getAllWarehouses();
@@ -2588,6 +2610,7 @@ class ProductsController {
             $_GET = array_map('trim', $_GET);
             
             $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
+            $product_id = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
             $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
             $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : '';
             $type = isset($_GET['type']) ? trim($_GET['type']) : '';
@@ -2600,8 +2623,8 @@ class ProductsController {
             }
             $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
             
-            if ($sku === '') {
-                echo json_encode(['success' => false, 'message' => 'Invalid SKU']);
+            if ($sku === '' && $product_id <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Invalid product filter']);
                 exit;
             }
             
@@ -2609,6 +2632,7 @@ class ProductsController {
             
             $filters = [
                 'sku' => $sku,
+                'product_id' => $product_id,
                 'start_date' => $start_date,
                 'end_date' => $end_date,
                 'type' => $type,
@@ -2621,9 +2645,9 @@ class ProductsController {
             // Format the response
             $records = [];
             if (!empty($history)) {
-                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out'];
-                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt'];
-                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600'];
+                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
+                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
+                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
                 
                 foreach ($history as $record) {
                     $record['formatted_date'] = date('d M Y', strtotime($record['created_at'] ?? ''));
