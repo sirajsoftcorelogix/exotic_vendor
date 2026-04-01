@@ -8,8 +8,8 @@
       <!-- <div class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 ">
         <img onclick="openImagePopup('<?php //echo $products['image']; ?>')" src="<?php //echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="w-full h-full px-3 py-3 cursor-pointer" />
       </div> -->
-      <div onclick="openImagePopup('<?php echo $products['image']; ?>')" class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
-        <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="max-w-full max-h-full px-3 py-3 object-contain cursor-pointer" />
+      <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
+        <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer" />
       </div>
       <div>
         <span class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">
