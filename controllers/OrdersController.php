@@ -1245,9 +1245,13 @@ class OrdersController {
                 $order_id = (int)$order_id;
                 $order = $ordersModel->getOrderById($order_id);
                 if ($order) {
+                    $invId = (int)($order['invoice_id'] ?? 0);
+                    $invStatus = $invId > 0 ? $ordersModel->getInvoiceStatusByInvoiceId($invId) : null;
                     $orders[] = [
                         'order_id' => $order_id,
-                        'customer_id' => $order['customer_id'] ?? null
+                        'customer_id' => $order['customer_id'] ?? null,
+                        'invoice_id' => $order['invoice_id'] ?? null,
+                        'invoice_status' => $invStatus,
                     ];
                 }
             }

@@ -644,8 +644,8 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
             exit;
         }
 
-        // ✅ CHECK EXISTING
-        $existing = $invoiceModel->getInvoiceByOrderNumber($orderNumber);
+        // ✅ CHECK EXISTING (ignore cancelled — allow new invoice)
+        $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
         if ($existing) {
             echo json_encode([
                 'success' => true,
@@ -851,9 +851,9 @@ WHERE IFNULL(o.payment_type,'') = 'offline' AND i.warehouse_id = " . intval($war
             echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
             exit;
         }
-        //validate if invoice created for same order_number
+        //validate if a non-cancelled invoice already exists for same order_number
         foreach ($order_numbers as $order_number) {
-            $existingInvoice = $invoiceModel->getInvoiceByOrderNumber($order_number);
+            $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($order_number);
             if ($existingInvoice) {
                 echo json_encode(['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"]);
                 exit;
