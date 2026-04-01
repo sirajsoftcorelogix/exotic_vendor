@@ -420,6 +420,48 @@ class product
         return $res;
     }
 
+    /**
+     * Resolve vp_products.id for an invoice line using vp_orders (order_number + item_code).
+     */
+    public function getProductIdForInvoiceLine(string $orderNumber, string $itemCode): int
+    {
+        $orderNumber = trim($orderNumber);
+        $itemCode = trim($itemCode);
+        if ($orderNumber === '' || $itemCode === '') {
+            return 0;
+        }
+        $sql = "SELECT item_code, sku, size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('ss', $orderNumber, $itemCode);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            return 0;
+        }
+        $ic = trim((string)($row['item_code'] ?? $itemCode));
+        $size = isset($row['size']) ? (string)$row['size'] : '';
+        $color = isset($row['color']) ? (string)$row['color'] : '';
+        $match = $this->findByItemCodeSizeColor($ic, $size, $color);
+        if (!empty($match['id'])) {
+            return (int)$match['id'];
+        }
+        $sku = trim((string)($row['sku'] ?? ''));
+        if ($sku !== '') {
+            $bySku = $this->findBySku($sku);
+            if (!empty($bySku['id']) && strcasecmp((string)($bySku['item_code'] ?? ''), $ic) === 0) {
+                return (int)$bySku['id'];
+            }
+            if (!empty($bySku['id'])) {
+                return (int)$bySku['id'];
+            }
+        }
+        return 0;
+    }
+
     public function searchProductsBySkuOrItemCode($query)
     {
         $q = '%' . $query . '%';
@@ -1772,8 +1814,10 @@ class product
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
 
             $insertStmt = $this->db->prepare($insertSql);
-            $ref_type = 'GRN';
-            $ref_id = 0;
+            $ref_type = isset($data['ref_type']) && $data['ref_type'] !== ''
+                ? (string)$data['ref_type']
+                : 'MANUAL';
+            $ref_id = array_key_exists('ref_id', $data) ? (string)$data['ref_id'] : '0';
 
             $insertStmt->bind_param(
                 'isssssssiiisss', 
