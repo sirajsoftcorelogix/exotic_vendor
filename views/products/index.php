@@ -799,7 +799,13 @@ document.getElementById('importConfirmBtn').addEventListener('click', function()
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            msg.textContent = `Imported: ${data.created}, Updated: ${data.updated}, Failed: ${data.failed.length} SKUs.`;
+            let timingPart = '';
+            if (data.timing && typeof data.timing.total_ms === 'number') {
+                const t = data.timing;
+                const cps = t.codes_per_second != null ? ` ~${t.codes_per_second} codes/s` : '';
+                timingPart = ` — ${(t.total_ms / 1000).toFixed(2)}s total (${(t.api_ms / 1000).toFixed(2)}s API)${cps}.`;
+            }
+            msg.textContent = `Imported: ${data.created}, Updated: ${data.updated}, Failed: ${data.failed.length} SKUs.${timingPart}`;
             msg.className = 'text-sm text-green-600 mt-3';
             setTimeout(()=> {
                 document.getElementById('importModal').classList.add('hidden');

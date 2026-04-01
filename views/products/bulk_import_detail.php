@@ -5,6 +5,14 @@
   $limitVal = (int)($limit ?? 100);
   $totalPages = max(1, (int)($total_pages ?? 1));
   $pendingItems = max(0, (int)($job['total_items'] ?? 0) - (int)($job['processed_items'] ?? 0));
+  $jtTotalMs = (int)($job['total_processing_ms'] ?? 0);
+  $jtLastMs = isset($job['last_batch_duration_ms']) && $job['last_batch_duration_ms'] !== null && $job['last_batch_duration_ms'] !== ''
+    ? (int)$job['last_batch_duration_ms'] : null;
+  $jtProc = (int)($job['processed_items'] ?? 0);
+  $jtTot = (int)($job['total_items'] ?? 0);
+  $jtAvgMs = ($jtProc > 0 && $jtTotalMs > 0) ? (int)round($jtTotalMs / $jtProc) : null;
+  $jtEtaMs = ($pendingItems > 0 && $jtProc > 0 && $jtTotalMs > 0) ? (int)round(($jtTotalMs / $jtProc) * $pendingItems) : null;
+  $jtExtrapMs = ($jtProc > 0 && $jtTotalMs > 0 && $jtTot > 0) ? (int)round(($jtTotalMs / $jtProc) * $jtTot) : null;
 ?>
 
 <div class="max-w-7xl mx-auto p-6">
@@ -32,6 +40,22 @@
     <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
       <?php $pct = ((int)($job['total_items'] ?? 0) > 0) ? (int)round(((int)($job['processed_items'] ?? 0) * 100) / (int)$job['total_items']) : 0; ?>
       <div id="progressBar" class="bg-amber-600 h-2.5 rounded-full" style="width: <?= $pct ?>%"></div>
+    </div>
+
+    <div class="text-sm text-gray-600 border border-gray-100 rounded-lg p-3 mb-4 bg-gray-50/80">
+      <div class="font-medium text-gray-700 mb-1">Import timing (for capacity estimates)</div>
+      <p id="timingDetailLine" class="tabular-nums">
+        Total processing: <span id="timingTotalWall"><?= $jtTotalMs > 0 ? htmlspecialchars(sprintf('%.2fs', $jtTotalMs / 1000)) : '—' ?></span>
+        <span class="mx-2 text-gray-300">|</span>
+        Last batch: <span id="timingLastBatch"><?= ($jtLastMs !== null && $jtLastMs > 0) ? htmlspecialchars(sprintf('%.2fs', $jtLastMs / 1000)) : '—' ?></span>
+        <span class="mx-2 text-gray-300">|</span>
+        Avg / row (processed): <span id="timingAvgRow"><?= $jtAvgMs !== null ? htmlspecialchars(sprintf('%.2fs', $jtAvgMs / 1000)) : '—' ?></span>
+        <span class="mx-2 text-gray-300">|</span>
+        ETA (pending, linear): <span id="timingEta"><?= $jtEtaMs !== null ? htmlspecialchars(sprintf('%.2fs', $jtEtaMs / 1000)) : '—' ?></span>
+        <span class="mx-2 text-gray-300">|</span>
+        Extrapolated full job: <span id="timingExtrap"><?= $jtExtrapMs !== null ? htmlspecialchars(sprintf('%.2fs', $jtExtrapMs / 1000)) : '—' ?></span>
+      </p>
+      <p class="text-xs text-gray-500 mt-1">Extrapolation uses (total processing time ÷ processed rows). For a ~300k row job, treat this as an indicative range until you have a long steady-state sample.</p>
     </div>
 
     <div class="flex flex-wrap gap-2 mb-4">
@@ -228,6 +252,25 @@
       return [err.message || fallback || 'Something went wrong.', err.stack || ''].filter(Boolean).join('\n');
     }
 
+    function fmtSecFromMs(ms) {
+      if (ms == null || ms === '' || Number(ms) <= 0) return '—';
+      return (Number(ms) / 1000).toFixed(2) + 's';
+    }
+
+    function updateTimingFromJobTiming(jt) {
+      if (!jt) return;
+      const tWall = document.getElementById('timingTotalWall');
+      const tLast = document.getElementById('timingLastBatch');
+      const tAvg = document.getElementById('timingAvgRow');
+      const tEta = document.getElementById('timingEta');
+      const tEx = document.getElementById('timingExtrap');
+      if (tWall) tWall.textContent = fmtSecFromMs(jt.total_processing_ms);
+      if (tLast) tLast.textContent = fmtSecFromMs(jt.last_batch_duration_ms);
+      if (tAvg) tAvg.textContent = jt.avg_ms_per_processed_item != null ? (Number(jt.avg_ms_per_processed_item) / 1000).toFixed(2) + 's' : '—';
+      if (tEta) tEta.textContent = fmtSecFromMs(jt.eta_pending_ms);
+      if (tEx) tEx.textContent = fmtSecFromMs(jt.extrapolated_total_job_ms);
+    }
+
     async function fetchJson(url, options) {
       const res = await fetch(url, options || {});
       const rawText = await res.text();
@@ -320,7 +363,7 @@
       hideOverlay();
     });
 
-    function renderStats(stats) {
+    function renderStats(stats, jobTiming) {
       document.getElementById('totalItems').textContent = stats.total_items ?? 0;
       document.getElementById('processedItems').textContent = stats.processed_items ?? 0;
       document.getElementById('successItems').textContent = stats.success_items ?? 0;
@@ -330,6 +373,7 @@
       const processed = stats.processed_items ?? 0;
       const pct = total > 0 ? Math.round((processed * 100) / total) : 0;
       document.getElementById('progressBar').style.width = pct + '%';
+      if (jobTiming) updateTimingFromJobTiming(jobTiming);
       if (!overlay.classList.contains('hidden')) {
         overlayProgressBar.classList.remove('animate-pulse');
         overlayProgressBar.style.width = pct + '%';
@@ -340,7 +384,7 @@
     async function fetchStatus() {
       const data = await fetchJson(`?page=products&action=bulk_import_status&job_id=${jobId}`);
       if (!data.success) throw new Error(data.message || 'Failed to fetch status');
-      renderStats(data.stats || {});
+      renderStats(data.stats || {}, data.job_timing);
       return data;
     }
 
@@ -418,10 +462,23 @@
             return;
           }
           const stats = data.stats || {};
-          renderStats(stats);
+          renderStats(stats, data.job_timing);
           overlayMessage.textContent =
             'Importing item codes in batches of 50. If the connection drops or the server times out, this page will retry automatically.';
-          overlayProgressText.textContent = 'In progress…';
+          const total = stats.total_items ?? 0;
+          const processed = stats.processed_items ?? 0;
+          const pct = total > 0 ? Math.round((processed * 100) / total) : 0;
+          const bt = data.batch_timing || {};
+          const jt = data.job_timing || {};
+          let line = `${processed}/${total} (${pct}%)`;
+          if (bt.batch_duration_ms != null && bt.rows_in_batch > 0) {
+            line += ` · batch ${(bt.batch_duration_ms / 1000).toFixed(2)}s`;
+            if (bt.rows_per_second != null) line += ` (${bt.rows_per_second} rows/s)`;
+          }
+          if (jt.eta_pending_ms != null && (stats.pending_items ?? 0) > 0) {
+            line += ` · ETA ~${fmtSecFromMs(jt.eta_pending_ms)}`;
+          }
+          overlayProgressText.textContent = line;
           if ((stats.pending_items ?? 0) <= 0) break;
           await new Promise(r => setTimeout(r, 350));
         }

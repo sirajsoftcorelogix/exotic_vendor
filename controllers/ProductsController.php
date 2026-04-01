@@ -291,7 +291,21 @@ class ProductsController {
     }
     public function importApiCall($manualCodes = null) {
         global $productModel;
+        $t0 = microtime(true);
         $internalCall = ($manualCodes !== null);
+        $importTiming = function (int $reqCodes, float $apiMs = 0.0, ?int $apiParentItems = null, ?int $dbWrites = null) use ($t0): array {
+            $total = round((microtime(true) - $t0) * 1000, 2);
+            $api = round($apiMs, 2);
+            return [
+                'total_ms' => $total,
+                'api_ms' => $api,
+                'processing_ms' => max(0, round($total - $api, 2)),
+                'requested_codes' => $reqCodes,
+                'api_parent_items' => $apiParentItems,
+                'db_writes' => $dbWrites,
+                'codes_per_second' => ($total > 0 && $reqCodes > 0) ? round($reqCodes / ($total / 1000), 4) : null,
+            ];
+        };
         $respond = function(array $payload) use ($internalCall) {
             if ($internalCall) {
                 return $payload;
@@ -310,23 +324,24 @@ class ProductsController {
             $payload = json_decode($raw, true);
             
             if (!$payload || !isset($payload['itemCodes'])) {
-                return $respond(['success' => false, 'message' => 'Invalid request.']);
+                return $respond(['success' => false, 'message' => 'Invalid request.', 'timing' => $importTiming(0)]);
             }
             $itemCodes = $payload['itemCodes'];
         }
         if (!is_array($itemCodes)) {
-            return $respond(['success' => false, 'message' => 'Invalid itemCodes.']);
+            return $respond(['success' => false, 'message' => 'Invalid itemCodes.', 'timing' => $importTiming(0)]);
         }
         // Filter and normalize
         $codes = array_values(array_unique(array_map('trim', array_filter($itemCodes))));
         $codes = array_filter($codes);
         if (count($codes) === 0) {
-            return $respond(['success' => false, 'message' => 'No item codes provided.']);
+            return $respond(['success' => false, 'message' => 'No item codes provided.', 'timing' => $importTiming(0)]);
         }
         if (count($codes) > 50) {
-            return $respond(['success' => false, 'message' => 'Maximum 50 SKUs allowed.']);
+            return $respond(['success' => false, 'message' => 'Maximum 50 SKUs allowed.', 'timing' => $importTiming(count($codes))]);
         }
-        
+        $codesCount = count($codes);
+
         //exit;
         $created = 0;
         $updated = 0;
@@ -349,17 +364,19 @@ class ProductsController {
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
+        $tApi0 = microtime(true);
         $response = curl_exec($ch);
+        $apiMsElapsed = (microtime(true) - $tApi0) * 1000;
         $error = curl_error($ch);
         curl_close($ch);
 
         if ($response === false) {
-            return $respond(['success' => false, 'message' => 'API request failed: ' . $error]);
+            return $respond(['success' => false, 'message' => 'API request failed: ' . $error, 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
 
         $apiResult = json_decode($response, true);
         if (!is_array($apiResult)) {
-            return $respond(['success' => false, 'message' => 'Invalid API response format.']);
+            return $respond(['success' => false, 'message' => 'Invalid API response format.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
         // print_array($apiResult);
         // exit;
@@ -378,7 +395,7 @@ class ProductsController {
         $items = $apiResult; 
         //print_array($items);
         if (count($items) === 0) {
-            return $respond(['success' => false, 'message' => 'No items found in API response.']);
+            return $respond(['success' => false, 'message' => 'No items found in API response.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
         
         foreach ($items as $apiItem) {
@@ -536,7 +553,14 @@ class ProductsController {
             usleep(100000); // 100ms
         }
 
-        $payload = ['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed];
+        $payload = [
+            'success' => true,
+            'message' => 'Products processed successfully',
+            'created' => $created,
+            'updated' => $updated,
+            'failed' => $failed,
+            'timing' => $importTiming($codesCount, $apiMsElapsed, count($items), $created + $updated),
+        ];
         if ($internalCall) {
             $payload['created_ids_by_code'] = $createdIdsByCode;
         }
@@ -797,6 +821,98 @@ class ProductsController {
         if (!$r3 || mysqli_num_rows($r3) === 0) {
             @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN created_product_ids TEXT NULL AFTER stock_location");
         }
+
+        $rTimStart = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'import_started_at'");
+        if (!$rTimStart || mysqli_num_rows($rTimStart) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN import_started_at DATETIME NULL AFTER failed_items");
+        }
+        $rTimEnd = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'import_completed_at'");
+        if (!$rTimEnd || mysqli_num_rows($rTimEnd) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN import_completed_at DATETIME NULL AFTER import_started_at");
+        }
+        $rLastBatch = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'last_batch_duration_ms'");
+        if (!$rLastBatch || mysqli_num_rows($rLastBatch) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN last_batch_duration_ms INT UNSIGNED NULL AFTER import_completed_at");
+        }
+        $rTotProc = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'total_processing_ms'");
+        if (!$rTotProc || mysqli_num_rows($rTotProc) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN total_processing_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER last_batch_duration_ms");
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchImportJobTimingColumns(\mysqli $conn, int $jobId): array {
+        $row = [
+            'import_started_at' => null,
+            'import_completed_at' => null,
+            'last_batch_duration_ms' => null,
+            'total_processing_ms' => 0,
+        ];
+        $stmt = @$conn->prepare('SELECT import_started_at, import_completed_at, last_batch_duration_ms, total_processing_ms FROM product_import_jobs WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return $row;
+        }
+        $stmt->bind_param('i', $jobId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && ($r = $res->fetch_assoc())) {
+            $row['import_started_at'] = $r['import_started_at'] ?? null;
+            $row['import_completed_at'] = $r['import_completed_at'] ?? null;
+            $row['last_batch_duration_ms'] = isset($r['last_batch_duration_ms']) ? (int)$r['last_batch_duration_ms'] : null;
+            $row['total_processing_ms'] = isset($r['total_processing_ms']) ? (int)$r['total_processing_ms'] : 0;
+        }
+        $stmt->close();
+        return $row;
+    }
+
+    /**
+     * @param array{processed_items?:int,pending_items?:int} $stats
+     */
+    private function applyImportJobBatchTiming(\mysqli $conn, int $jobId, float $batchDurationMs, array $stats): void {
+        $batchMs = (int)max(0, round($batchDurationMs));
+        if ($batchMs <= 0) {
+            return;
+        }
+        $pending = (int)($stats['pending_items'] ?? 0);
+        $completedFragment = $pending <= 0 ? 'import_completed_at = NOW()' : 'import_completed_at = NULL';
+        $sql = "UPDATE product_import_jobs SET
+            import_started_at = COALESCE(import_started_at, NOW()),
+            last_batch_duration_ms = ?,
+            total_processing_ms = total_processing_ms + ?,
+            $completedFragment
+            WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('iii', $batchMs, $batchMs, $jobId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    /**
+     * @param array{total_items?:int,processed_items?:int,pending_items?:int} $stats
+     * @return array<string, float|int|string|null>
+     */
+    private function buildImportJobTimingSummary(array $stats, array $timingColumns): array {
+        $totalMs = (int)($timingColumns['total_processing_ms'] ?? 0);
+        $processed = (int)($stats['processed_items'] ?? 0);
+        $pending = (int)($stats['pending_items'] ?? 0);
+        $totalItems = (int)($stats['total_items'] ?? 0);
+        $avgMsPerProcessed = ($processed > 0 && $totalMs > 0) ? round($totalMs / $processed, 2) : null;
+        $etaMs = ($pending > 0 && $processed > 0 && $totalMs > 0) ? (int)round(($totalMs / $processed) * $pending) : null;
+        $extrapolate300kMs = ($processed > 0 && $totalMs > 0) ? (int)round(($totalMs / $processed) * $totalItems) : null;
+        return [
+            'import_started_at' => $timingColumns['import_started_at'] ?? null,
+            'import_completed_at' => $timingColumns['import_completed_at'] ?? null,
+            'last_batch_duration_ms' => $timingColumns['last_batch_duration_ms'] ?? null,
+            'total_processing_ms' => $totalMs,
+            'avg_ms_per_processed_item' => $avgMsPerProcessed,
+            'eta_pending_ms' => $etaMs,
+            'extrapolated_total_job_ms' => $extrapolate300kMs,
+        ];
     }
 
     /**
@@ -1661,10 +1777,24 @@ class ProductsController {
 
         if (empty($ids)) {
             $stats = $this->refreshImportJobCounts($jobId);
-            echo json_encode(['success' => true, 'message' => 'No pending codes left.', 'batch_size' => 0, 'stats' => $stats]);
+            $tcolsIdle = $this->fetchImportJobTimingColumns($conn, $jobId);
+            $jobTimingIdle = $this->buildImportJobTimingSummary($stats, $tcolsIdle);
+            echo json_encode([
+                'success' => true,
+                'message' => 'No pending codes left.',
+                'batch_size' => 0,
+                'stats' => $stats,
+                'job_timing' => $jobTimingIdle,
+                'batch_timing' => [
+                    'batch_duration_ms' => 0,
+                    'rows_in_batch' => 0,
+                    'rows_per_second' => null,
+                ],
+            ]);
             exit;
         }
 
+        $batchT0 = microtime(true);
         $idList = implode(',', array_map('intval', $ids));
         mysqli_query($conn, "UPDATE product_import_items SET status='processing', attempt_count=attempt_count+1, updated_at=NOW() WHERE id IN ($idList)");
 
@@ -1755,12 +1885,24 @@ class ProductsController {
             }
         }
 
+        $batchDurationMs = (microtime(true) - $batchT0) * 1000;
         $stats = $this->refreshImportJobCounts($jobId);
+        $this->applyImportJobBatchTiming($conn, $jobId, $batchDurationMs, $stats);
+        $tcols = $this->fetchImportJobTimingColumns($conn, $jobId);
+        $jobTiming = $this->buildImportJobTimingSummary($stats, $tcols);
+        $rowCount = count($ids);
+        $rowsPerSec = ($rowCount > 0 && $batchDurationMs > 0) ? round($rowCount / ($batchDurationMs / 1000), 4) : null;
         echo json_encode([
             'success' => true,
-            'batch_size' => count($ids),
+            'batch_size' => $rowCount,
             'import_result' => $result,
-            'stats' => $stats
+            'stats' => $stats,
+            'job_timing' => $jobTiming,
+            'batch_timing' => [
+                'batch_duration_ms' => round($batchDurationMs, 2),
+                'rows_in_batch' => $rowCount,
+                'rows_per_second' => $rowsPerSec,
+            ],
         ]);
         exit;
     }
@@ -1786,6 +1928,8 @@ class ProductsController {
         }
 
         $stats = $this->refreshImportJobCounts($jobId);
+        $tcols = $this->fetchImportJobTimingColumns($conn, $jobId);
+        $jobTiming = $this->buildImportJobTimingSummary($stats, $tcols);
 
         $failed = [];
         $stmt = $conn->prepare("SELECT item_code, error_message FROM product_import_items WHERE job_id = ? AND status='failed' ORDER BY updated_at DESC LIMIT 20");
@@ -1797,7 +1941,7 @@ class ProductsController {
         }
         $stmt->close();
 
-        echo json_encode(['success' => true, 'job_id' => $jobId, 'stats' => $stats, 'failed_preview' => $failed]);
+        echo json_encode(['success' => true, 'job_id' => $jobId, 'stats' => $stats, 'job_timing' => $jobTiming, 'failed_preview' => $failed]);
         exit;
     }
 
