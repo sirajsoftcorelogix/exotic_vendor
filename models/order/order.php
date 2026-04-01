@@ -11,12 +11,15 @@ class Order{
         $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name,
             COALESCE(
                 (SELECT p.id FROM vp_products p
-                 WHERE p.item_code = vp_orders.item_code
-                   AND IFNULL(NULLIF(TRIM(p.size), ''), '') <=> IFNULL(NULLIF(TRIM(vp_orders.size), ''), '')
-                   AND IFNULL(NULLIF(TRIM(p.color), ''), '') <=> IFNULL(NULLIF(TRIM(vp_orders.color), ''), '')
+                 WHERE p.item_code COLLATE utf8mb4_unicode_ci = vp_orders.item_code COLLATE utf8mb4_unicode_ci
+                   AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_unicode_ci
+                       <=> IFNULL(NULLIF(TRIM(vp_orders.size), ''), '') COLLATE utf8mb4_unicode_ci
+                   AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_unicode_ci
+                       <=> IFNULL(NULLIF(TRIM(vp_orders.color), ''), '') COLLATE utf8mb4_unicode_ci
                  ORDER BY p.id ASC LIMIT 1),
                 (SELECT p2.id FROM vp_products p2
-                 WHERE p2.sku = vp_orders.sku AND vp_orders.sku IS NOT NULL AND TRIM(vp_orders.sku) != ''
+                 WHERE p2.sku COLLATE utf8mb4_unicode_ci = vp_orders.sku COLLATE utf8mb4_unicode_ci
+                   AND vp_orders.sku IS NOT NULL AND TRIM(vp_orders.sku) COLLATE utf8mb4_unicode_ci != ''
                  ORDER BY p2.id ASC LIMIT 1)
             ) AS catalog_product_id
 		FROM vp_orders 
