@@ -97,7 +97,7 @@
               <tr class="border-t">
                 <td class="px-3 py-2"><?= (int)$r['id'] ?></td>
                 <td class="px-3 py-2 font-medium"><?= htmlspecialchars($r['item_code'] ?? '') ?></td>
-                <td class="px-3 py-2"><?= htmlspecialchars($r['import_sku'] ?? '') ?></td>
+                <td class="px-3 py-2"><?= htmlspecialchars(($r['product_sku'] ?? '') !== '' ? $r['product_sku'] : ($r['import_sku'] ?? '')) ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['import_color'] ?? '') ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($r['import_size'] ?? '') ?></td>
                 <td class="px-3 py-2 text-right tabular-nums"><?= (int)($r['opening_qty'] ?? 0) ?></td>

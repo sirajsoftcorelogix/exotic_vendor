@@ -267,6 +267,7 @@
             <option value="OUT">Sale</option>
             <option value="TRANSFER_IN">Transfer In</option>
             <option value="TRANSFER_OUT">Transfer Out</option>
+            <option value="OPENING_STOCK">Opening Stock</option>
           </select>
       </div>   
       <div> 
@@ -297,15 +298,16 @@
           <th class="p-2 border">Stock Out</th>
           <th class="p-2 border">Balance</th>
           <th class="p-2 border">Warehouse</th>
+          <th class="p-2 border">Location</th>
         </tr>
       </thead>
       <tbody>
         <?php //print_r($products['warehouses']);
         if(!empty($products['stock_history'])) {
           foreach($products['stock_history'] as $history) {
-            $type = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out'];
-            $fontawesomeIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt'];
-            $textColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600'];
+            $type = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
+            $fontawesomeIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
+            $textColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
             ?>
             <tr class="text-center">
               <td class="p-2 border"><?php echo htmlspecialchars(date('d M Y', strtotime($history['created_at'] ?? ''))); ?></td>
@@ -314,15 +316,16 @@
                 <i class="fas <?php echo htmlspecialchars($fontawesomeIcon[$history['movement_type']] ?? ''); ?>"></i>
                 <?php echo htmlspecialchars($type[$history['movement_type']] ?? ''); ?>
               </td>
-              <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'IN' ? $history['quantity'] : ''); ?></td>
+              <td class="p-2 border"><?php echo htmlspecialchars(in_array(($history['movement_type'] ?? ''), ['IN','OPENING_STOCK'], true) ? $history['quantity'] : ''); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'OUT' ? $history['quantity'] : ''); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['running_stock'] ?? '0'); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['warehouse_name'] ?? ''); ?></td>
+              <td class="p-2 border"><?php echo htmlspecialchars($history['location'] ?? ''); ?></td>
             </tr> 
             <?php
           }
         } else {
-          echo '<tr><td colspan="8" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
+          echo '<tr><td colspan="9" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
         }
         ?>
         
@@ -557,15 +560,16 @@ function closeImagePopup() {
                   <i class="fas ${history.icon}"></i>
                   ${history.type}
                 </td>
-                <td class="p-2 border">${history.movement_type === 'IN' ? history.quantity : ''}</td>
+                <td class="p-2 border">${(history.movement_type === 'IN' || history.movement_type === 'OPENING_STOCK') ? history.quantity : ''}</td>
                 <td class="p-2 border">${history.movement_type === 'OUT' ? history.quantity : ''}</td>
                 <td class="p-2 border">${history.running_stock || '0'}</td>
                 <td class="p-2 border">${history.warehouse_name || ''}</td>
+                <td class="p-2 border">${history.location || ''}</td>
               `;
               tbody.appendChild(row);
             });
           } else {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
           }
           // Update pagination
           currentPage = page;
