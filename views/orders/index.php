@@ -1055,7 +1055,11 @@
                                                         <hr class="my-1 mx-2">
                                                         </hr>
                                                         <a href="#" onclick="SubmitCreatePo(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create PO</a>
-                                                        <?php if (empty($order['invoice_id'])): ?>
+                                                        <?php
+                                                        $invStatMenu = strtolower(trim((string)($order['invoice_status'] ?? '')));
+                                                        $showAddToInvoiceLink = empty($order['invoice_id']) || $invStatMenu === 'cancelled';
+                                                        ?>
+                                                        <?php if ($showAddToInvoiceLink): ?>
                                                         <hr class="my-1 mx-2"></hr>
                                                         <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                                                         <?php endif; ?>
@@ -2832,6 +2836,19 @@ document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', func
     });
 });
 
+/** True if order already has a non-cancelled invoice (blocks new invoice). */
+function orderHasBlockingInvoice(orderData) {
+    const inv = orderData.invoice_id;
+    if (!inv || inv === '' || inv === '0') {
+        return false;
+    }
+    const st = (orderData.invoice_status || '').toString().toLowerCase().trim();
+    if (st === 'cancelled') {
+        return false;
+    }
+    return true;
+}
+
 // Add to Invoice handler
 document.getElementById('action-add-to-invoice').addEventListener('click', function(e){
     e.preventDefault();
@@ -2869,10 +2886,8 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
             return;
         }
 
-        //invoice created orders check
-        const Inv = orderData.invoice_id;
-        if (Inv && Inv !== '' && Inv !== '0') {
-            showAlert('One or more selected orders are already invoiced. Cannot create invoice.', 'error');
+        if (orderHasBlockingInvoice(orderData)) {
+            showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
             return;
         }
     }
@@ -2896,12 +2911,19 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
                     } else if (customerId !== orderData.customer_id) {
                         throw new Error('Different customers');
                     }
+                    if (orderHasBlockingInvoice(orderData)) {
+                        throw new Error('active_invoice');
+                    }
                 }
             }
         })
         .catch(error => {
             console.error('Error fetching order data:', error);
-            showAlert('Different customers. Cannot create invoice.', 'error');
+            if (error.message === 'active_invoice') {
+                showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
+            } else {
+                showAlert('Different customers. Cannot create invoice.', 'error');
+            }
             throw error;
         });
     }

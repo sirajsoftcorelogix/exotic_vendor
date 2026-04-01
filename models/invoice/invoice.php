@@ -191,6 +191,33 @@ class Invoice {
         }
         return null;
     }
+
+    /**
+     * Invoice that still blocks creating a new invoice for this order_number (excludes cancelled).
+     */
+    public function getActiveInvoiceForOrderNumber($order_number) {
+        $order_number = trim((string)$order_number);
+        if ($order_number === '') {
+            return null;
+        }
+        $sql = "SELECT i.* FROM vp_invoices i
+                INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                WHERE ii.order_number = ?
+                AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
+                ORDER BY i.id DESC
+                LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
     public function insert_international_invoice_data($data) {
         $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, irn, qrcode_string) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";

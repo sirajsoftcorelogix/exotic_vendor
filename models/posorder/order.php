@@ -347,6 +347,28 @@ class Order
         }
         return null;
     }
+
+    public function getInvoiceStatusByInvoiceId($invoice_id)
+    {
+        $invoice_id = (int)$invoice_id;
+        if ($invoice_id <= 0) {
+            return null;
+        }
+        $sql = "SELECT status FROM vp_invoices WHERE id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $invoice_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+
+            return $row['status'] ?? null;
+        }
+        return null;
+    }
     /*public function insertOrder($data) {
         //print_r($data);
         //echo "<br>";
@@ -1566,7 +1588,10 @@ class Order
     }
     public function invoiceExists($order_number)
     {
-        $sql = "SELECT vp_invoices.id FROM vp_invoices join vp_invoice_items on vp_invoices.id = vp_invoice_items.invoice_id WHERE vp_invoice_items.order_number = ?";
+        $sql = "SELECT vp_invoices.id FROM vp_invoices 
+                INNER JOIN vp_invoice_items ON vp_invoices.id = vp_invoice_items.invoice_id 
+                WHERE vp_invoice_items.order_number = ?
+                AND LOWER(TRIM(COALESCE(vp_invoices.status, ''))) <> 'cancelled'";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $order_number);
         $stmt->execute();
