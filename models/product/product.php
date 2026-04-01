@@ -1713,13 +1713,19 @@ class product
         }
         return ['total_added' => 0, 'total_deducted' => 0];
     }
-    public function stock_history($sku, $limit = 100, $offset = 0)
+    public function stock_history($sku, $limit = 100, $offset = 0, $productId = 0)
     {
-        //join exotic_address on exotic_address.id = vp_stock_movements.warehouse_id
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name FROM vp_stock_movements sm LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id WHERE sm.sku = ? ORDER BY sm.created_at DESC LIMIT ? OFFSET ?";
+        // Join exotic_address and match by sku OR product_id (migration-safe).
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name
+                FROM vp_stock_movements sm
+                LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id
+                WHERE (sm.sku = ? OR sm.product_id = ?)
+                ORDER BY sm.created_at DESC
+                LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
-        $stmt->bind_param('sii', $sku, $limit, $offset);
+        $pid = (int)$productId;
+        $stmt->bind_param('siii', $sku, $pid, $limit, $offset);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
