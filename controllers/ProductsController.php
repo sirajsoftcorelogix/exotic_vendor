@@ -2616,7 +2616,9 @@ class ProductsController {
             $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
             $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
-            $order['stock_history'] = $productModel->stock_history($order['sku'], 100, 0, (int)$id);
+            $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(
+                $productModel->stock_history($order['sku'], 100, 0, (int)$id)
+            );
             $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
             $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
             $order['warehouses'] = $productModel->getAllWarehouses();
@@ -2775,15 +2777,12 @@ class ProductsController {
             // Format the response
             $records = [];
             if (!empty($history)) {
-                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
-                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
-                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
-                
                 foreach ($history as $record) {
                     $record['formatted_date'] = date('d M Y', strtotime($record['created_at'] ?? ''));
-                    $record['type'] = $typeMap[$record['movement_type']] ?? $record['movement_type'];
-                    $record['icon'] = $iconMap[$record['movement_type']] ?? '';
-                    $record['textColor'] = $colorMap[$record['movement_type']] ?? '';
+                    $disp = $productModel->getStockLedgerDisplayForMovement($record);
+                    $record['type'] = $disp['ledger_type'];
+                    $record['icon'] = $disp['icon'];
+                    $record['textColor'] = $disp['text_color_class'];
                     $records[] = $record;
                 }
             }
@@ -2808,16 +2807,18 @@ class ProductsController {
             echo '<p>Invalid SKU.</p>';
             exit;
         }
-        $stock_history = $productModel->stock_history($sku);
-        //print_array($ledger);
-        // if (!$stock_history) {
-        //     echo '<p>Product not found for SKU: ' . htmlspecialchars($sku) . '</p>';
-        //     exit;
-        // }
-        $order['warehouses'] = $productModel->getAllWarehouses();
+        $stock_history = $productModel->enrichStockHistoryRowsForLedger($productModel->stock_history($sku));
+        $warehouses = $productModel->getAllWarehouses();
+        $productRow = $productModel->findBySku($sku) ?: [];
+        $pid = (int)($productRow['id'] ?? 0);
         $data = [
             'stock_history' => $stock_history,
-            'warehouses' => $order['warehouses']
+            'warehouses' => $warehouses,
+            'products' => [
+                'id' => $pid,
+                'sku' => $sku,
+                'warehouses' => $warehouses,
+            ],
         ];
         renderTemplate('views/products/inventory_ledger.php', $data, 'Inventory Ledger');
     }
