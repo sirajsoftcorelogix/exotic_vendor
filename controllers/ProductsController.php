@@ -1138,13 +1138,11 @@ class ProductsController {
     }
 
     /**
-     * @return string|null Error message, or null on success / nothing to do
+     * @return string|null Error message, or null on success
      */
     private function bulkImportApplyOpeningStock(
         mysqli $conn,
-        $stockTransfer,
         int $warehouseId,
-        int $importItemId,
         string $itemCode,
         string $importSku,
         string $importSize,
@@ -1154,50 +1152,86 @@ class ProductsController {
         int $userId
     ): ?string {
         if ($warehouseId <= 0) {
-            return null;
+            return 'Warehouse is required for opening stock.';
         }
-        $refId = 'import_item:' . $importItemId;
+        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
+        if (!$product) {
+            return 'Product not found for stock movement (item_code/SKU/size/color).';
+        }
+
+        $productId = (int)($product['id'] ?? 0);
+        if ($productId <= 0) {
+            return 'Invalid product id for stock movement.';
+        }
+        $sku = trim($importSku) !== '' ? trim($importSku) : ((string)($product['sku'] ?? ''));
+        $size = trim($importSize);
+        $color = trim($importColor);
         $loc = trim($stockLocation);
         if ($loc === '') {
             $loc = '-';
         }
+        $qty = max(0, (int)$openingQty);
+        $runningStock = $qty; // as requested
+        $reason = 'Migration From Egreen';
+        $refType = 'Egreen';
 
-        if ($openingQty <= 0) {
-            try {
-                $stockTransfer->removeBulkImportOpeningByRef($refId);
-            } catch (Exception $e) {
-                return 'Opening stock failed: ' . $e->getMessage();
+        // Keep retries idempotent by updating existing identical Egreen opening rows first.
+        $sel = $conn->prepare("SELECT id FROM vp_stock_movements
+            WHERE product_id = ? AND sku = ? AND item_code = ? AND size = ? AND color = ?
+              AND warehouse_id = ? AND location = ? AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
+            ORDER BY id DESC LIMIT 1");
+        if ($sel) {
+            $sel->bind_param('issssiss', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc);
+            $sel->execute();
+            $found = $sel->get_result()->fetch_assoc();
+            $sel->close();
+            if ($found && !empty($found['id'])) {
+                $mid = (int)$found['id'];
+                $up = $conn->prepare("UPDATE vp_stock_movements
+                    SET quantity = ?, running_stock = ?, reason = ?, update_by_user = ?, updated_at = NOW()
+                    WHERE id = ?");
+                if (!$up) {
+                    return 'Could not prepare stock movement update.';
+                }
+                $up->bind_param('isiii', $qty, $runningStock, $reason, $userId, $mid);
+                if (!$up->execute()) {
+                    $msg = $up->error;
+                    $up->close();
+                    return 'Stock movement update failed: ' . $msg;
+                }
+                $up->close();
+                return null;
             }
+        }
 
+        $ins = $conn->prepare("INSERT INTO vp_stock_movements
+            (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, NULL, ?, ?)");
+        if (!$ins) {
+            return 'Could not prepare stock movement insert.';
+        }
+        $ins->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+        if (!$ins->execute()) {
+            $msg = $ins->error;
+            $ins->close();
+
+            // Fallback for schemas where ref_id is NOT NULL.
+            $ins2 = $conn->prepare("INSERT INTO vp_stock_movements
+                (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
+            if (!$ins2) {
+                return 'Stock movement insert failed: ' . $msg;
+            }
+            $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
+            if (!$ins2->execute()) {
+                $msg2 = $ins2->error;
+                $ins2->close();
+                return 'Stock movement insert failed: ' . $msg2;
+            }
+            $ins2->close();
             return null;
         }
-
-        $product = $this->findProductRowForBulkImportStock($conn, $itemCode, $importSku, $importSize, $importColor);
-        if (!$product) {
-            return 'API import succeeded but no local product row matched this item_code/SKU/size/color for opening stock.';
-        }
-        $sku = (string)($product['sku'] ?? '');
-        $size = (string)($product['size'] ?? '');
-        $color = (string)($product['color'] ?? '');
-        $ic = (string)($product['item_code'] ?? $itemCode);
-        try {
-            // Product may already exist (API update path): update same BULK_IMPORT row instead of skipping.
-            $stockTransfer->upsertBulkImportOpeningStock(
-                (int)$product['id'],
-                $sku,
-                $ic,
-                $size,
-                $color,
-                $warehouseId,
-                $loc,
-                $openingQty,
-                $userId,
-                $refId
-            );
-        } catch (Exception $e) {
-            return 'Opening stock failed: ' . $e->getMessage();
-        }
-
+        $ins->close();
         return null;
     }
 
@@ -1595,8 +1629,6 @@ class ProductsController {
             $jobWarehouseId = (int)($jwRow['warehouse_id'] ?? 0);
         }
 
-        require_once 'models/product/StockTransfer.php';
-        $stockTransferModel = new StockTransfer($conn);
         $batchUserId = (int)($_SESSION['user']['id'] ?? 0);
 
         $result = $this->importApiCall($codes);
@@ -1642,9 +1674,7 @@ class ProductsController {
                     }
                     $openErr = $this->bulkImportApplyOpeningStock(
                         $conn,
-                        $stockTransferModel,
                         $jobWarehouseId,
-                        $id,
                         (string)$code,
                         $impSku,
                         $isz,
