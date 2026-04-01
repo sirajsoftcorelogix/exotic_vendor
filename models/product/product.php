@@ -1830,13 +1830,22 @@ class product
         $params = [];
         $types = '';
 
-        if (!empty($filters['sku'])) {
+        if (!empty($filters['sku']) && !empty($filters['product_id'])) {
+            $where[] = '(sm.sku = ? OR sm.product_id = ?)';
+            $params[] = $filters['sku'];
+            $params[] = (int)$filters['product_id'];
+            $types .= 'si';
+        } elseif (!empty($filters['sku'])) {
             $where[] = 'sm.sku = ?';
             $params[] = $filters['sku'];
             $types .= 's';
+        } elseif (!empty($filters['product_id'])) {
+            $where[] = 'sm.product_id = ?';
+            $params[] = (int)$filters['product_id'];
+            $types .= 'i';
         }
 
-        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK'])) {
             $where[] = 'sm.movement_type = ?';
             $params[] = $filters['type'];
             $types .= 's';
@@ -1903,13 +1912,22 @@ class product
         $params = [];
         $types = '';
 
-        if (!empty($filters['sku'])) {
+        if (!empty($filters['sku']) && !empty($filters['product_id'])) {
+            $where[] = '(sm.sku = ? OR sm.product_id = ?)';
+            $params[] = $filters['sku'];
+            $params[] = (int)$filters['product_id'];
+            $types .= 'si';
+        } elseif (!empty($filters['sku'])) {
             $where[] = 'sm.sku = ?';
             $params[] = $filters['sku'];
             $types .= 's';
+        } elseif (!empty($filters['product_id'])) {
+            $where[] = 'sm.product_id = ?';
+            $params[] = (int)$filters['product_id'];
+            $types .= 'i';
         }
 
-        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK'])) {
             $where[] = 'sm.movement_type = ?';
             $params[] = $filters['type'];
             $types .= 's';
