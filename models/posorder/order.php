@@ -11,11 +11,12 @@ class Order
     {
  $warehouseId = $_SESSION['warehouse_id'] ?? 0;
         //$sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
-        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name 
+        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name, inv.status AS invoice_status
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
-		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id  
+		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id
+		LEFT JOIN vp_invoices inv ON inv.id = vp_orders.invoice_id  
 		WHERE 1=1 AND IFNULL(vp_orders.payment_type,'') = 'offline'AND vp_orders.warehouse_id = " . intval($warehouseId);
 
         $params = [];
