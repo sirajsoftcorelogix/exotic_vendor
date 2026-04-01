@@ -389,6 +389,18 @@ class ProductsController {
             continue;
             }
 
+            // Migration rule: if item_code already exists locally, force update API path.
+            if ($this->productExistsByItemCode($code)) {
+                $updResult = $productModel->updateProductFromApi([$apiItem]);
+                if (is_array($updResult) && (empty($updResult['success']))) {
+                    $failed[] = $code;
+                } else {
+                    $updated++;
+                }
+                usleep(100000); // 100ms
+                continue;
+            }
+
             // map API item to DB fields (adjust as needed)
             $item = [];
             $item['item_code'] = $code;
@@ -529,6 +541,21 @@ class ProductsController {
             $payload['created_ids_by_code'] = $createdIdsByCode;
         }
         return $respond($payload);
+    }
+
+    private function productExistsByItemCode(string $itemCode): bool {
+        global $conn;
+        $stmt = $conn->prepare("SELECT id FROM vp_products WHERE item_code = ? LIMIT 1");
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $itemCode);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $exists = $res && $res->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
     }
 
     public function bulkImportScreen() {
