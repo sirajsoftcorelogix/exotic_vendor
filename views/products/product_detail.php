@@ -305,16 +305,20 @@
         <?php //print_r($products['warehouses']);
         if(!empty($products['stock_history'])) {
           foreach($products['stock_history'] as $history) {
-            $type = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
-            $fontawesomeIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
-            $textColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
+            $fallbackType = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
+            $fallbackIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
+            $fallbackColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
+            $mt = $history['movement_type'] ?? '';
+            $dispLabel = $history['ledger_type'] ?? ($fallbackType[$mt] ?? $mt);
+            $dispIcon = $history['ledger_icon'] ?? ($fallbackIcon[$mt] ?? '');
+            $dispColor = $history['ledger_color_class'] ?? ($fallbackColor[$mt] ?? '');
             ?>
             <tr class="text-center">
               <td class="p-2 border"><?php echo htmlspecialchars(date('d M Y', strtotime($history['created_at'] ?? ''))); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['ref_id'] ?? ''); ?></td>
-              <td class="p-2 border <?php echo htmlspecialchars($textColor[$history['movement_type']] ?? ''); ?>">
-                <i class="fas <?php echo htmlspecialchars($fontawesomeIcon[$history['movement_type']] ?? ''); ?>"></i>
-                <?php echo htmlspecialchars($type[$history['movement_type']] ?? ''); ?>
+              <td class="p-2 border <?php echo htmlspecialchars($dispColor); ?>">
+                <i class="fas <?php echo htmlspecialchars($dispIcon); ?>"></i>
+                <?php echo htmlspecialchars($dispLabel); ?>
               </td>
               <td class="p-2 border"><?php echo htmlspecialchars(in_array(($history['movement_type'] ?? ''), ['IN','OPENING_STOCK'], true) ? $history['quantity'] : ''); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'OUT' ? $history['quantity'] : ''); ?></td>

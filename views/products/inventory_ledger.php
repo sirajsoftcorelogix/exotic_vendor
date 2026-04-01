@@ -78,19 +78,23 @@
                     <?php //print_r($products['warehouses']);
                     if (!empty($stock_history)) {
                         foreach ($stock_history as $history) {
-                            $type = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out'];
-                            $fontawesomeIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt'];
-                            $textColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600'];
+                            $mt = $history['movement_type'] ?? '';
+                            $fallbackType = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
+                            $fallbackIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
+                            $fallbackColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
+                            $dispLabel = $history['ledger_type'] ?? ($fallbackType[$mt] ?? $mt);
+                            $dispIcon = $history['ledger_icon'] ?? ($fallbackIcon[$mt] ?? '');
+                            $dispColor = $history['ledger_color_class'] ?? ($fallbackColor[$mt] ?? '');
                     ?>
                             <tr class="text-center">
                                 <td class="p-2 border"><?php echo htmlspecialchars(date('d M Y', strtotime($history['created_at'] ?? ''))); ?></td>
                                 <td class="p-2 border"><?php echo htmlspecialchars($history['ref_id'] ?? ''); ?></td>
-                                <td class="p-2 border <?php echo htmlspecialchars($textColor[$history['movement_type']] ?? ''); ?>">
-                                    <i class="fas <?php echo htmlspecialchars($fontawesomeIcon[$history['movement_type']] ?? ''); ?>"></i>
-                                    <?php echo htmlspecialchars($type[$history['movement_type']] ?? ''); ?>
+                                <td class="p-2 border <?php echo htmlspecialchars($dispColor); ?>">
+                                    <i class="fas <?php echo htmlspecialchars($dispIcon); ?>"></i>
+                                    <?php echo htmlspecialchars($dispLabel); ?>
                                 </td>
-                                <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'IN' ? $history['quantity'] : ''); ?></td>
-                                <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'OUT' ? $history['quantity'] : ''); ?></td>
+                                <td class="p-2 border"><?php echo htmlspecialchars(in_array($mt, ['IN', 'OPENING_STOCK'], true) ? $history['quantity'] : ''); ?></td>
+                                <td class="p-2 border"><?php echo htmlspecialchars($mt === 'OUT' ? $history['quantity'] : ''); ?></td>
                                 <td class="p-2 border"><?php echo htmlspecialchars($history['running_stock'] ?? '0'); ?></td>
                                 <td class="p-2 border"><?php echo htmlspecialchars($history['warehouse_name'] ?? ''); ?></td>
                             </tr>
@@ -142,45 +146,32 @@
                 },
                 dataType: 'json'
             }).done(function(response) {
-                if (response.success) {
-                    const history = response.data.stock_history;
-                    const totalPages = response.data.total_pages;
+                if (response.success && response.records) {
+                    const history = response.records;
+                    const limit = response.limit || itemsPerPage;
+                    const total = response.total || 0;
+                    const totalPages = Math.max(1, Math.ceil(total / limit));
                     $('#stockHistoryTable tbody').empty();
                     if (history.length > 0) {
-                        history.forEach(function(history) {
-                            const typeText = {
-                                'IN': 'Purchase',
-                                'OUT': 'Sale',
-                                'TRANSFER_IN': 'Transfer In',
-                                'TRANSFER_OUT': 'Transfer Out'
-                            };
-                            const fontawesomeIcon = {
-                                'IN': 'fa-arrow-up',
-                                'OUT': 'fa-arrow-down',
-                                'TRANSFER_IN': 'fa-exchange-alt',
-                                'TRANSFER_OUT': 'fa-exchange-alt'
-                            };
-                            const textColor = {
-                                'IN': 'text-green-600',
-                                'OUT': 'text-red-600',
-                                'TRANSFER_IN': 'text-blue-600',
-                                'TRANSFER_OUT': 'text-blue-600'
-                            };
-                            const row = `<tr class="text-center"> <td class="p-2 border">${history.created_at ?moment(history.created_at).format('DD MMM YYYY') : ''}</td> <td class="p-2 border">${history.ref_id ? history.ref_id : ''}</td> <td class="p-2 border ${textColor[history.movement_type] ?? ''}"> <iclass="fas ${fontawesomeIcon[history.movement_type] ?? ''}"></i> ${typeText[history.movement_type] ?? ''} </td> <td class="p-2 border">${history.movement_type === 'IN' ? history.quantity : ''}</td> <td class="p-2 border">${history.movement_type === 'OUT' ? history.quantity :''}</td> <td class="p-2 border">${history.running_stock ?? '0'}</td> <td class="p-2 border">${history.warehouse_name ?? ''}</td> </tr>`;
-                            $('#stockHistoryTable tbody').append(row);
+                        history.forEach(function(row) {
+                            const mt = row.movement_type || '';
+                            const qtyIn = (mt === 'IN' || mt === 'OPENING_STOCK') ? row.quantity : '';
+                            const qtyOut = (mt === 'OUT') ? row.quantity : '';
+                            const rowHtml = `<tr class="text-center"> <td class="p-2 border">${row.formatted_date || (row.created_at ? moment(row.created_at).format('DD MMM YYYY') : '')}</td> <td class="p-2 border">${row.ref_id || ''}</td> <td class="p-2 border ${row.textColor || ''}"> <i class="fas ${row.icon || ''}"></i> ${row.type || ''} </td> <td class="p-2 border">${qtyIn}</td> <td class="p-2 border">${qtyOut}</td> <td class="p-2 border">${row.running_stock ?? '0'}</td> <td class="p-2 border">${row.warehouse_name ?? ''}</td> </tr>`;
+                            $('#stockHistoryTable tbody').append(rowHtml);
                         });
                     } else {
-                        $('#stockHistoryTable tbody').append('<tr><td colspan="8" class="p-4 text-centertext-gray-500">No stock transactions found.</td></tr>');
+                        $('#stockHistoryTable tbody').append('<tr><td colspan="8" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>');
                     }
                     $('#pageInfo').text(`Page ${page} of ${totalPages}`);
                     $('#prevBtn').prop('disabled', page <= 1);
                     $('#nextBtn').prop('disabled', page >= totalPages);
                     currentPage = page;
                 } else {
-                    alert('Failed to fetch stock history: ' + response.message);
+                    alert('Failed to fetch stock history: ' + (response.message || 'Unknown error'));
                 }
             }).fail(function(jqXHR, textStatus, errorThrown) {
-                alert('Failed to fetchstock history: ' + errorThrown);
+                alert('Failed to fetch stock history: ' + errorThrown);
             });
         }
 
