@@ -137,38 +137,6 @@ $PRODUCT_LABEL_DATA = [
             barHeight: 180,
             barFont: 20,
             pad: 44
-        },
-        medium: {
-            name: 'Medium',
-            wMm: 76.2,
-            hMm: 50.8,
-            orient: 'landscape',
-            cw: 1200,
-            ch: 800,
-            barCol: 630,
-            barUnit: 2.025,
-            barHeight: 180,
-            barFont: 24,
-            pad: 24,
-            title: 40,
-            meta: 28,
-            smallMeta: 22
-        },
-        large: {
-            name: 'Large',
-            wMm: 100,
-            hMm: 150,
-            orient: 'portrait',
-            cw: 1000,
-            ch: 1500,
-            barCol: 570,
-            barUnit: 2.4,
-            barHeight: 240,
-            barFont: 30,
-            pad: 32,
-            title: 48,
-            meta: 32,
-            smallMeta: 26
         }
     };
 
