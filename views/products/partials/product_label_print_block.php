@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 25 × 15 mm — SKU | CODE128 (flex-grow centre band) | location + date; tight padding to use the strip.
+ * Micro (textiles): 25 × 15 mm — SKU | location | CODE128 (flex-grow mid) | print date.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -56,10 +56,12 @@ $PRODUCT_LABEL_DATA = [
     'labelLocation' => trim((string)($products['location'] ?? '')),
     'labelDate' => date('d-m-Y'),
 ];
+/** Bust browser/CDN cache for barcode + capture libs whenever this partial changes. */
+$productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 ?>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 
 <!-- Trigger -->
 <div class="bg-white rounded-lg border border-amber-200 p-3 shadow-sm">
@@ -97,7 +99,7 @@ $PRODUCT_LABEL_DATA = [
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). Choose <strong>Micro</strong> for the 25×15 mm strip; your last choice is remembered for this browser. Use “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU → location → barcode → date. Use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -121,7 +123,7 @@ $PRODUCT_LABEL_DATA = [
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
      * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
-     * micro: SKU + bottom stack fixed height; mid flexes so barcode sits in the remaining space (fills strip).
+     * micro: SKU, location, flex mid (barcode), date; mid flex-grow fills strip.
      */
     window.LABEL_PRESETS = {
         small: {
@@ -171,10 +173,12 @@ $PRODUCT_LABEL_DATA = [
             barDisplayValue: false,
             barFont: 8,
             barHorizontalMarginPx: 4,
-            /** Fixed SKU→barcode gap (px). Omit to use half-line default. */
+            /** Gap SKU line → location line (px). */
+            skuLocationGapPx: 3,
+            /** Gap location line → barcode (px). Omit to use half-line default. */
             skuBarcodeGapPx: 8,
-            /** Vertical gap between barcode and location line (px). */
-            barcodeLocationGapPx: 5
+            /** Gap barcode → date line (px). */
+            barcodeDateGapPx: 5
         }
     };
 
@@ -341,7 +345,10 @@ $PRODUCT_LABEL_DATA = [
             else skuFontPxForGap = 14 * (96 / 72);
         }
         const halfLineGapPx = Math.max(1, Math.round(skuFontPxForGap * microSkuLineHeight / 2));
-        const skuBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : halfLineGapPx;
+        const skuLocGap = preset.skuLocationGapPx != null ? preset.skuLocationGapPx : 3;
+        const locBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : halfLineGapPx;
+        const barDateGap = preset.barcodeDateGapPx != null ? preset.barcodeDateGapPx
+            : (preset.barcodeLocationGapPx != null ? preset.barcodeLocationGapPx : 5);
         const microFf = preset.fontFamily || 'Arial, Helvetica, sans-serif';
         const skuLocFont = '600 ' + skuLocFs + '/' + microSkuLineHeight + ' ' + microFf;
         const skuTop = document.createElement('div');
@@ -349,7 +356,7 @@ $PRODUCT_LABEL_DATA = [
         skuTop.style.width = '100%';
         skuTop.style.textAlign = 'center';
         skuTop.style.font = skuLocFont;
-        skuTop.style.paddingBottom = skuBarGap + 'px';
+        skuTop.style.paddingBottom = skuLocGap + 'px';
         skuTop.style.marginBottom = '0';
         skuTop.style.position = 'relative';
         skuTop.style.zIndex = '2';
@@ -357,6 +364,20 @@ $PRODUCT_LABEL_DATA = [
         skuTop.style.textOverflow = 'ellipsis';
         skuTop.style.whiteSpace = 'nowrap';
         skuTop.textContent = codeDisplay;
+
+        const locEl = document.createElement('div');
+        locEl.style.flexShrink = '0';
+        locEl.style.width = '100%';
+        locEl.style.font = skuLocFont;
+        locEl.style.textAlign = 'center';
+        locEl.style.maxWidth = '100%';
+        locEl.style.overflow = 'hidden';
+        locEl.style.textOverflow = 'ellipsis';
+        locEl.style.whiteSpace = 'nowrap';
+        locEl.style.paddingBottom = locBarGap + 'px';
+        locEl.style.position = 'relative';
+        locEl.style.zIndex = '2';
+        locEl.textContent = locDisplay;
 
         const mid = document.createElement('div');
         mid.style.flex = '1 1 0';
@@ -393,17 +414,7 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.style.alignItems = 'center';
         bottomStack.style.justifyContent = 'flex-start';
         bottomStack.style.gap = '0';
-        var barLocGap = preset.barcodeLocationGapPx != null ? preset.barcodeLocationGapPx : 5;
-        bottomStack.style.paddingTop = barLocGap + 'px';
-
-        const locEl = document.createElement('div');
-        locEl.style.font = skuLocFont;
-        locEl.style.textAlign = 'center';
-        locEl.style.maxWidth = '100%';
-        locEl.style.overflow = 'hidden';
-        locEl.style.textOverflow = 'ellipsis';
-        locEl.style.whiteSpace = 'nowrap';
-        locEl.textContent = locDisplay;
+        bottomStack.style.paddingTop = barDateGap + 'px';
 
         const dateEl = document.createElement('div');
         dateEl.style.fontSize = preset.dateSize || '9pt';
@@ -415,10 +426,10 @@ $PRODUCT_LABEL_DATA = [
         dateEl.style.maxWidth = '100%';
         dateEl.textContent = dateStr;
 
-        bottomStack.appendChild(locEl);
         bottomStack.appendChild(dateEl);
 
         el.appendChild(skuTop);
+        el.appendChild(locEl);
         el.appendChild(mid);
         el.appendChild(bottomStack);
         return el;
