@@ -51,14 +51,13 @@ $PRODUCT_LABEL_DATA = [
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <!-- Trigger -->
 <div class="bg-white rounded-lg border border-amber-200 p-3 shadow-sm">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
             <h3 class="font-semibold text-gray-800 text-sm">Product label</h3>
-            <p class="text-xs text-gray-500">PDF for thermal / laser printers — pick label size and copies.</p>
+            <p class="text-xs text-gray-500">Opens your browser’s print dialog — pick label size and copies.</p>
         </div>
         <button type="button" onclick="openProductLabelModal()"
             class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#d9822b] hover:bg-[#bf7326] text-white text-sm font-medium transition-colors">
@@ -90,13 +89,13 @@ $PRODUCT_LABEL_DATA = [
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes item code (or SKU). Use “actual size” when printing the PDF.</p>
+            <p class="text-xs text-gray-500">Barcode encodes item code (or SKU). In the print dialog, choose “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
                 class="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100">Cancel</button>
-            <button type="button" id="productLabelPdfBtn" onclick="generateProductLabelPdf()"
-                class="px-4 py-2 text-sm rounded-lg bg-[#d9822b] hover:bg-[#bf7326] text-white font-medium">Download PDF</button>
+            <button type="button" id="productLabelPrintBtn" onclick="generateProductLabelPrint()"
+                class="px-4 py-2 text-sm rounded-lg bg-[#d9822b] hover:bg-[#bf7326] text-white font-medium">Print…</button>
         </div>
     </div>
 </div>
@@ -434,7 +433,51 @@ $PRODUCT_LABEL_DATA = [
         }
     }
 
-    window.generateProductLabelPdf = async function() {
+    function openPrintWindowWithLabelImages(imageDataUrls, preset) {
+        const wMm = preset.wMm;
+        const hMm = preset.hMm;
+        const ox = preset.offsetXMm != null ? preset.offsetXMm : 0;
+        const oy = preset.offsetYMm != null ? preset.offsetYMm : 0;
+        const pagesHtml = imageDataUrls.map(function(src, idx) {
+            const last = idx === imageDataUrls.length - 1;
+            return '<div class="label-page' + (last ? ' label-page--last' : '') + '"><img src="' + src + '" alt="" /></div>';
+        }).join('');
+        const style =
+            '@page { size: ' + wMm + 'mm ' + hMm + 'mm; margin: 0; }' +
+            '* { box-sizing: border-box; }' +
+            'html, body { margin: 0; padding: 0; }' +
+            'body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+            '.label-page { width: ' + wMm + 'mm; height: ' + hMm + 'mm; page-break-after: always; page-break-inside: avoid; overflow: hidden; padding: ' + oy + 'mm 0 0 ' + ox + 'mm; }' +
+            '.label-page--last { page-break-after: auto; }' +
+            '.label-page img { display: block; width: calc(' + wMm + 'mm - ' + ox + 'mm); height: calc(' + hMm + 'mm - ' + oy + 'mm); object-fit: fill; }';
+        const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print labels</title><style>' + style + '</style></head><body>' + pagesHtml + '</body></html>';
+
+        const pw = window.open('', '_blank');
+        if (!pw) {
+            alert('Allow pop-ups for this site to print labels.');
+            return;
+        }
+        pw.document.open();
+        pw.document.write(html);
+        pw.document.close();
+
+        let printFired = false;
+        function doPrint() {
+            if (printFired) return;
+            printFired = true;
+            try {
+                pw.focus();
+                pw.print();
+            } catch (e) { /* ignore */ }
+        }
+        setTimeout(doPrint, 300);
+
+        pw.addEventListener('afterprint', function() {
+            try { pw.close(); } catch (e) { /* ignore */ }
+        });
+    }
+
+    window.generateProductLabelPrint = async function() {
         const sizeKey = document.getElementById('productLabelSize').value;
         let qty = parseInt(document.getElementById('productLabelQty').value, 10);
         if (isNaN(qty) || qty < 1) qty = 1;
@@ -471,23 +514,14 @@ $PRODUCT_LABEL_DATA = [
 
         await new Promise(function(r) { setTimeout(r, 150); });
 
-        const btn = document.getElementById('productLabelPdfBtn');
+        const btn = document.getElementById('productLabelPrintBtn');
         const prevHtml = btn.innerHTML;
         btn.disabled = true;
-        btn.textContent = 'Building PDF…';
+        btn.textContent = 'Preparing…';
 
         try {
-            const jsPDF = window.jspdf.jsPDF;
-            const pdf = new jsPDF({
-                orientation: preset.orient,
-                unit: 'mm',
-                format: [preset.wMm, preset.hMm]
-            });
-
+            const imageDataUrls = [];
             for (let i = 0; i < sheets.length; i++) {
-                if (i > 0) {
-                    pdf.addPage([preset.wMm, preset.hMm], preset.orient);
-                }
                 const element = sheets[i];
                 const canvas = await html2canvas(element, {
                     scale: 2,
@@ -510,18 +544,14 @@ $PRODUCT_LABEL_DATA = [
                         }
                     }
                 });
-                const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                const ox = preset.offsetXMm != null ? preset.offsetXMm : 0;
-                const oy = preset.offsetYMm != null ? preset.offsetYMm : 0;
-                pdf.addImage(imgData, 'JPEG', ox, oy, preset.wMm, preset.hMm);
+                imageDataUrls.push(canvas.toDataURL('image/png'));
             }
 
-            const safeCode = (data.itemCode || 'product').replace(/[^\w\-]+/g, '_');
-            const fileSlug = sizeKey === 'small' ? 'jewelry_size' : sizeKey;
-            pdf.save('product_label_' + safeCode + '_' + fileSlug + '.pdf');
+            openPrintWindowWithLabelImages(imageDataUrls, preset);
+            closeProductLabelModal();
         } catch (err) {
             console.error(err);
-            alert('Could not create PDF. If images are on another domain, try hosting them on the same site or check the console.');
+            alert('Could not prepare labels for printing. If images are on another domain, try hosting them on the same site or check the console.');
         } finally {
             btn.disabled = false;
             btn.innerHTML = prevHtml;
