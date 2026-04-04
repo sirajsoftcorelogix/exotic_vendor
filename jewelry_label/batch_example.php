@@ -133,7 +133,7 @@ foreach ($items as $row) {
             display: flex;
             flex-direction: column;
             justify-content: center;
-            flex: 1 1 auto;
+            flex: 0 1 auto;
             min-width: 0;
             font-size: <?php echo $leftFs; ?>;
             line-height: 1.28;
@@ -160,7 +160,8 @@ foreach ($items as $row) {
             display: flex;
             flex-direction: row;
             align-items: flex-start;
-            flex: 0 0 auto;
+            flex: 1 1 0;
+            min-width: 0;
             gap: 0.15mm;
             font-size: <?php echo $rightFs; ?>;
             line-height: 1.22;
@@ -181,6 +182,7 @@ foreach ($items as $row) {
             flex-direction: column;
             justify-content: center;
             gap: 0;
+            flex: 1 1 0;
             min-width: 0;
             overflow: visible;
             line-height: 1.18;
