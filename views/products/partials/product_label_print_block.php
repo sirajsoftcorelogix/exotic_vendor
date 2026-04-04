@@ -3,7 +3,8 @@
  * Product detail — label print modal (PDF, multiple sizes).
  * Expects $products from product_detail (getProduct).
  *
- * Jewelry Size: 100 × 12.9 mm — Item code / Size / Color | barcode | MRP + tax (one line) / product title.
+ * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
+ * Micro (textiles): 64 × 34 mm — location (TL) | date (TR) | CODE128 (center) | code (BC). See helpers/label/textiles_config.php.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -52,6 +53,8 @@ $PRODUCT_LABEL_DATA = [
     'color' => $products['color'] ?? '',
     'size' => $products['size'] ?? '',
     'taxNote' => 'Incl. of all taxes',
+    'labelLocation' => trim((string)($products['location'] ?? '')),
+    'labelDate' => date('d-m-Y'),
 ];
 ?>
 
@@ -85,7 +88,8 @@ $PRODUCT_LABEL_DATA = [
                 <label class="block text-sm font-medium text-gray-700 mb-1">Label size</label>
                 <select id="productLabelSize"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                    <option value="small" selected>Jewelry Size — 100 × 12.9 mm</option>
+                    <option value="small" selected>Jewelry — 100 × 12.9 mm</option>
+                    <option value="micro">Micro (textiles) — 64 × 34 mm</option>
                 </select>
             </div>
             <div>
@@ -93,7 +97,7 @@ $PRODUCT_LABEL_DATA = [
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes item code (or SKU). In the print dialog, choose “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if SKU is empty). Micro label: location from product <strong>Location</strong> field, date is today. In print, use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -137,6 +141,30 @@ $PRODUCT_LABEL_DATA = [
             barHeight: 180,
             barFont: 20,
             pad: 44
+        },
+        /** Mirrors helpers/label/textiles_config.php — layout: location TL, date TR, barcode center, code BC. */
+        micro: {
+            name: 'Micro (textiles)',
+            layout: 'micro',
+            wMm: 64,
+            hMm: 34,
+            offsetXMm: 0,
+            offsetYMm: 0,
+            orient: 'landscape',
+            cw: 1280,
+            ch: 680,
+            pad: 40,
+            border: '1px solid #000000',
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            locationSize: '16pt',
+            dateSize: '8pt',
+            codeSize: '10pt',
+            showBorders: true,
+            barUnit: 1,
+            barHeight: 45,
+            barDisplayValue: false,
+            barFont: 10,
+            barMaxWidth: 1180
         }
     };
 
@@ -179,7 +207,7 @@ $PRODUCT_LABEL_DATA = [
         el.style.paddingLeft = sidePad + 'px';
         el.style.paddingRight = sidePad + 'px';
 
-        const skuVal = esc((data.itemCode || data.sku || '').trim() || '—');
+        const skuVal = esc((data.sku || data.itemCode || '').trim() || '—');
         const sizeVal = esc((data.size || '').trim() || '—');
         const colorVal = esc((data.color || '').trim() || '—');
         const mrpShow = data.mrpFormatted != null && data.mrpFormatted !== ''
@@ -257,9 +285,106 @@ $PRODUCT_LABEL_DATA = [
         return el;
     }
 
+    function buildMicroLabelElement(preset, data) {
+        const el = document.createElement('div');
+        el.className = 'product-label-sheet';
+        el.style.boxSizing = 'border-box';
+        el.style.width = preset.cw + 'px';
+        el.style.height = preset.ch + 'px';
+        el.style.background = '#ffffff';
+        el.style.border = preset.showBorders !== false ? (preset.border || '1px solid #000000') : 'none';
+        el.style.color = '#000000';
+        el.style.fontFamily = preset.fontFamily || 'Arial, Helvetica, sans-serif';
+        el.style.display = 'flex';
+        el.style.flexDirection = 'column';
+        const padPx = preset.pad != null ? preset.pad : 40;
+        el.style.padding = padPx + 'px';
+        el.style.overflow = 'hidden';
+
+        const locRaw = (data.labelLocation != null && String(data.labelLocation).trim() !== '')
+            ? String(data.labelLocation).trim()
+            : '';
+        const locDisplay = locRaw !== '' ? '(' + locRaw + ')' : '—';
+
+        const dateStr = (data.labelDate != null && String(data.labelDate).trim() !== '')
+            ? String(data.labelDate).trim()
+            : '—';
+
+        const codeRaw = String((data.sku || data.itemCode || '').trim() || '');
+        const codeDisplay = codeRaw !== '' ? '(' + codeRaw + ')' : '—';
+
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.flexDirection = 'row';
+        topRow.style.justifyContent = 'space-between';
+        topRow.style.alignItems = 'flex-start';
+        topRow.style.width = '100%';
+        topRow.style.flexShrink = '0';
+
+        const locEl = document.createElement('div');
+        locEl.style.fontSize = preset.locationSize || '16pt';
+        locEl.style.fontWeight = '700';
+        locEl.style.lineHeight = '1.2';
+        locEl.style.maxWidth = '62%';
+        locEl.style.overflow = 'hidden';
+        locEl.style.textOverflow = 'ellipsis';
+        locEl.style.whiteSpace = 'nowrap';
+        locEl.textContent = locDisplay;
+
+        const dateEl = document.createElement('div');
+        dateEl.style.fontSize = preset.dateSize || '8pt';
+        dateEl.style.fontWeight = '400';
+        dateEl.style.lineHeight = '1.2';
+        dateEl.style.color = '#333333';
+        dateEl.style.textAlign = 'right';
+        dateEl.style.flexShrink = '0';
+        dateEl.style.marginLeft = '8px';
+        dateEl.textContent = dateStr;
+
+        topRow.appendChild(locEl);
+        topRow.appendChild(dateEl);
+
+        const mid = document.createElement('div');
+        mid.style.flex = '1';
+        mid.style.minHeight = '0';
+        mid.style.display = 'flex';
+        mid.style.alignItems = 'center';
+        mid.style.justifyContent = 'center';
+        mid.style.width = '100%';
+
+        const barWrap = document.createElement('div');
+        barWrap.className = 'pl-barcode-wrap';
+        barWrap.style.maxWidth = '100%';
+        barWrap.style.display = 'flex';
+        barWrap.style.alignItems = 'center';
+        barWrap.style.justifyContent = 'center';
+        const barCanvas = document.createElement('canvas');
+        barCanvas.className = 'pl-barcode';
+        barWrap.appendChild(barCanvas);
+        mid.appendChild(barWrap);
+
+        const bottom = document.createElement('div');
+        bottom.style.flexShrink = '0';
+        bottom.style.textAlign = 'center';
+        bottom.style.fontSize = preset.codeSize || '10pt';
+        bottom.style.fontWeight = '500';
+        bottom.style.lineHeight = '1.25';
+        bottom.style.width = '100%';
+        bottom.style.paddingTop = '6px';
+        bottom.textContent = codeDisplay;
+
+        el.appendChild(topRow);
+        el.appendChild(mid);
+        el.appendChild(bottom);
+        return el;
+    }
+
     function buildLabelElement(preset, data) {
         if (preset.layout === 'jewelry') {
             return buildJewelryLabelElement(preset, data);
+        }
+        if (preset.layout === 'micro') {
+            return buildMicroLabelElement(preset, data);
         }
         const el = document.createElement('div');
         el.className = 'product-label-sheet';
@@ -381,7 +506,7 @@ $PRODUCT_LABEL_DATA = [
     }
 
     function barcodeTextFromData(data) {
-        const raw = String(data.itemCode || data.sku || '').trim();
+        const raw = String(data.sku || data.itemCode || '').trim();
         if (raw.length) return raw;
         const pid = data.productId != null ? String(data.productId) : '';
         return pid.length ? ('ID' + pid) : '0';
@@ -390,16 +515,18 @@ $PRODUCT_LABEL_DATA = [
     function initBarcodeOnCanvas(canvas, value, preset) {
         const text = String(value).trim() || '0';
         const isJewelry = preset.layout === 'jewelry';
-        const bcMargin = isJewelry ? 2 : 4;
-        const bcFontOpt = isJewelry ? '' : 'bold';
+        const isMicro = preset.layout === 'micro';
+        const bcMargin = isJewelry ? 2 : (isMicro ? 0 : 4);
+        const bcFontOpt = (isJewelry || isMicro) ? '' : 'bold';
+        const showBarcodeText = isMicro && preset.barDisplayValue === false ? false : true;
         try {
             JsBarcode(canvas, text, {
                 format: 'CODE128',
-                width: preset.barUnit,
+                width: preset.barUnit != null ? preset.barUnit : 2,
                 height: preset.barHeight,
-                displayValue: true,
+                displayValue: showBarcodeText,
                 fontOptions: bcFontOpt,
-                fontSize: preset.barFont,
+                fontSize: preset.barFont != null ? preset.barFont : 14,
                 margin: bcMargin,
                 background: '#ffffff',
                 lineColor: '#000000'
@@ -408,11 +535,11 @@ $PRODUCT_LABEL_DATA = [
             try {
                 JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), {
                     format: 'CODE128',
-                    width: preset.barUnit,
+                    width: preset.barUnit != null ? preset.barUnit : 2,
                     height: preset.barHeight,
-                    displayValue: true,
+                    displayValue: showBarcodeText,
                     fontOptions: bcFontOpt,
-                    fontSize: preset.barFont,
+                    fontSize: preset.barFont != null ? preset.barFont : 14,
                     margin: bcMargin,
                     background: '#ffffff',
                     lineColor: '#000000'
@@ -420,10 +547,10 @@ $PRODUCT_LABEL_DATA = [
             } catch (e2) {
                 JsBarcode(canvas, 'INVALID', {
                     format: 'CODE128',
-                    width: preset.barUnit,
+                    width: preset.barUnit != null ? preset.barUnit : 2,
                     height: Math.min(preset.barHeight, 40),
-                    displayValue: true,
-                    fontSize: preset.barFont,
+                    displayValue: showBarcodeText,
+                    fontSize: preset.barFont != null ? preset.barFont : 14,
                     margin: bcMargin,
                     background: '#ffffff',
                     lineColor: '#000000'
@@ -431,7 +558,14 @@ $PRODUCT_LABEL_DATA = [
             }
         }
         const pad = preset.pad != null ? preset.pad : 0;
-        const maxW = preset.barCol - pad * 2 - 8;
+        var maxW;
+        if (preset.barMaxWidth != null) {
+            maxW = preset.barMaxWidth;
+        } else if (preset.barCol != null) {
+            maxW = preset.barCol - pad * 2 - 8;
+        } else {
+            maxW = preset.cw - pad * 2 - 8;
+        }
         if (maxW > 40 && canvas.width > maxW) {
             const nw = Math.floor(maxW);
             const nh = Math.floor(canvas.height * (maxW / canvas.width));
