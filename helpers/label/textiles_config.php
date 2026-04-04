@@ -3,20 +3,23 @@
 declare(strict_types=1);
 
 /**
- * Textiles / "Micro" label sheet layout constants (64×34 mm cell).
- * Mirrors front-end preset in views/products/partials/product_label_print_block.php (micro).
- * COLUMNS/ROWS/MARGINS apply to future batch sheet generators — not used by single-label browser print.
+ * Textiles / "Micro" thermal label — matches Seznik-style jewellery strip stock
+ * (Amazon.in ASIN B0FK2X6VYF: 25 mm × 15 mm, 2500 labels roll).
+ *
+ * Mirrors front-end preset `micro` in views/products/partials/product_label_print_block.php.
+ * COLUMNS/ROWS/MARGINS are for future sheet generators; re-tune when laying out full pages.
  */
 return [
     'CODE_COLUMN' => 0,
     'DATE_COLUMN' => 1,
     'LOCATION_COLUMN' => 2,
 
-    'LABEL_WIDTH_MM' => 64,
-    'LABEL_HEIGHT_MM' => 34,
+    'LABEL_WIDTH_MM' => 25,
+    'LABEL_HEIGHT_MM' => 15,
     'SPACING_MM' => 2,
 
-    'COLUMNS' => 3,
+    /** Example grid for ~208 mm printable width: (208 − L/R margins) / (25 + gap). */
+    'COLUMNS' => 7,
     'ROWS' => 8,
 
     'MARGIN_TOP_MM' => 13,
@@ -25,14 +28,14 @@ return [
     'MARGIN_RIGHT_MM' => 6,
 
     'BARCODE_TYPE' => 'CODE128',
-    'BARCODE_HEIGHT' => 45,
+    'BARCODE_HEIGHT' => 28,
     'BARCODE_WIDTH' => 1,
     'BARCODE_DISPLAY_VALUE' => false,
 
     'TEXT_FONT' => 'Arial',
-    'CODE_SIZE' => '10pt',
-    'DATE_SIZE' => '8pt',
-    'LOCATION_SIZE' => '16pt',
+    'CODE_SIZE' => '7pt',
+    'DATE_SIZE' => '6pt',
+    'LOCATION_SIZE' => '8pt',
 
     'SHOW_BORDERS' => true,
 ];

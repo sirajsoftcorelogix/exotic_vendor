@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 64 × 34 mm — location (TL) | date (TR) | CODE128 (center) | code (BC). See helpers/label/textiles_config.php.
+ * Micro (textiles): 25 × 15 mm (Seznik / Amazon B0FK2X6VYF) — location (TL) | date (TR) | CODE128 (center) | code (BC).
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -89,7 +89,7 @@ $PRODUCT_LABEL_DATA = [
                 <select id="productLabelSize"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
                     <option value="small" selected>Jewelry — 100 × 12.9 mm</option>
-                    <option value="micro">Micro (textiles) — 64 × 34 mm</option>
+                    <option value="micro">Micro (textiles) — 25 × 15 mm</option>
                 </select>
             </div>
             <div>
@@ -142,29 +142,29 @@ $PRODUCT_LABEL_DATA = [
             barFont: 20,
             pad: 44
         },
-        /** Mirrors helpers/label/textiles_config.php — layout: location TL, date TR, barcode center, code BC. */
+        /** 25×15 mm — Seznik jewellery thermal (Amazon B0FK2X6VYF). helpers/label/textiles_config.php */
         micro: {
             name: 'Micro (textiles)',
             layout: 'micro',
-            wMm: 64,
-            hMm: 34,
+            wMm: 25,
+            hMm: 15,
             offsetXMm: 0,
             offsetYMm: 0,
             orient: 'landscape',
-            cw: 1280,
-            ch: 680,
-            pad: 40,
+            cw: 500,
+            ch: 300,
+            pad: 20,
             border: '1px solid #000000',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            locationSize: '16pt',
-            dateSize: '8pt',
-            codeSize: '10pt',
+            locationSize: '8pt',
+            dateSize: '6pt',
+            codeSize: '7pt',
             showBorders: true,
             barUnit: 1,
-            barHeight: 45,
+            barHeight: 28,
             barDisplayValue: false,
-            barFont: 10,
-            barMaxWidth: 1180
+            barFont: 8,
+            barMaxWidth: 440
         }
     };
 
@@ -370,7 +370,7 @@ $PRODUCT_LABEL_DATA = [
         bottom.style.fontWeight = '500';
         bottom.style.lineHeight = '1.25';
         bottom.style.width = '100%';
-        bottom.style.paddingTop = '6px';
+        bottom.style.paddingTop = (preset.ch <= 320 ? '2px' : '6px');
         bottom.textContent = codeDisplay;
 
         el.appendChild(topRow);
