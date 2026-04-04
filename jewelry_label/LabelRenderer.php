@@ -55,11 +55,9 @@ final class LabelRenderer
         $size = htmlspecialchars((string) $row['size'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $color = htmlspecialchars((string) $row['color'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $mrp = htmlspecialchars(self::formatMrp($row['mrp']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $productName = htmlspecialchars(
-            (string) ($row['product_name'] ?? $row['title'] ?? ''),
-            ENT_QUOTES | ENT_SUBSTITUTE,
-            'UTF-8'
-        );
+        $productNameRaw = (string) ($row['product_name'] ?? $row['title'] ?? '');
+        $productNameRaw = str_replace("\xc2\xa0", ' ', $productNameRaw);
+        $productName = htmlspecialchars($productNameRaw, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeUri = htmlspecialchars($qrDataUri, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         return <<<HTML
@@ -76,7 +74,7 @@ final class LabelRenderer
         <div class="mrp-line">
           <span class="mrp">MRP: ₹{$mrp}</span><span class="tax"> · Incl. of all taxes</span>
         </div>
-        <span class="product-name">{$productName}</span>
+        <div class="product-name">{$productName}</div>
       </div>
     </div>
   </div>

@@ -180,6 +180,7 @@ foreach ($items as $row) {
         .label-right-text {
             display: flex;
             flex-direction: column;
+            align-items: stretch;
             justify-content: center;
             gap: 0;
             flex: 1 1 0;
@@ -205,15 +206,18 @@ foreach ($items as $row) {
         }
 
         .label-right-text .product-name {
-            display: block;
+            box-sizing: border-box;
+            width: 100%;
+            min-width: 0;
             font-size: <?php echo $leftFs; ?>;
             font-weight: 400;
             line-height: 1.22;
-            margin-top: 0;
-            max-width: 100%;
+            margin: 0;
+            padding: 0;
             white-space: normal;
-            overflow-wrap: anywhere;
+            overflow-wrap: break-word;
             word-wrap: break-word;
+            word-break: break-word;
         }
     </style>
 </head>
