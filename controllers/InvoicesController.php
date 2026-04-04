@@ -3,6 +3,8 @@ require_once 'models/invoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
+require_once 'models/product/product.php';
+require_once 'models/order/stock.php';
 
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
@@ -95,7 +97,7 @@ class InvoicesController
     public function createPost()
     {
         is_login();
-        global $invoiceModel, $ordersModel, $commanModel;
+        global $invoiceModel, $ordersModel, $commanModel, $conn;
         header('Content-Type: application/json');
         //print_r($_POST);
         //exit;
@@ -125,9 +127,9 @@ class InvoicesController
             echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
             exit;
         }
-        //validate if invoice created for same order_number
+        //validate if a non-cancelled invoice already exists for same order_number
         foreach ($order_numbers as $order_number) {
-            $existingInvoice = $invoiceModel->getInvoiceByOrderNumber($order_number);
+            $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($order_number);
             if ($existingInvoice) {
                 echo json_encode(['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"]);
                 exit;
@@ -190,6 +192,7 @@ class InvoicesController
         // Create invoice items
         $itemCreated = 0;
         $itemsFailed = [];
+        $productModel = new Product($conn);
 
         foreach ($order_numbers as $idx => $order_number) {
             $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
@@ -225,6 +228,10 @@ class InvoicesController
                 'line_total' => $amount + $totalTaxAmount,
                 'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
             ];
+            $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
+                (string)$order_number,
+                (string)($itemData['item_code'] ?? '')
+            );
             //print_r($itemData);
             $result = $invoiceModel->createInvoiceItem($itemData);
             if ($result) {
@@ -260,10 +267,8 @@ class InvoicesController
         foreach ($order_numbers as $order_number) {
             $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
         }
-        // insert in vp_stock_movements and update stock in vp_stock table
-        foreach ($order_numbers as $order_number) {
-            // $stockModel->updateStockByOrderNumber($order_number);
-        }
+        $stockModel = new Stock($conn);
+        $stockUpdate = $stockModel->updateStockByInvoiceId((int)$invoiceId);
 
         // Clear session
         unset($_SESSION['invoice_items']);
@@ -274,7 +279,8 @@ class InvoicesController
             'invoice_id' => $invoiceId,
             'invoice_number' => $invoice_number,
             'items_created' => $itemCreated,
-            'items_failed' => $itemsFailed
+            'items_failed' => $itemsFailed,
+            'stock_update' => $stockUpdate,
         ]);
         exit;
     }
@@ -551,6 +557,18 @@ class InvoicesController
                 http_response_code(404);
                 header('Content-Type: application/json');
                 echo json_encode(['success' => false, 'message' => 'Invoice not found']);
+                exit;
+            }
+
+            if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled') {
+                http_response_code(403);
+                if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => 'This invoice was cancelled and cannot be downloaded.']);
+                } else {
+                    header('Content-Type: text/plain; charset=utf-8');
+                    echo 'This invoice was cancelled and cannot be downloaded.';
+                }
                 exit;
             }
 
@@ -1028,7 +1046,7 @@ class InvoicesController
         global $commanModel;
         return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
     }
-    public function create_auto_from_order()
+    public function create_auto_from_order_bk()
     {
         is_login();
         header('Content-Type: application/json');
@@ -1045,8 +1063,8 @@ class InvoicesController
                 exit;
             }
 
-            // check invoice already exists
-            $existing = $invoiceModel->getInvoiceByOrderNumber($orderNumber);
+            // skip auto-create only if a non-cancelled invoice already exists
+            $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
             if ($existing) {
                 echo json_encode(['success' => true]);
                 exit;
@@ -1131,7 +1149,7 @@ class InvoicesController
             exit;
         }
     }
-
+ 
 
 
 
@@ -1153,19 +1171,19 @@ class InvoicesController
             $token = isset($_GET['token']) ? trim($_GET['token']) : '';
             $date = isset($_GET['date']) ? trim($_GET['date']) : '';
             $format = isset($_GET['format']) ? trim($_GET['format']) : 'zip'; // zip or consolidated
-            
+
             if (!$token) {
                 http_response_code(400);
                 exit('Bad request: Missing token');
             }
 
             // Validate token
-            if(!$ordersApi->isValidToken($token)) {
+            if (!$ordersApi->isValidToken($token)) {
                 http_response_code(403);
                 exit('Unauthorized');
             }
             //date if blank then set to privious day
-            if(empty($date)){
+            if (empty($date)) {
                 $date = date('Y-m-d', strtotime('-1 day'));
             }
 
@@ -1185,7 +1203,6 @@ class InvoicesController
             // If neither invoice_id nor date provided
             http_response_code(400);
             exit('Bad request: Must provide either invoice_id or date parameter');
-
         } catch (Exception $e) {
             http_response_code(500);
             exit('Error: ' . $e->getMessage());
@@ -1198,7 +1215,7 @@ class InvoicesController
     private function downloadSingleInvoiceXml($invoiceId)
     {
         global $invoiceModel;
-        
+
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
         if (!$invoice) {
             http_response_code(404);
@@ -1206,12 +1223,12 @@ class InvoicesController
         }
 
         $items = $invoiceModel->getInvoiceItems($invoiceId);
-        
+
         // Add calculated tax totals
         $invoice['sgst'] = array_sum(array_column($items, 'sgst'));
         $invoice['cgst'] = array_sum(array_column($items, 'cgst'));
         $invoice['igst'] = array_sum(array_column($items, 'igst'));
-        
+
         // Generate XML
         require_once 'generate-xml.php';
         $generator = new BusyXmlGenerator();
@@ -1219,12 +1236,12 @@ class InvoicesController
 
         // Stream as downloadable file
         header('Content-Type: application/xml; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . 
-               htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.txt"');
+        header('Content-Disposition: attachment; filename="' .
+            htmlspecialchars($invoice['invoice_number'] ?? 'invoice') . '_busy.txt"');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('Expires: 0');
-        
+
         echo $xml;
         exit;
     }
@@ -1366,7 +1383,7 @@ class InvoicesController
                         $invoice['customer_email'] = '';
                         $invoice['customer_gstin'] = '';
                     }
-                    $invoice['narration'] = $invoice['customer_name'] .' '. ($invoice['customer_address1'] ?? '') .' '. ($invoice['customer_address2'] ?? '') .' '. ($invoice['customer_address3'] ?? '') .' '. ($invoice['customer_address4'] ?? '');
+                    $invoice['narration'] = $invoice['customer_name'] . ' ' . ($invoice['customer_address1'] ?? '') . ' ' . ($invoice['customer_address2'] ?? '') . ' ' . ($invoice['customer_address3'] ?? '') . ' ' . ($invoice['customer_address4'] ?? '');
                 }
                 $address = $commanModel->get_exotic_address();
                 $invoice['exotic_address'] = $address[0]['address'] ?? '';
@@ -1436,7 +1453,6 @@ class InvoicesController
             @rmdir($tempDir);
 
             exit;
-
         } catch (Exception $e) {
             // Cleanup on error
             foreach ($xmlFiles as $file) {
@@ -1449,5 +1465,4 @@ class InvoicesController
             exit('Error: ' . $e->getMessage());
         }
     }
-
 }

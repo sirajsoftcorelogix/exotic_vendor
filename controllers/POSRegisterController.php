@@ -124,7 +124,7 @@ class POSRegisterController
     /**
      * DataTables AJAX endpoint for products list
      */
-    public function productsAjax()
+    public function productsAjax_bk()
     {
         // Prefer infinite-scroll params if provided
         $pageNo  = isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : null;
@@ -194,7 +194,74 @@ class POSRegisterController
         echo json_encode($response);
         exit;
     }
+   public function productsAjax()
+{
+    $pageNo  = $_GET['page_no'] ?? 1;
+    $perPage = $_GET['per_page'] ?? 12;
 
+    $start  = ($pageNo - 1) * $perPage;
+    $length = $perPage;
+
+    $searchValue = $_GET['search']['value'] ?? '';
+
+    $category    = $_GET['category'] ?? '';
+    $productName = $_GET['product_name'] ?? '';
+    $productCode = $_GET['product_code'] ?? '';
+
+    $minPrice = $_GET['min_price'] ?? '';
+    $maxPrice = $_GET['max_price'] ?? '';
+
+    // SORT
+    $sortBy = $_GET['sort_by'] ?? '';
+
+    switch ($sortBy) {
+        case 'price_low_high':
+            $orderColumn = 'itemprice';
+            $orderDir = 'asc';
+            break;
+
+        case 'price_high_low':
+            $orderColumn = 'itemprice';
+            $orderDir = 'desc';
+            break;
+
+        case 'name_asc':
+            $orderColumn = 'title';
+            $orderDir = 'asc';
+            break;
+
+        case 'name_desc':
+            $orderColumn = 'title';
+            $orderDir = 'desc';
+            break;
+
+        default:
+            $orderColumn = 'title';
+            $orderDir = 'asc';
+    }
+
+    $result = $this->pos->getProductsDataTable(
+        $start,
+        $length,
+        $searchValue,
+        $productName,
+        $orderColumn,
+        $orderDir,
+        $category,
+        $productCode,
+        $minPrice,
+        $maxPrice
+    );
+
+    echo json_encode([
+        'data' => $result['data'],
+        'recordsTotal' => $result['recordsTotal'],
+        'recordsFiltered' => $result['recordsFiltered'],
+        'current_page' => $pageNo,
+        'total_pages' => ceil($result['recordsFiltered'] / $length)
+    ]);
+    exit;
+}
     /**
      * Proxy: Add to cart (Exotic India API)
      */
@@ -419,8 +486,12 @@ class POSRegisterController
         $codcharges = (float)($data['codcharges_if_chosen'] ?? 0);
         $discount = (float)($data['couponreduction'] ?? 0);
         $gst = (float)($data['gstamount'] ?? 0);
+        $custom_discount = (float)($data['customreduction'] ?? 0);
+        $total_discount = $discount + $custom_discount;
 
-        $grand_total = $subtotal + $shipping_total + $gst - $discount;
+        $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
+
+        $grand_total = $subtotal + $shipping_total + $gst - $total_discount;
 
         return [
             'items' => $items,
@@ -428,6 +499,7 @@ class POSRegisterController
             'shipping_total' => $shipping_total,
             'gst' => $gst,
             'discount' => $discount,
+            'custom_discount' => $custom_discount,
             'grand_total' => $grand_total,
             'checkoutdata' => $data['checkoutdata'] ?? '',
             'codcharges' => $codcharges,
@@ -435,51 +507,67 @@ class POSRegisterController
         ];
     }
 
-
     public function add_to_cart()
     {
         $code      = $_POST['code'] ?? '';
         $qty       = $_POST['qty'] ?? 1;
-        $variation = $_POST['variation'] ?? '';
+        $variation = trim($_POST['variation'] ?? '');
         $options   = $_POST['options'] ?? '';
         $buyNow    = false;
-
-        if (empty(trim($code))) {
+        // echo '<pre>';
+        // print_r($options);
+        // exit;
+        if (empty($code)) {
             header("Location: ?page=pos_register");
             exit;
         }
+
         $voucher = $_SESSION['gift_voucher']['giftvoucherdetails'] ?? '';
-        $coupon = '';
+        $coupon  = '';
 
         if (!empty($_SESSION['discount_coupon'])) {
-            if (is_array($_SESSION['discount_coupon'])) {
-                $coupon = $_SESSION['discount_coupon']['discountcoupondetails'] ?? '';
-            } else {
-                $coupon = $_SESSION['discount_coupon'];
-            }
+            $coupon = is_array($_SESSION['discount_coupon'])
+                ? ($_SESSION['discount_coupon']['discountcoupondetails'] ?? '')
+                : $_SESSION['discount_coupon'];
         }
 
-        $postData = http_build_query([
+        $postArray = [
             'buynow'   => $buyNow ? 1 : 0,
             'code'     => trim($code),
             'qty'      => max(1, (int)$qty),
-            'variation' => trim($variation),
-            'options'  => trim($options),
             'discountcoupondetails' => $coupon,
-            'giftvoucherdetails' => $voucher
-        ]);
+            'giftvoucherdetails'    => $voucher
+        ];
+        //  Variation handling
+        if (!empty($variation)) {
+
+            if (strpos($variation, ':') === false || $variation === ':') {
+                header("Location: ?page=pos_register&error=invalid_variation");
+                exit;
+            }
+
+            list($size, $color) = explode(':', $variation) + ['', ''];
+            $variation = trim($size) . ':' . trim($color);
+
+            $postArray['variation'] = $variation;
+        }
+
+
+        if (!empty($options)) {
+            $postArray['options'] = trim($options);
+        }
+
+        $postData = http_build_query($postArray);
 
         $result = $this->exotic_api_call('/cart/add', 'POST', [], $postData);
 
-        // optional: check success
-        if (!empty($result['data']['cartref'])) {
-            // item added
+        if (empty($result['data']['cartref'])) {
+            $_SESSION['cart_error'] = $result['data']['error'] ?? 'Cart add failed';
         }
 
         header("Location: ?page=pos_register");
         exit;
     }
-
     public function change_qty()
     {
         $cartref = $_POST['cartref'] ?? '';
@@ -772,26 +860,27 @@ class POSRegisterController
             //     $_POST['note'],
             //     date('Y-m-d')
             // );
-$stmt->bind_param(
-    "isiisssdsss",
-    $orderId,
-    $orderNumber,
-    $customerId,
-    $warehouseId,
-    $userId,
-    $paymentStage,
-    $paymentType,
-    $amount,
-    $transactionId,
-    $note,
-    $paymentDate
-);
+            $stmt->bind_param(
+                "isiisssdsss",
+                $orderId,
+                $orderNumber,
+                $customerId,
+                $warehouseId,
+                $userId,
+                $paymentStage,
+                $paymentType,
+                $amount,
+                $transactionId,
+                $note,
+                $paymentDate
+            );
             $stmt->execute();
         }
 
         unset($_SESSION['discount_coupon']);
         unset($_SESSION['pos_customer_form']);
         unset($_SESSION['pos_customer_id']);
+        unset($_SESSION['custom_discount']);
         // echo '<pre>'; print_r($result); exit;
         echo json_encode([
             "success" => true,
@@ -873,19 +962,44 @@ $stmt->bind_param(
     }
     public function apply_custom_discount()
     {
-        $amount = $_POST['amount'] ?? 0;
+        $value = floatval($_POST['value'] ?? 0);
+        $type  = $_POST['type'] ?? 'fixed';
 
-        $amount = floatval($amount);
+        if ($value <= 0) {
+            echo json_encode(["success" => false, "message" => "Invalid discount"]);
+            exit;
+        }
+
+        //  convert % → fixed
+        if ($type === 'percent') {
+            $cart = $this->get_cart();
+            $value = ($cart['subtotal'] * $value) / 100;
+        }
+
+        //  store in session
+        $_SESSION['custom_discount'] = $value;
+
+        //  apply in API
+        $this->exotic_api_call(
+            '/cart/addcustomdiscount',
+            'GET',
+            ['custom_reduce' => $value]
+        );
+
+        echo json_encode(["success" => true]);
+        exit;
+    }
+    public function remove_custom_discount()
+    {
+        unset($_SESSION['custom_discount']);
 
         $this->exotic_api_call(
             '/cart/addcustomdiscount',
             'GET',
-            ['custom_reduce' => $amount]
+            ['custom_reduce' => 0]
         );
 
-        echo json_encode([
-            "success" => true
-        ]);
+        header("Location: ?page=pos_register");
         exit;
     }
     public function apply_gift_voucher()

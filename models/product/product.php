@@ -420,6 +420,48 @@ class product
         return $res;
     }
 
+    /**
+     * Resolve vp_products.id for an invoice line using vp_orders (order_number + item_code).
+     */
+    public function getProductIdForInvoiceLine(string $orderNumber, string $itemCode): int
+    {
+        $orderNumber = trim($orderNumber);
+        $itemCode = trim($itemCode);
+        if ($orderNumber === '' || $itemCode === '') {
+            return 0;
+        }
+        $sql = "SELECT item_code, sku, size, color FROM vp_orders WHERE order_number = ? AND item_code = ? ORDER BY id ASC LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('ss', $orderNumber, $itemCode);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            return 0;
+        }
+        $ic = trim((string)($row['item_code'] ?? $itemCode));
+        $size = isset($row['size']) ? (string)$row['size'] : '';
+        $color = isset($row['color']) ? (string)$row['color'] : '';
+        $match = $this->findByItemCodeSizeColor($ic, $size, $color);
+        if (!empty($match['id'])) {
+            return (int)$match['id'];
+        }
+        $sku = trim((string)($row['sku'] ?? ''));
+        if ($sku !== '') {
+            $bySku = $this->findBySku($sku);
+            if (!empty($bySku['id']) && strcasecmp((string)($bySku['item_code'] ?? ''), $ic) === 0) {
+                return (int)$bySku['id'];
+            }
+            if (!empty($bySku['id'])) {
+                return (int)$bySku['id'];
+            }
+        }
+        return 0;
+    }
+
     public function searchProductsBySkuOrItemCode($query)
     {
         $q = '%' . $query . '%';
@@ -1713,13 +1755,19 @@ class product
         }
         return ['total_added' => 0, 'total_deducted' => 0];
     }
-    public function stock_history($sku, $limit = 100, $offset = 0)
+    public function stock_history($sku, $limit = 100, $offset = 0, $productId = 0)
     {
-        //join exotic_address on exotic_address.id = vp_stock_movements.warehouse_id
-        $sql = "SELECT sm.*, ea.address_title AS warehouse_name FROM vp_stock_movements sm LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id WHERE sm.sku = ? ORDER BY sm.created_at DESC LIMIT ? OFFSET ?";
+        // Join exotic_address and match by sku OR product_id (migration-safe).
+        $sql = "SELECT sm.*, ea.address_title AS warehouse_name
+                FROM vp_stock_movements sm
+                LEFT JOIN exotic_address ea ON sm.warehouse_id = ea.id
+                WHERE (sm.sku = ? OR sm.product_id = ?)
+                ORDER BY sm.created_at DESC
+                LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return [];
-        $stmt->bind_param('sii', $sku, $limit, $offset);
+        $pid = (int)$productId;
+        $stmt->bind_param('siii', $sku, $pid, $limit, $offset);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
@@ -1727,6 +1775,104 @@ class product
         }
         return [];
     }
+
+    /**
+     * Stock ledger display: use ref_type (and movement_type), not movement direction alone.
+     * Cancelling an invoice posts movement_type IN — label as reversal of sale, not "Purchase".
+     *
+     * @return array{ledger_type:string, icon:string, text_color_class:string}
+     */
+    public function getStockLedgerDisplayForMovement(array $row): array
+    {
+        $mt = (string)($row['movement_type'] ?? '');
+        $rt = strtoupper(trim((string)($row['ref_type'] ?? '')));
+
+        if ($mt === 'IN' && $rt === 'INVOICE_CANCEL') {
+            return [
+                'ledger_type' => 'Invoice cancellation',
+                'icon' => 'fa-undo',
+                'text_color_class' => 'text-amber-600',
+            ];
+        }
+        if ($mt === 'OPENING_STOCK') {
+            return [
+                'ledger_type' => 'Opening stock',
+                'icon' => 'fa-boxes',
+                'text_color_class' => 'text-emerald-700',
+            ];
+        }
+        if ($rt === 'MANUAL' && ($mt === 'IN' || $mt === 'OUT')) {
+            return [
+                'ledger_type' => 'Stock adjustment',
+                'icon' => 'fa-sliders-h',
+                'text_color_class' => $mt === 'IN' ? 'text-green-600' : 'text-red-600',
+            ];
+        }
+        if ($mt === 'IN' && $rt === 'GRN') {
+            return [
+                'ledger_type' => 'Purchase (GRN)',
+                'icon' => 'fa-arrow-up',
+                'text_color_class' => 'text-green-600',
+            ];
+        }
+        if ($mt === 'IN' && $rt === 'BULK_IMPORT') {
+            return [
+                'ledger_type' => 'Bulk import',
+                'icon' => 'fa-cloud-upload-alt',
+                'text_color_class' => 'text-teal-600',
+            ];
+        }
+        if ($mt === 'OUT' && $rt === 'INVOICE') {
+            return [
+                'ledger_type' => 'Sale (invoice)',
+                'icon' => 'fa-arrow-down',
+                'text_color_class' => 'text-red-600',
+            ];
+        }
+
+        $typeMap = [
+            'IN' => 'Purchase',
+            'OUT' => 'Sale',
+            'TRANSFER_IN' => 'Transfer in',
+            'TRANSFER_OUT' => 'Transfer out',
+        ];
+        $iconMap = [
+            'IN' => 'fa-arrow-up',
+            'OUT' => 'fa-arrow-down',
+            'TRANSFER_IN' => 'fa-exchange-alt',
+            'TRANSFER_OUT' => 'fa-exchange-alt',
+        ];
+        $colorMap = [
+            'IN' => 'text-green-600',
+            'OUT' => 'text-red-600',
+            'TRANSFER_IN' => 'text-blue-600',
+            'TRANSFER_OUT' => 'text-blue-600',
+        ];
+
+        return [
+            'ledger_type' => $typeMap[$mt] ?? $mt,
+            'icon' => $iconMap[$mt] ?? 'fa-circle',
+            'text_color_class' => $colorMap[$mt] ?? '',
+        ];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    public function enrichStockHistoryRowsForLedger(array $rows): array
+    {
+        foreach ($rows as &$r) {
+            $d = $this->getStockLedgerDisplayForMovement($r);
+            $r['ledger_type'] = $d['ledger_type'];
+            $r['ledger_icon'] = $d['icon'];
+            $r['ledger_color_class'] = $d['text_color_class'];
+        }
+        unset($r);
+
+        return $rows;
+    }
+
     public function insertStockMovement($data){
         $this->db->begin_transaction();
         try {
@@ -1766,8 +1912,10 @@ class product
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
 
             $insertStmt = $this->db->prepare($insertSql);
-            $ref_type = 'GRN';
-            $ref_id = 0;
+            $ref_type = isset($data['ref_type']) && $data['ref_type'] !== ''
+                ? (string)$data['ref_type']
+                : 'MANUAL';
+            $ref_id = array_key_exists('ref_id', $data) ? (string)$data['ref_id'] : '0';
 
             $insertStmt->bind_param(
                 'isssssssiiisss', 
@@ -1824,13 +1972,22 @@ class product
         $params = [];
         $types = '';
 
-        if (!empty($filters['sku'])) {
+        if (!empty($filters['sku']) && !empty($filters['product_id'])) {
+            $where[] = '(sm.sku = ? OR sm.product_id = ?)';
+            $params[] = $filters['sku'];
+            $params[] = (int)$filters['product_id'];
+            $types .= 'si';
+        } elseif (!empty($filters['sku'])) {
             $where[] = 'sm.sku = ?';
             $params[] = $filters['sku'];
             $types .= 's';
+        } elseif (!empty($filters['product_id'])) {
+            $where[] = 'sm.product_id = ?';
+            $params[] = (int)$filters['product_id'];
+            $types .= 'i';
         }
 
-        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK'])) {
             $where[] = 'sm.movement_type = ?';
             $params[] = $filters['type'];
             $types .= 's';
@@ -1897,13 +2054,22 @@ class product
         $params = [];
         $types = '';
 
-        if (!empty($filters['sku'])) {
+        if (!empty($filters['sku']) && !empty($filters['product_id'])) {
+            $where[] = '(sm.sku = ? OR sm.product_id = ?)';
+            $params[] = $filters['sku'];
+            $params[] = (int)$filters['product_id'];
+            $types .= 'si';
+        } elseif (!empty($filters['sku'])) {
             $where[] = 'sm.sku = ?';
             $params[] = $filters['sku'];
             $types .= 's';
+        } elseif (!empty($filters['product_id'])) {
+            $where[] = 'sm.product_id = ?';
+            $params[] = (int)$filters['product_id'];
+            $types .= 'i';
         }
 
-        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT'])) {
+        if (!empty($filters['type']) && in_array($filters['type'], ['IN', 'OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK'])) {
             $where[] = 'sm.movement_type = ?';
             $params[] = $filters['type'];
             $types .= 's';

@@ -10,12 +10,29 @@
     </p>
 
     <form id="bulkImportForm" class="border rounded-lg p-4 bg-gray-50 mb-6" enctype="multipart/form-data" method="post">
-      <label class="block text-sm font-medium text-gray-700 mb-2">Upload CSV / XLSX</label>
+      <div class="grid gap-4 md:grid-cols-2 mb-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Warehouse <span class="text-red-600">*</span></label>
+          <select name="warehouse_id" id="bulk_import_warehouse_id" class="block w-full max-w-lg border rounded px-3 py-2 text-sm" required>
+            <option value="">— Select warehouse —</option>
+            <?php foreach ($warehouses ?? [] as $w): ?>
+              <option value="<?= (int)($w['id'] ?? 0) ?>"><?= htmlspecialchars($w['address_title'] ?? '') ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Upload CSV / XLSX <span class="text-red-600">*</span></label>
+          <input type="file" name="item_codes_file" id="item_codes_file" accept=".csv,.xlsx" class="block w-full text-sm max-w-lg border rounded px-2 py-1.5 bg-white" required>
+        </div>
+      </div>
       <div class="flex flex-wrap gap-3 items-center">
-        <input type="file" name="item_codes_file" id="item_codes_file" accept=".csv,.xlsx" class="block w-full text-sm max-w-lg" required>
         <button type="submit" class="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm font-semibold">Upload & Create Job</button>
       </div>
-      <div class="text-xs text-gray-500 mt-2">Expected format: first column contains item codes. Max file size: 10 MB.</div>
+      <div class="text-xs text-gray-500 mt-2">
+        Columns: <strong>A</strong> code, <strong>B</strong> SKU (blank = auto: <code>code</code>, <code>code-size</code>, <code>code--color</code>, or <code>code-size-color</code>), <strong>C</strong> color, <strong>D</strong> size, <strong>E</strong> qty, <strong>F</strong> location.
+        Older 3-column (code, qty, loc) and 4-column (code, SKU, qty, loc) files still work. Max file size: 10 MB.
+        <a href="?page=products&amp;action=bulk_import_sample_csv" class="ml-1 text-amber-700 hover:text-amber-900 underline font-medium">Download sample CSV</a>
+      </div>
     </form>
 
     <div class="overflow-x-auto rounded-lg border">
@@ -24,6 +41,7 @@
           <tr>
             <th class="px-3 py-2 text-left">Job ID</th>
             <th class="px-3 py-2 text-left">File</th>
+            <th class="px-3 py-2 text-left">Warehouse</th>
             <th class="px-3 py-2 text-left">Imported By</th>
             <th class="px-3 py-2 text-left">Status</th>
             <th class="px-3 py-2 text-left">Total</th>
@@ -36,7 +54,7 @@
         </thead>
         <tbody>
           <?php if (empty($jobs)): ?>
-            <tr><td colspan="10" class="px-3 py-8 text-center text-gray-400">No import jobs found.</td></tr>
+            <tr><td colspan="11" class="px-3 py-8 text-center text-gray-400">No import jobs found.</td></tr>
           <?php else: ?>
             <?php foreach ($jobs as $j): ?>
               <?php
@@ -50,6 +68,7 @@
               <tr class="border-t hover:bg-gray-50">
                 <td class="px-3 py-2 font-semibold"><?= (int)$j['id'] ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($j['file_name'] ?? '') ?></td>
+                <td class="px-3 py-2"><?= htmlspecialchars($j['warehouse_name'] ?? ('#' . (int)($j['warehouse_id'] ?? 0))) ?></td>
                 <td class="px-3 py-2"><?= htmlspecialchars($j['created_by_name'] ?? ('User #' . (int)$j['created_by'])) ?></td>
                 <td class="px-3 py-2"><span class="text-xs px-2 py-1 rounded <?= $statusClass ?>"><?= htmlspecialchars($status) ?></span></td>
                 <td class="px-3 py-2"><?= (int)$j['total_items'] ?></td>
@@ -61,6 +80,12 @@
                   <a href="?page=products&action=bulk_import_detail&job_id=<?= (int)$j['id'] ?>" class="px-2 py-1 text-xs rounded bg-amber-600 text-white hover:bg-amber-700">View Details</a>
                   <?php if ((int)($j['failed_items'] ?? 0) > 0): ?>
                     <button type="button" class="js-retry-failed-job ml-1 px-2 py-1 text-xs rounded border border-amber-700 text-amber-800 hover:bg-amber-50" data-job-id="<?= (int)$j['id'] ?>" title="Move all failed rows back to pending">Retry failed</button>
+                  <?php endif; ?>
+                  <?php
+                    $canRevert = (($j['status'] ?? 'pending') !== 'processing') && (((int)($j['success_items'] ?? 0) > 0) || ((int)($j['processed_items'] ?? 0) > 0));
+                  ?>
+                  <?php if ($canRevert): ?>
+                    <button type="button" class="js-revert-job ml-1 px-2 py-1 text-xs rounded border border-red-700 text-red-800 hover:bg-red-50" data-job-id="<?= (int)$j['id'] ?>" title="Deletes opening stock movements created by this import and removes the uploaded file">Revert</button>
                   <?php endif; ?>
                   <?php
                     $canDelete = ((int)$j['success_items'] === 0) && ((int)$j['failed_items'] === 0) && (($j['status'] ?? 'pending') !== 'processing');
@@ -232,9 +257,16 @@
       }
       // Build FormData before showProgress(): setDisabled() marks inputs disabled, and
       // disabled fields are omitted from new FormData(form), so the file would not upload.
+      const wh = document.getElementById('bulk_import_warehouse_id');
+      const wid = wh ? wh.value : '';
+      if (!wid) {
+        showResult('error', 'Validation Error', 'Please select a warehouse.');
+        return;
+      }
       const fd = new FormData();
       const file = fileInput.files[0];
       fd.append('item_codes_file', file, file.name);
+      fd.append('warehouse_id', wid);
       showProgress('Uploading file…', 'Uploading and validating your file.');
       try {
         const data = await fetchJson('?page=products&action=bulk_import_upload', { method: 'POST', body: fd });
@@ -305,6 +337,40 @@
         } catch (e3) {
           const details = extractServerError(e3, 'Delete failed');
           showResult('error', 'Delete Failed', 'Could not process server response.', details);
+        }
+      });
+    });
+
+    document.querySelectorAll('.js-revert-job').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const jobId = parseInt(btn.getAttribute('data-job-id') || '0', 10);
+        if (!jobId) return;
+        if (!confirm('Revert this import?\n\nThis will:\n- Delete opening stock movements created by this job\n- Recalculate local stock for affected products\n- Delete the job and its rows\n- Delete the uploaded file (if stored)\n\nContinue?')) return;
+        showProgress('Reverting import…', 'Deleting movements and cleaning up.');
+        try {
+          const data = await fetchJson('?page=products&action=bulk_import_revert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: jobId })
+          });
+          if (!data.success) {
+            const detailText = [data.message || 'Revert failed', data.debug || ''].filter(Boolean).join('\n');
+            showResult('error', 'Revert Failed', data.message || 'Revert failed', detailText);
+            return;
+          }
+          const detail = [
+            typeof data.deleted_movements === 'number' ? `Deleted movements: ${data.deleted_movements}` : '',
+            typeof data.recalculated_products === 'number' ? `Recalculated products: ${data.recalculated_products}` : '',
+            typeof data.deleted_products === 'number' ? `Deleted products: ${data.deleted_products}` : '',
+            Array.isArray(data.failed_product_deletes) && data.failed_product_deletes.length ? `Products not deleted (in use?): ${data.failed_product_deletes.join(', ')}` : '',
+            (data.file_deleted === true) ? 'Uploaded file deleted: yes' : (data.file_deleted === false ? 'Uploaded file deleted: no (not stored or already missing)' : '')
+          ].filter(Boolean).join('\n');
+          showResult('success', 'Import Reverted', data.message || 'Import reverted.', detail);
+          await new Promise(r => setTimeout(r, 450));
+          window.location.reload();
+        } catch (e5) {
+          const details = extractServerError(e5, 'Revert failed');
+          showResult('error', 'Revert Failed', 'Could not process server response.', details);
         }
       });
     });

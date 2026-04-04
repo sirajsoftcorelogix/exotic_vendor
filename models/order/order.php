@@ -8,11 +8,26 @@ class Order{
     public function getAllOrders($filters = [], $limit = 50, $offset = 0) {
 
         //$sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
-        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name 
+        $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name,
+            COALESCE(
+                (SELECT p.id FROM vp_products p
+                 WHERE p.item_code COLLATE utf8mb4_unicode_ci = vp_orders.item_code COLLATE utf8mb4_unicode_ci
+                   AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_unicode_ci
+                       <=> IFNULL(NULLIF(TRIM(vp_orders.size), ''), '') COLLATE utf8mb4_unicode_ci
+                   AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_unicode_ci
+                       <=> IFNULL(NULLIF(TRIM(vp_orders.color), ''), '') COLLATE utf8mb4_unicode_ci
+                 ORDER BY p.id ASC LIMIT 1),
+                (SELECT p2.id FROM vp_products p2
+                 WHERE p2.sku COLLATE utf8mb4_unicode_ci = vp_orders.sku COLLATE utf8mb4_unicode_ci
+                   AND vp_orders.sku IS NOT NULL AND TRIM(vp_orders.sku) COLLATE utf8mb4_unicode_ci != ''
+                 ORDER BY p2.id ASC LIMIT 1)
+            ) AS catalog_product_id,
+            inv.status AS invoice_status
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
 		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
 		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0
+		LEFT JOIN vp_invoices inv ON inv.id = vp_orders.invoice_id
 		WHERE 1=1";
 		
         $params = [];
@@ -414,6 +429,27 @@ class Order{
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
             return $result->fetch_assoc();
+        }
+        return null;
+    }
+
+    public function getInvoiceStatusByInvoiceId($invoice_id) {
+        $invoice_id = (int)$invoice_id;
+        if ($invoice_id <= 0) {
+            return null;
+        }
+        $sql = "SELECT status FROM vp_invoices WHERE id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $invoice_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+
+            return $row['status'] ?? null;
         }
         return null;
     }
@@ -1559,7 +1595,10 @@ class Order{
         }
     }
     public function invoiceExists($order_number) {
-        $sql = "SELECT vp_invoices.id FROM vp_invoices join vp_invoice_items on vp_invoices.id = vp_invoice_items.invoice_id WHERE vp_invoice_items.order_number = ?";
+        $sql = "SELECT vp_invoices.id FROM vp_invoices 
+                INNER JOIN vp_invoice_items ON vp_invoices.id = vp_invoice_items.invoice_id 
+                WHERE vp_invoice_items.order_number = ?
+                AND LOWER(TRIM(COALESCE(vp_invoices.status, ''))) <> 'cancelled'";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('s', $order_number);
         $stmt->execute();

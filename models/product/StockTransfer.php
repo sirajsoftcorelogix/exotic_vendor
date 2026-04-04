@@ -320,6 +320,242 @@ class StockTransfer
     }
 
     /**
+     * Opening stock line from product bulk import (requires OPENING_STOCK in vp_stock_movements.movement_type enum).
+     */
+    public function recordOpeningStockFromBulkImport(
+        int $product_id,
+        string $sku,
+        string $item_code,
+        string $size,
+        string $color,
+        int $warehouse_id,
+        string $location,
+        int $quantity,
+        int $user_id,
+        string $ref_id
+    ) {
+        return $this->insertStockMovement(
+            $product_id,
+            $sku,
+            $item_code,
+            $warehouse_id,
+            $location,
+            $size,
+            $color,
+            'OPENING_STOCK',
+            $quantity,
+            $user_id,
+            'BULK_IMPORT',
+            'Opening stock from product bulk import',
+            $ref_id
+        );
+    }
+
+    /**
+     * Remove bulk-import opening movement for this import row (if any) and fix subsequent running_stock.
+     */
+    public function removeBulkImportOpeningByRef(string $ref_id): bool
+    {
+        $existing = $this->fetchBulkImportMovementByRef($ref_id);
+        if (!$existing) {
+            return true;
+        }
+        $pid = (int)($existing['product_id'] ?? 0);
+        $this->deleteMovementAndAdjustSubsequent((int)$existing['id']);
+        if ($pid > 0) {
+            $this->syncProductLocalStockFromLatestMovement($pid);
+        }
+
+        return true;
+    }
+
+    /**
+     * Insert or update the single BULK_IMPORT opening row for a bulk import item (same ref_id).
+     * Use when the product already exists and the same import line is re-run with new qty/location.
+     */
+    public function upsertBulkImportOpeningStock(
+        int $product_id,
+        string $sku,
+        string $item_code,
+        string $size,
+        string $color,
+        int $warehouse_id,
+        string $location,
+        int $quantity,
+        int $user_id,
+        string $ref_id
+    ) {
+        $loc = trim($location) === '' ? '-' : trim($location);
+        $existing = $this->fetchBulkImportMovementByRef($ref_id);
+        if (!$existing) {
+            return $this->recordOpeningStockFromBulkImport(
+                $product_id,
+                $sku,
+                $item_code,
+                $size,
+                $color,
+                $warehouse_id,
+                $loc,
+                $quantity,
+                $user_id,
+                $ref_id
+            );
+        }
+
+        $movId = (int)$existing['id'];
+        $oldWh = (int)$existing['warehouse_id'];
+        $oldQty = (int)$existing['quantity'];
+        $skuRow = (string)$existing['sku'];
+        $newWh = (int)$warehouse_id;
+
+        if ($oldWh !== $newWh) {
+            $this->deleteMovementAndAdjustSubsequent($movId);
+            $this->syncProductLocalStockFromLatestMovement($product_id);
+
+            return $this->recordOpeningStockFromBulkImport(
+                $product_id,
+                $sku,
+                $item_code,
+                $size,
+                $color,
+                $newWh,
+                $loc,
+                $quantity,
+                $user_id,
+                $ref_id
+            );
+        }
+
+        $delta = $quantity - $oldQty;
+        $oldLoc = (string)($existing['location'] ?? '');
+
+        if ($delta !== 0 || $loc !== $oldLoc) {
+            $upd = $this->db->prepare(
+                'UPDATE vp_stock_movements SET quantity = ?, location = ?, running_stock = running_stock + ?, update_by_user = ? WHERE id = ?'
+            );
+            if (!$upd) {
+                throw new Exception('Prepare error: ' . $this->db->error);
+            }
+            $upd->bind_param('isiii', $quantity, $loc, $delta, $user_id, $movId);
+            if (!$upd->execute()) {
+                throw new Exception('Execute error: ' . $upd->error);
+            }
+            $upd->close();
+
+            if ($delta !== 0) {
+                $sub = $this->db->prepare(
+                    'UPDATE vp_stock_movements SET running_stock = running_stock + ? WHERE sku = ? AND warehouse_id = ? AND id > ?'
+                );
+                if (!$sub) {
+                    throw new Exception('Prepare error: ' . $this->db->error);
+                }
+                $sub->bind_param('isii', $delta, $skuRow, $newWh, $movId);
+                if (!$sub->execute()) {
+                    throw new Exception('Execute error: ' . $sub->error);
+                }
+                $sub->close();
+            }
+        }
+
+        $this->syncProductLocalStockFromLatestMovement($product_id);
+
+        return true;
+    }
+
+    private function fetchBulkImportMovementByRef(string $ref_id): ?array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT id, product_id, sku, warehouse_id, quantity, running_stock, movement_type, location
+             FROM vp_stock_movements
+             WHERE ref_type = 'BULK_IMPORT' AND ref_id = ?
+             LIMIT 1"
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $ref_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    /**
+     * Delete one movement row and align running_stock for all later rows for the same sku + warehouse.
+     */
+    private function deleteMovementAndAdjustSubsequent(int $movementId): void
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, sku, warehouse_id, quantity, movement_type FROM vp_stock_movements WHERE id = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            throw new Exception('Prepare error: ' . $this->db->error);
+        }
+        $stmt->bind_param('i', $movementId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        if (!$row) {
+            return;
+        }
+
+        $type = (string)($row['movement_type'] ?? '');
+        $qty = (int)($row['quantity'] ?? 0);
+        $sku = (string)($row['sku'] ?? '');
+        $wh = (int)($row['warehouse_id'] ?? 0);
+
+        $deltaForLater = ($type === 'TRANSFER_OUT') ? $qty : -$qty;
+
+        if ($sku !== '' && $wh >= 0) {
+            $u = $this->db->prepare(
+                'UPDATE vp_stock_movements SET running_stock = running_stock + ? WHERE sku = ? AND warehouse_id = ? AND id > ?'
+            );
+            if ($u) {
+                $u->bind_param('isii', $deltaForLater, $sku, $wh, $movementId);
+                $u->execute();
+                $u->close();
+            }
+        }
+
+        $d = $this->db->prepare('DELETE FROM vp_stock_movements WHERE id = ? LIMIT 1');
+        if (!$d) {
+            throw new Exception('Prepare error: ' . $this->db->error);
+        }
+        $d->bind_param('i', $movementId);
+        if (!$d->execute()) {
+            throw new Exception('Execute error: ' . $d->error);
+        }
+        $d->close();
+    }
+
+    private function syncProductLocalStockFromLatestMovement(int $product_id): void
+    {
+        $last = 0;
+        $stmt = $this->db->prepare(
+            'SELECT running_stock FROM vp_stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 1'
+        );
+        if ($stmt) {
+            $stmt->bind_param('i', $product_id);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $r = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($r) {
+                $last = (int)($r['running_stock'] ?? 0);
+            }
+        }
+        $up = $this->db->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+        if ($up) {
+            $up->bind_param('ii', $last, $product_id);
+            $up->execute();
+            $up->close();
+        }
+    }
+
+    /**
      * Ensure GRN related tables exist before inserting.
      * This avoids "table does not exist" errors on first use.
      */

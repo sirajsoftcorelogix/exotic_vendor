@@ -1,7 +1,7 @@
 <?php
 // 1. PHP Logic & Data Fetching
 $label_data[0] = $data["form2"] ?? [];
-$variations = $data["variations"] ?? [];
+$variations = $data["form2"]["variations"] ?? [];
 // $variations = $data['variation'];
 if (isset($variations) && !empty($variations)) {
     foreach ($variations as $key => $value) {

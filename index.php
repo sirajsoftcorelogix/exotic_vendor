@@ -438,11 +438,17 @@ switch ($page) {
             case 'bulk_import':
                 $controller->bulkImportScreen();
                 break;
+            case 'bulk_import_sample_csv':
+                $controller->bulkImportSampleCsv();
+                break;
             case 'bulk_import_detail':
                 $controller->bulkImportDetail();
                 break;
             case 'bulk_import_upload':
                 $controller->bulkImportUpload();
+                break;
+            case 'bulk_import_revert':
+                $controller->bulkImportRevert();
                 break;
             case 'bulk_import_status':
                 $controller->bulkImportStatus();
@@ -861,6 +867,12 @@ switch ($page) {
             case 'set-customer':
                 $controller->set_customer();
                 break;
+            case 'apply_custom_discount':
+                $controller->apply_custom_discount();
+                break;
+            case 'remove-custom-discount':
+                $controller->remove_custom_discount();
+                break;
             default:
                 $controller->index();
                 break;
@@ -1085,10 +1097,10 @@ switch ($page) {
                 $controller->preview();
                 break;
 
-            case 'create_auto_from_order':
+
+            case 'CreateAutoFromOrder':
                 $controller->create_auto_from_order();
                 break;
-
             case 'create_from_payment':
                 $controller->create_from_payment();
                 break;
@@ -1102,14 +1114,14 @@ switch ($page) {
                 break;
 
             case 'generate_pdf':
-                $controller->generate_pdf();
+                $controller->generatePdf();
                 break;
 
             default:
                 $controller->index();
                 break;
         }
-         case 'posorders':
+    case 'posorders':
         require_once 'controllers/PosOrdersController.php';
         $controller = new PosOrdersController($conn);
         switch ($action) {
@@ -1179,5 +1191,4 @@ switch ($page) {
                 break;
         }
         break;
-
 }

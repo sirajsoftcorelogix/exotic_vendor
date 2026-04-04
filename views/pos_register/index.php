@@ -90,7 +90,45 @@
             <?php $isFirst = false; ?>
           <?php endforeach; ?>
         </div>
+        <div class="flex flex-wrap items-center gap-3 mt-3">
 
+          <!-- Sort -->
+          <select id="sortBy" class="border rounded-lg px-3 py-2 text-xs">
+            <option value="">Sort By</option>
+            <option value="price_low_high">Price Low → High</option>
+            <option value="price_high_low">Price High → Low</option>
+            <option value="name_asc">Name A → Z</option>
+            <option value="name_desc">Name Z → A</option>
+            <!-- <option value="stock_high_low">Stock High → Low</option> -->
+          </select>
+
+          <!-- Price -->
+          <input type="number" id="minPrice" placeholder="Min ₹"
+            class="border rounded-lg px-3 py-2 text-xs w-24">
+
+          <input type="number" id="maxPrice" placeholder="Max ₹"
+            class="border rounded-lg px-3 py-2 text-xs w-24">
+
+          <!-- Stock -->
+          <!-- <select id="stockFilter" class="border rounded-lg px-3 py-2 text-xs">
+            <option value="">All Stock</option>
+            <option value="in_stock">In Stock</option>
+            <option value="out_stock">Out of Stock</option>
+          </select> -->
+
+          <!-- APPLY BUTTON -->
+          <button id="applyFilterBtn"
+            class="bg-orange-600 text-white px-4 py-2 text-xs rounded-lg hover:bg-orange-700">
+            Apply
+          </button>
+
+          <!-- RESET BUTTON -->
+          <button id="resetFilterBtn"
+            class="bg-gray-200 text-gray-700 px-4 py-2 text-xs rounded-lg hover:bg-gray-300">
+            Reset
+          </button>
+
+        </div>
         <!-- Product Card -->
         <div class="mt-3 h-[70vh] overflow-y-auto no-scrollbar">
           <div
@@ -363,6 +401,25 @@
             </div>
 
           <?php endif; ?>
+          <?php if (!empty($cartData['custom_discount']) && $cartData['custom_discount'] > 0): ?>
+            <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+
+              <span class="text-[11px] text-green-700 font-semibold">
+                Custom Discount
+                (- <?= currencySymbol($cartData['currency']) ?>
+                <?= number_format($cartData['custom_discount'], 2) ?>)
+              </span>
+
+              <form method="POST" action="?page=pos_register&action=remove-custom-discount">
+                <button
+                  type="submit"
+                  class="text-[11px] text-green-600 font-semibold hover:underline">
+                  Remove
+                </button>
+              </form>
+
+            </div>
+          <?php endif; ?>
           <div id="couponMessage" class="text-[11px]"></div>
           <?php if (isset($_SESSION['coupon_message'])): ?>
 
@@ -469,7 +526,7 @@
   </main>
 </div>
 <!-- <a
-  href="/?page=invoices&action=generate_pdf&invoice_id=33"
+  href="/?page=posinvoice&action=generate_pdf&invoice_id=49"
   target="_blank"
   class="px-4 py-2 bg-green-600 text-white rounded">
   TEST PRINT
@@ -546,6 +603,7 @@
               <input type="hidden" name="code" id="modal_product_code">
               <input type="hidden" name="qty" id="modal_qty" value="1">
               <input type="hidden" name="options" id="modal_options">
+              <input type="hidden" name="variation" id="modal_variation">
               <button type="submit"
                 class="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
                 Add to Cart
@@ -748,7 +806,7 @@
           </select>
         </div>
 
-        <!-- Payment Mode -->
+        <!-- Payment Mode
         <div>
           <label class="text-xs text-gray-600">Payment Mode</label>
 
@@ -765,7 +823,8 @@
             <option value="demand_draft">Demand Draft</option>
 
           </select>
-        </div>
+        </div> -->
+        <input type="hidden" name="payment_type" id="payment_mode" value="offline">
 
         <!-- Payment Date -->
         <div>
@@ -839,6 +898,46 @@
 
   </div>
 </div>
+<!-- DISCOUNT MODAL -->
+<div id="discountModal" class="fixed inset-0 z-[9999] hidden">
+
+  <div class="absolute inset-0 bg-black/40" onclick="closeDiscountModal()"></div>
+
+  <div class="relative mx-auto mt-40 w-[95%] max-w-md rounded-2xl bg-white shadow-xl p-5">
+
+    <h2 class="text-lg font-semibold mb-4">Apply Discount</h2>
+
+    <!-- TYPE -->
+    <div class="mb-3">
+      <label class="text-xs text-gray-600">Discount Type</label>
+      <select id="discount_type"
+        class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
+        <option value="fixed">Fixed Amount (₹)</option>
+        <option value="percent">Percentage (%)</option>
+      </select>
+    </div>
+
+    <!-- VALUE -->
+    <div class="mb-4">
+      <label class="text-xs text-gray-600">Value</label>
+      <input type="number" id="discount_value"
+        class="w-full mt-1 border rounded-lg px-3 py-2 text-sm"
+        placeholder="Enter value">
+    </div>
+
+    <!-- BUTTONS -->
+    <div class="flex justify-end gap-2">
+      <button onclick="closeDiscountModal()"
+        class="px-4 py-2 bg-gray-300 rounded-lg">Cancel</button>
+
+      <button onclick="applyDiscount()"
+        class="px-4 py-2 bg-orange-600 text-white rounded-lg">
+        Apply
+      </button>
+    </div>
+
+  </div>
+</div>
 <!-- CUSTOMER MODAL -->
 <!-- INVOICE PREVIEW MODAL -->
 
@@ -874,7 +973,7 @@
 <script>
   function autoCreateInvoiceThenPreview(orderid) {
 
-    fetch('?page=invoices&action=CreateAutoFromOrder', {
+    fetch('?page=posinvoice&action=CreateAutoFromOrder', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -902,10 +1001,10 @@
       });
   }
 
- 
+
   function previewInvoiceFromOrder(orderNumber) {
 
-    fetch('?page=invoices&action=preview', {
+    fetch('?page=posinvoice&action=preview', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -929,7 +1028,7 @@
         if (data.invoice_id) {
 
           document.getElementById("printInvoiceBtn").href =
-            "/?page=invoices&action=generate_pdf&invoice_id=" + data.invoice_id;
+            "/?page=posinvoice&action=generate_pdf&invoice_id=" + data.invoice_id;
 
         } else {
 
@@ -1408,31 +1507,39 @@
 </script>
 
 <script>
+  // OPEN MODAL
   document.getElementById("applyCustomDiscountBtn").addEventListener("click", function() {
+    document.getElementById("discountModal").classList.remove("hidden");
+  });
 
-    let amount = prompt("Enter Discount Amount");
+  function closeDiscountModal() {
+    document.getElementById("discountModal").classList.add("hidden");
+  }
 
-    if (amount === null) return;
+  // APPLY DISCOUNT
+  function applyDiscount() {
 
-    amount = parseFloat(amount);
+    let type = document.getElementById("discount_type").value;
+    let value = parseFloat(document.getElementById("discount_value").value);
 
-    if (isNaN(amount) || amount < 0) {
-      alert("Invalid discount amount");
+    if (!value || value <= 0) {
+      showToast("⚠ Enter valid discount", "red");
       return;
     }
 
-    fetch("?page=pos_register&action=apply-custom-discount", {
+    fetch("?page=pos_register&action=apply_custom_discount", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded"
         },
-        body: "amount=" + amount
+        body: "type=" + type + "&value=" + value
       })
       .then(res => res.json())
       .then(data => {
 
         if (data.success) {
           showToast("✓ Discount Applied", "green");
+          closeDiscountModal();
           location.reload();
         } else {
           showToast(data.message || "Discount failed", "red");
@@ -1440,5 +1547,14 @@
 
       });
 
-  });
+  }
+</script>
+<script>
+//   $('#sortBy, #minPrice, #maxPrice, #stockFilter').on('change keyup', function () {
+//   clearTimeout(searchTimeout);
+//   searchTimeout = setTimeout(function () {
+//     resetAndLoad();
+//   }, 400);
+// });
+
 </script>
