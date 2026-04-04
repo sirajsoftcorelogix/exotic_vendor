@@ -33,6 +33,8 @@
     <div class="bg-orange-50 rounded-lg p-4">
       <h3 class="font-semibold mb-2">Measures</h3>
       <div class="grid grid-cols-2 gap-2 text-sm">
+        <div><i class="fas fa-expand-arrows-alt mr-1 text-orange-600"></i>Size: <b><?php echo htmlspecialchars((string)($products['size'] ?? '')); ?></b></div>
+        <div><i class="fas fa-palette mr-1 text-orange-600"></i>Color: <b><?php echo htmlspecialchars((string)($products['color'] ?? '')); ?></b></div>
         <div><i class="fas fa-ruler-horizontal mr-1 text-orange-600"></i>Length: <b><?php echo htmlspecialchars($products['prod_length'] ?  $products['prod_length'].' '.$products['length_unit'] : ''); ?> </b></div>
         <div><i class="fas fa-ruler-vertical mr-2 text-orange-600"></i>Height: <b><?php echo htmlspecialchars($products['prod_height'] ? $products['prod_height'].' '.$products['length_unit'] : ''); ?></b></div>
         <div><i class="fas fa-arrows-alt-h mr-1.5 text-orange-600"></i>Width: <b><?php echo htmlspecialchars($products['prod_width'] ? $products['prod_width'].' '.$products['length_unit'] : ''); ?></b></div>
