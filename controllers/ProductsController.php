@@ -2110,9 +2110,20 @@ class ProductsController {
         header('Content-Type: application/json');
         global $productModel;
         $q = isset($_GET['q']) ? trim($_GET['q']) : '';
+        $exact = isset($_GET['exact']) && (string) $_GET['exact'] === '1';
 
         if ($q === '') {
             echo json_encode(['success' => false, 'message' => 'Please provide item code or SKU']);
+            exit;
+        }
+
+        if ($exact) {
+            $p = $productModel->getProductByskuExact($q);
+            if ($p && !empty($p['id'])) {
+                echo json_encode(['success' => true, 'product' => $p]);
+                exit;
+            }
+            echo json_encode(['success' => false, 'message' => 'No product found with this SKU.']);
             exit;
         }
 
