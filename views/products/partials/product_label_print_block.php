@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 25 × 15 mm (Seznik / Amazon B0FK2X6VYF) — location (TL) | date (TR) | CODE128 (center) | code (BC).
+ * Micro (textiles): 25 × 15 mm — SKU (top) | CODE128 | location | print date (bottom).
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -97,7 +97,7 @@ $PRODUCT_LABEL_DATA = [
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if SKU is empty). Micro label: location from product <strong>Location</strong> field, date is today. In print, use “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU on top; location from product <strong>Location</strong> under the barcode; print date under location (set when the page loads). Use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -119,6 +119,7 @@ $PRODUCT_LABEL_DATA = [
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
      * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
+     * micro layout: SKU (12pt) → barcode → location (12pt) → print date (8pt).
      */
     window.LABEL_PRESETS = {
         small: {
@@ -159,12 +160,12 @@ $PRODUCT_LABEL_DATA = [
             pad: 20,
             border: '1px solid #000000',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            locationSize: '8pt',
-            dateSize: '6pt',
-            codeSize: '7pt',
+            locationSize: '12pt',
+            dateSize: '8pt',
+            codeSize: '12pt',
             showBorders: true,
             barUnit: 1,
-            barHeight: 44,
+            barHeight: 36,
             barDisplayValue: false,
             barFont: 8,
             barHorizontalMarginPx: 6
@@ -316,36 +317,18 @@ $PRODUCT_LABEL_DATA = [
         const codeRaw = String((data.sku || data.itemCode || '').trim() || '');
         const codeDisplay = codeRaw !== '' ? '(' + codeRaw + ')' : '—';
 
-        const topRow = document.createElement('div');
-        topRow.style.display = 'flex';
-        topRow.style.flexDirection = 'row';
-        topRow.style.justifyContent = 'space-between';
-        topRow.style.alignItems = 'flex-start';
-        topRow.style.width = '100%';
-        topRow.style.flexShrink = '0';
-
-        const locEl = document.createElement('div');
-        locEl.style.fontSize = preset.locationSize || '16pt';
-        locEl.style.fontWeight = '700';
-        locEl.style.lineHeight = '1.2';
-        locEl.style.maxWidth = '62%';
-        locEl.style.overflow = 'hidden';
-        locEl.style.textOverflow = 'ellipsis';
-        locEl.style.whiteSpace = 'nowrap';
-        locEl.textContent = locDisplay;
-
-        const dateEl = document.createElement('div');
-        dateEl.style.fontSize = preset.dateSize || '8pt';
-        dateEl.style.fontWeight = '400';
-        dateEl.style.lineHeight = '1.2';
-        dateEl.style.color = '#333333';
-        dateEl.style.textAlign = 'right';
-        dateEl.style.flexShrink = '0';
-        dateEl.style.marginLeft = '8px';
-        dateEl.textContent = dateStr;
-
-        topRow.appendChild(locEl);
-        topRow.appendChild(dateEl);
+        const skuTop = document.createElement('div');
+        skuTop.style.flexShrink = '0';
+        skuTop.style.width = '100%';
+        skuTop.style.textAlign = 'center';
+        skuTop.style.fontSize = preset.codeSize || '12pt';
+        skuTop.style.fontWeight = '600';
+        skuTop.style.lineHeight = '1.15';
+        skuTop.style.paddingBottom = '2px';
+        skuTop.style.overflow = 'hidden';
+        skuTop.style.textOverflow = 'ellipsis';
+        skuTop.style.whiteSpace = 'nowrap';
+        skuTop.textContent = codeDisplay;
 
         const mid = document.createElement('div');
         mid.style.flex = '1';
@@ -366,19 +349,42 @@ $PRODUCT_LABEL_DATA = [
         barWrap.appendChild(barCanvas);
         mid.appendChild(barWrap);
 
-        const bottom = document.createElement('div');
-        bottom.style.flexShrink = '0';
-        bottom.style.textAlign = 'center';
-        bottom.style.fontSize = preset.codeSize || '10pt';
-        bottom.style.fontWeight = '500';
-        bottom.style.lineHeight = '1.25';
-        bottom.style.width = '100%';
-        bottom.style.paddingTop = (preset.ch <= 320 ? '2px' : '6px');
-        bottom.textContent = codeDisplay;
+        const bottomStack = document.createElement('div');
+        bottomStack.style.flexShrink = '0';
+        bottomStack.style.width = '100%';
+        bottomStack.style.display = 'flex';
+        bottomStack.style.flexDirection = 'column';
+        bottomStack.style.alignItems = 'center';
+        bottomStack.style.justifyContent = 'flex-start';
+        bottomStack.style.gap = '1px';
+        bottomStack.style.paddingTop = '2px';
 
-        el.appendChild(topRow);
+        const locEl = document.createElement('div');
+        locEl.style.fontSize = preset.locationSize || '12pt';
+        locEl.style.fontWeight = '700';
+        locEl.style.lineHeight = '1.15';
+        locEl.style.textAlign = 'center';
+        locEl.style.maxWidth = '100%';
+        locEl.style.overflow = 'hidden';
+        locEl.style.textOverflow = 'ellipsis';
+        locEl.style.whiteSpace = 'nowrap';
+        locEl.textContent = locDisplay;
+
+        const dateEl = document.createElement('div');
+        dateEl.style.fontSize = preset.dateSize || '8pt';
+        dateEl.style.fontWeight = '400';
+        dateEl.style.lineHeight = '1.15';
+        dateEl.style.color = '#333333';
+        dateEl.style.textAlign = 'center';
+        dateEl.style.maxWidth = '100%';
+        dateEl.textContent = dateStr;
+
+        bottomStack.appendChild(locEl);
+        bottomStack.appendChild(dateEl);
+
+        el.appendChild(skuTop);
         el.appendChild(mid);
-        el.appendChild(bottom);
+        el.appendChild(bottomStack);
         return el;
     }
 
