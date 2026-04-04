@@ -169,7 +169,7 @@ $PRODUCT_LABEL_DATA = [
             barDisplayValue: false,
             barFont: 8,
             barHorizontalMarginPx: 6,
-            skuBarcodeGapPx: 5,
+            skuBarcodeGapPx: 10,
             /** Grow ratios for top (SKU) vs bottom (location/date) bands; top > bottom lifts SKU slightly. */
             microTopBandFlex: 1.12,
             microBotBandFlex: 0.88
@@ -333,7 +333,7 @@ $PRODUCT_LABEL_DATA = [
         skuTop.style.fontSize = skuLocFs;
         skuTop.style.fontWeight = '600';
         skuTop.style.lineHeight = '1.4';
-        const skuBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : 5;
+        const skuBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : 10;
         skuTop.style.paddingBottom = skuBarGap + 'px';
         skuTop.style.marginBottom = '0';
         skuTop.style.position = 'relative';
