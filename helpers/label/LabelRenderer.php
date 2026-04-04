@@ -6,7 +6,7 @@ use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 
 /**
- * QR generation and label inner markup (styles live in label.php / batch_example.php).
+ * QR generation and jewelry label inner HTML (print CSS lives in views/products/jewelry_label_*.php).
  */
 final class LabelRenderer
 {
@@ -40,7 +40,7 @@ final class LabelRenderer
         return round(min($scaled, $max), 3);
     }
 
-    /** Horizontal padding on .label-inner L and R (mm); must match label.php / batch_example.css. */
+    /** Horizontal padding on .label-inner L and R (mm); must match jewelry label view CSS. */
     public const INNER_PAD_LR_MM = 2.2;
 
     /**
