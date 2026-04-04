@@ -2,6 +2,176 @@
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <div class="max-w-7xl mx-auto p-4 space-y-6">
+  <!-- SKU quick jump (product detail) -->
+  <div class="bg-gradient-to-r from-amber-50 via-white to-orange-50/50 rounded-xl border border-amber-100/80 shadow-sm p-4 sm:p-5">
+    <form id="productDetailSkuSearchForm" class="relative" autocomplete="off">
+      <label for="productDetailSkuInput" class="block text-sm font-semibold text-gray-800 mb-1.5">
+        <i class="fas fa-search text-amber-600 mr-1.5" aria-hidden="true"></i>Jump to product by SKU
+      </label>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-3">
+        <div class="relative flex-1 min-w-0">
+          <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-500/90 z-10">
+            <i class="fas fa-barcode text-sm"></i>
+          </span>
+          <input type="text" id="productDetailSkuInput" name="sku_jump"
+            class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg shadow-inner bg-white/90 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400/80 focus:border-amber-500 outline-none transition"
+            placeholder="Type SKU — suggestions appear after 2 characters"
+            value="<?php echo htmlspecialchars($products['sku'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+            aria-autocomplete="list" aria-controls="productDetailSkuSuggestions" aria-expanded="false" />
+          <div id="productDetailSkuSuggestions" role="listbox"
+            class="hidden absolute left-0 right-0 top-full mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-gray-200/90 bg-white shadow-xl shadow-amber-900/10 z-[100] py-1">
+          </div>
+        </div>
+        <button type="submit"
+          class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-sm font-semibold shadow-md shadow-amber-600/25 border border-amber-600/30 transition w-full sm:w-auto">
+          <i class="fas fa-arrow-right text-xs opacity-90"></i> Go
+        </button>
+      </div>
+      <p class="mt-1.5 text-xs text-gray-500">Select a suggestion or enter the full SKU and press <kbd class="px-1 rounded bg-gray-100 border text-[10px]">Go</kbd></p>
+      <p id="productDetailSkuError" class="hidden mt-3 text-sm font-medium text-red-600 flex items-center gap-2">
+        <i class="fas fa-exclamation-circle"></i><span id="productDetailSkuErrorText"></span>
+      </p>
+    </form>
+  </div>
+  <script>
+  (function () {
+    var searchBase = <?php echo json_encode(base_url('?page=products&action=search_product'), JSON_UNESCAPED_SLASHES); ?>;
+    var detailBase = <?php echo json_encode(base_url('?page=products&action=detail&id='), JSON_UNESCAPED_SLASHES); ?>;
+    var currentId = <?php echo (int)($products['id'] ?? 0); ?>;
+
+    var form = document.getElementById('productDetailSkuSearchForm');
+    var input = document.getElementById('productDetailSkuInput');
+    var box = document.getElementById('productDetailSkuSuggestions');
+    var errWrap = document.getElementById('productDetailSkuError');
+    var errText = document.getElementById('productDetailSkuErrorText');
+    var debounceTimer = null;
+    var activeFetch = 0;
+
+    function hideError() {
+      errWrap.classList.add('hidden');
+      errText.textContent = '';
+    }
+
+    function showError(msg) {
+      errText.textContent = msg;
+      errWrap.classList.remove('hidden');
+    }
+
+    function closeSuggestions() {
+      box.classList.add('hidden');
+      box.innerHTML = '';
+      input.setAttribute('aria-expanded', 'false');
+    }
+
+    function goToProduct(id) {
+      if (!id || id === currentId) {
+        if (id === currentId) showError('You are already on this product.');
+        return;
+      }
+      window.location.href = detailBase + encodeURIComponent(id);
+    }
+
+    function renderSuggestions(products) {
+      box.innerHTML = '';
+      if (!products || !products.length) {
+        closeSuggestions();
+        return;
+      }
+      input.setAttribute('aria-expanded', 'true');
+      box.classList.remove('hidden');
+      products.forEach(function (p, idx) {
+        var id = p.id;
+        var sku = (p.sku != null ? String(p.sku) : '');
+        var ic = (p.item_code != null ? String(p.item_code) : '');
+        var title = (p.title != null ? String(p.title) : '');
+        if (title.length > 72) title = title.slice(0, 69) + '…';
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.setAttribute('role', 'option');
+        row.className = 'w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50/90 focus:bg-amber-50 outline-none border-b border-gray-50 last:border-0 flex flex-col gap-0.5 transition';
+        row.innerHTML = '<span class="font-semibold text-gray-900 tracking-tight">' + escapeHtml(sku) + '</span>' +
+          '<span class="text-xs text-gray-500">' + escapeHtml(ic) + (title ? ' · ' + escapeHtml(title) : '') + '</span>';
+        row.addEventListener('click', function () {
+          input.value = sku;
+          closeSuggestions();
+          goToProduct(parseInt(id, 10));
+        });
+        box.appendChild(row);
+      });
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function fetchSuggestions(q) {
+      if (q.length < 2) {
+        closeSuggestions();
+        return;
+      }
+      var myId = ++activeFetch;
+      var url = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q);
+      fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (myId !== activeFetch) return;
+          if (data.success && data.products && data.products.length) {
+            renderSuggestions(data.products);
+          } else {
+            closeSuggestions();
+          }
+        })
+        .catch(function () {
+          if (myId !== activeFetch) return;
+          closeSuggestions();
+        });
+    }
+
+    input.addEventListener('input', function () {
+      hideError();
+      var q = (input.value || '').trim();
+      clearTimeout(debounceTimer);
+      if (q.length < 2) {
+        closeSuggestions();
+        return;
+      }
+      debounceTimer = setTimeout(function () { fetchSuggestions(q); }, 280);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeSuggestions();
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideError();
+      var q = (input.value || '').trim();
+      if (q.length < 1) {
+        showError('Enter a SKU.');
+        return;
+      }
+      var url = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q) + '&exact=1';
+      fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.success && data.product && data.product.id) {
+            goToProduct(parseInt(data.product.id, 10));
+          } else {
+            showError((data && data.message) ? data.message : 'No product found with this SKU.');
+          }
+        })
+        .catch(function () {
+          showError('Could not verify SKU. Try again.');
+        });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!form.contains(e.target)) closeSuggestions();
+    });
+  })();
+  </script>
   <!-- PRODUCT HEADER -->
   <div class="bg-white rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="flex gap-4">
