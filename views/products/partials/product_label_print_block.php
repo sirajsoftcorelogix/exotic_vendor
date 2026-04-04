@@ -169,8 +169,7 @@ $PRODUCT_LABEL_DATA = [
             barDisplayValue: false,
             barFont: 8,
             barHorizontalMarginPx: 6,
-            skuBarcodeGapPx: 10,
-            /** Grow ratios for top (SKU) vs bottom (location/date) bands; top > bottom lifts SKU slightly. */
+            /** SKU→barcode gap = max(half SKU line, skuBarcodeGapPx ?? half line). microTopBandFlex / microBotBandFlex: SKU band vs bottom band. */
             microTopBandFlex: 1.12,
             microBotBandFlex: 0.88
         }
@@ -326,14 +325,30 @@ $PRODUCT_LABEL_DATA = [
         const skuLocFs = preset.skuLocationFontPx != null
             ? (preset.skuLocationFontPx + 'px')
             : (preset.codeSize || '14pt');
+        const microSkuLineHeight = 1.4;
+        var skuFontPxForGap;
+        if (preset.skuLocationFontPx != null) {
+            skuFontPxForGap = preset.skuLocationFontPx;
+        } else {
+            var cs = String(preset.codeSize || '14pt');
+            var ptMatch = cs.match(/^([\d.]+)\s*pt$/i);
+            var pxMatch = cs.match(/^([\d.]+)\s*px$/i);
+            if (ptMatch) skuFontPxForGap = parseFloat(ptMatch[1]) * (96 / 72);
+            else if (pxMatch) skuFontPxForGap = parseFloat(pxMatch[1]);
+            else skuFontPxForGap = 14 * (96 / 72);
+        }
+        const halfLineGapPx = Math.max(1, Math.round(skuFontPxForGap * microSkuLineHeight / 2));
+        const skuBarGap = Math.max(
+            halfLineGapPx,
+            preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : halfLineGapPx
+        );
         const skuTop = document.createElement('div');
         skuTop.style.flexShrink = '0';
         skuTop.style.width = '100%';
         skuTop.style.textAlign = 'center';
         skuTop.style.fontSize = skuLocFs;
         skuTop.style.fontWeight = '600';
-        skuTop.style.lineHeight = '1.4';
-        const skuBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : 10;
+        skuTop.style.lineHeight = String(microSkuLineHeight);
         skuTop.style.paddingBottom = skuBarGap + 'px';
         skuTop.style.marginBottom = '0';
         skuTop.style.position = 'relative';
