@@ -3,7 +3,7 @@
  * Product detail — label print modal (PDF, multiple sizes).
  * Expects $products from product_detail (getProduct).
  *
- * Jewelry Size: 100 × 12.9 mm, three columns — SKU / Size / Color | barcode | MRP / tax line / store host.
+ * Jewelry Size: 100 × 12.9 mm — SKU / Size / Color | barcode | MRP + tax (one line) / product title.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -31,12 +31,6 @@ if (!empty($products['product_weight']) && (float)$products['product_weight'] > 
     $wt = $products['product_weight'] . ' ' . ($products['product_weight_unit'] ?? '');
 }
 
-$labelStoreHost = 'www.exoticindia.com';
-$bu = @parse_url(rtrim(base_url(''), '/'));
-if (!empty($bu['host'])) {
-    $labelStoreHost = $bu['host'];
-}
-
 $mrpRaw = $products['itemprice'] ?? $products['cost_price'] ?? '';
 $mrpFormatted = $mrpRaw;
 if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
@@ -57,7 +51,6 @@ $PRODUCT_LABEL_DATA = [
     'weight' => $wt,
     'color' => $products['color'] ?? '',
     'size' => $products['size'] ?? '',
-    'storeHost' => $labelStoreHost,
     'taxNote' => 'Incl. of all taxes',
 ];
 ?>
@@ -140,10 +133,10 @@ $PRODUCT_LABEL_DATA = [
             leftMetaPx: 27,
             rightMrpPx: 36,
             rightSmallPx: 21,
-            barCol: 700,
-            barUnit: 1.35,
-            barHeight: 120,
-            barFont: 13,
+            barCol: 1050,
+            barUnit: 2.025,
+            barHeight: 180,
+            barFont: 20,
             pad: 16
         },
         medium: {
@@ -153,10 +146,10 @@ $PRODUCT_LABEL_DATA = [
             orient: 'landscape',
             cw: 1200,
             ch: 800,
-            barCol: 420,
-            barUnit: 1.35,
-            barHeight: 120,
-            barFont: 16,
+            barCol: 630,
+            barUnit: 2.025,
+            barHeight: 180,
+            barFont: 24,
             pad: 24,
             title: 40,
             meta: 28,
@@ -169,10 +162,10 @@ $PRODUCT_LABEL_DATA = [
             orient: 'portrait',
             cw: 1000,
             ch: 1500,
-            barCol: 380,
-            barUnit: 1.6,
-            barHeight: 160,
-            barFont: 20,
+            barCol: 570,
+            barUnit: 2.4,
+            barHeight: 240,
+            barFont: 30,
             pad: 32,
             title: 48,
             meta: 32,
@@ -225,8 +218,8 @@ $PRODUCT_LABEL_DATA = [
         const mrpShow = data.mrpFormatted != null && data.mrpFormatted !== ''
             ? String(data.mrpFormatted)
             : (data.mrp != null && data.mrp !== '' ? String(data.mrp) : '—');
-        const storeHost = esc((data.storeHost || '').trim() || '—');
         const taxNote = esc((data.taxNote || 'Incl. of all taxes').trim());
+        const productTitle = esc((data.title || '').trim() || '—');
 
         const leftSkuPx = preset.leftSkuPx || 34;
         const leftMetaPx = preset.leftMetaPx || 28;
@@ -280,9 +273,8 @@ $PRODUCT_LABEL_DATA = [
         rightCol.style.paddingLeft = '8px';
         rightCol.style.overflow = 'visible';
         rightCol.innerHTML =
-            '<div style="font-size:' + rightMrpPx + 'px;font-weight:800;line-height:1.28;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">MRP: ₹' + mrpShow + '</div>' +
-            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.25;margin-top:1px;opacity:0.92;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">' + taxNote + '</div>' +
-            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.25;margin-top:1px;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">' + storeHost + '</div>';
+            '<div style="font-size:' + rightMrpPx + 'px;line-height:1.28;white-space:nowrap;text-overflow:ellipsis;max-width:100%;"><span style="font-weight:800">MRP: ₹' + mrpShow + '</span> <span style="font-weight:400;opacity:0.92;font-size:' + rightSmallPx + 'px">' + taxNote + '</span></div>' +
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.25;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">' + productTitle + '</div>';
 
         el.appendChild(leftCol);
         el.appendChild(centerCol);

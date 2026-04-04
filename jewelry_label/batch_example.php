@@ -18,6 +18,7 @@ $items = [
         'size' => '17',
         'color' => 'Rose',
         'mrp' => 12500,
+        'product_name' => 'Sterling Silver Rose Gold Ring',
         'qr_payload' => 'https://www.example.com/product/AB12345',
     ],
     [
@@ -25,6 +26,7 @@ $items = [
         'size' => '18',
         'color' => 'Gold',
         'mrp' => 8900,
+        'product_name' => '22K Gold Temple Necklace',
         'qr_payload' => 'https://www.example.com/product/CD67890',
     ],
     [
@@ -32,6 +34,7 @@ $items = [
         'size' => '16',
         'color' => 'Silver',
         'mrp' => 15250,
+        'product_name' => 'Oxidized Silver Bangle Set',
         'qr_payload' => 'https://www.example.com/product/EF24680',
     ],
 ];
@@ -181,15 +184,31 @@ foreach ($items as $row) {
             line-height: 1.25;
         }
 
-        .label-right-text .mrp {
-            font-weight: 700;
+        .label-right-text .mrp-line {
             display: block;
             line-height: 1.28;
+            white-space: nowrap;
+        }
+
+        .label-right-text .mrp {
+            font-weight: 700;
         }
 
         .label-right-text .tax {
             font-weight: 400;
             font-size: 92%;
+        }
+
+        .label-right-text .product-name {
+            display: block;
+            font-size: <?php echo $leftFs; ?>;
+            font-weight: 400;
+            line-height: 1.25;
+            margin-top: 0.08mm;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
     </style>
 </head>

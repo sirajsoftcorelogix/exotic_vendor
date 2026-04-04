@@ -47,7 +47,7 @@ final class LabelRenderer
 
     /**
      * @param array<string, scalar> $config
-     * @param array{sku:string,size:string,color:string,mrp:float|int,qr_payload?:string} $row
+     * @param array{sku:string,size:string,color:string,mrp:float|int,product_name?:string,title?:string,qr_payload?:string} $row
      */
     public static function renderLabelInnerHtml(array $config, array $row, string $qrDataUri): string
     {
@@ -55,6 +55,11 @@ final class LabelRenderer
         $size = htmlspecialchars((string) $row['size'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $color = htmlspecialchars((string) $row['color'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $mrp = htmlspecialchars(self::formatMrp($row['mrp']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $productName = htmlspecialchars(
+            (string) ($row['product_name'] ?? $row['title'] ?? ''),
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8'
+        );
         $safeUri = htmlspecialchars($qrDataUri, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         return <<<HTML
@@ -68,8 +73,10 @@ final class LabelRenderer
     <div class="label-right">
       <img class="qr" src="{$safeUri}" alt="" />
       <div class="label-right-text">
-        <span class="mrp">MRP: ₹{$mrp}</span>
-        <span class="tax">Incl. of all taxes</span>
+        <div class="mrp-line">
+          <span class="mrp">MRP: ₹{$mrp}</span><span class="tax"> · Incl. of all taxes</span>
+        </div>
+        <span class="product-name">{$productName}</span>
       </div>
     </div>
   </div>

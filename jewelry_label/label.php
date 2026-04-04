@@ -17,6 +17,7 @@ $sampleRow = [
     'size' => '17',
     'color' => 'Rose',
     'mrp' => 12500,
+    'product_name' => 'Sterling Silver Rose Gold Ring',
     'qr_payload' => 'https://www.example.com/product/AB12345',
 ];
 
@@ -161,15 +162,31 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
             line-height: 1.25;
         }
 
-        .label-right-text .mrp {
-            font-weight: 700;
+        .label-right-text .mrp-line {
             display: block;
             line-height: 1.28;
+            white-space: nowrap;
+        }
+
+        .label-right-text .mrp {
+            font-weight: 700;
         }
 
         .label-right-text .tax {
             font-weight: 400;
             font-size: 92%;
+        }
+
+        .label-right-text .product-name {
+            display: block;
+            font-size: <?php echo $leftFs; ?>;
+            font-weight: 400;
+            line-height: 1.25;
+            margin-top: 0.08mm;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -183,8 +200,8 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
  *
  * $config = require __DIR__ . '/config.php';
  * $items = [
- *     ['sku'=>'AB12345','size'=>'17','color'=>'Rose','mrp'=>12500,'qr_payload'=>'https://example.com/p/AB12345'],
- *     ['sku'=>'CD67890','size'=>'18','color'=>'Gold','mrp'=>8900,'qr_payload'=>'https://example.com/p/CD67890'],
+ *     ['sku'=>'AB12345','size'=>'17','color'=>'Rose','mrp'=>12500,'product_name'=>'…','qr_payload'=>'https://example.com/p/AB12345'],
+ *     ['sku'=>'CD67890','size'=>'18','color'=>'Gold','mrp'=>8900,'product_name'=>'…','qr_payload'=>'https://example.com/p/CD67890'],
  * ];
  * foreach ($items as $row) {
  *     $qrUri = LabelRenderer::qrDataUri($config, (string)($row['qr_payload'] ?? 'https://example.com/p/'.$row['sku']));
