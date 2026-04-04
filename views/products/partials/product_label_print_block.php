@@ -2,6 +2,10 @@
 /**
  * Product detail — label print modal (PDF, multiple sizes).
  * Expects $products from product_detail (getProduct).
+ *
+ * Jewelry Size preset matches JEWELRY_FILE_CONFIG geometry:
+ * LABEL_WIDTH_MM 100, LABEL_HEIGHT_MM 12.9, OFFSET_X/Y_MM 0,
+ * TEXT_FONT Arial, left/right text ≈ 5pt / 6pt at print scale.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -76,7 +80,7 @@ $PRODUCT_LABEL_DATA = [
                 <label class="block text-sm font-medium text-gray-700 mb-1">Label size</label>
                 <select id="productLabelSize"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                    <option value="small">Small — 50 × 25 mm (2&quot; × 1&quot;)</option>
+                    <option value="small">Jewelry Size — 100 × 12.9 mm</option>
                     <option value="medium" selected>Medium — 76 × 51 mm (3&quot; × 2&quot;)</option>
                     <option value="large">Large — 100 × 150 mm (shelf)</option>
                 </select>
@@ -105,22 +109,27 @@ $PRODUCT_LABEL_DATA = [
 (function() {
     window.PRODUCT_LABEL_DATA = <?php echo json_encode($PRODUCT_LABEL_DATA, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
+    /** Jewelry strip aligns with JEWELRY_FILE_CONFIG label geometry (100 × 12.9 mm, offsets, fonts). */
     window.LABEL_PRESETS = {
         small: {
-            name: 'Small',
-            wMm: 50,
-            hMm: 25,
+            name: 'Jewelry Size',
+            layout: 'jewelry',
+            wMm: 100,
+            hMm: 12.9,
+            offsetXMm: 0,
+            offsetYMm: 0,
             orient: 'landscape',
-            cw: 1000,
-            ch: 500,
-            barCol: 340,
-            barUnit: 1,
-            barHeight: 72,
+            cw: 2000,
+            ch: 258,
+            border: '1px solid #000000',
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            leftFontPx: 35,
+            rightFontPx: 42,
+            barCol: 400,
+            barUnit: 0.85,
+            barHeight: 78,
             barFont: 11,
-            pad: 16,
-            title: 26,
-            meta: 20,
-            smallMeta: 17
+            pad: 10
         },
         medium: {
             name: 'Medium',
@@ -169,14 +178,94 @@ $PRODUCT_LABEL_DATA = [
         return d.innerHTML;
     }
 
+    function buildJewelryLabelElement(preset, data) {
+        const el = document.createElement('div');
+        el.className = 'product-label-sheet';
+        el.style.boxSizing = 'border-box';
+        el.style.width = preset.cw + 'px';
+        el.style.height = preset.ch + 'px';
+        el.style.background = '#ffffff';
+        el.style.border = preset.border || '1px solid #000000';
+        el.style.color = '#000000';
+        el.style.fontFamily = preset.fontFamily || 'Arial, Helvetica, sans-serif';
+        el.style.display = 'flex';
+        el.style.flexDirection = 'row';
+        el.style.alignItems = 'center';
+        el.style.overflow = 'hidden';
+        const sidePad = preset.pad != null ? preset.pad : 10;
+        el.style.paddingLeft = sidePad + 'px';
+        el.style.paddingRight = sidePad + 'px';
+
+        const barCol = document.createElement('div');
+        barCol.style.flex = '0 0 auto';
+        barCol.style.width = preset.barCol + 'px';
+        barCol.style.display = 'flex';
+        barCol.style.alignItems = 'center';
+        barCol.style.justifyContent = 'center';
+        barCol.style.boxSizing = 'border-box';
+        barCol.style.paddingRight = Math.max(8, Math.round(sidePad * 0.6)) + 'px';
+        const barWrap = document.createElement('div');
+        barWrap.className = 'pl-barcode-wrap';
+        barWrap.style.maxWidth = '100%';
+        barWrap.style.overflow = 'hidden';
+        barWrap.style.display = 'flex';
+        barWrap.style.alignItems = 'center';
+        barWrap.style.justifyContent = 'center';
+        const barCanvas = document.createElement('canvas');
+        barCanvas.className = 'pl-barcode';
+        barWrap.appendChild(barCanvas);
+        barCol.appendChild(barWrap);
+
+        const mid = document.createElement('div');
+        mid.style.flex = '1';
+        mid.style.minWidth = '0';
+        mid.style.display = 'flex';
+        mid.style.flexDirection = 'row';
+        mid.style.alignItems = 'center';
+        mid.style.justifyContent = 'flex-start';
+        mid.style.gap = '10px';
+        mid.style.fontSize = (preset.leftFontPx || 35) + 'px';
+        mid.style.fontWeight = '600';
+        mid.style.lineHeight = '1.1';
+        mid.style.overflow = 'hidden';
+        mid.style.whiteSpace = 'nowrap';
+        mid.style.textOverflow = 'ellipsis';
+        const skuTxt = esc((data.sku || data.itemCode || '').trim() || '—');
+        const sizeTxt = esc((data.size || '').trim() || '—');
+        const colorTxt = esc((data.color || '').trim() || '—');
+        mid.innerHTML =
+            '<span>' + skuTxt + '</span>' +
+            '<span style="opacity:0.35;padding:0 2px">|</span>' +
+            '<span>' + sizeTxt + '</span>' +
+            '<span style="opacity:0.35;padding:0 2px">|</span>' +
+            '<span>' + colorTxt + '</span>';
+
+        const right = document.createElement('div');
+        right.style.flex = '0 0 auto';
+        right.style.marginLeft = '10px';
+        right.style.fontSize = (preset.rightFontPx || 42) + 'px';
+        right.style.fontWeight = '800';
+        right.style.lineHeight = '1.1';
+        right.style.whiteSpace = 'nowrap';
+        right.textContent = 'MRP ₹' + (data.mrp != null && data.mrp !== '' ? String(data.mrp) : '—');
+
+        el.appendChild(barCol);
+        el.appendChild(mid);
+        el.appendChild(right);
+        return el;
+    }
+
     function buildLabelElement(preset, data) {
+        if (preset.layout === 'jewelry') {
+            return buildJewelryLabelElement(preset, data);
+        }
         const el = document.createElement('div');
         el.className = 'product-label-sheet';
         el.style.boxSizing = 'border-box';
         el.style.width = preset.cw + 'px';
         el.style.height = preset.ch + 'px';
         el.style.background = '#fff';
-        el.style.border = '3px solid #000';
+        el.style.border = preset.border || '3px solid #000';
         el.style.color = '#000';
         el.style.fontFamily = 'system-ui, Segoe UI, Roboto, sans-serif';
         el.style.display = 'flex';
@@ -330,8 +419,9 @@ $PRODUCT_LABEL_DATA = [
                 });
             }
         }
-        const maxW = preset.barCol - preset.pad * 2 - 8;
-        if (canvas.width > maxW && maxW > 40) {
+        const pad = preset.pad != null ? preset.pad : 0;
+        const maxW = preset.barCol - pad * 2 - 8;
+        if (maxW > 40 && canvas.width > maxW) {
             const nw = Math.floor(maxW);
             const nh = Math.floor(canvas.height * (maxW / canvas.width));
             const src = document.createElement('canvas');
@@ -421,11 +511,14 @@ $PRODUCT_LABEL_DATA = [
                     }
                 });
                 const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                pdf.addImage(imgData, 'JPEG', 0, 0, preset.wMm, preset.hMm);
+                const ox = preset.offsetXMm != null ? preset.offsetXMm : 0;
+                const oy = preset.offsetYMm != null ? preset.offsetYMm : 0;
+                pdf.addImage(imgData, 'JPEG', ox, oy, preset.wMm, preset.hMm);
             }
 
             const safeCode = (data.itemCode || 'product').replace(/[^\w\-]+/g, '_');
-            pdf.save('product_label_' + safeCode + '_' + sizeKey + '.pdf');
+            const fileSlug = sizeKey === 'small' ? 'jewelry_size' : sizeKey;
+            pdf.save('product_label_' + safeCode + '_' + fileSlug + '.pdf');
         } catch (err) {
             console.error(err);
             alert('Could not create PDF. If images are on another domain, try hosting them on the same site or check the console.');
