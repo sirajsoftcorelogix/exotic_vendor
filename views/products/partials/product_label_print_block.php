@@ -97,7 +97,7 @@ $PRODUCT_LABEL_DATA = [
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU on top; location from product <strong>Location</strong> under the barcode; print date under location (set when the page loads). Use “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). Choose <strong>Micro</strong> for the 25×15 mm strip; your last choice is remembered for this browser. Use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -330,9 +330,9 @@ $PRODUCT_LABEL_DATA = [
         skuTop.style.fontSize = skuLocFs;
         skuTop.style.fontWeight = '600';
         skuTop.style.lineHeight = '1.4';
-        skuTop.style.paddingBottom = '0';
         const skuBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : 5;
-        skuTop.style.marginBottom = skuBarGap + 'px';
+        skuTop.style.paddingBottom = skuBarGap + 'px';
+        skuTop.style.marginBottom = '0';
         skuTop.style.position = 'relative';
         skuTop.style.zIndex = '2';
         skuTop.style.overflow = 'hidden';
@@ -343,9 +343,7 @@ $PRODUCT_LABEL_DATA = [
         const mid = document.createElement('div');
         mid.style.flex = '0 0 auto';
         mid.style.minHeight = '0';
-        mid.style.display = 'flex';
-        mid.style.alignItems = 'center';
-        mid.style.justifyContent = 'center';
+        mid.style.display = 'block';
         mid.style.width = '100%';
         mid.style.marginBottom = '8px';
         mid.style.position = 'relative';
@@ -355,13 +353,12 @@ $PRODUCT_LABEL_DATA = [
         barWrap.className = 'pl-barcode-wrap';
         barWrap.style.width = '100%';
         barWrap.style.maxWidth = '100%';
-        barWrap.style.display = 'flex';
-        barWrap.style.alignItems = 'center';
-        barWrap.style.justifyContent = 'center';
+        barWrap.style.display = 'block';
+        barWrap.style.textAlign = 'center';
         barWrap.style.lineHeight = '0';
         const barCanvas = document.createElement('canvas');
         barCanvas.className = 'pl-barcode';
-        barCanvas.style.display = 'block';
+        barCanvas.style.display = 'inline-block';
         barCanvas.style.verticalAlign = 'top';
         barWrap.appendChild(barCanvas);
         mid.appendChild(barWrap);
@@ -806,5 +803,19 @@ $PRODUCT_LABEL_DATA = [
     document.getElementById('productLabelModal') && document.getElementById('productLabelModal').addEventListener('click', function(e) {
         if (e.target === this) closeProductLabelModal();
     });
+
+    (function initProductLabelSizeSelect() {
+        var sel = document.getElementById('productLabelSize');
+        if (!sel || !window.LABEL_PRESETS) return;
+        try {
+            var saved = sessionStorage.getItem('productLabelLastSize');
+            if (saved === 'small' || saved === 'micro') sel.value = saved;
+        } catch (e) { /* private mode / blocked */ }
+        sel.addEventListener('change', function() {
+            try {
+                sessionStorage.setItem('productLabelLastSize', this.value);
+            } catch (e2) { /* ignore */ }
+        });
+    })();
 })();
 </script>
