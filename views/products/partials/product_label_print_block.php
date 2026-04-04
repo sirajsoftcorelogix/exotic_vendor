@@ -116,7 +116,10 @@ $PRODUCT_LABEL_DATA = [
 (function() {
     window.PRODUCT_LABEL_DATA = <?php echo json_encode($PRODUCT_LABEL_DATA, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
-    /** Jewelry strip aligns with JEWELRY_FILE_CONFIG label geometry (100 × 12.9 mm, offsets, fonts). */
+    /**
+     * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
+     * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
+     */
     window.LABEL_PRESETS = {
         small: {
             name: 'Jewelry Size',
@@ -579,6 +582,7 @@ $PRODUCT_LABEL_DATA = [
         }
     }
 
+    /** Opens print document: one page per image, physical size = preset.wMm × preset.hMm (CSS mm). */
     function openPrintWindowWithLabelImages(imageDataUrls, preset) {
         const wMm = preset.wMm;
         const hMm = preset.hMm;
@@ -634,6 +638,20 @@ $PRODUCT_LABEL_DATA = [
         if (!preset || !data) {
             alert('Label data missing.');
             return;
+        }
+
+        var pxPerMmW = preset.cw / preset.wMm;
+        var pxPerMmH = preset.ch / preset.hMm;
+        if (Math.abs(pxPerMmW - pxPerMmH) > 0.02) {
+            console.warn('Label preset: cw/wMm and ch/hMm should match (avoid distorted print).', {
+                key: sizeKey,
+                wMm: preset.wMm,
+                hMm: preset.hMm,
+                cw: preset.cw,
+                ch: preset.ch,
+                pxPerMmW: pxPerMmW,
+                pxPerMmH: pxPerMmH
+            });
         }
 
         const queue = document.getElementById('product-label-pdf-queue');
