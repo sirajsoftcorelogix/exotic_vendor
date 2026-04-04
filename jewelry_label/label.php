@@ -139,7 +139,7 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
             flex-direction: row;
             align-items: flex-start;
             flex: 0 0 auto;
-            gap: 0.15mm;
+            gap: 0.25mm;
             font-size: <?php echo $rightFs; ?>;
             line-height: 1.22;
             overflow: visible;
@@ -162,7 +162,7 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
             min-width: 0;
             overflow: visible;
             line-height: 1.18;
-            margin-left: -10mm;
+            margin-left: 10mm;
         }
 
         .label-right-text .mrp-line {
