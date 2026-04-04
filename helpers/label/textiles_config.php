@@ -33,6 +33,7 @@ return [
     'BARCODE_DISPLAY_VALUE' => false,
 
     'TEXT_FONT' => 'Arial',
+    /** Mirrors preset skuLocationFontPx (~19px ≈ 14pt @ 96dpi). */
     'CODE_SIZE' => '14pt',
     'DATE_SIZE' => '8pt',
     'LOCATION_SIZE' => '14pt',

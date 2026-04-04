@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 25 × 15 mm — SKU (top, 14pt) | CODE128 | location (14pt) | print date (bottom).
+ * Micro (textiles): 25 × 15 mm — SKU (top) | CODE128 | location (same size as SKU) | print date (bottom).
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -119,7 +119,7 @@ $PRODUCT_LABEL_DATA = [
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
      * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
-     * micro layout: SKU (14pt) → barcode → location (same as SKU) → print date (8pt).
+     * micro layout: SKU | CODE128 | location (same px as SKU) | print date — barcode canvas is display:block to avoid overlap.
      */
     window.LABEL_PRESETS = {
         small: {
@@ -160,9 +160,9 @@ $PRODUCT_LABEL_DATA = [
             pad: 20,
             border: '1px solid #000000',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            locationSize: '14pt',
             dateSize: '8pt',
-            codeSize: '14pt',
+            /** Same px for SKU + location so capture/print match exactly (~14pt @ 96dpi). */
+            skuLocationFontPx: 19,
             showBorders: true,
             barUnit: 1,
             barHeight: 34,
@@ -302,8 +302,7 @@ $PRODUCT_LABEL_DATA = [
         el.style.display = 'flex';
         el.style.flexDirection = 'column';
         el.style.alignItems = 'stretch';
-        el.style.justifyContent = 'center';
-        el.style.gap = '2px';
+        el.style.justifyContent = 'flex-start';
         const padPx = preset.pad != null ? preset.pad : 40;
         el.style.padding = padPx + 'px';
         el.style.overflow = 'hidden';
@@ -320,15 +319,20 @@ $PRODUCT_LABEL_DATA = [
         const codeRaw = String((data.sku || data.itemCode || '').trim() || '');
         const codeDisplay = codeRaw !== '' ? '(' + codeRaw + ')' : '—';
 
-        const codeSize = preset.codeSize || '12pt';
+        const skuLocFs = preset.skuLocationFontPx != null
+            ? (preset.skuLocationFontPx + 'px')
+            : (preset.codeSize || '14pt');
         const skuTop = document.createElement('div');
         skuTop.style.flexShrink = '0';
         skuTop.style.width = '100%';
         skuTop.style.textAlign = 'center';
-        skuTop.style.fontSize = codeSize;
+        skuTop.style.fontSize = skuLocFs;
         skuTop.style.fontWeight = '600';
-        skuTop.style.lineHeight = '1.38';
+        skuTop.style.lineHeight = '1.4';
         skuTop.style.paddingBottom = '0';
+        skuTop.style.marginBottom = '8px';
+        skuTop.style.position = 'relative';
+        skuTop.style.zIndex = '2';
         skuTop.style.overflow = 'hidden';
         skuTop.style.textOverflow = 'ellipsis';
         skuTop.style.whiteSpace = 'nowrap';
@@ -341,6 +345,9 @@ $PRODUCT_LABEL_DATA = [
         mid.style.alignItems = 'center';
         mid.style.justifyContent = 'center';
         mid.style.width = '100%';
+        mid.style.marginBottom = '8px';
+        mid.style.position = 'relative';
+        mid.style.zIndex = '1';
 
         const barWrap = document.createElement('div');
         barWrap.className = 'pl-barcode-wrap';
@@ -348,8 +355,11 @@ $PRODUCT_LABEL_DATA = [
         barWrap.style.display = 'flex';
         barWrap.style.alignItems = 'center';
         barWrap.style.justifyContent = 'center';
+        barWrap.style.lineHeight = '0';
         const barCanvas = document.createElement('canvas');
         barCanvas.className = 'pl-barcode';
+        barCanvas.style.display = 'block';
+        barCanvas.style.verticalAlign = 'top';
         barWrap.appendChild(barCanvas);
         mid.appendChild(barWrap);
 
@@ -364,9 +374,9 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.style.paddingTop = '0';
 
         const locEl = document.createElement('div');
-        locEl.style.fontSize = preset.locationSize || codeSize;
-        locEl.style.fontWeight = '700';
-        locEl.style.lineHeight = '1.38';
+        locEl.style.fontSize = skuLocFs;
+        locEl.style.fontWeight = '600';
+        locEl.style.lineHeight = '1.4';
         locEl.style.textAlign = 'center';
         locEl.style.maxWidth = '100%';
         locEl.style.overflow = 'hidden';
