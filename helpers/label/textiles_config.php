@@ -28,14 +28,14 @@ return [
     'MARGIN_RIGHT_MM' => 6,
 
     'BARCODE_TYPE' => 'CODE128',
-    'BARCODE_HEIGHT' => 36,
+    'BARCODE_HEIGHT' => 34,
     'BARCODE_WIDTH' => 1,
     'BARCODE_DISPLAY_VALUE' => false,
 
     'TEXT_FONT' => 'Arial',
-    'CODE_SIZE' => '12pt',
+    'CODE_SIZE' => '14pt',
     'DATE_SIZE' => '8pt',
-    'LOCATION_SIZE' => '12pt',
+    'LOCATION_SIZE' => '14pt',
 
     'SHOW_BORDERS' => true,
 ];

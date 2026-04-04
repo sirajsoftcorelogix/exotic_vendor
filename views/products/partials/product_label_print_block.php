@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 25 × 15 mm — SKU (top) | CODE128 | location | print date (bottom).
+ * Micro (textiles): 25 × 15 mm — SKU (top, 14pt) | CODE128 | location (14pt) | print date (bottom).
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -119,7 +119,7 @@ $PRODUCT_LABEL_DATA = [
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
      * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
-     * micro layout: SKU (12pt) → barcode → location (12pt) → print date (8pt).
+     * micro layout: SKU (14pt) → barcode → location (same as SKU) → print date (8pt).
      */
     window.LABEL_PRESETS = {
         small: {
@@ -160,12 +160,12 @@ $PRODUCT_LABEL_DATA = [
             pad: 20,
             border: '1px solid #000000',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            locationSize: '12pt',
+            locationSize: '14pt',
             dateSize: '8pt',
-            codeSize: '12pt',
+            codeSize: '14pt',
             showBorders: true,
             barUnit: 1,
-            barHeight: 36,
+            barHeight: 34,
             barDisplayValue: false,
             barFont: 8,
             barHorizontalMarginPx: 6
@@ -301,6 +301,9 @@ $PRODUCT_LABEL_DATA = [
         el.style.fontFamily = preset.fontFamily || 'Arial, Helvetica, sans-serif';
         el.style.display = 'flex';
         el.style.flexDirection = 'column';
+        el.style.alignItems = 'stretch';
+        el.style.justifyContent = 'center';
+        el.style.gap = '2px';
         const padPx = preset.pad != null ? preset.pad : 40;
         el.style.padding = padPx + 'px';
         el.style.overflow = 'hidden';
@@ -317,21 +320,22 @@ $PRODUCT_LABEL_DATA = [
         const codeRaw = String((data.sku || data.itemCode || '').trim() || '');
         const codeDisplay = codeRaw !== '' ? '(' + codeRaw + ')' : '—';
 
+        const codeSize = preset.codeSize || '12pt';
         const skuTop = document.createElement('div');
         skuTop.style.flexShrink = '0';
         skuTop.style.width = '100%';
         skuTop.style.textAlign = 'center';
-        skuTop.style.fontSize = preset.codeSize || '12pt';
+        skuTop.style.fontSize = codeSize;
         skuTop.style.fontWeight = '600';
-        skuTop.style.lineHeight = '1.15';
-        skuTop.style.paddingBottom = '2px';
+        skuTop.style.lineHeight = '1.38';
+        skuTop.style.paddingBottom = '0';
         skuTop.style.overflow = 'hidden';
         skuTop.style.textOverflow = 'ellipsis';
         skuTop.style.whiteSpace = 'nowrap';
         skuTop.textContent = codeDisplay;
 
         const mid = document.createElement('div');
-        mid.style.flex = '1';
+        mid.style.flex = '0 0 auto';
         mid.style.minHeight = '0';
         mid.style.display = 'flex';
         mid.style.alignItems = 'center';
@@ -356,13 +360,13 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.style.flexDirection = 'column';
         bottomStack.style.alignItems = 'center';
         bottomStack.style.justifyContent = 'flex-start';
-        bottomStack.style.gap = '1px';
-        bottomStack.style.paddingTop = '2px';
+        bottomStack.style.gap = '0';
+        bottomStack.style.paddingTop = '0';
 
         const locEl = document.createElement('div');
-        locEl.style.fontSize = preset.locationSize || '12pt';
+        locEl.style.fontSize = preset.locationSize || codeSize;
         locEl.style.fontWeight = '700';
-        locEl.style.lineHeight = '1.15';
+        locEl.style.lineHeight = '1.38';
         locEl.style.textAlign = 'center';
         locEl.style.maxWidth = '100%';
         locEl.style.overflow = 'hidden';
@@ -373,7 +377,8 @@ $PRODUCT_LABEL_DATA = [
         const dateEl = document.createElement('div');
         dateEl.style.fontSize = preset.dateSize || '8pt';
         dateEl.style.fontWeight = '400';
-        dateEl.style.lineHeight = '1.15';
+        dateEl.style.lineHeight = '1.25';
+        dateEl.style.marginTop = '0';
         dateEl.style.color = '#333333';
         dateEl.style.textAlign = 'center';
         dateEl.style.maxWidth = '100%';
