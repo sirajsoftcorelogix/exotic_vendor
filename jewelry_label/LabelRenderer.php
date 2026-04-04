@@ -66,11 +66,12 @@ final class LabelRenderer
 
     /**
      * @param array<string, scalar> $config
-     * @param array{sku:string,size:string,color:string,mrp:float|int,product_name?:string,title?:string,qr_payload?:string} $row
+     * @param array{item_code?:string,sku?:string,size:string,color:string,mrp:float|int,product_name?:string,title?:string,qr_payload?:string} $row
      */
     public static function renderLabelInnerHtml(array $config, array $row, string $qrDataUri): string
     {
-        $sku = htmlspecialchars((string) $row['sku'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $codeLine = (string) ($row['item_code'] ?? $row['sku'] ?? '');
+        $codeLine = htmlspecialchars($codeLine, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $size = htmlspecialchars((string) $row['size'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $color = htmlspecialchars((string) $row['color'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $mrp = htmlspecialchars(self::formatMrp($row['mrp']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -83,7 +84,7 @@ final class LabelRenderer
 <div class="label-sheet">
   <div class="label-inner">
     <div class="label-left">
-      <span class="sku">{$sku}</span>
+      <span class="sku">{$codeLine}</span>
       <span class="meta">Size: {$size}</span>
       <span class="meta">Color: {$color}</span>
     </div>
