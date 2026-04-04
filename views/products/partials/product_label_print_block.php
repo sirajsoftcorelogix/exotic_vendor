@@ -168,7 +168,8 @@ $PRODUCT_LABEL_DATA = [
             barHeight: 34,
             barDisplayValue: false,
             barFont: 8,
-            barHorizontalMarginPx: 6
+            barHorizontalMarginPx: 6,
+            skuBarcodeGapPx: 5
         }
     };
 
@@ -330,7 +331,8 @@ $PRODUCT_LABEL_DATA = [
         skuTop.style.fontWeight = '600';
         skuTop.style.lineHeight = '1.4';
         skuTop.style.paddingBottom = '0';
-        skuTop.style.marginBottom = '8px';
+        const skuBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : 5;
+        skuTop.style.marginBottom = skuBarGap + 'px';
         skuTop.style.position = 'relative';
         skuTop.style.zIndex = '2';
         skuTop.style.overflow = 'hidden';
@@ -351,6 +353,7 @@ $PRODUCT_LABEL_DATA = [
 
         const barWrap = document.createElement('div');
         barWrap.className = 'pl-barcode-wrap';
+        barWrap.style.width = '100%';
         barWrap.style.maxWidth = '100%';
         barWrap.style.display = 'flex';
         barWrap.style.alignItems = 'center';
