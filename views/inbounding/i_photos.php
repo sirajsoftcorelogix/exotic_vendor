@@ -32,7 +32,14 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     $thumbDir  = $dirName . '/thumbs/'; 
     $thumbPath = $thumbDir . $fileName;
 
-    if (file_exists($thumbPath)) return $thumbPath;
+    if (file_exists($thumbPath)) {
+        $srcMtime = @filemtime($cleanPath);
+        $thumbMtime = @filemtime($thumbPath);
+        if ($srcMtime !== false && $thumbMtime !== false && $thumbMtime >= $srcMtime) {
+            return $thumbPath;
+        }
+        @unlink($thumbPath);
+    }
 
     if (!is_dir($thumbDir)) mkdir($thumbDir, 0777, true);
 
@@ -109,7 +116,13 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             <?php 
                 // OPTIMIZATION 1: Main Image Thumbnail
                 $mainImgPath = $item['product_photo'] ?? '';
-                $mainThumbSrc = (!empty($mainImgPath)) ? base_url(getThumbnail($mainImgPath)) : 'assets/no-img.png';
+                if (!empty($mainImgPath)) {
+                    $mainThumbPath = getThumbnail($mainImgPath);
+                    $mainThumbVer = @filemtime(ltrim($mainImgPath, '/')) ?: time();
+                    $mainThumbSrc = base_url($mainThumbPath) . '?v=' . $mainThumbVer;
+                } else {
+                    $mainThumbSrc = 'assets/no-img.png';
+                }
             ?>
             <img src="<?php echo $mainThumbSrc; ?>" class="max-w-full max-h-full object-contain rounded">
         </div>
@@ -151,7 +164,13 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 <?php 
                     // OPTIMIZATION 2: Variation Strip Thumbnails
                     $varImgPath = $var['variation_image'] ?? '';
-                    $varThumbSrc = (!empty($varImgPath)) ? base_url(getThumbnail($varImgPath)) : 'assets/no-img.png';
+                    if (!empty($varImgPath)) {
+                        $varThumbPath = getThumbnail($varImgPath);
+                        $varThumbVer = @filemtime(ltrim($varImgPath, '/')) ?: time();
+                        $varThumbSrc = base_url($varThumbPath) . '?v=' . $varThumbVer;
+                    } else {
+                        $varThumbSrc = 'assets/no-img.png';
+                    }
                 ?>
                 <div class="var-card cursor-pointer bg-white border border-gray-300 rounded-lg p-2 flex gap-3 min-w-[240px] items-center shadow-sm transition-all hover:border-gray-400"
                      onclick="switchVariation(<?php echo $var['id']; ?>, this)">
@@ -180,7 +199,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <h3 class="font-bold text-lg text-gray-900 flex items-center gap-2">
                         <i class="fa-solid fa-cloud-arrow-up"></i> Upload Edited Photos
                     </h3>
-                    <p class="text-xs text-gray-500 mt-1">Select a variation above, then upload photos for it.</p>
+                    <p class="text-xs text-gray-500 mt-1">Select a variation, upload photos, and set Display Order here. Lower numbers appear first. New uploads auto-fill the next display order for that variation.</p>
                 </div>
                 <label id="uploadLabel" class="cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 px-5 rounded inline-flex items-center text-sm transition shadow-sm border border-gray-300">
                     <i class="fa-solid fa-folder-open mr-2"></i> 
@@ -215,7 +234,9 @@ function renderImageGrid($imgs) {
         // OPTIMIZATION 3: Existing Grid Images
         // Assuming images are in 'uploads/itm_img/'
         $fullPath = 'uploads/itm_img/' . $img['file_name'];
-        $thumbSrc = base_url(getThumbnail($fullPath));
+        $thumbPath = getThumbnail($fullPath);
+        $thumbVer = @filemtime(ltrim($fullPath, '/')) ?: time();
+        $thumbSrc = base_url($thumbPath) . '?v=' . $thumbVer;
         ?>
         <div class="draggable-item flex border border-gray-300 rounded-md p-2 gap-3 bg-white relative shadow-sm cursor-move" draggable="true">
             <input type="hidden" name="image_ids_ordered[]" value="<?php echo $img['id']; ?>">
@@ -231,6 +252,12 @@ function renderImageGrid($imgs) {
                 <input type="text" name="captions[<?php echo $img['id']; ?>]" 
                        value="<?php echo htmlspecialchars($img['image_caption'] ?? ''); ?>"
                        class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none">
+
+                <label class="text-[10px] font-bold text-gray-500 uppercase">Display Order</label>
+                <input type="number" name="display_orders[<?php echo $img['id']; ?>]"
+                       value="<?php echo (int)($img['display_order'] ?? 0); ?>"
+                       min="0"
+                       class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none display-order-input">
                 
                 <button type="button" onclick="markForDeletion(this, <?php echo $img['id']; ?>)" class="absolute top-0 right-0 text-gray-400 hover:text-red-600">
                     <i class="fa-solid fa-trash"></i>
@@ -301,6 +328,7 @@ function renderImageGrid($imgs) {
     fileInput.addEventListener('change', async function() {
         const activeVarId = currentVarInput.value;
         const activeContainer = document.getElementById('container_' + activeVarId);
+        let nextDisplayOrder = getNextDisplayOrderForContainer(activeContainer);
         
         // Show loading state
         const originalLabelText = uploadText.innerText;
@@ -329,7 +357,8 @@ function renderImageGrid($imgs) {
                 
                 if(!globalFiles.has(uniqueKey)){
                     globalFiles.set(uniqueKey, compressedFile);
-                    createPreview(compressedFile, uniqueKey, activeContainer, activeVarId);
+                    createPreview(compressedFile, uniqueKey, activeContainer, activeVarId, nextDisplayOrder);
+                    nextDisplayOrder++;
                 }
             } catch (e) {
                 console.error("Compression failed for " + file.name, e);
@@ -345,7 +374,7 @@ function renderImageGrid($imgs) {
     });
 
     // 4. CREATE PREVIEW
-    function createPreview(file, uniqueKey, container, varId) {
+    function createPreview(file, uniqueKey, container, varId, displayOrder) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onloadend = function() {
@@ -367,6 +396,9 @@ function renderImageGrid($imgs) {
                 <div class="flex-grow flex flex-col justify-center space-y-2 pr-7 relative">
                     <label class="text-[10px] font-bold text-gray-500 uppercase">Caption</label>
                     <input type="text" name="new_captions[]" placeholder="Enter caption..." class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none">
+
+                    <label class="text-[10px] font-bold text-gray-500 uppercase">Display Order</label>
+                    <input type="number" name="new_display_orders[]" value="${displayOrder}" min="0" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none display-order-input">
                     
                     <button type="button" onclick="removeNewFile(this, '${uniqueKey}')" class="absolute top-0 right-0 text-gray-400 hover:text-red-600">
                         <i class="fa-solid fa-trash"></i>
@@ -384,6 +416,19 @@ function renderImageGrid($imgs) {
         btn.closest('.draggable-item').remove();
         globalFiles.delete(key);
         updateFileInput();
+    }
+
+    function getNextDisplayOrderForContainer(container) {
+        if (!container) return 1;
+        let maxOrder = 0;
+        const orderInputs = container.querySelectorAll('.display-order-input');
+        orderInputs.forEach((input) => {
+            const val = parseInt(input.value || '0', 10);
+            if (!Number.isNaN(val) && val > maxOrder) {
+                maxOrder = val;
+            }
+        });
+        return maxOrder + 1;
     }
 
     function updateFileInput() {
