@@ -121,6 +121,7 @@ $PRODUCT_LABEL_DATA = [
             layout: 'jewelry',
             wMm: 100,
             hMm: 12.9,
+            barcodeOffsetMm: 10,
             offsetXMm: 0,
             offsetYMm: 0,
             orient: 'landscape',
@@ -250,6 +251,10 @@ $PRODUCT_LABEL_DATA = [
         centerCol.style.boxSizing = 'border-box';
         centerCol.style.paddingLeft = '6px';
         centerCol.style.paddingRight = '6px';
+        var offMm = preset.barcodeOffsetMm != null ? Number(preset.barcodeOffsetMm) : 0;
+        if (offMm > 0 && preset.wMm) {
+            centerCol.style.marginLeft = Math.round((offMm / preset.wMm) * preset.cw) + 'px';
+        }
         const barWrap = document.createElement('div');
         barWrap.className = 'pl-barcode-wrap';
         barWrap.style.maxWidth = '100%';
@@ -274,7 +279,7 @@ $PRODUCT_LABEL_DATA = [
         rightCol.style.overflow = 'visible';
         rightCol.innerHTML =
             '<div style="font-size:' + rightMrpPx + 'px;line-height:1.28;white-space:nowrap;text-overflow:ellipsis;max-width:100%;"><span style="font-weight:800">MRP: ₹' + mrpShow + '</span> <span style="font-weight:400;opacity:0.92;font-size:' + rightSmallPx + 'px">' + taxNote + '</span></div>' +
-            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.25;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">' + productTitle + '</div>';
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.28;margin-top:2px;max-width:100%;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">' + productTitle + '</div>';
 
         el.appendChild(leftCol);
         el.appendChild(centerCol);

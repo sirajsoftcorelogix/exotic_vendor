@@ -137,7 +137,7 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
         .label-right {
             display: flex;
             flex-direction: row;
-            align-items: center;
+            align-items: flex-start;
             flex: 0 0 auto;
             gap: 1mm;
             font-size: <?php echo $rightFs; ?>;
@@ -151,6 +151,7 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
             object-fit: contain;
             flex-shrink: 0;
             display: block;
+            margin-left: 10mm;
         }
 
         .label-right-text {
@@ -181,12 +182,12 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
             display: block;
             font-size: <?php echo $leftFs; ?>;
             font-weight: 400;
-            line-height: 1.25;
+            line-height: 1.28;
             margin-top: 0.08mm;
             max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-wrap: break-word;
         }
     </style>
 </head>

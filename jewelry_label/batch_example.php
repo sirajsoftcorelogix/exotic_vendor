@@ -159,7 +159,7 @@ foreach ($items as $row) {
         .label-right {
             display: flex;
             flex-direction: row;
-            align-items: center;
+            align-items: flex-start;
             flex: 0 0 auto;
             gap: 1mm;
             font-size: <?php echo $rightFs; ?>;
@@ -173,6 +173,7 @@ foreach ($items as $row) {
             object-fit: contain;
             flex-shrink: 0;
             display: block;
+            margin-left: 10mm;
         }
 
         .label-right-text {
@@ -203,12 +204,12 @@ foreach ($items as $row) {
             display: block;
             font-size: <?php echo $leftFs; ?>;
             font-weight: 400;
-            line-height: 1.25;
+            line-height: 1.28;
             margin-top: 0.08mm;
             max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-wrap: break-word;
         }
     </style>
 </head>
