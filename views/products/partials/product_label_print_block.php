@@ -278,9 +278,12 @@ $PRODUCT_LABEL_DATA = [
         rightCol.style.paddingLeft = '0';
         rightCol.style.gap = '0';
         rightCol.style.overflow = 'visible';
+        var rhsShiftPx = preset.wMm ? Math.round((10 / preset.wMm) * preset.cw) : 200;
         rightCol.innerHTML =
+            '<div style="margin-left:-' + rhsShiftPx + 'px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:0">' +
             '<div style="font-size:' + rightMrpPx + 'px;line-height:1.12;white-space:nowrap;text-overflow:ellipsis;max-width:100%;"><span style="font-weight:800">MRP: ₹' + mrpShow + '</span> <span style="font-weight:400;opacity:0.92;font-size:' + rightSmallPx + 'px">' + taxNote + '</span></div>' +
-            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.2;margin-top:0;max-width:100%;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">' + productTitle + '</div>';
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.2;margin-top:0;max-width:100%;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">' + productTitle + '</div>' +
+            '</div>';
 
         el.appendChild(leftCol);
         el.appendChild(centerCol);

@@ -184,6 +184,7 @@ foreach ($items as $row) {
             min-width: 0;
             overflow: visible;
             line-height: 1.18;
+            margin-left: -10mm;
         }
 
         .label-right-text .mrp-line {
