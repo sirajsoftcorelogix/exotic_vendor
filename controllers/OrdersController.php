@@ -1652,8 +1652,9 @@ class OrdersController {
                 $finalprice = $order['finalprice'] ?? 0;
                 $item_total = $quantity * $finalprice;
                 $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
+                $is_express = strpos(strtolower($order['options'] ?? ''), 'express') !== false;
                 $items_html .= '
-                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">
+                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '" data-is-express="' . ($is_express ? '1' : '0') . '">
                     <td class="p-2">
                         <input type="checkbox" name="order_ids[]" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
                     </td>

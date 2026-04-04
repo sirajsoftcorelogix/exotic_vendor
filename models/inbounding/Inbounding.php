@@ -1128,7 +1128,7 @@ class Inbounding {
     }
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
-    public function saveVariations($it_id, $variations, $item_code) {
+    public function saveVariations($it_id, $variations, $item_code, $deletedVariationIds = null) {
         $submittedIds = [];
         if (!is_array($variations)) { $variations = []; }
 
@@ -1140,12 +1140,14 @@ class Inbounding {
         }
 
         $safe_it_id = (int)$it_id;
-        // Never DELETE item_images using POST-derived id lists — incomplete POSTs delete the wrong rows.
-        if (!empty($submittedIds)) {
-            $idsStr = implode(',', $submittedIds);
-            $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id NOT IN ($idsStr)");
-        } else {
-            $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id");
+
+        // Delete only user-explicitly removed variation IDs (safe against max_input_vars truncation).
+        if (is_array($deletedVariationIds) && !empty($deletedVariationIds)) {
+            $delIds = array_values(array_unique(array_filter(array_map('intval', $deletedVariationIds))));
+            if (!empty($delIds)) {
+                $idsStr = implode(',', $delIds);
+                $this->conn->query("DELETE FROM vp_variations WHERE it_id = $safe_it_id AND id IN ($idsStr)");
+            }
         }
 
         // Prepare SQL with 'sku' column included
@@ -1222,8 +1224,6 @@ class Inbounding {
                 $stmtInsert->execute();
             }
         }
-
-        $this->deleteOrphanVariationGalleryImages($safe_it_id);
 
         return true;
     }
@@ -1356,7 +1356,7 @@ class Inbounding {
         ];
     }
     public function get_item_images_by_variation($item_id, $variation_id) {
-        $sql = "SELECT id, file_name FROM item_images WHERE item_id = ? AND variation_id = ? ORDER BY display_order ASC";
+        $sql = "SELECT id, file_name, display_order FROM item_images WHERE item_id = ? AND variation_id = ? ORDER BY display_order ASC, id ASC";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param("ii", $item_id, $variation_id);
         $stmt->execute();
