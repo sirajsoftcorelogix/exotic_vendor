@@ -124,7 +124,7 @@ foreach ($items as $row) {
             justify-content: space-between;
             width: 100%;
             height: 100%;
-            padding: 0.05mm 1mm 0.05mm 1mm;
+            padding: 0.05mm 2.2mm 0.05mm 2.2mm;
             gap: 1mm;
             overflow: visible;
         }
@@ -161,7 +161,7 @@ foreach ($items as $row) {
             flex-direction: row;
             align-items: flex-start;
             flex: 0 0 auto;
-            gap: 1mm;
+            gap: 0.6mm;
             font-size: <?php echo $rightFs; ?>;
             line-height: 1.22;
             overflow: visible;
@@ -180,14 +180,15 @@ foreach ($items as $row) {
             display: flex;
             flex-direction: column;
             justify-content: center;
+            gap: 0;
             min-width: 0;
             overflow: visible;
-            line-height: 1.25;
+            line-height: 1.18;
         }
 
         .label-right-text .mrp-line {
             display: block;
-            line-height: 1.28;
+            line-height: 1.15;
             white-space: nowrap;
         }
 
@@ -204,8 +205,8 @@ foreach ($items as $row) {
             display: block;
             font-size: <?php echo $leftFs; ?>;
             font-weight: 400;
-            line-height: 1.28;
-            margin-top: 0.08mm;
+            line-height: 1.22;
+            margin-top: 0;
             max-width: 100%;
             white-space: normal;
             overflow-wrap: anywhere;

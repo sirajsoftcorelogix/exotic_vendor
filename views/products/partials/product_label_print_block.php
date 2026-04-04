@@ -138,7 +138,7 @@ $PRODUCT_LABEL_DATA = [
             barUnit: 2.025,
             barHeight: 180,
             barFont: 20,
-            pad: 16
+            pad: 44
         },
         medium: {
             name: 'Medium',
@@ -275,11 +275,12 @@ $PRODUCT_LABEL_DATA = [
         rightCol.style.alignItems = 'flex-start';
         rightCol.style.justifyContent = 'center';
         rightCol.style.boxSizing = 'border-box';
-        rightCol.style.paddingLeft = '8px';
+        rightCol.style.paddingLeft = '4px';
+        rightCol.style.gap = '0';
         rightCol.style.overflow = 'visible';
         rightCol.innerHTML =
-            '<div style="font-size:' + rightMrpPx + 'px;line-height:1.28;white-space:nowrap;text-overflow:ellipsis;max-width:100%;"><span style="font-weight:800">MRP: ₹' + mrpShow + '</span> <span style="font-weight:400;opacity:0.92;font-size:' + rightSmallPx + 'px">' + taxNote + '</span></div>' +
-            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.28;margin-top:2px;max-width:100%;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">' + productTitle + '</div>';
+            '<div style="font-size:' + rightMrpPx + 'px;line-height:1.12;white-space:nowrap;text-overflow:ellipsis;max-width:100%;"><span style="font-weight:800">MRP: ₹' + mrpShow + '</span> <span style="font-weight:400;opacity:0.92;font-size:' + rightSmallPx + 'px">' + taxNote + '</span></div>' +
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.2;margin-top:0;max-width:100%;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">' + productTitle + '</div>';
 
         el.appendChild(leftCol);
         el.appendChild(centerCol);
