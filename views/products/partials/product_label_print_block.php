@@ -161,8 +161,8 @@ $PRODUCT_LABEL_DATA = [
             border: '1px solid #000000',
             fontFamily: 'Arial, Helvetica, sans-serif',
             dateSize: '8pt',
-            /** Same px for SKU + location so capture/print match exactly (~14pt @ 96dpi). */
-            skuLocationFontPx: 19,
+            /** Same px for SKU + location (shared font shorthand in buildMicroLabelElement). */
+            skuLocationFontPx: 22,
             showBorders: true,
             barUnit: 1,
             barHeight: 34,
@@ -342,13 +342,13 @@ $PRODUCT_LABEL_DATA = [
             halfLineGapPx,
             preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : halfLineGapPx
         );
+        const microFf = preset.fontFamily || 'Arial, Helvetica, sans-serif';
+        const skuLocFont = '600 ' + skuLocFs + '/' + microSkuLineHeight + ' ' + microFf;
         const skuTop = document.createElement('div');
         skuTop.style.flexShrink = '0';
         skuTop.style.width = '100%';
         skuTop.style.textAlign = 'center';
-        skuTop.style.fontSize = skuLocFs;
-        skuTop.style.fontWeight = '600';
-        skuTop.style.lineHeight = String(microSkuLineHeight);
+        skuTop.style.font = skuLocFont;
         skuTop.style.paddingBottom = skuBarGap + 'px';
         skuTop.style.marginBottom = '0';
         skuTop.style.position = 'relative';
@@ -392,9 +392,7 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.style.paddingTop = '0';
 
         const locEl = document.createElement('div');
-        locEl.style.fontSize = skuLocFs;
-        locEl.style.fontWeight = '600';
-        locEl.style.lineHeight = '1.4';
+        locEl.style.font = skuLocFont;
         locEl.style.textAlign = 'center';
         locEl.style.maxWidth = '100%';
         locEl.style.overflow = 'hidden';
@@ -416,7 +414,7 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.appendChild(dateEl);
 
         const topFlex = preset.microTopBandFlex != null ? preset.microTopBandFlex : 1.12;
-        const botFlex = preset.microBotBandFlex != null ? preset.microBotBandFlex : 1.12;
+        const botFlex = preset.microBotBandFlex != null ? preset.microBotBandFlex : 0.88;
         const topRegion = document.createElement('div');
         topRegion.style.flex = topFlex + ' 1 0';
         topRegion.style.minHeight = '0';
