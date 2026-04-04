@@ -164,10 +164,10 @@ $PRODUCT_LABEL_DATA = [
             codeSize: '7pt',
             showBorders: true,
             barUnit: 1,
-            barHeight: 28,
+            barHeight: 44,
             barDisplayValue: false,
             barFont: 8,
-            barMaxWidth: 440
+            barHorizontalMarginPx: 6
         }
     };
 
@@ -562,23 +562,32 @@ $PRODUCT_LABEL_DATA = [
         }
         const pad = preset.pad != null ? preset.pad : 0;
         var maxW;
-        if (preset.barMaxWidth != null) {
+        if (preset.barMaxWidth != null && preset.barMaxWidth > 0) {
             maxW = preset.barMaxWidth;
+        } else if (preset.layout === 'jewelry') {
+            const sidePad = preset.pad != null ? preset.pad : 0;
+            const innerW = preset.cw - 2 * sidePad;
+            const colW = Math.floor(innerW / 3);
+            const inset = preset.barWidthInsetPx != null ? preset.barWidthInsetPx : 10;
+            maxW = Math.max(80, colW - inset);
         } else if (preset.barCol != null) {
             maxW = preset.barCol - pad * 2 - 8;
         } else {
-            maxW = preset.cw - pad * 2 - 8;
+            const sideEach = preset.barHorizontalMarginPx != null ? preset.barHorizontalMarginPx : 8;
+            maxW = Math.max(40, preset.cw - pad * 2 - 2 * sideEach);
         }
-        if (maxW > 40 && canvas.width > maxW) {
+        if (maxW > 40 && canvas.width > 0) {
             const nw = Math.floor(maxW);
-            const nh = Math.floor(canvas.height * (maxW / canvas.width));
-            const src = document.createElement('canvas');
-            src.width = canvas.width;
-            src.height = canvas.height;
-            src.getContext('2d').drawImage(canvas, 0, 0);
-            canvas.width = nw;
-            canvas.height = nh;
-            canvas.getContext('2d').drawImage(src, 0, 0, src.width, src.height, 0, 0, nw, nh);
+            if (Math.abs(canvas.width - nw) > 1) {
+                const nh = Math.max(1, Math.floor(canvas.height * (nw / canvas.width)));
+                const src = document.createElement('canvas');
+                src.width = canvas.width;
+                src.height = canvas.height;
+                src.getContext('2d').drawImage(canvas, 0, 0);
+                canvas.width = nw;
+                canvas.height = nh;
+                canvas.getContext('2d').drawImage(src, 0, 0, src.width, src.height, 0, 0, nw, nh);
+            }
         }
     }
 

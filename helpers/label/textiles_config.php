@@ -28,7 +28,7 @@ return [
     'MARGIN_RIGHT_MM' => 6,
 
     'BARCODE_TYPE' => 'CODE128',
-    'BARCODE_HEIGHT' => 28,
+    'BARCODE_HEIGHT' => 44,
     'BARCODE_WIDTH' => 1,
     'BARCODE_DISPLAY_VALUE' => false,
 
