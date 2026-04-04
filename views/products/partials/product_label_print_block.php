@@ -250,7 +250,7 @@ $PRODUCT_LABEL_DATA = [
         centerCol.style.justifyContent = 'center';
         centerCol.style.boxSizing = 'border-box';
         centerCol.style.paddingLeft = '6px';
-        centerCol.style.paddingRight = '6px';
+        centerCol.style.paddingRight = '1px';
         var offMm = preset.barcodeOffsetMm != null ? Number(preset.barcodeOffsetMm) : 0;
         if (offMm > 0 && preset.wMm) {
             centerCol.style.marginLeft = Math.round((offMm / preset.wMm) * preset.cw) + 'px';
@@ -275,7 +275,7 @@ $PRODUCT_LABEL_DATA = [
         rightCol.style.alignItems = 'flex-start';
         rightCol.style.justifyContent = 'center';
         rightCol.style.boxSizing = 'border-box';
-        rightCol.style.paddingLeft = '4px';
+        rightCol.style.paddingLeft = '0';
         rightCol.style.gap = '0';
         rightCol.style.overflow = 'visible';
         rightCol.innerHTML =

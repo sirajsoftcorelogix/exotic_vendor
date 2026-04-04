@@ -161,7 +161,7 @@ foreach ($items as $row) {
             flex-direction: row;
             align-items: flex-start;
             flex: 0 0 auto;
-            gap: 0.6mm;
+            gap: 0.15mm;
             font-size: <?php echo $rightFs; ?>;
             line-height: 1.22;
             overflow: visible;
