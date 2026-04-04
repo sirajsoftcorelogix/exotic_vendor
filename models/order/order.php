@@ -9,19 +9,6 @@ class Order{
 
         //$sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.*, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name FROM vp_orders INNER JOIN purchase_orders ON vp_orders.po_number = purchase_orders.po_number INNER JOIN vp_vendors ON vp_vendors.id = purchase_orders.vendor_id INNER JOIN vp_users ON vp_users.id = purchase_orders.user_id WHERE 1=1";
         $sql = "SELECT vp_orders.id as order_id, vp_orders.*, purchase_orders.id, purchase_orders.po_number, purchase_orders.vendor_id, purchase_orders.po_date, purchase_orders.expected_delivery_date, purchase_orders.total_cost, vp_vendors.vendor_name as vendor_name, vp_users.name as staff_name,
-            COALESCE(
-                (SELECT p.id FROM vp_products p
-                 WHERE p.item_code COLLATE utf8mb4_unicode_ci = vp_orders.item_code COLLATE utf8mb4_unicode_ci
-                   AND IFNULL(NULLIF(TRIM(p.size), ''), '') COLLATE utf8mb4_unicode_ci
-                       <=> IFNULL(NULLIF(TRIM(vp_orders.size), ''), '') COLLATE utf8mb4_unicode_ci
-                   AND IFNULL(NULLIF(TRIM(p.color), ''), '') COLLATE utf8mb4_unicode_ci
-                       <=> IFNULL(NULLIF(TRIM(vp_orders.color), ''), '') COLLATE utf8mb4_unicode_ci
-                 ORDER BY p.id ASC LIMIT 1),
-                (SELECT p2.id FROM vp_products p2
-                 WHERE p2.sku COLLATE utf8mb4_unicode_ci = vp_orders.sku COLLATE utf8mb4_unicode_ci
-                   AND vp_orders.sku IS NOT NULL AND TRIM(vp_orders.sku) COLLATE utf8mb4_unicode_ci != ''
-                 ORDER BY p2.id ASC LIMIT 1)
-            ) AS catalog_product_id,
             inv.status AS invoice_status
 		FROM vp_orders 
 		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
