@@ -108,13 +108,15 @@ $PRODUCT_LABEL_DATA = [
     </div>
 </div>
 
-<!-- Off-screen render queue -->
+<!-- Off-screen render queue (micro label JS rev <?php echo (int)@filemtime(__FILE__); ?>) -->
 <div id="product-label-pdf-queue" class="fixed left-0 top-0 -z-10 pointer-events-none opacity-0 overflow-hidden"
     style="width:0;height:0;" aria-hidden="true"></div>
 
 <script>
 (function() {
     window.PRODUCT_LABEL_DATA = <?php echo json_encode($PRODUCT_LABEL_DATA, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    /** Unix mtime of this PHP file — if it doesn’t change after you save, the server is serving a stale copy. */
+    window.PRODUCT_LABEL_PRINT_BLOCK_MT = <?php echo (int)@filemtime(__FILE__); ?>;
 
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
