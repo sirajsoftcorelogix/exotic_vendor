@@ -3,6 +3,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/invoice/invoice.php';
 require_once 'models/dispatch/dispatch.php';
 require_once 'models/order/order.php';
+require_once 'courier_selector.php';
 $commanModel = new Tables($conn);
 $invoiceModel = new Invoice($conn); 
 $dispatchModel = new Dispatch($conn);
@@ -1654,6 +1655,140 @@ class DispatchController {
                 'success' => false,
                 'message' => 'Error creating invoices: ' . $e->getMessage(),
                 'errors' => $errors
+            ]);
+            exit;
+        }
+    }
+
+    /**
+     * Get available couriers from Shiprocket based on serviceability
+     */
+    public function getCourierServiceability() {
+        global $dispatchModel, $commanModel, $ordersModel;
+        
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+            exit;
+        }
+
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            
+            // Get delivery postcode from order
+            $order_number = $input['order_number'] ?? null;
+            $length = (float)($input['length'] ?? 0);
+            $breadth = (float)($input['breadth'] ?? 0);
+            $height = (float)($input['height'] ?? 0);
+            $weight = (float)($input['weight'] ?? 0);
+            $cod = (int)($input['cod'] ?? 0);
+            $is_express = (int)($input['is_express'] ?? 0);
+            
+            if (empty($order_number) || $weight <= 0 || $length <= 0 || $breadth <= 0 || $height <= 0) {
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order number, weight, and dimensions are required and must be greater than 0'
+                ]);
+                exit;
+            }
+            
+            // Get firm details for pickup postcode
+            $firm = $commanModel->getRecordById('firm_details', 1);
+            $pickup_postcode = $firm['pin'] ?? null;
+            
+            if (empty($pickup_postcode)) {
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Pickup postcode not configured in firm details'
+                ]);
+                exit;
+            }
+            
+            // Get delivery postcode from order address
+            // $sql = "SELECT shipping_zipcode FROM vp_orders WHERE order_number = ?";
+            // $stmt = $GLOBALS['conn']->prepare($sql);
+            // if (!$stmt) {
+            //     throw new Exception('Database error: ' . $GLOBALS['conn']->error);
+            // }
+            // $stmt->bind_param('s', $order_number);
+            // $stmt->execute();
+            // $result = $stmt->get_result();
+            // $order = $result->fetch_assoc();
+            // $stmt->close();
+
+            $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
+            if (!$orderInfo || empty($orderInfo['shipping_zipcode'])) {
+                http_response_code(404);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order not found or delivery postcode missing'
+                ]);
+                exit;
+            }
+            
+            $delivery_postcode = $orderInfo['shipping_zipcode'];
+            
+            // Call Shiprocket serviceability API
+            $serviceability = $dispatchModel->getCourierServiceability(
+                $pickup_postcode,
+                $delivery_postcode,
+                $weight,
+                $length,
+                $breadth,
+                $height,
+                $cod,
+                0, // is_return
+                0  // qc_check
+            );
+            
+            if (!$serviceability['success']) {
+                http_response_code($serviceability['http_code'] ?? 400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Failed to fetch courier serviceability',
+                    'details' => $serviceability['data']
+                ]);
+                exit;
+            }
+            
+            // Use Courier Selector to sort and filter couriers
+            // Parameters: response data, is_cod, is_express
+            $selectedCouriers = prepareCouriers($serviceability['data'], $cod, $is_express);
+            //print_r($serviceability); // Debug: check selected couriers
+            // Format response with sorted courier details
+            $couriers = [];
+            if (!empty($selectedCouriers['topCourier'])) {
+                foreach ($selectedCouriers['topCourier'] as $courier) {
+                    $couriers[] = [
+                        'id' => $courier['id'] ?? null,
+                        'name' => $courier['name'] ?? 'Unknown',
+                        'price' => $courier['freight'] ?? 0,
+                        'etd' => $courier['etd'] ?? 'N/A',
+                        'rating' => $courier['rating'] ?? 0,
+                        'estimated_days' => $courier['delivery_performance'] ?? null,
+                        'delivery_performance' => $courier['delivery_performance'] ?? 0,
+                        'pickup_performance' => $courier['pickup_performance'] ?? 0,
+                        'sla_adherence' => $courier['sla_adherence'] ?? 0
+                    ];
+                }
+            }
+            
+            http_response_code(200);
+            echo json_encode([
+                'success' => true,
+                'couriers' => $couriers,
+                'selected' => $selectedCouriers['selected'] ?? null,
+                'message' => 'Couriers fetched and ranked successfully'
+            ]);
+            exit;
+            
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error fetching couriers: ' . $e->getMessage()
             ]);
             exit;
         }

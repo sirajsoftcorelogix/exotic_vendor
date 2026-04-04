@@ -358,6 +358,12 @@ switch ($page) {
             case 'CreateAutoFromOrder':
                 $controller->create_auto_from_order();
                 break;
+            case 'generateAlankitIrnForInvoice':
+                $invoice_id = $_GET['invoice_id'] ?? null;
+                if ($invoice_id) {
+                    $controller->generateAlankitIrnForInvoice($invoice_id);
+                }
+                break;
             default:
                 $controller->index();
                 break;
@@ -961,6 +967,9 @@ switch ($page) {
                 break;
             case 'retry_shipments':
                 $controller->retryShipments();
+                break;
+            case 'getCourierServiceability':
+                $controller->getCourierServiceability();
                 break;
             default:
                 $controller->create();

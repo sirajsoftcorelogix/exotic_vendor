@@ -249,6 +249,9 @@ class InvoicesController
                 'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0
             ];
             $invoiceModel->insert_international_invoice_data($internationalData);
+            
+            // Generate Alankit IRN for international invoice
+            $irn = $this->generateAlankitIrnForInvoice($invoiceId);
         }
         //call irisirp api to generate irn
         //$this->generateIrnForInvoice($invoiceId);
@@ -328,6 +331,169 @@ class InvoicesController
             return false;
         }
     }
+
+    /**
+     * Generate Alankit IRN for International Invoices
+     * @param int $invoiceId Invoice ID
+     * @param string $invoiceNumber Invoice number
+     * @param array $invoiceData Invoice data
+     * @return boolean
+     */
+    public function generateAlankitIrnForInvoice($invoiceId)
+    {
+        global $invoiceModel, $commanModel;
+
+        try {
+            // Get full invoice details
+            $invoice = $invoiceModel->getInvoiceById($invoiceId);
+            $items = $invoiceModel->getInvoiceItems($invoiceId);
+            $internationalData = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
+
+            if (!$invoice || empty($items)) {
+                error_log("Alankit IRN: Missing invoice or items for invoice #$invoiceId");
+                return false;
+            }
+
+            // Get customer and firm details
+            $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+            $firm = $commanModel->getRecordById('firm_details', 1);
+
+            if (!$customer || !$firm) {
+                error_log("Alankit IRN: Missing customer or firm details for invoice #$invoiceId");
+                return false;
+            }
+
+            // Prepare line items
+            $lineItems = [];
+            foreach ($items as $idx => $item) {
+                $lineItems[] = [
+                    'item_number' => $idx + 1,
+                    'item_code' => $item['item_code'] ?? '',
+                    'item_name' => $item['item_name'] ?? '',
+                    'description' => $item['description'] ?? '',
+                    'hsn' => $item['hsn'] ?? '',
+                    'quantity' => $item['quantity'] ?? 0,
+                    'unit' => 'PCS',
+                    'unit_price' => $item['unit_price'] ?? 0,
+                    'amount' => ($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0),
+                    'tax_rate' => $item['tax_rate'] ?? 0,
+                    'sgst' => $item['sgst'] ?? 0,
+                    'cgst' => $item['cgst'] ?? 0,
+                    'igst' => $item['igst'] ?? 0,
+                    'tax_amount' => $item['tax_amount'] ?? 0,
+                    'total' => $item['line_total'] ?? 0
+                ];
+            }
+
+            // Prepare Alankit IRN payload
+            $irnPayload = [
+                'invoice_number' => $invoice['invoice_number'] ?? '',
+                'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
+                'seller_gstin' => $firm['gstin'] ?? '',
+                'seller_name' => $firm['firm_name'] ?? '',
+                'seller_address' => $firm['address'] ?? '',
+                'seller_city' => $firm['city'] ?? '',
+                'seller_state' => $firm['state'] ?? '',
+                'seller_country' => 'IN',
+                'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
+                'buyer_address' => $customer['shipping_address_line1'] ?? $customer['address_line1'] ?? '',
+                'buyer_city' => $customer['shipping_city'] ?? $customer['city'] ?? '',
+                'buyer_state' => $customer['shipping_state'] ?? $customer['state'] ?? '',
+                'buyer_country' => $customer['shipping_country'] ?? $customer['country'] ?? 'IN',
+                'buyer_pincode' => $customer['shipping_zipcode'] ?? $customer['zipcode'] ?? '',
+                'shipping_name' => $customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? '',
+                'shipping_address' => $customer['shipping_address_line1'] ?? '',
+                'shipping_city' => $customer['shipping_city'] ?? '',
+                'shipping_state' => $customer['shipping_state'] ?? '',
+                'shipping_country' => $customer['shipping_country'] ?? 'IN',
+                'shipping_pincode' => $customer['shipping_zipcode'] ?? '',
+                'currency' => $invoice['currency'] ?? 'INR',
+                'line_items' => $lineItems,
+                'subtotal' => $invoice['subtotal'] ?? 0,
+                'tax_amount' => $invoice['tax_amount'] ?? 0,
+                'discount_amount' => $invoice['discount_amount'] ?? 0,
+                'total_amount' => $invoice['total_amount'] ?? 0,
+                'notes' => $internationalData['final_destination'] ?? '',
+                'reference_number' => $invoice['invoice_number'] ?? ''
+            ];
+
+            // Load Alankit IRN Client
+            require_once 'models/invoice/AlankitIrnClient.php';
+
+            // Get Alankit API credentials from config
+            $config = include 'config.php';
+            $alankitConfig = $config['alankit'] ?? [];
+
+            if (empty($alankitConfig) || 
+                empty($alankitConfig['username']) || 
+                empty($alankitConfig['password']) || 
+                empty($alankitConfig['subscription_key']) ||
+                empty($alankitConfig['app_key']) ||
+                empty($alankitConfig['gstin'])) {
+                error_log("Alankit IRN: Missing API credentials in config.php. Please configure alankit section with username, password, subscription_key, app_key, and gstin");
+                return false;
+            }
+
+            // Initialize Alankit client with credentials from config
+            // Option 1: Use existing AppKey from config
+            $alankitClient = new AlankitIrnClient(
+                $alankitConfig['username'],
+                $alankitConfig['password'],
+                $alankitConfig['subscription_key'],
+                $alankitConfig['app_key'],
+                $alankitConfig['gstin'],
+                $alankitConfig['force_refresh_access_token'] ?? true
+            );
+            
+            // Option 2 (Alternative): Create with auto-generated AppKey
+            // $alankitClient = AlankitIrnClient::createWithGeneratedKey(
+            //     $alankitConfig['username'],
+            //     $alankitConfig['password'],
+            //     $alankitConfig['subscription_key'],
+            //     $alankitConfig['gstin'],
+            //     true  // Use AES-256 (64-char hex AppKey)
+            // );
+            //echo "Alankit IRN: Initialized AlankitIrnClient with provided credentials.\n";
+            // Generate IRN
+            $response = $alankitClient->generateIrn($irnPayload);
+
+            if ($response && isset($response['status']) && $response['status'] === true) {
+                // Update invoice with IRN details and store payloads for audit trail
+                $updateData = [
+                    'irn' => $response['irn'] ?? null,
+                    'ack_number' => $response['ack_number'] ?? null,
+                    'ack_date' => $response['ack_date'] ? date('Y-m-d H:i:s', strtotime($response['ack_date'])) : null,
+                    'signed_invoice' => $response['signed_invoice'] ?? null,
+                    'qrcode_string' => $response['qr_code'] ?? null,
+                    'irn_status' => 'generated',
+                    'request_payload' => json_encode($irnPayload),
+                    'response_payload' => json_encode($response)
+                ];
+
+                // Update invoice international table with IRN details
+                $invoiceModel->updateInvoice($invoiceId, $updateData);
+
+                error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($response['irn'] ?? 'No IRN'));
+                return true;
+            } else {
+                // Store request and error response for debugging
+                $updateData = [
+                    'irn_status' => 'failed',
+                    'request_payload' => json_encode($irnPayload),
+                    'response_payload' => json_encode($response ?? ['error' => 'No response received'])
+                ];
+                
+                $invoiceModel->updateInvoice($invoiceId, $updateData);
+                error_log("Alankit IRN generation failed for invoice #$invoiceId: " . ($response['message'] ?? 'Unknown error'));
+                return false;
+            }
+
+        } catch (Exception $e) {
+            error_log("Alankit IRN Exception for invoice #$invoiceId: " . $e->getMessage());
+            return false;
+        }
+    }
+
     public function view()
     {
         is_login();
@@ -768,7 +934,7 @@ class InvoicesController
             echo json_encode([
                 'success' => true,
                 'html' => $html,
-               'invoice_id' => $invoice['id']
+               //'invoice_id' => $invoice['id']
             ]);
             exit;
         } catch (Exception $e) {

@@ -208,7 +208,7 @@ class Invoice {
         return false;
     }
     public function getInternationalInvoiceByInvoiceId($invoice_id) {
-        $sql = "SELECT * FROM vp_international_invoices WHERE invoice_id = ?";
+        $sql = "SELECT * FROM vp_invoices_international WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
 
@@ -221,21 +221,34 @@ class Invoice {
         return null;
     }
     public function updateInvoice($invoice_id, $data) {
-        $sql = "UPDATE vp_international_invoices SET irn = ?, ack_number = ?, ack_date = ?, signed_invoice = ?, qrcode_string = ?, irn_status = ?, updated_at = NOW() WHERE invoice_id = ?";
+        // Build dynamic UPDATE query based on provided fields
+        $allowedFields = ['irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload'];
+        $updateFields = [];
+        $bindParams = [];
+        $bindTypes = '';
+
+        foreach ($allowedFields as $field) {
+            if (isset($data[$field])) {
+                $updateFields[] = "$field = ?";
+                $bindParams[] = $data[$field];
+                $bindTypes .= 's'; // All fields treated as strings
+            }
+        }
+
+        if (empty($updateFields)) {
+            return false; // No fields to update
+        }
+
+        // Add invoice_id as last parameter
+        $bindParams[] = $invoice_id;
+        $bindTypes .= 'i'; // invoice_id is integer
+
+        $sql = "UPDATE vp_invoices_international SET " . implode(', ', $updateFields) . ", updated_at = NOW() WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
-        $stmt->bind_param(
-            'sisssdddsdssi',
-            $data['irn'],
-            $data['ack_number'],
-            $data['ack_date'],
-            $data['signed_invoice'],
-            $data['qrcode_string'],
-            $data['irn_status'],
-            $invoice_id
-        );
-
+        // Dynamically bind parameters
+        $stmt->bind_param($bindTypes, ...$bindParams);
         return $stmt->execute();
     }
     public function getInvoicesCount() {
