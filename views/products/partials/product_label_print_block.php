@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 25 × 15 mm — SKU (top) | CODE128 | location (same size as SKU) | print date (bottom).
+ * Micro (textiles): 25 × 15 mm — SKU / location+date in equal top+bottom flex bands; CODE128 vertically centred on the label.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -119,7 +119,7 @@ $PRODUCT_LABEL_DATA = [
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
      * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
-     * micro layout: SKU | CODE128 | location (same px as SKU) | print date — barcode canvas is display:block to avoid overlap.
+     * micro: equal flex top/bottom bands; barcode row centred vertically on the label; SKU | CODE128 | location | date.
      */
     window.LABEL_PRESETS = {
         small: {
@@ -397,9 +397,27 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.appendChild(locEl);
         bottomStack.appendChild(dateEl);
 
-        el.appendChild(skuTop);
+        const topRegion = document.createElement('div');
+        topRegion.style.flex = '1 1 0';
+        topRegion.style.minHeight = '0';
+        topRegion.style.display = 'flex';
+        topRegion.style.flexDirection = 'column';
+        topRegion.style.justifyContent = 'flex-end';
+        topRegion.style.alignItems = 'stretch';
+        topRegion.appendChild(skuTop);
+
+        const botRegion = document.createElement('div');
+        botRegion.style.flex = '1 1 0';
+        botRegion.style.minHeight = '0';
+        botRegion.style.display = 'flex';
+        botRegion.style.flexDirection = 'column';
+        botRegion.style.justifyContent = 'flex-start';
+        botRegion.style.alignItems = 'stretch';
+        botRegion.appendChild(bottomStack);
+
+        el.appendChild(topRegion);
         el.appendChild(mid);
-        el.appendChild(bottomStack);
+        el.appendChild(botRegion);
         return el;
     }
 
