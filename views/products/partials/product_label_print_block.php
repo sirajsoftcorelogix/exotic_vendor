@@ -401,7 +401,7 @@ $PRODUCT_LABEL_DATA = [
         locEl.textContent = locDisplay;
 
         const dateEl = document.createElement('div');
-        dateEl.style.fontSize = preset.dateSize || '8pt';
+        dateEl.style.fontSize = preset.dateSize || '12pt';
         dateEl.style.fontWeight = '400';
         dateEl.style.lineHeight = '1.25';
         dateEl.style.marginTop = '0';
