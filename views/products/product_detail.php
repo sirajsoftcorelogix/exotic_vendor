@@ -267,6 +267,7 @@
             <option value="OUT">Sale</option>
             <option value="TRANSFER_IN">Transfer In</option>
             <option value="TRANSFER_OUT">Transfer Out</option>
+            <option value="OPENING_STOCK">Opening Stock</option>
           </select>
       </div>   
       <div> 
@@ -559,15 +560,16 @@ function closeImagePopup() {
                   <i class="fas ${history.icon}"></i>
                   ${history.type}
                 </td>
-                <td class="p-2 border">${history.movement_type === 'IN' ? history.quantity : ''}</td>
+                <td class="p-2 border">${(history.movement_type === 'IN' || history.movement_type === 'OPENING_STOCK') ? history.quantity : ''}</td>
                 <td class="p-2 border">${history.movement_type === 'OUT' ? history.quantity : ''}</td>
                 <td class="p-2 border">${history.running_stock || '0'}</td>
                 <td class="p-2 border">${history.warehouse_name || ''}</td>
+                <td class="p-2 border">${history.location || ''}</td>
               `;
               tbody.appendChild(row);
             });
           } else {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-gray-500">No stock transactions found.</td></tr>';
           }
           // Update pagination
           currentPage = page;

@@ -2610,6 +2610,7 @@ class ProductsController {
             $_GET = array_map('trim', $_GET);
             
             $sku = isset($_GET['sku']) ? trim($_GET['sku']) : '';
+            $product_id = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
             $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : '';
             $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : '';
             $type = isset($_GET['type']) ? trim($_GET['type']) : '';
@@ -2622,8 +2623,8 @@ class ProductsController {
             }
             $limit = isset($_GET['limit']) ? max(1, (int)$_GET['limit']) : 10;
             
-            if ($sku === '') {
-                echo json_encode(['success' => false, 'message' => 'Invalid SKU']);
+            if ($sku === '' && $product_id <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Invalid product filter']);
                 exit;
             }
             
@@ -2631,6 +2632,7 @@ class ProductsController {
             
             $filters = [
                 'sku' => $sku,
+                'product_id' => $product_id,
                 'start_date' => $start_date,
                 'end_date' => $end_date,
                 'type' => $type,
@@ -2643,9 +2645,9 @@ class ProductsController {
             // Format the response
             $records = [];
             if (!empty($history)) {
-                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out'];
-                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt'];
-                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600'];
+                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
+                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
+                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
                 
                 foreach ($history as $record) {
                     $record['formatted_date'] = date('d M Y', strtotime($record['created_at'] ?? ''));
