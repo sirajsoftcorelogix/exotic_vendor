@@ -40,6 +40,25 @@ final class LabelRenderer
         return round(min($scaled, $max), 3);
     }
 
+    /** Horizontal padding on .label-inner L and R (mm); must match label.php / batch_example.css. */
+    public const INNER_PAD_LR_MM = 2.2;
+
+    /**
+     * Max width (mm) for the SKU column so QR + margins + minimum title strip always fit on the label.
+     *
+     * @param array<string, scalar> $config
+     */
+    public static function leftColumnMaxMm(array $config, float $qrMm, float $rightRowGapMm = 0.5): float
+    {
+        $w = (float) $config['LABEL_WIDTH_MM'];
+        $innerMm = $w - 2 * self::INNER_PAD_LR_MM;
+        $betweenColsMm = 1.0;
+        $qrTrackMm = 10 + $qrMm + $rightRowGapMm + 10;
+        $minTitleMm = 8.0;
+
+        return max(18.0, $innerMm - $betweenColsMm - $qrTrackMm - $minTitleMm);
+    }
+
     public static function formatMrp(float|int $amount): string
     {
         return number_format((float) $amount, 0, '.', ',');

@@ -46,8 +46,16 @@ $ox = (float) $config['OFFSET_X_MM'];
 $oy = (float) $config['OFFSET_Y_MM'];
 $leftFs = htmlspecialchars((string) $config['LEFT_SIDE_SIZE'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$productNameWmm = (float) ($config['PRODUCT_NAME_WIDTH_MM'] ?? 36);
 $qrMm = LabelRenderer::qrDisplayMm($config);
+$batchRightGapMm = 0.15;
+$leftMaxMm = LabelRenderer::leftColumnMaxMm($config, $qrMm, $batchRightGapMm);
+$innerMm = $w - 2 * LabelRenderer::INNER_PAD_LR_MM;
+$qrTrackMm = 10 + $qrMm + $batchRightGapMm + 10;
+$productNamePrefMm = (float) ($config['PRODUCT_NAME_WIDTH_MM'] ?? 36);
+$productNameWmm = min(
+    $productNamePrefMm,
+    max(6.0, $innerMm - 1.0 - 16.0 - $qrTrackMm)
+);
 
 $pages = '';
 foreach ($items as $row) {
@@ -115,7 +123,7 @@ foreach ($items as $row) {
             margin-top: <?php echo $oy; ?>mm;
             background: #fff;
             border: 0.12mm solid #000;
-            overflow: visible;
+            overflow: hidden;
         }
 
         .label-inner {
@@ -127,7 +135,8 @@ foreach ($items as $row) {
             height: 100%;
             padding: 0.05mm 2.2mm 0.05mm 2.2mm;
             gap: 1mm;
-            overflow: visible;
+            overflow: hidden;
+            min-width: 0;
         }
 
         .label-left {
@@ -136,9 +145,10 @@ foreach ($items as $row) {
             justify-content: center;
             flex: 0 1 auto;
             min-width: 0;
+            max-width: <?php echo $leftMaxMm; ?>mm;
             font-size: <?php echo $leftFs; ?>;
             line-height: 1.28;
-            overflow: visible;
+            overflow: hidden;
         }
 
         .label-left .sku {
@@ -147,6 +157,10 @@ foreach ($items as $row) {
             line-height: 1.3;
             padding: 0;
             margin: 0;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .label-left .meta {
@@ -155,6 +169,10 @@ foreach ($items as $row) {
             line-height: 1.28;
             padding: 0;
             margin: 0.05mm 0 0 0;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .label-right {
@@ -166,7 +184,7 @@ foreach ($items as $row) {
             gap: 0.15mm;
             font-size: <?php echo $rightFs; ?>;
             line-height: 1.22;
-            overflow: visible;
+            overflow: hidden;
         }
 
         .label-right .qr {
@@ -185,8 +203,9 @@ foreach ($items as $row) {
             justify-content: center;
             gap: 0;
             flex: 1 1 0;
+            width: 0;
             min-width: 0;
-            overflow: visible;
+            overflow: hidden;
             line-height: 1.18;
             margin-left: -10mm;
         }
@@ -195,6 +214,9 @@ foreach ($items as $row) {
             display: block;
             line-height: 1.15;
             white-space: nowrap;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .label-right-text .mrp {
@@ -208,7 +230,7 @@ foreach ($items as $row) {
 
         .label-right-text .product-name {
             box-sizing: border-box;
-            width: min(<?php echo $productNameWmm; ?>mm, 100%);
+            width: 100%;
             max-width: min(<?php echo $productNameWmm; ?>mm, 100%);
             min-width: 0;
             font-size: <?php echo $leftFs; ?>;
@@ -217,7 +239,7 @@ foreach ($items as $row) {
             margin: 0;
             padding: 0;
             white-space: normal;
-            overflow-wrap: break-word;
+            overflow-wrap: anywhere;
             word-wrap: break-word;
             word-break: break-word;
         }
