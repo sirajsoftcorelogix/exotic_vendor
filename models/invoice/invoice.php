@@ -65,17 +65,29 @@ class Invoice {
         return false;
     }
 
+    private function ensureInvoiceItemsProductIdColumn(): void {
+        $r = @$this->db->query("SHOW COLUMNS FROM vp_invoice_items LIKE 'product_id'");
+        if ($r && $r->num_rows > 0) {
+            return;
+        }
+        @$this->db->query("ALTER TABLE vp_invoice_items ADD COLUMN product_id INT UNSIGNED NULL DEFAULT NULL AFTER item_code");
+    }
+
     public function createInvoiceItem($data) {
-        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total, image_url, groupname)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $this->ensureInvoiceItemsProductIdColumn();
+        $sql = "INSERT INTO vp_invoice_items (invoice_id, order_number, item_code, product_id, hsn, item_name, description, box_no, quantity, unit_price, tax_rate, cgst, sgst, igst, tax_amount, line_total, image_url, groupname)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
+        $productId = isset($data['product_id']) ? (int)$data['product_id'] : 0;
+
         $stmt->bind_param(
-            'isssssiddddddddss',
+            'ississssidddddddss',
             $data['invoice_id'],
             $data['order_number'],
             $data['item_code'],
+            $productId,
             $data['hsn'],
             $data['item_name'],
             $data['description'],
@@ -179,6 +191,33 @@ class Invoice {
         }
         return null;
     }
+
+    /**
+     * Invoice that still blocks creating a new invoice for this order_number (excludes cancelled).
+     */
+    public function getActiveInvoiceForOrderNumber($order_number) {
+        $order_number = trim((string)$order_number);
+        if ($order_number === '') {
+            return null;
+        }
+        $sql = "SELECT i.* FROM vp_invoices i
+                INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                WHERE ii.order_number = ?
+                AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
+                ORDER BY i.id DESC
+                LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+        return null;
+    }
     public function insert_international_invoice_data($data) {
         $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, irn, qrcode_string) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -208,7 +247,7 @@ class Invoice {
         return false;
     }
     public function getInternationalInvoiceByInvoiceId($invoice_id) {
-        $sql = "SELECT * FROM vp_international_invoices WHERE invoice_id = ?";
+        $sql = "SELECT * FROM vp_invoices_international WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return null;
 
@@ -221,21 +260,34 @@ class Invoice {
         return null;
     }
     public function updateInvoice($invoice_id, $data) {
-        $sql = "UPDATE vp_international_invoices SET irn = ?, ack_number = ?, ack_date = ?, signed_invoice = ?, qrcode_string = ?, irn_status = ?, updated_at = NOW() WHERE invoice_id = ?";
+        // Build dynamic UPDATE query based on provided fields
+        $allowedFields = ['irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload'];
+        $updateFields = [];
+        $bindParams = [];
+        $bindTypes = '';
+
+        foreach ($allowedFields as $field) {
+            if (isset($data[$field])) {
+                $updateFields[] = "$field = ?";
+                $bindParams[] = $data[$field];
+                $bindTypes .= 's'; // All fields treated as strings
+            }
+        }
+
+        if (empty($updateFields)) {
+            return false; // No fields to update
+        }
+
+        // Add invoice_id as last parameter
+        $bindParams[] = $invoice_id;
+        $bindTypes .= 'i'; // invoice_id is integer
+
+        $sql = "UPDATE vp_invoices_international SET " . implode(', ', $updateFields) . ", updated_at = NOW() WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
-        $stmt->bind_param(
-            'sisssdddsdssi',
-            $data['irn'],
-            $data['ack_number'],
-            $data['ack_date'],
-            $data['signed_invoice'],
-            $data['qrcode_string'],
-            $data['irn_status'],
-            $invoice_id
-        );
-
+        // Dynamically bind parameters
+        $stmt->bind_param($bindTypes, ...$bindParams);
         return $stmt->execute();
     }
     public function getInvoicesCount() {

@@ -8,8 +8,8 @@
       <!-- <div class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 ">
         <img onclick="openImagePopup('<?php //echo $products['image']; ?>')" src="<?php //echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="w-full h-full px-3 py-3 cursor-pointer" />
       </div> -->
-      <div onclick="openImagePopup('<?php echo $products['image']; ?>')" class="w-24 h-32 bg-white rounded-[10px] outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
-        <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" class="max-w-full max-h-full px-3 py-3 object-contain cursor-pointer" />
+      <div onclick="openImagePopup('<?php echo htmlspecialchars($products['image'] ?? '', ENT_QUOTES); ?>')" class="flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white outline outline-2 outline-offset-[-2px] outline-amber-600 cursor-pointer">
+        <img src="<?php echo htmlspecialchars($products['image'] ?? 'https://placehold.co/90x120'); ?>" alt="" class="block h-full w-full max-h-full max-w-full object-contain cursor-pointer" />
       </div>
       <div>
         <span class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">
@@ -305,16 +305,20 @@
         <?php //print_r($products['warehouses']);
         if(!empty($products['stock_history'])) {
           foreach($products['stock_history'] as $history) {
-            $type = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
-            $fontawesomeIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
-            $textColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
+            $fallbackType = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
+            $fallbackIcon = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
+            $fallbackColor = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
+            $mt = $history['movement_type'] ?? '';
+            $dispLabel = $history['ledger_type'] ?? ($fallbackType[$mt] ?? $mt);
+            $dispIcon = $history['ledger_icon'] ?? ($fallbackIcon[$mt] ?? '');
+            $dispColor = $history['ledger_color_class'] ?? ($fallbackColor[$mt] ?? '');
             ?>
             <tr class="text-center">
               <td class="p-2 border"><?php echo htmlspecialchars(date('d M Y', strtotime($history['created_at'] ?? ''))); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['ref_id'] ?? ''); ?></td>
-              <td class="p-2 border <?php echo htmlspecialchars($textColor[$history['movement_type']] ?? ''); ?>">
-                <i class="fas <?php echo htmlspecialchars($fontawesomeIcon[$history['movement_type']] ?? ''); ?>"></i>
-                <?php echo htmlspecialchars($type[$history['movement_type']] ?? ''); ?>
+              <td class="p-2 border <?php echo htmlspecialchars($dispColor); ?>">
+                <i class="fas <?php echo htmlspecialchars($dispIcon); ?>"></i>
+                <?php echo htmlspecialchars($dispLabel); ?>
               </td>
               <td class="p-2 border"><?php echo htmlspecialchars(in_array(($history['movement_type'] ?? ''), ['IN','OPENING_STOCK'], true) ? $history['quantity'] : ''); ?></td>
               <td class="p-2 border"><?php echo htmlspecialchars($history['movement_type'] == 'OUT' ? $history['quantity'] : ''); ?></td>

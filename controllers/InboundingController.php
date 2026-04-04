@@ -652,12 +652,11 @@ class InboundingController {
 
             // 2. Update Existing Images (Order & Caption)
             if (!empty($_POST['image_ids_ordered'])) {
-                $counter = 1; 
                 foreach ($_POST['image_ids_ordered'] as $img_id) {
                     if(isset($_POST['captions'][$img_id])) {
                         $caption = $_POST['captions'][$img_id] ?? '';
-                        $inboundingModel->update_image_meta($img_id, $caption, $counter);
-                        $counter++;
+                        $displayOrder = isset($_POST['display_orders'][$img_id]) ? (int)$_POST['display_orders'][$img_id] : 0;
+                        $inboundingModel->update_image_meta($img_id, $caption, $displayOrder);
                     }
                 }
             }
@@ -679,9 +678,10 @@ class InboundingController {
                         // appended to the DOM, so they will follow the same index order as new_photos[]
                         $newCaption = $_POST['new_captions'][$key] ?? '';
                         $varId = $_POST['new_image_variation_id'][$key] ?? -1;
+                        $newDisplayOrder = isset($_POST['new_display_orders'][$key]) ? (int)$_POST['new_display_orders'][$key] : 0;
 
                         if (move_uploaded_file($tmpName, $uploadDir . $newName)) {
-                            $inboundingModel->add_image($id, $newName, $newCaption, 0, $varId);
+                            $inboundingModel->add_image($id, $newName, $newCaption, $newDisplayOrder, $varId);
                         }
                     }
                 }
@@ -914,21 +914,7 @@ class InboundingController {
         if (empty($baseImages)) $baseImages = $inboundingModel->get_item_images_by_variation($itemId, 0);
 
         if (!empty($baseImages)) {
-            $counter = 0; // Start at 0 to track the "First" image
-            foreach ($baseImages as $img) {
-                
-                // Logic: 
-                // 1st Image (0) -> abc1234.jpg
-                // 2nd Image (1) -> abc1234_a01.jpg
-                if ($counter === 0) {
-                    $newName = $baseName; 
-                } else {
-                    $newName = $baseName . "_a" . str_pad($counter, 2, '0', STR_PAD_LEFT);
-                }
-
-                $this->processRename($img['file_name'], $altPhotoDir, $newName, $img['id'], 'gallery', $inboundingModel);
-                $counter++;
-            }
+            $this->renameGalleryImagesByDisplayOrder($baseImages, $altPhotoDir, $baseName, $inboundingModel);
         }
 
         // =================================================================
@@ -949,22 +935,105 @@ class InboundingController {
                 // 2. Rename Variation Gallery Images
                 $varImages = $inboundingModel->get_item_images_by_variation($itemId, $var['id']);
                 if (!empty($varImages)) {
-                    $vCounter = 0; // Start at 0
-                    foreach ($varImages as $vImg) {
-                        
-                        // Logic:
-                        // 1st Image (0) -> abc1234-blue.jpg
-                        // 2nd Image (1) -> abc1234-blue_a01.jpg
-                        if ($vCounter === 0) {
-                            $vNewName = $varBaseName;
-                        } else {
-                            $vNewName = $varBaseName . "_a" . str_pad($vCounter, 2, '0', STR_PAD_LEFT);
-                        }
-
-                        $this->processRename($vImg['file_name'], $altPhotoDir, $vNewName, $vImg['id'], 'gallery', $inboundingModel);
-                        $vCounter++;
-                    }
+                    $this->renameGalleryImagesByDisplayOrder($varImages, $altPhotoDir, $varBaseName, $inboundingModel);
                 }
+            }
+        }
+    }
+
+    /**
+     * Rename gallery files by display_order with collision-safe two-pass renaming.
+     */
+    private function renameGalleryImagesByDisplayOrder(array $images, string $directory, string $baseName, $model): void {
+        if (empty($images)) {
+            return;
+        }
+
+        usort($images, function ($a, $b) {
+            $oa = (int)($a['display_order'] ?? 0);
+            $ob = (int)($b['display_order'] ?? 0);
+            if ($oa === $ob) {
+                return (int)($a['id'] ?? 0) <=> (int)($b['id'] ?? 0);
+            }
+            return $oa <=> $ob;
+        });
+
+        $plans = [];
+        $usedTargets = [];
+
+        foreach ($images as $idx => $img) {
+            $imgId = (int)($img['id'] ?? 0);
+            $oldFileName = basename((string)($img['file_name'] ?? ''));
+            if ($imgId <= 0 || $oldFileName === '') {
+                continue;
+            }
+
+            $fullOldPath = $directory . $oldFileName;
+            if (!file_exists($fullOldPath)) {
+                continue;
+            }
+
+            $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
+
+            // Name by visual order after sorting (dense sequence): base, a01, a02...
+            if ($idx === 0) {
+                $candidateBase = $baseName;
+            } else {
+                $candidateBase = $baseName . '_a' . str_pad((string)$idx, 2, '0', STR_PAD_LEFT);
+            }
+
+            $candidate = $candidateBase . '.' . $ext;
+            $dedupe = 1;
+            while (isset($usedTargets[strtolower($candidate)])) {
+                $candidate = $candidateBase . '_d' . $dedupe . '.' . $ext;
+                $dedupe++;
+            }
+            $usedTargets[strtolower($candidate)] = true;
+
+            $plans[] = [
+                'id' => $imgId,
+                'old' => $oldFileName,
+                'oldPath' => $fullOldPath,
+                'target' => $candidate,
+                'targetPath' => $directory . $candidate,
+                'tmp' => '__tmp__' . $imgId . '_' . time() . '_' . mt_rand(1000, 9999) . '.' . $ext,
+            ];
+        }
+
+        foreach ($plans as &$plan) {
+            if ($plan['old'] === $plan['target']) {
+                $plan['skipSecondPass'] = true;
+                continue;
+            }
+            $tmpPath = $directory . $plan['tmp'];
+            if (@rename($plan['oldPath'], $tmpPath)) {
+                $plan['tmpPath'] = $tmpPath;
+            } else {
+                $plan['failed'] = true;
+            }
+        }
+        unset($plan);
+
+        foreach ($plans as $plan) {
+            if (!empty($plan['failed'])) {
+                continue;
+            }
+            if (!empty($plan['skipSecondPass'])) {
+                continue;
+            }
+            if (empty($plan['tmpPath']) || !file_exists($plan['tmpPath'])) {
+                continue;
+            }
+
+            if (@rename($plan['tmpPath'], $plan['targetPath'])) {
+                // Force fresh mtime so ?v= cache-busting URL always changes after rename swaps.
+                @touch($plan['targetPath']);
+                $model->update_image_filename_direct($plan['id'], $plan['target']);
+                // Ensure thumb cache cannot show previous content under reused filename.
+                $this->deleteThumbnailForImagePath($plan['targetPath']);
+                $this->deleteThumbnailForImagePath($plan['oldPath']);
+            } else {
+                @rename($plan['tmpPath'], $plan['oldPath']);
             }
         }
     }
@@ -999,6 +1068,11 @@ class InboundingController {
             if ($oldFileName === $finalName) return;
 
             if (rename($fullOldPath, $fullNewPath)) {
+                // Force fresh mtime so ?v= cache-busting URL always changes after rename.
+                @touch($fullNewPath);
+                // Filename changed, so clear old/new thumbnail cache entries.
+                $this->deleteThumbnailForImagePath($fullOldPath);
+                $this->deleteThumbnailForImagePath($fullNewPath);
                 // Update Database based on type
                 if ($type === 'main') {
                     $dbPath = "uploads/products/" . $finalName;
@@ -1013,6 +1087,19 @@ class InboundingController {
                     $model->update_image_filename_direct($dbId, $finalName);
                 }
             }
+        }
+    }
+
+    private function deleteThumbnailForImagePath(string $absoluteImagePath): void {
+        $dir = dirname($absoluteImagePath);
+        $name = basename($absoluteImagePath);
+        if ($name === '' || $name === '.' || $name === '..') {
+            return;
+        }
+
+        $thumbPath = $dir . '/thumbs/' . $name;
+        if (file_exists($thumbPath)) {
+            @unlink($thumbPath);
         }
     }
     public function updatedesktopform() {
@@ -1062,6 +1149,7 @@ class InboundingController {
 
         // 1. Capture Inputs
         $is_variant = $_POST['is_variant'] ?? '';
+        $shouldRename = false;
 
         if ($oldData['form1']['is_variant'] == 'Y') {
             if ($_POST['is_variant'] != $oldData['form1']['is_variant']) {
@@ -1073,12 +1161,16 @@ class InboundingController {
         }else{
             $item_code = $_POST['Item_code'] ?? '';         
         }
-        if (!empty($item_code)) {
-            $shouldRename = true; 
-        }
+
         // --- SKU GENERATION ---
         $size  = trim($_POST['size'] ?? '');
         $color = trim($_POST['color'] ?? '');
+
+        // Always rename on every save so gallery filenames stay in sync with display_order.
+        if (!empty($item_code)) {
+            $shouldRename = true;
+        }
+
         $generated_sku = '';
         if ($is_variant === 'N') {
             $generated_sku = $item_code;
@@ -1191,6 +1283,11 @@ class InboundingController {
 
         // --- VARIATIONS LOGIC ---
         $allVariations = $_POST['variations'] ?? [];
+        $deletedVariationIdsCsv = trim((string) ($_POST['deleted_variation_ids_csv'] ?? ''));
+        $deletedVariationIds = [];
+        if ($deletedVariationIdsCsv !== '') {
+            $deletedVariationIds = array_values(array_unique(array_filter(array_map('intval', explode(',', $deletedVariationIdsCsv)))));
+        }
         foreach ($allVariations as $key => &$variant) {
             $variant['id'] = $variant['id'] ?? '';
             $uploadError = $_FILES['variations']['error'][$key]['photo'] ?? UPLOAD_ERR_NO_FILE;
@@ -1211,18 +1308,18 @@ class InboundingController {
             }
         }
         unset($variant);
-        $inboundingModel->saveVariations($id, $allVariations, $item_code,$item_code);
+        $inboundingModel->saveVariations($id, $allVariations, $item_code, $deletedVariationIds);
 
         // 5. Update Image Order & Assignment
-        if (isset($_POST['photo_order']) && is_array($_POST['photo_order'])) {
-            foreach ($_POST['photo_order'] as $img_id => $order_num) {
-                $inboundingModel->update_image_order($img_id, $order_num);
-            }
-        }
         if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
             foreach ($_POST['photo_variation'] as $img_id => $var_id) {
                 $inboundingModel->update_image_variation($img_id, $var_id);
             }
+        }
+
+        // Run orphan cleanup only when variations were explicitly removed in this save.
+        if (!empty($deletedVariationIds)) {
+            $inboundingModel->deleteOrphanVariationGalleryImages($id);
         }
 
         if ($result['success']) {

@@ -184,9 +184,14 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     $thumbDir  = $dirName . '/thumbs/'; 
     $thumbPath = $thumbDir . $fileName;
 
-    // 4. Return cached thumbnail if it exists
+    // 4. Return cached thumbnail only if it's fresh. If source changed, rebuild thumb.
     if (file_exists($thumbPath)) {
-        return $thumbPath;
+        $srcMtime = @filemtime($cleanPath);
+        $thumbMtime = @filemtime($thumbPath);
+        if ($srcMtime !== false && $thumbMtime !== false && $thumbMtime >= $srcMtime) {
+            return $thumbPath;
+        }
+        @unlink($thumbPath);
     }
 
     // 5. Create Thumb Directory if it doesn't exist
@@ -279,6 +284,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
     <input type="hidden" name="save_action" id="hidden_save_action" value="">
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
         <input type="hidden" name="delete_gallery_image_ids_csv" id="delete_gallery_image_ids_csv" value="">
+        <input type="hidden" name="deleted_variation_ids_csv" id="deleted_variation_ids_csv" value="">
         <div class="flex flex-col md:flex-row items-stretch w-full gap-4 md:gap-0">
             <div class="shrink-0 w-full md:w-[150px] bg-[#f4f4f4] border border-[#777] rounded-md p-1 md:ml-5 relative h-[200px] md:h-[200px] group">
                 <div class="w-full h-full relative flex items-center justify-center bg-white rounded-[3px] overflow-hidden">
@@ -462,7 +468,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             </div>
             <div class="w-full mb-5 min-w-0">
                 <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:</label>
-                <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier. Use <strong>&times;</strong> on a card to remove that image from the product (deletes file on save).</p>
+                <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Gallery order is managed from the Item Photos page. Use <strong>&times;</strong> on a card to remove that image from the product (deletes file on save).</p>
                 <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[140px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="-1" data-gallery-label="Main item">
                     <?php 
                     if (!empty($grouped_images['-1'])) {
@@ -645,7 +651,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         
                         <div class="grow min-w-0">
                             <label class="block text-xs font-bold text-[#555] mb-1">Gallery Photos:</label>
-                            <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Set <strong>Sort order</strong> on each image (number). Lower values are shown first when the item is loaded. You can use gaps (e.g. 10, 20, 30) to make inserting easier. Use <strong>&times;</strong> on a card to remove that image (deletes file on save).</p>
+                            <p class="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl">Gallery order is managed from the Item Photos page. Use <strong>&times;</strong> on a card to remove that image (deletes file on save).</p>
                             <div class="photo-group-grid flex flex-row overflow-x-auto gap-3 min-h-[100px] p-2 border border-dashed border-gray-300 rounded bg-gray-50 custom-scrollbar" data-var-id="<?= htmlspecialchars((string)$var['id']) ?>" data-gallery-label="<?= htmlspecialchars('Variation: ' . trim(($var['color'] ?? '') . ' / ' . ($var['size'] ?? '')), ENT_QUOTES) ?>">
                                 <?php 
                                 if (!empty($grouped_images[$var['id']])) {
@@ -842,7 +848,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 
         // 2. Pass the FULL PATH to the generator (filesystem-relative)
         $thumbSrc = getThumbnail($fullPath);
-        $thumbUrl = base_url($thumbSrc);
+        $thumbVersion = @filemtime(ltrim($fullPath, '/')) ?: time();
+        $thumbUrl = base_url($thumbSrc) . '?v=' . $thumbVersion;
         $fullUrl  = base_url($fullPath);
         $popupUrlJson = json_encode($fullUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
     ?>
@@ -867,14 +874,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             <span class="text-[10px] text-[#666] truncate w-full text-center mb-1.5" title="<?php echo htmlspecialchars($img['file_name']); ?>">
                 <?php echo htmlspecialchars($img['file_name']); ?>
             </span>
-            <label class="w-full text-[9px] font-bold text-[#555] mb-0.5">Sort order</label>
-            <input type="number"
-                   name="photo_order[<?php echo (int) $img['id']; ?>]"
-                   value="<?php echo (int) ($img['display_order'] ?? 0); ?>"
-                   min="0"
-                   step="1"
-                   inputmode="numeric"
-                   class="order-input w-full h-8 border border-[#ccc] rounded-[3px] px-1.5 text-center text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">
             <input type="hidden" name="photo_variation[<?php echo (int) $img['id']; ?>]" value="<?php echo htmlspecialchars((string) $varId, ENT_QUOTES, 'UTF-8'); ?>" class="variation-input">
         </div>
     <?php } ?>
@@ -2670,6 +2669,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target.closest('.remove-var-btn')) {
             const card = e.target.closest('.variation-card');
             if(card && confirm('Remove this variation card?')) {
+                const idInput = card.querySelector('input[name$="[id]"]');
+                const dbId = idInput ? parseInt(idInput.value || '0', 10) : 0;
+                if (dbId > 0) {
+                    const deletedCsv = document.getElementById('deleted_variation_ids_csv');
+                    if (deletedCsv) {
+                        const ids = deletedCsv.value
+                            ? deletedCsv.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+                            : [];
+                        if (ids.indexOf(String(dbId)) < 0) {
+                            ids.push(String(dbId));
+                        }
+                        deletedCsv.value = ids.join(',');
+                    }
+                }
                 card.remove();
             }
         }

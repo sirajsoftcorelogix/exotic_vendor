@@ -387,3 +387,6 @@ ALTER TABLE `vp_invoices` CHANGE `status` `status` ENUM('draft','final','cancell
 
 ALTER TABLE `vp_products` ADD `add_ons` TEXT NULL AFTER `notes`;
 ALTER TABLE `vp_users` ADD COLUMN `is_deleted` TINYINT(1) NOT NULL DEFAULT 0 AFTER `warehouse_id`;
+
+--irn response related columns
+ALTER TABLE `vp_invoices_international` ADD `request_payload` TEXT NULL AFTER `qrcode_string`, ADD `response_payload` TEXT NULL AFTER `request_payload`;

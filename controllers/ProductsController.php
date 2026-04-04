@@ -291,7 +291,21 @@ class ProductsController {
     }
     public function importApiCall($manualCodes = null) {
         global $productModel;
+        $t0 = microtime(true);
         $internalCall = ($manualCodes !== null);
+        $importTiming = function (int $reqCodes, float $apiMs = 0.0, ?int $apiParentItems = null, ?int $dbWrites = null) use ($t0): array {
+            $total = round((microtime(true) - $t0) * 1000, 2);
+            $api = round($apiMs, 2);
+            return [
+                'total_ms' => $total,
+                'api_ms' => $api,
+                'processing_ms' => max(0, round($total - $api, 2)),
+                'requested_codes' => $reqCodes,
+                'api_parent_items' => $apiParentItems,
+                'db_writes' => $dbWrites,
+                'codes_per_second' => ($total > 0 && $reqCodes > 0) ? round($reqCodes / ($total / 1000), 4) : null,
+            ];
+        };
         $respond = function(array $payload) use ($internalCall) {
             if ($internalCall) {
                 return $payload;
@@ -310,23 +324,24 @@ class ProductsController {
             $payload = json_decode($raw, true);
             
             if (!$payload || !isset($payload['itemCodes'])) {
-                return $respond(['success' => false, 'message' => 'Invalid request.']);
+                return $respond(['success' => false, 'message' => 'Invalid request.', 'timing' => $importTiming(0)]);
             }
             $itemCodes = $payload['itemCodes'];
         }
         if (!is_array($itemCodes)) {
-            return $respond(['success' => false, 'message' => 'Invalid itemCodes.']);
+            return $respond(['success' => false, 'message' => 'Invalid itemCodes.', 'timing' => $importTiming(0)]);
         }
         // Filter and normalize
         $codes = array_values(array_unique(array_map('trim', array_filter($itemCodes))));
         $codes = array_filter($codes);
         if (count($codes) === 0) {
-            return $respond(['success' => false, 'message' => 'No item codes provided.']);
+            return $respond(['success' => false, 'message' => 'No item codes provided.', 'timing' => $importTiming(0)]);
         }
         if (count($codes) > 50) {
-            return $respond(['success' => false, 'message' => 'Maximum 50 SKUs allowed.']);
+            return $respond(['success' => false, 'message' => 'Maximum 50 SKUs allowed.', 'timing' => $importTiming(count($codes))]);
         }
-        
+        $codesCount = count($codes);
+
         //exit;
         $created = 0;
         $updated = 0;
@@ -349,17 +364,19 @@ class ProductsController {
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
+        $tApi0 = microtime(true);
         $response = curl_exec($ch);
+        $apiMsElapsed = (microtime(true) - $tApi0) * 1000;
         $error = curl_error($ch);
         curl_close($ch);
 
         if ($response === false) {
-            return $respond(['success' => false, 'message' => 'API request failed: ' . $error]);
+            return $respond(['success' => false, 'message' => 'API request failed: ' . $error, 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
 
         $apiResult = json_decode($response, true);
         if (!is_array($apiResult)) {
-            return $respond(['success' => false, 'message' => 'Invalid API response format.']);
+            return $respond(['success' => false, 'message' => 'Invalid API response format.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
         // print_array($apiResult);
         // exit;
@@ -378,7 +395,7 @@ class ProductsController {
         $items = $apiResult; 
         //print_array($items);
         if (count($items) === 0) {
-            return $respond(['success' => false, 'message' => 'No items found in API response.']);
+            return $respond(['success' => false, 'message' => 'No items found in API response.', 'timing' => $importTiming($codesCount, $apiMsElapsed)]);
         }
         
         foreach ($items as $apiItem) {
@@ -387,18 +404,6 @@ class ProductsController {
             if ($code === '') {
             $failed[] = '(unknown)';
             continue;
-            }
-
-            // Migration rule: if item_code already exists locally, force update API path.
-            if ($this->productExistsByItemCode($code)) {
-                $updResult = $productModel->updateProductFromApi([$apiItem]);
-                if (is_array($updResult) && (empty($updResult['success']))) {
-                    $failed[] = $code;
-                } else {
-                    $updated++;
-                }
-                usleep(100000); // 100ms
-                continue;
             }
 
             // map API item to DB fields (adjust as needed)
@@ -536,26 +541,18 @@ class ProductsController {
             usleep(100000); // 100ms
         }
 
-        $payload = ['success' => true, 'message' => 'Products processed successfully', 'created' => $created, 'updated' => $updated, 'failed' => $failed];
+        $payload = [
+            'success' => true,
+            'message' => 'Products processed successfully',
+            'created' => $created,
+            'updated' => $updated,
+            'failed' => $failed,
+            'timing' => $importTiming($codesCount, $apiMsElapsed, count($items), $created + $updated),
+        ];
         if ($internalCall) {
             $payload['created_ids_by_code'] = $createdIdsByCode;
         }
         return $respond($payload);
-    }
-
-    private function productExistsByItemCode(string $itemCode): bool {
-        global $conn;
-        $stmt = $conn->prepare("SELECT id FROM vp_products WHERE item_code = ? LIMIT 1");
-        if (!$stmt) {
-            return false;
-        }
-        $stmt->bind_param('s', $itemCode);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $exists = $res && $res->num_rows > 0;
-        $stmt->close();
-
-        return $exists;
     }
 
     public function bulkImportScreen() {
@@ -797,6 +794,98 @@ class ProductsController {
         if (!$r3 || mysqli_num_rows($r3) === 0) {
             @mysqli_query($conn, "ALTER TABLE product_import_items ADD COLUMN created_product_ids TEXT NULL AFTER stock_location");
         }
+
+        $rTimStart = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'import_started_at'");
+        if (!$rTimStart || mysqli_num_rows($rTimStart) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN import_started_at DATETIME NULL AFTER failed_items");
+        }
+        $rTimEnd = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'import_completed_at'");
+        if (!$rTimEnd || mysqli_num_rows($rTimEnd) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN import_completed_at DATETIME NULL AFTER import_started_at");
+        }
+        $rLastBatch = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'last_batch_duration_ms'");
+        if (!$rLastBatch || mysqli_num_rows($rLastBatch) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN last_batch_duration_ms INT UNSIGNED NULL AFTER import_completed_at");
+        }
+        $rTotProc = @mysqli_query($conn, "SHOW COLUMNS FROM product_import_jobs LIKE 'total_processing_ms'");
+        if (!$rTotProc || mysqli_num_rows($rTotProc) === 0) {
+            @mysqli_query($conn, "ALTER TABLE product_import_jobs ADD COLUMN total_processing_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER last_batch_duration_ms");
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchImportJobTimingColumns(\mysqli $conn, int $jobId): array {
+        $row = [
+            'import_started_at' => null,
+            'import_completed_at' => null,
+            'last_batch_duration_ms' => null,
+            'total_processing_ms' => 0,
+        ];
+        $stmt = @$conn->prepare('SELECT import_started_at, import_completed_at, last_batch_duration_ms, total_processing_ms FROM product_import_jobs WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return $row;
+        }
+        $stmt->bind_param('i', $jobId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && ($r = $res->fetch_assoc())) {
+            $row['import_started_at'] = $r['import_started_at'] ?? null;
+            $row['import_completed_at'] = $r['import_completed_at'] ?? null;
+            $row['last_batch_duration_ms'] = isset($r['last_batch_duration_ms']) ? (int)$r['last_batch_duration_ms'] : null;
+            $row['total_processing_ms'] = isset($r['total_processing_ms']) ? (int)$r['total_processing_ms'] : 0;
+        }
+        $stmt->close();
+        return $row;
+    }
+
+    /**
+     * @param array{processed_items?:int,pending_items?:int} $stats
+     */
+    private function applyImportJobBatchTiming(\mysqli $conn, int $jobId, float $batchDurationMs, array $stats): void {
+        $batchMs = (int)max(0, round($batchDurationMs));
+        if ($batchMs <= 0) {
+            return;
+        }
+        $pending = (int)($stats['pending_items'] ?? 0);
+        $completedFragment = $pending <= 0 ? 'import_completed_at = NOW()' : 'import_completed_at = NULL';
+        $sql = "UPDATE product_import_jobs SET
+            import_started_at = COALESCE(import_started_at, NOW()),
+            last_batch_duration_ms = ?,
+            total_processing_ms = total_processing_ms + ?,
+            $completedFragment
+            WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('iii', $batchMs, $batchMs, $jobId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    /**
+     * @param array{total_items?:int,processed_items?:int,pending_items?:int} $stats
+     * @return array<string, float|int|string|null>
+     */
+    private function buildImportJobTimingSummary(array $stats, array $timingColumns): array {
+        $totalMs = (int)($timingColumns['total_processing_ms'] ?? 0);
+        $processed = (int)($stats['processed_items'] ?? 0);
+        $pending = (int)($stats['pending_items'] ?? 0);
+        $totalItems = (int)($stats['total_items'] ?? 0);
+        $avgMsPerProcessed = ($processed > 0 && $totalMs > 0) ? round($totalMs / $processed, 2) : null;
+        $etaMs = ($pending > 0 && $processed > 0 && $totalMs > 0) ? (int)round(($totalMs / $processed) * $pending) : null;
+        $extrapolate300kMs = ($processed > 0 && $totalMs > 0) ? (int)round(($totalMs / $processed) * $totalItems) : null;
+        return [
+            'import_started_at' => $timingColumns['import_started_at'] ?? null,
+            'import_completed_at' => $timingColumns['import_completed_at'] ?? null,
+            'last_batch_duration_ms' => $timingColumns['last_batch_duration_ms'] ?? null,
+            'total_processing_ms' => $totalMs,
+            'avg_ms_per_processed_item' => $avgMsPerProcessed,
+            'eta_pending_ms' => $etaMs,
+            'extrapolated_total_job_ms' => $extrapolate300kMs,
+        ];
     }
 
     /**
@@ -1220,38 +1309,31 @@ class ProductsController {
             $loc = '-';
         }
         $qty = max(0, (int)$openingQty);
-        $runningStock = $qty; // as requested
+        $runningStock = $qty; // new opening line baseline
         $reason = 'Migration From Egreen';
         $refType = 'Egreen';
 
-        // Keep retries idempotent by updating existing identical Egreen opening rows first.
-        $sel = $conn->prepare("SELECT id FROM vp_stock_movements
-            WHERE product_id = ? AND sku = ? AND item_code = ? AND size = ? AND color = ?
-              AND warehouse_id = ? AND location = ? AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
-            ORDER BY id DESC LIMIT 1");
-        if ($sel) {
-            $sel->bind_param('issssis', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc);
-            $sel->execute();
-            $found = $sel->get_result()->fetch_assoc();
-            $sel->close();
-            if ($found && !empty($found['id'])) {
-                $mid = (int)$found['id'];
-                $up = $conn->prepare("UPDATE vp_stock_movements
-                    SET quantity = ?, running_stock = ?, reason = ?, update_by_user = ?, updated_at = NOW()
-                    WHERE id = ?");
-                if (!$up) {
-                    return 'Could not prepare stock movement update.';
-                }
-                $up->bind_param('isiii', $qty, $runningStock, $reason, $userId, $mid);
-                if (!$up->execute()) {
-                    $msg = $up->error;
-                    $up->close();
-                    return 'Stock movement update failed: ' . $msg;
-                }
-                $up->close();
-                return null;
-            }
+        // Re-import: remove prior bulk opening lines for this variant/warehouse, then insert a fresh movement.
+        if (!$conn->begin_transaction()) {
+            return 'Could not start transaction for stock movement.';
         }
+        $del = $conn->prepare("DELETE FROM vp_stock_movements
+            WHERE product_id = ? AND warehouse_id = ? AND item_code = ?
+              AND movement_type = 'OPENING_STOCK' AND ref_type = 'Egreen'
+              AND IFNULL(NULLIF(TRIM(size), ''), '') <=> ?
+              AND IFNULL(NULLIF(TRIM(color), ''), '') <=> ?");
+        if (!$del) {
+            $conn->rollback();
+            return 'Could not prepare stock movement delete (refresh).';
+        }
+        $del->bind_param('iisss', $productId, $warehouseId, $itemCode, $size, $color);
+        if (!$del->execute()) {
+            $msg = $del->error;
+            $del->close();
+            $conn->rollback();
+            return 'Stock movement delete failed: ' . $msg;
+        }
+        $del->close();
 
         $ins = $conn->prepare("INSERT INTO vp_stock_movements
             (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
@@ -1269,18 +1351,38 @@ class ProductsController {
                 (product_id, sku, item_code, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'OPENING_STOCK', ?, ?, ?, '', ?, ?)");
             if (!$ins2) {
+                $conn->rollback();
                 return 'Stock movement insert failed: ' . $msg;
             }
             $ins2->bind_param('issssisiissi', $productId, $sku, $itemCode, $size, $color, $warehouseId, $loc, $qty, $runningStock, $refType, $reason, $userId);
             if (!$ins2->execute()) {
                 $msg2 = $ins2->error;
                 $ins2->close();
+                $conn->rollback();
                 return 'Stock movement insert failed: ' . $msg2;
             }
             $ins2->close();
-            return null;
+        } else {
+            $ins->close();
         }
-        $ins->close();
+
+        $updL = $conn->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+        if (!$updL) {
+            $conn->rollback();
+            return 'Could not prepare product stock update.';
+        }
+        $updL->bind_param('ii', $runningStock, $productId);
+        if (!$updL->execute()) {
+            $err = $updL->error;
+            $updL->close();
+            $conn->rollback();
+            return 'Product local_stock update failed: ' . $err;
+        }
+        $updL->close();
+
+        if (!$conn->commit()) {
+            return 'Could not commit stock movement transaction.';
+        }
         return null;
     }
 
@@ -1661,10 +1763,24 @@ class ProductsController {
 
         if (empty($ids)) {
             $stats = $this->refreshImportJobCounts($jobId);
-            echo json_encode(['success' => true, 'message' => 'No pending codes left.', 'batch_size' => 0, 'stats' => $stats]);
+            $tcolsIdle = $this->fetchImportJobTimingColumns($conn, $jobId);
+            $jobTimingIdle = $this->buildImportJobTimingSummary($stats, $tcolsIdle);
+            echo json_encode([
+                'success' => true,
+                'message' => 'No pending codes left.',
+                'batch_size' => 0,
+                'stats' => $stats,
+                'job_timing' => $jobTimingIdle,
+                'batch_timing' => [
+                    'batch_duration_ms' => 0,
+                    'rows_in_batch' => 0,
+                    'rows_per_second' => null,
+                ],
+            ]);
             exit;
         }
 
+        $batchT0 = microtime(true);
         $idList = implode(',', array_map('intval', $ids));
         mysqli_query($conn, "UPDATE product_import_items SET status='processing', attempt_count=attempt_count+1, updated_at=NOW() WHERE id IN ($idList)");
 
@@ -1755,12 +1871,24 @@ class ProductsController {
             }
         }
 
+        $batchDurationMs = (microtime(true) - $batchT0) * 1000;
         $stats = $this->refreshImportJobCounts($jobId);
+        $this->applyImportJobBatchTiming($conn, $jobId, $batchDurationMs, $stats);
+        $tcols = $this->fetchImportJobTimingColumns($conn, $jobId);
+        $jobTiming = $this->buildImportJobTimingSummary($stats, $tcols);
+        $rowCount = count($ids);
+        $rowsPerSec = ($rowCount > 0 && $batchDurationMs > 0) ? round($rowCount / ($batchDurationMs / 1000), 4) : null;
         echo json_encode([
             'success' => true,
-            'batch_size' => count($ids),
+            'batch_size' => $rowCount,
             'import_result' => $result,
-            'stats' => $stats
+            'stats' => $stats,
+            'job_timing' => $jobTiming,
+            'batch_timing' => [
+                'batch_duration_ms' => round($batchDurationMs, 2),
+                'rows_in_batch' => $rowCount,
+                'rows_per_second' => $rowsPerSec,
+            ],
         ]);
         exit;
     }
@@ -1786,6 +1914,8 @@ class ProductsController {
         }
 
         $stats = $this->refreshImportJobCounts($jobId);
+        $tcols = $this->fetchImportJobTimingColumns($conn, $jobId);
+        $jobTiming = $this->buildImportJobTimingSummary($stats, $tcols);
 
         $failed = [];
         $stmt = $conn->prepare("SELECT item_code, error_message FROM product_import_items WHERE job_id = ? AND status='failed' ORDER BY updated_at DESC LIMIT 20");
@@ -1797,7 +1927,7 @@ class ProductsController {
         }
         $stmt->close();
 
-        echo json_encode(['success' => true, 'job_id' => $jobId, 'stats' => $stats, 'failed_preview' => $failed]);
+        echo json_encode(['success' => true, 'job_id' => $jobId, 'stats' => $stats, 'job_timing' => $jobTiming, 'failed_preview' => $failed]);
         exit;
     }
 
@@ -2486,7 +2616,9 @@ class ProductsController {
             $order['available_stock'] = $order['local_stock'] - $order['committed_stock'];
             $order['in_purchase_list'] = $commanModel->isInPurchaseList($order['sku']);
             $order['vendors'] = $productModel->getVendorByItemCode($order['item_code']);
-            $order['stock_history'] = $productModel->stock_history($order['sku'], 100, 0, (int)$id);
+            $order['stock_history'] = $productModel->enrichStockHistoryRowsForLedger(
+                $productModel->stock_history($order['sku'], 100, 0, (int)$id)
+            );
             $order['stocks'] = $productModel->getStockSummaryBySku($order['sku']);
             $order['variants'] = $productModel->getVariantsByItemCode($order['item_code']);
             $order['warehouses'] = $productModel->getAllWarehouses();
@@ -2645,15 +2777,12 @@ class ProductsController {
             // Format the response
             $records = [];
             if (!empty($history)) {
-                $typeMap = ['IN' => 'Purchase', 'OUT' => 'Sale', 'TRANSFER_IN' => 'Transfer In', 'TRANSFER_OUT' => 'Transfer Out', 'OPENING_STOCK' => 'Opening Stock'];
-                $iconMap = ['IN' => 'fa-arrow-up', 'OUT' => 'fa-arrow-down', 'TRANSFER_IN' => 'fa-exchange-alt', 'TRANSFER_OUT' => 'fa-exchange-alt', 'OPENING_STOCK' => 'fa-boxes'];
-                $colorMap = ['IN' => 'text-green-600', 'OUT' => 'text-red-600', 'TRANSFER_IN' => 'text-blue-600', 'TRANSFER_OUT' => 'text-blue-600', 'OPENING_STOCK' => 'text-emerald-700'];
-                
                 foreach ($history as $record) {
                     $record['formatted_date'] = date('d M Y', strtotime($record['created_at'] ?? ''));
-                    $record['type'] = $typeMap[$record['movement_type']] ?? $record['movement_type'];
-                    $record['icon'] = $iconMap[$record['movement_type']] ?? '';
-                    $record['textColor'] = $colorMap[$record['movement_type']] ?? '';
+                    $disp = $productModel->getStockLedgerDisplayForMovement($record);
+                    $record['type'] = $disp['ledger_type'];
+                    $record['icon'] = $disp['icon'];
+                    $record['textColor'] = $disp['text_color_class'];
                     $records[] = $record;
                 }
             }
@@ -2678,16 +2807,18 @@ class ProductsController {
             echo '<p>Invalid SKU.</p>';
             exit;
         }
-        $stock_history = $productModel->stock_history($sku);
-        //print_array($ledger);
-        // if (!$stock_history) {
-        //     echo '<p>Product not found for SKU: ' . htmlspecialchars($sku) . '</p>';
-        //     exit;
-        // }
-        $order['warehouses'] = $productModel->getAllWarehouses();
+        $stock_history = $productModel->enrichStockHistoryRowsForLedger($productModel->stock_history($sku));
+        $warehouses = $productModel->getAllWarehouses();
+        $productRow = $productModel->findBySku($sku) ?: [];
+        $pid = (int)($productRow['id'] ?? 0);
         $data = [
             'stock_history' => $stock_history,
-            'warehouses' => $order['warehouses']
+            'warehouses' => $warehouses,
+            'products' => [
+                'id' => $pid,
+                'sku' => $sku,
+                'warehouses' => $warehouses,
+            ],
         ];
         renderTemplate('views/products/inventory_ledger.php', $data, 'Inventory Ledger');
     }

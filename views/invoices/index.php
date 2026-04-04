@@ -35,7 +35,11 @@
                     "><?= ucfirst($invoice['status']) ?></span>
                 </td> -->
                 <td class="px-6 py-4 text-right text-sm space-x-2">
+                    <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled'): ?>
+                        <span class="text-gray-500">—</span>
+                    <?php else: ?>
                     <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" target="_blank" class="text-indigo-600 hover:text-indigo-900">Download</a>
+                    <?php endif; ?>
                 </td>
             </tr>
                     <?php endforeach; ?>
