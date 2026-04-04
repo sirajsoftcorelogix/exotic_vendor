@@ -897,13 +897,7 @@
                                             </div>
                                             <div class="pt-1 w-full max-w-xs">
                                                 <h2 class="product-title mb-1 w-[300px]"><?= $order['title'] ?></h2>
-                                                <p class="item-code">Item Code: <?php
-                                                    $catalogPid = isset($order['catalog_product_id']) ? (int)$order['catalog_product_id'] : 0;
-                                                    if ($catalogPid > 0): ?>
-                                                    <a href="<?= htmlspecialchars(base_url('?page=products&action=detail&id=' . $catalogPid)) ?>" target="_blank" rel="noopener noreferrer" class="icon-link text-blue-600 hover:underline"><?= htmlspecialchars($order['item_code']) ?></a>
-                                                <?php else: ?>
-                                                    <span class="text-gray-800"><?= htmlspecialchars($order['item_code']) ?></span>
-                                                <?php endif; ?></p>
+                                                <p class="item-code">Item Code: <a href="http://exoticindiaart.com/book/details/<?= rawurlencode($order['item_code']) ?>" target="_blank" rel="noopener noreferrer" class="icon-link text-blue-600 hover:underline"><?= htmlspecialchars($order['item_code']) ?></a></p>
                                                 <p class="quantity">Quantity: <?= $order['quantity'] ?> </p>
                                                 <?php
                                                 $dimensions = [];
