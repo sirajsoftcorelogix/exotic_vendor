@@ -14,28 +14,31 @@ $config = require __DIR__ . '/config.php';
 
 $items = [
     [
-        'sku' => 'AB12345',
+        'item_code' => 'ITEM-AB12345',
+        'sku' => 'V-SKU-001',
         'size' => '17',
         'color' => 'Rose',
         'mrp' => 12500,
         'product_name' => 'Sterling Silver Rose Gold Ring',
-        'qr_payload' => 'https://www.example.com/product/AB12345',
+        'qr_payload' => 'https://www.example.com/product/ITEM-AB12345',
     ],
     [
-        'sku' => 'CD67890',
+        'item_code' => 'ITEM-CD67890',
+        'sku' => 'V-SKU-002',
         'size' => '18',
         'color' => 'Gold',
         'mrp' => 8900,
         'product_name' => '22K Gold Temple Necklace',
-        'qr_payload' => 'https://www.example.com/product/CD67890',
+        'qr_payload' => 'https://www.example.com/product/ITEM-CD67890',
     ],
     [
-        'sku' => 'EF24680',
+        'item_code' => 'ITEM-EF24680',
+        'sku' => 'V-SKU-003',
         'size' => '16',
         'color' => 'Silver',
         'mrp' => 15250,
         'product_name' => 'Oxidized Silver Bangle Set',
-        'qr_payload' => 'https://www.example.com/product/EF24680',
+        'qr_payload' => 'https://www.example.com/product/ITEM-EF24680',
     ],
 ];
 
@@ -61,7 +64,7 @@ $pages = '';
 foreach ($items as $row) {
     $payload = isset($row['qr_payload']) && $row['qr_payload'] !== ''
         ? (string) $row['qr_payload']
-        : 'https://www.example.com/p/' . rawurlencode((string) $row['sku']);
+        : 'https://www.example.com/p/' . rawurlencode((string) ($row['item_code'] ?? $row['sku'] ?? ''));
     $qrUri = LabelRenderer::qrDataUri($config, $payload);
     $pages .= '<div class="label-print-page">' . LabelRenderer::renderLabelInnerHtml($config, $row, $qrUri) . '</div>';
 }

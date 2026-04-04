@@ -3,7 +3,7 @@
  * Product detail — label print modal (PDF, multiple sizes).
  * Expects $products from product_detail (getProduct).
  *
- * Jewelry Size: 100 × 12.9 mm — SKU / Size / Color | barcode | MRP + tax (one line) / product title.
+ * Jewelry Size: 100 × 12.9 mm — Item code / Size / Color | barcode | MRP + tax (one line) / product title.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -213,7 +213,7 @@ $PRODUCT_LABEL_DATA = [
         el.style.paddingLeft = sidePad + 'px';
         el.style.paddingRight = sidePad + 'px';
 
-        const skuVal = esc((data.sku || data.itemCode || '').trim() || '—');
+        const skuVal = esc((data.itemCode || data.sku || '').trim() || '—');
         const sizeVal = esc((data.size || '').trim() || '—');
         const colorVal = esc((data.color || '').trim() || '—');
         const mrpShow = data.mrpFormatted != null && data.mrpFormatted !== ''

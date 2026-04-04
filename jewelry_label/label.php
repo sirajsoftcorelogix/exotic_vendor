@@ -13,17 +13,18 @@ require_once __DIR__ . '/LabelRenderer.php';
 $config = require __DIR__ . '/config.php';
 
 $sampleRow = [
-    'sku' => 'AB12345',
+    'item_code' => 'ITEM-AB12345',
+    'sku' => 'V-SKU-001',
     'size' => '17',
     'color' => 'Rose',
     'mrp' => 12500,
     'product_name' => 'Sterling Silver Rose Gold Ring',
-    'qr_payload' => 'https://www.example.com/product/AB12345',
+    'qr_payload' => 'https://www.example.com/product/ITEM-AB12345',
 ];
 
 $qrPayload = isset($sampleRow['qr_payload']) && $sampleRow['qr_payload'] !== ''
     ? (string) $sampleRow['qr_payload']
-    : 'https://www.example.com/p/' . rawurlencode((string) $sampleRow['sku']);
+    : 'https://www.example.com/p/' . rawurlencode((string) ($sampleRow['item_code'] ?? $sampleRow['sku'] ?? ''));
 
 $qrUri = LabelRenderer::qrDataUri($config, $qrPayload);
 $qrMm = LabelRenderer::qrDisplayMm($config);
@@ -51,7 +52,7 @@ $productNameWmm = min(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jewelry label — <?php echo htmlspecialchars($sampleRow['sku'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></title>
+    <title>Jewelry label — <?php echo htmlspecialchars((string)($sampleRow['item_code'] ?? $sampleRow['sku'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></title>
     <style>
         @page {
             size: <?php echo $w; ?>mm <?php echo $h; ?>mm;
@@ -232,11 +233,11 @@ $productNameWmm = min(
  *
  * $config = require __DIR__ . '/config.php';
  * $items = [
- *     ['sku'=>'AB12345','size'=>'17','color'=>'Rose','mrp'=>12500,'product_name'=>'…','qr_payload'=>'https://example.com/p/AB12345'],
- *     ['sku'=>'CD67890','size'=>'18','color'=>'Gold','mrp'=>8900,'product_name'=>'…','qr_payload'=>'https://example.com/p/CD67890'],
+ *     ['item_code'=>'ITEM-1','sku'=>'…','size'=>'17','color'=>'Rose','mrp'=>12500,'product_name'=>'…','qr_payload'=>'https://example.com/p/ITEM-1'],
+ *     ['item_code'=>'ITEM-2','sku'=>'…','size'=>'18','color'=>'Gold','mrp'=>8900,'product_name'=>'…','qr_payload'=>'https://example.com/p/ITEM-2'],
  * ];
  * foreach ($items as $row) {
- *     $qrUri = LabelRenderer::qrDataUri($config, (string)($row['qr_payload'] ?? 'https://example.com/p/'.$row['sku']));
+ *     $qrUri = LabelRenderer::qrDataUri($config, (string)($row['qr_payload'] ?? 'https://example.com/p/'.rawurlencode((string)($row['item_code'] ?? $row['sku'] ?? ''))));
  *     echo '<div class="label-print-page">' . LabelRenderer::renderLabelInnerHtml($config, $row, $qrUri) . '</div>';
  * }
  *
