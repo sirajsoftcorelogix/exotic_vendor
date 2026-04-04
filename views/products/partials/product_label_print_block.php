@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 25 × 15 mm — SKU / location+date in equal top+bottom flex bands; CODE128 vertically centred on the label.
+ * Micro (textiles): 25 × 15 mm — SKU | CODE128 (flex-grow centre band) | location + date; tight padding to use the strip.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -119,7 +119,7 @@ $PRODUCT_LABEL_DATA = [
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
      * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
-     * micro: equal flex top/bottom bands; barcode row centred vertically on the label; SKU | CODE128 | location | date.
+     * micro: SKU + bottom stack fixed height; mid flexes so barcode sits in the remaining space (fills strip).
      */
     window.LABEL_PRESETS = {
         small: {
@@ -157,21 +157,22 @@ $PRODUCT_LABEL_DATA = [
             orient: 'landscape',
             cw: 500,
             ch: 300,
-            pad: 20,
+            pad: 12,
             border: '1px solid #000000',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            dateSize: '8pt',
+            dateSize: '9pt',
             /** Same px for SKU + location (shared font shorthand in buildMicroLabelElement). */
-            skuLocationFontPx: 22,
+            skuLocationFontPx: 23,
             showBorders: true,
             barUnit: 1,
-            barHeight: 34,
+            barHeight: 40,
             barDisplayValue: false,
             barFont: 8,
-            barHorizontalMarginPx: 6,
-            /** SKU→barcode gap = max(half SKU line, skuBarcodeGapPx ?? half line). microTopBandFlex / microBotBandFlex: SKU band vs bottom band. */
-            microTopBandFlex: 1.12,
-            microBotBandFlex: 0.88
+            barHorizontalMarginPx: 4,
+            /** Fixed SKU→barcode gap (px). Omit to use half-line default. */
+            skuBarcodeGapPx: 8,
+            /** Vertical gap between barcode and location line (px). */
+            barcodeLocationGapPx: 5
         }
     };
 
@@ -338,10 +339,7 @@ $PRODUCT_LABEL_DATA = [
             else skuFontPxForGap = 14 * (96 / 72);
         }
         const halfLineGapPx = Math.max(1, Math.round(skuFontPxForGap * microSkuLineHeight / 2));
-        const skuBarGap = Math.max(
-            halfLineGapPx,
-            preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : halfLineGapPx
-        );
+        const skuBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : halfLineGapPx;
         const microFf = preset.fontFamily || 'Arial, Helvetica, sans-serif';
         const skuLocFont = '600 ' + skuLocFs + '/' + microSkuLineHeight + ' ' + microFf;
         const skuTop = document.createElement('div');
@@ -359,11 +357,14 @@ $PRODUCT_LABEL_DATA = [
         skuTop.textContent = codeDisplay;
 
         const mid = document.createElement('div');
-        mid.style.flex = '0 0 auto';
-        mid.style.minHeight = '0';
-        mid.style.display = 'block';
+        mid.style.flex = '1 1 0';
+        mid.style.display = 'flex';
+        mid.style.flexDirection = 'column';
+        mid.style.alignItems = 'center';
+        mid.style.justifyContent = 'flex-end';
         mid.style.width = '100%';
-        mid.style.marginBottom = '8px';
+        mid.style.minHeight = '0';
+        mid.style.marginBottom = '0';
         mid.style.position = 'relative';
         mid.style.zIndex = '1';
 
@@ -374,6 +375,7 @@ $PRODUCT_LABEL_DATA = [
         barWrap.style.display = 'block';
         barWrap.style.textAlign = 'center';
         barWrap.style.lineHeight = '0';
+        barWrap.style.flexShrink = '0';
         const barCanvas = document.createElement('canvas');
         barCanvas.className = 'pl-barcode';
         barCanvas.style.display = 'inline-block';
@@ -389,7 +391,8 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.style.alignItems = 'center';
         bottomStack.style.justifyContent = 'flex-start';
         bottomStack.style.gap = '0';
-        bottomStack.style.paddingTop = '0';
+        var barLocGap = preset.barcodeLocationGapPx != null ? preset.barcodeLocationGapPx : 5;
+        bottomStack.style.paddingTop = barLocGap + 'px';
 
         const locEl = document.createElement('div');
         locEl.style.font = skuLocFont;
@@ -401,7 +404,7 @@ $PRODUCT_LABEL_DATA = [
         locEl.textContent = locDisplay;
 
         const dateEl = document.createElement('div');
-        dateEl.style.fontSize = preset.dateSize || '12pt';
+        dateEl.style.fontSize = preset.dateSize || '9pt';
         dateEl.style.fontWeight = '400';
         dateEl.style.lineHeight = '1.25';
         dateEl.style.marginTop = '0';
@@ -413,29 +416,9 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.appendChild(locEl);
         bottomStack.appendChild(dateEl);
 
-        const topFlex = preset.microTopBandFlex != null ? preset.microTopBandFlex : 1.12;
-        const botFlex = preset.microBotBandFlex != null ? preset.microBotBandFlex : 0.88;
-        const topRegion = document.createElement('div');
-        topRegion.style.flex = topFlex + ' 1 0';
-        topRegion.style.minHeight = '0';
-        topRegion.style.display = 'flex';
-        topRegion.style.flexDirection = 'column';
-        topRegion.style.justifyContent = 'flex-end';
-        topRegion.style.alignItems = 'stretch';
-        topRegion.appendChild(skuTop);
-
-        const botRegion = document.createElement('div');
-        botRegion.style.flex = botFlex + ' 1 0';
-        botRegion.style.minHeight = '0';
-        botRegion.style.display = 'flex';
-        botRegion.style.flexDirection = 'column';
-        botRegion.style.justifyContent = 'flex-start';
-        botRegion.style.alignItems = 'stretch';
-        botRegion.appendChild(bottomStack);
-
-        el.appendChild(topRegion);
+        el.appendChild(skuTop);
         el.appendChild(mid);
-        el.appendChild(botRegion);
+        el.appendChild(bottomStack);
         return el;
     }
 

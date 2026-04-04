@@ -28,15 +28,15 @@ return [
     'MARGIN_RIGHT_MM' => 6,
 
     'BARCODE_TYPE' => 'CODE128',
-    'BARCODE_HEIGHT' => 50,
+    'BARCODE_HEIGHT' => 40,
     'BARCODE_WIDTH' => 1,
     'BARCODE_DISPLAY_VALUE' => false,
 
     'TEXT_FONT' => 'Arial',
-    /** Mirrors preset skuLocationFontPx (22px; SKU and location share the same font). */
-    'CODE_SIZE' => '16.5pt',
-    'DATE_SIZE' => '12pt',
-    'LOCATION_SIZE' => '16.5pt',
+    /** Mirrors preset skuLocationFontPx (23px) and dateSize (9pt). */
+    'CODE_SIZE' => '17.25pt',
+    'DATE_SIZE' => '9pt',
+    'LOCATION_SIZE' => '17.25pt',
 
     'SHOW_BORDERS' => true,
 ];
