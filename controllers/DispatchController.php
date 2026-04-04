@@ -1800,7 +1800,7 @@ class DispatchController {
             // Use Courier Selector to sort and filter couriers
             // Parameters: response data, is_cod, is_express
             $selectedCouriers = prepareCouriers($serviceability['data'], $cod, $is_express);
-            print_r($serviceability); // Debug: check selected couriers
+            //print_r($selectedCouriers); // Debug: check selected couriers
             // Format response with sorted courier details
             $couriers = [];
             if (!empty($selectedCouriers['topCourier'])) {
