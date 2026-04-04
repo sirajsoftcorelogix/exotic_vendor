@@ -12,7 +12,9 @@ final class LabelRenderer
 {
     public static function qrDataUri(array $config, string $payload): string
     {
-        $bitmapSize = max(120, (int) round((float) $config['QR_SIZE'] * 4));
+        $mult = isset($config['QR_DISPLAY_MULTIPLIER']) ? max(1.0, (float) $config['QR_DISPLAY_MULTIPLIER']) : 3.0;
+        $bitmapSize = max(200, (int) round((float) $config['QR_SIZE'] * 4 * $mult));
+        $bitmapSize = min($bitmapSize, 800);
 
         $qrCode = new QrCode(
             data: $payload,
@@ -26,13 +28,16 @@ final class LabelRenderer
         return 'data:image/png;base64,' . base64_encode($result->getString());
     }
 
-    /** QR square edge length on paper (mm); QR_SIZE = reference px at 96dpi. */
+    /** QR square edge length on paper (mm); base from QR_SIZE (px@96dpi), × QR_DISPLAY_MULTIPLIER, capped to label height. */
     public static function qrDisplayMm(array $config): float
     {
-        $mm = (float) $config['QR_SIZE'] * 25.4 / 96.0;
-        $max = (float) $config['LABEL_HEIGHT_MM'] - 2.0;
+        $baseMm = (float) $config['QR_SIZE'] * 25.4 / 96.0;
+        $mult = isset($config['QR_DISPLAY_MULTIPLIER']) ? max(1.0, (float) $config['QR_DISPLAY_MULTIPLIER']) : 3.0;
+        $scaled = $baseMm * $mult;
+        $reserveTextMm = 0.9;
+        $max = max(4.0, (float) $config['LABEL_HEIGHT_MM'] - $reserveTextMm);
 
-        return round(min($mm, max(4.0, $max)), 3);
+        return round(min($scaled, $max), 3);
     }
 
     public static function formatMrp(float|int $amount): string

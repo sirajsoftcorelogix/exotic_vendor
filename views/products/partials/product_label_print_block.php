@@ -136,14 +136,14 @@ $PRODUCT_LABEL_DATA = [
             border: '1px solid #000000',
             borderRadius: '36px',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            leftSkuPx: 34,
-            leftMetaPx: 28,
-            rightMrpPx: 38,
-            rightSmallPx: 22,
-            barCol: 630,
-            barUnit: 0.75,
-            barHeight: 58,
-            barFont: 8,
+            leftSkuPx: 32,
+            leftMetaPx: 27,
+            rightMrpPx: 36,
+            rightSmallPx: 21,
+            barCol: 700,
+            barUnit: 1.35,
+            barHeight: 120,
+            barFont: 13,
             pad: 16
         },
         medium: {
@@ -210,7 +210,7 @@ $PRODUCT_LABEL_DATA = [
         el.style.flexDirection = 'row';
         el.style.alignItems = 'stretch';
         el.style.justifyContent = 'space-between';
-        el.style.overflow = 'hidden';
+        el.style.overflow = 'visible';
 
         const sidePad = preset.pad != null ? preset.pad : 16;
         const innerW = preset.cw - 2 * sidePad;
@@ -242,11 +242,11 @@ $PRODUCT_LABEL_DATA = [
         leftCol.style.justifyContent = 'center';
         leftCol.style.boxSizing = 'border-box';
         leftCol.style.paddingRight = '8px';
-        leftCol.style.overflow = 'hidden';
+        leftCol.style.overflow = 'visible';
         leftCol.innerHTML =
-            '<div style="font-size:' + leftSkuPx + 'px;font-weight:800;line-height:1.05;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">' + skuVal + '</div>' +
-            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">Size: ' + sizeVal + '</div>' +
-            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">Color: ' + colorVal + '</div>';
+            '<div style="font-size:' + leftSkuPx + 'px;font-weight:800;line-height:1.3;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">' + skuVal + '</div>' +
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.28;margin-top:1px;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">Size: ' + sizeVal + '</div>' +
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.28;margin-top:1px;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">Color: ' + colorVal + '</div>';
 
         const centerCol = document.createElement('div');
         centerCol.style.flex = '0 0 ' + colW + 'px';
@@ -260,7 +260,7 @@ $PRODUCT_LABEL_DATA = [
         const barWrap = document.createElement('div');
         barWrap.className = 'pl-barcode-wrap';
         barWrap.style.maxWidth = '100%';
-        barWrap.style.overflow = 'hidden';
+        barWrap.style.overflow = 'visible';
         barWrap.style.display = 'flex';
         barWrap.style.alignItems = 'center';
         barWrap.style.justifyContent = 'center';
@@ -278,11 +278,11 @@ $PRODUCT_LABEL_DATA = [
         rightCol.style.justifyContent = 'center';
         rightCol.style.boxSizing = 'border-box';
         rightCol.style.paddingLeft = '8px';
-        rightCol.style.overflow = 'hidden';
+        rightCol.style.overflow = 'visible';
         rightCol.innerHTML =
-            '<div style="font-size:' + rightMrpPx + 'px;font-weight:800;line-height:1.05;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">MRP: ₹' + mrpShow + '</div>' +
-            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;opacity:0.92;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">' + taxNote + '</div>' +
-            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">' + storeHost + '</div>';
+            '<div style="font-size:' + rightMrpPx + 'px;font-weight:800;line-height:1.28;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">MRP: ₹' + mrpShow + '</div>' +
+            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.25;margin-top:1px;opacity:0.92;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">' + taxNote + '</div>' +
+            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.25;margin-top:1px;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">' + storeHost + '</div>';
 
         el.appendChild(leftCol);
         el.appendChild(centerCol);

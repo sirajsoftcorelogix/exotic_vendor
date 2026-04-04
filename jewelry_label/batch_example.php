@@ -111,7 +111,7 @@ foreach ($items as $row) {
             margin-top: <?php echo $oy; ?>mm;
             background: #fff;
             border: 0.12mm solid #000;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .label-inner {
@@ -121,8 +121,9 @@ foreach ($items as $row) {
             justify-content: space-between;
             width: 100%;
             height: 100%;
-            padding: 0.25mm 1.2mm 0.25mm 1.2mm;
-            gap: 1.5mm;
+            padding: 0.05mm 1mm 0.05mm 1mm;
+            gap: 1mm;
+            overflow: visible;
         }
 
         .label-left {
@@ -132,15 +133,24 @@ foreach ($items as $row) {
             flex: 1 1 auto;
             min-width: 0;
             font-size: <?php echo $leftFs; ?>;
-            line-height: 1.12;
+            line-height: 1.28;
+            overflow: visible;
         }
 
         .label-left .sku {
             font-weight: 700;
+            display: block;
+            line-height: 1.3;
+            padding: 0;
+            margin: 0;
         }
 
         .label-left .meta {
             font-weight: 400;
+            display: block;
+            line-height: 1.28;
+            padding: 0;
+            margin: 0.05mm 0 0 0;
         }
 
         .label-right {
@@ -150,7 +160,8 @@ foreach ($items as $row) {
             flex: 0 0 auto;
             gap: 1mm;
             font-size: <?php echo $rightFs; ?>;
-            line-height: 1.1;
+            line-height: 1.22;
+            overflow: visible;
         }
 
         .label-right .qr {
@@ -166,10 +177,14 @@ foreach ($items as $row) {
             flex-direction: column;
             justify-content: center;
             min-width: 0;
+            overflow: visible;
+            line-height: 1.25;
         }
 
         .label-right-text .mrp {
             font-weight: 700;
+            display: block;
+            line-height: 1.28;
         }
 
         .label-right-text .tax {
