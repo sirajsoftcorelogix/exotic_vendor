@@ -36,6 +36,7 @@ $ox = (float) $config['OFFSET_X_MM'];
 $oy = (float) $config['OFFSET_Y_MM'];
 $leftFs = htmlspecialchars((string) $config['LEFT_SIDE_SIZE'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$productNameWmm = (float) ($config['PRODUCT_NAME_WIDTH_MM'] ?? 36);
 
 ?>
 <!DOCTYPE html>
@@ -185,7 +186,8 @@ $rightFs = htmlspecialchars((string) $config['RIGHT_SIDE_SIZE'], ENT_QUOTES | EN
 
         .label-right-text .product-name {
             box-sizing: border-box;
-            width: 100%;
+            width: min(<?php echo $productNameWmm; ?>mm, 100%);
+            max-width: min(<?php echo $productNameWmm; ?>mm, 100%);
             min-width: 0;
             font-size: <?php echo $leftFs; ?>;
             font-weight: 400;
