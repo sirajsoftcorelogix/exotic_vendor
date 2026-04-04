@@ -5,31 +5,29 @@
   <!-- SKU quick jump (product detail) -->
   <div class="bg-gradient-to-r from-amber-50 via-white to-orange-50/50 rounded-xl border border-amber-100/80 shadow-sm p-4 sm:p-5">
     <form id="productDetailSkuSearchForm" class="relative" autocomplete="off">
-      <div class="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
-        <div class="flex-1 min-w-0">
-          <label for="productDetailSkuInput" class="block text-sm font-semibold text-gray-800 mb-1.5">
-            <i class="fas fa-search text-amber-600 mr-1.5" aria-hidden="true"></i>Jump to product by SKU
-          </label>
-          <div class="relative">
-            <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-500/90">
-              <i class="fas fa-barcode text-sm"></i>
-            </span>
-            <input type="text" id="productDetailSkuInput" name="sku_jump"
-              class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg shadow-inner bg-white/90 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400/80 focus:border-amber-500 outline-none transition"
-              placeholder="Type SKU — suggestions appear after 2 characters"
-              value="<?php echo htmlspecialchars($products['sku'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-              aria-autocomplete="list" aria-controls="productDetailSkuSuggestions" aria-expanded="false" />
-            <div id="productDetailSkuSuggestions" role="listbox"
-              class="hidden absolute left-0 right-0 top-full mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-gray-200/90 bg-white shadow-xl shadow-amber-900/10 z-[100] py-1">
-            </div>
+      <label for="productDetailSkuInput" class="block text-sm font-semibold text-gray-800 mb-1.5">
+        <i class="fas fa-search text-amber-600 mr-1.5" aria-hidden="true"></i>Jump to product by SKU
+      </label>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-3">
+        <div class="relative flex-1 min-w-0">
+          <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-500/90 z-10">
+            <i class="fas fa-barcode text-sm"></i>
+          </span>
+          <input type="text" id="productDetailSkuInput" name="sku_jump"
+            class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg shadow-inner bg-white/90 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400/80 focus:border-amber-500 outline-none transition"
+            placeholder="Type SKU — suggestions appear after 2 characters"
+            value="<?php echo htmlspecialchars($products['sku'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+            aria-autocomplete="list" aria-controls="productDetailSkuSuggestions" aria-expanded="false" />
+          <div id="productDetailSkuSuggestions" role="listbox"
+            class="hidden absolute left-0 right-0 top-full mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-gray-200/90 bg-white shadow-xl shadow-amber-900/10 z-[100] py-1">
           </div>
-          <p class="mt-1.5 text-xs text-gray-500">Select a suggestion or enter the full SKU and press <kbd class="px-1 rounded bg-gray-100 border text-[10px]">Go</kbd></p>
         </div>
         <button type="submit"
-          class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-sm font-semibold shadow-md shadow-amber-600/25 border border-amber-600/30 transition">
+          class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-sm font-semibold shadow-md shadow-amber-600/25 border border-amber-600/30 transition w-full sm:w-auto">
           <i class="fas fa-arrow-right text-xs opacity-90"></i> Go
         </button>
       </div>
+      <p class="mt-1.5 text-xs text-gray-500">Select a suggestion or enter the full SKU and press <kbd class="px-1 rounded bg-gray-100 border text-[10px]">Go</kbd></p>
       <p id="productDetailSkuError" class="hidden mt-3 text-sm font-medium text-red-600 flex items-center gap-2">
         <i class="fas fa-exclamation-circle"></i><span id="productDetailSkuErrorText"></span>
       </p>
