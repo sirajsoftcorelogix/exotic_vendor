@@ -169,7 +169,10 @@ $PRODUCT_LABEL_DATA = [
             barDisplayValue: false,
             barFont: 8,
             barHorizontalMarginPx: 6,
-            skuBarcodeGapPx: 5
+            skuBarcodeGapPx: 5,
+            /** Grow ratios for top (SKU) vs bottom (location/date) bands; top > bottom lifts SKU slightly. */
+            microTopBandFlex: 1.12,
+            microBotBandFlex: 0.88
         }
     };
 
@@ -397,8 +400,10 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.appendChild(locEl);
         bottomStack.appendChild(dateEl);
 
+        const topFlex = preset.microTopBandFlex != null ? preset.microTopBandFlex : 1.12;
+        const botFlex = preset.microBotBandFlex != null ? preset.microBotBandFlex : 0.88;
         const topRegion = document.createElement('div');
-        topRegion.style.flex = '1 1 0';
+        topRegion.style.flex = topFlex + ' 1 0';
         topRegion.style.minHeight = '0';
         topRegion.style.display = 'flex';
         topRegion.style.flexDirection = 'column';
@@ -407,7 +412,7 @@ $PRODUCT_LABEL_DATA = [
         topRegion.appendChild(skuTop);
 
         const botRegion = document.createElement('div');
-        botRegion.style.flex = '1 1 0';
+        botRegion.style.flex = botFlex + ' 1 0';
         botRegion.style.minHeight = '0';
         botRegion.style.display = 'flex';
         botRegion.style.flexDirection = 'column';
