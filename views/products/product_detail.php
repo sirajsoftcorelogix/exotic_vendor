@@ -41,6 +41,7 @@
     </div>
     
   </div>
+  <?php require __DIR__ . '/partials/product_label_print_block.php'; ?>
   <!-- INVENTORY -->
   <!-- <div class="bg-white rounded-lg p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
     <div>
