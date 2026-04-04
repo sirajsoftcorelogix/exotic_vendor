@@ -3,9 +3,7 @@
  * Product detail — label print modal (PDF, multiple sizes).
  * Expects $products from product_detail (getProduct).
  *
- * Jewelry Size preset matches JEWELRY_FILE_CONFIG geometry:
- * LABEL_WIDTH_MM 100, LABEL_HEIGHT_MM 12.9, OFFSET_X/Y_MM 0,
- * TEXT_FONT Arial, left/right text ≈ 5pt / 6pt at print scale.
+ * Jewelry Size: 100 × 12.9 mm, three columns — SKU / Size / Color | barcode | MRP / tax line / store host.
  */
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -33,6 +31,18 @@ if (!empty($products['product_weight']) && (float)$products['product_weight'] > 
     $wt = $products['product_weight'] . ' ' . ($products['product_weight_unit'] ?? '');
 }
 
+$labelStoreHost = 'www.exoticindia.com';
+$bu = @parse_url(rtrim(base_url(''), '/'));
+if (!empty($bu['host'])) {
+    $labelStoreHost = $bu['host'];
+}
+
+$mrpRaw = $products['itemprice'] ?? $products['cost_price'] ?? '';
+$mrpFormatted = $mrpRaw;
+if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
+    $mrpFormatted = number_format((float)$mrpRaw, 0, '.', ',');
+}
+
 $PRODUCT_LABEL_DATA = [
     'detailUrl' => $labelDetailUrl,
     'productId' => $pid,
@@ -40,12 +50,15 @@ $PRODUCT_LABEL_DATA = [
     'itemCode' => $products['item_code'] ?? '',
     'sku' => $products['sku'] ?? '',
     'title' => $products['title'] ?? '',
-    'mrp' => $products['itemprice'] ?? $products['cost_price'] ?? '',
+    'mrp' => $mrpRaw,
+    'mrpFormatted' => $mrpFormatted,
     'group' => $products['groupname'] ?? '',
     'dims' => $labelDims,
     'weight' => $wt,
     'color' => $products['color'] ?? '',
     'size' => $products['size'] ?? '',
+    'storeHost' => $labelStoreHost,
+    'taxNote' => 'Incl. of all taxes',
 ];
 ?>
 
@@ -121,14 +134,17 @@ $PRODUCT_LABEL_DATA = [
             cw: 2000,
             ch: 258,
             border: '1px solid #000000',
+            borderRadius: '36px',
             fontFamily: 'Arial, Helvetica, sans-serif',
-            leftFontPx: 35,
-            rightFontPx: 42,
-            barCol: 400,
-            barUnit: 0.85,
-            barHeight: 78,
-            barFont: 11,
-            pad: 10
+            leftSkuPx: 34,
+            leftMetaPx: 28,
+            rightMrpPx: 38,
+            rightSmallPx: 22,
+            barCol: 630,
+            barUnit: 0.75,
+            barHeight: 58,
+            barFont: 8,
+            pad: 16
         },
         medium: {
             name: 'Medium',
@@ -185,24 +201,62 @@ $PRODUCT_LABEL_DATA = [
         el.style.height = preset.ch + 'px';
         el.style.background = '#ffffff';
         el.style.border = preset.border || '1px solid #000000';
+        if (preset.borderRadius) {
+            el.style.borderRadius = preset.borderRadius;
+        }
         el.style.color = '#000000';
         el.style.fontFamily = preset.fontFamily || 'Arial, Helvetica, sans-serif';
         el.style.display = 'flex';
         el.style.flexDirection = 'row';
-        el.style.alignItems = 'center';
+        el.style.alignItems = 'stretch';
+        el.style.justifyContent = 'space-between';
         el.style.overflow = 'hidden';
-        const sidePad = preset.pad != null ? preset.pad : 10;
+
+        const sidePad = preset.pad != null ? preset.pad : 16;
+        const innerW = preset.cw - 2 * sidePad;
+        const colW = Math.floor(innerW / 3);
+
         el.style.paddingLeft = sidePad + 'px';
         el.style.paddingRight = sidePad + 'px';
 
-        const barCol = document.createElement('div');
-        barCol.style.flex = '0 0 auto';
-        barCol.style.width = preset.barCol + 'px';
-        barCol.style.display = 'flex';
-        barCol.style.alignItems = 'center';
-        barCol.style.justifyContent = 'center';
-        barCol.style.boxSizing = 'border-box';
-        barCol.style.paddingRight = Math.max(8, Math.round(sidePad * 0.6)) + 'px';
+        const skuVal = esc((data.sku || data.itemCode || '').trim() || '—');
+        const sizeVal = esc((data.size || '').trim() || '—');
+        const colorVal = esc((data.color || '').trim() || '—');
+        const mrpShow = data.mrpFormatted != null && data.mrpFormatted !== ''
+            ? String(data.mrpFormatted)
+            : (data.mrp != null && data.mrp !== '' ? String(data.mrp) : '—');
+        const storeHost = esc((data.storeHost || '').trim() || '—');
+        const taxNote = esc((data.taxNote || 'Incl. of all taxes').trim());
+
+        const leftSkuPx = preset.leftSkuPx || 34;
+        const leftMetaPx = preset.leftMetaPx || 28;
+        const rightMrpPx = preset.rightMrpPx || 38;
+        const rightSmallPx = preset.rightSmallPx || 22;
+
+        const leftCol = document.createElement('div');
+        leftCol.style.flex = '0 0 ' + colW + 'px';
+        leftCol.style.width = colW + 'px';
+        leftCol.style.display = 'flex';
+        leftCol.style.flexDirection = 'column';
+        leftCol.style.alignItems = 'flex-start';
+        leftCol.style.justifyContent = 'center';
+        leftCol.style.boxSizing = 'border-box';
+        leftCol.style.paddingRight = '8px';
+        leftCol.style.overflow = 'hidden';
+        leftCol.innerHTML =
+            '<div style="font-size:' + leftSkuPx + 'px;font-weight:800;line-height:1.05;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">' + skuVal + '</div>' +
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">Size: ' + sizeVal + '</div>' +
+            '<div style="font-size:' + leftMetaPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">Color: ' + colorVal + '</div>';
+
+        const centerCol = document.createElement('div');
+        centerCol.style.flex = '0 0 ' + colW + 'px';
+        centerCol.style.width = colW + 'px';
+        centerCol.style.display = 'flex';
+        centerCol.style.alignItems = 'center';
+        centerCol.style.justifyContent = 'center';
+        centerCol.style.boxSizing = 'border-box';
+        centerCol.style.paddingLeft = '6px';
+        centerCol.style.paddingRight = '6px';
         const barWrap = document.createElement('div');
         barWrap.className = 'pl-barcode-wrap';
         barWrap.style.maxWidth = '100%';
@@ -213,44 +267,26 @@ $PRODUCT_LABEL_DATA = [
         const barCanvas = document.createElement('canvas');
         barCanvas.className = 'pl-barcode';
         barWrap.appendChild(barCanvas);
-        barCol.appendChild(barWrap);
+        centerCol.appendChild(barWrap);
 
-        const mid = document.createElement('div');
-        mid.style.flex = '1';
-        mid.style.minWidth = '0';
-        mid.style.display = 'flex';
-        mid.style.flexDirection = 'row';
-        mid.style.alignItems = 'center';
-        mid.style.justifyContent = 'flex-start';
-        mid.style.gap = '10px';
-        mid.style.fontSize = (preset.leftFontPx || 35) + 'px';
-        mid.style.fontWeight = '600';
-        mid.style.lineHeight = '1.1';
-        mid.style.overflow = 'hidden';
-        mid.style.whiteSpace = 'nowrap';
-        mid.style.textOverflow = 'ellipsis';
-        const skuTxt = esc((data.sku || data.itemCode || '').trim() || '—');
-        const sizeTxt = esc((data.size || '').trim() || '—');
-        const colorTxt = esc((data.color || '').trim() || '—');
-        mid.innerHTML =
-            '<span>' + skuTxt + '</span>' +
-            '<span style="opacity:0.35;padding:0 2px">|</span>' +
-            '<span>' + sizeTxt + '</span>' +
-            '<span style="opacity:0.35;padding:0 2px">|</span>' +
-            '<span>' + colorTxt + '</span>';
+        const rightCol = document.createElement('div');
+        rightCol.style.flex = '0 0 ' + colW + 'px';
+        rightCol.style.width = colW + 'px';
+        rightCol.style.display = 'flex';
+        rightCol.style.flexDirection = 'column';
+        rightCol.style.alignItems = 'flex-start';
+        rightCol.style.justifyContent = 'center';
+        rightCol.style.boxSizing = 'border-box';
+        rightCol.style.paddingLeft = '8px';
+        rightCol.style.overflow = 'hidden';
+        rightCol.innerHTML =
+            '<div style="font-size:' + rightMrpPx + 'px;font-weight:800;line-height:1.05;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">MRP: ₹' + mrpShow + '</div>' +
+            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;opacity:0.92;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">' + taxNote + '</div>' +
+            '<div style="font-size:' + rightSmallPx + 'px;font-weight:400;line-height:1.1;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;">' + storeHost + '</div>';
 
-        const right = document.createElement('div');
-        right.style.flex = '0 0 auto';
-        right.style.marginLeft = '10px';
-        right.style.fontSize = (preset.rightFontPx || 42) + 'px';
-        right.style.fontWeight = '800';
-        right.style.lineHeight = '1.1';
-        right.style.whiteSpace = 'nowrap';
-        right.textContent = 'MRP ₹' + (data.mrp != null && data.mrp !== '' ? String(data.mrp) : '—');
-
-        el.appendChild(barCol);
-        el.appendChild(mid);
-        el.appendChild(right);
+        el.appendChild(leftCol);
+        el.appendChild(centerCol);
+        el.appendChild(rightCol);
         return el;
     }
 
@@ -381,15 +417,18 @@ $PRODUCT_LABEL_DATA = [
 
     function initBarcodeOnCanvas(canvas, value, preset) {
         const text = String(value).trim() || '0';
+        const isJewelry = preset.layout === 'jewelry';
+        const bcMargin = isJewelry ? 2 : 4;
+        const bcFontOpt = isJewelry ? '' : 'bold';
         try {
             JsBarcode(canvas, text, {
                 format: 'CODE128',
                 width: preset.barUnit,
                 height: preset.barHeight,
                 displayValue: true,
-                fontOptions: 'bold',
+                fontOptions: bcFontOpt,
                 fontSize: preset.barFont,
-                margin: 4,
+                margin: bcMargin,
                 background: '#ffffff',
                 lineColor: '#000000'
             });
@@ -400,8 +439,9 @@ $PRODUCT_LABEL_DATA = [
                     width: preset.barUnit,
                     height: preset.barHeight,
                     displayValue: true,
+                    fontOptions: bcFontOpt,
                     fontSize: preset.barFont,
-                    margin: 4,
+                    margin: bcMargin,
                     background: '#ffffff',
                     lineColor: '#000000'
                 });
@@ -412,7 +452,7 @@ $PRODUCT_LABEL_DATA = [
                     height: Math.min(preset.barHeight, 40),
                     displayValue: true,
                     fontSize: preset.barFont,
-                    margin: 2,
+                    margin: bcMargin,
                     background: '#ffffff',
                     lineColor: '#000000'
                 });
