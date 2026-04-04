@@ -110,9 +110,9 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
     </div>
 </div>
 
-<!-- Off-screen render queue (micro label JS rev <?php echo (int)@filemtime(__FILE__); ?>) -->
-<div id="product-label-pdf-queue" class="fixed left-0 top-0 -z-10 pointer-events-none opacity-0 overflow-hidden"
-    style="width:0;height:0;" aria-hidden="true"></div>
+<!-- Capture host: avoid width:0/overflow:hidden so html2canvas can clone reliably (see generateProductLabelPrint). -->
+<div id="product-label-pdf-queue" class="fixed left-0 top-0 pointer-events-none opacity-0"
+    style="z-index:-1;width:1px;height:1px;overflow:visible;clip-path:inset(100%);" aria-hidden="true"></div>
 
 <script>
 (function() {
@@ -717,13 +717,15 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         }
 
         const queue = document.getElementById('product-label-pdf-queue');
+        const queueParent = queue.parentNode;
+        const queueNext = queue.nextSibling;
         queue.innerHTML = '';
-        queue.style.width = preset.cw + 'px';
-        queue.style.height = 'auto';
-        queue.style.opacity = '0';
-        queue.style.position = 'fixed';
-        queue.style.left = '-9999px';
-        queue.style.top = '0';
+        try {
+            if (queueParent && document.body !== queueParent) {
+                document.body.appendChild(queue);
+            }
+        } catch (eMoveQ) { /* keep in place */ }
+        queue.style.cssText = 'position:fixed!important;left:0!important;top:0!important;width:auto!important;height:auto!important;min-width:' + preset.cw + 'px!important;overflow:visible!important;opacity:0!important;pointer-events:none!important;z-index:2147483646!important;clip:unset!important;clip-path:none!important;';
 
         const sheets = [];
         for (let i = 0; i < qty; i++) {
@@ -749,39 +751,49 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 
         function makeOncloneForSheet(sourceEl) {
             return function(clonedDoc) {
-                var clonedSheet = clonedDoc.querySelector('.product-label-sheet[data-pl-capture="1"]');
-                if (!clonedSheet) clonedSheet = clonedDoc.querySelector('.product-label-sheet');
-                var origCanvas = sourceEl.querySelector('canvas.pl-barcode');
-                var clonedCanvas = clonedSheet ? clonedSheet.querySelector('canvas.pl-barcode') : null;
-                if (origCanvas && clonedCanvas && origCanvas.width > 0 && origCanvas.height > 0) {
-                    clonedCanvas.width = origCanvas.width;
-                    clonedCanvas.height = origCanvas.height;
-                    clonedCanvas.getContext('2d').drawImage(origCanvas, 0, 0);
+                try {
+                    var clonedSheet = clonedDoc.querySelector('.product-label-sheet[data-pl-capture="1"]')
+                        || clonedDoc.querySelector('.product-label-sheet');
+                    var origCanvas = sourceEl.querySelector('canvas.pl-barcode');
+                    var clonedCanvas = clonedSheet ? clonedSheet.querySelector('canvas.pl-barcode') : null;
+                    if (origCanvas && clonedCanvas && origCanvas.width > 0 && origCanvas.height > 0) {
+                        clonedCanvas.width = origCanvas.width;
+                        clonedCanvas.height = origCanvas.height;
+                        clonedCanvas.getContext('2d').drawImage(origCanvas, 0, 0);
+                    }
+                } catch (eClone) {
+                    console.warn('Label onclone canvas sync:', eClone);
                 }
             };
         }
 
-        async function captureSheetAsPng(element) {
-            var baseOpts = {
+        function html2canvasOptsForElement(element, scale, extra) {
+            var ow = Math.max(1, Math.ceil(element.offsetWidth || preset.cw));
+            var oh = Math.max(1, Math.ceil(element.offsetHeight || preset.ch));
+            return Object.assign({
                 useCORS: true,
                 allowTaint: false,
                 backgroundColor: '#ffffff',
                 logging: false,
-                width: preset.cw,
-                height: preset.ch,
-                windowWidth: preset.cw,
-                windowHeight: preset.ch,
-                foreignObjectRendering: false
-            };
+                foreignObjectRendering: false,
+                scale: scale,
+                width: ow,
+                height: oh,
+                scrollX: 0,
+                scrollY: 0
+            }, extra || {});
+        }
+
+        async function captureSheetAsPng(element) {
             element.setAttribute('data-pl-capture', '1');
             try {
-                var canvas = await html2canvas(element, Object.assign({}, baseOpts, {
-                    scale: 2,
-                    onclone: makeOncloneForSheet(element)
-                }));
+                var canvas = await html2canvas(element, Object.assign(
+                    html2canvasOptsForElement(element, 2),
+                    { onclone: makeOncloneForSheet(element) }
+                ));
                 return canvas.toDataURL('image/png');
             } catch (firstErr) {
-                console.warn('Label capture retry (no product photo / lower scale):', firstErr);
+                console.warn('Label capture retry (lower scale / CORS):', firstErr);
                 var imgs = element.querySelectorAll('img');
                 var imgBackup = [];
                 for (var j = 0; j < imgs.length; j++) {
@@ -794,12 +806,15 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                     im.setAttribute('src', TRANSPARENT_GIF);
                 }
                 try {
-                    var canvas2 = await html2canvas(element, Object.assign({}, baseOpts, {
-                        scale: 1,
-                        useCORS: false,
-                        onclone: makeOncloneForSheet(element)
-                    }));
+                    var canvas2 = await html2canvas(element, Object.assign(
+                        html2canvasOptsForElement(element, 1, { useCORS: false }),
+                        { onclone: makeOncloneForSheet(element) }
+                    ));
                     return canvas2.toDataURL('image/png');
+                } catch (secondErr) {
+                    console.warn('Label capture retry (no onclone):', secondErr);
+                    var canvas3 = await html2canvas(element, html2canvasOptsForElement(element, 1, { useCORS: false }));
+                    return canvas3.toDataURL('image/png');
                 } finally {
                     for (var k = 0; k < imgs.length; k++) {
                         if (imgBackup[k].src != null) imgs[k].setAttribute('src', imgBackup[k].src);
@@ -829,6 +844,17 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             btn.disabled = false;
             btn.innerHTML = prevHtml;
             queue.innerHTML = '';
+            queue.className = 'fixed left-0 top-0 pointer-events-none opacity-0';
+            queue.style.cssText = 'z-index:-1;width:1px;height:1px;overflow:visible;clip-path:inset(100%);';
+            if (queueParent) {
+                try {
+                    if (queueNext && queueNext.parentNode === queueParent) {
+                        queueParent.insertBefore(queue, queueNext);
+                    } else {
+                        queueParent.appendChild(queue);
+                    }
+                } catch (eRestore) { /* ignore */ }
+            }
         }
     };
 
