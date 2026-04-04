@@ -401,7 +401,7 @@ $PRODUCT_LABEL_DATA = [
         bottomStack.appendChild(dateEl);
 
         const topFlex = preset.microTopBandFlex != null ? preset.microTopBandFlex : 1.12;
-        const botFlex = preset.microBotBandFlex != null ? preset.microBotBandFlex : 0.88;
+        const botFlex = preset.microBotBandFlex != null ? preset.microBotBandFlex : 1.12;
         const topRegion = document.createElement('div');
         topRegion.style.flex = topFlex + ' 1 0';
         topRegion.style.minHeight = '0';
