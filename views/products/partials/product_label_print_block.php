@@ -338,7 +338,12 @@ $PRODUCT_LABEL_DATA = [
         imgCol.style.padding = preset.pad + 'px';
         const img = document.createElement('img');
         img.src = data.imageUrl;
-        img.crossOrigin = 'anonymous';
+        try {
+            const abs = new URL(data.imageUrl, window.location.href);
+            if ((abs.protocol === 'http:' || abs.protocol === 'https:') && abs.origin !== window.location.origin) {
+                img.crossOrigin = 'anonymous';
+            }
+        } catch (e) { /* keep default — same-page relative URLs stay non-CORS for capture */ }
         img.alt = '';
         img.style.maxWidth = '100%';
         img.style.maxHeight = '95%';
@@ -552,46 +557,93 @@ $PRODUCT_LABEL_DATA = [
             if (canvas) initBarcodeOnCanvas(canvas, bcVal, preset);
         });
 
-        await new Promise(function(r) { setTimeout(r, 150); });
+        await new Promise(function(r) { setTimeout(r, 280); });
 
         const btn = document.getElementById('productLabelPrintBtn');
         const prevHtml = btn.innerHTML;
         btn.disabled = true;
         btn.textContent = 'Preparing…';
 
+        var TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+        function makeOncloneForSheet(sourceEl) {
+            return function(clonedDoc) {
+                var clonedSheet = clonedDoc.querySelector('.product-label-sheet[data-pl-capture="1"]');
+                if (!clonedSheet) clonedSheet = clonedDoc.querySelector('.product-label-sheet');
+                var origCanvas = sourceEl.querySelector('canvas.pl-barcode');
+                var clonedCanvas = clonedSheet ? clonedSheet.querySelector('canvas.pl-barcode') : null;
+                if (origCanvas && clonedCanvas && origCanvas.width > 0 && origCanvas.height > 0) {
+                    clonedCanvas.width = origCanvas.width;
+                    clonedCanvas.height = origCanvas.height;
+                    clonedCanvas.getContext('2d').drawImage(origCanvas, 0, 0);
+                }
+            };
+        }
+
+        async function captureSheetAsPng(element) {
+            var baseOpts = {
+                useCORS: true,
+                allowTaint: false,
+                backgroundColor: '#ffffff',
+                logging: false,
+                width: preset.cw,
+                height: preset.ch,
+                windowWidth: preset.cw,
+                windowHeight: preset.ch,
+                foreignObjectRendering: false
+            };
+            element.setAttribute('data-pl-capture', '1');
+            try {
+                var canvas = await html2canvas(element, Object.assign({}, baseOpts, {
+                    scale: 2,
+                    onclone: makeOncloneForSheet(element)
+                }));
+                return canvas.toDataURL('image/png');
+            } catch (firstErr) {
+                console.warn('Label capture retry (no product photo / lower scale):', firstErr);
+                var imgs = element.querySelectorAll('img');
+                var imgBackup = [];
+                for (var j = 0; j < imgs.length; j++) {
+                    var im = imgs[j];
+                    imgBackup.push({
+                        src: im.getAttribute('src'),
+                        crossorigin: im.getAttribute('crossorigin')
+                    });
+                    im.removeAttribute('crossorigin');
+                    im.setAttribute('src', TRANSPARENT_GIF);
+                }
+                try {
+                    var canvas2 = await html2canvas(element, Object.assign({}, baseOpts, {
+                        scale: 1,
+                        useCORS: false,
+                        onclone: makeOncloneForSheet(element)
+                    }));
+                    return canvas2.toDataURL('image/png');
+                } finally {
+                    for (var k = 0; k < imgs.length; k++) {
+                        if (imgBackup[k].src != null) imgs[k].setAttribute('src', imgBackup[k].src);
+                        else imgs[k].removeAttribute('src');
+                        if (imgBackup[k].crossorigin) imgs[k].setAttribute('crossorigin', imgBackup[k].crossorigin);
+                        else imgs[k].removeAttribute('crossorigin');
+                    }
+                }
+            } finally {
+                element.removeAttribute('data-pl-capture');
+            }
+        }
+
         try {
             const imageDataUrls = [];
             for (let i = 0; i < sheets.length; i++) {
-                const element = sheets[i];
-                const canvas = await html2canvas(element, {
-                    scale: 2,
-                    useCORS: true,
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                    width: preset.cw,
-                    height: preset.ch,
-                    windowWidth: preset.cw,
-                    windowHeight: preset.ch,
-                    onclone: function(clonedDoc) {
-                        const origCanvas = element.querySelector('canvas.pl-barcode');
-                        const clonedSheet = clonedDoc.querySelector('.product-label-sheet');
-                        const clonedCanvas = clonedSheet ? clonedSheet.querySelector('canvas.pl-barcode') : null;
-                        if (origCanvas && clonedCanvas) {
-                            const ctx = clonedCanvas.getContext('2d');
-                            clonedCanvas.width = origCanvas.width;
-                            clonedCanvas.height = origCanvas.height;
-                            ctx.drawImage(origCanvas, 0, 0);
-                        }
-                    }
-                });
-                imageDataUrls.push(canvas.toDataURL('image/png'));
+                imageDataUrls.push(await captureSheetAsPng(sheets[i]));
             }
 
             openPrintWindowWithLabelImages(imageDataUrls, preset);
             closeProductLabelModal();
         } catch (err) {
             console.error(err);
-            alert('Could not prepare labels for printing. If images are on another domain, try hosting them on the same site or check the console.');
+            var detail = err && err.message ? err.message : String(err);
+            alert('Could not prepare labels for printing.\n\n' + detail + '\n\nIf a product photo is on another domain, labels were retried without the photo. Check the browser console for more detail.');
         } finally {
             btn.disabled = false;
             btn.innerHTML = prevHtml;
