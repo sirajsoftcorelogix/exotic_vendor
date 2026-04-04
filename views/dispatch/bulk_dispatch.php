@@ -626,6 +626,8 @@
                     const container = document.getElementById('invDispatchesContainer');
                     const newOrderDiv = document.createElement('div');
                     newOrderDiv.className = 'px-4 pt-4 pb-2';
+                    const isExpress = false;
+                    const isCOD = false;
                     newOrderDiv.innerHTML = `
                         <div class="bg-orange-500 text-white px-4 py-2 flex flex-wrap justify-between items-center rounded-t">
                             <div class="font-semibold">
@@ -643,7 +645,7 @@
                                     <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
                                         📦
                                     </span>
-                                    <span class="font-semibold text-gray-800">Box 1</span>
+                                    <span class="font-semibold text-gray-800">Box 1</span> <span class="text-xs text-green-500 express-badge hidden">EXPRESS</span> <span class="text-xs text-blue-500 cod-badge hidden">COD</span>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
                                     <div>
@@ -711,6 +713,8 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="availableCourierCompanies" class="px-4 py-2 text-xs text-gray-700 border-t border-gray-200">
+                        </div>
 
                         <div class="mt-2 mb-4 flex flex-wrap items-center justify-between">
                             <button class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded text-sm inline-flex items-center gap-2 add-box-btn">
@@ -726,7 +730,11 @@
                 }
 
                 rows.forEach(row => {
+                    console.log('Processing row...');
                     const cb = row.querySelector('input[type="checkbox"]');
+                    //data-is-express check
+                    console.log(row.dataset.isExpress)
+                    console.log('Checkbox found and checked?', cb && cb.checked);
                     if (cb && cb.checked) {
                         const cols = row.querySelectorAll('td');
                         const orderNum = cols[1]?.textContent.trim() || '';
@@ -739,6 +747,11 @@
                         const paymentType = cols[8]?.textContent.trim() || '';
                         const groupname = row.dataset.groupname || '';
                         const itemId = row.dataset.itemId || '';
+                        const isExpress = row.dataset.isExpress || '';
+                        
+                        console.log('Item extracted:', { itemInfo, paymentType, orderNum });
+                        console.log('COD check:', paymentType.toLowerCase().includes('cod'));
+                        console.log('EXPRESS check:', itemInfo.toUpperCase().includes('EXPRESS'));
 
                         // Skip if this exact item is already added to the current box
                         if (currentBox && itemId) {
@@ -781,6 +794,7 @@
                             if (summary) summary.insertAdjacentElement('beforebegin', itemRow);
                         }
                         added++;
+                        console.log('Item added, count:', added);
                         
                         // Update order_ids attribute on the current box with all item IDs
                         if (currentBox && itemId) {
@@ -791,12 +805,63 @@
                             }
                             currentBox.setAttribute('order_ids', orderIdsArray.join(','));
                         }
+                        
+                        // Track COD and Express flags
+                        console.log('About to check flags, currentBox:', currentBox);
+                        console.log('About to check flags, paymentType value:', paymentType, 'itemInfo value:', itemInfo);
+                        
+                        if (currentBox) {
+                            console.log('currentBox exists, checking conditions...');
+                            // Check if payment type is COD
+                            const isCODFlag = paymentType.toLowerCase().includes('cod');
+                            const isExpressFlag = isExpress;
+                            console.log('COD flag condition result:', isCODFlag);
+                            console.log('EXPRESS flag condition result:', isExpressFlag);
+                            
+                            if (isCODFlag) {
+                                currentBox.setAttribute('data-is-cod', '1');
+                                console.log('✓ Set data-is-cod=1');
+                            } else {
+                                console.log('✗ COD condition was false, not setting data-is-cod');
+                            }
+                            
+                            // Check if item info contains Express keyword
+                            if (isExpressFlag) {
+                                currentBox.setAttribute('data-is-express', '1');
+                                console.log('✓ Set data-is-express=1');
+                            } else {
+                                console.log('✗ EXPRESS condition was false, not setting data-is-express');
+                            }
+                            
+                            console.log('CurrentBox attributes after flags:', {
+                                'data-is-cod': currentBox.getAttribute('data-is-cod'),
+                                'data-is-express': currentBox.getAttribute('data-is-express')
+                            });
+                        } else {
+                            console.log('✗ currentBox is null/falsy');
+                        }
                     }
                 });
                 if (added > 0) {
                     // Update box totals after adding items
                     if (currentBox) {
+                        console.log('Before updateBadgeVisibility - currentBox attributes:', {
+                            'data-is-cod': currentBox.getAttribute('data-is-cod'),
+                            'data-is-express': currentBox.getAttribute('data-is-express')
+                        });
+                        console.log('Calling updateBoxTotals and fetchCouriersForBox');
                         updateBoxTotals(currentBox);
+                        // Use setTimeout to ensure DOM is updated
+                        setTimeout(() => {
+                            console.log('setTimeout - about to call updateBadgeVisibility');
+                            console.log('currentBox attributes in setTimeout:', {
+                                'data-is-cod': currentBox.getAttribute('data-is-cod'),
+                                'data-is-express': currentBox.getAttribute('data-is-express')
+                            });
+                            updateBadgeVisibility(currentBox);
+                        }, 100);
+                        // Fetch available couriers for this box
+                        fetchCouriersForBox(currentBox);
                     }
                     selectAllCheckbox.checked = false;
                     closeModal();
@@ -806,6 +871,178 @@
             });
         }
 
+        // Helper function to update badge visibility based on data attributes
+        function updateBadgeVisibility(boxElement) {
+            if (!boxElement) {
+                console.log('updateBadgeVisibility: boxElement is null');
+                return;
+            }
+            
+            console.log('updateBadgeVisibility - boxElement:', boxElement);
+            
+            // Check data attributes
+            const isExpress = boxElement.getAttribute('data-is-express') === '1';
+            const isCOD = boxElement.getAttribute('data-is-cod') === '1';
+            
+            console.log('updateBadgeVisibility - flags:', { isExpress, isCOD });
+            
+            // Find badges - search in the entire box element tree
+            const expressBadge = boxElement.querySelector('.express-badge');
+            const codBadge = boxElement.querySelector('.cod-badge');
+            
+            console.log('Badges found:', { expressBadge: !!expressBadge, codBadge: !!codBadge });
+            console.log('Express badge element:', expressBadge);
+            console.log('COD badge element:', codBadge);
+            
+            if (expressBadge) {
+                if (isExpress) {
+                    expressBadge.classList.remove('hidden');
+                    expressBadge.style.display = 'inline-block';
+                    console.log('EXPRESS badge shown');
+                } else {
+                    expressBadge.classList.add('hidden');
+                    expressBadge.style.display = 'none';
+                    console.log('EXPRESS badge hidden');
+                }
+            } else {
+                console.log('EXPRESS badge not found in:', boxElement);
+            }
+            
+            if (codBadge) {
+                if (isCOD) {
+                    codBadge.classList.remove('hidden');
+                    codBadge.style.display = 'inline-block';
+                    console.log('COD badge shown');
+                } else {
+                    codBadge.classList.add('hidden');
+                    codBadge.style.display = 'none';
+                    console.log('COD badge hidden');
+                }
+            } else {
+                console.log('COD badge not found in:', boxElement);
+            }
+        }
+
+        // Helper function to fetch couriers from Shiprocket API
+        function fetchCouriersForBox(boxElement) {
+            console.log('fetchCouriersForBox called with:', boxElement);
+            if (!boxElement) {
+                console.log('boxElement is null/undefined');
+                return;
+            }
+            
+            // Get box details
+            const boxSizeSelect = boxElement.querySelector('.BoxSize');
+            const weightInput = boxElement.querySelector('.weight-input');
+            const orderNumber = boxElement.getAttribute('data-order-number');
+            
+            console.log('Box details found:', {
+                boxSizeSelect: !!boxSizeSelect,
+                weightInput: !!weightInput,
+                orderNumber: orderNumber
+            });
+            
+            if (!boxSizeSelect || !weightInput || !orderNumber) {
+                console.log('Missing required box data for courier serviceability', {
+                    boxSizeSelect: !!boxSizeSelect,
+                    weightInput: !!weightInput,
+                    orderNumber: !!orderNumber
+                });
+                return;
+            }
+            
+            const selectedOption = boxSizeSelect.options[boxSizeSelect.selectedIndex];
+            const length = parseFloat(selectedOption.getAttribute('data-length')) || 0;
+            const breadth = parseFloat(selectedOption.getAttribute('data-width')) || 0;
+            const height = parseFloat(selectedOption.getAttribute('data-height')) || 0;
+            const weight = parseFloat(weightInput.value) || 0;
+            
+            console.log('Dimensions extracted:', { length, breadth, height, weight });
+            
+            // Only fetch if we have valid dimensions
+            if (weight <= 0 || length <= 0 || breadth <= 0 || height <= 0) {
+                console.log('Invalid dimensions for courier check', { weight, length, breadth, height });
+                return;
+            }
+            
+            // Show loading state in courier container
+            const courierContainer = boxElement.closest('.px-4.pt-4.pb-2').querySelector('#availableCourierCompanies');
+            console.log('Courier container found:', !!courierContainer);
+            if (courierContainer) {
+                courierContainer.innerHTML = '<div class="text-xs text-gray-500 py-2">⏳ Fetching available couriers...</div>';
+            }
+            
+            // Call the PHP endpoint
+            const payload = {
+                order_number: orderNumber,
+                length: length,
+                breadth: breadth,
+                height: height,
+                weight: weight,
+                cod: boxElement.getAttribute('data-is-cod') === '1' ? 1 : 0,
+                is_express: boxElement.getAttribute('data-is-express') === '1' ? 1 : 0
+            };
+            
+            console.log('Sending payload to PHP endpoint:', payload);
+            
+            fetch('?page=dispatch&action=getCourierServiceability', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success && data.couriers && data.couriers.length > 0) {
+                    // Display couriers
+                    let courierHtml = '<div class="text-xs"><div class="font-semibold text-gray-800 mb-2">Available Couriers:</div>';
+                    courierHtml += '<div class="space-y-2 flex flex-wrap gap-2 justify-start items-stretch overflow-auto max-h-32">';
+                    
+                    data.couriers.forEach(courier => {
+                        const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
+                        const price = courier.price ? ('₹ ' + parseFloat(courier.price).toFixed(2)) : 'N/A';
+                        const etd = courier.etd || 'N/A';
+                        
+                        courierHtml += `
+                            <div class="border border-orange-200 rounded p-2 hover:bg-orange-50 cursor-pointer flex flex-col w-52" data-courier-id="${courier.id}">
+                                <div class="flex justify-between items-start">
+                                    <div class="flex-1">
+                                        <p class="font-bold text-gray-800">${escapeHtml(courier.name)}</p>
+                                        <div class="grid grid-cols-3 gap-2 mt-1 text-xs text-gray-700">
+                                            <div><span class="font-semibold">Price:</span> ${price}</div>
+                                            <div><span class="font-semibold">ETD:</span> ${etd}</div>
+                                            <div><span class="font-semibold">Rating:</span> ${rating}<i class="fas fa-star text-yellow-500 ml-1"></i></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    courierHtml += '</div></div>';
+                    if (courierContainer) {
+                        courierContainer.innerHTML = courierHtml;
+                    }
+                } else {
+                    if (courierContainer) {
+                        courierContainer.innerHTML = '<div class="text-xs text-red-600 py-2">❌ No couriers available for this route</div>';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching couriers:', error);
+                if (courierContainer) {
+                    courierContainer.innerHTML = '<div class="text-xs text-red-600 py-2">⚠️ Error fetching couriers</div>';
+                }
+            });
+        }
+        
         // Handle Add Order button
         document.getElementById('addOrderBtn').addEventListener('click', function() {
             const orderNumber = document.getElementById('orderNumber').value.trim();
@@ -888,7 +1125,7 @@
                                     <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-400 text-white text-sm">
                                         📦
                                     </span>
-                                    <span class="font-semibold text-gray-800">Box ${boxNumber}</span>
+                                    <span class="font-semibold text-gray-800">Box ${boxNumber}</span> <span class="text-xs text-green-500 express-badge hidden">EXPRESS</span> <span class="text-xs text-blue-500 cod-badge hidden">COD</span>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
                                     <div>
@@ -961,6 +1198,12 @@
             // Insert the new box before the "Add Box" button
             const addBoxButton = orderContainer.querySelector('.add-box-btn').closest('.mt-2.mb-4');
             addBoxButton.insertAdjacentHTML('beforebegin', newBoxHtml);
+            
+            // Fetch couriers for the newly added box
+            const newBox = addBoxButton.previousElementSibling.querySelector('[data-order-number]');
+            if (newBox) {
+                fetchCouriersForBox(newBox);
+            }
         }
     });
 
@@ -1625,5 +1868,38 @@
 
             showAlert(`✓ Applied weight ${weight} kg to ${updatedCount} boxes`, 'success');
         });
-    }})();
+    }
+    
+    // Add event listeners for box size change to fetch couriers
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('.BoxSize')) {
+            const boxElement = e.target.closest('[data-order-number]');
+            if (boxElement) {
+                // Debounce the API call
+                if (boxElement._courierDebounce) {
+                    clearTimeout(boxElement._courierDebounce);
+                }
+                boxElement._courierDebounce = setTimeout(() => {
+                    fetchCouriersForBox(boxElement);
+                }, 500);
+            }
+        }
+    });
+    
+    // Add event listeners for weight change to fetch couriers
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('.weight-input')) {
+            const boxElement = e.target.closest('[data-order-number]');
+            if (boxElement) {
+                // Debounce the API call
+                if (boxElement._courierDebounce) {
+                    clearTimeout(boxElement._courierDebounce);
+                }
+                boxElement._courierDebounce = setTimeout(() => {
+                    fetchCouriersForBox(boxElement);
+                }, 1000);
+            }
+        }
+    });
+})();
 </script>

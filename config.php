@@ -33,4 +33,36 @@ return [
    */
   'backfill_logs_web_key' => '',
 
+  /**
+   * Alankit/Eraahi E-invoice IRN API Credentials
+   * Used for generating IRN (Invoice Registration Number) for international invoices
+   * API Documentation: https://developers.eraahi.com
+   * AppKey: 32-character random unique identifier for application authentication
+   */
+  // 'alankit' => [
+  //   'username' => 'EXOT_IND_2026',
+  //   'password' => 'Alankit@123',
+  //   'subscription_key' => 'AL6x9c9S1b7g8h9S7C',
+  //   'gstin' => '07AGAPA5363L002',
+  //   'company_name' => 'EXOTIC INDIA ART PVT LTD',
+  //   'app_key' => 'f8c4e2d1a9b3c5e7f9a1b3c5e7f9a1b3', // 32-character unique ID
+  //   'force_refresh_access_token' => true, // Refresh token 10 minutes before expiry
+  //   'auto_generate_ewaybill' => true, // Auto-generate E-Way Bill when IRN is generated
+  //   'ewaybill_transport_mode' => 'ROAD', // ROAD, RAIL, AIR, SHIP
+  //   'ewaybill_vehicle_type' => 'REGULAR' // REGULAR, ABNORMAL
+  // ],
+  /**Sandbox */
+  'alankit' => [
+    'username' => 'AL001',
+    'password' => 'Alankit@123',
+    'subscription_key' => 'AL6x9c9S1b7g8h9S7C',
+    'gstin' => '07AGAPA5363L002',
+    'company_name' => 'EXOTIC INDIA ART PVT LTD',
+    'app_key' => 'f8c4e2d1a9b3c5e7f9a1b3c5e7f9a1b3', // 32-character unique ID
+    'force_refresh_access_token' => true, // Refresh token 10 minutes before expiry
+    'auto_generate_ewaybill' => true, // Auto-generate E-Way Bill when IRN is generated
+    'ewaybill_transport_mode' => 'ROAD', // ROAD, RAIL, AIR, SHIP
+    'ewaybill_vehicle_type' => 'REGULAR' // REGULAR, ABNORMAL
+  ],
+
  ];

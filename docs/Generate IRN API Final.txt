@@ -1,0 +1,346 @@
+
+1. e-invoice auth api:
+
+{ "UserName":"AL001", "Password":"Alankit@123", "AppKey":"s5W/W2gjV+hCk/XjBhdG105ehsucKBXBc/5JwWz2l9U=","ForceRefreshAccessToken": true }
+
+Response:
+
+{"Status":1,"ErrorDetails":null,"Data":{"ClientId":"AGAPA29GSPAVK1R","UserName":"AL001","AuthToken":"bla18B40sjy1S4YYW4mVyaEOR","Sek":"v7WT+RdKBXSTweyyLaIA9oabvJCW1s6NsmC7GGHqtGLlCZqCyF1TFO3b86rJ7WI6","TokenExpiry":"2024-09-06 17:42:11"},"InfoDtls":null}
+
+
+2.
+
+Get Decrypted sek by decrypting sek using appkey-->  
+
+Decrypted sek : tpBgaMC0RmKDW7vIwiwB7YtTrO6Y/C9ptvwgEcALMns=
+
+
+Sample code
+
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DecryptSEK
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+
+            string DecryptedSek = "";
+
+              string encryptedSek = "v7WT+RdKBXSTweyyLaIA9oabvJCW1s6NsmC7GGHqtGLlCZqCyF1TFO3b86rJ7WI6";
+         
+
+           string appkey = "s5W/W2gjV+hCk/XjBhdG105ehsucKBXBc/5JwWz2l9U=";
+       
+            byte[] appkeybyte = Convert.FromBase64String(appkey);
+
+            DecryptedSek = DecryptBySymmetricKey(encryptedSek, appkeybyte);
+
+            Console.WriteLine(DecryptedSek);
+            Console.ReadLine();
+
+        }
+
+
+
+
+        public static string DecryptBySymmetricKey(string encryptedSek, byte[] appkey)
+        {
+            //Decrypting SEK
+            try
+            {
+                byte[] dataToDecrypt = Convert.FromBase64String(encryptedSek);
+                var keyBytes = appkey;
+                AesManaged tdes = new AesManaged();
+                tdes.KeySize = 256;
+                tdes.BlockSize = 128;
+                tdes.Key = keyBytes;
+                tdes.Mode = CipherMode.ECB;
+                tdes.Padding = PaddingMode.PKCS7;
+                ICryptoTransform decrypt__1 = tdes.CreateDecryptor();
+                byte[] deCipher = decrypt__1.TransformFinalBlock(dataToDecrypt, 0, dataToDecrypt.Length);
+                tdes.Clear();
+                string EK_result = Convert.ToBase64String(deCipher);
+                return EK_result;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
+
+    }
+}
+
+
+3.
+
+Generate IRN Payload:
+
+{
+    "Version": "1.1",
+    "TranDtls": {
+        "TaxSch": "GST",
+        "SupTyp": "B2B",
+        "RegRev": "Y",
+        "EcmGstin": null,
+        "IgstOnIntra": "N"
+    },
+    "DocDtls": {
+        "Typ": "INV",
+        "No": "test05012026",
+        "Dt": "05/01/2026"
+    },
+    "SellerDtls": {
+        "Gstin": "07AGAPA5363L002",
+        "LglNm": "NIC company pvt ltd",
+        "TrdNm": "NIC Industries",
+        "Addr1": "5th block, kuvempu layout",
+        "Addr2": "kuvempu layout",
+        "Loc": "GANDHINAGAR",
+        "Pin": 110055,
+        "Stcd": "07",
+        "Ph": "9000000000",
+        "Em": "abc@gmail.com"
+    },
+    "BuyerDtls": {
+        "Gstin": "29AWGPV7107B1Z1",
+        "LglNm": "XYZ company pvt ltd",
+        "TrdNm": "XYZ Industries",
+        "Pos": "12",
+        "Addr1": "7th block, kuvempu layout",
+        "Addr2": "kuvempu layout",
+        "Loc": "GANDHINAGAR",
+        "Pin": 562160,
+        "Stcd": "29",
+        "Ph": "91111111111",
+        "Em": "xyz@yahoo.com"
+    },
+    "DispDtls": {
+        "Nm": "ABC company pvt ltd",
+        "Addr1": "7th block, kuvempu layout",
+        "Addr2": "kuvempu layout",
+        "Loc": "Banagalore",
+        "Pin": 562160,
+        "Stcd": "29"
+    },
+    "ShipDtls": {
+        "Gstin": "29AWGPV7107B1Z1",
+        "LglNm": "CBE company pvt ltd",
+        "TrdNm": "kuvempu layout",
+        "Addr1": "7th block, kuvempu layout",
+        "Addr2": "kuvempu layout",
+        "Loc": "Banagalore",
+        "Pin": 562160,
+        "Stcd": "29"
+    },
+    "ItemList": [
+        {
+            "SlNo": "1",
+            "PrdDesc": "Rice",
+            "IsServc": "N",
+            "HsnCd": "1001",
+            "Barcde": "123456",
+            "Qty": 100.345,
+            "FreeQty": 10,
+            "Unit": "BAG",
+            "UnitPrice": 99.545,
+            "TotAmt": 9988.84,
+            "Discount": 10,
+            "PreTaxVal": 1,
+            "AssAmt": 9978.84,
+            "GstRt": 12,
+            "IgstAmt": 1197.46,
+            "CgstAmt": 0,
+            "SgstAmt": 0,
+            "CesRt": 5,
+            "CesAmt": 498.94,
+            "CesNonAdvlAmt": 10,
+            "StateCesRt": 12,
+            "StateCesAmt": 1197.46,
+            "StateCesNonAdvlAmt": 5,
+            "OthChrg": 10,
+            "TotItemVal": 12897.7,
+            "OrdLineRef": "3256",
+            "OrgCntry": "AG",
+            "PrdSlNo": "12345",
+            "BchDtls": {
+                "Nm": "123456",
+                "ExpDt": "01/08/2023",
+                "WrDt": "01/09/2023"
+            },
+            "AttribDtls": [
+                {
+                    "Nm": "Rice",
+                    "Val": "10000"
+                }
+            ]
+        }
+    ],
+    "ValDtls": {
+        "AssVal": 9978.84,
+        "CgstVal": 0,
+        "SgstVal": 0,
+        "IgstVal": 1197.46,
+        "CesVal": 508.94,
+        "StCesVal": 1202.46,
+        "Discount": 10,
+        "OthChrg": 20,
+        "RndOffAmt": 0.3,
+        "TotInvVal": 12908,
+        "TotInvValFc": 12897.7
+    },
+    "PayDtls": {
+        "Nm": "ABCDE",
+        "AccDet": "5697389713210",
+        "Mode": "Cash",
+        "FinInsBr": "SBIN11000",
+        "PayTerm": "100",
+        "PayInstr": "Gift",
+        "CrTrn": "test",
+        "DirDr": "test",
+        "CrDay": 100,
+        "PaidAmt": 10000,
+        "PaymtDue": 5000
+    },
+    "RefDtls": {
+        "InvRm": "TEST",
+        "DocPerdDtls": {
+            "InvStDt": "01/08/2023",
+            "InvEndDt": "01/09/2023"
+        },
+        "PrecDocDtls": [
+            {
+                "InvNo": "DOC/002",
+                "InvDt": "01/08/2023",
+                "OthRefNo": "123456"
+            }
+        ],
+        "ContrDtls": [
+            {
+                "RecAdvRefr": "Doc/003",
+                "RecAdvDt": "01/08/2023",
+                "TendRefr": "Abc001",
+                "ContrRefr": "Co123",
+                "ExtRefr": "Yo456",
+                "ProjRefr": "Doc-456",
+                "PORefr": "Doc-789",
+                "PORefDt": "01/08/2023"
+            }
+        ]
+    },
+    "AddlDocDtls": [
+        {
+            "Url": "https://einv-apisandbox.nic.in",
+            "Docs": "Test Doc",
+            "Info": "Document Test"
+        }
+    ],
+    "ExpDtls": {
+        "ShipBNo": "A-248",
+        "ShipBDt": "01/08/2023",
+        "Port": "INABG1",
+        "RefClm": "N",
+        "ForCur": "AED",
+        "CntCode": "AE",
+        "ExpDuty": null
+    },
+    "EwbDtls": {
+        "TransId": "12AWGPV7107B1Z1",
+        "TransName": "XYZ EXPORTS",
+        "Distance": 100,
+        "TransDocNo": "DOC01",
+        "TransDocDt": "04/04/2024",
+        "VehNo": "ka123456",
+        "VehType": "R",
+        "TransMode": "1"
+    }
+}
+
+
+Encrypting Base64 payload with decrypted sek
+
+
+sample code :
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace GenIRNPayloadData
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            string PayloadData = "";
+            string BASE64ENCODEJSON = "ewogICAgIlZlcnNpb24iOiAiMS4xIiwKICAgICJUcmFuRHRscyI6IHsKICAgICAgICAiVGF4U2NoIjogIkdTVCIsCiAgICAgICAgIlN1cFR5cCI6ICJCMkIiLAogICAgICAgICJSZWdSZXYiOiAiWSIsCiAgICAgICAgIkVjbUdzdGluIjogbnVsbCwKICAgICAgICAiSWdzdE9uSW50cmEiOiAiTiIKICAgIH0sCiAgICAiRG9jRHRscyI6IHsKICAgICAgICAiVHlwIjogIklOViIsCiAgICAgICAgIk5vIjogInRlc3QwNjA5MjAyNCIsCiAgICAgICAgIkR0IjogIjA2LzA5LzIwMjQiCiAgICB9LAogICAgIlNlbGxlckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjA3QUdBUEE1MzYzTDAwMiIsCiAgICAgICAgIkxnbE5tIjogIk5JQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJOSUMgSW5kdXN0cmllcyIsCiAgICAgICAgIkFkZHIxIjogIjV0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDExMDA1NSwKICAgICAgICAiU3RjZCI6ICIwNyIsCiAgICAgICAgIlBoIjogIjkwMDAwMDAwMDAiLAogICAgICAgICJFbSI6ICJhYmNAZ21haWwuY29tIgogICAgfSwKICAgICJCdXllckR0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIlhZWiBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJYWVogSW5kdXN0cmllcyIsCiAgICAgICAgIlBvcyI6ICIxMiIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJHQU5ESElOQUdBUiIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIsCiAgICAgICAgIlBoIjogIjkxMTExMTExMTExIiwKICAgICAgICAiRW0iOiAieHl6QHlhaG9vLmNvbSIKICAgIH0sCiAgICAiRGlzcER0bHMiOiB7CiAgICAgICAgIk5tIjogIkFCQyBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJBZGRyMSI6ICI3dGggYmxvY2ssIGt1dmVtcHUgbGF5b3V0IiwKICAgICAgICAiQWRkcjIiOiAia3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJMb2MiOiAiQmFuYWdhbG9yZSIsCiAgICAgICAgIlBpbiI6IDU2MjE2MCwKICAgICAgICAiU3RjZCI6ICIyOSIKICAgIH0sCiAgICAiU2hpcER0bHMiOiB7CiAgICAgICAgIkdzdGluIjogIjI5QVdHUFY3MTA3QjFaMSIsCiAgICAgICAgIkxnbE5tIjogIkNCRSBjb21wYW55IHB2dCBsdGQiLAogICAgICAgICJUcmRObSI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkFkZHIxIjogIjd0aCBibG9jaywga3V2ZW1wdSBsYXlvdXQiLAogICAgICAgICJBZGRyMiI6ICJrdXZlbXB1IGxheW91dCIsCiAgICAgICAgIkxvYyI6ICJCYW5hZ2Fsb3JlIiwKICAgICAgICAiUGluIjogNTYyMTYwLAogICAgICAgICJTdGNkIjogIjI5IgogICAgfSwKICAgICJJdGVtTGlzdCI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJTbE5vIjogIjEiLAogICAgICAgICAgICAiUHJkRGVzYyI6ICJSaWNlIiwKICAgICAgICAgICAgIklzU2VydmMiOiAiTiIsCiAgICAgICAgICAgICJIc25DZCI6ICIxMDAxIiwKICAgICAgICAgICAgIkJhcmNkZSI6ICIxMjM0NTYiLAogICAgICAgICAgICAiUXR5IjogMTAwLjM0NSwKICAgICAgICAgICAgIkZyZWVRdHkiOiAxMCwKICAgICAgICAgICAgIlVuaXQiOiAiQkFHIiwKICAgICAgICAgICAgIlVuaXRQcmljZSI6IDk5LjU0NSwKICAgICAgICAgICAgIlRvdEFtdCI6IDk5ODguODQsCiAgICAgICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICAgICAiUHJlVGF4VmFsIjogMSwKICAgICAgICAgICAgIkFzc0FtdCI6IDk5NzguODQsCiAgICAgICAgICAgICJHc3RSdCI6IDEyLAogICAgICAgICAgICAiSWdzdEFtdCI6IDExOTcuNDYsCiAgICAgICAgICAgICJDZ3N0QW10IjogMCwKICAgICAgICAgICAgIlNnc3RBbXQiOiAwLAogICAgICAgICAgICAiQ2VzUnQiOiA1LAogICAgICAgICAgICAiQ2VzQW10IjogNDk4Ljk0LAogICAgICAgICAgICAiQ2VzTm9uQWR2bEFtdCI6IDEwLAogICAgICAgICAgICAiU3RhdGVDZXNSdCI6IDEyLAogICAgICAgICAgICAiU3RhdGVDZXNBbXQiOiAxMTk3LjQ2LAogICAgICAgICAgICAiU3RhdGVDZXNOb25BZHZsQW10IjogNSwKICAgICAgICAgICAgIk90aENocmciOiAxMCwKICAgICAgICAgICAgIlRvdEl0ZW1WYWwiOiAxMjg5Ny43LAogICAgICAgICAgICAiT3JkTGluZVJlZiI6ICIzMjU2IiwKICAgICAgICAgICAgIk9yZ0NudHJ5IjogIkFHIiwKICAgICAgICAgICAgIlByZFNsTm8iOiAiMTIzNDUiLAogICAgICAgICAgICAiQmNoRHRscyI6IHsKICAgICAgICAgICAgICAgICJObSI6ICIxMjM0NTYiLAogICAgICAgICAgICAgICAgIkV4cER0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIldyRHQiOiAiMDEvMDkvMjAyMyIKICAgICAgICAgICAgfSwKICAgICAgICAgICAgIkF0dHJpYkR0bHMiOiBbCiAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgIk5tIjogIlJpY2UiLAogICAgICAgICAgICAgICAgICAgICJWYWwiOiAiMTAwMDAiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIF0KICAgICAgICB9CiAgICBdLAogICAgIlZhbER0bHMiOiB7CiAgICAgICAgIkFzc1ZhbCI6IDk5NzguODQsCiAgICAgICAgIkNnc3RWYWwiOiAwLAogICAgICAgICJTZ3N0VmFsIjogMCwKICAgICAgICAiSWdzdFZhbCI6IDExOTcuNDYsCiAgICAgICAgIkNlc1ZhbCI6IDUwOC45NCwKICAgICAgICAiU3RDZXNWYWwiOiAxMjAyLjQ2LAogICAgICAgICJEaXNjb3VudCI6IDEwLAogICAgICAgICJPdGhDaHJnIjogMjAsCiAgICAgICAgIlJuZE9mZkFtdCI6IDAuMywKICAgICAgICAiVG90SW52VmFsIjogMTI5MDgsCiAgICAgICAgIlRvdEludlZhbEZjIjogMTI4OTcuNwogICAgfSwKICAgICJQYXlEdGxzIjogewogICAgICAgICJObSI6ICJBQkNERSIsCiAgICAgICAgIkFjY0RldCI6ICI1Njk3Mzg5NzEzMjEwIiwKICAgICAgICAiTW9kZSI6ICJDYXNoIiwKICAgICAgICAiRmluSW5zQnIiOiAiU0JJTjExMDAwIiwKICAgICAgICAiUGF5VGVybSI6ICIxMDAiLAogICAgICAgICJQYXlJbnN0ciI6ICJHaWZ0IiwKICAgICAgICAiQ3JUcm4iOiAidGVzdCIsCiAgICAgICAgIkRpckRyIjogInRlc3QiLAogICAgICAgICJDckRheSI6IDEwMCwKICAgICAgICAiUGFpZEFtdCI6IDEwMDAwLAogICAgICAgICJQYXltdER1ZSI6IDUwMDAKICAgIH0sCiAgICAiUmVmRHRscyI6IHsKICAgICAgICAiSW52Um0iOiAiVEVTVCIsCiAgICAgICAgIkRvY1BlcmREdGxzIjogewogICAgICAgICAgICAiSW52U3REdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgIkludkVuZER0IjogIjAxLzA5LzIwMjMiCiAgICAgICAgfSwKICAgICAgICAiUHJlY0RvY0R0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJJbnZObyI6ICJET0MvMDAyIiwKICAgICAgICAgICAgICAgICJJbnZEdCI6ICIwMS8wOC8yMDIzIiwKICAgICAgICAgICAgICAgICJPdGhSZWZObyI6ICIxMjM0NTYiCiAgICAgICAgICAgIH0KICAgICAgICBdLAogICAgICAgICJDb250ckR0bHMiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICJSZWNBZHZSZWZyIjogIkRvYy8wMDMiLAogICAgICAgICAgICAgICAgIlJlY0FkdkR0IjogIjAxLzA4LzIwMjMiLAogICAgICAgICAgICAgICAgIlRlbmRSZWZyIjogIkFiYzAwMSIsCiAgICAgICAgICAgICAgICAiQ29udHJSZWZyIjogIkNvMTIzIiwKICAgICAgICAgICAgICAgICJFeHRSZWZyIjogIllvNDU2IiwKICAgICAgICAgICAgICAgICJQcm9qUmVmciI6ICJEb2MtNDU2IiwKICAgICAgICAgICAgICAgICJQT1JlZnIiOiAiRG9jLTc4OSIsCiAgICAgICAgICAgICAgICAiUE9SZWZEdCI6ICIwMS8wOC8yMDIzIgogICAgICAgICAgICB9CiAgICAgICAgXQogICAgfSwKICAgICJBZGRsRG9jRHRscyI6IFsKICAgICAgICB7CiAgICAgICAgICAgICJVcmwiOiAiaHR0cHM6Ly9laW52LWFwaXNhbmRib3gubmljLmluIiwKICAgICAgICAgICAgIkRvY3MiOiAiVGVzdCBEb2MiLAogICAgICAgICAgICAiSW5mbyI6ICJEb2N1bWVudCBUZXN0IgogICAgICAgIH0KICAgIF0sCiAgICAiRXhwRHRscyI6IHsKICAgICAgICAiU2hpcEJObyI6ICJBLTI0OCIsCiAgICAgICAgIlNoaXBCRHQiOiAiMDEvMDgvMjAyMyIsCiAgICAgICAgIlBvcnQiOiAiSU5BQkcxIiwKICAgICAgICAiUmVmQ2xtIjogIk4iLAogICAgICAgICJGb3JDdXIiOiAiQUVEIiwKICAgICAgICAiQ250Q29kZSI6ICJBRSIsCiAgICAgICAgIkV4cER1dHkiOiBudWxsCiAgICB9LAogICAgIkV3YkR0bHMiOiB7CiAgICAgICAgIlRyYW5zSWQiOiAiMTJBV0dQVjcxMDdCMVoxIiwKICAgICAgICAiVHJhbnNOYW1lIjogIlhZWiBFWFBPUlRTIiwKICAgICAgICAiRGlzdGFuY2UiOiAxMDAsCiAgICAgICAgIlRyYW5zRG9jTm8iOiAiRE9DMDEiLAogICAgICAgICJUcmFuc0RvY0R0IjogIjA0LzA0LzIwMjQiLAogICAgICAgICJWZWhObyI6ICJrYTEyMzQ1NiIsCiAgICAgICAgIlZlaFR5cGUiOiAiUiIsCiAgICAgICAgIlRyYW5zTW9kZSI6ICIxIgogICAgfQp9";
+            string decryptedsek = "tpBgaMC0RmKDW7vIwiwB7YtTrO6Y/C9ptvwgEcALMns=";
+            string read;
+
+            PayloadData = EncryptBySymmetricKey(BASE64ENCODEJSON, decryptedsek);
+            Console.WriteLine(PayloadData);
+              read =   Console.ReadLine();
+
+        }
+
+
+
+        public static string EncryptBySymmetricKey(string jsondata, string decryptedsek)
+        {
+            //Encrypting SEK
+            try
+            {
+                byte[] dataToEncrypt = Convert.FromBase64String(jsondata);
+                var keyBytes = Convert.FromBase64String(decryptedsek);
+                AesManaged tdes = new AesManaged();
+                tdes.KeySize = 256;
+                tdes.BlockSize = 128;
+                tdes.Key = keyBytes;
+                tdes.Mode = CipherMode.ECB;
+                tdes.Padding = PaddingMode.PKCS7;
+                ICryptoTransform encrypt__1 = tdes.CreateEncryptor();
+                byte[] deCipher = encrypt__1.TransformFinalBlock(dataToEncrypt, 0, dataToEncrypt.Length);
+                tdes.Clear();
+                string EK_result = Convert.ToBase64String(deCipher);
+                return EK_result;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
+    }
+}
+
+Encrypted value passing through postman
+
+{
+    "Data" : "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"
+}
+
+
+
+
+
+
+
+Response:
+
+{"Status":1,"ErrorDetails":null,"Data":"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","InfoDtls":[{"InfCd":"EWBERR","Desc":[{"ErrorCode":"4021","ErrorMessage":"Transporter document date cannot be earlier than the invoice date."}]}]}
+
+
+
+

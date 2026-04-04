@@ -226,6 +226,49 @@ class Dispatch {
         curl_close($ch);
         return json_decode($response, true);
     }
+    // Get available couriers from Shiprocket based on serviceability
+    public function getCourierServiceability($pickup_postcode, $delivery_postcode, $weight, $length, $breadth, $height, $cod = 0, $is_return = 0, $qc_check = 0, $mode = null) {
+        // Build query parameters for GET request
+        $params = [
+            'pickup_postcode' => $pickup_postcode,
+            'delivery_postcode' => $delivery_postcode,
+            'weight' => $weight,
+            'length' => $length,
+            'breadth' => $breadth,
+            'height' => $height,
+            'cod' => $cod,
+            //'is_return' => $is_return,
+            'qc_check' => $qc_check
+        ];
+        
+        if ($mode !== null) {
+            $params['mode'] = $mode;
+        }
+        
+        // Build URL with query string
+        $url = "https://apiv2.shiprocket.in/v1/external/courier/serviceability/?" . http_build_query($params);
+        
+        $headers = [
+            "Content-Type: application/json",
+            "Authorization: Bearer " . $this->getShiprocketToken()
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        // GET is the default, no need to set it explicitly
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        $responseDecoded = json_decode($response, true);
+        return [
+            'http_code' => $httpCode,
+            'data' => $responseDecoded,
+            'success' => $httpCode == 200 && !empty($responseDecoded),
+            'params' => $params
+        ];
+    }
     //get labels from shiprocket
     public function getShiprocketLabels($shipmentId) {
         //$url = "https://apiv2.shiprocket.in/v1/external/shipments/{$shipmentId}/label";
