@@ -85,9 +85,7 @@ $PRODUCT_LABEL_DATA = [
                 <label class="block text-sm font-medium text-gray-700 mb-1">Label size</label>
                 <select id="productLabelSize"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                    <option value="small">Jewelry Size — 100 × 12.9 mm</option>
-                    <option value="medium" selected>Medium — 76 × 51 mm (3&quot; × 2&quot;)</option>
-                    <option value="large">Large — 100 × 150 mm (shelf)</option>
+                    <option value="small" selected>Jewelry Size — 100 × 12.9 mm</option>
                 </select>
             </div>
             <div>
@@ -139,38 +137,6 @@ $PRODUCT_LABEL_DATA = [
             barHeight: 180,
             barFont: 20,
             pad: 44
-        },
-        medium: {
-            name: 'Medium',
-            wMm: 76.2,
-            hMm: 50.8,
-            orient: 'landscape',
-            cw: 1200,
-            ch: 800,
-            barCol: 630,
-            barUnit: 2.025,
-            barHeight: 180,
-            barFont: 24,
-            pad: 24,
-            title: 40,
-            meta: 28,
-            smallMeta: 22
-        },
-        large: {
-            name: 'Large',
-            wMm: 100,
-            hMm: 150,
-            orient: 'portrait',
-            cw: 1000,
-            ch: 1500,
-            barCol: 570,
-            barUnit: 2.4,
-            barHeight: 240,
-            barFont: 30,
-            pad: 32,
-            title: 48,
-            meta: 32,
-            smallMeta: 26
         }
     };
 
