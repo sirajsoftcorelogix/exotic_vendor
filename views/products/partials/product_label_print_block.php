@@ -496,7 +496,11 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                 src.getContext('2d').drawImage(canvas, 0, 0);
                 canvas.width = nw;
                 canvas.height = nh;
-                canvas.getContext('2d').drawImage(src, 0, 0, src.width, src.height, 0, 0, nw, nh);
+                const ctx = canvas.getContext('2d');
+                /* Nearest-neighbor: default bilinear resize blurs 1D barcodes. */
+                ctx.imageSmoothingEnabled = false;
+                try { ctx.imageSmoothingQuality = 'low'; } catch (eSmoothQ) { /* ignore */ }
+                ctx.drawImage(src, 0, 0, src.width, src.height, 0, 0, nw, nh);
             }
         }
     }
@@ -602,7 +606,10 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                     if (origCanvas && clonedCanvas && origCanvas.width > 0 && origCanvas.height > 0) {
                         clonedCanvas.width = origCanvas.width;
                         clonedCanvas.height = origCanvas.height;
-                        clonedCanvas.getContext('2d').drawImage(origCanvas, 0, 0);
+                        var cctx = clonedCanvas.getContext('2d');
+                        cctx.imageSmoothingEnabled = false;
+                        try { cctx.imageSmoothingQuality = 'low'; } catch (eC) { /* ignore */ }
+                        cctx.drawImage(origCanvas, 0, 0);
                     }
                 } catch (eClone) {
                     console.warn('Label onclone canvas sync:', eClone);
@@ -628,9 +635,10 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 
         async function captureSheetAsPng(element) {
             element.setAttribute('data-pl-capture', '1');
+            var captureScale = (preset.layout === 'mg_store') ? 3 : 2;
             try {
                 try {
-                    return (await html2canvas(element, captureOpts(element, 2, true))).toDataURL('image/png');
+                    return (await html2canvas(element, captureOpts(element, captureScale, true))).toDataURL('image/png');
                 } catch (e1) {
                     console.warn('Label capture retry:', e1);
                     var imgs = element.querySelectorAll('img');

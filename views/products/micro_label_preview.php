@@ -59,7 +59,10 @@ $h = (float) $preset['hMm'];
                 s.width = cv.width; s.height = cv.height;
                 s.getContext('2d').drawImage(cv, 0, 0);
                 cv.width = nw; cv.height = nh;
-                cv.getContext('2d').drawImage(s, 0, 0, s.width, s.height, 0, 0, nw, nh);
+                var cvctx = cv.getContext('2d');
+                cvctx.imageSmoothingEnabled = false;
+                try { cvctx.imageSmoothingQuality = 'low'; } catch (eQ) { /* ignore */ }
+                cvctx.drawImage(s, 0, 0, s.width, s.height, 0, 0, nw, nh);
             }
         }
         document.getElementById('host').appendChild(el);
