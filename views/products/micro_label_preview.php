@@ -45,7 +45,9 @@ $h = (float) $preset['hMm'];
             try {
                 JsBarcode(cv, t, {
                     format: 'CODE128', width: preset.barUnit || 1, height: preset.barHeight,
-                    displayValue: preset.barDisplayValue === true, fontSize: preset.barFont || 8, margin: 0,
+                    displayValue: preset.barDisplayValue === true,
+                    font: preset.fontFamily || 'Arial, Helvetica, sans-serif',
+                    fontSize: preset.barFont || 8, margin: 0,
                     background: '#fff', lineColor: '#000'
                 });
             } catch (e) {}

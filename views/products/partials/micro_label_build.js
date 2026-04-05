@@ -10,19 +10,19 @@
         return d;
     }
     g.buildMicroLabelElement = function (p, data) {
+        var ffs = p.fontFamily || 'Arial, Helvetica, sans-serif';
         var el = document.createElement('div');
         el.className = 'product-label-sheet';
         Object.assign(el.style, {
             boxSizing: 'border-box', width: p.cw + 'px', height: p.ch + 'px', background: '#fff',
             border: p.showBorders !== false ? (p.border || '1px solid #000') : 'none', color: '#000',
-            fontFamily: p.fontFamily || 'Arial', display: 'flex', flexDirection: 'column',
+            fontFamily: ffs, display: 'flex', flexDirection: 'column',
             alignItems: 'stretch', padding: (p.pad != null ? p.pad : 12) + 'px', overflow: 'hidden'
         });
         var loc = (data.labelLocation != null && String(data.labelLocation).trim()) ? '(' + String(data.labelLocation).trim() + ')' : '—';
         var dt = (data.labelDate != null && String(data.labelDate).trim()) ? String(data.labelDate).trim() : '—';
         var code = String((data.sku || data.itemCode || '').trim() || '');
         code = code ? '(' + code + ')' : '—';
-        var ffs = p.fontFamily || 'Arial, Helvetica, sans-serif';
         var skuFs = (p.skuLocationFontPx != null) ? p.skuLocationFontPx + 'px' : '14pt';
         var locFs = (p.locationFontPx != null)
             ? p.locationFontPx + 'px'
@@ -61,7 +61,7 @@
         var dateEl = document.createElement('div');
         dateEl.textContent = dt;
         Object.assign(dateEl.style, {
-            fontSize: p.dateSize || '9pt', fontWeight: '400', lineHeight: '1.25', color: '#333',
+            fontFamily: ffs, fontSize: p.dateSize || '9pt', fontWeight: '400', lineHeight: '1.25', color: '#333',
             textAlign: 'center', maxWidth: '100%'
         });
         bot.appendChild(dateEl);

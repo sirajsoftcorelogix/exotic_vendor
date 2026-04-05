@@ -414,42 +414,28 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         const bcMargin = isJewelry ? 2 : (isMicro ? 0 : 4);
         const bcFontOpt = (isJewelry || isMicro) ? '' : 'bold';
         const showBarcodeText = isMicro && preset.barDisplayValue === false ? false : true;
+        const bcFont = preset.fontFamily || 'Arial, Helvetica, sans-serif';
+        const bcOpts = {
+            format: 'CODE128',
+            width: preset.barUnit != null ? preset.barUnit : 2,
+            height: preset.barHeight,
+            displayValue: showBarcodeText,
+            font: bcFont,
+            fontOptions: bcFontOpt,
+            fontSize: preset.barFont != null ? preset.barFont : 14,
+            margin: bcMargin,
+            background: '#ffffff',
+            lineColor: '#000000'
+        };
         try {
-            JsBarcode(canvas, text, {
-                format: 'CODE128',
-                width: preset.barUnit != null ? preset.barUnit : 2,
-                height: preset.barHeight,
-                displayValue: showBarcodeText,
-                fontOptions: bcFontOpt,
-                fontSize: preset.barFont != null ? preset.barFont : 14,
-                margin: bcMargin,
-                background: '#ffffff',
-                lineColor: '#000000'
-            });
+            JsBarcode(canvas, text, bcOpts);
         } catch (e) {
             try {
-                JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), {
-                    format: 'CODE128',
-                    width: preset.barUnit != null ? preset.barUnit : 2,
-                    height: preset.barHeight,
-                    displayValue: showBarcodeText,
-                    fontOptions: bcFontOpt,
-                    fontSize: preset.barFont != null ? preset.barFont : 14,
-                    margin: bcMargin,
-                    background: '#ffffff',
-                    lineColor: '#000000'
-                });
+                JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), bcOpts);
             } catch (e2) {
-                JsBarcode(canvas, 'INVALID', {
-                    format: 'CODE128',
-                    width: preset.barUnit != null ? preset.barUnit : 2,
-                    height: Math.min(preset.barHeight, 40),
-                    displayValue: showBarcodeText,
-                    fontSize: preset.barFont != null ? preset.barFont : 14,
-                    margin: bcMargin,
-                    background: '#ffffff',
-                    lineColor: '#000000'
-                });
+                JsBarcode(canvas, 'INVALID', Object.assign({}, bcOpts, {
+                    height: Math.min(preset.barHeight, 40)
+                }));
             }
         }
         const pad = preset.pad != null ? preset.pad : 0;
