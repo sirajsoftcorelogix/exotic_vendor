@@ -172,9 +172,9 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             rightMrpPx: 36,
             rightSmallPx: 21,
             barCol: 1050,
-            barUnit: 2.025,
-            barHeight: 180,
-            barFont: 20,
+            barUnit: 1.0125,
+            barHeight: 90,
+            barFont: 10,
             pad: 44,
             barcodeSupersample: 3,
             captureScale: 5

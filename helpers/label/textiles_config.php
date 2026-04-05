@@ -17,9 +17,9 @@ $TC = [
     /** Unitless line-height for SKU row. */
     'SKU_LINE_HEIGHT' => 1.62,
     'DATE_PT' => '9pt',
-    'BAR_HEIGHT' => 30,
-    'BAR_WIDTH' => 1,
-    'BAR_FONT' => 8,
+    'BAR_HEIGHT' => 15,
+    'BAR_WIDTH' => 0.5,
+    'BAR_FONT' => 4,
     /** Internal N× render → downscale for sharper micro barcodes. */
     'BARCODE_SUPERSAMPLE' => 3,
     /** html2canvas scale (micro label is small; higher = sharper print PNG). */

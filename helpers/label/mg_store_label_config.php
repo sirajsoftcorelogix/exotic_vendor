@@ -29,8 +29,9 @@ $MG = [
     /**
      * After fit-to-width, scale the barcode bitmap by this factor (0–1).
      * Fit-to-maxWidth was forcing wide codes to the same full width; this makes “smaller barcode” edits visible.
+     * 0.5 = half the drawn width and height vs the fit-to-maxWidth bitmap.
      */
-    'BAR_VISUAL_SCALE' => 0.75,
+    'BAR_VISUAL_SCALE' => 0.5,
     'BAR_H_MARGIN_PX' => 8,
     'BORDER' => '1px solid #000000',
     'FONT_FAMILY' => 'Arial, Helvetica, sans-serif',
