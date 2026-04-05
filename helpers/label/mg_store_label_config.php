@@ -26,6 +26,11 @@ $MG = [
     'BARCODE_SUPERSAMPLE' => 3,
     /** html2canvas scale for this label (higher = sharper PNG for thermal print). */
     'CAPTURE_SCALE' => 4,
+    /**
+     * After fit-to-width, scale the barcode bitmap by this factor (0–1).
+     * Fit-to-maxWidth was forcing wide codes to the same full width; this makes “smaller barcode” edits visible.
+     */
+    'BAR_VISUAL_SCALE' => 0.75,
     'BAR_H_MARGIN_PX' => 8,
     'BORDER' => '1px solid #000000',
     'FONT_FAMILY' => 'Arial, Helvetica, sans-serif',
@@ -68,6 +73,7 @@ $MG['PRINT_JS_PRESET'] = [
     'barFont' => (int) $MG['BAR_FONT'],
     'barcodeSupersample' => (int) max(1, min(4, (int) ($MG['BARCODE_SUPERSAMPLE'] ?? 1))),
     'captureScale' => (int) max(2, min(6, (int) ($MG['CAPTURE_SCALE'] ?? 4))),
+    'barVisualScale' => (float) max(0.25, min(1.0, (float) ($MG['BAR_VISUAL_SCALE'] ?? 1))),
     'barHorizontalMarginPx' => (int) $MG['BAR_H_MARGIN_PX'],
 ];
 

@@ -551,6 +551,23 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                 crispDrawResize(canvas.getContext('2d'), src, 0, 0, src.width, src.height, 0, 0, nw, nh);
             }
         }
+        /* Uniform scale (MG store): fit-to-maxW kept wide codes at full label width; this applies your intended size. */
+        if (isMgStore && preset.barVisualScale != null && canvas.width > 0) {
+            const vs = Number(preset.barVisualScale);
+            if (vs > 0 && vs < 0.999) {
+                const nwV = Math.max(1, Math.floor(canvas.width * vs));
+                const nhV = Math.max(1, Math.floor(canvas.height * vs));
+                if (nwV < canvas.width || nhV < canvas.height) {
+                    const srcV = document.createElement('canvas');
+                    srcV.width = canvas.width;
+                    srcV.height = canvas.height;
+                    srcV.getContext('2d').drawImage(canvas, 0, 0);
+                    canvas.width = nwV;
+                    canvas.height = nhV;
+                    crispDrawResize(canvas.getContext('2d'), srcV, 0, 0, srcV.width, srcV.height, 0, 0, nwV, nhV);
+                }
+            }
+        }
     }
 
     /** Opens print document: one page per image, physical size = preset.wMm × preset.hMm (CSS mm). */
