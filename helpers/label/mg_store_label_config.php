@@ -22,6 +22,10 @@ $MG = [
     'BAR_HEIGHT' => 19,
     'BAR_WIDTH' => 0.75,
     'BAR_FONT' => 10,
+    /** Render barcode at N× then downscale (nearest) for sharp bars + cleaner print capture. */
+    'BARCODE_SUPERSAMPLE' => 3,
+    /** html2canvas scale for this label (higher = sharper PNG for thermal print). */
+    'CAPTURE_SCALE' => 4,
     'BAR_H_MARGIN_PX' => 8,
     'BORDER' => '1px solid #000000',
     'FONT_FAMILY' => 'Arial, Helvetica, sans-serif',
@@ -62,6 +66,8 @@ $MG['PRINT_JS_PRESET'] = [
     'barHeight' => (int) $MG['BAR_HEIGHT'],
     'barDisplayValue' => (bool) ($MG['SHOW_BARCODE_TEXT'] ?? false),
     'barFont' => (int) $MG['BAR_FONT'],
+    'barcodeSupersample' => (int) max(1, min(4, (int) ($MG['BARCODE_SUPERSAMPLE'] ?? 1))),
+    'captureScale' => (int) max(2, min(6, (int) ($MG['CAPTURE_SCALE'] ?? 4))),
     'barHorizontalMarginPx' => (int) $MG['BAR_H_MARGIN_PX'],
 ];
 

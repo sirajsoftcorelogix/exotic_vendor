@@ -175,7 +175,9 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             barUnit: 2.025,
             barHeight: 180,
             barFont: 20,
-            pad: 44
+            pad: 44,
+            barcodeSupersample: 2,
+            captureScale: 3
         },
         micro: <?php echo json_encode($microClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
         large: <?php echo json_encode($mgStoreClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
@@ -434,6 +436,12 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         return pid.length ? ('ID' + pid) : '0';
     }
 
+    function crispDrawResize(destCtx, src, sx, sy, sw, sh, dx, dy, dw, dh) {
+        destCtx.imageSmoothingEnabled = false;
+        try { destCtx.imageSmoothingQuality = 'low'; } catch (eQ) { /* ignore */ }
+        destCtx.drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh);
+    }
+
     function initBarcodeOnCanvas(canvas, value, preset) {
         const text = String(value).trim() || '0';
         const isJewelry = preset.layout === 'jewelry';
@@ -455,15 +463,59 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             background: '#ffffff',
             lineColor: '#000000'
         };
-        try {
-            JsBarcode(canvas, text, bcOpts);
-        } catch (e) {
+        const ss = Math.max(1, Math.min(4, parseInt(preset.barcodeSupersample, 10) || 1));
+        if (ss > 1) {
+            const w0 = Number(bcOpts.width) || 2;
+            const m0 = typeof bcMargin === 'number' ? bcMargin : 0;
+            const hiOpts = Object.assign({}, bcOpts, {
+                height: Math.max(1, Math.round(bcOpts.height * ss)),
+                width: w0 * ss,
+                margin: m0 * ss,
+                fontSize: showBarcodeText ? Math.max(6, Math.round((bcOpts.fontSize || 14) * ss)) : bcOpts.fontSize
+            });
+            const hi = document.createElement('canvas');
+            let ok = false;
             try {
-                JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), bcOpts);
-            } catch (e2) {
-                JsBarcode(canvas, 'INVALID', Object.assign({}, bcOpts, {
-                    height: Math.min(preset.barHeight, 40)
-                }));
+                JsBarcode(hi, text, hiOpts);
+                ok = hi.width > 0 && hi.height > 0;
+            } catch (e) {
+                try {
+                    JsBarcode(hi, text.replace(/[^\x20-\x7E]/g, ''), hiOpts);
+                    ok = hi.width > 0 && hi.height > 0;
+                } catch (e2) {
+                    ok = false;
+                }
+            }
+            if (ok) {
+                const tw = Math.max(1, Math.floor(hi.width / ss));
+                const th = Math.max(1, Math.floor(hi.height / ss));
+                canvas.width = tw;
+                canvas.height = th;
+                crispDrawResize(canvas.getContext('2d'), hi, 0, 0, hi.width, hi.height, 0, 0, tw, th);
+            } else {
+                try {
+                    JsBarcode(canvas, text, bcOpts);
+                } catch (e3) {
+                    try {
+                        JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), bcOpts);
+                    } catch (e4) {
+                        JsBarcode(canvas, 'INVALID', Object.assign({}, bcOpts, {
+                            height: Math.min(preset.barHeight, 40)
+                        }));
+                    }
+                }
+            }
+        } else {
+            try {
+                JsBarcode(canvas, text, bcOpts);
+            } catch (e) {
+                try {
+                    JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), bcOpts);
+                } catch (e2) {
+                    JsBarcode(canvas, 'INVALID', Object.assign({}, bcOpts, {
+                        height: Math.min(preset.barHeight, 40)
+                    }));
+                }
             }
         }
         const pad = preset.pad != null ? preset.pad : 0;
@@ -496,11 +548,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                 src.getContext('2d').drawImage(canvas, 0, 0);
                 canvas.width = nw;
                 canvas.height = nh;
-                const ctx = canvas.getContext('2d');
-                /* Nearest-neighbor: default bilinear resize blurs 1D barcodes. */
-                ctx.imageSmoothingEnabled = false;
-                try { ctx.imageSmoothingQuality = 'low'; } catch (eSmoothQ) { /* ignore */ }
-                ctx.drawImage(src, 0, 0, src.width, src.height, 0, 0, nw, nh);
+                crispDrawResize(canvas.getContext('2d'), src, 0, 0, src.width, src.height, 0, 0, nw, nh);
             }
         }
     }
@@ -635,7 +683,9 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 
         async function captureSheetAsPng(element) {
             element.setAttribute('data-pl-capture', '1');
-            var captureScale = (preset.layout === 'mg_store') ? 3 : 2;
+            var captureScale = preset.captureScale != null
+                ? Math.max(2, Math.min(6, Number(preset.captureScale)))
+                : 2;
             try {
                 try {
                     return (await html2canvas(element, captureOpts(element, captureScale, true))).toDataURL('image/png');

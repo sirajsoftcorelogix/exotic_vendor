@@ -50,7 +50,7 @@
         Object.assign(barWrap.style, { display: 'inline-block', maxWidth: '100%' });
         var cv = document.createElement('canvas');
         cv.className = 'pl-barcode';
-        Object.assign(cv.style, { display: 'block', verticalAlign: 'top' });
+        Object.assign(cv.style, { display: 'block', verticalAlign: 'top', imageRendering: 'pixelated' });
         barWrap.appendChild(cv);
         barOuter.appendChild(barWrap);
         el.appendChild(barOuter);

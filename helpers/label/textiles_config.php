@@ -20,6 +20,8 @@ $TC = [
     'BAR_HEIGHT' => 30,
     'BAR_WIDTH' => 1,
     'BAR_FONT' => 8,
+    /** Internal N× render → downscale for sharper micro barcodes. */
+    'BARCODE_SUPERSAMPLE' => 2,
     'BAR_H_MARGIN_PX' => 4,
     /** Space between SKU line and location line. */
     'SKU_TO_LOC_PX' => 3,
@@ -68,6 +70,7 @@ $TC['PRINT_JS_PRESET'] = [
     'barHeight' => (int) $TC['BAR_HEIGHT'],
     'barDisplayValue' => (bool) ($TC['SHOW_BARCODE_TEXT'] ?? false),
     'barFont' => (int) $TC['BAR_FONT'],
+    'barcodeSupersample' => (int) max(1, min(4, (int) ($TC['BARCODE_SUPERSAMPLE'] ?? 1))),
     'barHorizontalMarginPx' => (int) $TC['BAR_H_MARGIN_PX'],
     'skuLocationGapPx' => (int) $TC['SKU_TO_LOC_PX'],
     'skuBarcodeGapPx' => (int) $TC['LOC_TO_BAR_PX'],
