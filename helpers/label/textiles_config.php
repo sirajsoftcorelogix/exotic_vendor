@@ -3,40 +3,69 @@
 declare(strict_types=1);
 
 /**
- * Textiles / "Micro" thermal label — matches Seznik-style jewellery strip stock
- * (Amazon.in ASIN B0FK2X6VYF: 25 mm × 15 mm, 2500 labels roll).
- *
- * Mirrors front-end preset `micro` in views/products/partials/product_label_print_block.php.
- * COLUMNS/ROWS/MARGINS are for future sheet generators; re-tune when laying out full pages.
+ * Textiles / Micro thermal strip (25×15 mm). Batch grid keys optional.
+ * `PRINT_JS_PRESET` is embedded on the product page for JsBarcode/html2canvas.
  */
-return [
+$TC = [
+    'LABEL_WIDTH_MM' => 25,
+    'LABEL_HEIGHT_MM' => 15,
+    'PX_PER_MM' => 20,
+    'OFFSET_X_MM' => 0,
+    'OFFSET_Y_MM' => 0,
+    'LABEL_PAD_PX' => 12,
+    'SKU_FONT_PX' => 23,
+    'DATE_PT' => '9pt',
+    'BAR_HEIGHT' => 30,
+    'BAR_WIDTH' => 1,
+    'BAR_FONT' => 8,
+    'BAR_H_MARGIN_PX' => 4,
+    'SKU_TO_LOC_PX' => 3,
+    'LOC_TO_BAR_PX' => 8,
+    'BAR_TO_DATE_PX' => 5,
+    'BORDER' => '1px solid #000000',
+    'FONT' => 'Arial',
+    'SHOW_BARCODE_TEXT' => false,
+    'SHOW_BORDER' => true,
     'CODE_COLUMN' => 0,
     'DATE_COLUMN' => 1,
     'LOCATION_COLUMN' => 2,
-
-    'LABEL_WIDTH_MM' => 25,
-    'LABEL_HEIGHT_MM' => 15,
     'SPACING_MM' => 2,
-
-    /** Example grid for ~208 mm printable width: (208 − L/R margins) / (25 + gap). */
     'COLUMNS' => 7,
     'ROWS' => 8,
-
     'MARGIN_TOP_MM' => 13,
     'MARGIN_BOTTOM_MM' => 13,
     'MARGIN_LEFT_MM' => 6,
     'MARGIN_RIGHT_MM' => 6,
-
-    'BARCODE_TYPE' => 'CODE128',
-    'BARCODE_HEIGHT' => 25,
-    'BARCODE_WIDTH' => 1,
-    'BARCODE_DISPLAY_VALUE' => false,
-
-    'TEXT_FONT' => 'Arial',
-    /** Mirrors preset skuLocationFontPx (23px) and dateSize (9pt). */
-    'CODE_SIZE' => '17.25pt',
-    'DATE_SIZE' => '9pt',
-    'LOCATION_SIZE' => '17.25pt',
-
-    'SHOW_BORDERS' => true,
 ];
+
+$ppm = max(1, (int) $TC['PX_PER_MM']);
+$w = (float) $TC['LABEL_WIDTH_MM'];
+$h = (float) $TC['LABEL_HEIGHT_MM'];
+
+$TC['PRINT_JS_PRESET'] = [
+    'name' => 'Micro (textiles)',
+    'layout' => 'micro',
+    'wMm' => $w,
+    'hMm' => $h,
+    'offsetXMm' => (float) $TC['OFFSET_X_MM'],
+    'offsetYMm' => (float) $TC['OFFSET_Y_MM'],
+    'orient' => 'landscape',
+    'cw' => (int) round($w * $ppm),
+    'ch' => (int) round($h * $ppm),
+    'pad' => (int) $TC['LABEL_PAD_PX'],
+    'border' => (string) $TC['BORDER'],
+    'fontFamily' => $TC['FONT'] . ', Helvetica, sans-serif',
+    'dateSize' => (string) $TC['DATE_PT'],
+    'skuLocationFontPx' => (int) $TC['SKU_FONT_PX'],
+    'showBorders' => (bool) $TC['SHOW_BORDER'],
+    'barUnit' => (float) $TC['BAR_WIDTH'],
+    'barHeight' => (int) $TC['BAR_HEIGHT'],
+    'barDisplayValue' => (bool) ($TC['SHOW_BARCODE_TEXT'] ?? false),
+    'barFont' => (int) $TC['BAR_FONT'],
+    'barHorizontalMarginPx' => (int) $TC['BAR_H_MARGIN_PX'],
+    'skuLocationGapPx' => (int) $TC['SKU_TO_LOC_PX'],
+    'skuBarcodeGapPx' => (int) $TC['LOC_TO_BAR_PX'],
+    'barcodeDateGapPx' => (int) $TC['BAR_TO_DATE_PX'],
+];
+
+return $TC;
