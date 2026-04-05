@@ -4,8 +4,11 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): 25 × 15 mm — SKU | location | CODE128 (flex-grow mid) | print date.
+ * Micro (textiles): helpers/label/textiles_config.php (`PRINT_JS_PRESET`) + partials/micro_label_build.js.
  */
+$_tx = require dirname(__DIR__, 3) . '/helpers/label/textiles_config.php';
+$microClientPreset = $_tx['PRINT_JS_PRESET'];
+
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
 $rawImg = trim((string)($products['image'] ?? ''));
@@ -62,6 +65,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script><?php readfile(__DIR__ . '/micro_label_build.js'); ?></script>
 
 <!-- Trigger -->
 <div class="bg-white rounded-lg border border-amber-200 p-3 shadow-sm">
@@ -150,36 +154,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             barFont: 20,
             pad: 44
         },
-        /** 25×15 mm — Seznik jewellery thermal (Amazon B0FK2X6VYF). helpers/label/textiles_config.php */
-        micro: {
-            name: 'Micro (textiles)',
-            layout: 'micro',
-            wMm: 25,
-            hMm: 15,
-            offsetXMm: 0,
-            offsetYMm: 0,
-            orient: 'landscape',
-            cw: 500,
-            ch: 300,
-            pad: 12,
-            border: '1px solid #000000',
-            fontFamily: 'Arial, Helvetica, sans-serif',
-            dateSize: '9pt',
-            /** Same px for SKU + location (shared font shorthand in buildMicroLabelElement). */
-            skuLocationFontPx: 23,
-            showBorders: true,
-            barUnit: 1,
-            barHeight: 25,
-            barDisplayValue: false,
-            barFont: 8,
-            barHorizontalMarginPx: 4,
-            /** Gap SKU line → location line (px). */
-            skuLocationGapPx: 3,
-            /** Gap location line → barcode (px). Omit to use half-line default. */
-            skuBarcodeGapPx: 8,
-            /** Gap barcode → date line (px). */
-            barcodeDateGapPx: 5
-        }
+        micro: <?php echo json_encode($microClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
     };
 
     window.openProductLabelModal = function() {
@@ -299,148 +274,12 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         return el;
     }
 
-    function buildMicroLabelElement(preset, data) {
-        const el = document.createElement('div');
-        el.className = 'product-label-sheet';
-        el.style.boxSizing = 'border-box';
-        el.style.width = preset.cw + 'px';
-        el.style.height = preset.ch + 'px';
-        el.style.background = '#ffffff';
-        el.style.border = preset.showBorders !== false ? (preset.border || '1px solid #000000') : 'none';
-        el.style.color = '#000000';
-        el.style.fontFamily = preset.fontFamily || 'Arial, Helvetica, sans-serif';
-        el.style.display = 'flex';
-        el.style.flexDirection = 'column';
-        el.style.alignItems = 'stretch';
-        el.style.justifyContent = 'flex-start';
-        const padPx = preset.pad != null ? preset.pad : 40;
-        el.style.padding = padPx + 'px';
-        el.style.overflow = 'hidden';
-
-        const locRaw = (data.labelLocation != null && String(data.labelLocation).trim() !== '')
-            ? String(data.labelLocation).trim()
-            : '';
-        const locDisplay = locRaw !== '' ? '(' + locRaw + ')' : '—';
-
-        const dateStr = (data.labelDate != null && String(data.labelDate).trim() !== '')
-            ? String(data.labelDate).trim()
-            : '—';
-
-        const codeRaw = String((data.sku || data.itemCode || '').trim() || '');
-        const codeDisplay = codeRaw !== '' ? '(' + codeRaw + ')' : '—';
-
-        const skuLocFs = preset.skuLocationFontPx != null
-            ? (preset.skuLocationFontPx + 'px')
-            : (preset.codeSize || '14pt');
-        const microSkuLineHeight = 1.4;
-        var skuFontPxForGap;
-        if (preset.skuLocationFontPx != null) {
-            skuFontPxForGap = preset.skuLocationFontPx;
-        } else {
-            var cs = String(preset.codeSize || '14pt');
-            var ptMatch = cs.match(/^([\d.]+)\s*pt$/i);
-            var pxMatch = cs.match(/^([\d.]+)\s*px$/i);
-            if (ptMatch) skuFontPxForGap = parseFloat(ptMatch[1]) * (96 / 72);
-            else if (pxMatch) skuFontPxForGap = parseFloat(pxMatch[1]);
-            else skuFontPxForGap = 14 * (96 / 72);
-        }
-        const halfLineGapPx = Math.max(1, Math.round(skuFontPxForGap * microSkuLineHeight / 2));
-        const skuLocGap = preset.skuLocationGapPx != null ? preset.skuLocationGapPx : 3;
-        const locBarGap = preset.skuBarcodeGapPx != null ? preset.skuBarcodeGapPx : halfLineGapPx;
-        const barDateGap = preset.barcodeDateGapPx != null ? preset.barcodeDateGapPx
-            : (preset.barcodeLocationGapPx != null ? preset.barcodeLocationGapPx : 5);
-        const microFf = preset.fontFamily || 'Arial, Helvetica, sans-serif';
-        const skuLocFont = '600 ' + skuLocFs + '/' + microSkuLineHeight + ' ' + microFf;
-        const skuTop = document.createElement('div');
-        skuTop.style.flexShrink = '0';
-        skuTop.style.width = '100%';
-        skuTop.style.textAlign = 'center';
-        skuTop.style.font = skuLocFont;
-        skuTop.style.paddingBottom = skuLocGap + 'px';
-        skuTop.style.marginBottom = '0';
-        skuTop.style.position = 'relative';
-        skuTop.style.zIndex = '2';
-        skuTop.style.overflow = 'hidden';
-        skuTop.style.textOverflow = 'ellipsis';
-        skuTop.style.whiteSpace = 'nowrap';
-        skuTop.textContent = codeDisplay;
-
-        const locEl = document.createElement('div');
-        locEl.style.flexShrink = '0';
-        locEl.style.width = '100%';
-        locEl.style.font = skuLocFont;
-        locEl.style.textAlign = 'center';
-        locEl.style.maxWidth = '100%';
-        locEl.style.overflow = 'hidden';
-        locEl.style.textOverflow = 'ellipsis';
-        locEl.style.whiteSpace = 'nowrap';
-        locEl.style.paddingBottom = locBarGap + 'px';
-        locEl.style.position = 'relative';
-        locEl.style.zIndex = '2';
-        locEl.textContent = locDisplay;
-
-        const mid = document.createElement('div');
-        mid.style.flex = '1 1 0';
-        mid.style.display = 'flex';
-        mid.style.flexDirection = 'column';
-        mid.style.alignItems = 'center';
-        mid.style.justifyContent = 'flex-end';
-        mid.style.width = '100%';
-        mid.style.minHeight = '0';
-        mid.style.marginBottom = '0';
-        mid.style.position = 'relative';
-        mid.style.zIndex = '1';
-
-        const barWrap = document.createElement('div');
-        barWrap.className = 'pl-barcode-wrap';
-        barWrap.style.width = '100%';
-        barWrap.style.maxWidth = '100%';
-        barWrap.style.display = 'block';
-        barWrap.style.textAlign = 'center';
-        barWrap.style.lineHeight = '0';
-        barWrap.style.flexShrink = '0';
-        const barCanvas = document.createElement('canvas');
-        barCanvas.className = 'pl-barcode';
-        barCanvas.style.display = 'inline-block';
-        barCanvas.style.verticalAlign = 'top';
-        barWrap.appendChild(barCanvas);
-        mid.appendChild(barWrap);
-
-        const bottomStack = document.createElement('div');
-        bottomStack.style.flexShrink = '0';
-        bottomStack.style.width = '100%';
-        bottomStack.style.display = 'flex';
-        bottomStack.style.flexDirection = 'column';
-        bottomStack.style.alignItems = 'center';
-        bottomStack.style.justifyContent = 'flex-start';
-        bottomStack.style.gap = '0';
-        bottomStack.style.paddingTop = barDateGap + 'px';
-
-        const dateEl = document.createElement('div');
-        dateEl.style.fontSize = preset.dateSize || '9pt';
-        dateEl.style.fontWeight = '400';
-        dateEl.style.lineHeight = '1.25';
-        dateEl.style.marginTop = '0';
-        dateEl.style.color = '#333333';
-        dateEl.style.textAlign = 'center';
-        dateEl.style.maxWidth = '100%';
-        dateEl.textContent = dateStr;
-
-        bottomStack.appendChild(dateEl);
-
-        el.appendChild(skuTop);
-        el.appendChild(locEl);
-        el.appendChild(mid);
-        el.appendChild(bottomStack);
-        return el;
-    }
-
     function buildLabelElement(preset, data) {
         if (preset.layout === 'jewelry') {
             return buildJewelryLabelElement(preset, data);
         }
         if (preset.layout === 'micro') {
-            return buildMicroLabelElement(preset, data);
+            return window.buildMicroLabelElement(preset, data);
         }
         const el = document.createElement('div');
         el.className = 'product-label-sheet';
@@ -702,20 +541,6 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             return;
         }
 
-        var pxPerMmW = preset.cw / preset.wMm;
-        var pxPerMmH = preset.ch / preset.hMm;
-        if (Math.abs(pxPerMmW - pxPerMmH) > 0.02) {
-            console.warn('Label preset: cw/wMm and ch/hMm should match (avoid distorted print).', {
-                key: sizeKey,
-                wMm: preset.wMm,
-                hMm: preset.hMm,
-                cw: preset.cw,
-                ch: preset.ch,
-                pxPerMmW: pxPerMmW,
-                pxPerMmH: pxPerMmH
-            });
-        }
-
         const queue = document.getElementById('product-label-pdf-queue');
         const queueParent = queue.parentNode;
         const queueNext = queue.nextSibling;
@@ -767,60 +592,45 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             };
         }
 
-        function html2canvasOptsForElement(element, scale, extra) {
-            var ow = Math.max(1, Math.ceil(element.offsetWidth || preset.cw));
-            var oh = Math.max(1, Math.ceil(element.offsetHeight || preset.ch));
-            return Object.assign({
-                useCORS: true,
+        function captureOpts(el, scale, useCors) {
+            return {
+                useCORS: useCors,
                 allowTaint: false,
                 backgroundColor: '#ffffff',
                 logging: false,
                 foreignObjectRendering: false,
                 scale: scale,
-                width: ow,
-                height: oh,
+                width: Math.max(1, Math.ceil(el.offsetWidth || preset.cw)),
+                height: Math.max(1, Math.ceil(el.offsetHeight || preset.ch)),
                 scrollX: 0,
-                scrollY: 0
-            }, extra || {});
+                scrollY: 0,
+                onclone: makeOncloneForSheet(el)
+            };
         }
 
         async function captureSheetAsPng(element) {
             element.setAttribute('data-pl-capture', '1');
             try {
-                var canvas = await html2canvas(element, Object.assign(
-                    html2canvasOptsForElement(element, 2),
-                    { onclone: makeOncloneForSheet(element) }
-                ));
-                return canvas.toDataURL('image/png');
-            } catch (firstErr) {
-                console.warn('Label capture retry (lower scale / CORS):', firstErr);
-                var imgs = element.querySelectorAll('img');
-                var imgBackup = [];
-                for (var j = 0; j < imgs.length; j++) {
-                    var im = imgs[j];
-                    imgBackup.push({
-                        src: im.getAttribute('src'),
-                        crossorigin: im.getAttribute('crossorigin')
-                    });
-                    im.removeAttribute('crossorigin');
-                    im.setAttribute('src', TRANSPARENT_GIF);
-                }
                 try {
-                    var canvas2 = await html2canvas(element, Object.assign(
-                        html2canvasOptsForElement(element, 1, { useCORS: false }),
-                        { onclone: makeOncloneForSheet(element) }
-                    ));
-                    return canvas2.toDataURL('image/png');
-                } catch (secondErr) {
-                    console.warn('Label capture retry (no onclone):', secondErr);
-                    var canvas3 = await html2canvas(element, html2canvasOptsForElement(element, 1, { useCORS: false }));
-                    return canvas3.toDataURL('image/png');
-                } finally {
-                    for (var k = 0; k < imgs.length; k++) {
-                        if (imgBackup[k].src != null) imgs[k].setAttribute('src', imgBackup[k].src);
-                        else imgs[k].removeAttribute('src');
-                        if (imgBackup[k].crossorigin) imgs[k].setAttribute('crossorigin', imgBackup[k].crossorigin);
-                        else imgs[k].removeAttribute('crossorigin');
+                    return (await html2canvas(element, captureOpts(element, 2, true))).toDataURL('image/png');
+                } catch (e1) {
+                    console.warn('Label capture retry:', e1);
+                    var imgs = element.querySelectorAll('img');
+                    var bak = [];
+                    for (var j = 0; j < imgs.length; j++) {
+                        bak.push({ src: imgs[j].getAttribute('src'), x: imgs[j].getAttribute('crossorigin') });
+                        imgs[j].removeAttribute('crossorigin');
+                        imgs[j].setAttribute('src', TRANSPARENT_GIF);
+                    }
+                    try {
+                        return (await html2canvas(element, captureOpts(element, 1, false))).toDataURL('image/png');
+                    } finally {
+                        for (var k = 0; k < imgs.length; k++) {
+                            if (bak[k].src != null) imgs[k].setAttribute('src', bak[k].src);
+                            else imgs[k].removeAttribute('src');
+                            if (bak[k].x) imgs[k].setAttribute('crossorigin', bak[k].x);
+                            else imgs[k].removeAttribute('crossorigin');
+                        }
                     }
                 }
             } finally {
