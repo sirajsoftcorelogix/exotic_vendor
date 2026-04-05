@@ -23,9 +23,9 @@ $MG = [
     'BAR_WIDTH' => 0.75,
     'BAR_FONT' => 10,
     /** Render barcode at N× then downscale (nearest) for sharp bars + cleaner print capture. */
-    'BARCODE_SUPERSAMPLE' => 3,
+    'BARCODE_SUPERSAMPLE' => 4,
     /** html2canvas scale for this label (higher = sharper PNG for thermal print). */
-    'CAPTURE_SCALE' => 4,
+    'CAPTURE_SCALE' => 6,
     /**
      * After fit-to-width, scale the barcode bitmap by this factor (0–1).
      * Fit-to-maxWidth was forcing wide codes to the same full width; this makes “smaller barcode” edits visible.
@@ -71,8 +71,8 @@ $MG['PRINT_JS_PRESET'] = [
     'barHeight' => (int) $MG['BAR_HEIGHT'],
     'barDisplayValue' => (bool) ($MG['SHOW_BARCODE_TEXT'] ?? false),
     'barFont' => (int) $MG['BAR_FONT'],
-    'barcodeSupersample' => (int) max(1, min(4, (int) ($MG['BARCODE_SUPERSAMPLE'] ?? 1))),
-    'captureScale' => (int) max(2, min(6, (int) ($MG['CAPTURE_SCALE'] ?? 4))),
+    'barcodeSupersample' => (int) max(1, min(6, (int) ($MG['BARCODE_SUPERSAMPLE'] ?? 1))),
+    'captureScale' => (int) max(2, min(8, (int) ($MG['CAPTURE_SCALE'] ?? 6))),
     'barVisualScale' => (float) max(0.25, min(1.0, (float) ($MG['BAR_VISUAL_SCALE'] ?? 1))),
     'barHorizontalMarginPx' => (int) $MG['BAR_H_MARGIN_PX'],
 ];

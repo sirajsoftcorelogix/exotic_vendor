@@ -176,8 +176,8 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             barHeight: 180,
             barFont: 20,
             pad: 44,
-            barcodeSupersample: 2,
-            captureScale: 3
+            barcodeSupersample: 3,
+            captureScale: 5
         },
         micro: <?php echo json_encode($microClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
         large: <?php echo json_encode($mgStoreClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
@@ -463,7 +463,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             background: '#ffffff',
             lineColor: '#000000'
         };
-        const ss = Math.max(1, Math.min(4, parseInt(preset.barcodeSupersample, 10) || 1));
+        const ss = Math.max(1, Math.min(6, parseInt(preset.barcodeSupersample, 10) || 1));
         if (ss > 1) {
             const w0 = Number(bcOpts.width) || 2;
             const m0 = typeof bcMargin === 'number' ? bcMargin : 0;
@@ -701,7 +701,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         async function captureSheetAsPng(element) {
             element.setAttribute('data-pl-capture', '1');
             var captureScale = preset.captureScale != null
-                ? Math.max(2, Math.min(6, Number(preset.captureScale)))
+                ? Math.max(2, Math.min(8, Number(preset.captureScale)))
                 : 2;
             try {
                 try {
