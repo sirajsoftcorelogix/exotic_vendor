@@ -19,8 +19,8 @@ $MG = [
     'TITLE_LINE_PX' => 50,
     'BODY_LINE_PX' => 50,
     /** Bar geometry: height = bar module stack; width = narrow-bar width (CODE128). */
-    'BAR_HEIGHT' => 25,
-    'BAR_WIDTH' => 1,
+    'BAR_HEIGHT' => 19,
+    'BAR_WIDTH' => 0.75,
     'BAR_FONT' => 10,
     'BAR_H_MARGIN_PX' => 8,
     'BORDER' => '1px solid #000000',
