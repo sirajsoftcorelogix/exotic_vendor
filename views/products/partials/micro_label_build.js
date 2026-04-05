@@ -20,7 +20,7 @@
             alignItems: 'stretch', padding: (p.pad != null ? p.pad : 12) + 'px', overflow: 'hidden'
         });
         var dt = (data.labelDate != null && String(data.labelDate).trim()) ? String(data.labelDate).trim() : '—';
-        var code = String((data.sku || data.itemCode || '').trim() || '');
+        var code = String((data.sku != null ? data.sku : '').trim() || '');
         code = code ? '(' + code + ')' : '—';
         var locRaw = data.labelLocation != null ? String(data.labelLocation).trim() : '';
         var loc = locRaw ? '(' + locRaw + ')' : '—';

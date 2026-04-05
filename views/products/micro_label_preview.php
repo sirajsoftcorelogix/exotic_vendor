@@ -40,7 +40,7 @@ $h = (float) $preset['hMm'];
         var data = <?php echo json_encode($sample, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         var el = buildMicroLabelElement(preset, data);
         var cv = el.querySelector('canvas.pl-barcode');
-        var t = String(data.sku || data.itemCode || '0').trim() || '0';
+        var t = String(data.sku != null ? data.sku : '').trim() || '0';
         if (cv) {
             try {
                 JsBarcode(cv, t, {

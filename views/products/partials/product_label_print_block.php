@@ -126,7 +126,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU → location → barcode → date. <strong>Large:</strong> MG store layout (barcode on top, text below). Use “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes the product <strong>SKU</strong> field only (fill SKU on the product if the scan is wrong). <strong>Micro:</strong> SKU → location → barcode → date. <strong>Large:</strong> MG store layout (barcode on top, text below). Use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -222,7 +222,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         el.style.paddingLeft = sidePad + 'px';
         el.style.paddingRight = sidePad + 'px';
 
-        const skuVal = esc((data.sku || data.itemCode || '').trim() || '—');
+        const skuVal = esc(String(data.sku != null ? data.sku : '').trim() || '—');
         const sizeVal = esc((data.size || '').trim() || '—');
         const colorVal = esc((data.color || '').trim() || '—');
         const mrpShow = data.mrpFormatted != null && data.mrpFormatted !== ''
@@ -430,10 +430,10 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
     }
 
     function barcodeTextFromData(data) {
-        const raw = String(data.sku || data.itemCode || '').trim();
+        /* CODE128 on label encodes SKU only (not item code / product id). */
+        const raw = String(data.sku != null ? data.sku : '').trim();
         if (raw.length) return raw;
-        const pid = data.productId != null ? String(data.productId) : '';
-        return pid.length ? ('ID' + pid) : '0';
+        return '0';
     }
 
     function crispDrawResize(destCtx, src, sx, sy, sw, sh, dx, dy, dw, dh) {

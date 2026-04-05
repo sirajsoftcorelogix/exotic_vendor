@@ -74,7 +74,7 @@
             gap: gapPx + 'px'
         });
 
-        var skuCode = String((data.sku || data.itemCode || '').trim() || '—');
+        var skuCode = String((data.sku != null ? data.sku : '').trim() || '—');
         block.appendChild(textLine(skuPx, '700', '<span style="font-weight:700">SKU:</span> ' + esc(skuCode)));
 
         var title = String(data.title || '').trim() || '—';
