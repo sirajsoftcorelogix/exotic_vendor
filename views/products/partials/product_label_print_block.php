@@ -4,7 +4,7 @@
  * Expects $products from product_detail (getProduct).
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
- * Micro (textiles): helpers/label/textiles_config.php (`PRINT_JS_PRESET`) + partials/micro_label_build.js.
+ * Micro (textiles): SKU, barcode, date — helpers/label/textiles_config.php (`PRINT_JS_PRESET`) + partials/micro_label_build.js.
  */
 $_tx = require dirname(__DIR__, 3) . '/helpers/label/textiles_config.php';
 $microClientPreset = $_tx['PRINT_JS_PRESET'];
@@ -56,7 +56,6 @@ $PRODUCT_LABEL_DATA = [
     'color' => $products['color'] ?? '',
     'size' => $products['size'] ?? '',
     'taxNote' => 'Incl. of all taxes',
-    'labelLocation' => trim((string)($products['location'] ?? '')),
     'labelDate' => date('d-m-Y'),
 ];
 /** Bust browser/CDN cache for barcode + capture libs whenever this partial changes. */
@@ -103,7 +102,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU → location → barcode → date. Use “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU → barcode → date. Use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -127,7 +126,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
     /**
      * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
      * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
-     * micro: SKU, location, flex mid (barcode), date; mid flex-grow fills strip.
+     * micro: SKU, flex mid (barcode), date; mid flex-grow fills strip.
      */
     window.LABEL_PRESETS = {
         small: {

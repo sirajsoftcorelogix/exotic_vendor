@@ -19,24 +19,17 @@
             fontFamily: ffs, display: 'flex', flexDirection: 'column',
             alignItems: 'stretch', padding: (p.pad != null ? p.pad : 12) + 'px', overflow: 'hidden'
         });
-        var loc = (data.labelLocation != null && String(data.labelLocation).trim()) ? '(' + String(data.labelLocation).trim() + ')' : '—';
         var dt = (data.labelDate != null && String(data.labelDate).trim()) ? String(data.labelDate).trim() : '—';
         var code = String((data.sku || data.itemCode || '').trim() || '');
         code = code ? '(' + code + ')' : '—';
-        var skuFs = (p.skuLocationFontPx != null) ? p.skuLocationFontPx + 'px' : '14pt';
-        var locFs = (p.locationFontPx != null)
-            ? p.locationFontPx + 'px'
-            : ((p.skuLocationFontPx != null) ? p.skuLocationFontPx + 'px' : '14pt');
+        var skuPx = p.skuFontPx != null ? p.skuFontPx : p.skuLocationFontPx;
+        var skuFs = (skuPx != null) ? skuPx + 'px' : '14pt';
         var skuLh = p.skuLineHeight != null ? p.skuLineHeight : 1.62;
-        var locLh = p.locationLineHeight != null ? p.locationLineHeight : 1.45;
         var skuFont = '600 ' + skuFs + '/' + skuLh + ' ' + ffs;
-        var locFont = '700 ' + locFs + '/' + locLh + ' ' + ffs;
-        var skuGap = p.skuLocationGapPx != null ? p.skuLocationGapPx : 3;
-        var locBar = p.skuBarcodeGapPx != null ? p.skuBarcodeGapPx : 8;
+        var skuBar = p.skuBarcodeGapPx != null ? p.skuBarcodeGapPx : 8;
         var barDate = p.barcodeDateGapPx != null ? p.barcodeDateGapPx : (p.barcodeLocationGapPx != null ? p.barcodeLocationGapPx : 5);
 
-        el.appendChild(row(skuFont, code, skuGap));
-        el.appendChild(row(locFont, loc, locBar));
+        el.appendChild(row(skuFont, code, skuBar));
 
         var mid = document.createElement('div');
         Object.assign(mid.style, {

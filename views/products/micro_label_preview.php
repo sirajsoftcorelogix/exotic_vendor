@@ -11,7 +11,7 @@ $root = dirname(__DIR__, 2);
 $tx = require $root . '/helpers/label/textiles_config.php';
 $preset = $tx['PRINT_JS_PRESET'];
 $sample = [
-    'sku' => 'M-SKU-001', 'itemCode' => 'ITEM-DEMO-01', 'labelLocation' => 'A-12', 'labelDate' => date('d-m-Y'),
+    'sku' => 'M-SKU-001', 'itemCode' => 'ITEM-DEMO-01', 'labelDate' => date('d-m-Y'),
 ];
 $w = (float) $preset['wMm'];
 $h = (float) $preset['hMm'];

@@ -14,18 +14,15 @@ $TC = [
     'OFFSET_Y_MM' => 0,
     'LABEL_PAD_PX' => 12,
     'SKU_FONT_PX' => 23,
-    /** Line 2 (location) — larger for thermal readability. */
-    'LOCATION_FONT_PX' => 28,
-    /** Unitless line-height for SKU / location rows. */
+    /** Unitless line-height for SKU row. */
     'SKU_LINE_HEIGHT' => 1.62,
-    'LOCATION_LINE_HEIGHT' => 1.45,
     'DATE_PT' => '9pt',
     'BAR_HEIGHT' => 30,
     'BAR_WIDTH' => 1,
     'BAR_FONT' => 8,
     'BAR_H_MARGIN_PX' => 4,
-    'SKU_TO_LOC_PX' => 3,
-    'LOC_TO_BAR_PX' => 8,
+    /** Space between SKU row and barcode. */
+    'SKU_TO_BAR_PX' => 8,
     'BAR_TO_DATE_PX' => 5,
     'BORDER' => '1px solid #000000',
     /** Stack for label + JsBarcode caption (matches jewelry preset). */
@@ -62,18 +59,15 @@ $TC['PRINT_JS_PRESET'] = [
     'border' => (string) $TC['BORDER'],
     'fontFamily' => (string) $TC['FONT_FAMILY'],
     'dateSize' => (string) $TC['DATE_PT'],
-    'skuLocationFontPx' => (int) $TC['SKU_FONT_PX'],
-    'locationFontPx' => (int) ($TC['LOCATION_FONT_PX'] ?? (int) $TC['SKU_FONT_PX']),
+    'skuFontPx' => (int) $TC['SKU_FONT_PX'],
     'skuLineHeight' => (float) ($TC['SKU_LINE_HEIGHT'] ?? 1.62),
-    'locationLineHeight' => (float) ($TC['LOCATION_LINE_HEIGHT'] ?? 1.45),
     'showBorders' => (bool) $TC['SHOW_BORDER'],
     'barUnit' => (float) $TC['BAR_WIDTH'],
     'barHeight' => (int) $TC['BAR_HEIGHT'],
     'barDisplayValue' => (bool) ($TC['SHOW_BARCODE_TEXT'] ?? false),
     'barFont' => (int) $TC['BAR_FONT'],
     'barHorizontalMarginPx' => (int) $TC['BAR_H_MARGIN_PX'],
-    'skuLocationGapPx' => (int) $TC['SKU_TO_LOC_PX'],
-    'skuBarcodeGapPx' => (int) $TC['LOC_TO_BAR_PX'],
+    'skuBarcodeGapPx' => (int) $TC['SKU_TO_BAR_PX'],
     'barcodeDateGapPx' => (int) $TC['BAR_TO_DATE_PX'],
 ];
 
