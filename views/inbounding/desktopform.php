@@ -1362,12 +1362,12 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         </div>
                     </div>
                     <div class="flex-1 backorder-field" style="display: none;">
-                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Days:</label>
+                        <label class="block text-xs font-bold text-[#222] mb-[5px]">Backorder Weeks:</label>
                         <div class="relative w-full">
                             <input type="number" name="backorder_day" min="0" placeholder="0"
                                    value="<?= htmlspecialchars($data['form2']['backorder_day'] ?? '') ?>" 
                                    class="w-full h-[32px] border border-[#ccc] rounded-[3px] pl-[10px] pr-[45px] text-[13px] text-[#333] focus:outline-none focus:border-[#999]">
-                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Days</span>
+                            <span class="absolute right-[10px] top-1/2 -translate-y-1/2 text-[13px] text-[#777] pointer-events-none">Weeks</span>
                         </div>
                     </div>
                     <div class="flex-1">
@@ -1653,6 +1653,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var productForm = document.getElementById('product_form');
     if (productForm) {
         productForm.addEventListener('click', function (e) {
+            var cloneRemoveBtn = e.target.closest('.clone-photo-remove-btn');
+            if (cloneRemoveBtn && productForm.contains(cloneRemoveBtn)) {
+                var cloneCard = cloneRemoveBtn.closest('.draggable-item');
+                if (cloneCard) cloneCard.remove();
+                return;
+            }
+
             var removeBtn = e.target.closest('.photo-remove-btn');
             if (!removeBtn || !productForm.contains(removeBtn)) return;
             var imageId = removeBtn.getAttribute('data-image-id');
@@ -2244,6 +2251,9 @@ document.addEventListener('DOMContentLoaded', function() {
         let manual = false;
 
         if (!dim) return;
+
+        // Preserve DB-saved/custom dimensions on load; do not auto-overwrite until user edits H/W/D.
+        manual = dim.value.trim() !== '';
         dim.addEventListener('input', () => { manual = true; });
 
         const update = () => {
@@ -2749,6 +2759,77 @@ document.addEventListener('DOMContentLoaded', function() {
                 cloneImg.style.display = 'none'; // Re-apply hiding
                 clonePlaceholder.style.display = 'flex'; // Show placeholder
                 if (cloneHiddenOldPhoto) cloneHiddenOldPhoto.value = '';
+            }
+
+            // Clone gallery cards as "copy requests" so save can duplicate files/rows.
+            const sourceGrid = sourceCard.querySelector('.photo-group-grid');
+            const sourceGalleryWrap = sourceCard.querySelector('.grow.min-w-0');
+            const targetGallerySlot = newCard.querySelector('.grow');
+
+            if (sourceGrid && targetGallerySlot) {
+                const clonedGrid = sourceGrid.cloneNode(true);
+                clonedGrid.setAttribute('data-var-id', newId);
+
+                const c = (getValue('color') || '').trim();
+                const s = (getValue('size') || '').trim();
+                const parts = [c, s].filter(Boolean);
+                clonedGrid.setAttribute('data-gallery-label', parts.length ? ('Variation: ' + parts.join(' / ')) : 'Variation');
+
+                clonedGrid.querySelectorAll('.draggable-item').forEach((photoCard) => {
+                    const removeBtn = photoCard.querySelector('.photo-remove-btn');
+
+                    let sourceImageId = '';
+                    const existingVariationInput = photoCard.querySelector('input.variation-input');
+                    if (existingVariationInput) {
+                        const m = String(existingVariationInput.name || '').match(/^photo_variation\[(\d+)\]$/);
+                        if (m) sourceImageId = m[1];
+                        existingVariationInput.remove();
+                    }
+
+                    const existingCloneInput = photoCard.querySelector('.clone-source-image-input');
+                    if (existingCloneInput) {
+                        sourceImageId = sourceImageId || String(existingCloneInput.value || '').trim();
+                        existingCloneInput.remove();
+                    }
+
+                    if (!sourceImageId && removeBtn) {
+                        sourceImageId = String(removeBtn.getAttribute('data-image-id') || '').trim();
+                    }
+
+                    if (removeBtn) {
+                        removeBtn.classList.remove('photo-remove-btn');
+                        removeBtn.classList.add('clone-photo-remove-btn');
+                        removeBtn.removeAttribute('data-image-id');
+                        removeBtn.setAttribute('title', 'Remove cloned image reference');
+                    }
+
+                    if (sourceImageId) {
+                        const hidden = document.createElement('input');
+                        hidden.type = 'hidden';
+                        hidden.name = `clone_photo_from[${newId}][]`;
+                        hidden.value = sourceImageId;
+                        hidden.className = 'clone-source-image-input';
+                        photoCard.appendChild(hidden);
+                    }
+                });
+
+                if (sourceGalleryWrap) {
+                    const clonedWrap = sourceGalleryWrap.cloneNode(false);
+                    clonedWrap.innerHTML = '';
+
+                    const lbl = document.createElement('label');
+                    lbl.className = 'block text-xs font-bold text-[#555] mb-1';
+                    lbl.textContent = 'Gallery Photos:';
+
+                    const note = document.createElement('p');
+                    note.className = 'text-[10px] text-gray-500 mb-1.5 leading-snug max-w-3xl';
+                    note.innerHTML = 'Gallery order is managed from the Item Photos page. Use <strong>&times;</strong> on a card to remove that image (deletes file on save).';
+
+                    clonedWrap.appendChild(lbl);
+                    clonedWrap.appendChild(note);
+                    clonedWrap.appendChild(clonedGrid);
+                    targetGallerySlot.replaceWith(clonedWrap);
+                }
             }
             // ---------------------------------------------------------
             // END FIX
