@@ -7,6 +7,9 @@
  * Micro (textiles): SKU, location (same type as SKU), barcode, date — textiles_config (`PRINT_JS_PRESET`) + micro_label_build.js.
  * Large (MG store): 75 × 50 mm — barcode top, SKU / title / material / price / dimensions — mg_store_label_config + mg_store_label_build.js.
  */
+/** false = hide modal Print… until QR / label formats are fixed. Set true to re-enable. */
+$productLabelModalPrintEnabled = false;
+
 $_tx = require dirname(__DIR__, 3) . '/helpers/label/textiles_config.php';
 $microClientPreset = $_tx['PRINT_JS_PRESET'];
 $_mg = require dirname(__DIR__, 3) . '/helpers/label/mg_store_label_config.php';
@@ -127,12 +130,17 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
             <p class="text-xs text-gray-500">Barcode encodes the product <strong>SKU</strong> field only (fill SKU on the product if the scan is wrong). <strong>Micro:</strong> SKU → location → barcode → date. <strong>Large:</strong> MG store layout (barcode on top, text below). Use “Actual size” / 100% if needed.</p>
+            <?php if (!$productLabelModalPrintEnabled) { ?>
+            <p class="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Printing is paused while we fix QR and label format issues. The <strong>Print…</strong> action will return when ready.</p>
+            <?php } ?>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
                 class="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100">Cancel</button>
+            <?php if ($productLabelModalPrintEnabled) { ?>
             <button type="button" id="productLabelPrintBtn" onclick="generateProductLabelPrint()"
                 class="px-4 py-2 text-sm rounded-lg bg-[#d9822b] hover:bg-[#bf7326] text-white font-medium">Print…</button>
+            <?php } ?>
         </div>
     </div>
 </div>
@@ -143,6 +151,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 
 <script>
 (function() {
+    window.PRODUCT_LABEL_PRINT_SUBMIT_ENABLED = <?php echo $productLabelModalPrintEnabled ? 'true' : 'false'; ?>;
     window.PRODUCT_LABEL_DATA = <?php echo json_encode($PRODUCT_LABEL_DATA, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     /** Unix mtime of this PHP file — if it doesn’t change after you save, the server is serving a stale copy. */
     window.PRODUCT_LABEL_PRINT_BLOCK_MT = <?php echo (int)@filemtime(__FILE__); ?>;
@@ -616,6 +625,10 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
     }
 
     window.generateProductLabelPrint = async function() {
+        if (!window.PRODUCT_LABEL_PRINT_SUBMIT_ENABLED) {
+            alert('Label printing is temporarily unavailable while we fix QR and label formats.');
+            return;
+        }
         const sizeKey = document.getElementById('productLabelSize').value;
         let qty = parseInt(document.getElementById('productLabelQty').value, 10);
         if (isNaN(qty) || qty < 1) qty = 1;
