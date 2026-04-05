@@ -24,9 +24,13 @@
         code = code ? '(' + code + ')' : '—';
         var ffs = p.fontFamily || 'Arial, Helvetica, sans-serif';
         var skuFs = (p.skuLocationFontPx != null) ? p.skuLocationFontPx + 'px' : '14pt';
+        var locFs = (p.locationFontPx != null)
+            ? p.locationFontPx + 'px'
+            : ((p.skuLocationFontPx != null) ? p.skuLocationFontPx + 'px' : '14pt');
         var skuLh = p.skuLineHeight != null ? p.skuLineHeight : 1.62;
+        var locLh = p.locationLineHeight != null ? p.locationLineHeight : 1.45;
         var skuFont = '600 ' + skuFs + '/' + skuLh + ' ' + ffs;
-        var locFont = '600 ' + skuFs + '/1.4 ' + ffs;
+        var locFont = '700 ' + locFs + '/' + locLh + ' ' + ffs;
         var skuGap = p.skuLocationGapPx != null ? p.skuLocationGapPx : 3;
         var locBar = p.skuBarcodeGapPx != null ? p.skuBarcodeGapPx : 8;
         var barDate = p.barcodeDateGapPx != null ? p.barcodeDateGapPx : (p.barcodeLocationGapPx != null ? p.barcodeLocationGapPx : 5);
