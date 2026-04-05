@@ -693,6 +693,19 @@ class Inbounding {
         
         return $stmt->execute();
     }
+    public function get_item_image_by_id(int $item_id, int $img_id) {
+        $sql = "SELECT id, file_name, display_order, image_caption FROM item_images WHERE item_id = ? AND id = ? LIMIT 1";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param("ii", $item_id, $img_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row ?: null;
+    }
     public function getBycateId($categoryRef){
         $stmt = $this->conn->prepare("SELECT * FROM category WHERE category = ?");
         $stmt->bind_param("i", $categoryRef);
@@ -1128,7 +1141,7 @@ class Inbounding {
     }
 
     // 2. SAVE EXTRA VARIATIONS (Delete Old -> Insert New)
-    public function saveVariations($it_id, $variations, $item_code, $deletedVariationIds = null) {
+    public function saveVariations($it_id, &$variations, $item_code, $deletedVariationIds = null) {
         $submittedIds = [];
         if (!is_array($variations)) { $variations = []; }
 
@@ -1221,7 +1234,9 @@ class Inbounding {
                     $pi, $pm, $inr, $amz, $usd, 
                     $hsn, $gst, $colm, $dim, $upc
                 );
-                $stmtInsert->execute();
+                if ($stmtInsert->execute()) {
+                    $variations[$key]['id'] = (int) $stmtInsert->insert_id;
+                }
             }
         }
 
