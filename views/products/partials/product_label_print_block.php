@@ -169,7 +169,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             skuLocationFontPx: 23,
             showBorders: true,
             barUnit: 1,
-            barHeight: 40,
+            barHeight: 25,
             barDisplayValue: false,
             barFont: 8,
             barHorizontalMarginPx: 4,
