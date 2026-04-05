@@ -14,6 +14,8 @@ $TC = [
     'OFFSET_Y_MM' => 0,
     'LABEL_PAD_PX' => 12,
     'SKU_FONT_PX' => 23,
+    /** Unitless CSS line-height for the SKU row only (location row stays tighter). */
+    'SKU_LINE_HEIGHT' => 1.62,
     'DATE_PT' => '9pt',
     'BAR_HEIGHT' => 30,
     'BAR_WIDTH' => 1,
@@ -57,6 +59,7 @@ $TC['PRINT_JS_PRESET'] = [
     'fontFamily' => $TC['FONT'] . ', Helvetica, sans-serif',
     'dateSize' => (string) $TC['DATE_PT'],
     'skuLocationFontPx' => (int) $TC['SKU_FONT_PX'],
+    'skuLineHeight' => (float) ($TC['SKU_LINE_HEIGHT'] ?? 1.62),
     'showBorders' => (bool) $TC['SHOW_BORDER'],
     'barUnit' => (float) $TC['BAR_WIDTH'],
     'barHeight' => (int) $TC['BAR_HEIGHT'],

@@ -24,13 +24,15 @@
         code = code ? '(' + code + ')' : '—';
         var ffs = p.fontFamily || 'Arial, Helvetica, sans-serif';
         var skuFs = (p.skuLocationFontPx != null) ? p.skuLocationFontPx + 'px' : '14pt';
-        var skuFont = '600 ' + skuFs + '/1.4 ' + ffs;
+        var skuLh = p.skuLineHeight != null ? p.skuLineHeight : 1.62;
+        var skuFont = '600 ' + skuFs + '/' + skuLh + ' ' + ffs;
+        var locFont = '600 ' + skuFs + '/1.4 ' + ffs;
         var skuGap = p.skuLocationGapPx != null ? p.skuLocationGapPx : 3;
         var locBar = p.skuBarcodeGapPx != null ? p.skuBarcodeGapPx : 8;
         var barDate = p.barcodeDateGapPx != null ? p.barcodeDateGapPx : (p.barcodeLocationGapPx != null ? p.barcodeLocationGapPx : 5);
 
         el.appendChild(row(skuFont, code, skuGap));
-        el.appendChild(row(skuFont, loc, locBar));
+        el.appendChild(row(locFont, loc, locBar));
 
         var mid = document.createElement('div');
         Object.assign(mid.style, {
