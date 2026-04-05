@@ -5,9 +5,12 @@
  *
  * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
  * Micro (textiles): SKU, location (same type as SKU), barcode, date — textiles_config (`PRINT_JS_PRESET`) + micro_label_build.js.
+ * Large (MG store): 75 × 50 mm — barcode top, SKU / title / material / price / dimensions — mg_store_label_config + mg_store_label_build.js.
  */
 $_tx = require dirname(__DIR__, 3) . '/helpers/label/textiles_config.php';
 $microClientPreset = $_tx['PRINT_JS_PRESET'];
+$_mg = require dirname(__DIR__, 3) . '/helpers/label/mg_store_label_config.php';
+$mgStoreClientPreset = $_mg['PRINT_JS_PRESET'];
 
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
@@ -41,6 +44,21 @@ if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
     $mrpFormatted = number_format((float)$mrpRaw, 0, '.', ',');
 }
 
+$lenUnit = trim((string)($products['length_unit'] ?? ''));
+$mgDimSeg = static function (string $label, $val) use ($lenUnit): string {
+    $v = trim((string)$val);
+    if ($v === '') {
+        return '';
+    }
+    return $label . ': ' . $v . ($lenUnit !== '' ? ' ' . $lenUnit : '');
+};
+$mgDimParts = array_filter([
+    $mgDimSeg('Height', $products['prod_height'] ?? ''),
+    $mgDimSeg('Width', $products['prod_width'] ?? ''),
+    $mgDimSeg('Depth', $products['prod_length'] ?? ''),
+]);
+$mgDimsLine = $mgDimParts !== [] ? implode(', ', $mgDimParts) : '';
+
 $PRODUCT_LABEL_DATA = [
     'detailUrl' => $labelDetailUrl,
     'productId' => $pid,
@@ -48,6 +66,7 @@ $PRODUCT_LABEL_DATA = [
     'itemCode' => $products['item_code'] ?? '',
     'sku' => $products['sku'] ?? '',
     'title' => $products['title'] ?? '',
+    'material' => trim((string)($products['material'] ?? '')),
     'mrp' => $mrpRaw,
     'mrpFormatted' => $mrpFormatted,
     'group' => $products['groupname'] ?? '',
@@ -56,6 +75,8 @@ $PRODUCT_LABEL_DATA = [
     'color' => $products['color'] ?? '',
     'size' => $products['size'] ?? '',
     'taxNote' => 'Incl. of all taxes',
+    'priceTaxNote' => 'Incl. GST',
+    'mgDimsLine' => $mgDimsLine,
     'labelLocation' => trim((string)($products['location'] ?? '')),
     'labelDate' => date('d-m-Y'),
 ];
@@ -66,6 +87,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script><?php readfile(__DIR__ . '/micro_label_build.js'); ?></script>
+<script><?php readfile(__DIR__ . '/mg_store_label_build.js'); ?></script>
 
 <!-- Trigger -->
 <div class="bg-white rounded-lg border border-amber-200 p-3 shadow-sm">
@@ -96,6 +118,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
                     <option value="small" selected>Jewelry — 100 × 12.9 mm</option>
                     <option value="micro">Micro (textiles) — 25 × 15 mm</option>
+                    <option value="large">Large (MG store) — 75 × 50 mm</option>
                 </select>
             </div>
             <div>
@@ -103,7 +126,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU → location → barcode → date. Use “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes <strong>SKU</strong> (falls back to item code if empty). <strong>Micro:</strong> SKU → location → barcode → date. <strong>Large:</strong> MG store layout (barcode on top, text below). Use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -154,7 +177,8 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             barFont: 20,
             pad: 44
         },
-        micro: <?php echo json_encode($microClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
+        micro: <?php echo json_encode($microClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+        large: <?php echo json_encode($mgStoreClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
     };
 
     window.openProductLabelModal = function() {
@@ -280,6 +304,9 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         }
         if (preset.layout === 'micro') {
             return window.buildMicroLabelElement(preset, data);
+        }
+        if (preset.layout === 'mg_store') {
+            return window.buildMgStoreLabelElement(preset, data);
         }
         const el = document.createElement('div');
         el.className = 'product-label-sheet';
@@ -411,9 +438,10 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         const text = String(value).trim() || '0';
         const isJewelry = preset.layout === 'jewelry';
         const isMicro = preset.layout === 'micro';
-        const bcMargin = isJewelry ? 2 : (isMicro ? 0 : 4);
-        const bcFontOpt = (isJewelry || isMicro) ? '' : 'bold';
-        const showBarcodeText = isMicro && preset.barDisplayValue === false ? false : true;
+        const isMgStore = preset.layout === 'mg_store';
+        const bcMargin = isJewelry ? 2 : (isMicro ? 0 : (isMgStore ? 2 : 4));
+        const bcFontOpt = (isJewelry || isMicro || isMgStore) ? '' : 'bold';
+        const showBarcodeText = preset.barDisplayValue !== false;
         const bcFont = preset.fontFamily || 'Arial, Helvetica, sans-serif';
         const bcOpts = {
             format: 'CODE128',
@@ -448,6 +476,10 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
             const colW = Math.floor(innerW / 3);
             const inset = preset.barWidthInsetPx != null ? preset.barWidthInsetPx : 10;
             maxW = Math.max(80, colW - inset);
+        } else if (preset.layout === 'mg_store') {
+            const sidePad = preset.pad != null ? preset.pad : 0;
+            const sideEach = preset.barHorizontalMarginPx != null ? preset.barHorizontalMarginPx : 8;
+            maxW = Math.max(80, preset.cw - 2 * sidePad - 2 * sideEach);
         } else if (preset.barCol != null) {
             maxW = preset.barCol - pad * 2 - 8;
         } else {
@@ -663,7 +695,7 @@ $productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
         if (!sel || !window.LABEL_PRESETS) return;
         try {
             var saved = sessionStorage.getItem('productLabelLastSize');
-            if (saved === 'small' || saved === 'micro') sel.value = saved;
+            if (saved === 'small' || saved === 'micro' || saved === 'large') sel.value = saved;
         } catch (e) { /* private mode / blocked */ }
         sel.addEventListener('change', function() {
             try {
