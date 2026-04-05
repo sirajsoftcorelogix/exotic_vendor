@@ -21,8 +21,10 @@ $TC = [
     'BAR_WIDTH' => 1,
     'BAR_FONT' => 8,
     'BAR_H_MARGIN_PX' => 4,
-    /** Space between SKU row and barcode. */
-    'SKU_TO_BAR_PX' => 8,
+    /** Space between SKU line and location line. */
+    'SKU_TO_LOC_PX' => 3,
+    /** Space between location line and barcode. */
+    'LOC_TO_BAR_PX' => 8,
     'BAR_TO_DATE_PX' => 5,
     'BORDER' => '1px solid #000000',
     /** Stack for label + JsBarcode caption (matches jewelry preset). */
@@ -67,7 +69,8 @@ $TC['PRINT_JS_PRESET'] = [
     'barDisplayValue' => (bool) ($TC['SHOW_BARCODE_TEXT'] ?? false),
     'barFont' => (int) $TC['BAR_FONT'],
     'barHorizontalMarginPx' => (int) $TC['BAR_H_MARGIN_PX'],
-    'skuBarcodeGapPx' => (int) $TC['SKU_TO_BAR_PX'],
+    'skuLocationGapPx' => (int) $TC['SKU_TO_LOC_PX'],
+    'skuBarcodeGapPx' => (int) $TC['LOC_TO_BAR_PX'],
     'barcodeDateGapPx' => (int) $TC['BAR_TO_DATE_PX'],
 ];
 

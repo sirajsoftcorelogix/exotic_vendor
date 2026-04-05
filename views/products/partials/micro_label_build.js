@@ -22,14 +22,18 @@
         var dt = (data.labelDate != null && String(data.labelDate).trim()) ? String(data.labelDate).trim() : '—';
         var code = String((data.sku || data.itemCode || '').trim() || '');
         code = code ? '(' + code + ')' : '—';
+        var locRaw = data.labelLocation != null ? String(data.labelLocation).trim() : '';
+        var loc = locRaw ? '(' + locRaw + ')' : '—';
         var skuPx = p.skuFontPx != null ? p.skuFontPx : p.skuLocationFontPx;
         var skuFs = (skuPx != null) ? skuPx + 'px' : '14pt';
         var skuLh = p.skuLineHeight != null ? p.skuLineHeight : 1.62;
         var skuFont = '600 ' + skuFs + '/' + skuLh + ' ' + ffs;
-        var skuBar = p.skuBarcodeGapPx != null ? p.skuBarcodeGapPx : 8;
+        var skuToLoc = p.skuLocationGapPx != null ? p.skuLocationGapPx : 3;
+        var locToBar = p.skuBarcodeGapPx != null ? p.skuBarcodeGapPx : 8;
         var barDate = p.barcodeDateGapPx != null ? p.barcodeDateGapPx : (p.barcodeLocationGapPx != null ? p.barcodeLocationGapPx : 5);
 
-        el.appendChild(row(skuFont, code, skuBar));
+        el.appendChild(row(skuFont, code, skuToLoc));
+        el.appendChild(row(skuFont, loc, locToBar));
 
         var mid = document.createElement('div');
         Object.assign(mid.style, {
