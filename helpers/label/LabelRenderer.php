@@ -7,6 +7,8 @@ use Endroid\QrCode\Writer\PngWriter;
 
 /**
  * QR generation and jewelry label inner HTML (print CSS lives in views/products/jewelry_label_*.php).
+ * Micro strip: helpers/label/textiles_config.php + views/products/partials/micro_label_build.js.
+ * Large MG store: helpers/label/mg_store_label_config.php + views/products/partials/mg_store_label_build.js.
  */
 final class LabelRenderer
 {

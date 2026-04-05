@@ -3,8 +3,15 @@
  * Product detail — label print modal (PDF, multiple sizes).
  * Expects $products from product_detail (getProduct).
  *
- * Jewelry Size: 100 × 12.9 mm — Item code / Size / Color | barcode | MRP + tax (one line) / product title.
+ * Jewelry (small): 100 × 12.9 mm — SKU / Size / Color | barcode (SKU) | MRP + tax / product title.
+ * Micro (textiles): SKU, location (same type as SKU), barcode, date — textiles_config (`PRINT_JS_PRESET`) + micro_label_build.js.
+ * Large (MG store): 75 × 50 mm — barcode top, SKU / title / material / price / dimensions — mg_store_label_config + mg_store_label_build.js.
  */
+$_tx = require dirname(__DIR__, 3) . '/helpers/label/textiles_config.php';
+$microClientPreset = $_tx['PRINT_JS_PRESET'];
+$_mg = require dirname(__DIR__, 3) . '/helpers/label/mg_store_label_config.php';
+$mgStoreClientPreset = $_mg['PRINT_JS_PRESET'];
+
 $pid = (int)($products['id'] ?? 0);
 $labelDetailUrl = base_url('?page=products&action=detail&id=' . $pid);
 $rawImg = trim((string)($products['image'] ?? ''));
@@ -37,6 +44,21 @@ if ($mrpRaw !== '' && $mrpRaw !== null && is_numeric($mrpRaw)) {
     $mrpFormatted = number_format((float)$mrpRaw, 0, '.', ',');
 }
 
+$lenUnit = trim((string)($products['length_unit'] ?? ''));
+$mgDimSeg = static function (string $label, $val) use ($lenUnit): string {
+    $v = trim((string)$val);
+    if ($v === '') {
+        return '';
+    }
+    return $label . ': ' . $v . ($lenUnit !== '' ? ' ' . $lenUnit : '');
+};
+$mgDimParts = array_filter([
+    $mgDimSeg('Height', $products['prod_height'] ?? ''),
+    $mgDimSeg('Width', $products['prod_width'] ?? ''),
+    $mgDimSeg('Depth', $products['prod_length'] ?? ''),
+]);
+$mgDimsLine = $mgDimParts !== [] ? implode(', ', $mgDimParts) : '';
+
 $PRODUCT_LABEL_DATA = [
     'detailUrl' => $labelDetailUrl,
     'productId' => $pid,
@@ -44,6 +66,7 @@ $PRODUCT_LABEL_DATA = [
     'itemCode' => $products['item_code'] ?? '',
     'sku' => $products['sku'] ?? '',
     'title' => $products['title'] ?? '',
+    'material' => trim((string)($products['material'] ?? '')),
     'mrp' => $mrpRaw,
     'mrpFormatted' => $mrpFormatted,
     'group' => $products['groupname'] ?? '',
@@ -52,11 +75,19 @@ $PRODUCT_LABEL_DATA = [
     'color' => $products['color'] ?? '',
     'size' => $products['size'] ?? '',
     'taxNote' => 'Incl. of all taxes',
+    'priceTaxNote' => 'Incl. GST',
+    'mgDimsLine' => $mgDimsLine,
+    'labelLocation' => trim((string)($products['location'] ?? '')),
+    'labelDate' => date('d-m-Y'),
 ];
+/** Bust browser/CDN cache for barcode + capture libs whenever this partial changes. */
+$productLabelPrintAssetVer = (string) (int) @filemtime(__FILE__);
 ?>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js?v=<?php echo htmlspecialchars($productLabelPrintAssetVer, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script><?php readfile(__DIR__ . '/micro_label_build.js'); ?></script>
+<script><?php readfile(__DIR__ . '/mg_store_label_build.js'); ?></script>
 
 <!-- Trigger -->
 <div class="bg-white rounded-lg border border-amber-200 p-3 shadow-sm">
@@ -85,7 +116,9 @@ $PRODUCT_LABEL_DATA = [
                 <label class="block text-sm font-medium text-gray-700 mb-1">Label size</label>
                 <select id="productLabelSize"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                    <option value="small" selected>Jewelry Size — 100 × 12.9 mm</option>
+                    <option value="small" selected>Jewelry — 100 × 12.9 mm</option>
+                    <option value="micro">Micro (textiles) — 25 × 15 mm</option>
+                    <option value="large">Large (MG store) — 75 × 50 mm</option>
                 </select>
             </div>
             <div>
@@ -93,7 +126,7 @@ $PRODUCT_LABEL_DATA = [
                 <input type="number" id="productLabelQty" min="1" max="99" value="1"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
             </div>
-            <p class="text-xs text-gray-500">Barcode encodes item code (or SKU). In the print dialog, choose “Actual size” / 100% if needed.</p>
+            <p class="text-xs text-gray-500">Barcode encodes the product <strong>SKU</strong> field only (fill SKU on the product if the scan is wrong). <strong>Micro:</strong> SKU → location → barcode → date. <strong>Large:</strong> MG store layout (barcode on top, text below). Use “Actual size” / 100% if needed.</p>
         </div>
         <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex gap-2 justify-end">
             <button type="button" onclick="closeProductLabelModal()"
@@ -104,15 +137,21 @@ $PRODUCT_LABEL_DATA = [
     </div>
 </div>
 
-<!-- Off-screen render queue -->
-<div id="product-label-pdf-queue" class="fixed left-0 top-0 -z-10 pointer-events-none opacity-0 overflow-hidden"
-    style="width:0;height:0;" aria-hidden="true"></div>
+<!-- Capture host: avoid width:0/overflow:hidden so html2canvas can clone reliably (see generateProductLabelPrint). -->
+<div id="product-label-pdf-queue" class="fixed left-0 top-0 pointer-events-none opacity-0"
+    style="z-index:-1;width:1px;height:1px;overflow:visible;clip-path:inset(100%);" aria-hidden="true"></div>
 
 <script>
 (function() {
     window.PRODUCT_LABEL_DATA = <?php echo json_encode($PRODUCT_LABEL_DATA, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    /** Unix mtime of this PHP file — if it doesn’t change after you save, the server is serving a stale copy. */
+    window.PRODUCT_LABEL_PRINT_BLOCK_MT = <?php echo (int)@filemtime(__FILE__); ?>;
 
-    /** Jewelry strip aligns with JEWELRY_FILE_CONFIG label geometry (100 × 12.9 mm, offsets, fonts). */
+    /**
+     * Printable size for each preset = wMm × hMm (openPrintWindowWithLabelImages: @page + img in mm).
+     * Keep cw / wMm === ch / hMm so the PNG aspect matches paper and nothing is stretched (here: 20 px/mm).
+     * micro: SKU, location (same font as SKU), flex mid (barcode), date.
+     */
     window.LABEL_PRESETS = {
         small: {
             name: 'Jewelry Size',
@@ -133,11 +172,15 @@ $PRODUCT_LABEL_DATA = [
             rightMrpPx: 36,
             rightSmallPx: 21,
             barCol: 1050,
-            barUnit: 2.025,
-            barHeight: 180,
-            barFont: 20,
-            pad: 44
-        }
+            barUnit: 1.0125,
+            barHeight: 90,
+            barFont: 10,
+            pad: 44,
+            barcodeSupersample: 3,
+            captureScale: 5
+        },
+        micro: <?php echo json_encode($microClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+        large: <?php echo json_encode($mgStoreClientPreset, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
     };
 
     window.openProductLabelModal = function() {
@@ -179,7 +222,7 @@ $PRODUCT_LABEL_DATA = [
         el.style.paddingLeft = sidePad + 'px';
         el.style.paddingRight = sidePad + 'px';
 
-        const skuVal = esc((data.itemCode || data.sku || '').trim() || '—');
+        const skuVal = esc(String(data.sku != null ? data.sku : '').trim() || '—');
         const sizeVal = esc((data.size || '').trim() || '—');
         const colorVal = esc((data.color || '').trim() || '—');
         const mrpShow = data.mrpFormatted != null && data.mrpFormatted !== ''
@@ -261,6 +304,12 @@ $PRODUCT_LABEL_DATA = [
         if (preset.layout === 'jewelry') {
             return buildJewelryLabelElement(preset, data);
         }
+        if (preset.layout === 'micro') {
+            return window.buildMicroLabelElement(preset, data);
+        }
+        if (preset.layout === 'mg_store') {
+            return window.buildMgStoreLabelElement(preset, data);
+        }
         const el = document.createElement('div');
         el.className = 'product-label-sheet';
         el.style.boxSizing = 'border-box';
@@ -269,7 +318,7 @@ $PRODUCT_LABEL_DATA = [
         el.style.background = '#fff';
         el.style.border = preset.border || '3px solid #000';
         el.style.color = '#000';
-        el.style.fontFamily = 'system-ui, Segoe UI, Roboto, sans-serif';
+        el.style.fontFamily = preset.fontFamily || 'Arial, Helvetica, sans-serif';
         el.style.display = 'flex';
         el.style.flexDirection = 'row';
         el.style.alignItems = 'stretch';
@@ -381,70 +430,147 @@ $PRODUCT_LABEL_DATA = [
     }
 
     function barcodeTextFromData(data) {
-        const raw = String(data.itemCode || data.sku || '').trim();
+        /* CODE128 on label encodes SKU only (not item code / product id). */
+        const raw = String(data.sku != null ? data.sku : '').trim();
         if (raw.length) return raw;
-        const pid = data.productId != null ? String(data.productId) : '';
-        return pid.length ? ('ID' + pid) : '0';
+        return '0';
+    }
+
+    function crispDrawResize(destCtx, src, sx, sy, sw, sh, dx, dy, dw, dh) {
+        destCtx.imageSmoothingEnabled = false;
+        try { destCtx.imageSmoothingQuality = 'low'; } catch (eQ) { /* ignore */ }
+        destCtx.drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh);
     }
 
     function initBarcodeOnCanvas(canvas, value, preset) {
         const text = String(value).trim() || '0';
         const isJewelry = preset.layout === 'jewelry';
-        const bcMargin = isJewelry ? 2 : 4;
-        const bcFontOpt = isJewelry ? '' : 'bold';
-        try {
-            JsBarcode(canvas, text, {
-                format: 'CODE128',
-                width: preset.barUnit,
-                height: preset.barHeight,
-                displayValue: true,
-                fontOptions: bcFontOpt,
-                fontSize: preset.barFont,
-                margin: bcMargin,
-                background: '#ffffff',
-                lineColor: '#000000'
+        const isMicro = preset.layout === 'micro';
+        const isMgStore = preset.layout === 'mg_store';
+        const bcMargin = isJewelry ? 2 : (isMicro ? 0 : (isMgStore ? 2 : 4));
+        const bcFontOpt = (isJewelry || isMicro || isMgStore) ? '' : 'bold';
+        const showBarcodeText = preset.barDisplayValue !== false;
+        const bcFont = preset.fontFamily || 'Arial, Helvetica, sans-serif';
+        const bcOpts = {
+            format: 'CODE128',
+            width: preset.barUnit != null ? preset.barUnit : 2,
+            height: preset.barHeight,
+            displayValue: showBarcodeText,
+            font: bcFont,
+            fontOptions: bcFontOpt,
+            fontSize: preset.barFont != null ? preset.barFont : 14,
+            margin: bcMargin,
+            background: '#ffffff',
+            lineColor: '#000000'
+        };
+        const ss = Math.max(1, Math.min(6, parseInt(preset.barcodeSupersample, 10) || 1));
+        if (ss > 1) {
+            const w0 = Number(bcOpts.width) || 2;
+            const m0 = typeof bcMargin === 'number' ? bcMargin : 0;
+            const hiOpts = Object.assign({}, bcOpts, {
+                height: Math.max(1, Math.round(bcOpts.height * ss)),
+                width: w0 * ss,
+                margin: m0 * ss,
+                fontSize: showBarcodeText ? Math.max(6, Math.round((bcOpts.fontSize || 14) * ss)) : bcOpts.fontSize
             });
-        } catch (e) {
+            const hi = document.createElement('canvas');
+            let ok = false;
             try {
-                JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), {
-                    format: 'CODE128',
-                    width: preset.barUnit,
-                    height: preset.barHeight,
-                    displayValue: true,
-                    fontOptions: bcFontOpt,
-                    fontSize: preset.barFont,
-                    margin: bcMargin,
-                    background: '#ffffff',
-                    lineColor: '#000000'
-                });
-            } catch (e2) {
-                JsBarcode(canvas, 'INVALID', {
-                    format: 'CODE128',
-                    width: preset.barUnit,
-                    height: Math.min(preset.barHeight, 40),
-                    displayValue: true,
-                    fontSize: preset.barFont,
-                    margin: bcMargin,
-                    background: '#ffffff',
-                    lineColor: '#000000'
-                });
+                JsBarcode(hi, text, hiOpts);
+                ok = hi.width > 0 && hi.height > 0;
+            } catch (e) {
+                try {
+                    JsBarcode(hi, text.replace(/[^\x20-\x7E]/g, ''), hiOpts);
+                    ok = hi.width > 0 && hi.height > 0;
+                } catch (e2) {
+                    ok = false;
+                }
+            }
+            if (ok) {
+                const tw = Math.max(1, Math.floor(hi.width / ss));
+                const th = Math.max(1, Math.floor(hi.height / ss));
+                canvas.width = tw;
+                canvas.height = th;
+                crispDrawResize(canvas.getContext('2d'), hi, 0, 0, hi.width, hi.height, 0, 0, tw, th);
+            } else {
+                try {
+                    JsBarcode(canvas, text, bcOpts);
+                } catch (e3) {
+                    try {
+                        JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), bcOpts);
+                    } catch (e4) {
+                        JsBarcode(canvas, 'INVALID', Object.assign({}, bcOpts, {
+                            height: Math.min(preset.barHeight, 40)
+                        }));
+                    }
+                }
+            }
+        } else {
+            try {
+                JsBarcode(canvas, text, bcOpts);
+            } catch (e) {
+                try {
+                    JsBarcode(canvas, text.replace(/[^\x20-\x7E]/g, ''), bcOpts);
+                } catch (e2) {
+                    JsBarcode(canvas, 'INVALID', Object.assign({}, bcOpts, {
+                        height: Math.min(preset.barHeight, 40)
+                    }));
+                }
             }
         }
         const pad = preset.pad != null ? preset.pad : 0;
-        const maxW = preset.barCol - pad * 2 - 8;
-        if (maxW > 40 && canvas.width > maxW) {
+        var maxW;
+        if (preset.barMaxWidth != null && preset.barMaxWidth > 0) {
+            maxW = preset.barMaxWidth;
+        } else if (preset.layout === 'jewelry') {
+            const sidePad = preset.pad != null ? preset.pad : 0;
+            const innerW = preset.cw - 2 * sidePad;
+            const colW = Math.floor(innerW / 3);
+            const inset = preset.barWidthInsetPx != null ? preset.barWidthInsetPx : 10;
+            maxW = Math.max(80, colW - inset);
+        } else if (preset.layout === 'mg_store') {
+            const sidePad = preset.pad != null ? preset.pad : 0;
+            const sideEach = preset.barHorizontalMarginPx != null ? preset.barHorizontalMarginPx : 8;
+            maxW = Math.max(80, preset.cw - 2 * sidePad - 2 * sideEach);
+        } else if (preset.barCol != null) {
+            maxW = preset.barCol - pad * 2 - 8;
+        } else {
+            const sideEach = preset.barHorizontalMarginPx != null ? preset.barHorizontalMarginPx : 8;
+            maxW = Math.max(40, preset.cw - pad * 2 - 2 * sideEach);
+        }
+        if (maxW > 40 && canvas.width > 0) {
             const nw = Math.floor(maxW);
-            const nh = Math.floor(canvas.height * (maxW / canvas.width));
-            const src = document.createElement('canvas');
-            src.width = canvas.width;
-            src.height = canvas.height;
-            src.getContext('2d').drawImage(canvas, 0, 0);
-            canvas.width = nw;
-            canvas.height = nh;
-            canvas.getContext('2d').drawImage(src, 0, 0, src.width, src.height, 0, 0, nw, nh);
+            if (Math.abs(canvas.width - nw) > 1) {
+                const nh = Math.max(1, Math.floor(canvas.height * (nw / canvas.width)));
+                const src = document.createElement('canvas');
+                src.width = canvas.width;
+                src.height = canvas.height;
+                src.getContext('2d').drawImage(canvas, 0, 0);
+                canvas.width = nw;
+                canvas.height = nh;
+                crispDrawResize(canvas.getContext('2d'), src, 0, 0, src.width, src.height, 0, 0, nw, nh);
+            }
+        }
+        /* Uniform scale (MG store): fit-to-maxW kept wide codes at full label width; this applies your intended size. */
+        if (isMgStore && preset.barVisualScale != null && canvas.width > 0) {
+            const vs = Number(preset.barVisualScale);
+            if (vs > 0 && vs < 0.999) {
+                const nwV = Math.max(1, Math.floor(canvas.width * vs));
+                const nhV = Math.max(1, Math.floor(canvas.height * vs));
+                if (nwV < canvas.width || nhV < canvas.height) {
+                    const srcV = document.createElement('canvas');
+                    srcV.width = canvas.width;
+                    srcV.height = canvas.height;
+                    srcV.getContext('2d').drawImage(canvas, 0, 0);
+                    canvas.width = nwV;
+                    canvas.height = nhV;
+                    crispDrawResize(canvas.getContext('2d'), srcV, 0, 0, srcV.width, srcV.height, 0, 0, nwV, nhV);
+                }
+            }
         }
     }
 
+    /** Opens print document: one page per image, physical size = preset.wMm × preset.hMm (CSS mm). */
     function openPrintWindowWithLabelImages(imageDataUrls, preset) {
         const wMm = preset.wMm;
         const hMm = preset.hMm;
@@ -503,13 +629,15 @@ $PRODUCT_LABEL_DATA = [
         }
 
         const queue = document.getElementById('product-label-pdf-queue');
+        const queueParent = queue.parentNode;
+        const queueNext = queue.nextSibling;
         queue.innerHTML = '';
-        queue.style.width = preset.cw + 'px';
-        queue.style.height = 'auto';
-        queue.style.opacity = '0';
-        queue.style.position = 'fixed';
-        queue.style.left = '-9999px';
-        queue.style.top = '0';
+        try {
+            if (queueParent && document.body !== queueParent) {
+                document.body.appendChild(queue);
+            }
+        } catch (eMoveQ) { /* keep in place */ }
+        queue.style.cssText = 'position:fixed!important;left:0!important;top:0!important;width:auto!important;height:auto!important;min-width:' + preset.cw + 'px!important;overflow:visible!important;opacity:0!important;pointer-events:none!important;z-index:2147483646!important;clip:unset!important;clip-path:none!important;';
 
         const sheets = [];
         for (let i = 0; i < qty; i++) {
@@ -535,63 +663,67 @@ $PRODUCT_LABEL_DATA = [
 
         function makeOncloneForSheet(sourceEl) {
             return function(clonedDoc) {
-                var clonedSheet = clonedDoc.querySelector('.product-label-sheet[data-pl-capture="1"]');
-                if (!clonedSheet) clonedSheet = clonedDoc.querySelector('.product-label-sheet');
-                var origCanvas = sourceEl.querySelector('canvas.pl-barcode');
-                var clonedCanvas = clonedSheet ? clonedSheet.querySelector('canvas.pl-barcode') : null;
-                if (origCanvas && clonedCanvas && origCanvas.width > 0 && origCanvas.height > 0) {
-                    clonedCanvas.width = origCanvas.width;
-                    clonedCanvas.height = origCanvas.height;
-                    clonedCanvas.getContext('2d').drawImage(origCanvas, 0, 0);
+                try {
+                    var clonedSheet = clonedDoc.querySelector('.product-label-sheet[data-pl-capture="1"]')
+                        || clonedDoc.querySelector('.product-label-sheet');
+                    var origCanvas = sourceEl.querySelector('canvas.pl-barcode');
+                    var clonedCanvas = clonedSheet ? clonedSheet.querySelector('canvas.pl-barcode') : null;
+                    if (origCanvas && clonedCanvas && origCanvas.width > 0 && origCanvas.height > 0) {
+                        clonedCanvas.width = origCanvas.width;
+                        clonedCanvas.height = origCanvas.height;
+                        var cctx = clonedCanvas.getContext('2d');
+                        cctx.imageSmoothingEnabled = false;
+                        try { cctx.imageSmoothingQuality = 'low'; } catch (eC) { /* ignore */ }
+                        cctx.drawImage(origCanvas, 0, 0);
+                    }
+                } catch (eClone) {
+                    console.warn('Label onclone canvas sync:', eClone);
                 }
             };
         }
 
-        async function captureSheetAsPng(element) {
-            var baseOpts = {
-                useCORS: true,
+        function captureOpts(el, scale, useCors) {
+            return {
+                useCORS: useCors,
                 allowTaint: false,
                 backgroundColor: '#ffffff',
                 logging: false,
-                width: preset.cw,
-                height: preset.ch,
-                windowWidth: preset.cw,
-                windowHeight: preset.ch,
-                foreignObjectRendering: false
+                foreignObjectRendering: false,
+                scale: scale,
+                width: Math.max(1, Math.ceil(el.offsetWidth || preset.cw)),
+                height: Math.max(1, Math.ceil(el.offsetHeight || preset.ch)),
+                scrollX: 0,
+                scrollY: 0,
+                onclone: makeOncloneForSheet(el)
             };
+        }
+
+        async function captureSheetAsPng(element) {
             element.setAttribute('data-pl-capture', '1');
+            var captureScale = preset.captureScale != null
+                ? Math.max(2, Math.min(8, Number(preset.captureScale)))
+                : 2;
             try {
-                var canvas = await html2canvas(element, Object.assign({}, baseOpts, {
-                    scale: 2,
-                    onclone: makeOncloneForSheet(element)
-                }));
-                return canvas.toDataURL('image/png');
-            } catch (firstErr) {
-                console.warn('Label capture retry (no product photo / lower scale):', firstErr);
-                var imgs = element.querySelectorAll('img');
-                var imgBackup = [];
-                for (var j = 0; j < imgs.length; j++) {
-                    var im = imgs[j];
-                    imgBackup.push({
-                        src: im.getAttribute('src'),
-                        crossorigin: im.getAttribute('crossorigin')
-                    });
-                    im.removeAttribute('crossorigin');
-                    im.setAttribute('src', TRANSPARENT_GIF);
-                }
                 try {
-                    var canvas2 = await html2canvas(element, Object.assign({}, baseOpts, {
-                        scale: 1,
-                        useCORS: false,
-                        onclone: makeOncloneForSheet(element)
-                    }));
-                    return canvas2.toDataURL('image/png');
-                } finally {
-                    for (var k = 0; k < imgs.length; k++) {
-                        if (imgBackup[k].src != null) imgs[k].setAttribute('src', imgBackup[k].src);
-                        else imgs[k].removeAttribute('src');
-                        if (imgBackup[k].crossorigin) imgs[k].setAttribute('crossorigin', imgBackup[k].crossorigin);
-                        else imgs[k].removeAttribute('crossorigin');
+                    return (await html2canvas(element, captureOpts(element, captureScale, true))).toDataURL('image/png');
+                } catch (e1) {
+                    console.warn('Label capture retry:', e1);
+                    var imgs = element.querySelectorAll('img');
+                    var bak = [];
+                    for (var j = 0; j < imgs.length; j++) {
+                        bak.push({ src: imgs[j].getAttribute('src'), x: imgs[j].getAttribute('crossorigin') });
+                        imgs[j].removeAttribute('crossorigin');
+                        imgs[j].setAttribute('src', TRANSPARENT_GIF);
+                    }
+                    try {
+                        return (await html2canvas(element, captureOpts(element, 1, false))).toDataURL('image/png');
+                    } finally {
+                        for (var k = 0; k < imgs.length; k++) {
+                            if (bak[k].src != null) imgs[k].setAttribute('src', bak[k].src);
+                            else imgs[k].removeAttribute('src');
+                            if (bak[k].x) imgs[k].setAttribute('crossorigin', bak[k].x);
+                            else imgs[k].removeAttribute('crossorigin');
+                        }
                     }
                 }
             } finally {
@@ -615,11 +747,36 @@ $PRODUCT_LABEL_DATA = [
             btn.disabled = false;
             btn.innerHTML = prevHtml;
             queue.innerHTML = '';
+            queue.className = 'fixed left-0 top-0 pointer-events-none opacity-0';
+            queue.style.cssText = 'z-index:-1;width:1px;height:1px;overflow:visible;clip-path:inset(100%);';
+            if (queueParent) {
+                try {
+                    if (queueNext && queueNext.parentNode === queueParent) {
+                        queueParent.insertBefore(queue, queueNext);
+                    } else {
+                        queueParent.appendChild(queue);
+                    }
+                } catch (eRestore) { /* ignore */ }
+            }
         }
     };
 
     document.getElementById('productLabelModal') && document.getElementById('productLabelModal').addEventListener('click', function(e) {
         if (e.target === this) closeProductLabelModal();
     });
+
+    (function initProductLabelSizeSelect() {
+        var sel = document.getElementById('productLabelSize');
+        if (!sel || !window.LABEL_PRESETS) return;
+        try {
+            var saved = sessionStorage.getItem('productLabelLastSize');
+            if (saved === 'small' || saved === 'micro' || saved === 'large') sel.value = saved;
+        } catch (e) { /* private mode / blocked */ }
+        sel.addEventListener('change', function() {
+            try {
+                sessionStorage.setItem('productLabelLastSize', this.value);
+            } catch (e2) { /* ignore */ }
+        });
+    })();
 })();
 </script>

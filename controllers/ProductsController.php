@@ -2635,6 +2635,11 @@ class ProductsController {
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
             if ($order) {
+                if (!headers_sent()) {
+                    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+                    header('Pragma: no-cache');
+                    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+                }
                 renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
             } else {
               echo '<p>Product details not found.</p>';

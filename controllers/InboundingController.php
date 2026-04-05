@@ -1059,33 +1059,57 @@ class InboundingController {
         $oldFileName = basename($oldPathOrName);
         $fullOldPath = $directory . $oldFileName;
 
-        if (file_exists($fullOldPath)) {
-            $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
-            $finalName = $newBaseName . "." . $ext;
+        $ext = strtolower(pathinfo($oldFileName, PATHINFO_EXTENSION));
+        $finalName = $newBaseName . "." . $ext;
+        $fullNewPath = $directory . $finalName;
+
+        // If old name is already correct and file exists, nothing to do.
+        if ($oldFileName === $finalName && file_exists($fullOldPath)) {
+            return;
+        }
+
+        // Collision-safe target for variation main images.
+        // Cloned variations can share same color/size so base target may already exist.
+        if ($type === 'variation_main' && file_exists($fullNewPath) && $oldFileName !== $finalName) {
+            $finalName = $newBaseName . '_v' . (int)$dbId . '.' . $ext;
             $fullNewPath = $directory . $finalName;
+            $bump = 1;
+            while (file_exists($fullNewPath) && $bump <= 10) {
+                $finalName = $newBaseName . '_v' . (int)$dbId . '_d' . $bump . '.' . $ext;
+                $fullNewPath = $directory . $finalName;
+                $bump++;
+            }
+        }
 
-            // Skip if name is already correct
-            if ($oldFileName === $finalName) return;
+        $renamed = false;
+        if (file_exists($fullOldPath)) {
+            $renamed = @rename($fullOldPath, $fullNewPath);
+        } else {
+            // Shared-source fallback: if another variation already moved this file,
+            // point this record to an existing target so image doesn't break.
+            if (file_exists($fullNewPath)) {
+                $renamed = true;
+            }
+        }
 
-            if (rename($fullOldPath, $fullNewPath)) {
-                // Force fresh mtime so ?v= cache-busting URL always changes after rename.
-                @touch($fullNewPath);
-                // Filename changed, so clear old/new thumbnail cache entries.
-                $this->deleteThumbnailForImagePath($fullOldPath);
-                $this->deleteThumbnailForImagePath($fullNewPath);
-                // Update Database based on type
-                if ($type === 'main') {
-                    $dbPath = "uploads/products/" . $finalName;
-                    $model->update_main_product_photo($dbId, $dbPath);
-                } elseif ($type === 'variation_main') {
-                    $dbPath = "uploads/products/" . $finalName;
-                    $model->update_variation_photo($dbId, $dbPath);
-                } elseif ($type === 'gallery') {
-                    // Gallery stores just filename usually, or check your logic
-                    // Your current code stores just filename in item_images? 
-                    // Based on "uploads/itm_img/filename" in your view, it likely stores just filename.
-                    $model->update_image_filename_direct($dbId, $finalName);
-                }
+        if ($renamed) {
+            // Force fresh mtime so ?v= cache-busting URL always changes after rename.
+            @touch($fullNewPath);
+            // Filename changed, so clear old/new thumbnail cache entries.
+            $this->deleteThumbnailForImagePath($fullOldPath);
+            $this->deleteThumbnailForImagePath($fullNewPath);
+            // Update Database based on type
+            if ($type === 'main') {
+                $dbPath = "uploads/products/" . $finalName;
+                $model->update_main_product_photo($dbId, $dbPath);
+            } elseif ($type === 'variation_main') {
+                $dbPath = "uploads/products/" . $finalName;
+                $model->update_variation_photo($dbId, $dbPath);
+            } elseif ($type === 'gallery') {
+                // Gallery stores just filename usually, or check your logic
+                // Your current code stores just filename in item_images? 
+                // Based on "uploads/itm_img/filename" in your view, it likely stores just filename.
+                $model->update_image_filename_direct($dbId, $finalName);
             }
         }
     }
@@ -1288,9 +1312,11 @@ class InboundingController {
         if ($deletedVariationIdsCsv !== '') {
             $deletedVariationIds = array_values(array_unique(array_filter(array_map('intval', explode(',', $deletedVariationIdsCsv)))));
         }
+        $variationPhotoUploaded = [];
         foreach ($allVariations as $key => &$variant) {
             $variant['id'] = $variant['id'] ?? '';
             $uploadError = $_FILES['variations']['error'][$key]['photo'] ?? UPLOAD_ERR_NO_FILE;
+            $variationPhotoUploaded[$key] = ($uploadError === UPLOAD_ERR_OK);
             if ($uploadError === UPLOAD_ERR_OK) {
                  $tmpName = $_FILES['variations']['tmp_name'][$key]['photo'];
                  $name    = $_FILES['variations']['name'][$key]['photo'];
@@ -1310,10 +1336,65 @@ class InboundingController {
         unset($variant);
         $inboundingModel->saveVariations($id, $allVariations, $item_code, $deletedVariationIds);
 
+        // 4b. For cloned/new rows inheriting old_photo, create a dedicated copy of the main variation image.
+        // This prevents multiple variations sharing one file path which can disappear after rename workflows.
+        foreach ($allVariations as $key => $variant) {
+            $keyStr = (string) $key;
+            if (strpos($keyStr, 'new_') !== 0) {
+                continue;
+            }
+
+            $varId = (int) ($variant['id'] ?? 0);
+            if ($varId <= 0) {
+                continue;
+            }
+
+            $uploadedNow = !empty($variationPhotoUploaded[$key]);
+            if ($uploadedNow) {
+                continue;
+            }
+
+            $currentPhoto = trim((string) ($variant['photo'] ?? ''));
+            if ($currentPhoto === '') {
+                continue;
+            }
+
+            $this->duplicateVariationMainImageFile($id, $varId, $currentPhoto);
+        }
+
         // 5. Update Image Order & Assignment
         if (isset($_POST['photo_variation']) && is_array($_POST['photo_variation'])) {
             foreach ($_POST['photo_variation'] as $img_id => $var_id) {
                 $inboundingModel->update_image_variation($img_id, $var_id);
+            }
+        }
+
+        // 6. Duplicate gallery images for cloned variation cards.
+        // Frontend sends clone_photo_from[new_key_or_id][] = source_image_id
+        $cloneMap = $_POST['clone_photo_from'] ?? [];
+        if (is_array($cloneMap)) {
+            foreach ($cloneMap as $targetKey => $sourceIdsRaw) {
+                if (!is_array($sourceIdsRaw)) {
+                    continue;
+                }
+
+                $targetVariationId = 0;
+                if (isset($allVariations[$targetKey]['id']) && is_numeric($allVariations[$targetKey]['id'])) {
+                    $targetVariationId = (int) $allVariations[$targetKey]['id'];
+                } elseif (is_numeric($targetKey)) {
+                    $targetVariationId = (int) $targetKey;
+                }
+
+                if ($targetVariationId <= 0) {
+                    continue;
+                }
+
+                $sourceIds = array_values(array_unique(array_filter(array_map('intval', $sourceIdsRaw))));
+                if (empty($sourceIds)) {
+                    continue;
+                }
+
+                $this->cloneVariationGalleryImages($id, $targetVariationId, $sourceIds);
             }
         }
 
@@ -1563,6 +1644,110 @@ class InboundingController {
         }
         exit;
     }
+
+    private function cloneVariationGalleryImages(int $itemId, int $targetVariationId, array $sourceImageIds): void {
+        global $inboundingModel;
+
+        if ($itemId <= 0 || $targetVariationId <= 0 || empty($sourceImageIds)) {
+            return;
+        }
+
+        $imgDir = __DIR__ . '/../uploads/itm_img/';
+        if (!is_dir($imgDir)) {
+            return;
+        }
+
+        $deduped = array_values(array_unique(array_filter(array_map('intval', $sourceImageIds))));
+        foreach ($deduped as $srcImgId) {
+            $row = $inboundingModel->get_item_image_by_id($itemId, $srcImgId);
+            if (!$row) {
+                continue;
+            }
+
+            $oldName = basename((string) ($row['file_name'] ?? ''));
+            if ($oldName === '') {
+                continue;
+            }
+
+            $sourcePath = $imgDir . $oldName;
+            if (!file_exists($sourcePath)) {
+                continue;
+            }
+
+            $ext = strtolower(pathinfo($oldName, PATHINFO_EXTENSION));
+            $base = pathinfo($oldName, PATHINFO_FILENAME);
+            $newName = $base . '_v' . $targetVariationId . '_' . time() . '_' . random_int(100, 999);
+            if ($ext !== '') {
+                $newName .= '.' . $ext;
+            }
+
+            $targetPath = $imgDir . $newName;
+            $attempt = 0;
+            while (file_exists($targetPath) && $attempt < 5) {
+                $attempt++;
+                $newName = $base . '_v' . $targetVariationId . '_' . time() . '_' . random_int(1000, 9999);
+                if ($ext !== '') {
+                    $newName .= '.' . $ext;
+                }
+                $targetPath = $imgDir . $newName;
+            }
+
+            if (!@copy($sourcePath, $targetPath)) {
+                continue;
+            }
+
+            $order = (int) ($row['display_order'] ?? 0);
+            $caption = (string) ($row['image_caption'] ?? '');
+            $inboundingModel->add_image($itemId, $newName, $caption, $order, $targetVariationId);
+        }
+    }
+
+    private function duplicateVariationMainImageFile(int $itemId, int $variationId, string $relativePath): void {
+        global $inboundingModel;
+
+        if ($itemId <= 0 || $variationId <= 0) {
+            return;
+        }
+
+        $cleanRelative = ltrim($relativePath, '/');
+        if ($cleanRelative === '') {
+            return;
+        }
+
+        $sourcePath = __DIR__ . '/../' . $cleanRelative;
+        if (!file_exists($sourcePath)) {
+            return;
+        }
+
+        $targetDir = __DIR__ . '/../uploads/products/';
+        if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true)) {
+            return;
+        }
+
+        $ext = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
+        $newName = 'VAR_' . $itemId . '_' . $variationId . '_clone_' . time() . '_' . random_int(100, 999);
+        if ($ext !== '') {
+            $newName .= '.' . $ext;
+        }
+
+        $targetPath = $targetDir . $newName;
+        $attempt = 0;
+        while (file_exists($targetPath) && $attempt < 5) {
+            $attempt++;
+            $newName = 'VAR_' . $itemId . '_' . $variationId . '_clone_' . time() . '_' . random_int(1000, 9999);
+            if ($ext !== '') {
+                $newName .= '.' . $ext;
+            }
+            $targetPath = $targetDir . $newName;
+        }
+
+        if (!@copy($sourcePath, $targetPath)) {
+            return;
+        }
+
+        $inboundingModel->update_variation_photo($variationId, 'uploads/products/' . $newName);
+    }
+
     private function ensureImagesAreRenamed($id, $item_code, $is_variant, $color = '', $size = '') {
         
         if (empty($item_code)) return;
