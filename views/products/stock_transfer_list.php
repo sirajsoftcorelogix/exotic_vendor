@@ -257,22 +257,24 @@ $formatStatusLabel = static function (string $status): string {
                                         <span class="text-gray-400">No items</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-5 py-4 align-top text-right">
-                                    <div class="inline-flex flex-col gap-2 items-end">
+                                <td class="px-4 py-4 align-middle text-right">
+                                    <div class="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5">
                                         <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transfer['id']); ?>"
-                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-800 text-xs font-semibold hover:bg-gray-50 hover:border-gray-300 transition shadow-sm">
-                                            <i class="fas fa-edit text-blue-600" aria-hidden="true"></i>
+                                            title="Edit transfer"
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border border-gray-200 text-gray-800 text-[11px] sm:text-xs font-semibold hover:bg-gray-50 whitespace-nowrap">
+                                            <i class="fas fa-edit text-blue-600 text-[10px] sm:text-xs" aria-hidden="true"></i>
                                             Edit
                                         </a>
                                         <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo urlencode($transfer['id']); ?>"
-                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600 transition shadow-sm">
-                                            <i class="fas fa-file-invoice" aria-hidden="true"></i>
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-orange-500 text-white text-[11px] sm:text-xs font-semibold hover:bg-orange-600 whitespace-nowrap">
+                                            <i class="fas fa-file-invoice text-[10px] sm:text-xs shrink-0" aria-hidden="true"></i>
                                             Add GRN
                                         </a>
                                         <a href="?page=stock_transfer_grns&action=list&transfer_id=<?php echo urlencode($transfer['id']); ?>"
-                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition shadow-sm">
-                                            <i class="fas fa-list" aria-hidden="true"></i>
-                                            View GRNs
+                                            title="View GRNs for this transfer"
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600 text-white text-[11px] sm:text-xs font-semibold hover:bg-emerald-700 whitespace-nowrap">
+                                            <i class="fas fa-list text-[10px] sm:text-xs shrink-0" aria-hidden="true"></i>
+                                            GRNs
                                         </a>
                                     </div>
                                 </td>
