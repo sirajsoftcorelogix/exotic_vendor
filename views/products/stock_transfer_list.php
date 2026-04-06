@@ -43,33 +43,49 @@ $formatStatusLabel = static function (string $status): string {
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Page header -->
-    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-8">
-        <div class="min-w-0">
-            <div class="inline-flex items-center gap-2 text-amber-800/90 text-sm font-medium mb-2">
-                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-                    <i class="fas fa-exchange-alt" aria-hidden="true"></i>
-                </span>
-                <span>Warehouse</span>
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
+        <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-sky-200/15 blur-2xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+            <div class="min-w-0 max-w-3xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-exchange-alt text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span>Warehouse · Stock transfers</span>
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                    Stock transfer <span class="text-amber-800">history</span>
+                </h1>
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+                    Review moves between locations, edit open transfers, and record GRNs against transfer orders—all in one place.
+                </p>
             </div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Stock transfer history</h1>
-            <p class="mt-2 text-sm sm:text-base text-gray-600 max-w-2xl">
-                Review transfers between locations, open a transfer to edit, or record GRNs against a transfer order.
-            </p>
-        </div>
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            <a href="?page=products&action=transfer_stock"
-                class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-md shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
-                <i class="fas fa-plus" aria-hidden="true"></i>
-                Create stock transfer
-            </a>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shrink-0 lg:pl-4">
+                <div class="flex flex-col justify-center rounded-xl border border-white/80 bg-white/85 px-5 py-4 text-center shadow-sm backdrop-blur-sm sm:text-left ring-1 ring-gray-900/5 min-w-0 sm:min-w-[9.5rem]">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-amber-800/60">This view</span>
+                    <span class="mt-0.5 text-3xl font-bold tabular-nums text-gray-900 leading-none"><?php echo number_format($totalRecords); ?></span>
+                    <span class="mt-1 text-xs text-gray-500">matching current filters</span>
+                </div>
+                <a href="?page=products&action=transfer_stock"
+                    class="inline-flex items-center justify-center gap-2 self-center px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
+                    <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
+                    Create stock transfer
+                </a>
+            </div>
         </div>
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden mb-6">
-        <div class="px-5 py-4 border-b border-gray-100 bg-gray-50/80 flex items-center gap-3">
-            <i class="fas fa-filter text-gray-400" aria-hidden="true"></i>
-            <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden mb-6 ring-1 ring-gray-900/[0.03]">
+        <div class="px-5 py-4 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 flex items-center gap-3">
+            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Narrow the list by order, dates, people, routes, or item.</p>
+            </div>
         </div>
         <form method="GET" action="" class="p-5">
             <input type="hidden" name="page" value="products">
