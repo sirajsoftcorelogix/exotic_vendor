@@ -3,11 +3,15 @@
     <span class="sr-only">Error</span>
     <span class="ml-2 text-sm">
     <?php
-    if (isset($data['message'])) {
-        $message = $data['message'];    
-        $type = isset($message['type']) ? $message['type'] : 'success';
-        $text = isset($message['text']) ? $message['text'] : 'Operation completed successfully.';
-        echo flash_message($text, $type);
+    $msg = $message ?? ($data['message'] ?? null);
+    if ($msg !== null) {
+        if (is_array($msg)) {
+            $type = isset($msg['type']) ? $msg['type'] : 'success';
+            $text = isset($msg['text']) ? $msg['text'] : 'Operation completed successfully.';
+            echo flash_message($text, $type);
+        } else {
+            echo flash_message((string) $msg, 'error');
+        }
     }
     ?>
     </span>

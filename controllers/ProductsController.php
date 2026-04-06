@@ -121,6 +121,47 @@ class ProductsController {
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
     }
 
+    /**
+     * Paginated line items for one transfer (Option A — list uses aggregates only).
+     */
+    public function stock_transfer_items() {
+        is_login();
+        global $conn;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+
+        $transferId = isset($_GET['transfer_id']) ? (int)$_GET['transfer_id'] : 0;
+        if ($transferId <= 0) {
+            header('Location: ?page=products&action=stock_transfer');
+            return;
+        }
+
+        $pageNo = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
+        $pageNo = max(1, $pageNo);
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50;
+        $offset = ($pageNo - 1) * $limit;
+
+        $result = $stockTransferModel->getTransferItemsPaginated($transferId, $limit, $offset);
+
+        if ($result['transfer'] === null) {
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Stock transfer not found'],
+            ], 'Error');
+            return;
+        }
+
+        renderTemplate('views/products/stock_transfer_items.php', [
+            'transfer' => $result['transfer'],
+            'items' => $result['rows'],
+            'total_records' => $result['total'],
+            'page_no' => $pageNo,
+            'limit' => $limit,
+            'transfer_id' => $transferId,
+        ], 'Transfer line items');
+    }
+
     public function stock_transfer_edit() {
         is_login();
         global $conn;

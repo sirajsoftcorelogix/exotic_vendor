@@ -207,40 +207,42 @@ $statusClass = static function (?string $status): string {
                                     </div>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-gray-800">
-                                    <?php if (!empty($transfer['items'])): ?>
-                                        <ul class="space-y-2">
-                                            <?php foreach ($transfer['items'] as $item): ?>
-                                                <?php
-                                                    $label = trim($item['sku'] ?? '');
-                                                    if ($label === '') {
-                                                        $label = trim($item['item_code'] ?? '');
-                                                    }
-                                                ?>
-                                                <li class="rounded-lg bg-gray-50 px-2.5 py-1.5 border border-gray-100">
-                                                    <span class="font-medium text-gray-900"><?php echo htmlspecialchars($label ?: 'N/A'); ?></span>
-                                                    <span class="text-gray-600"> · <?php echo (int)$item['transfer_qty']; ?> qty</span>
-                                                    <?php if (!empty(trim($item['item_notes'] ?? ''))): ?>
-                                                        <span class="block text-xs text-gray-500 mt-0.5"><?php echo htmlspecialchars($item['item_notes']); ?></span>
-                                                    <?php endif; ?>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
+                                    <?php
+                                        $lineCount = (int)($transfer['line_item_count'] ?? 0);
+                                        $lineTotalQty = (int)($transfer['line_total_qty'] ?? 0);
+                                        $preview = $transfer['line_preview_skus'] ?? [];
+                                    ?>
+                                    <?php if ($lineCount > 0): ?>
+                                        <div class="space-y-2">
+                                            <div class="text-xs text-gray-500 tabular-nums">
+                                                <span class="font-medium text-gray-700"><?php echo number_format($lineCount); ?></span> line<?php echo $lineCount === 1 ? '' : 's'; ?>
+                                                · <span class="font-medium text-gray-700"><?php echo number_format($lineTotalQty); ?></span> total qty
+                                            </div>
+                                            <?php if (!empty($preview)): ?>
+                                                <ul class="flex flex-wrap gap-1.5">
+                                                    <?php foreach ($preview as $sku): ?>
+                                                        <li class="rounded-md bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-800 border border-gray-100"><?php echo htmlspecialchars($sku); ?></li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            <?php endif; ?>
+                                            <?php if ($lineCount > count($preview)): ?>
+                                                <span class="text-xs text-gray-500">+<?php echo number_format($lineCount - count($preview)); ?> more</span>
+                                            <?php endif; ?>
+                                            <div>
+                                                <a href="?page=products&action=stock_transfer_items&transfer_id=<?php echo urlencode($transfer['id']); ?>"
+                                                    class="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:text-amber-900">
+                                                    <i class="fas fa-list-ul" aria-hidden="true"></i>
+                                                    View all lines
+                                                </a>
+                                            </div>
+                                        </div>
                                     <?php else: ?>
                                         <span class="text-gray-400">No items</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-right">
-                                    <?php
-                                    $productIds = [];
-                                    foreach ($transfer['items'] as $item) {
-                                        if (!empty($item['product_id'])) {
-                                            $productIds[] = (int)$item['product_id'];
-                                        }
-                                    }
-                                    $productIdsParam = urlencode(implode(',', array_unique($productIds)));
-                                    ?>
                                     <div class="inline-flex flex-col gap-2 items-end">
-                                        <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transfer['id']); ?>&product_ids=<?php echo $productIdsParam; ?>"
+                                        <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transfer['id']); ?>"
                                             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-800 text-xs font-semibold hover:bg-gray-50 hover:border-gray-300 transition shadow-sm">
                                             <i class="fas fa-edit text-blue-600" aria-hidden="true"></i>
                                             Edit

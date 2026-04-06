@@ -878,14 +878,13 @@ class StockTransfer
     }
 
     /**
-     * Get paginated list of stock transfers with item details.
+     * Get paginated list of stock transfers. Line items are **not** loaded; use
+     * line_item_count, line_preview_skus (up to 3 labels), line_total_qty from the JOIN.
+     * Full lines: {@see getTransferItemsPaginated()}.
      *
      * @param int $limit
      * @param int $offset
-     * @return array [
-     *   'records' => array of transfers,
-     *   'total' => int total transfer count
-     * ]
+     * @return array{records: list<array>, total: int}
      */
     public function listTransfers($limit = 50, $offset = 0, $filters = [])
     {
@@ -964,17 +963,41 @@ class StockTransfer
         $countStmt->close();
         $total = (int)($totalRow['total'] ?? 0);
 
-        // Fetch transfers with source/destination names and requester/dispatcher names
+        // Aggregate line-item summary only (no full line fetch — keeps list fast for large transfers)
         $sql = "SELECT t.*, 
                        f.address_title AS source_name, 
                        d.address_title AS dest_name,
                        ru.name AS requested_by_name,
-                       du.name AS dispatch_by_name
+                       du.name AS dispatch_by_name,
+                       COALESCE(line_agg.line_item_count, 0) AS line_item_count,
+                       COALESCE(line_agg.line_total_qty, 0) AS line_total_qty,
+                       line_agg.line_preview_raw AS line_preview_raw
                 FROM vp_stock_transfer t
                 LEFT JOIN exotic_address f ON f.id = t.from_warehouse
                 LEFT JOIN exotic_address d ON d.id = t.to_warehouse
                 LEFT JOIN vp_users ru ON ru.id = t.requested_by
                 LEFT JOIN vp_users du ON du.id = t.dispatch_by
+                LEFT JOIN (
+                    SELECT 
+                        i.transfer_order_no,
+                        COUNT(*) AS line_item_count,
+                        SUM(COALESCE(i.transfer_qty, 0)) AS line_total_qty,
+                        SUBSTRING_INDEX(
+                            GROUP_CONCAT(
+                                COALESCE(
+                                    NULLIF(TRIM(i.sku), ''),
+                                    NULLIF(TRIM(i.item_code), ''),
+                                    CONCAT('#', i.id)
+                                )
+                                ORDER BY i.id ASC
+                                SEPARATOR '||'
+                            ),
+                            '||',
+                            3
+                        ) AS line_preview_raw
+                    FROM vp_item_stock_transfer i
+                    GROUP BY i.transfer_order_no
+                ) line_agg ON line_agg.transfer_order_no = t.transfer_order_no
                 " . $where . "
                 ORDER BY t.id DESC
                 LIMIT ? OFFSET ?";
@@ -1006,45 +1029,90 @@ class StockTransfer
         $stmt->execute();
         $result = $stmt->get_result();
         $transfers = [];
-        $transferNos = [];
 
         while ($row = $result->fetch_assoc()) {
-            $transfers[$row['transfer_order_no']] = $row;
-            $transfers[$row['transfer_order_no']]['items'] = [];
-            $transferNos[] = $row['transfer_order_no'];
+            $row['items'] = [];
+            $row['line_item_count'] = (int)($row['line_item_count'] ?? 0);
+            $row['line_total_qty'] = (int)($row['line_total_qty'] ?? 0);
+            $previewRaw = isset($row['line_preview_raw']) ? (string)$row['line_preview_raw'] : '';
+            $row['line_preview_skus'] = $previewRaw !== ''
+                ? array_values(array_filter(explode('||', $previewRaw), static fn ($s) => $s !== ''))
+                : [];
+            $transfers[] = $row;
         }
         $stmt->close();
 
-        if (!empty($transferNos)) {
-            // Fetch items for these transfers
-            $placeholders = implode(',', array_fill(0, count($transferNos), '?'));
-            $itemSql = "SELECT transfer_order_no, product_id, sku, item_code, transfer_qty, item_notes FROM vp_item_stock_transfer WHERE transfer_order_no IN ($placeholders) ORDER BY id ASC";
-            $itemStmt = $this->db->prepare($itemSql);
-            if ($itemStmt) {
-                $itemTypes = str_repeat('s', count($transferNos));
-                $bindParams = array_merge([$itemTypes], $transferNos);
-                $refs = [];
-                foreach ($bindParams as $key => $value) {
-                    $refs[$key] = &$bindParams[$key];
-                }
-                call_user_func_array([$itemStmt, 'bind_param'], $refs);
-
-                $itemStmt->execute();
-                $itemResult = $itemStmt->get_result();
-                while ($itemRow = $itemResult->fetch_assoc()) {
-                    $orderNo = $itemRow['transfer_order_no'];
-                    if (isset($transfers[$orderNo])) {
-                        $transfers[$orderNo]['items'][] = $itemRow;
-                    }
-                }
-                $itemStmt->close();
-            }
-        }
-
-        // Convert to indexed array so view can loop easily
-        $records = array_values($transfers);
+        $records = $transfers;
 
         return ['records' => $records, 'total' => $total];
+    }
+
+    /**
+     * Paginated line items for one transfer (by vp_stock_transfer.id). Used by the line-items detail page.
+     *
+     * @return array{rows: list<array<string,mixed>>, total: int, transfer: array|null}
+     */
+    public function getTransferItemsPaginated(int $transferId, int $limit = 50, int $offset = 0): array
+    {
+        $transferId = max(0, $transferId);
+        $limit = max(1, min(200, $limit));
+        $offset = max(0, $offset);
+
+        $headerSql = "SELECT t.id, t.transfer_order_no, t.dispatch_date, t.status,
+                             f.address_title AS source_name, d.address_title AS dest_name
+                      FROM vp_stock_transfer t
+                      LEFT JOIN exotic_address f ON f.id = t.from_warehouse
+                      LEFT JOIN exotic_address d ON d.id = t.to_warehouse
+                      WHERE t.id = ?
+                      LIMIT 1";
+        $hStmt = $this->db->prepare($headerSql);
+        if (!$hStmt) {
+            return ['rows' => [], 'total' => 0, 'transfer' => null];
+        }
+        $hStmt->bind_param('i', $transferId);
+        $hStmt->execute();
+        $hRes = $hStmt->get_result();
+        $transfer = $hRes ? $hRes->fetch_assoc() : null;
+        $hStmt->close();
+
+        if (!$transfer || empty($transfer['transfer_order_no'])) {
+            return ['rows' => [], 'total' => 0, 'transfer' => null];
+        }
+
+        $countSql = "SELECT COUNT(*) AS c FROM vp_item_stock_transfer WHERE transfer_order_no = ?";
+        $cStmt = $this->db->prepare($countSql);
+        if (!$cStmt) {
+            return ['rows' => [], 'total' => 0, 'transfer' => $transfer];
+        }
+        $orderNo = $transfer['transfer_order_no'];
+        $cStmt->bind_param('s', $orderNo);
+        $cStmt->execute();
+        $cRes = $cStmt->get_result();
+        $totalRow = $cRes ? $cRes->fetch_assoc() : ['c' => 0];
+        $cStmt->close();
+        $total = (int)($totalRow['c'] ?? 0);
+
+        $sql = "SELECT id, product_id, sku, item_code, transfer_qty, item_notes
+                FROM vp_item_stock_transfer
+                WHERE transfer_order_no = ?
+                ORDER BY id ASC
+                LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return ['rows' => [], 'total' => $total, 'transfer' => $transfer];
+        }
+        $stmt->bind_param('sii', $orderNo, $limit, $offset);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        if ($res) {
+            while ($r = $res->fetch_assoc()) {
+                $rows[] = $r;
+            }
+        }
+        $stmt->close();
+
+        return ['rows' => $rows, 'total' => $total, 'transfer' => $transfer];
     }
 
     /**
