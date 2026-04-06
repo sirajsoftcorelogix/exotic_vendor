@@ -191,11 +191,11 @@ $statusClass = static function (?string $status): string {
                                     <div class="flex flex-col gap-1.5 text-gray-700">
                                         <span class="inline-flex flex-col gap-0.5">
                                             <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Requested</span>
-                                            <span><?php echo htmlspecialchars(trim((string)($transfer['requested_by_name'] ?? '')) ?: '—'); ?></span>
+                                            <span class="font-bold text-gray-900"><?php echo htmlspecialchars(trim((string)($transfer['requested_by_name'] ?? '')) ?: '—'); ?></span>
                                         </span>
                                         <span class="inline-flex flex-col gap-0.5">
                                             <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Dispatched by</span>
-                                            <span><?php echo htmlspecialchars(trim((string)($transfer['dispatch_by_name'] ?? '')) ?: '—'); ?></span>
+                                            <span class="font-bold text-gray-900"><?php echo htmlspecialchars(trim((string)($transfer['dispatch_by_name'] ?? '')) ?: '—'); ?></span>
                                         </span>
                                     </div>
                                 </td>
