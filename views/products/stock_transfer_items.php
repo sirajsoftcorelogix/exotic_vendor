@@ -127,7 +127,7 @@ $statusRing = $statusClass($rawStatus);
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">SKU / code</th>
                         <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Quantity on transfer order" class="no-underline cursor-help border-b border-dotted border-gray-400">Sent</abbr></th>
                         <th scope="col" class="px-5 py-3.5 text-center whitespace-nowrap w-0"><abbr title="Received on GRNs (tick = yes; hover for quantity)" class="no-underline cursor-help border-b border-dotted border-gray-400">Received</abbr></th>
-                        <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Total marked quality-acceptable on GRNs (sum of qty_acceptable)" class="no-underline cursor-help border-b border-dotted border-gray-400">Acceptable</abbr></th>
+                        <th scope="col" class="px-5 py-3.5 text-center whitespace-nowrap w-0"><abbr title="Quality acceptable on GRNs (icon only; hover for quantity)" class="no-underline cursor-help border-b border-dotted border-gray-400">Acceptable</abbr></th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Notes</th>
                     </tr>
                 </thead>
@@ -157,16 +157,6 @@ $statusRing = $statusClass($rawStatus);
                                 $sent = (int) ($item['transfer_qty'] ?? 0);
                                 $received = (int) ($item['qty_received_total'] ?? 0);
                                 $acceptable = (int) ($item['qty_acceptable_total'] ?? 0);
-                                $accClass = 'text-gray-500';
-                                if ($received > 0) {
-                                    if ($acceptable >= $received) {
-                                        $accClass = 'text-emerald-700';
-                                    } elseif ($acceptable > 0) {
-                                        $accClass = 'text-amber-800';
-                                    } else {
-                                        $accClass = 'text-red-700/90';
-                                    }
-                                }
                                 $searchBlob = strtolower(implode(' ', array_filter([
                                     (string) $rowId,
                                     (string) ($item['sku'] ?? ''),
@@ -200,15 +190,24 @@ $statusRing = $statusClass($rawStatus);
                                         <span class="text-gray-300" title="Not received on any GRN yet">—</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-5 py-3.5 text-sm text-right tabular-nums font-medium <?php echo $accClass; ?>">
-                                    <?php echo number_format($acceptable); ?>
-                                    <?php if ($received > 0 && $acceptable >= $received): ?>
-                                        <span class="sr-only">All received quantity marked acceptable</span>
-                                        <i class="fas fa-check-circle text-emerald-600 text-xs ml-1 align-middle" aria-hidden="true" title="All received quantity marked acceptable"></i>
-                                    <?php elseif ($received > 0 && $acceptable === 0): ?>
-                                        <i class="fas fa-times-circle text-red-500/80 text-xs ml-1 align-middle" aria-hidden="true" title="None of received quantity marked acceptable"></i>
-                                    <?php elseif ($received > 0 && $acceptable < $received): ?>
-                                        <i class="fas fa-exclamation-circle text-amber-600 text-xs ml-1 align-middle" aria-hidden="true" title="Partial acceptable quantity"></i>
+                                <td class="px-5 py-3.5 text-sm text-center">
+                                    <?php if ($received <= 0): ?>
+                                        <span class="text-gray-300" title="Nothing received yet">—</span>
+                                    <?php elseif ($acceptable >= $received): ?>
+                                        <span class="inline-flex justify-center" title="Acceptable: <?php echo number_format($acceptable); ?> (covers received quantity)">
+                                            <i class="fas fa-check-circle text-lg text-emerald-600" aria-hidden="true"></i>
+                                            <span class="sr-only">Acceptable <?php echo number_format($acceptable); ?>; all received quantity marked acceptable</span>
+                                        </span>
+                                    <?php elseif ($acceptable === 0): ?>
+                                        <span class="inline-flex justify-center" title="Acceptable: 0 (none of received quantity marked acceptable)">
+                                            <i class="fas fa-times-circle text-lg text-red-500/85" aria-hidden="true"></i>
+                                            <span class="sr-only">None of received quantity marked acceptable</span>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="inline-flex justify-center" title="Acceptable: <?php echo number_format($acceptable); ?> of <?php echo number_format($received); ?> received">
+                                            <i class="fas fa-exclamation-circle text-lg text-amber-600" aria-hidden="true"></i>
+                                            <span class="sr-only">Partial acceptable: <?php echo number_format($acceptable); ?> of <?php echo number_format($received); ?> received</span>
+                                        </span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-5 py-3.5 text-sm text-gray-600 max-w-[20rem]">
