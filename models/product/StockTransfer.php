@@ -1050,7 +1050,7 @@ class StockTransfer
     /**
      * Paginated line items for one transfer (by vp_stock_transfer.id). Used by the line-items detail page.
      *
-     * @return array{rows: list<array<string,mixed>>, total: int, transfer: array|null}
+     * @return array{rows: list<array<string,mixed>>, total: int, transfer: array|null} rows include qty_received_total (sum from vp_stock_transfer_grns)
      */
     public function getTransferItemsPaginated(int $transferId, int $limit = 50, int $offset = 0): array
     {
@@ -1092,16 +1092,28 @@ class StockTransfer
         $cStmt->close();
         $total = (int)($totalRow['c'] ?? 0);
 
-        $sql = "SELECT id, product_id, sku, item_code, transfer_qty, item_notes
-                FROM vp_item_stock_transfer
-                WHERE transfer_order_no = ?
-                ORDER BY id ASC
+        // qty_received_total: sum of GRN receipts for this transfer line (match SKU, else item_code)
+        $sql = "SELECT i.id, i.product_id, i.sku, i.item_code, i.transfer_qty, i.item_notes,
+                COALESCE((
+                    SELECT SUM(g.qty_received)
+                    FROM vp_stock_transfer_grns g
+                    WHERE g.transfer_id = ?
+                      AND (
+                        (NULLIF(TRIM(IFNULL(i.sku, '')), '') IS NOT NULL AND g.sku = i.sku)
+                        OR (NULLIF(TRIM(IFNULL(i.sku, '')), '') IS NULL
+                            AND NULLIF(TRIM(IFNULL(i.item_code, '')), '') IS NOT NULL
+                            AND g.item_code = i.item_code)
+                      )
+                ), 0) AS qty_received_total
+                FROM vp_item_stock_transfer i
+                WHERE i.transfer_order_no = ?
+                ORDER BY i.id ASC
                 LIMIT ? OFFSET ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return ['rows' => [], 'total' => $total, 'transfer' => $transfer];
         }
-        $stmt->bind_param('sii', $orderNo, $limit, $offset);
+        $stmt->bind_param('isii', $transferId, $orderNo, $limit, $offset);
         $stmt->execute();
         $res = $stmt->get_result();
         $rows = [];

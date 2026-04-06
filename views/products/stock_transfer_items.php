@@ -125,14 +125,15 @@ $statusRing = $statusClass($rawStatus);
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">SKU / code</th>
-                        <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap">Qty</th>
+                        <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Quantity on transfer order" class="no-underline cursor-help border-b border-dotted border-gray-400">Sent</abbr></th>
+                        <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Total received on all GRNs for this transfer" class="no-underline cursor-help border-b border-dotted border-gray-400">Received</abbr></th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Notes</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php if (empty($items)): ?>
                         <tr>
-                            <td colspan="4" class="px-5 py-16 text-center">
+                            <td colspan="5" class="px-5 py-16 text-center">
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-3 mx-auto">
                                     <i class="fas fa-box-open" aria-hidden="true"></i>
                                 </span>
@@ -152,18 +153,35 @@ $statusRing = $statusClass($rawStatus);
                                 }
                                 $rowId = (int) ($item['id'] ?? 0);
                                 $notesRaw = trim($item['item_notes'] ?? '');
+                                $sent = (int) ($item['transfer_qty'] ?? 0);
+                                $received = (int) ($item['qty_received_total'] ?? 0);
+                                $recvClass = 'text-gray-500';
+                                if ($received > 0) {
+                                    if ($sent > 0 && $received > $sent) {
+                                        $recvClass = 'text-orange-700';
+                                    } elseif ($sent > 0 && $received >= $sent) {
+                                        $recvClass = 'text-emerald-700';
+                                    } else {
+                                        $recvClass = 'text-amber-800';
+                                    }
+                                }
                                 $searchBlob = strtolower(implode(' ', array_filter([
                                     (string) $rowId,
                                     (string) ($item['sku'] ?? ''),
                                     (string) ($item['item_code'] ?? ''),
                                     $label,
                                     $notesRaw,
+                                    (string) $sent,
+                                    (string) $received,
                                 ])));
                             ?>
                             <tr class="transfer-item-row hover:bg-amber-50/40 transition-colors" data-search="<?php echo htmlspecialchars($searchBlob, ENT_QUOTES, 'UTF-8'); ?>">
                                 <td class="px-5 py-3.5 text-sm text-gray-500 tabular-nums"><?php echo $rowId; ?></td>
                                 <td class="px-5 py-3.5 text-sm font-medium text-gray-900"><?php echo htmlspecialchars($label); ?></td>
-                                <td class="px-5 py-3.5 text-sm text-gray-800 text-right tabular-nums font-medium"><?php echo number_format((int) ($item['transfer_qty'] ?? 0)); ?></td>
+                                <td class="px-5 py-3.5 text-sm text-gray-800 text-right tabular-nums font-medium"><?php echo number_format($sent); ?></td>
+                                <td class="px-5 py-3.5 text-sm text-right tabular-nums font-medium <?php echo $recvClass; ?>">
+                                    <?php echo number_format($received); ?>
+                                </td>
                                 <td class="px-5 py-3.5 text-sm text-gray-600 max-w-[20rem]">
                                     <span class="line-clamp-2" title="<?php echo htmlspecialchars($notesRaw, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($notesRaw ?: '—'); ?></span>
                                 </td>
