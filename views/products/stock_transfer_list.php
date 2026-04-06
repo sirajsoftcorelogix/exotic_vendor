@@ -156,7 +156,7 @@ $formatStatusLabel = static function (string $status): string {
                         <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Requested / Dispatched by</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[8rem]">Route</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Line items</th>
-                        <th scope="col" class="pl-2 pr-3 py-3.5 text-right whitespace-nowrap w-[1%] text-gray-600">Actions</th>
+                        <th scope="col" class="w-0 px-0 py-3.5 text-right"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -257,25 +257,25 @@ $formatStatusLabel = static function (string $status): string {
                                         <span class="text-gray-400">No items</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="pl-2 pr-3 py-4 align-middle text-right w-[1%] whitespace-nowrap">
-                                    <div class="inline-flex items-center justify-end gap-0.5">
+                                <td class="w-0 pl-1 pr-1 py-3 align-middle text-right whitespace-nowrap">
+                                    <div class="inline-flex items-center justify-end gap-0">
                                         <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transfer['id']); ?>"
-                                            class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-blue-600 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-blue-600 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                                             title="Edit transfer"
                                             aria-label="Edit transfer">
-                                            <i class="fas fa-edit text-sm" aria-hidden="true"></i>
+                                            <i class="fas fa-edit text-xs" aria-hidden="true"></i>
                                         </a>
                                         <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo urlencode($transfer['id']); ?>"
-                                            class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                                             title="Add GRN"
                                             aria-label="Add GRN">
-                                            <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
+                                            <i class="fas fa-file-invoice text-xs" aria-hidden="true"></i>
                                         </a>
                                         <a href="?page=stock_transfer_grns&action=list&transfer_id=<?php echo urlencode($transfer['id']); ?>"
-                                            class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                                             title="View GRNs"
                                             aria-label="View GRNs">
-                                            <i class="fas fa-list text-sm" aria-hidden="true"></i>
+                                            <i class="fas fa-list text-xs" aria-hidden="true"></i>
                                         </a>
                                     </div>
                                 </td>
