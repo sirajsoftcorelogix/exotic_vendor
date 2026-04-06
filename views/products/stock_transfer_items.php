@@ -16,6 +16,23 @@ if ($rawStatus !== '') {
     $lower = function_exists('mb_strtolower') ? mb_strtolower($norm, 'UTF-8') : strtolower($norm);
     $statusLabel = function_exists('mb_convert_case') ? mb_convert_case($lower, MB_CASE_TITLE, 'UTF-8') : ucwords($lower);
 }
+
+$statusClass = static function (?string $status): string {
+    $s = strtolower(trim((string) $status));
+    $s = str_replace(['_', '-'], ' ', $s);
+    $s = preg_replace('/\s+/', ' ', $s) ?? $s;
+    $s = trim($s);
+
+    return match ($s) {
+        'completed', 'complete', 'received' => 'bg-emerald-50 text-emerald-800 ring-emerald-600/20',
+        'cancelled', 'canceled' => 'bg-gray-100 text-gray-700 ring-gray-500/20',
+        'in transit', 'dispatched' => 'bg-sky-50 text-sky-800 ring-sky-600/20',
+        'pending', 'draft' => 'bg-amber-50 text-amber-900 ring-amber-600/25',
+        default => 'bg-slate-50 text-slate-700 ring-slate-500/15',
+    };
+};
+
+$statusRing = $statusClass($rawStatus);
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <div class="mb-6">
@@ -63,7 +80,7 @@ if ($rawStatus !== '') {
                     <?php endif; ?>
                     <?php if ($statusLabel !== ''): ?>
                         <span class="text-gray-300">·</span>
-                        <span class="inline-flex items-center rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-gray-200/80 shadow-sm"><?php echo htmlspecialchars($statusLabel); ?></span>
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset shadow-sm <?php echo $statusRing; ?>"><?php echo htmlspecialchars($statusLabel); ?></span>
                     <?php endif; ?>
                 </p>
             </div>
