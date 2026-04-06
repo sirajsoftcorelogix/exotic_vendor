@@ -45,10 +45,6 @@ $statusClass = static function (?string $status): string {
             </p>
         </div>
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            <div class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm text-center sm:text-left">
-                <div class="text-xs font-medium text-gray-500 uppercase tracking-wide">Total (this view)</div>
-                <div class="text-2xl font-semibold text-gray-900 tabular-nums"><?php echo number_format($totalRecords); ?></div>
-            </div>
             <a href="?page=products&action=transfer_stock"
                 class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-md shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
                 <i class="fas fa-plus" aria-hidden="true"></i>
