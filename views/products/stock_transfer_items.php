@@ -65,24 +65,18 @@ if ($rawStatus !== '') {
                     </div>
                 </div>
             </div>
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 lg:self-center lg:pl-4">
-                <div class="rounded-xl border border-white/80 bg-white/85 px-5 py-4 text-center shadow-sm backdrop-blur-sm sm:text-left ring-1 ring-gray-900/5 min-w-0 sm:min-w-[8.5rem]">
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-amber-800/60">Total lines</span>
-                    <span class="mt-0.5 block text-3xl font-bold tabular-nums text-gray-900 leading-none"><?php echo number_format($totalRecords); ?></span>
-                </div>
-                <div class="flex flex-col gap-2 min-w-0">
-                    <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transferId); ?>"
-                        class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
-                        <i class="fas fa-edit text-xs opacity-95" aria-hidden="true"></i>
-                        Edit transfer
-                    </a>
-                    <a href="?page=stock_transfer_grns&action=list&transfer_id=<?php echo urlencode($transferId); ?>"
-                        target="_blank" rel="noopener noreferrer"
-                        class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 transition">
-                        <i class="fas fa-file-invoice text-emerald-600" aria-hidden="true"></i>
-                        View GRNs
-                    </a>
-                </div>
+            <div class="flex flex-col gap-2 min-w-0 shrink-0 lg:self-center lg:pl-4">
+                <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transferId); ?>"
+                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
+                    <i class="fas fa-edit text-xs opacity-95" aria-hidden="true"></i>
+                    Edit transfer
+                </a>
+                <a href="?page=stock_transfer_grns&action=list&transfer_id=<?php echo urlencode($transferId); ?>"
+                    target="_blank" rel="noopener noreferrer"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 transition w-full sm:w-auto">
+                    <i class="fas fa-file-invoice text-emerald-600" aria-hidden="true"></i>
+                    View GRNs
+                </a>
             </div>
         </div>
     </div>
