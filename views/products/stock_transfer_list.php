@@ -213,28 +213,28 @@ $statusClass = static function (?string $status): string {
                                         $preview = $transfer['line_preview_skus'] ?? [];
                                     ?>
                                     <?php if ($lineCount > 0): ?>
-                                        <div class="space-y-2">
-                                            <div class="text-xs text-gray-500 tabular-nums">
-                                                <span class="font-medium text-gray-700"><?php echo number_format($lineCount); ?></span> line<?php echo $lineCount === 1 ? '' : 's'; ?>
-                                                · <span class="font-medium text-gray-700"><?php echo number_format($lineTotalQty); ?></span> total qty
+                                        <div class="max-w-[14rem] text-sm leading-snug">
+                                            <div class="text-gray-900 tabular-nums">
+                                                <?php echo number_format($lineCount); ?> line<?php echo $lineCount === 1 ? '' : 's'; ?>
+                                                <span class="text-gray-300 mx-1">·</span>
+                                                <?php echo number_format($lineTotalQty); ?> qty
                                             </div>
-                                            <?php if (!empty($preview)): ?>
-                                                <ul class="flex flex-wrap gap-1.5">
-                                                    <?php foreach ($preview as $sku): ?>
-                                                        <li class="rounded-md bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-800 border border-gray-100"><?php echo htmlspecialchars($sku); ?></li>
-                                                    <?php endforeach; ?>
-                                                </ul>
+                                            <?php
+                                                $previewLine = '';
+                                                if (!empty($preview)) {
+                                                    $previewLine = implode(', ', array_map('htmlspecialchars', $preview));
+                                                    if ($lineCount > count($preview)) {
+                                                        $previewLine .= '<span class="text-gray-400">, +' . number_format($lineCount - count($preview)) . '</span>';
+                                                    }
+                                                }
+                                            ?>
+                                            <?php if ($previewLine !== ''): ?>
+                                                <p class="mt-0.5 text-xs text-gray-600 break-words"><?php echo $previewLine; ?></p>
                                             <?php endif; ?>
-                                            <?php if ($lineCount > count($preview)): ?>
-                                                <span class="text-xs text-gray-500">+<?php echo number_format($lineCount - count($preview)); ?> more</span>
-                                            <?php endif; ?>
-                                            <div>
-                                                <a href="?page=products&action=stock_transfer_items&transfer_id=<?php echo urlencode($transfer['id']); ?>"
-                                                    class="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:text-amber-900">
-                                                    <i class="fas fa-list-ul" aria-hidden="true"></i>
-                                                    View all lines
-                                                </a>
-                                            </div>
+                                            <a href="?page=products&action=stock_transfer_items&transfer_id=<?php echo urlencode($transfer['id']); ?>"
+                                                class="mt-1 inline-block text-xs font-medium text-amber-800/90 hover:text-amber-950 hover:underline underline-offset-2 decoration-amber-800/30">
+                                                View lines
+                                            </a>
                                         </div>
                                     <?php else: ?>
                                         <span class="text-gray-400">No items</span>
