@@ -28,6 +28,18 @@ $statusClass = static function (?string $status): string {
         default => 'bg-slate-50 text-slate-700 ring-slate-500/15',
     };
 };
+
+/** Title-style label: underscores → spaces, each word capitalized (e.g. in_transit → In Transit). */
+$formatStatusLabel = static function (string $status): string {
+    $s = trim(str_replace('_', ' ', $status));
+    if ($s === '') {
+        return '';
+    }
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtolower($s);
+    return function_exists('mb_convert_case')
+        ? mb_convert_case($lower, MB_CASE_TITLE, 'UTF-8')
+        : ucwords($lower);
+};
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Page header -->
@@ -138,9 +150,9 @@ $statusClass = static function (?string $status): string {
             <table class="min-w-full text-left">
                 <thead>
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Dispatch</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Order</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Status</th>
-                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Dispatch</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Requested / Dispatched by</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[8rem]">Route</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Line items</th>
@@ -168,10 +180,13 @@ $statusClass = static function (?string $status): string {
                         <?php foreach ($transfers as $transfer): ?>
                             <?php
                                 $rawStatus = trim((string)($transfer['status'] ?? ''));
-                                $statusLabel = $rawStatus !== '' ? $rawStatus : '—';
+                                $statusLabel = $rawStatus !== '' ? $formatStatusLabel($rawStatus) : '—';
                                 $statusRing = $statusClass($rawStatus);
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
+                                <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
+                                    <?php echo !empty($transfer['dispatch_date']) ? htmlspecialchars(date('j M Y', strtotime($transfer['dispatch_date']))) : '—'; ?>
+                                </td>
                                 <td class="px-5 py-4 align-top">
                                     <span class="font-mono text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($transfer['transfer_order_no']); ?></span>
                                 </td>
@@ -183,9 +198,6 @@ $statusClass = static function (?string $status): string {
                                     <?php else: ?>
                                         <span class="text-sm text-gray-400">—</span>
                                     <?php endif; ?>
-                                </td>
-                                <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
-                                    <?php echo !empty($transfer['dispatch_date']) ? htmlspecialchars(date('j M Y', strtotime($transfer['dispatch_date']))) : '—'; ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm">
                                     <div class="flex flex-col gap-1.5 text-gray-700">
