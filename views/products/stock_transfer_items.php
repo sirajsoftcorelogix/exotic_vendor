@@ -127,13 +127,14 @@ $statusRing = $statusClass($rawStatus);
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">SKU / code</th>
                         <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Quantity on transfer order" class="no-underline cursor-help border-b border-dotted border-gray-400">Sent</abbr></th>
                         <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Total received on all GRNs for this transfer" class="no-underline cursor-help border-b border-dotted border-gray-400">Received</abbr></th>
+                        <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Total marked quality-acceptable on GRNs (sum of qty_acceptable)" class="no-underline cursor-help border-b border-dotted border-gray-400">Acceptable</abbr></th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Notes</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php if (empty($items)): ?>
                         <tr>
-                            <td colspan="5" class="px-5 py-16 text-center">
+                            <td colspan="6" class="px-5 py-16 text-center">
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-3 mx-auto">
                                     <i class="fas fa-box-open" aria-hidden="true"></i>
                                 </span>
@@ -155,6 +156,7 @@ $statusRing = $statusClass($rawStatus);
                                 $notesRaw = trim($item['item_notes'] ?? '');
                                 $sent = (int) ($item['transfer_qty'] ?? 0);
                                 $received = (int) ($item['qty_received_total'] ?? 0);
+                                $acceptable = (int) ($item['qty_acceptable_total'] ?? 0);
                                 $recvClass = 'text-gray-500';
                                 if ($received > 0) {
                                     if ($sent > 0 && $received > $sent) {
@@ -165,6 +167,16 @@ $statusRing = $statusClass($rawStatus);
                                         $recvClass = 'text-amber-800';
                                     }
                                 }
+                                $accClass = 'text-gray-500';
+                                if ($received > 0) {
+                                    if ($acceptable >= $received) {
+                                        $accClass = 'text-emerald-700';
+                                    } elseif ($acceptable > 0) {
+                                        $accClass = 'text-amber-800';
+                                    } else {
+                                        $accClass = 'text-red-700/90';
+                                    }
+                                }
                                 $searchBlob = strtolower(implode(' ', array_filter([
                                     (string) $rowId,
                                     (string) ($item['sku'] ?? ''),
@@ -173,6 +185,7 @@ $statusRing = $statusClass($rawStatus);
                                     $notesRaw,
                                     (string) $sent,
                                     (string) $received,
+                                    (string) $acceptable,
                                 ])));
                             ?>
                             <tr class="transfer-item-row hover:bg-amber-50/40 transition-colors" data-search="<?php echo htmlspecialchars($searchBlob, ENT_QUOTES, 'UTF-8'); ?>">
@@ -181,6 +194,17 @@ $statusRing = $statusClass($rawStatus);
                                 <td class="px-5 py-3.5 text-sm text-gray-800 text-right tabular-nums font-medium"><?php echo number_format($sent); ?></td>
                                 <td class="px-5 py-3.5 text-sm text-right tabular-nums font-medium <?php echo $recvClass; ?>">
                                     <?php echo number_format($received); ?>
+                                </td>
+                                <td class="px-5 py-3.5 text-sm text-right tabular-nums font-medium <?php echo $accClass; ?>">
+                                    <?php echo number_format($acceptable); ?>
+                                    <?php if ($received > 0 && $acceptable >= $received): ?>
+                                        <span class="sr-only">All received quantity marked acceptable</span>
+                                        <i class="fas fa-check-circle text-emerald-600 text-xs ml-1 align-middle" aria-hidden="true" title="All received quantity marked acceptable"></i>
+                                    <?php elseif ($received > 0 && $acceptable === 0): ?>
+                                        <i class="fas fa-times-circle text-red-500/80 text-xs ml-1 align-middle" aria-hidden="true" title="None of received quantity marked acceptable"></i>
+                                    <?php elseif ($received > 0 && $acceptable < $received): ?>
+                                        <i class="fas fa-exclamation-circle text-amber-600 text-xs ml-1 align-middle" aria-hidden="true" title="Partial acceptable quantity"></i>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-5 py-3.5 text-sm text-gray-600 max-w-[20rem]">
                                     <span class="line-clamp-2" title="<?php echo htmlspecialchars($notesRaw, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($notesRaw ?: '—'); ?></span>
