@@ -5,6 +5,14 @@ $limit = isset($limit) ? (int) $limit : 50;
 $totalRecords = isset($total_records) ? (int) $total_records : 0;
 $filters = $filters ?? [];
 $transfers = $transfers ?? [];
+$filtersPanelOpen =
+    trim((string) ($filters['transfer_order_no'] ?? '')) !== ''
+    || trim((string) ($filters['dispatch_date'] ?? '')) !== ''
+    || (isset($filters['requested_by']) && (int) $filters['requested_by'] > 0)
+    || (isset($filters['dispatch_by']) && (int) $filters['dispatch_by'] > 0)
+    || (isset($filters['from_warehouse']) && (int) $filters['from_warehouse'] > 0)
+    || (isset($filters['to_warehouse']) && (int) $filters['to_warehouse'] > 0)
+    || trim((string) ($filters['item_number'] ?? '')) !== '';
 $users = $users ?? [];
 $warehouses = $warehouses ?? [];
 $totalPages = $limit > 0 ? (int) ceil($totalRecords / $limit) : 1;
@@ -61,14 +69,9 @@ $formatStatusLabel = static function (string $status): string {
                     Review moves between locations, edit open transfers, and record GRNs against transfer orders—all in one place.
                 </p>
             </div>
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shrink-0 lg:pl-4">
-                <div class="flex flex-col justify-center rounded-xl border border-white/80 bg-white/85 px-5 py-4 text-center shadow-sm backdrop-blur-sm sm:text-left ring-1 ring-gray-900/5 min-w-0 sm:min-w-[9.5rem]">
-                    <span class="text-[10px] font-bold uppercase tracking-widest text-amber-800/60">This view</span>
-                    <span class="mt-0.5 text-3xl font-bold tabular-nums text-gray-900 leading-none"><?php echo number_format($totalRecords); ?></span>
-                    <span class="mt-1 text-xs text-gray-500">matching current filters</span>
-                </div>
+            <div class="flex shrink-0 lg:pl-4 lg:self-center">
                 <a href="?page=products&action=transfer_stock"
-                    class="inline-flex items-center justify-center gap-2 self-center px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
+                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
                     Create stock transfer
                 </a>
@@ -76,17 +79,32 @@ $formatStatusLabel = static function (string $status): string {
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden mb-6 ring-1 ring-gray-900/[0.03]">
-        <div class="px-5 py-4 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 flex items-center gap-3">
-            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
-                <i class="fas fa-filter text-sm" aria-hidden="true"></i>
-            </span>
-            <div>
-                <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                <p class="text-xs text-gray-500 mt-0.5">Narrow the list by order, dates, people, routes, or item.</p>
+    <style>
+        #st-transfer-filters > summary { list-style: none; }
+        #st-transfer-filters > summary::-webkit-details-marker { display: none; }
+        #st-transfer-filters[open] > summary { border-bottom: 1px solid rgba(251, 243, 219, 0.85); }
+        #st-transfer-filters:not([open]) .stf-label-open { display: none; }
+        #st-transfer-filters[open] .stf-label-closed { display: none; }
+        #st-transfer-filters[open] .stf-chevron { transform: rotate(180deg); }
+    </style>
+    <!-- Filters (collapsed by default; opens automatically when any filter is applied) -->
+    <details id="st-transfer-filters" class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden mb-6 ring-1 ring-gray-900/[0.03]" <?php echo $filtersPanelOpen ? 'open' : ''; ?>>
+        <summary class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 flex items-center justify-between gap-4 cursor-pointer">
+            <div class="flex items-center gap-3 min-w-0">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                    <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0">
+                    <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Narrow the list by order, dates, people, routes, or item.</p>
+                </div>
             </div>
-        </div>
+            <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
+                <span class="stf-label-closed">Show</span>
+                <span class="stf-label-open">Hide</span>
+                <i class="stf-chevron fas fa-chevron-down text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+            </span>
+        </summary>
         <form method="GET" action="" class="p-5">
             <input type="hidden" name="page" value="products">
             <input type="hidden" name="action" value="stock_transfer">
@@ -158,7 +176,7 @@ $formatStatusLabel = static function (string $status): string {
                 </a>
             </div>
         </form>
-    </div>
+    </details>
 
     <!-- Table -->
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
