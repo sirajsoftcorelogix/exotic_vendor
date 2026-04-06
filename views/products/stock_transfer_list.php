@@ -255,8 +255,9 @@ $formatStatusLabel = static function (string $status): string {
                                                 <p class="mt-0.5 text-xs text-gray-600 break-words"><?php echo $previewLine; ?></p>
                                             <?php endif; ?>
                                             <a href="?page=products&action=stock_transfer_items&transfer_id=<?php echo urlencode($transfer['id']); ?>"
+                                                target="_blank" rel="noopener noreferrer"
                                                 class="mt-1 inline-block text-xs font-medium text-amber-800/90 hover:text-amber-950 hover:underline underline-offset-2 decoration-amber-800/30">
-                                                View lines
+                                                View items
                                             </a>
                                         </div>
                                     <?php else: ?>
