@@ -37,9 +37,24 @@ if ($rawStatus !== '') {
                     </span>
                     <span>Transfer · Line items</span>
                 </div>
-                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                    Transfer <span class="text-amber-800">items</span>
-                </h1>
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6">
+                    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 shrink-0">
+                        Transfer <span class="text-amber-800">items</span>
+                    </h1>
+                    <div class="rounded-xl border border-white/80 bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-900/5 backdrop-blur-sm w-full md:w-auto md:min-w-[14rem] md:max-w-md">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Route</div>
+                        <div class="flex flex-col gap-2 text-sm text-gray-800">
+                            <span class="inline-flex items-start gap-2" title="Source">
+                                <i class="fas fa-arrow-up text-emerald-600 mt-0.5 text-xs shrink-0" aria-hidden="true"></i>
+                                <span class="break-words"><?php echo htmlspecialchars($transfer['source_name'] ?? '—'); ?></span>
+                            </span>
+                            <span class="inline-flex items-start gap-2" title="Destination">
+                                <i class="fas fa-arrow-down text-sky-600 mt-0.5 text-xs shrink-0" aria-hidden="true"></i>
+                                <span class="break-words"><?php echo htmlspecialchars($transfer['dest_name'] ?? '—'); ?></span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
                 <p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600">
                     <span class="font-mono font-semibold text-gray-900"><?php echo htmlspecialchars($transfer['transfer_order_no'] ?? '—'); ?></span>
                     <?php if (!empty($transfer['dispatch_date'])): ?>
@@ -51,19 +66,6 @@ if ($rawStatus !== '') {
                         <span class="inline-flex items-center rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-gray-200/80 shadow-sm"><?php echo htmlspecialchars($statusLabel); ?></span>
                     <?php endif; ?>
                 </p>
-                <div class="mt-4 rounded-xl border border-white/80 bg-white/70 px-4 py-3 shadow-sm ring-1 ring-gray-900/5 backdrop-blur-sm">
-                    <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Route</div>
-                    <div class="flex flex-col gap-2 text-sm text-gray-800">
-                        <span class="inline-flex items-start gap-2" title="Source">
-                            <i class="fas fa-arrow-up text-emerald-600 mt-0.5 text-xs shrink-0" aria-hidden="true"></i>
-                            <span><?php echo htmlspecialchars($transfer['source_name'] ?? '—'); ?></span>
-                        </span>
-                        <span class="inline-flex items-start gap-2" title="Destination">
-                            <i class="fas fa-arrow-down text-sky-600 mt-0.5 text-xs shrink-0" aria-hidden="true"></i>
-                            <span><?php echo htmlspecialchars($transfer['dest_name'] ?? '—'); ?></span>
-                        </span>
-                    </div>
-                </div>
             </div>
             <div class="flex flex-col gap-2 min-w-0 shrink-0 lg:self-center lg:pl-4">
                 <a href="?page=products&action=transfer_stock&transfer_id=<?php echo urlencode($transferId); ?>"
