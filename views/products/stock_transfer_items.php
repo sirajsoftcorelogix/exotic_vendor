@@ -126,7 +126,7 @@ $statusRing = $statusClass($rawStatus);
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">SKU / code</th>
                         <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Quantity on transfer order" class="no-underline cursor-help border-b border-dotted border-gray-400">Sent</abbr></th>
-                        <th scope="col" class="px-5 py-3.5 text-center whitespace-nowrap w-0"><abbr title="Received on GRNs (tick = yes; hover for quantity)" class="no-underline cursor-help border-b border-dotted border-gray-400">Received</abbr></th>
+                        <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap"><abbr title="Total quantity received on all GRNs for this transfer" class="no-underline cursor-help border-b border-dotted border-gray-400">Received</abbr></th>
                         <th scope="col" class="px-5 py-3.5 text-center whitespace-nowrap w-0"><abbr title="Quality acceptable on GRNs (icon only; hover for quantity)" class="no-underline cursor-help border-b border-dotted border-gray-400">Acceptable</abbr></th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Notes</th>
                     </tr>
@@ -157,6 +157,16 @@ $statusRing = $statusClass($rawStatus);
                                 $sent = (int) ($item['transfer_qty'] ?? 0);
                                 $received = (int) ($item['qty_received_total'] ?? 0);
                                 $acceptable = (int) ($item['qty_acceptable_total'] ?? 0);
+                                $recvClass = 'text-gray-500';
+                                if ($received > 0) {
+                                    if ($sent > 0 && $received > $sent) {
+                                        $recvClass = 'text-orange-700';
+                                    } elseif ($sent > 0 && $received < $sent) {
+                                        $recvClass = 'text-amber-800';
+                                    } else {
+                                        $recvClass = 'text-emerald-700';
+                                    }
+                                }
                                 $searchBlob = strtolower(implode(' ', array_filter([
                                     (string) $rowId,
                                     (string) ($item['sku'] ?? ''),
@@ -172,23 +182,8 @@ $statusRing = $statusClass($rawStatus);
                                 <td class="px-5 py-3.5 text-sm text-gray-500 tabular-nums"><?php echo $rowId; ?></td>
                                 <td class="px-5 py-3.5 text-sm font-medium text-gray-900"><?php echo htmlspecialchars($label); ?></td>
                                 <td class="px-5 py-3.5 text-sm text-gray-800 text-right tabular-nums font-medium"><?php echo number_format($sent); ?></td>
-                                <td class="px-5 py-3.5 text-sm text-center">
-                                    <?php if ($received > 0): ?>
-                                        <?php
-                                            $recvIconClass = 'text-emerald-600';
-                                            if ($sent > 0 && $received > $sent) {
-                                                $recvIconClass = 'text-orange-600';
-                                            } elseif ($sent > 0 && $received < $sent) {
-                                                $recvIconClass = 'text-amber-600';
-                                            }
-                                        ?>
-                                        <span class="inline-flex justify-center" title="Received: <?php echo number_format($received); ?>">
-                                            <i class="fas fa-check-circle text-lg <?php echo $recvIconClass; ?>" aria-hidden="true"></i>
-                                            <span class="sr-only">Received <?php echo number_format($received); ?> units</span>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="text-gray-300" title="Not received on any GRN yet">—</span>
-                                    <?php endif; ?>
+                                <td class="px-5 py-3.5 text-sm text-right tabular-nums font-medium <?php echo $recvClass; ?>">
+                                    <?php echo number_format($received); ?>
                                 </td>
                                 <td class="px-5 py-3.5 text-sm text-center">
                                     <?php if ($received <= 0): ?>
