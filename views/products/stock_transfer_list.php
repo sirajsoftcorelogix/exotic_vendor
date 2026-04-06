@@ -141,8 +141,7 @@ $statusClass = static function (?string $status): string {
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Order</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Dispatch</th>
-                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Requested</th>
-                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Dispatch by</th>
+                        <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Requested / Dispatched by</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[8rem]">Route</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Line items</th>
                         <th scope="col" class="px-5 py-3.5 text-right whitespace-nowrap">Actions</th>
@@ -151,7 +150,7 @@ $statusClass = static function (?string $status): string {
                 <tbody class="divide-y divide-gray-100">
                     <?php if (empty($transfers)): ?>
                         <tr>
-                            <td colspan="8" class="px-5 py-16 text-center">
+                            <td colspan="7" class="px-5 py-16 text-center">
                                 <div class="mx-auto flex max-w-sm flex-col items-center">
                                     <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                         <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -188,8 +187,18 @@ $statusClass = static function (?string $status): string {
                                 <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
                                     <?php echo !empty($transfer['dispatch_date']) ? htmlspecialchars(date('j M Y', strtotime($transfer['dispatch_date']))) : '—'; ?>
                                 </td>
-                                <td class="px-5 py-4 align-top text-sm text-gray-700"><?php echo htmlspecialchars($transfer['requested_by_name'] ?? ''); ?></td>
-                                <td class="px-5 py-4 align-top text-sm text-gray-700"><?php echo htmlspecialchars($transfer['dispatch_by_name'] ?? ''); ?></td>
+                                <td class="px-5 py-4 align-top text-sm">
+                                    <div class="flex flex-col gap-1.5 text-gray-700">
+                                        <span class="inline-flex flex-col gap-0.5">
+                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Requested</span>
+                                            <span><?php echo htmlspecialchars(trim((string)($transfer['requested_by_name'] ?? '')) ?: '—'); ?></span>
+                                        </span>
+                                        <span class="inline-flex flex-col gap-0.5">
+                                            <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Dispatched by</span>
+                                            <span><?php echo htmlspecialchars(trim((string)($transfer['dispatch_by_name'] ?? '')) ?: '—'); ?></span>
+                                        </span>
+                                    </div>
+                                </td>
                                 <td class="px-5 py-4 align-top text-sm">
                                     <div class="flex flex-col gap-1.5 text-gray-700">
                                         <span class="inline-flex items-start gap-1.5">
