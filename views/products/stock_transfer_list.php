@@ -212,12 +212,18 @@ $formatStatusLabel = static function (string $status): string {
                                     </div>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm">
+                                    <?php
+                                        $sourceLabel = trim((string)($transfer['source_name'] ?? ''));
+                                        $destLabel = trim((string)($transfer['dest_name'] ?? ''));
+                                        $sourceTitle = 'Source' . ($sourceLabel !== '' && $sourceLabel !== '—' ? ': ' . $sourceLabel : '');
+                                        $destTitle = 'Destination' . ($destLabel !== '' && $destLabel !== '—' ? ': ' . $destLabel : '');
+                                    ?>
                                     <div class="flex flex-col gap-1.5 text-gray-700">
-                                        <span class="inline-flex items-start gap-1.5">
+                                        <span class="inline-flex items-start gap-1.5 cursor-help" title="<?php echo htmlspecialchars($sourceTitle, ENT_QUOTES, 'UTF-8'); ?>">
                                             <i class="fas fa-arrow-up text-emerald-600 mt-0.5 text-xs" aria-hidden="true"></i>
                                             <span><?php echo htmlspecialchars($transfer['source_name'] ?? '—'); ?></span>
                                         </span>
-                                        <span class="inline-flex items-start gap-1.5">
+                                        <span class="inline-flex items-start gap-1.5 cursor-help" title="<?php echo htmlspecialchars($destTitle, ENT_QUOTES, 'UTF-8'); ?>">
                                             <i class="fas fa-arrow-down text-sky-600 mt-0.5 text-xs" aria-hidden="true"></i>
                                             <span><?php echo htmlspecialchars($transfer['dest_name'] ?? '—'); ?></span>
                                         </span>
