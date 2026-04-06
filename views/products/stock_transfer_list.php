@@ -156,7 +156,7 @@ $formatStatusLabel = static function (string $status): string {
                         <th scope="col" class="px-5 py-3.5 min-w-[10rem]">Requested / Dispatched by</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[8rem]">Route</th>
                         <th scope="col" class="px-5 py-3.5 min-w-[12rem]">Line items</th>
-                        <th scope="col" class="w-0 px-0 py-3.5 text-right"><span class="sr-only">Actions</span></th>
+                        <th scope="col" class="px-0 py-3.5 text-right"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
