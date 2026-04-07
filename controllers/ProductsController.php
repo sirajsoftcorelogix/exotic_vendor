@@ -87,8 +87,9 @@ class ProductsController {
         ];
 
         // Warehouse users only see transfers touching their assigned location (source or destination).
-        $isAdminRole = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
-        if (!$isAdminRole) {
+        // Admins see every transfer (matches helpers/html_helpers.php hasPermission(): role_id == 1 has full access).
+        $isAdminUser = isset($_SESSION['user']['role_id']) && $_SESSION['user']['role_id'] == 1;
+        if (!$isAdminUser) {
             $userWh = (int)($_SESSION['warehouse_id'] ?? 0);
             if ($userWh <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
                 $userWh = (int)$_SESSION['user']['warehouse_id'];
