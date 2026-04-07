@@ -117,7 +117,7 @@ $gridRowCount = 40;
                             <tr>
                                 <th class="px-2 py-2 text-center font-semibold text-gray-700 w-10 min-w-[2.5rem]" scope="col">#</th>
                                 <th class="px-1 py-2 text-center font-semibold text-gray-700 w-12 min-w-[3rem]" scope="col">Image</th>
-                                <th class="px-2 py-2 text-left font-semibold text-gray-700 w-36 max-w-[9.5rem]">SKU <span class="font-normal text-gray-500">(search)</span></th>
+                                <th class="px-3 py-2 text-left font-semibold text-gray-700 min-w-[calc(11rem-20px)] w-[calc(11rem-20px)]">SKU <span class="font-normal text-gray-500">(search)</span></th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Size</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Color</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-24">Qty</th>
@@ -133,11 +133,11 @@ $gridRowCount = 40;
                                             <span class="bulk-row-img-ph pointer-events-none text-gray-300 text-[10px] select-none leading-none py-1" aria-hidden="true">—</span>
                                         </div>
                                     </td>
-                                    <td class="p-1 align-top w-36 max-w-[9.5rem]">
-                                        <div class="relative max-w-[9.5rem]">
+                                    <td class="p-1 align-top w-[calc(11rem-20px)] min-w-[calc(11rem-20px)] max-w-[calc(11rem-20px)]">
+                                        <div class="relative w-full max-w-[calc(11rem-20px)]">
                                             <input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">
-                                            <input type="text" class="bulk-inp-sku w-full px-1.5 py-1 border border-gray-200 rounded text-xs" placeholder="SKU…" autocomplete="off">
-                                            <div class="bulk-ac-menu hidden absolute left-0 right-0 z-30 mt-0.5 max-h-52 overflow-y-auto rounded-md border border-gray-300 bg-white text-xs shadow-lg min-w-[12rem]" role="listbox"></div>
+                                            <input type="text" class="bulk-inp-sku w-full px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">
+                                            <div class="bulk-ac-menu hidden absolute left-0 right-0 z-30 mt-0.5 max-h-52 min-w-[12rem] overflow-y-auto rounded-md border border-gray-300 bg-white text-xs shadow-lg" role="listbox"></div>
                                         </div>
                                     </td>
                                     <td class="p-1 align-top"><input type="text" class="bulk-inp-size w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
