@@ -1378,14 +1378,22 @@ class StockTransfer
     public function listTransferGrns($transferId = 0)
     {
         $transferId = (int)$transferId;
+        // Resolve item_group via scalar subqueries (LIMIT 1) so duplicate vp_products rows for the same
+        // sku/item_code do not multiply GRN lines, which happened with LEFT JOIN vp_products.
         $sql = "SELECT g.*, t.transfer_order_no, w.address_title AS location_name, u.name AS received_by_name,
-                       COALESCE(ps.groupname, pic.groupname, '') AS item_group
+                       COALESCE(
+                           (SELECT p.groupname FROM vp_products p
+                            WHERE NULLIF(TRIM(g.sku), '') IS NOT NULL AND TRIM(p.sku) = TRIM(g.sku)
+                            LIMIT 1),
+                           (SELECT p2.groupname FROM vp_products p2
+                            WHERE NULLIF(TRIM(g.item_code), '') IS NOT NULL AND TRIM(p2.item_code) = TRIM(g.item_code)
+                            LIMIT 1),
+                           ''
+                       ) AS item_group
                 FROM vp_stock_transfer_grns g
                 LEFT JOIN vp_stock_transfer t ON t.id = g.transfer_id
                 LEFT JOIN exotic_address w ON w.id = g.location
-                LEFT JOIN vp_users u ON u.id = g.received_by
-                LEFT JOIN vp_products ps ON TRIM(COALESCE(g.sku, '')) <> '' AND ps.sku = g.sku
-                LEFT JOIN vp_products pic ON TRIM(COALESCE(g.item_code, '')) <> '' AND pic.item_code = g.item_code";
+                LEFT JOIN vp_users u ON u.id = g.received_by";
 
         if ($transferId > 0) {
             $sql .= " WHERE g.transfer_id = ?";
