@@ -167,7 +167,7 @@ $warehouses = $warehouses ?? [];
                                 <p class="text-lg sm:text-xl font-bold text-amber-950 tabular-nums leading-none mt-1"><?php echo number_format($remaining); ?></p>
                             </div>
 
-                            <div class="rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[5.25rem] sm:w-[5.75rem] shrink-0">
+                            <div class="rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[6.25rem] sm:w-[6.75rem] shrink-0">
                                 <label for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" class="block text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight cursor-pointer">
                                     Qty received<span class="text-red-500 ml-px">*</span>
                                 </label>
