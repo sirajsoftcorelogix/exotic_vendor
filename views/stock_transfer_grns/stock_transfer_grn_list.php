@@ -217,7 +217,6 @@ if (!function_exists('grn_item_group_camel_case')) {
                             <th class="px-4 py-3 whitespace-nowrap">GRN ID</th>
                             <th class="px-4 py-3 whitespace-nowrap">Item group</th>
                             <th class="px-4 py-3 whitespace-nowrap">SKU</th>
-                            <th class="px-4 py-3 whitespace-nowrap">Item code</th>
                             <th class="px-4 py-3 whitespace-nowrap">Received</th>
                             <th class="px-4 py-3 whitespace-nowrap">Received by</th>
                             <th class="px-4 py-3 whitespace-nowrap">Location</th>
@@ -272,7 +271,6 @@ if (!function_exists('grn_item_group_camel_case')) {
                                 <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate capitalize"
                                     <?php echo $itemGroup !== '' ? 'title="' . htmlspecialchars($itemGroup, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>><?php echo $itemGroup !== '' ? htmlspecialchars(grn_item_group_camel_case($itemGroup)) : '—'; ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['sku'] ?? ''); ?></td>
-                                <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['item_code'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-700 whitespace-nowrap"><?php echo !empty($grn['received_date']) ? htmlspecialchars(date('j M Y', strtotime($grn['received_date']))) : '—'; ?></td>
                                 <td class="px-4 py-3 text-gray-700"><?php echo htmlspecialchars($grn['received_by_name'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-700"><?php echo htmlspecialchars($grn['location_name'] ?? ''); ?></td>
