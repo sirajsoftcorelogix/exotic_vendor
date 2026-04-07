@@ -3,6 +3,31 @@ $transfer = $transfer ?? null;
 $grns = $grns ?? [];
 $transferId = isset($transferId) ? (int) $transferId : 0;
 $grnTotal = count($grns);
+
+if (!function_exists('grn_item_group_camel_case')) {
+    /**
+     * Display item group as camelCase (e.g. "Home Decor" → "homeDecor").
+     */
+    function grn_item_group_camel_case($label) {
+        $label = trim((string) $label);
+        if ($label === '') {
+            return '';
+        }
+        $parts = preg_split('/[\s\-_]+/', $label, -1, PREG_SPLIT_NO_EMPTY);
+        if ($parts === false || $parts === []) {
+            return $label;
+        }
+        $out = strtolower($parts[0]);
+        for ($i = 1, $n = count($parts); $i < $n; $i++) {
+            $w = $parts[$i];
+            if ($w === '') {
+                continue;
+            }
+            $out .= strtoupper(substr($w, 0, 1)) . strtolower(substr($w, 1));
+        }
+        return $out;
+    }
+}
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Page header -->
@@ -237,7 +262,8 @@ $grnTotal = count($grns);
                                 data-sku="<?php echo htmlspecialchars($skuNorm, ENT_QUOTES, 'UTF-8'); ?>"
                                 data-item-code="<?php echo htmlspecialchars($codeNorm, ENT_QUOTES, 'UTF-8'); ?>">
                                 <td class="px-4 py-3 tabular-nums text-gray-700"><?php echo (int) $grn['id']; ?></td>
-                                <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate" title="<?php echo htmlspecialchars($itemGroup, ENT_QUOTES, 'UTF-8'); ?>"><?php echo $itemGroup !== '' ? htmlspecialchars($itemGroup) : '—'; ?></td>
+                                <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate font-mono text-xs"
+                                    <?php echo $itemGroup !== '' ? 'title="' . htmlspecialchars($itemGroup, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>><?php echo $itemGroup !== '' ? htmlspecialchars(grn_item_group_camel_case($itemGroup)) : '—'; ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['sku'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['item_code'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-700 whitespace-nowrap"><?php echo !empty($grn['received_date']) ? htmlspecialchars(date('j M Y', strtotime($grn['received_date']))) : '—'; ?></td>
