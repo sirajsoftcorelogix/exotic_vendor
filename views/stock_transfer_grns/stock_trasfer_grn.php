@@ -99,7 +99,7 @@ $warehouses = $warehouses ?? [];
             <span class="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-3 py-1"><?php echo count($transferItems); ?> line<?php echo count($transferItems) === 1 ? '' : 's'; ?></span>
         </div>
 
-        <?php foreach ($transferItems as $item): ?>
+        <?php foreach ($transferItems as $grnLineIdx => $item): ?>
             <?php
                 $label = trim($item['sku'] ?? '');
                 if ($label === '') {
@@ -145,33 +145,33 @@ $warehouses = $warehouses ?? [];
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
-                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Shipped</p>
-                                <p class="text-lg font-bold text-slate-900 tabular-nums"><?php echo number_format($quantity); ?></p>
+                        <div class="flex flex-wrap items-stretch gap-2">
+                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-2 py-1.5 w-[5rem] sm:w-[5.25rem] shrink-0">
+                                <p class="text-[9px] font-bold uppercase tracking-wide text-slate-500 leading-tight">Shipped</p>
+                                <p class="text-base sm:text-lg font-bold text-slate-900 tabular-nums leading-tight mt-0.5"><?php echo number_format($quantity); ?></p>
                             </div>
-                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
-                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Received earlier</p>
-                                <p class="text-lg font-bold text-slate-800 tabular-nums"><?php echo number_format($already); ?></p>
+                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-2 py-1.5 w-[5rem] sm:w-[5.25rem] shrink-0">
+                                <p class="text-[9px] font-bold uppercase tracking-wide text-slate-500 leading-tight">Prior GRN</p>
+                                <p class="text-base sm:text-lg font-bold text-slate-800 tabular-nums leading-tight mt-0.5"><?php echo number_format($already); ?></p>
                             </div>
-                            <div class="rounded-lg bg-amber-50/80 border border-amber-100 px-3 py-2 col-span-2 sm:col-span-1">
-                                <p class="text-[10px] font-bold uppercase tracking-wide text-amber-900/70">Left to receive</p>
-                                <p class="text-lg font-bold text-amber-950 tabular-nums"><?php echo number_format($remaining); ?></p>
+                            <div class="rounded-lg bg-amber-50/80 border border-amber-100 px-2 py-1.5 w-[5rem] sm:w-[5.25rem] shrink-0">
+                                <p class="text-[9px] font-bold uppercase tracking-wide text-amber-900/70 leading-tight">To receive</p>
+                                <p class="text-base sm:text-lg font-bold text-amber-950 tabular-nums leading-tight mt-0.5"><?php echo number_format($remaining); ?></p>
                             </div>
                         </div>
 
-                        <div class="flex flex-col sm:flex-row sm:items-end gap-4 pt-1">
-                            <div class="flex-1">
-                                <label class="block text-xs font-semibold text-gray-600 mb-1.5">Quantity received <span class="text-red-500">*</span></label>
-                                <input name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-0.5">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <label class="text-xs font-semibold text-gray-600 shrink-0 whitespace-nowrap" for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>">Qty received <span class="text-red-500">*</span></label>
+                                <input id="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
                                     placeholder="0"
                                     value="<?php echo htmlspecialchars($mode === 'edit' ? (string)(int)($item['qty_received'] ?? 0) : ($remaining > 0 ? (string)$remaining : '0')); ?>"
-                                    class="st-grn-qty w-full sm:max-w-[8rem] px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 tabular-nums shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                                    class="st-grn-qty w-[4.5rem] sm:w-24 px-2.5 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 tabular-nums text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
                             </div>
-                            <label class="inline-flex items-center gap-2.5 cursor-pointer select-none rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-2.5 sm:mb-0.5">
-                                <input type="checkbox" name="qty_acceptable[]" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                            <label class="inline-flex items-center gap-2 cursor-pointer select-none rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 shrink-0">
+                                <input type="checkbox" name="qty_acceptable[]" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500 shrink-0"
                                     <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
-                                <span class="text-sm font-medium text-gray-800">Quality acceptable</span>
+                                <span class="text-xs sm:text-sm font-medium text-gray-800 whitespace-nowrap">Quality OK</span>
                             </label>
                         </div>
 
