@@ -39,9 +39,9 @@ $gridRowCount = 40;
         <input type="hidden" name="bulk_mode" id="bulk_mode" value="grid">
 
         <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm ring-1 ring-gray-900/[0.03] overflow-hidden">
-            <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-gradient-to-r from-amber-50/40 via-white to-slate-50/30">
+            <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-slate-50/90">
                 <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-700 shadow-sm border border-amber-100">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm border border-sky-100">
                         <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
                     </span>
                     <div>
@@ -54,7 +54,7 @@ $gridRowCount = 40;
                 <div class="grid gap-5 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Transfer order no.</label>
-                        <input type="text" name="transfer_order_no" id="bulk_transfer_order_no" readonly value="" class="w-full px-3 py-2.5 border border-amber-100 rounded-lg bg-amber-50/40 text-sm text-gray-800 font-medium cursor-not-allowed shadow-sm" title="Assigned when warehouses are selected">
+                        <input type="text" name="transfer_order_no" id="bulk_transfer_order_no" readonly value="" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-gray-100 text-sm text-gray-700 cursor-not-allowed shadow-sm" title="Assigned when warehouses are selected">
                     </div>
                     <div class="flex flex-col">
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Dispatch date <span class="text-red-500">*</span></label>
@@ -87,7 +87,7 @@ $gridRowCount = 40;
         </div>
 
         <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm ring-1 ring-gray-900/[0.03] overflow-hidden">
-            <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-gradient-to-r from-sky-50/30 via-white to-amber-50/20">
+            <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-slate-50/90">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm border border-sky-100">
                         <i class="fas fa-route text-sm" aria-hidden="true"></i>
