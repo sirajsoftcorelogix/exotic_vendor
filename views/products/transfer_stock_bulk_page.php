@@ -144,6 +144,13 @@ $gridRowCount = 40;
                 <div>
                     <label class="text-sm font-semibold text-gray-700 mb-2 block">File (.csv, .xlsx, .xls)</label>
                     <input type="file" name="bulk_file" id="bulk_file" accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" class="w-full max-w-md text-sm">
+                    <div id="bulk_file_selection_row" class="mt-2 flex flex-wrap items-center gap-2 hidden">
+                        <span id="bulk_file_name" class="text-sm text-gray-700 truncate max-w-[min(100%,28rem)]" title=""></span>
+                        <button type="button" id="bulk_file_clear" class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500/30">
+                            <i class="fas fa-times text-[10px]" aria-hidden="true"></i>
+                            Remove file
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -320,6 +327,32 @@ $gridRowCount = 40;
     const panelGrid = document.getElementById('panel_grid');
     const bulkMode = document.getElementById('bulk_mode');
     const bulkFile = document.getElementById('bulk_file');
+    const bulkFileSelectionRow = document.getElementById('bulk_file_selection_row');
+    const bulkFileName = document.getElementById('bulk_file_name');
+    const bulkFileClear = document.getElementById('bulk_file_clear');
+
+    function updateBulkFileSelectionUi() {
+        if (!bulkFile || !bulkFileSelectionRow || !bulkFileName) return;
+        const f = bulkFile.files && bulkFile.files[0];
+        if (f) {
+            bulkFileName.textContent = f.name;
+            bulkFileName.title = f.name;
+            bulkFileSelectionRow.classList.remove('hidden');
+        } else {
+            bulkFileName.textContent = '';
+            bulkFileName.title = '';
+            bulkFileSelectionRow.classList.add('hidden');
+        }
+    }
+    if (bulkFile) {
+        bulkFile.addEventListener('change', updateBulkFileSelectionUi);
+    }
+    if (bulkFileClear && bulkFile) {
+        bulkFileClear.addEventListener('click', function () {
+            bulkFile.value = '';
+            updateBulkFileSelectionUi();
+        });
+    }
 
     function setTab(mode) {
         bulkMode.value = mode;
@@ -627,7 +660,10 @@ $gridRowCount = 40;
             }
             document.getElementById('bulk_rows_json').value = JSON.stringify(gridData);
             fd.set('bulk_rows_json', JSON.stringify(gridData));
-            if (bulkFile) bulkFile.value = '';
+            if (bulkFile) {
+                bulkFile.value = '';
+                updateBulkFileSelectionUi();
+            }
         } else {
             document.getElementById('bulk_rows_json').value = '[]';
             fd.set('bulk_rows_json', '[]');
