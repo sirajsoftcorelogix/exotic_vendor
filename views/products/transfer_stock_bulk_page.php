@@ -13,13 +13,10 @@ $gridRowCount = 40;
             </div>
             <div>
                 <h1 class="text-2xl font-semibold text-gray-900">Bulk stock transfer</h1>
-                <p class="text-sm text-gray-600 mt-1">Upload a spreadsheet or fill the grid—same header and warehouse fields as the standard transfer form.</p>
+                <p class="text-sm text-gray-600 mt-1">Upload a spreadsheet or fill the grid with dispatch, route, and transport details.</p>
             </div>
         </div>
         <div class="flex flex-wrap gap-3">
-            <a href="?page=products&action=transfer_stock" class="text-sm font-semibold text-amber-700 hover:text-amber-900 whitespace-nowrap">
-                <i class="fas fa-shipping-fast mr-1"></i> Standard transfer
-            </a>
             <a href="?page=products&action=stock_transfer" class="text-sm font-semibold text-gray-600 hover:text-gray-900 whitespace-nowrap">
                 Transfer history
             </a>

@@ -70,18 +70,11 @@ $formatStatusLabel = static function (string $status): string {
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center">
-                <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                <a href="?page=products&action=transfer_stock"
-                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
+                <a href="?page=products&action=transfer_stock_bulk"
+                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
                     Create stock transfer
                 </a>
-                <a href="?page=products&action=transfer_stock_bulk"
-                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border-2 border-amber-700/30 bg-white text-amber-900 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
-                    <i class="fas fa-table text-xs opacity-90" aria-hidden="true"></i>
-                    Bulk transfer
-                </a>
-                </div>
             </div>
         </div>
     </div>
@@ -210,7 +203,7 @@ $formatStatusLabel = static function (string $status): string {
                                     </span>
                                     <p class="text-base font-medium text-gray-900">No transfers match</p>
                                     <p class="mt-1 text-sm text-gray-500">Try adjusting filters or create a new stock transfer.</p>
-                                    <a href="?page=products&action=transfer_stock" class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-amber-700 hover:text-amber-800">
+                                    <a href="?page=products&action=transfer_stock_bulk" class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-amber-700 hover:text-amber-800">
                                         <i class="fas fa-plus-circle" aria-hidden="true"></i>
                                         New transfer
                                     </a>
