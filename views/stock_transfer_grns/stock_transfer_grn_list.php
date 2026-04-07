@@ -307,7 +307,7 @@ if (!function_exists('grn_item_group_camel_case')) {
             <div class="px-5 pt-5 pb-4 border-b border-gray-100 bg-gradient-to-br from-red-50/80 to-white">
                 <div class="flex items-start gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
-                        <i class="fas fa-triangle-exclamation text-lg" aria-hidden="true"></i>
+                        <i class="fas fa-exclamation-triangle text-lg" aria-hidden="true"></i>
                     </span>
                     <div class="min-w-0 pt-0.5">
                         <h3 id="grnDeleteModalTitle" class="text-base font-semibold text-gray-900 leading-snug">Delete this GRN line?</h3>
@@ -325,7 +325,7 @@ if (!function_exists('grn_item_group_camel_case')) {
                 </button>
                 <button type="button" data-grn-delete-confirm
                     class="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-b from-red-600 to-red-700 text-white text-sm font-semibold shadow-md shadow-red-900/20 hover:from-red-700 hover:to-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition">
-                    <i class="fas fa-trash-can text-xs opacity-90" aria-hidden="true"></i>
+                    <i class="fas fa-trash-alt text-xs opacity-90" aria-hidden="true"></i>
                     Delete GRN
                 </button>
             </div>
@@ -382,6 +382,7 @@ if (!function_exists('grn_item_group_camel_case')) {
         });
     }
 })();
+</script>
 
 <script>
 (function () {
