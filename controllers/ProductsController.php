@@ -151,6 +151,31 @@ class ProductsController {
         exit;
     }
 
+    public function stock_transfer_delete_line() {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $transferId = (int)($_POST['transfer_id'] ?? 0);
+        $lineItemId = (int)($_POST['line_item_id'] ?? 0);
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        $result = $stockTransferModel->deleteTransferLineItem($transferId, $lineItemId);
+
+        echo json_encode([
+            'success' => !empty($result['success']),
+            'message' => (string)($result['message'] ?? ''),
+        ]);
+        exit;
+    }
+
     /**
      * Paginated line items for one transfer (Option A — list uses aggregates only).
      */
@@ -3298,13 +3323,17 @@ class ProductsController {
                 if (!empty($item['product']['image'])) {
                     $img = (string)$item['product']['image'];
                 }
+                $lineSku = (string)($resolved['sku'] ?? $item['sku'] ?? '');
+                $lineIc = (string)($resolved['item_code'] ?? $item['item_code'] ?? '');
                 $bulk_grid_prefill[] = [
-                    'item_code' => (string)($resolved['item_code'] ?? $item['item_code'] ?? ''),
-                    'sku' => (string)($resolved['sku'] ?? $item['sku'] ?? ''),
+                    'item_code' => $lineIc,
+                    'sku' => $lineSku,
                     'size' => (string)($resolved['size'] ?? ''),
                     'color' => (string)($resolved['color'] ?? ''),
                     'qty' => (int)($item['transfer_qty'] ?? 0),
                     'image' => $img,
+                    'transfer_line_id' => (int)($item['id'] ?? 0),
+                    'line_grn_locked' => $stockTransferModel->transferSkuHasGrn($transfer_id, $lineSku, $lineIc),
                 ];
             }
         }

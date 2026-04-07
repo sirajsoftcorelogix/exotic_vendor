@@ -1791,6 +1791,191 @@ class StockTransfer
     }
 
     /**
+     * True if this transfer has any GRN row whose sku matches the line (or item_code when sku is empty),
+     * consistent with how GRNs are recorded per SKU on a transfer.
+     */
+    public function transferSkuHasGrn(int $transferId, string $sku, string $itemCode = ''): bool
+    {
+        $transferId = (int)$transferId;
+        $sku = trim($sku);
+        $itemCode = trim($itemCode);
+        if ($transferId <= 0) {
+            return false;
+        }
+        $keys = array_values(array_unique(array_filter([$sku, $itemCode], static fn ($s) => trim((string)$s) !== '')));
+        if ($keys === []) {
+            return false;
+        }
+        $placeholders = implode(',', array_fill(0, count($keys), '?'));
+        $sql = "SELECT 1 FROM vp_stock_transfer_grns WHERE transfer_id = ? AND TRIM(IFNULL(sku, '')) IN ($placeholders) LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $types = str_repeat('s', count($keys));
+        $stmt->bind_param('i' . $types, $transferId, ...$keys);
+        $stmt->execute();
+        $has = (bool)$stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $has;
+    }
+
+    /**
+     * Pick TRANSFER_OUT movement id for one vp_item_stock_transfer row (handles duplicate SKU lines by order).
+     */
+    private function pickTransferOutMovementIdForLine(array $lineRow, string $orderNo, int $fromWarehouse): int
+    {
+        $orderNo = trim($orderNo);
+        $fromWarehouse = (int)$fromWarehouse;
+        $lineId = (int)($lineRow['id'] ?? 0);
+        $sku = trim((string)($lineRow['sku'] ?? ''));
+        $productId = (int)($lineRow['product_id'] ?? 0);
+        if ($orderNo === '' || $fromWarehouse <= 0 || $lineId <= 0 || $sku === '') {
+            return 0;
+        }
+
+        $movSql = "SELECT id FROM vp_stock_movements
+            WHERE ref_type = 'TRANSFER_ORDER' AND ref_id = ? AND movement_type = 'TRANSFER_OUT'
+            AND warehouse_id = ? AND sku = ?";
+        $types = 'sis';
+        $params = [$orderNo, $fromWarehouse, $sku];
+        if ($productId > 0) {
+            $movSql .= ' AND product_id = ?';
+            $types .= 'i';
+            $params[] = $productId;
+        }
+        $movSql .= ' ORDER BY id ASC';
+
+        $movIds = [];
+        $stmt = $this->db->prepare($movSql);
+        if ($stmt) {
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($r = $res->fetch_assoc()) {
+                $movIds[] = (int)$r['id'];
+            }
+            $stmt->close();
+        }
+        if ($movIds === []) {
+            return 0;
+        }
+
+        $lineSql = "SELECT id FROM vp_item_stock_transfer WHERE transfer_order_no = ? AND sku = ?";
+        $ltypes = 'ss';
+        $lparams = [$orderNo, $sku];
+        if ($productId > 0) {
+            $lineSql .= ' AND product_id = ?';
+            $ltypes .= 'i';
+            $lparams[] = $productId;
+        }
+        $lineSql .= ' ORDER BY id ASC';
+
+        $lineIds = [];
+        $lst = $this->db->prepare($lineSql);
+        if ($lst) {
+            $lst->bind_param($ltypes, ...$lparams);
+            $lst->execute();
+            $lres = $lst->get_result();
+            while ($r = $lres->fetch_assoc()) {
+                $lineIds[] = (int)$r['id'];
+            }
+            $lst->close();
+        }
+
+        $idx = array_search($lineId, $lineIds, true);
+        if ($idx === false || !isset($movIds[$idx])) {
+            return 0;
+        }
+
+        return (int)$movIds[$idx];
+    }
+
+    /**
+     * Delete one transfer line when no GRN exists for that SKU on the transfer; reverses TRANSFER_OUT for that line.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public function deleteTransferLineItem(int $transferId, int $lineItemId): array
+    {
+        $transferId = (int)$transferId;
+        $lineItemId = (int)$lineItemId;
+        if ($transferId <= 0 || $lineItemId <= 0) {
+            return ['success' => false, 'message' => 'Invalid request.'];
+        }
+
+        $transfer = $this->getTransferById($transferId);
+        if (!$transfer) {
+            return ['success' => false, 'message' => 'Stock transfer not found.'];
+        }
+
+        $orderNo = trim((string)($transfer['transfer_order_no'] ?? ''));
+        $fromWarehouse = (int)($transfer['from_warehouse'] ?? 0);
+
+        $lst = $this->db->prepare(
+            'SELECT id, transfer_order_no, product_id, sku, item_code, transfer_qty FROM vp_item_stock_transfer WHERE id = ? LIMIT 1'
+        );
+        if (!$lst) {
+            return ['success' => false, 'message' => 'Database error.'];
+        }
+        $lst->bind_param('i', $lineItemId);
+        $lst->execute();
+        $line = $lst->get_result()->fetch_assoc();
+        $lst->close();
+        if (!$line) {
+            return ['success' => false, 'message' => 'Line item not found.'];
+        }
+
+        if (trim((string)($line['transfer_order_no'] ?? '')) !== $orderNo) {
+            return ['success' => false, 'message' => 'Line does not belong to this transfer.'];
+        }
+
+        $sku = trim((string)($line['sku'] ?? ''));
+        $itemCode = trim((string)($line['item_code'] ?? ''));
+        if ($this->transferSkuHasGrn($transferId, $sku, $itemCode)) {
+            return ['success' => false, 'message' => 'Cannot remove this line: a GRN already exists for this item on the transfer.'];
+        }
+
+        $qty = (int)($line['transfer_qty'] ?? 0);
+        $productId = (int)($line['product_id'] ?? 0);
+
+        $this->db->begin_transaction();
+        try {
+            $movId = $this->pickTransferOutMovementIdForLine($line, $orderNo, $fromWarehouse);
+
+            if ($qty > 0 && $movId <= 0) {
+                throw new Exception('No outbound stock movement found for this line; delete stopped to avoid a mismatch.');
+            }
+
+            if ($movId > 0) {
+                $this->deleteMovementAndAdjustSubsequent($movId);
+            }
+
+            $del = $this->db->prepare('DELETE FROM vp_item_stock_transfer WHERE id = ? LIMIT 1');
+            if (!$del) {
+                throw new Exception('Prepare failed: delete line');
+            }
+            $del->bind_param('i', $lineItemId);
+            if (!$del->execute()) {
+                throw new Exception('Failed to delete line item.');
+            }
+            $del->close();
+
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+
+        if ($sku !== '' && $productId > 0) {
+            $this->syncProductLocalStock($sku, $productId);
+        }
+
+        return ['success' => true, 'message' => 'Line item removed and source stock restored.'];
+    }
+
+    /**
      * Remove a stock transfer only when no GRN exists: reverses TRANSFER_OUT movements, line items, header.
      *
      * @return array{success: bool, message: string}

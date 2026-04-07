@@ -185,6 +185,9 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                                 <th class="px-3 py-2.5 text-left font-semibold text-gray-700 min-w-[5rem]">Size</th>
                                 <th class="px-3 py-2.5 text-left font-semibold text-gray-700 min-w-[5rem]">Color</th>
                                 <th class="px-3 py-2.5 text-right font-semibold text-gray-700 w-24 min-w-[5.5rem]">Qty</th>
+                                <?php if ($isBulkEdit): ?>
+                                    <th class="px-2 py-2.5 text-center font-semibold text-gray-700 w-14 min-w-[3.5rem]" scope="col">Remove</th>
+                                <?php endif; ?>
                             </tr>
                         </thead>
                         <tbody id="bulk_grid_body">
@@ -197,6 +200,8 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                                 $pfColor = $pf !== null ? (string)($pf['color'] ?? '') : '';
                                 $pfQty = ($pf !== null && array_key_exists('qty', $pf)) ? (int)$pf['qty'] : null;
                                 $pfImg = $pf !== null ? trim((string)($pf['image'] ?? '')) : '';
+                                $pfLineId = $pf !== null ? (int)($pf['transfer_line_id'] ?? 0) : 0;
+                                $pfGrnLocked = $pf !== null && !empty($pf['line_grn_locked']);
                                 $imgHas = $pfImg !== '';
                                 $imgAlt = htmlspecialchars($pfSku !== '' ? $pfSku : ($pfIc !== '' ? $pfIc : 'Product'), ENT_QUOTES, 'UTF-8');
                                 ?>
@@ -223,6 +228,23 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                                     <td class="px-2 sm:px-3 py-2 align-middle w-32 min-w-0"><input type="text" class="bulk-inp-size w-full min-w-0 px-2.5 py-2 border border-gray-200 rounded-md text-sm leading-tight" value="<?php echo htmlspecialchars($pfSize, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off"></td>
                                     <td class="px-2 sm:px-3 py-2 align-middle w-32 min-w-0"><input type="text" class="bulk-inp-color w-full min-w-0 px-2.5 py-2 border border-gray-200 rounded-md text-sm leading-tight" value="<?php echo htmlspecialchars($pfColor, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off"></td>
                                     <td class="px-2 sm:px-3 py-2 align-middle"><input type="number" min="0" class="bulk-inp-qty w-full max-w-[6rem] sm:max-w-none ml-auto block px-2.5 py-2 border border-gray-200 rounded-md text-sm tabular-nums text-right leading-tight" value="<?php echo $pfQty !== null ? (int)$pfQty : ''; ?>" autocomplete="off"></td>
+                                    <?php if ($isBulkEdit): ?>
+                                        <td class="px-1 py-2 align-middle text-center w-14">
+                                            <?php if ($pfLineId > 0 && !$pfGrnLocked): ?>
+                                                <button type="button"
+                                                    class="bulk-line-delete inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                                                    data-line-id="<?php echo $pfLineId; ?>"
+                                                    title="Remove this line (no GRN for this item)"
+                                                    aria-label="Remove line item">
+                                                    <i class="fas fa-times text-xs" aria-hidden="true"></i>
+                                                </button>
+                                            <?php elseif ($pfLineId > 0 && $pfGrnLocked): ?>
+                                                <span class="inline-flex text-gray-400 text-xs cursor-help" title="This item has a GRN and cannot be removed here.">—</span>
+                                            <?php else: ?>
+                                                <span class="text-gray-300 text-xs" aria-hidden="true">·</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endif; ?>
                                 </tr>
                             <?php endfor; ?>
                         </tbody>
@@ -357,7 +379,8 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     const toSel = document.getElementById('to_warehouse');
     const orderInput = document.getElementById('bulk_transfer_order_no');
     const bulkTransferIdInput = document.getElementById('bulk_transfer_id');
-    const isBulkEdit = !!(bulkTransferIdInput && parseInt(String(bulkTransferIdInput.value || '').trim(), 10) > 0);
+    const bulkEditTransferId = bulkTransferIdInput ? parseInt(String(bulkTransferIdInput.value || '').trim(), 10) : 0;
+    const isBulkEdit = bulkEditTransferId > 0;
 
     function updateWarehouseAddresses() {
         const srcEl = document.getElementById('source_address');
@@ -479,12 +502,50 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 '</div></td>' +
                 '<td class="px-2 sm:px-3 py-2 align-middle w-32 min-w-0"><input type="text" class="bulk-inp-size w-full min-w-0 px-2.5 py-2 border border-gray-200 rounded-md text-sm leading-tight" autocomplete="off"></td>' +
                 '<td class="px-2 sm:px-3 py-2 align-middle w-32 min-w-0"><input type="text" class="bulk-inp-color w-full min-w-0 px-2.5 py-2 border border-gray-200 rounded-md text-sm leading-tight" autocomplete="off"></td>' +
-                '<td class="px-2 sm:px-3 py-2 align-middle"><input type="number" min="0" class="bulk-inp-qty w-full max-w-[6rem] sm:max-w-none ml-auto block px-2.5 py-2 border border-gray-200 rounded-md text-sm tabular-nums text-right leading-tight" autocomplete="off"></td>';
+                '<td class="px-2 sm:px-3 py-2 align-middle"><input type="number" min="0" class="bulk-inp-qty w-full max-w-[6rem] sm:max-w-none ml-auto block px-2.5 py-2 border border-gray-200 rounded-md text-sm tabular-nums text-right leading-tight" autocomplete="off"></td>' +
+                (bulkEditTransferId > 0
+                    ? '<td class="px-1 py-2 align-middle text-center w-14"><span class="text-gray-300 text-xs" aria-hidden="true">·</span></td>'
+                    : '');
             tbody.appendChild(tr);
         }
         renumberBulkGrid();
     });
     renumberBulkGrid();
+
+    if (bulkEditTransferId > 0) {
+        const lineDelTbody = document.getElementById('bulk_grid_body');
+        if (lineDelTbody) {
+            lineDelTbody.addEventListener('click', function (ev) {
+                const btn = ev.target.closest('.bulk-line-delete');
+                if (!btn || !lineDelTbody.contains(btn)) {
+                    return;
+                }
+                const lineId = parseInt(btn.getAttribute('data-line-id'), 10);
+                if (!lineId) {
+                    return;
+                }
+                ev.preventDefault();
+                if (!confirm('Remove this line from the transfer? Stock at the source warehouse will be restored for this line.')) {
+                    return;
+                }
+                const fd = new FormData();
+                fd.append('transfer_id', String(bulkEditTransferId));
+                fd.append('line_item_id', String(lineId));
+                fetch(apiUrl('stock_transfer_delete_line'), { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            window.location.reload();
+                        } else {
+                            alert(data.message || 'Could not remove this line.');
+                        }
+                    })
+                    .catch(function () {
+                        alert('Could not remove this line. Check your connection and try again.');
+                    });
+            });
+        }
+    }
 
     function hideAllBulkAcMenus(exceptMenu) {
         document.querySelectorAll('#bulk_grid_body .bulk-ac-menu').forEach(function (el) {
