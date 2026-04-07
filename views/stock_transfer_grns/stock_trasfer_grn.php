@@ -130,56 +130,62 @@ $warehouses = $warehouses ?? [];
                         <?php endif; ?>
                     </button>
 
-                    <div class="flex-1 min-w-0 space-y-4">
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:gap-x-6">
-                            <div class="min-w-0 flex-1 sm:pr-2">
-                                <h3 class="text-base font-semibold text-gray-900 leading-snug"><?php echo htmlspecialchars($title); ?></h3>
-                                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                                    <span><span class="text-gray-400 font-medium">SKU</span> <?php echo htmlspecialchars($item['sku'] ?? '—'); ?></span>
-                                    <span><span class="text-gray-400 font-medium">Item code</span> <?php echo htmlspecialchars($item['item_code'] ?? '—'); ?></span>
-                                    <?php if ($material !== ''): ?>
-                                        <span><span class="text-gray-400 font-medium">Material</span> <?php echo htmlspecialchars($material); ?></span>
-                                    <?php endif; ?>
-                                    <?php if ($weight !== ''): ?>
-                                        <span><span class="text-gray-400 font-medium">Weight</span> <?php echo htmlspecialchars((string)$weight . ' ' . (string)$weightUnit); ?></span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <div class="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 shrink-0 w-full sm:w-auto sm:ml-auto">
-                                <div class="flex items-center gap-2 min-w-0">
-                                    <label class="text-xs font-semibold text-gray-600 shrink-0 whitespace-nowrap" for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>">Qty received <span class="text-red-500">*</span></label>
-                                    <input id="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
-                                        placeholder="0"
-                                        value="<?php echo htmlspecialchars($mode === 'edit' ? (string)(int)($item['qty_received'] ?? 0) : ($remaining > 0 ? (string)$remaining : '0')); ?>"
-                                        class="st-grn-qty w-[4.5rem] sm:w-24 px-2.5 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 tabular-nums text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
-                                </div>
-                                <label class="inline-flex items-center gap-2 cursor-pointer select-none rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 shrink-0">
-                                    <input type="checkbox" name="qty_acceptable[]" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500 shrink-0"
-                                        <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
-                                    <span class="text-xs sm:text-sm font-medium text-gray-800 whitespace-nowrap">Quality OK</span>
-                                </label>
-                            </div>
+                    <div class="flex-1 min-w-0 space-y-3 sm:space-y-3.5">
+                        <!-- Product title + primary SKU (compact, mockup-style) -->
+                        <div class="min-w-0">
+                            <h3 class="text-[15px] sm:text-base font-semibold text-slate-900 leading-snug pr-1"><?php echo htmlspecialchars($title); ?></h3>
+                            <p class="mt-1.5 text-xs text-gray-500">
+                                <span class="text-gray-400 font-medium">SKU</span>
+                                <?php echo htmlspecialchars($item['sku'] ?? '—'); ?>
+                                <?php if (trim((string)($item['item_code'] ?? '')) !== ''): ?>
+                                    <span class="text-gray-300 mx-1.5">·</span>
+                                    <span class="text-gray-400 font-medium">Item code</span>
+                                    <?php echo htmlspecialchars($item['item_code']); ?>
+                                <?php endif; ?>
+                            </p>
+                            <?php if ($material !== '' || $weight !== ''): ?>
+                                <p class="mt-1 text-[11px] text-gray-400">
+                                    <?php if ($material !== ''): ?><?php echo htmlspecialchars($material); ?><?php endif; ?>
+                                    <?php if ($material !== '' && $weight !== ''): ?> · <?php endif; ?>
+                                    <?php if ($weight !== ''): ?><?php echo htmlspecialchars((string)$weight . ' ' . (string)$weightUnit); ?><?php endif; ?>
+                                </p>
+                            <?php endif; ?>
                         </div>
 
-                        <div class="flex flex-wrap items-stretch gap-2">
-                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-2 py-1.5 w-[5rem] sm:w-[5.25rem] shrink-0">
-                                <p class="text-[9px] font-bold uppercase tracking-wide text-slate-500 leading-tight">Shipped</p>
-                                <p class="text-base sm:text-lg font-bold text-slate-900 tabular-nums leading-tight mt-0.5"><?php echo number_format($quantity); ?></p>
+                        <!-- One row: stats + qty received + quality OK -->
+                        <div class="flex flex-wrap items-end gap-2 sm:gap-2.5">
+                            <div class="rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[4.75rem] sm:w-[5rem] shrink-0">
+                                <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight">Shipped</p>
+                                <p class="text-lg sm:text-xl font-bold text-gray-900 tabular-nums leading-none mt-1"><?php echo number_format($quantity); ?></p>
                             </div>
-                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-2 py-1.5 w-[5rem] sm:w-[5.25rem] shrink-0">
-                                <p class="text-[9px] font-bold uppercase tracking-wide text-slate-500 leading-tight">Prior GRN</p>
-                                <p class="text-base sm:text-lg font-bold text-slate-800 tabular-nums leading-tight mt-0.5"><?php echo number_format($already); ?></p>
+                            <div class="rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[4.75rem] sm:w-[5rem] shrink-0">
+                                <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight">Prior GRN</p>
+                                <p class="text-lg sm:text-xl font-bold text-gray-900 tabular-nums leading-none mt-1"><?php echo number_format($already); ?></p>
                             </div>
-                            <div class="rounded-lg bg-amber-50/80 border border-amber-100 px-2 py-1.5 w-[5rem] sm:w-[5.25rem] shrink-0">
-                                <p class="text-[9px] font-bold uppercase tracking-wide text-amber-900/70 leading-tight">To receive</p>
-                                <p class="text-base sm:text-lg font-bold text-amber-950 tabular-nums leading-tight mt-0.5"><?php echo number_format($remaining); ?></p>
+                            <div class="rounded-md bg-amber-50 border border-amber-200/90 px-2 py-1.5 w-[4.75rem] sm:w-[5rem] shrink-0 ring-1 ring-amber-900/5">
+                                <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-amber-900/80 leading-tight">To receive</p>
+                                <p class="text-lg sm:text-xl font-bold text-amber-950 tabular-nums leading-none mt-1"><?php echo number_format($remaining); ?></p>
                             </div>
+
+                            <div class="flex flex-col gap-1 shrink-0 min-w-0">
+                                <label class="text-[11px] font-semibold text-gray-600 leading-none" for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>">Qty received <span class="text-red-500">*</span></label>
+                                <input id="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
+                                    placeholder="0"
+                                    value="<?php echo htmlspecialchars($mode === 'edit' ? (string)(int)($item['qty_received'] ?? 0) : ($remaining > 0 ? (string)$remaining : '0')); ?>"
+                                    class="st-grn-qty w-[4.25rem] sm:w-20 px-2 py-2 border border-gray-300 rounded-md text-sm font-bold text-gray-900 tabular-nums text-center bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                            </div>
+
+                            <label class="inline-flex items-center gap-2.5 cursor-pointer select-none rounded-lg border border-gray-300 bg-white px-3 py-2 sm:py-2.5 shrink-0 shadow-sm min-h-[2.875rem] sm:min-h-0 sm:items-center">
+                                <input type="checkbox" name="qty_acceptable[]" value="1" class="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 shrink-0"
+                                    <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
+                                <span class="text-xs sm:text-sm font-medium text-gray-800 whitespace-nowrap">Quality OK</span>
+                            </label>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Line remarks <span class="text-gray-400 font-normal">(optional)</span></label>
-                            <textarea name="item_remarks[]" rows="2" placeholder="Damage notes, batch, etc."
-                                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-y min-h-[4rem]"><?php echo htmlspecialchars(($mode === 'edit' ? ($item['remarks'] ?? '') : '')); ?></textarea>
+                            <label class="block text-xs font-semibold text-gray-500 mb-1">Line remarks <span class="text-gray-400 font-normal">(optional)</span></label>
+                            <textarea name="item_remarks[]" rows="1" placeholder="Damage notes, batch, etc."
+                                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-y min-h-[2.75rem] max-h-32"><?php echo htmlspecialchars(($mode === 'edit' ? ($item['remarks'] ?? '') : '')); ?></textarea>
                         </div>
                     </div>
                 </div>
