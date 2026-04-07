@@ -13,7 +13,7 @@ $gridRowCount = 40;
             </div>
             <div>
                 <h1 class="text-2xl font-semibold text-gray-900">Bulk stock transfer</h1>
-                <p class="text-sm text-gray-600 mt-1">Upload a spreadsheet or fill the grid with dispatch, route, and transport details.</p>
+                <p class="text-sm text-gray-600 mt-1">Fill the grid (default) or upload a spreadsheet—plus dispatch, route, and transport details.</p>
             </div>
         </div>
         <div class="flex flex-wrap gap-3">
@@ -24,7 +24,7 @@ $gridRowCount = 40;
     </div>
 
     <form id="bulkTransferForm" class="space-y-6" method="POST" enctype="multipart/form-data" action="?page=products&action=process_transfer_stock_bulk">
-        <input type="hidden" name="bulk_mode" id="bulk_mode" value="upload">
+        <input type="hidden" name="bulk_mode" id="bulk_mode" value="grid">
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-6">
@@ -92,11 +92,11 @@ $gridRowCount = 40;
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Line items</div>
             <div class="flex flex-wrap gap-2 mb-4">
-                <button type="button" id="tab_upload" class="bulk-tab px-4 py-2 rounded-lg text-sm font-semibold bg-amber-100 text-amber-900 ring-1 ring-amber-300">1. Upload spreadsheet</button>
-                <button type="button" id="tab_grid" class="bulk-tab px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200">2. Excel-style grid</button>
+                <button type="button" id="tab_grid" class="bulk-tab px-4 py-2 rounded-lg text-sm font-semibold bg-amber-100 text-amber-900 ring-1 ring-amber-300">1. Excel-style grid</button>
+                <button type="button" id="tab_upload" class="bulk-tab px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200">2. Upload spreadsheet</button>
             </div>
 
-            <div id="panel_upload" class="bulk-panel space-y-4">
+            <div id="panel_upload" class="bulk-panel space-y-4 hidden">
                 <p class="text-sm text-gray-600">Use columns: <strong>ItemCode</strong>, <strong>Size</strong>, <strong>Color</strong>, <strong>Quantity</strong>. Headers can use spaces (e.g. <code class="bg-gray-100 px-1 rounded">Item Code</code>). Size and Color can be blank if they match empty variants in your catalog.</p>
                 <div class="flex flex-wrap gap-3 items-center">
                     <a href="?page=products&action=transfer_bulk_template" class="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-900">
@@ -109,12 +109,13 @@ $gridRowCount = 40;
                 </div>
             </div>
 
-            <div id="panel_grid" class="bulk-panel hidden">
+            <div id="panel_grid" class="bulk-panel">
                 <p class="text-sm text-gray-600 mb-3">Type a <strong>SKU</strong> to search—matching products appear below the cell. Pick one to fill <strong>item code</strong>, size, and color automatically. Enter quantity in the last column. You can still adjust size or color manually if needed.</p>
                 <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-[420px] overflow-y-auto">
                     <table class="min-w-full divide-y divide-gray-200 text-sm">
                         <thead class="bg-gray-100 sticky top-0 z-10">
                             <tr>
+                                <th class="px-2 py-2 text-center font-semibold text-gray-700 w-10 min-w-[2.5rem]" scope="col">#</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 min-w-[11rem]">SKU <span class="font-normal text-gray-500">(search)</span></th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Size</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Color</th>
@@ -124,6 +125,7 @@ $gridRowCount = 40;
                         <tbody id="bulk_grid_body">
                             <?php for ($i = 0; $i < $gridRowCount; $i++): ?>
                                 <tr class="bulk-grid-row border-b border-gray-100">
+                                    <td class="bulk-row-num px-2 py-2 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-middle border-r border-gray-100"><?php echo $i + 1; ?></td>
                                     <td class="p-1 align-top">
                                         <div class="relative">
                                             <input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">
@@ -271,13 +273,22 @@ $gridRowCount = 40;
     }
     tabUpload.addEventListener('click', function () { setTab('upload'); });
     tabGrid.addEventListener('click', function () { setTab('grid'); });
+    setTab('grid');
+
+    function renumberBulkGrid() {
+        document.querySelectorAll('#bulk_grid_body tr.bulk-grid-row').forEach(function (tr, idx) {
+            const cell = tr.querySelector('.bulk-row-num');
+            if (cell) cell.textContent = String(idx + 1);
+        });
+    }
 
     document.getElementById('bulk_add_rows').addEventListener('click', function () {
         const tbody = document.getElementById('bulk_grid_body');
         for (let k = 0; k < 10; k++) {
             const tr = document.createElement('tr');
             tr.className = 'bulk-grid-row border-b border-gray-100';
-            tr.innerHTML = '<td class="p-1 align-top"><div class="relative">' +
+            tr.innerHTML = '<td class="bulk-row-num px-2 py-2 text-center text-xs font-semibold text-gray-500 tabular-nums select-none bg-gray-50 align-middle border-r border-gray-100"></td>' +
+                '<td class="p-1 align-top"><div class="relative">' +
                 '<input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">' +
                 '<input type="text" class="bulk-inp-sku w-full px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">' +
                 '<div class="bulk-ac-menu hidden absolute left-0 right-0 mt-0.5 bg-white border border-gray-300 rounded-md shadow-lg max-h-52 overflow-y-auto z-30 text-xs" role="listbox"></div>' +
@@ -287,7 +298,9 @@ $gridRowCount = 40;
                 '<td class="p-1"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>';
             tbody.appendChild(tr);
         }
+        renumberBulkGrid();
     });
+    renumberBulkGrid();
 
     function hideAllBulkAcMenus(exceptMenu) {
         document.querySelectorAll('#bulk_grid_body .bulk-ac-menu').forEach(function (el) {
