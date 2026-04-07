@@ -13,17 +13,22 @@ if (!function_exists('grn_item_group_camel_case')) {
         if ($label === '') {
             return '';
         }
-        $parts = preg_split('/[\s\-_]+/', $label, -1, PREG_SPLIT_NO_EMPTY);
+        $parts = preg_split('/[\s\-_\/|&,.]+/u', $label, -1, PREG_SPLIT_NO_EMPTY);
         if ($parts === false || $parts === []) {
             return $label;
         }
-        $out = strtolower($parts[0]);
+        $out = function_exists('mb_strtolower') ? mb_strtolower($parts[0], 'UTF-8') : strtolower($parts[0]);
         for ($i = 1, $n = count($parts); $i < $n; $i++) {
             $w = $parts[$i];
             if ($w === '') {
                 continue;
             }
-            $out .= strtoupper(substr($w, 0, 1)) . strtolower(substr($w, 1));
+            if (function_exists('mb_substr')) {
+                $out .= mb_strtoupper(mb_substr($w, 0, 1, 'UTF-8'), 'UTF-8')
+                    . mb_strtolower(mb_substr($w, 1, null, 'UTF-8'), 'UTF-8');
+            } else {
+                $out .= strtoupper(substr($w, 0, 1)) . strtolower(substr($w, 1));
+            }
         }
         return $out;
     }
@@ -165,9 +170,11 @@ if (!function_exists('grn_item_group_camel_case')) {
                                             if (strlen($cbId) > 80) {
                                                 $cbId = 'grn_grp_' . md5($optKey);
                                             }
-                                            $showLabel = $optKey === '__none__' ? '(No group)' : ($optLabel !== '' ? $optLabel : $optKey);
+                                            $titleLabel = $optKey === '__none__' ? 'No group' : ($optLabel !== '' ? $optLabel : $optKey);
+                                            $showLabel = $optKey === '__none__' ? 'noGroup' : grn_item_group_camel_case($optLabel !== '' ? $optLabel : $optKey);
                                         ?>
-                                        <label class="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-sm text-gray-800 hover:bg-amber-50/80" for="<?php echo htmlspecialchars($cbId); ?>">
+                                        <label class="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-sm text-gray-800 hover:bg-amber-50/80 font-mono text-xs" for="<?php echo htmlspecialchars($cbId); ?>"
+                                            title="<?php echo htmlspecialchars($titleLabel, ENT_QUOTES, 'UTF-8'); ?>">
                                             <input type="checkbox" name="grn_filter_group[]" id="<?php echo htmlspecialchars($cbId); ?>"
                                                 value="<?php echo htmlspecialchars($optKey, ENT_QUOTES, 'UTF-8'); ?>"
                                                 class="grn-group-cb h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500/50" />
