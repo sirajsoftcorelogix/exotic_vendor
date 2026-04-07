@@ -28,7 +28,7 @@ $grnTotal = count($grns);
             <?php if (!empty($transfer['id'])): ?>
                 <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo (int) $transfer['id']; ?>"
                     class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-md shadow-amber-900/15 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
-                    <i class="fas fa-plus" aria-hidden="true"></i>
+                    <i class="fas fa-clipboard-check" aria-hidden="true"></i>
                     Add GRN
                 </a>
             <?php endif; ?>

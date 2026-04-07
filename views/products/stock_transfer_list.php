@@ -310,13 +310,13 @@ $formatStatusLabel = static function (string $status): string {
                                             class="inline-flex h-7 w-7 items-center justify-center rounded bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                                             title="Add GRN"
                                             aria-label="Add GRN">
-                                            <i class="fas fa-file-invoice text-xs" aria-hidden="true"></i>
+                                            <i class="fas fa-clipboard-check text-xs" aria-hidden="true"></i>
                                         </a>
                                         <a href="?page=stock_transfer_grns&action=list&transfer_id=<?php echo urlencode($transfer['id']); ?>"
                                             class="inline-flex h-7 w-7 items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                                             title="View GRNs"
                                             aria-label="View GRNs">
-                                            <i class="fas fa-list text-xs" aria-hidden="true"></i>
+                                            <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
                                         </a>
                                     </div>
                                 </td>
