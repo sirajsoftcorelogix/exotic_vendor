@@ -292,10 +292,10 @@ $warehouses = $warehouses ?? [];
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <div class="flex flex-col">
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5">Supporting files <span class="text-gray-400 font-normal">(optional)</span></label>
-                    <input type="file" id="grnSupportingFiles" name="grn_file[]" multiple accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp"
+                    <input type="file" id="grnSupportingFiles" name="grn_file[]" multiple accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
                         class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100 border border-dashed border-gray-300 rounded-xl bg-gray-50/50 px-3 py-2">
                     <div id="grnFileList" class="mt-2 space-y-1.5 hidden" aria-live="polite"></div>
-                    <p class="text-[11px] text-gray-400 mt-1.5">PDF or images — delivery challan, photos, etc.</p>
+                    <p class="text-[11px] text-gray-400 mt-1.5">PNG, JPG, or PDF only — max 2 MB per file.</p>
                 </div>
                 <div class="flex flex-col">
                     <label class="block text-xs font-semibold text-gray-600 mb-1.5">GRN remarks <span class="text-gray-400 font-normal">(optional)</span></label>
@@ -348,6 +348,19 @@ $warehouses = $warehouses ?? [];
 </div>
 
 <script>
+var GRN_SUPPORTING_FILE_MAX_BYTES = 2097152; // 2 MiB
+
+function grnIsAllowedSupportingFile(file) {
+    var n = file.name || '';
+    var i = n.lastIndexOf('.');
+    var ext = i >= 0 ? n.slice(i).toLowerCase() : '';
+    return ext === '.pdf' || ext === '.png' || ext === '.jpg' || ext === '.jpeg';
+}
+
+function grnSupportingFileWithinSizeLimit(file) {
+    return file && file.size <= GRN_SUPPORTING_FILE_MAX_BYTES;
+}
+
 (function () {
     function openImagePopup(src, alt) {
         var popup = document.getElementById('imagePopup');
@@ -454,7 +467,17 @@ $warehouses = $warehouses ?? [];
             grnStagedFiles.forEach(function (f) {
                 seen[grnFileKey(f)] = true;
             });
+            var rejectedType = [];
+            var rejectedSize = [];
             Array.prototype.forEach.call(grnFileInput.files || [], function (f) {
+                if (!grnIsAllowedSupportingFile(f)) {
+                    rejectedType.push(f.name);
+                    return;
+                }
+                if (!grnSupportingFileWithinSizeLimit(f)) {
+                    rejectedSize.push(f.name);
+                    return;
+                }
                 var k = grnFileKey(f);
                 if (!seen[k]) {
                     seen[k] = true;
@@ -464,6 +487,12 @@ $warehouses = $warehouses ?? [];
             grnFileInput.value = '';
             grnApplyStagedToInput();
             grnRenderFileList();
+            if (rejectedType.length > 0) {
+                alert('Only PNG, JPG, and PDF files are allowed. Skipped:\n' + rejectedType.join('\n'));
+            }
+            if (rejectedSize.length > 0) {
+                alert('Each file must be 2 MB or smaller. Skipped:\n' + rejectedSize.join('\n'));
+            }
         });
     }
 })();
@@ -540,6 +569,14 @@ function saveStockTransferGrn(event) {
     var fileInput = document.querySelector('input[name="grn_file[]"]');
     if (fileInput && fileInput.files.length > 0) {
         for (var f = 0; f < fileInput.files.length; f++) {
+            if (!grnIsAllowedSupportingFile(fileInput.files[f])) {
+                alert('Only PNG, JPG, and PDF files are allowed. Remove or replace: ' + fileInput.files[f].name);
+                return;
+            }
+            if (!grnSupportingFileWithinSizeLimit(fileInput.files[f])) {
+                alert('Each file must be 2 MB or smaller. Remove or replace: ' + fileInput.files[f].name);
+                return;
+            }
             formData.append('grn_file[]', fileInput.files[f]);
         }
     }

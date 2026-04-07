@@ -827,6 +827,17 @@ class StockTransfer
             $mimeType = $files['type'][$index] ?? '';
             $size = intval($files['size'][$index] ?? 0);
 
+            $maxGrnBytes = 2 * 1024 * 1024; // 2 MiB
+            if ($size > $maxGrnBytes) {
+                throw new Exception('GRN attachment too large (max 2 MB): ' . $originalName);
+            }
+
+            $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+            $allowedExt = ['pdf', 'png', 'jpg', 'jpeg'];
+            if (!in_array($ext, $allowedExt, true)) {
+                throw new Exception('Invalid GRN attachment type. Only PDF, PNG, and JPG are allowed: ' . $originalName);
+            }
+
             $safeBase = preg_replace('/[^a-zA-Z0-9-_\.]/', '_', pathinfo($originalName, PATHINFO_FILENAME));
             $extension = pathinfo($originalName, PATHINFO_EXTENSION);
             $fileName = sprintf('grn_%d_%d_%s', $grnId, time(), $safeBase);
