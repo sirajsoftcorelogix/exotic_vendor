@@ -1,6 +1,7 @@
 <?php
 $transfer = $transfer ?? [];
 $bulk_grid_prefill = $bulk_grid_prefill ?? [];
+$transfer_grn_count = (int)($transfer_grn_count ?? 0);
 $isBulkEdit = !empty($transfer['id']);
 $currentUserId = $_SESSION['user']['id'] ?? 0;
 $selectedRequestedBy = (int)($transfer['requested_by'] ?? $currentUserId);
@@ -289,6 +290,32 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 
         <textarea name="bulk_rows_json" id="bulk_rows_json" class="hidden" aria-hidden="true"></textarea>
     </form>
+
+    <?php if ($isBulkEdit && $transfer_grn_count === 0): ?>
+        <div class="mt-8 rounded-2xl border border-red-200/80 bg-red-50/40 px-5 py-5 sm:px-7 sm:py-6 shadow-sm ring-1 ring-red-900/[0.06]">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div class="min-w-0">
+                    <h2 class="text-sm font-semibold text-red-900">Delete this transfer</h2>
+                    <p class="mt-1 text-xs sm:text-sm text-red-800/90 leading-relaxed max-w-xl">
+                        Allowed only while no GRN has been recorded. This removes the transfer and restores outbound stock at the source warehouse.
+                    </p>
+                </div>
+                <form method="post" action="?page=products&action=stock_transfer_delete" class="shrink-0"
+                    onsubmit="return confirm('Delete this stock transfer permanently? Outbound stock will be restored.');">
+                    <input type="hidden" name="transfer_id" value="<?php echo (int)$transfer['id']; ?>">
+                    <button type="submit"
+                        class="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 rounded-xl border border-red-300 bg-white text-red-700 text-sm font-semibold hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition">
+                        <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+                        Delete transfer
+                    </button>
+                </form>
+            </div>
+        </div>
+    <?php elseif ($isBulkEdit && $transfer_grn_count > 0): ?>
+        <p class="mt-8 text-xs text-gray-500 max-w-2xl leading-relaxed">
+            This transfer has GRN activity and cannot be deleted from here. Remove or adjust GRNs first if your process allows it.
+        </p>
+    <?php endif; ?>
 </div>
 </div>
 

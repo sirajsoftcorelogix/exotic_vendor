@@ -146,8 +146,14 @@ class StockTransferGrnController {
             return;
         }
 
-        $this->stockTransferModel->deleteTransferGrn($grnId);
-        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . (int)$grn['transfer_id']);
+        $tid = (int)$grn['transfer_id'];
+        if (!$this->stockTransferModel->deleteTransferGrn($grnId)) {
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Could not delete GRN. Stock rollback may have failed; try again or contact support.'],
+            ], 'Error');
+            return;
+        }
+        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $tid);
     }
 
     public function createPost() {

@@ -1,5 +1,5 @@
 <?php
-/** @var array $filters @var array $transfers @var array $users @var array $warehouses */
+/** @var array $filters @var array $transfers @var array $users @var array $warehouses @var array|null $flash */
 $pageNo = isset($page_no) ? (int) $page_no : 1;
 $limit = isset($limit) ? (int) $limit : 50;
 $totalRecords = isset($total_records) ? (int) $total_records : 0;
@@ -15,6 +15,7 @@ $filtersPanelOpen =
     || trim((string) ($filters['item_number'] ?? '')) !== '';
 $users = $users ?? [];
 $warehouses = $warehouses ?? [];
+$flash = $flash ?? null;
 $totalPages = $limit > 0 ? (int) ceil($totalRecords / $limit) : 1;
 $queryString = '';
 if (!empty($_GET)) {
@@ -78,6 +79,18 @@ $formatStatusLabel = static function (string $status): string {
             </div>
         </div>
     </div>
+
+    <?php if (is_array($flash) && trim((string)($flash['message'] ?? '')) !== ''): ?>
+        <?php
+            $flashType = ($flash['type'] ?? '') === 'success' ? 'success' : 'error';
+            $flashRing = $flashType === 'success'
+                ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-900'
+                : 'border-red-200/80 bg-red-50/90 text-red-900';
+        ?>
+        <div class="mb-6 rounded-xl border px-4 py-3 text-sm font-medium shadow-sm <?php echo $flashRing; ?>" role="status">
+            <?php echo htmlspecialchars((string)$flash['message']); ?>
+        </div>
+    <?php endif; ?>
 
     <style>
         #st-transfer-filters > summary { list-style: none; }
@@ -306,6 +319,18 @@ $formatStatusLabel = static function (string $status): string {
                                             aria-label="Edit transfer">
                                             <i class="fas fa-edit text-xs" aria-hidden="true"></i>
                                         </a>
+                                        <?php if ((int)($transfer['grn_count'] ?? 0) === 0): ?>
+                                            <form method="post" action="?page=products&action=stock_transfer_delete" class="inline"
+                                                onsubmit="return confirm('Delete this stock transfer? Outbound quantities will be restored at the source warehouse. This cannot be undone.');">
+                                                <input type="hidden" name="transfer_id" value="<?php echo (int)$transfer['id']; ?>">
+                                                <button type="submit"
+                                                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
+                                                    title="Delete transfer (no GRN yet)"
+                                                    aria-label="Delete transfer">
+                                                    <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
                                         <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo urlencode($transfer['id']); ?>"
                                             class="inline-flex h-7 w-7 items-center justify-center rounded bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                                             title="Add GRN"

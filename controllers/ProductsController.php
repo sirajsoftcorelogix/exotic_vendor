@@ -88,6 +88,11 @@ class ProductsController {
 
         $transferData = $stockTransferModel->listTransfers($limit, $offset, $filters);
 
+        $flash = $_SESSION['stock_transfer_list_flash'] ?? null;
+        if (is_array($flash)) {
+            unset($_SESSION['stock_transfer_list_flash']);
+        }
+
         // Pull users for filters
         $users = [];
         $userQuery = "SELECT id, name FROM vp_users WHERE is_active = 1 ORDER BY name ASC";
@@ -116,9 +121,34 @@ class ProductsController {
             'filters' => $filters,
             'users' => $users,
             'warehouses' => $warehouses,
+            'flash' => $flash,
         ];
 
         renderTemplate('views/products/stock_transfer_list.php', $data, 'Stock Transfer Log');
+    }
+
+    public function stock_transfer_delete() {
+        is_login();
+        global $conn;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?page=products&action=stock_transfer');
+            exit;
+        }
+
+        $transferId = isset($_POST['transfer_id']) ? (int)$_POST['transfer_id'] : 0;
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        $result = $stockTransferModel->deleteStockTransfer($transferId);
+
+        $_SESSION['stock_transfer_list_flash'] = [
+            'type' => !empty($result['success']) ? 'success' : 'error',
+            'message' => (string)($result['message'] ?? ''),
+        ];
+
+        header('Location: ?page=products&action=stock_transfer');
+        exit;
     }
 
     /**
@@ -3299,12 +3329,18 @@ class ProductsController {
 
         $pageTitle = $transfer ? 'Edit stock transfer' : 'Bulk stock transfer';
 
+        $transferGrnCount = 0;
+        if ($transfer_id > 0 && $transfer) {
+            $transferGrnCount = $stockTransferModel->countGrnsForTransfer($transfer_id);
+        }
+
         renderTemplate('views/products/transfer_stock_bulk_page.php', [
             'warehouses' => $warehouses,
             'users' => $users,
             'transfer' => $transfer,
             'bulk_grid_prefill' => $bulk_grid_prefill,
             'product_ids' => '',
+            'transfer_grn_count' => $transferGrnCount,
         ], $pageTitle);
     }
 

@@ -316,7 +316,17 @@ if (!function_exists('grn_item_group_camel_case')) {
                 </div>
             </div>
             <div class="px-5 py-4 bg-white">
-                <p id="grnDeleteModalMeta" class="text-xs font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2"></p>
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-3">You are about to delete</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="rounded-xl border-2 border-slate-200 bg-slate-50/90 px-4 py-3.5 ring-1 ring-slate-900/[0.04] shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">GRN ID</div>
+                        <div id="grnDeleteMetaId" class="text-2xl sm:text-[1.65rem] font-bold tabular-nums tracking-tight text-slate-900 font-mono leading-none">—</div>
+                    </div>
+                    <div class="rounded-xl border-2 border-amber-300/80 bg-gradient-to-br from-amber-50 to-amber-100/50 px-4 py-3.5 ring-1 ring-amber-900/10 shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-amber-900/70 mb-1.5">SKU</div>
+                        <div id="grnDeleteMetaSku" class="text-lg sm:text-xl font-bold text-amber-950 font-mono break-all leading-snug">—</div>
+                    </div>
+                </div>
             </div>
             <div class="px-5 py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50/80 border-t border-gray-100">
                 <button type="button" data-grn-delete-cancel
@@ -336,16 +346,14 @@ if (!function_exists('grn_item_group_camel_case')) {
 <script>
 (function () {
     var modal = document.getElementById('grnDeleteModal');
-    var metaEl = document.getElementById('grnDeleteModalMeta');
+    var metaIdEl = document.getElementById('grnDeleteMetaId');
+    var metaSkuEl = document.getElementById('grnDeleteMetaSku');
     var pendingUrl = '';
 
     function openGrnDeleteModal(url, id, sku) {
         pendingUrl = url || '';
-        if (metaEl) {
-            var bits = ['GRN #' + id];
-            if (sku) bits.push('SKU: ' + sku);
-            metaEl.textContent = bits.join(' · ');
-        }
+        if (metaIdEl) metaIdEl.textContent = id ? String(id) : '—';
+        if (metaSkuEl) metaSkuEl.textContent = sku && String(sku).trim() !== '' ? String(sku).trim() : '—';
         if (!modal) return;
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
