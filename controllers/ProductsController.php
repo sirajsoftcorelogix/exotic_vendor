@@ -2161,6 +2161,17 @@ class ProductsController {
             exit;
         }
 
+        $by = isset($_GET['by']) ? trim((string)$_GET['by']) : '';
+        if ($by === 'sku' && !$exact) {
+            $products = $productModel->searchProductsBySkuLike($q);
+            if (!$products || count($products) === 0) {
+                echo json_encode(['success' => false, 'message' => 'No products found for this SKU search']);
+                exit;
+            }
+            echo json_encode(['success' => true, 'products' => $products]);
+            exit;
+        }
+
         if ($exact) {
             $p = $productModel->getProductByskuExact($q);
             if ($p && !empty($p['id'])) {

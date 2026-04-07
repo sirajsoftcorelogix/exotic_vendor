@@ -113,12 +113,12 @@ $gridRowCount = 40;
             </div>
 
             <div id="panel_grid" class="bulk-panel hidden">
-                <p class="text-sm text-gray-600 mb-3">Paste from Excel row-by-row or type directly. Only rows with an item code and quantity are submitted.</p>
+                <p class="text-sm text-gray-600 mb-3">Type a <strong>SKU</strong> to search—matching products appear below the cell. Pick one to fill <strong>item code</strong>, size, and color automatically. Enter quantity in the last column. You can still adjust size or color manually if needed.</p>
                 <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-[420px] overflow-y-auto">
                     <table class="min-w-full divide-y divide-gray-200 text-sm">
                         <thead class="bg-gray-100 sticky top-0 z-10">
                             <tr>
-                                <th class="px-3 py-2 text-left font-semibold text-gray-700 w-40">ItemCode</th>
+                                <th class="px-3 py-2 text-left font-semibold text-gray-700 min-w-[11rem]">SKU <span class="font-normal text-gray-500">(search)</span></th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Size</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-32">Color</th>
                                 <th class="px-3 py-2 text-left font-semibold text-gray-700 w-24">Qty</th>
@@ -127,7 +127,13 @@ $gridRowCount = 40;
                         <tbody id="bulk_grid_body">
                             <?php for ($i = 0; $i < $gridRowCount; $i++): ?>
                                 <tr class="bulk-grid-row border-b border-gray-100">
-                                    <td class="p-1"><input type="text" class="bulk-inp-item w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
+                                    <td class="p-1 align-top">
+                                        <div class="relative">
+                                            <input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">
+                                            <input type="text" class="bulk-inp-sku w-full px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">
+                                            <div class="bulk-ac-menu hidden absolute left-0 right-0 mt-0.5 bg-white border border-gray-300 rounded-md shadow-lg max-h-52 overflow-y-auto z-30 text-xs" role="listbox"></div>
+                                        </div>
+                                    </td>
                                     <td class="p-1"><input type="text" class="bulk-inp-size w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
                                     <td class="p-1"><input type="text" class="bulk-inp-color w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
                                     <td class="p-1"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>
@@ -274,7 +280,11 @@ $gridRowCount = 40;
         for (let k = 0; k < 10; k++) {
             const tr = document.createElement('tr');
             tr.className = 'bulk-grid-row border-b border-gray-100';
-            tr.innerHTML = '<td class="p-1"><input type="text" class="bulk-inp-item w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>' +
+            tr.innerHTML = '<td class="p-1 align-top"><div class="relative">' +
+                '<input type="hidden" class="bulk-inp-item-code" value="" autocomplete="off">' +
+                '<input type="text" class="bulk-inp-sku w-full px-2 py-1.5 border border-gray-200 rounded text-sm" placeholder="Type SKU…" autocomplete="off">' +
+                '<div class="bulk-ac-menu hidden absolute left-0 right-0 mt-0.5 bg-white border border-gray-300 rounded-md shadow-lg max-h-52 overflow-y-auto z-30 text-xs" role="listbox"></div>' +
+                '</div></td>' +
                 '<td class="p-1"><input type="text" class="bulk-inp-size w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>' +
                 '<td class="p-1"><input type="text" class="bulk-inp-color w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>' +
                 '<td class="p-1"><input type="number" min="0" class="bulk-inp-qty w-full px-2 py-1.5 border border-gray-200 rounded text-sm" autocomplete="off"></td>';
@@ -282,10 +292,139 @@ $gridRowCount = 40;
         }
     });
 
+    function hideAllBulkAcMenus(exceptMenu) {
+        document.querySelectorAll('#bulk_grid_body .bulk-ac-menu').forEach(function (el) {
+            if (el !== exceptMenu) {
+                el.classList.add('hidden');
+                el.innerHTML = '';
+            }
+        });
+    }
+
+    function applyBulkSkuProduct(tr, product) {
+        if (!tr || !product) return;
+        const ic = tr.querySelector('.bulk-inp-item-code');
+        const skuIn = tr.querySelector('.bulk-inp-sku');
+        const sizeIn = tr.querySelector('.bulk-inp-size');
+        const colorIn = tr.querySelector('.bulk-inp-color');
+        if (ic) ic.value = product.item_code || '';
+        if (skuIn) skuIn.value = product.sku || '';
+        if (sizeIn) sizeIn.value = product.size != null ? String(product.size) : '';
+        if (colorIn) colorIn.value = product.color != null ? String(product.color) : '';
+        const menu = tr.querySelector('.bulk-ac-menu');
+        if (menu) {
+            menu.classList.add('hidden');
+            menu.innerHTML = '';
+        }
+    }
+
+    function tryBulkExactSku(tr, sku) {
+        sku = (sku || '').trim();
+        if (!sku) return Promise.resolve();
+        return fetch(apiUrl('search_product', '&q=' + encodeURIComponent(sku) + '&exact=1'), { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success && data.product) {
+                    applyBulkSkuProduct(tr, data.product);
+                }
+            })
+            .catch(function () {});
+    }
+
+    const gridBody = document.getElementById('bulk_grid_body');
+    gridBody.addEventListener('input', function (e) {
+        const inp = e.target;
+        if (!inp.classList || !inp.classList.contains('bulk-inp-sku')) return;
+        const tr = inp.closest('tr');
+        const menu = tr && tr.querySelector('.bulk-ac-menu');
+        if (!tr || !menu) return;
+
+        if (inp._bulkTimer) clearTimeout(inp._bulkTimer);
+        const ic = tr.querySelector('.bulk-inp-item-code');
+        if (ic) ic.value = '';
+
+        const q = inp.value.trim();
+        if (q.length < 2) {
+            menu.classList.add('hidden');
+            menu.innerHTML = '';
+            return;
+        }
+
+        inp._bulkReqSeq = (inp._bulkReqSeq || 0) + 1;
+        const mySeq = inp._bulkReqSeq;
+        inp._bulkTimer = setTimeout(function () {
+            fetch(apiUrl('search_product', '&q=' + encodeURIComponent(q) + '&by=sku'), { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (mySeq !== inp._bulkReqSeq) return;
+                    if (!data.success || !data.products || data.products.length === 0) {
+                        menu.innerHTML = '<div class="px-2 py-2 text-gray-500">No SKU matches</div>';
+                        menu.classList.remove('hidden');
+                        hideAllBulkAcMenus(menu);
+                        return;
+                    }
+                    hideAllBulkAcMenus(menu);
+                    menu.innerHTML = '';
+                    data.products.forEach(function (p) {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'bulk-ac-opt w-full text-left px-2 py-1.5 hover:bg-amber-50 border-b border-gray-100 last:border-0';
+                        btn.setAttribute('role', 'option');
+                        const sku = (p.sku || '').replace(/</g, '&lt;');
+                        const icv = (p.item_code || '').replace(/</g, '&lt;');
+                        const sz = (p.size != null && String(p.size) !== '') ? ', ' + String(p.size).replace(/</g, '&lt;') : '';
+                        const cl = (p.color != null && String(p.color) !== '') ? ', ' + String(p.color).replace(/</g, '&lt;') : '';
+                        btn.innerHTML = '<span class="font-semibold text-gray-900">' + sku + '</span>' +
+                            '<span class="text-gray-600"> · ' + icv + sz + cl + '</span>';
+                        btn.addEventListener('mousedown', function (ev) {
+                            ev.preventDefault();
+                            applyBulkSkuProduct(tr, p);
+                        });
+                        menu.appendChild(btn);
+                    });
+                    menu.classList.remove('hidden');
+                })
+                .catch(function () {
+                    if (mySeq !== inp._bulkReqSeq) return;
+                    menu.innerHTML = '<div class="px-2 py-2 text-red-600">Search failed</div>';
+                    menu.classList.remove('hidden');
+                    hideAllBulkAcMenus(menu);
+                });
+        }, 280);
+    });
+
+    gridBody.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') hideAllBulkAcMenus(null);
+    });
+
+    gridBody.addEventListener('focusout', function (e) {
+        const inp = e.target;
+        if (!inp.classList || !inp.classList.contains('bulk-inp-sku')) return;
+        const tr = inp.closest('tr');
+        setTimeout(function () {
+            if (!tr) return;
+            const menu = tr.querySelector('.bulk-ac-menu');
+            if (menu && document.activeElement && menu.contains(document.activeElement)) return;
+            if (menu) {
+                menu.classList.add('hidden');
+                menu.innerHTML = '';
+            }
+            const ic = tr.querySelector('.bulk-inp-item-code');
+            if (ic && !ic.value.trim()) {
+                tryBulkExactSku(tr, inp.value);
+            }
+        }, 180);
+    });
+
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('#bulk_grid_body .bulk-ac-menu') || e.target.closest('.bulk-inp-sku')) return;
+        hideAllBulkAcMenus(null);
+    });
+
     function collectGridRows() {
         const rows = [];
         document.querySelectorAll('#bulk_grid_body tr.bulk-grid-row').forEach(function (tr) {
-            const item = tr.querySelector('.bulk-inp-item')?.value.trim() || '';
+            const item = tr.querySelector('.bulk-inp-item-code')?.value.trim() || '';
             const size = tr.querySelector('.bulk-inp-size')?.value.trim() || '';
             const color = tr.querySelector('.bulk-inp-color')?.value.trim() || '';
             const qty = parseInt(tr.querySelector('.bulk-inp-qty')?.value || '0', 10);
@@ -313,7 +452,7 @@ $gridRowCount = 40;
         if (bulkMode.value === 'grid') {
             const gridData = collectGridRows();
             if (gridData.length === 0) {
-                alert('Add at least one row with item code and quantity in the grid.');
+                alert('Add at least one row with a resolved product (search SKU and pick a match, or type an exact SKU) and quantity.');
                 return;
             }
             document.getElementById('bulk_rows_json').value = JSON.stringify(gridData);
