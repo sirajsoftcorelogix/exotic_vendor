@@ -68,25 +68,25 @@ $warehouses = $warehouses ?? [];
                 <p class="text-xs text-gray-500 mt-0.5">Order reference and route for this receipt.</p>
             </div>
         </div>
-        <div class="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-            <dl class="space-y-3">
-                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+        <div class="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 text-sm text-left">
+            <dl class="space-y-4">
+                <div class="py-2 border-b border-gray-100">
                     <dt class="text-gray-500 font-medium">Transfer order</dt>
-                    <dd class="font-mono font-semibold text-gray-900 text-right"><?php echo htmlspecialchars($transfer['transfer_order_no'] ?? '—'); ?></dd>
+                    <dd class="mt-1 font-mono font-semibold text-gray-900 break-words"><?php echo htmlspecialchars($transfer['transfer_order_no'] ?? '—'); ?></dd>
                 </div>
-                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+                <div class="py-2 border-b border-gray-100">
                     <dt class="text-gray-500 font-medium">From</dt>
-                    <dd class="text-gray-900 text-right max-w-[16rem]"><?php echo htmlspecialchars($transfer['source_name'] ?? '—'); ?></dd>
+                    <dd class="mt-1 text-gray-900 break-words"><?php echo htmlspecialchars($transfer['source_name'] ?? '—'); ?></dd>
                 </div>
             </dl>
-            <dl class="space-y-3">
-                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+            <dl class="space-y-4">
+                <div class="py-2 border-b border-gray-100">
                     <dt class="text-gray-500 font-medium">Dispatch date</dt>
-                    <dd class="text-gray-900 text-right"><?php echo !empty($transfer['dispatch_date']) ? htmlspecialchars(date('j M Y', strtotime($transfer['dispatch_date']))) : '—'; ?></dd>
+                    <dd class="mt-1 text-gray-900"><?php echo !empty($transfer['dispatch_date']) ? htmlspecialchars(date('j M Y', strtotime($transfer['dispatch_date']))) : '—'; ?></dd>
                 </div>
-                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+                <div class="py-2 border-b border-gray-100">
                     <dt class="text-gray-500 font-medium">To</dt>
-                    <dd class="text-gray-900 text-right max-w-[16rem]"><?php echo htmlspecialchars($transfer['dest_name'] ?? '—'); ?></dd>
+                    <dd class="mt-1 text-gray-900 break-words"><?php echo htmlspecialchars($transfer['dest_name'] ?? '—'); ?></dd>
                 </div>
             </dl>
         </div>
