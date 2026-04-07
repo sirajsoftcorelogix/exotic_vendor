@@ -59,14 +59,16 @@ class StockTransferGrnController {
             $transfer['dispatch_date'] = date('Y-m-d');
         }
 
-        // Make sure previously received qty is based on actual last TRANSFER_IN/IN movement
-        if (!empty($transfer['items']) && !empty($transfer['to_warehouse'])) {
+        // Cumulative qty already GRN'd for this SKU on this transfer (for remaining / caps in UI)
+        if (!empty($transfer['items'])) {
             foreach ($transfer['items'] as &$item) {
                 $itemSku = trim($item['sku'] ?? '');
-                $item['previously_received_qty'] = 0;
-                if ($itemSku !== '') {
-                    $item['previously_received_qty'] = (int)$this->stockTransferModel->getLastReceivedQty($itemSku, (int)$transfer['to_warehouse']);
+                $item['already_received_on_transfer'] = 0;
+                if ($itemSku !== '' && $transferId > 0) {
+                    $item['already_received_on_transfer'] = (int)$this->stockTransferModel->getReceivedQtyForTransferSku($transferId, $itemSku);
                 }
+                $tq = (int)($item['transfer_qty'] ?? 0);
+                $item['remaining_to_receive'] = max(0, $tq - $item['already_received_on_transfer']);
             }
             unset($item);
         }
@@ -150,7 +152,8 @@ class StockTransferGrnController {
         $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
         $receivedBy = isset($data['received_by']) ? (int)$data['received_by'] : ($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0));
         $receivedDate = isset($data['received_date']) ? $data['received_date'] : date('Y-m-d');
-        $remarks = isset($data['grn_remarks']) ? trim($data['grn_remarks']) : '';
+        $remarks = isset($data['grn_remarks']) ? trim((string)$data['grn_remarks'])
+            : (isset($data['remarks']) ? trim((string)$data['remarks']) : '');
         $warehouseId = isset($data['warehouse_id']) ? (int)$data['warehouse_id'] : 0;
 
         $items = isset($data['items']) && is_array($data['items']) ? $data['items'] : [];

@@ -1,346 +1,443 @@
 <?php
-    $mode = $data['mode'] ?? 'create';
-    $grn = $data['grn'] ?? [];
-    $formAction = $mode === 'edit' ? '?page=stock_transfer_grns&action=update' : '#';
-    $pageTitle = $mode === 'edit' ? 'Edit' : 'Create';
-    $receivedDateValue = $mode === 'edit' ? ($grn['received_date'] ?? date('Y-m-d')) : date('Y-m-d');
-    $qualityAcceptChecked = $mode === 'edit' ? ((int)($grn['qty_acceptable'] ?? 0) > 0) : true;
-    $grnRemarksValue = $mode === 'edit' ? htmlspecialchars($grn['remarks'] ?? '') : '';
+$mode = $data['mode'] ?? 'create';
+$grn = $data['grn'] ?? [];
+$formAction = $mode === 'edit' ? '?page=stock_transfer_grns&action=update' : '#';
+$pageTitle = $mode === 'edit' ? 'Edit' : 'Create';
+$receivedDateValue = $mode === 'edit' ? ($grn['received_date'] ?? date('Y-m-d')) : date('Y-m-d');
+$grnRemarksValue = $mode === 'edit' ? htmlspecialchars($grn['remarks'] ?? '') : '';
+$transfer = $transfer ?? [];
+$transferId = (int)($transfer['id'] ?? 0);
+$transferItems = $transfer['items'] ?? [];
+$defaultReceivedBy = (int)($default_received_by ?? ($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0)));
+$defaultWarehouseId = (int)($default_warehouse_id ?? 0);
+$users = $users ?? [];
+$warehouses = $warehouses ?? [];
 ?>
-<div class="container mx-auto px-8 bg-white">    
+<div class="min-h-full bg-gradient-to-b from-slate-50 via-white to-amber-50/25">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+
     <?php if ($mode === 'edit'): ?>
-        <form method="post" action="<?php echo $formAction; ?>">
-            <input type="hidden" name="grn_id" value="<?php echo (int)($grn['id'] ?? 0); ?>">
-            <input type="hidden" name="transfer_id" value="<?php echo (int)($grn['transfer_id'] ?? $transfer['id'] ?? 0); ?>">
+    <form method="post" action="<?php echo htmlspecialchars($formAction); ?>">
+        <input type="hidden" name="grn_id" value="<?php echo (int)($grn['id'] ?? 0); ?>">
+        <input type="hidden" name="transfer_id" value="<?php echo (int)($grn['transfer_id'] ?? $transferId); ?>">
     <?php endif; ?>
-    <div class="pt-8 pb-6 text-center">
-        <h1 class="text-2xl md:text-4xl font-bold text-orange-600"><?php echo $pageTitle; ?></h1>
-        <h1 class="type-page-header text-base md:text-lg text-orange-600">Goods Receipt Note</h1> 
-    </div>
 
-    <!-- Transfer Header -->
-    <div class="w-full mb-8 border-b border-gray-200 pb-8">
-        <div class="w-full md:w-[800px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0">
-            <div class="space-y-0">
-                <div class="flex">
-                    <span class="type-label-small w-32">Transfer Order</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['transfer_order_no'] ?? '') ?></span>
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/80 via-white to-slate-50/50 shadow-sm ring-1 ring-amber-900/[0.04] mb-8">
+        <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/15 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-16 -left-12 h-48 w-48 rounded-full bg-emerald-200/10 blur-2xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-7 sm:px-8 sm:py-8 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            <div class="min-w-0 max-w-2xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/80 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-clipboard-check text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span>Stock transfer · Goods receipt</span>
                 </div>
-                <div class="flex">
-                    <span class="type-label-small w-32">From</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['source_name'] ?? '') ?></span>
-                </div>
-                
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                    <?php echo htmlspecialchars($pageTitle); ?> <span class="text-amber-800">GRN</span>
+                </h1>
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed">
+                    Record quantities received at the destination warehouse. You can receive in multiple GRNs until each line is fully received.
+                </p>
             </div>
-
-            <div class="space-y-0">
-                <div class="flex">
-                    <span class="type-label-small w-32">Dispatch Date</span>
-                    <span class="type-data-small">: &nbsp; <?= !empty($transfer['dispatch_date']) ? date('j F Y', strtotime($transfer['dispatch_date'])) : '' ?></span>
-                </div>
-                <div class="flex">
-                    <span class="type-label-small w-32">To</span>
-                    <span class="type-data-small">: &nbsp; <?= htmlspecialchars($transfer['dest_name'] ?? '') ?></span>
-                </div>
+            <div class="flex shrink-0 flex-col sm:flex-row gap-2 flex-wrap lg:pt-1">
+                <a href="?page=products&action=stock_transfer"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200/90 bg-white text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 transition whitespace-nowrap">
+                    <i class="fas fa-history text-xs text-amber-700" aria-hidden="true"></i>
+                    Transfer history
+                </a>
+                <?php if ($transferId > 0): ?>
+                <a href="?page=stock_transfer_grns&action=list&transfer_id=<?php echo $transferId; ?>"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-200 bg-white text-emerald-800 text-sm font-semibold shadow-sm hover:bg-emerald-50/80 transition whitespace-nowrap">
+                    <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
+                    GRNs for this transfer
+                </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-        <?php if ($mode === 'create' || $mode === 'edit'): ?>
-            <?php foreach ($transfer['items'] as $item): ?>
-                <?php
-                    $label = trim($item['sku'] ?? '');
-                    if ($label === '') {
-                        $label = trim($item['item_code'] ?? '');
-                    }
-                    $product = $item['product'] ?? null;
-                    $imageUrl = $product['image'] ?? '';
-                    $title = $product['title'] ?? $label;
-                    $quantity = (int)$item['transfer_qty'];
-                    $weight = $product['product_weight'] ?? '';
-                    $weightUnit = $product['product_weight_unit'] ?? '';
-                    $height = $product['prod_height'] ?? '';
-                    $width = $product['prod_width'] ?? '';
-                    $depth = $product['prod_length'] ?? '';
-                    $lengthUnit = $product['length_unit'] ?? '';
-                    $material = $product['material'] ?? '';
-                    $prevReceived = isset($item['previously_received_qty']) ? (int)$item['previously_received_qty'] : ($product['local_stock'] ?? 0);
-                ?>
-            <div class="custom-card p-5">
-                <div class="flex flex-col sm:flex-row gap-5 mb-5">
-                    <div class="w-full sm:w-32 h-40 shrink-0 bg-gray-200 rounded-md overflow-hidden border border-gray-300 flex items-center justify-center">
+    <!-- Transfer summary -->
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm ring-1 ring-gray-900/[0.03] overflow-hidden mb-8">
+        <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-slate-50/90 flex items-center gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm border border-sky-100">
+                <i class="fas fa-route text-sm" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2 class="text-base font-semibold text-gray-900">Transfer summary</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Order reference and route for this receipt.</p>
+            </div>
+        </div>
+        <div class="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+            <dl class="space-y-3">
+                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+                    <dt class="text-gray-500 font-medium">Transfer order</dt>
+                    <dd class="font-mono font-semibold text-gray-900 text-right"><?php echo htmlspecialchars($transfer['transfer_order_no'] ?? '—'); ?></dd>
+                </div>
+                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+                    <dt class="text-gray-500 font-medium">From</dt>
+                    <dd class="text-gray-900 text-right max-w-[16rem]"><?php echo htmlspecialchars($transfer['source_name'] ?? '—'); ?></dd>
+                </div>
+            </dl>
+            <dl class="space-y-3">
+                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+                    <dt class="text-gray-500 font-medium">Dispatch date</dt>
+                    <dd class="text-gray-900 text-right"><?php echo !empty($transfer['dispatch_date']) ? htmlspecialchars(date('j M Y', strtotime($transfer['dispatch_date']))) : '—'; ?></dd>
+                </div>
+                <div class="flex justify-between gap-4 py-2 border-b border-gray-100">
+                    <dt class="text-gray-500 font-medium">To</dt>
+                    <dd class="text-gray-900 text-right max-w-[16rem]"><?php echo htmlspecialchars($transfer['dest_name'] ?? '—'); ?></dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <?php if ($mode === 'create' || $mode === 'edit'): ?>
+    <div class="space-y-6 mb-8">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+            <h2 class="text-lg font-semibold text-gray-900">Line items to receive</h2>
+            <span class="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-3 py-1"><?php echo count($transferItems); ?> line<?php echo count($transferItems) === 1 ? '' : 's'; ?></span>
+        </div>
+
+        <?php foreach ($transferItems as $item): ?>
+            <?php
+                $label = trim($item['sku'] ?? '');
+                if ($label === '') {
+                    $label = trim($item['item_code'] ?? '');
+                }
+                $product = $item['product'] ?? null;
+                $imageUrl = $product['image'] ?? '';
+                $title = $product['title'] ?? $label;
+                $quantity = (int)$item['transfer_qty'];
+                $already = (int)($item['already_received_on_transfer'] ?? $item['previously_received_qty'] ?? 0);
+                $remaining = isset($item['remaining_to_receive']) ? (int)$item['remaining_to_receive'] : max(0, $quantity - $already);
+                $weight = $product['product_weight'] ?? '';
+                $weightUnit = $product['product_weight_unit'] ?? '';
+                $material = $product['material'] ?? '';
+            ?>
+        <div class="group rounded-2xl border border-gray-200/90 bg-white shadow-sm ring-1 ring-gray-900/[0.03] overflow-hidden hover:border-amber-200/60 transition-colors">
+            <div class="p-4 sm:p-5">
+                <div class="flex flex-col sm:flex-row gap-5">
+                    <button type="button"
+                        class="st-grn-thumb w-full sm:w-28 h-36 shrink-0 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        data-img="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        data-title="<?php echo htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?>"
+                        <?php echo $imageUrl === '' ? 'disabled' : ''; ?>>
                         <?php if (!empty($imageUrl)): ?>
-                            <img onclick="openImagePopup('<?= htmlspecialchars($imageUrl) ?>')" src="<?= htmlspecialchars($imageUrl) ?>" alt="Item Image" class="max-w-full max-h-full object-contain cursor-pointer ">
+                            <img src="<?php echo htmlspecialchars($imageUrl); ?>" alt="" class="max-w-full max-h-full object-contain">
                         <?php else: ?>
-                            <span class="text-gray-500 text-sm">No Image</span>
+                            <span class="text-gray-400 text-xs font-medium">No image</span>
                         <?php endif; ?>
-                    </div>
+                    </button>
 
-                    <div class="flex-1">
-                        <h3 class="type-item-name mb-3"><?= htmlspecialchars($title) ?></h3>
+                    <div class="flex-1 min-w-0 space-y-4">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900 leading-snug"><?php echo htmlspecialchars($title); ?></h3>
+                            <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                                <span><span class="text-gray-400 font-medium">SKU</span> <?php echo htmlspecialchars($item['sku'] ?? '—'); ?></span>
+                                <span><span class="text-gray-400 font-medium">Item code</span> <?php echo htmlspecialchars($item['item_code'] ?? '—'); ?></span>
+                                <?php if ($material !== ''): ?>
+                                    <span><span class="text-gray-400 font-medium">Material</span> <?php echo htmlspecialchars($material); ?></span>
+                                <?php endif; ?>
+                                <?php if ($weight !== ''): ?>
+                                    <span><span class="text-gray-400 font-medium">Weight</span> <?php echo htmlspecialchars((string)$weight . ' ' . (string)$weightUnit); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
 
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-0">
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">SKU</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['sku'] ?? 'N/A') ?></span>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Shipped</p>
+                                <p class="text-lg font-bold text-slate-900 tabular-nums"><?php echo number_format($quantity); ?></p>
                             </div>
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">Item Code</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($item['item_code'] ?? 'N/A') ?></span>
+                            <div class="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Received earlier</p>
+                                <p class="text-lg font-bold text-slate-800 tabular-nums"><?php echo number_format($already); ?></p>
                             </div>
+                            <div class="rounded-lg bg-amber-50/80 border border-amber-100 px-3 py-2 col-span-2 sm:col-span-1">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-amber-900/70">Left to receive</p>
+                                <p class="text-lg font-bold text-amber-950 tabular-nums"><?php echo number_format($remaining); ?></p>
+                            </div>
+                        </div>
 
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">Quantity</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($quantity) ?></span>
+                        <div class="flex flex-col sm:flex-row sm:items-end gap-4 pt-1">
+                            <div class="flex-1">
+                                <label class="block text-xs font-semibold text-gray-600 mb-1.5">Quantity received <span class="text-red-500">*</span></label>
+                                <input name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
+                                    placeholder="0"
+                                    value="<?php echo htmlspecialchars($mode === 'edit' ? (string)(int)($item['qty_received'] ?? 0) : ($remaining > 0 ? (string)$remaining : '0')); ?>"
+                                    class="st-grn-qty w-full sm:max-w-[8rem] px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 tabular-nums shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
                             </div>
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">Height</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($height) ?: '0' ?></span>
-                            </div>
+                            <label class="inline-flex items-center gap-2.5 cursor-pointer select-none rounded-lg border border-gray-200 bg-gray-50/80 px-4 py-2.5 sm:mb-0.5">
+                                <input type="checkbox" name="qty_acceptable[]" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                    <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
+                                <span class="text-sm font-medium text-gray-800">Quality acceptable</span>
+                            </label>
+                        </div>
 
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">Weight</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($weight) ?> <?= htmlspecialchars($weightUnit) ?></span>
-                            </div>
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">Width</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($width) ?></span>
-                            </div>
-
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">Material</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($material) ?></span>
-                            </div>
-                            <div class="flex items-baseline">
-                                <span class="type-label-small w-20 shrink-0">Depth</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($depth) ?> <?= htmlspecialchars($lengthUnit) ?></span>
-                            </div>
-                            <div class="flex items-baseline w-48">
-                                <span class="type-label-small shrink-0">Total Received Qty</span>
-                                <span class="type-data-small">: &nbsp; <?= htmlspecialchars($prevReceived) ?></span>
-                            </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Line remarks <span class="text-gray-400 font-normal">(optional)</span></label>
+                            <textarea name="item_remarks[]" rows="2" placeholder="Damage notes, batch, etc."
+                                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-y min-h-[4rem]"><?php echo htmlspecialchars(($mode === 'edit' ? ($item['remarks'] ?? '') : '')); ?></textarea>
                         </div>
                     </div>
                 </div>
-
-                <div class="flex flex-wrap gap-4 mb-5">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" class="custom-checkbox" name="qty_acceptable[]" value="1" <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?> >
-                        <span class="type-checkbox-label">Quality Acceptable</span>                    
-                    </label>
-
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input name="qty_received[]" type="number" min="0" class="ml-0 w-16 px-2 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" placeholder="Qty" value="<?= htmlspecialchars(($mode === 'edit' ? (int)($item['qty_received'] ?? $item['transfer_qty']) : $quantity)) ?>">
-                        <span class="type-checkbox-label">Quantity Received</span>                    
-                    </label>
-                </div>
-
-                <div>
-                    <textarea
-                            class="w-full p-3 rounded-xl border text-gray-600 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none"
-                            style="border-color: rgba(163, 163, 163, 1); height: 100px;"
-                            placeholder="Remarks, if any"
-                            name="item_remarks[]"><?= htmlspecialchars(($mode === 'edit' ? $item['remarks'] ?? '' : '')) ?></textarea>
-                </div>
-
-                <input type="hidden" name="grn_row_id[]" value="<?= (int)($item['id'] ?? 0) ?>">
-                <input type="hidden" name="item_id[]" value="<?= (int)($item['item_id'] ?? $item['id'] ?? 0) ?>">
-                <input type="hidden" name="sku[]" value="<?= htmlspecialchars($item['sku'] ?? '') ?>">
-                <input type="hidden" name="item_code[]" value="<?= htmlspecialchars($item['item_code'] ?? '') ?>">
-                <input type="hidden" name="transfer_qty[]" value="<?= (int)($item['transfer_qty'] ?? 0) ?>">
             </div>
+
+            <input type="hidden" name="grn_row_id[]" value="<?php echo (int)($item['id'] ?? 0); ?>">
+            <input type="hidden" name="item_id[]" value="<?php echo (int)($item['item_id'] ?? $item['id'] ?? 0); ?>">
+            <input type="hidden" name="sku[]" value="<?php echo htmlspecialchars($item['sku'] ?? ''); ?>">
+            <input type="hidden" name="item_code[]" value="<?php echo htmlspecialchars($item['item_code'] ?? ''); ?>">
+            <input type="hidden" name="transfer_qty[]" value="<?php echo (int)($item['transfer_qty'] ?? 0); ?>">
+        </div>
         <?php endforeach; ?>
+    </div>
+
     <?php else: ?>
-            <div class="custom-card p-5">
-                <div class="flex items-center gap-4 mb-4">
-                    <p class="font-semibold">GRN ID:</p>
-                    <p><?php echo (int)($grn['id'] ?? 0); ?></p>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div><strong>Transfer Order</strong>: <?= htmlspecialchars($transfer['transfer_order_no'] ?? '') ?></div>
-                    <div><strong>SKU</strong>: <?= htmlspecialchars($grn['sku'] ?? $transfer['items'][0]['sku'] ?? '') ?></div>
-                    <div><strong>Item Code</strong>: <?= htmlspecialchars($grn['item_code'] ?? $transfer['items'][0]['item_code'] ?? '') ?></div>
-                    <div><strong>Location</strong>: <?= htmlspecialchars($transfer['dest_name'] ?? '') ?></div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><strong>Quantity Transferred</strong>: <?= (int)($transfer['items'][0]['transfer_qty'] ?? 0) ?></div>
-                    <div><strong>Quantity Received</strong>: <input type="number" name="qty_received" min="0" value="<?= (int)($grn['qty_received'] ?? 0) ?>" class="w-24 border rounded px-2 py-1"></div>
-                    <div><strong>Qty Acceptable</strong>: <input type="number" name="qty_acceptable" min="0" value="<?= (int)($grn['qty_acceptable'] ?? 0) ?>" class="w-24 border rounded px-2 py-1"></div>
-                    <div><strong>Received Date</strong>: <input type="date" name="received_date" value="<?= htmlspecialchars($receivedDateValue) ?>" class="border rounded px-2 py-1"></div>
-                </div>
-                <div class="mt-4">
-                    <strong>Remarks</strong>
-                    <textarea name="remarks" class="w-full mt-2 p-2 border rounded" rows="3"><?= htmlspecialchars($grnRemarksValue) ?></textarea>
-                </div>
-            </div>
+    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 mb-8">
+        <h2 class="text-sm font-semibold text-gray-900 mb-4">GRN details</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+            <div><span class="text-gray-500">GRN ID</span> <span class="font-mono font-semibold"><?php echo (int)($grn['id'] ?? 0); ?></span></div>
+            <div><span class="text-gray-500">Transfer order</span> <?php echo htmlspecialchars($transfer['transfer_order_no'] ?? ''); ?></div>
+            <div><span class="text-gray-500">SKU</span> <?php echo htmlspecialchars($grn['sku'] ?? $transferItems[0]['sku'] ?? ''); ?></div>
+            <div><span class="text-gray-500">Item code</span> <?php echo htmlspecialchars($grn['item_code'] ?? $transferItems[0]['item_code'] ?? ''); ?></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><strong>Qty transferred</strong>: <?php echo (int)($transferItems[0]['transfer_qty'] ?? 0); ?></div>
+            <div><strong>Qty received</strong>: <input type="number" name="qty_received" min="0" value="<?php echo (int)($grn['qty_received'] ?? 0); ?>" class="w-24 border rounded-lg px-2 py-1"></div>
+            <div><strong>Qty acceptable</strong>: <input type="number" name="qty_acceptable" min="0" value="<?php echo (int)($grn['qty_acceptable'] ?? 0); ?>" class="w-24 border rounded-lg px-2 py-1"></div>
+            <div><strong>Received date</strong>: <input type="date" name="received_date" value="<?php echo htmlspecialchars($receivedDateValue); ?>" class="border rounded-lg px-2 py-1"></div>
+        </div>
+        <div class="mt-4">
+            <strong>Remarks</strong>
+            <textarea name="remarks" class="w-full mt-2 p-3 border border-gray-200 rounded-lg text-sm" rows="3"><?php echo htmlspecialchars($grnRemarksValue); ?></textarea>
+        </div>
+    </div>
     <?php endif; ?>
-    </div>
 
-    <div class="mt-8 flex flex-col gap-8 items-center">
-
-        <div class="flex flex-col md:flex-row gap-6 justify-center w-full">
-            <div class="w-[320px]">
-                <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Received Date <span class="text-red-500">*</span></label>
-                <div class="relative">
-                    <input type="date" name="received_date" value="<?= htmlspecialchars($receivedDateValue) ?>" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-sm focus:outline-none">
+    <!-- Receipt + submit -->
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm ring-1 ring-gray-900/[0.03] overflow-hidden mb-8">
+        <div class="px-5 py-4 sm:px-6 border-b border-gray-100 bg-slate-50/90 flex items-center gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-gray-700 shadow-sm border border-gray-200">
+                <i class="fas fa-warehouse text-sm" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2 class="text-base font-semibold text-gray-900">Receipt details</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Where and when the shipment was received.</p>
+            </div>
+        </div>
+        <div class="p-5 sm:p-6 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div class="flex flex-col">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1.5">Received date <span class="text-red-500">*</span></label>
+                    <input type="date" name="received_date" value="<?php echo htmlspecialchars($receivedDateValue); ?>"
+                        class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                </div>
+                <div class="flex flex-col">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1.5">Received by <span class="text-red-500">*</span></label>
+                    <select name="received_by" id="receivedBy" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                        <option value="">Select user…</option>
+                        <?php foreach ($users as $id => $name): ?>
+                            <option value="<?php echo (int)$id; ?>"<?php echo ((int)$id === $defaultReceivedBy) ? ' selected' : ''; ?>><?php echo htmlspecialchars($name); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="flex flex-col md:col-span-2 lg:col-span-1">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1.5">Receiving warehouse <span class="text-red-500">*</span></label>
+                    <select name="warehouse_id" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                        <option value="">Select warehouse…</option>
+                        <?php foreach ($warehouses as $warehouse): ?>
+                            <option value="<?php echo htmlspecialchars($warehouse['id']); ?>"<?php echo ((int)$warehouse['id'] === $defaultWarehouseId) ? ' selected' : ''; ?>><?php echo htmlspecialchars($warehouse['address_title']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
-            <div class="w-[320px]">
-                <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Received by <span class="text-red-500">*</span></label>
-                <select name="received_by" id="receivedBy" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
-                    <option value="">Select User</option>
-                    <?php $defaultReceivedBy = (int)($default_received_by ?? ($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0))); ?>
-                    <?php foreach ($users as $id => $name): ?>
-                        <option value="<?= $id ?>" <?= ($id === $defaultReceivedBy) ? 'selected' : '' ?>><?= htmlspecialchars($name) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="w-[320px]">
-                <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Warehouse <span class="text-red-500">*</span></label>
-                <select name="warehouse_id" class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
-                    <option value="">Select Warehouse</option>
-                    <?php $defaultWarehouseId = (int)($default_warehouse_id ?? 0); ?>
-                    <?php foreach ($warehouses as $warehouse): ?>
-                        <option value="<?= $warehouse['id'] ?>" <?= ((int)$warehouse['id'] === $defaultWarehouseId) ? 'selected' : '' ?>><?= htmlspecialchars($warehouse['address_title']) ?></option>
-                    <?php endforeach; ?>
-                </select>            
-            </div>
-            <div class="w-[320px]">
-                <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">Image <span class="text-red-500"></span></label>
-                <input type="file" name="grn_file[]" multiple class="w-full px-4 py-3 rounded-full border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none">
-            </div>
-        </div>
 
-        <div class="flex flex-col md:flex-row gap-6 justify-center w-full">
-            <div class="w-full max-w-[640px]">
-                <label class="block text-sm font-medium mb-2 font-inter" style="color: rgba(5, 19, 33, 1);">GRN Remarks</label>
-                <textarea id="grnRemarks" name="grn_remarks" class="w-full p-3 rounded-xl border text-gray-600 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none" style="border-color: rgba(163, 163, 163, 1); height: 80px;" placeholder="Remarks for this GRN (optional)"><?= $grnRemarksValue ?></textarea>
-                <p id="grnStatus" class="text-sm text-gray-600 mt-2"></p>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="flex flex-col">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1.5">Supporting files <span class="text-gray-400 font-normal">(optional)</span></label>
+                    <input type="file" name="grn_file[]" multiple accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp"
+                        class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-900 hover:file:bg-amber-100 border border-dashed border-gray-300 rounded-xl bg-gray-50/50 px-3 py-2">
+                    <p class="text-[11px] text-gray-400 mt-1.5">PDF or images — delivery challan, photos, etc.</p>
+                </div>
+                <div class="flex flex-col">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1.5">GRN remarks <span class="text-gray-400 font-normal">(optional)</span></label>
+                    <textarea id="grnRemarks" name="grn_remarks" rows="3" placeholder="Overall notes for this GRN…"
+                        class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-y min-h-[5.5rem]"><?php echo $grnRemarksValue; ?></textarea>
+                </div>
             </div>
-        </div>
 
-        <div class="flex flex-col md:flex-row gap-4 justify-center w-full pb-8">
-            <input type="hidden" name="transfer_id" value="<?= (int)$transfer['id'] ?>">
-            <input type="hidden" name="transfer_order_no" value="<?= htmlspecialchars($transfer['transfer_order_no'] ?? '') ?>">
-            <?php if ($mode === 'edit'): ?>
-                <button type="submit" id="saveChanges" class="w-[320px] bg-[#d9822b] text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
-                    Save Changes
-                </button>
-            <?php else: ?>
-                <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges" class="w-[320px] bg-[#d9822b] text-white font-medium py-3 px-6 rounded-full shadow hover:bg-gray-800 transition-colors">
-                    Save & Submit
-                </button>
-            <?php endif; ?>
+            <p id="grnStatus" class="text-sm min-h-[1.25rem]" role="status"></p>
+
+            <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-2 border-t border-gray-100">
+                <input type="hidden" name="transfer_id" value="<?php echo $transferId; ?>">
+                <input type="hidden" name="transfer_order_no" value="<?php echo htmlspecialchars($transfer['transfer_order_no'] ?? ''); ?>">
+                <p class="text-xs text-gray-500">Submitting creates GRN rows for every line with a received quantity greater than zero.</p>
+                <?php if ($mode === 'edit'): ?>
+                    <button type="submit" id="saveChanges" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap">
+                        <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
+                        Save changes
+                    </button>
+                <?php else: ?>
+                    <button type="button" onclick="saveStockTransferGrn(event)" id="saveChanges" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap shrink-0">
+                        <i class="fas fa-check text-xs opacity-95" aria-hidden="true"></i>
+                        Save GRN
+                    </button>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
+
     <?php if ($mode === 'edit'): ?>
-        </form>
+    </form>
     <?php endif; ?>
+
+</div>
+</div>
+
+<div id="imagePopup" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 p-4 sm:p-8" role="dialog" aria-modal="true" aria-label="Product image">
+    <button type="button" onclick="closeImagePopup()" class="absolute top-3 right-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl leading-none text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Close">&times;</button>
+    <img id="popupImage" alt="" class="max-h-[90vh] max-w-full object-contain rounded-lg shadow-2xl">
 </div>
 
 <script>
+(function () {
+    function openImagePopup(src, alt) {
+        var popup = document.getElementById('imagePopup');
+        var img = document.getElementById('popupImage');
+        if (!popup || !img || !src) return;
+        img.src = src;
+        img.alt = alt || '';
+        popup.classList.remove('hidden');
+        popup.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    window.closeImagePopup = function () {
+        var popup = document.getElementById('imagePopup');
+        var img = document.getElementById('popupImage');
+        if (!popup || !img) return;
+        popup.classList.add('hidden');
+        popup.classList.remove('flex');
+        img.removeAttribute('src');
+        img.alt = '';
+        document.body.style.overflow = '';
+    };
+
+    document.getElementById('imagePopup').addEventListener('click', function (e) {
+        if (e.target === this) window.closeImagePopup();
+    });
+    document.addEventListener('keydown', function (e) {
+        var popup = document.getElementById('imagePopup');
+        if (e.key === 'Escape' && popup && !popup.classList.contains('hidden')) {
+            window.closeImagePopup();
+        }
+    });
+
+    document.querySelectorAll('.st-grn-thumb').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var src = btn.getAttribute('data-img') || '';
+            var title = btn.getAttribute('data-title') || '';
+            if (src) openImagePopup(src, title);
+        });
+    });
+})();
+
 function saveStockTransferGrn(event) {
     event.preventDefault();
 
-    const receivedBy = document.querySelector('select[name="received_by"]').value;
-    const warehouse = document.querySelector('select[name="warehouse_id"]').value;
-    const qtyInputs = Array.from(document.querySelectorAll('input[name="qty_received[]"]'));
+    var receivedBy = document.querySelector('select[name="received_by"]').value;
+    var warehouse = document.querySelector('select[name="warehouse_id"]').value;
+    var qtyInputs = Array.from(document.querySelectorAll('input[name="qty_received[]"]'));
 
     if (!warehouse) {
-        alert('Please select a warehouse.');
+        alert('Please select a receiving warehouse.');
         return;
     }
 
     if (!receivedBy) {
-        alert('Please select received by.');
+        alert('Please select who received the shipment.');
         return;
     }
 
-    if (qtyInputs.every(i => parseInt(i.value || 0) <= 0)) {
-        alert('Please enter valid quantities.');
+    if (qtyInputs.every(function (i) { return parseInt(i.value || 0, 10) <= 0; })) {
+        alert('Enter a received quantity for at least one line.');
         return;
     }
 
-    const transferId = document.querySelector('input[name="transfer_id"]').value;
-    const receivedDate = document.querySelector('input[name="received_date"]').value;
-    const remarks = document.getElementById('grnRemarks').value;
+    var transferId = document.querySelector('input[name="transfer_id"]').value;
+    var receivedDate = document.querySelector('input[name="received_date"]').value;
+    var remarks = document.getElementById('grnRemarks') ? document.getElementById('grnRemarks').value : '';
 
-    const items = [];
-    const itemIds = Array.from(document.querySelectorAll('input[name="item_id[]"]')).map(i => i.value);
-    const skus = Array.from(document.querySelectorAll('input[name="sku[]"]')).map(i => i.value);
-    const itemCodes = Array.from(document.querySelectorAll('input[name="item_code[]"]')).map(i => i.value);
-    const transferQtys = Array.from(document.querySelectorAll('input[name="transfer_qty[]"]')).map(i => i.value);
-    const receivedQtys = Array.from(document.querySelectorAll('input[name="qty_received[]"]')).map(i => i.value);
-    const acceptables = Array.from(document.querySelectorAll('input[name="qty_acceptable[]"]')).map(i => i.checked ? 1 : 0);
-    const itemRemarks = Array.from(document.querySelectorAll('textarea[name="item_remarks[]"]')).map(i => i.value);
+    var items = [];
+    var itemIds = Array.from(document.querySelectorAll('input[name="item_id[]"]')).map(function (i) { return i.value; });
+    var skus = Array.from(document.querySelectorAll('input[name="sku[]"]')).map(function (i) { return i.value; });
+    var itemCodes = Array.from(document.querySelectorAll('input[name="item_code[]"]')).map(function (i) { return i.value; });
+    var transferQtys = Array.from(document.querySelectorAll('input[name="transfer_qty[]"]')).map(function (i) { return i.value; });
+    var receivedQtys = Array.from(document.querySelectorAll('input[name="qty_received[]"]')).map(function (i) { return i.value; });
+    var acceptables = Array.from(document.querySelectorAll('input[name="qty_acceptable[]"]')).map(function (i) { return i.checked ? 1 : 0; });
+    var itemRemarks = Array.from(document.querySelectorAll('textarea[name="item_remarks[]"]')).map(function (i) { return i.value; });
 
-    for (let i = 0; i < itemIds.length; i++) {
+    for (var i = 0; i < itemIds.length; i++) {
+        var rec = parseInt(receivedQtys[i] || 0, 10) || 0;
+        var ok = acceptables[i] || 0;
         items.push({
-            transfer_item_id: parseInt(itemIds[i]) || 0,
+            transfer_item_id: parseInt(itemIds[i], 10) || 0,
             sku: skus[i] || '',
             item_code: itemCodes[i] || '',
-            transfer_qty: parseInt(transferQtys[i]) || 0,
-            received_qty: parseInt(receivedQtys[i]) || 0,
-            acceptable: acceptables[i] || 0,
+            transfer_qty: parseInt(transferQtys[i] || 0, 10) || 0,
+            received_qty: rec,
+            acceptable: ok,
+            qty_acceptable: ok ? rec : 0,
             remarks: itemRemarks[i] || ''
         });
     }
 
-    const formData = new FormData();
-    formData.append('transfer_id', parseInt(transferId));
-    formData.append('received_by', parseInt(receivedBy));
-    formData.append('warehouse_id', parseInt(warehouse));
+    var formData = new FormData();
+    formData.append('transfer_id', parseInt(transferId, 10));
+    formData.append('received_by', parseInt(receivedBy, 10));
+    formData.append('warehouse_id', parseInt(warehouse, 10));
     formData.append('received_date', receivedDate);
+    formData.append('grn_remarks', remarks);
     formData.append('remarks', remarks);
     formData.append('items', JSON.stringify(items));
 
-    const fileInput = document.querySelector('input[name="grn_file[]"]');
+    var fileInput = document.querySelector('input[name="grn_file[]"]');
     if (fileInput && fileInput.files.length > 0) {
-        for (const file of fileInput.files) {
-            formData.append('grn_file[]', file);
+        for (var f = 0; f < fileInput.files.length; f++) {
+            formData.append('grn_file[]', fileInput.files[f]);
         }
     }
 
-    const statusEl = document.getElementById('grnStatus');
-    statusEl.textContent = 'Saving...';
+    var statusEl = document.getElementById('grnStatus');
+    statusEl.textContent = 'Saving…';
+    statusEl.classList.remove('text-red-600', 'text-green-600');
+    statusEl.classList.add('text-gray-600');
 
     fetch('?page=stock_transfer_grns&action=create_post', {
         method: 'POST',
         body: formData
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            statusEl.classList.remove('text-red-600');
-            statusEl.classList.add('text-green-600');
-            statusEl.textContent = 'Saved successfully. Redirecting...';
-            setTimeout(() => {
-                window.location.href = '?page=products&action=stock_transfer';
-            }, 1200);
-        } else {
-            statusEl.classList.remove('text-green-600');
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                statusEl.classList.remove('text-red-600', 'text-gray-600');
+                statusEl.classList.add('text-green-600');
+                statusEl.textContent = res.message || 'Saved successfully. Redirecting…';
+                setTimeout(function () {
+                    window.location.href = '?page=stock_transfer_grns&action=list&transfer_id=' + encodeURIComponent(transferId);
+                }, 900);
+            } else {
+                statusEl.classList.remove('text-green-600', 'text-gray-600');
+                statusEl.classList.add('text-red-600');
+                statusEl.textContent = res.message || 'Could not save GRN.';
+            }
+        })
+        .catch(function (err) {
+            statusEl.classList.remove('text-green-600', 'text-gray-600');
             statusEl.classList.add('text-red-600');
-            statusEl.textContent = res.message || 'Failed to save GRN.';
-        }
-    })
-    .catch(err => {
-        statusEl.classList.remove('text-green-600');
-        statusEl.classList.add('text-red-600');
-        statusEl.textContent = 'Error saving GRN.';
-        console.error(err);
-    });
-}
-
-function openImagePopup(src) {
-    const popup = document.getElementById('imagePopup');
-    const img = document.getElementById('popupImage');
-    img.src = src;
-    popup.classList.remove('hidden');
-}
-
-function closeImagePopup() {
-    const popup = document.getElementById('imagePopup');
-    popup.classList.add('hidden');
+            statusEl.textContent = 'Request failed. Please try again.';
+            console.error(err);
+        });
 }
 </script>
