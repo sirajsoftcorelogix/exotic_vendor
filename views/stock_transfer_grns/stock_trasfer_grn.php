@@ -167,19 +167,24 @@ $warehouses = $warehouses ?? [];
                                 <p class="text-lg sm:text-xl font-bold text-amber-950 tabular-nums leading-none mt-1"><?php echo number_format($remaining); ?></p>
                             </div>
 
-                            <div class="flex flex-col gap-1 shrink-0 min-w-0">
-                                <label class="text-[11px] font-semibold text-gray-600 leading-none" for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>">Qty received <span class="text-red-500">*</span></label>
+                            <div class="rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[5.25rem] sm:w-[5.75rem] shrink-0">
+                                <label for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" class="block text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight cursor-pointer">
+                                    Qty received<span class="text-red-500 ml-px">*</span>
+                                </label>
                                 <input id="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" name="qty_received[]" type="number" min="0" max="<?php echo (int)$remaining; ?>"
                                     placeholder="0"
                                     value="<?php echo htmlspecialchars($mode === 'edit' ? (string)(int)($item['qty_received'] ?? 0) : ($remaining > 0 ? (string)$remaining : '0')); ?>"
-                                    class="st-grn-qty w-[4.25rem] sm:w-20 px-2 py-2 border border-gray-300 rounded-md text-sm font-bold text-gray-900 tabular-nums text-center bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
+                                    class="st-grn-qty mt-1 w-full px-1.5 py-1 border border-gray-200/90 rounded bg-white text-center text-base sm:text-lg font-bold text-gray-900 tabular-nums shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500">
                             </div>
 
-                            <label class="inline-flex items-center gap-2.5 cursor-pointer select-none rounded-lg border border-gray-300 bg-white px-3 py-2 sm:py-2.5 shrink-0 shadow-sm min-h-[2.875rem] sm:min-h-0 sm:items-center">
-                                <input type="checkbox" name="qty_acceptable[]" value="1" class="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 shrink-0"
-                                    <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
-                                <span class="text-xs sm:text-sm font-medium text-gray-800 whitespace-nowrap">Quality OK</span>
-                            </label>
+                            <div class="rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[5.5rem] sm:w-[6rem] shrink-0">
+                                <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight">Quality OK</p>
+                                <label class="mt-1 flex min-h-[1.875rem] items-center justify-center gap-2 cursor-pointer select-none rounded bg-white/90 border border-gray-200/80 px-1.5 py-1 shadow-sm">
+                                    <input type="checkbox" name="qty_acceptable[]" value="1" class="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 shrink-0"
+                                        <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
+                                    <span class="text-xs font-bold text-gray-800">OK</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div>
