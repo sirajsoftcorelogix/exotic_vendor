@@ -9,11 +9,18 @@ if (empty($transferOrderNo)) {
 ?>
 <div class="min-h-screen bg-gray-50 p-6">
     <!-- Header -->
-    <div class="flex items-center gap-4 mb-8 pb-4 border-b border-gray-200">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 pb-4 border-b border-gray-200">
+        <div class="flex items-center gap-4">
         <div class="text-2xl text-gray-500">
             <i class="fas fa-shipping-fast"></i>
         </div>
         <h1 class="text-2xl font-semibold text-gray-900"><?php echo isset($transfer) ? 'Edit Transfer Order' : 'New Transfer Order'; ?></h1>
+        </div>
+        <?php if (empty($transfer['id'])): ?>
+            <a href="?page=products&action=transfer_stock_bulk" class="text-sm font-semibold text-amber-700 hover:text-amber-900 whitespace-nowrap">
+                <i class="fas fa-table mr-1"></i> Large quantity / bulk transfer
+            </a>
+        <?php endif; ?>
     </div>
 
     <!-- Main Form -->

@@ -22,6 +22,144 @@ class StockTransfer
     }
     
     /**
+     * Resolve a catalog product for a transfer line: product_id, sku, or item_code + size + color.
+     *
+     * @return array{id:int,sku:string,item_code:string,title:string,location:string,size:string,color:string}|null
+     */
+    public function resolveProductForTransferItem(array $item): ?array
+    {
+        $productId = (int)($item['product_id'] ?? 0);
+        $pick = static function ($row): ?array {
+            if (!$row || empty($row['id'])) {
+                return null;
+            }
+
+            return [
+                'id' => (int)$row['id'],
+                'sku' => (string)($row['sku'] ?? ''),
+                'item_code' => (string)($row['item_code'] ?? ''),
+                'title' => (string)($row['title'] ?? ''),
+                'location' => (string)($row['location'] ?? ''),
+                'size' => (string)($row['size'] ?? ''),
+                'color' => (string)($row['color'] ?? ''),
+            ];
+        };
+
+        $select = 'SELECT id, sku, item_code, title, location, IFNULL(size, \'\') AS size, IFNULL(color, \'\') AS color FROM vp_products';
+
+        if ($productId > 0) {
+            $stmt = $this->db->prepare($select . ' WHERE id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $productId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                return $pick($row);
+            }
+
+            return null;
+        }
+
+        $sku = trim((string)($item['sku'] ?? ''));
+        if ($sku !== '') {
+            $stmt = $this->db->prepare($select . ' WHERE sku = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('s', $sku);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                return $pick($row);
+            }
+
+            return null;
+        }
+
+        $itemCode = trim((string)($item['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $size = trim((string)($item['size'] ?? ''));
+        $color = trim((string)($item['color'] ?? ''));
+
+        $stmt = $this->db->prepare($select . ' WHERE item_code = ? AND IFNULL(TRIM(size), \'\') = ? AND IFNULL(TRIM(color), \'\') = ? LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('sss', $itemCode, $size, $color);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $pick($row);
+    }
+
+    /**
+     * Merge bulk rows (item_code, size, color, quantity) into transfer items; resolves products and sums duplicate variants.
+     *
+     * @param list<array<string,mixed>> $rows
+     * @return array{items: list<array<string,mixed>>, errors: list<string>}
+     */
+    public function aggregateBulkVariantRows(array $rows): array
+    {
+        $merged = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $ic = trim((string)($row['item_code'] ?? ''));
+            $sz = trim((string)($row['size'] ?? ''));
+            $cl = trim((string)($row['color'] ?? ''));
+            $qty = isset($row['quantity']) ? (int)$row['quantity'] : 0;
+            if ($ic === '' || $qty <= 0) {
+                continue;
+            }
+            $k = strtolower($ic) . "\x1e" . $sz . "\x1e" . $cl;
+            if (!isset($merged[$k])) {
+                $merged[$k] = ['item_code' => $ic, 'size' => $sz, 'color' => $cl, 'qty' => 0];
+            }
+            $merged[$k]['qty'] += $qty;
+        }
+
+        if ($merged === []) {
+            return ['items' => [], 'errors' => ['No valid rows. Each row needs ItemCode and a positive Quantity.']];
+        }
+
+        $items = [];
+        $errors = [];
+        foreach ($merged as $m) {
+            $resolved = $this->resolveProductForTransferItem([
+                'product_id' => 0,
+                'sku' => '',
+                'item_code' => $m['item_code'],
+                'size' => $m['size'],
+                'color' => $m['color'],
+            ]);
+            if (!$resolved) {
+                $errors[] = 'No product for ItemCode ' . $m['item_code']
+                    . ', Size ' . ($m['size'] !== '' ? $m['size'] : '(blank)')
+                    . ', Color ' . ($m['color'] !== '' ? $m['color'] : '(blank)');
+                continue;
+            }
+            $pid = (int)$resolved['id'];
+            if (isset($items[$pid])) {
+                $items[$pid]['transfer_qty'] += $m['qty'];
+            } else {
+                $items[$pid] = [
+                    'product_id' => $pid,
+                    'item_code' => $resolved['item_code'],
+                    'sku' => $resolved['sku'],
+                    'title' => $resolved['title'],
+                    'transfer_qty' => $m['qty'],
+                    'item_notes' => '',
+                ];
+            }
+        }
+
+        return ['items' => array_values($items), 'errors' => $errors];
+    }
+
+    /**
      * Create a stock transfer record
      * @param array $data Transfer data
      * @return array Result with success status and message
@@ -101,35 +239,32 @@ class StockTransfer
             
             foreach ($data['items'] as $item) {
                 $item_code = trim($item['item_code'] ?? '');
-                $sku = trim($item['sku'] ?? '');
                 $transfer_qty = (int)($item['transfer_qty'] ?? 0);
-                
+
                 if ($transfer_qty <= 0) {
                     continue;
                 }
-                
-                // Get product details by SKU (more specific than item_code)
-                $productQuery = "SELECT id, sku, title, location, size, color FROM vp_products WHERE sku = ?";
-                $pstmt = $this->db->prepare($productQuery);
-                if (!$pstmt) {
-                    throw new Exception('Prepare error: ' . $this->db->error);
-                }
-                $pstmt->bind_param('s', $sku);
-                $pstmt->execute();
-                $result = $pstmt->get_result();
-                $product = $result->fetch_assoc();
-                $pstmt->close();
-                
+
+                $product = $this->resolveProductForTransferItem($item);
                 if (!$product) {
-                    throw new Exception('Product not found for SKU: ' . $sku);
+                    $hint = trim((string)($item['sku'] ?? ''));
+                    if ($hint !== '') {
+                        throw new Exception('Product not found for SKU: ' . $hint);
+                    }
+                    $hint = trim((string)($item['item_code'] ?? ''));
+
+                    throw new Exception('Product not found for item line (item code: ' . ($hint !== '' ? $hint : '(missing)') . ').');
                 }
-                
-                $product_id = $product['id'];
+
+                $product_id = (int)$product['id'];
                 $sku = $product['sku'];
                 $title = $product['title'];
                 $location = $product['location'] ?? '';
                 $size = $product['size'] ?? '';
                 $color = $product['color'] ?? '';
+                if ($item_code === '') {
+                    $item_code = $product['item_code'] ?? '';
+                }
                 $item_notes = trim($item['item_notes'] ?? '');
                 
                 // Insert into vp_item_stock_transfer
@@ -1133,18 +1268,20 @@ class StockTransfer
     }
 
     /**
-     * True when this transfer has at least one line and every line has SUM(GRN qty_received) >= transfer_qty.
+     * Receipt progress for all transfer lines vs GRNs (same SKU/item_code matching as line-items page).
+     *
+     * @return string 'empty' | 'none' | 'partial' | 'full'
      */
-    public function isTransferFullyReceived(int $transferId): bool
+    public function getTransferReceiptStatus(int $transferId): string
     {
         $transferId = max(0, $transferId);
         if ($transferId <= 0) {
-            return false;
+            return 'empty';
         }
 
         $hdr = $this->db->prepare('SELECT transfer_order_no FROM vp_stock_transfer WHERE id = ? LIMIT 1');
         if (!$hdr) {
-            return false;
+            return 'empty';
         }
         $hdr->bind_param('i', $transferId);
         $hdr->execute();
@@ -1152,14 +1289,19 @@ class StockTransfer
         $hrow = $hres ? $hres->fetch_assoc() : null;
         $hdr->close();
         if (!$hrow || empty($hrow['transfer_order_no'])) {
-            return false;
+            return 'empty';
         }
         $orderNo = $hrow['transfer_order_no'];
 
-        $grnLineMatch = '( (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NOT NULL AND g.sku = i.sku)
+        $grnLineMatchI = '( (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NOT NULL AND g.sku = i.sku)
             OR (NULLIF(TRIM(IFNULL(i.sku, \'\')), \'\') IS NULL
                 AND NULLIF(TRIM(IFNULL(i.item_code, \'\')), \'\') IS NOT NULL
                 AND g.item_code = i.item_code) )';
+
+        $grnLineMatchI2 = '( (NULLIF(TRIM(IFNULL(i2.sku, \'\')), \'\') IS NOT NULL AND g2.sku = i2.sku)
+            OR (NULLIF(TRIM(IFNULL(i2.sku, \'\')), \'\') IS NULL
+                AND NULLIF(TRIM(IFNULL(i2.item_code, \'\')), \'\') IS NOT NULL
+                AND g2.item_code = i2.item_code) )';
 
         $sql = "SELECT
                     (SELECT COUNT(*) FROM vp_item_stock_transfer i0 WHERE i0.transfer_order_no = ?) AS total_lines,
@@ -1169,14 +1311,23 @@ class StockTransfer
                            SELECT SUM(g.qty_received)
                            FROM vp_stock_transfer_grns g
                            WHERE g.transfer_id = ?
-                             AND $grnLineMatch
+                             AND $grnLineMatchI
                        ), 0) < i.transfer_qty
-                    ) AS incomplete_lines";
+                    ) AS incomplete_lines,
+                    (SELECT COUNT(*) FROM vp_item_stock_transfer i2
+                     WHERE i2.transfer_order_no = ?
+                       AND COALESCE((
+                           SELECT SUM(g2.qty_received)
+                           FROM vp_stock_transfer_grns g2
+                           WHERE g2.transfer_id = ?
+                             AND $grnLineMatchI2
+                       ), 0) > 0
+                    ) AS lines_with_receipt";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
-            return false;
+            return 'empty';
         }
-        $stmt->bind_param('ssi', $orderNo, $orderNo, $transferId);
+        $stmt->bind_param('ssisi', $orderNo, $orderNo, $transferId, $orderNo, $transferId);
         $stmt->execute();
         $res = $stmt->get_result();
         $row = $res ? $res->fetch_assoc() : null;
@@ -1184,8 +1335,27 @@ class StockTransfer
 
         $totalLines = (int) ($row['total_lines'] ?? 0);
         $incomplete = (int) ($row['incomplete_lines'] ?? 0);
+        $linesWithReceipt = (int) ($row['lines_with_receipt'] ?? 0);
 
-        return $totalLines > 0 && $incomplete === 0;
+        if ($totalLines === 0) {
+            return 'empty';
+        }
+        if ($incomplete === 0) {
+            return 'full';
+        }
+        if ($linesWithReceipt > 0) {
+            return 'partial';
+        }
+
+        return 'none';
+    }
+
+    /**
+     * True when this transfer has at least one line and every line has SUM(GRN qty_received) >= transfer_qty.
+     */
+    public function isTransferFullyReceived(int $transferId): bool
+    {
+        return $this->getTransferReceiptStatus($transferId) === 'full';
     }
 
     /**
@@ -1622,21 +1792,23 @@ class StockTransfer
                 continue;
             }
 
-            // If product_id is missing, try to resolve it from SKU.
-            if ($productId <= 0 && $sku !== '') {
-                $prodStmt = $this->db->prepare("SELECT id, title FROM vp_products WHERE sku = ? LIMIT 1");
-                if ($prodStmt) {
-                    $prodStmt->bind_param('s', $sku);
-                    $prodStmt->execute();
-                    $prodRes = $prodStmt->get_result();
-                    $prodRow = $prodRes->fetch_assoc();
-                    $prodStmt->close();
-
-                    if ($prodRow) {
-                        $productId = (int)$prodRow['id'];
-                        if (empty($title)) {
-                            $title = $prodRow['title'] ?? $title;
-                        }
+            // Resolve product from id / sku / item_code+size+color when needed.
+            if ($productId <= 0 || $sku === '') {
+                $resolved = $this->resolveProductForTransferItem([
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => trim((string)($item['size'] ?? '')),
+                    'color' => trim((string)($item['color'] ?? '')),
+                ]);
+                if ($resolved) {
+                    $productId = (int)$resolved['id'];
+                    $sku = $resolved['sku'] ?: $sku;
+                    if ($itemCode === '') {
+                        $itemCode = $resolved['item_code'] ?? $itemCode;
+                    }
+                    if ($title === '') {
+                        $title = $resolved['title'] ?? $title;
                     }
                 }
             }

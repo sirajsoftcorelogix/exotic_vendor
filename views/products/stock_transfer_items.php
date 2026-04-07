@@ -5,35 +5,11 @@ $limit = isset($limit) ? (int) $limit : 50;
 $totalRecords = isset($total_records) ? (int) $total_records : 0;
 $transfer = $transfer ?? [];
 $items = $items ?? [];
-$transferFullyReceived = !empty($transfer_fully_received);
 $transferId = isset($transfer_id) ? (int) $transfer_id : (int) ($transfer['id'] ?? 0);
 $totalPages = $limit > 0 ? (int) ceil($totalRecords / $limit) : 1;
 $pgBase = '?page=products&action=stock_transfer_items&transfer_id=' . $transferId . '&limit=' . $limit;
 
-$rawStatus = trim((string) ($transfer['status'] ?? ''));
-$statusLabel = '';
-if ($rawStatus !== '') {
-    $norm = str_replace('_', ' ', $rawStatus);
-    $lower = function_exists('mb_strtolower') ? mb_strtolower($norm, 'UTF-8') : strtolower($norm);
-    $statusLabel = function_exists('mb_convert_case') ? mb_convert_case($lower, MB_CASE_TITLE, 'UTF-8') : ucwords($lower);
-}
-
-$statusClass = static function (?string $status): string {
-    $s = strtolower(trim((string) $status));
-    $s = str_replace(['_', '-'], ' ', $s);
-    $s = preg_replace('/\s+/', ' ', $s) ?? $s;
-    $s = trim($s);
-
-    return match ($s) {
-        'completed', 'complete', 'received' => 'bg-emerald-50 text-emerald-800 ring-emerald-600/20',
-        'cancelled', 'canceled' => 'bg-gray-100 text-gray-700 ring-gray-500/20',
-        'in transit', 'dispatched' => 'bg-sky-50 text-sky-800 ring-sky-600/20',
-        'pending', 'draft' => 'bg-amber-50 text-amber-900 ring-amber-600/25',
-        default => 'bg-slate-50 text-slate-700 ring-slate-500/15',
-    };
-};
-
-$statusRing = $statusClass($rawStatus);
+$receiptStatus = isset($transfer_receipt_status) ? (string) $transfer_receipt_status : 'empty';
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <div class="mb-6">
@@ -79,15 +55,23 @@ $statusRing = $statusClass($rawStatus);
                         <span class="text-gray-300">·</span>
                         <span>Dispatch <span class="font-medium text-gray-800"><?php echo htmlspecialchars(date('j M Y', strtotime($transfer['dispatch_date']))); ?></span></span>
                     <?php endif; ?>
-                    <?php if ($statusLabel !== ''): ?>
+                    <?php if ($receiptStatus === 'full'): ?>
                         <span class="text-gray-300">·</span>
-                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset shadow-sm <?php echo $statusRing; ?>"><?php echo htmlspecialchars($statusLabel); ?></span>
-                    <?php endif; ?>
-                    <?php if ($transferFullyReceived): ?>
-                        <span class="text-gray-300">·</span>
-                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/20 shadow-sm" title="Every line on this transfer has received quantity at least equal to sent quantity.">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/20 shadow-sm" title="Every line has received quantity at least equal to sent quantity.">
                             <i class="fas fa-check-circle" aria-hidden="true"></i>
                             Fully received
+                        </span>
+                    <?php elseif ($receiptStatus === 'partial'): ?>
+                        <span class="text-gray-300">·</span>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-900 ring-1 ring-inset ring-amber-600/25 shadow-sm" title="Some quantity has been received, but at least one line is still short of the sent quantity.">
+                            <i class="fas fa-adjust" aria-hidden="true"></i>
+                            Partially received
+                        </span>
+                    <?php elseif ($receiptStatus === 'none'): ?>
+                        <span class="text-gray-300">·</span>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-400/25 shadow-sm" title="No GRN quantity has been recorded yet for any line on this transfer.">
+                            <i class="fas fa-circle-notch" aria-hidden="true"></i>
+                            Not received
                         </span>
                     <?php endif; ?>
                 </p>
