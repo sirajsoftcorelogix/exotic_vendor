@@ -154,26 +154,26 @@ $warehouses = $warehouses ?? [];
 
                         <!-- One row: stats + qty received + quality OK — equal-height chips -->
                         <div class="flex flex-wrap items-stretch gap-2 sm:gap-2.5">
-                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[4.75rem] sm:w-[5rem] shrink-0 flex flex-col min-h-[5.75rem] sm:min-h-[6rem]">
+                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">
                                 <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight shrink-0">Shipped</p>
                                 <div class="flex-1 flex items-end min-h-0 pt-1">
                                     <p class="text-lg sm:text-xl font-bold text-gray-900 tabular-nums leading-none w-full"><?php echo number_format($quantity); ?></p>
                                 </div>
                             </div>
-                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[4.75rem] sm:w-[5rem] shrink-0 flex flex-col min-h-[5.75rem] sm:min-h-[6rem]">
+                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">
                                 <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight shrink-0">Prior GRN</p>
                                 <div class="flex-1 flex items-end min-h-0 pt-1">
                                     <p class="text-lg sm:text-xl font-bold text-gray-900 tabular-nums leading-none w-full"><?php echo number_format($already); ?></p>
                                 </div>
                             </div>
-                            <div class="st-grn-metric rounded-md bg-amber-50 border border-amber-200/90 px-2 py-1.5 w-[4.75rem] sm:w-[5rem] shrink-0 ring-1 ring-amber-900/5 flex flex-col min-h-[5.75rem] sm:min-h-[6rem]">
+                            <div class="st-grn-metric rounded-md bg-amber-50 border border-amber-200/90 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 ring-1 ring-amber-900/5 flex flex-col box-border">
                                 <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-amber-900/80 leading-tight shrink-0">To receive</p>
                                 <div class="flex-1 flex items-end min-h-0 pt-1">
                                     <p class="text-lg sm:text-xl font-bold text-amber-950 tabular-nums leading-none w-full"><?php echo number_format($remaining); ?></p>
                                 </div>
                             </div>
 
-                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[6.25rem] sm:w-[6.75rem] shrink-0 flex flex-col min-h-[5.75rem] sm:min-h-[6rem]">
+                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">
                                 <label for="st-grn-qty-<?php echo (int)$grnLineIdx; ?>" class="block text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight cursor-pointer shrink-0">
                                     Qty received<span class="text-red-500 ml-px">*</span>
                                 </label>
@@ -185,10 +185,10 @@ $warehouses = $warehouses ?? [];
                                 </div>
                             </div>
 
-                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 px-2 py-1.5 w-[5.5rem] sm:w-[6rem] shrink-0 flex flex-col min-h-[5.75rem] sm:min-h-[6rem]">
+                            <div class="st-grn-metric rounded-md bg-slate-100/90 border border-slate-200/80 p-2 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex flex-col box-border">
                                 <p class="text-[8px] sm:text-[9px] font-bold uppercase tracking-wide text-sky-800/90 leading-tight shrink-0">Quality OK</p>
                                 <div class="flex-1 flex items-end min-h-0 pt-1 w-full">
-                                    <label class="flex h-[2.125rem] sm:h-9 w-full items-center justify-center gap-2 cursor-pointer select-none rounded bg-white/90 border border-gray-200/80 px-1.5 shadow-sm">
+                                    <label class="flex min-h-[2.125rem] sm:min-h-10 w-full items-center justify-center gap-2 cursor-pointer select-none rounded bg-white/90 border border-gray-200/80 px-1.5 py-1 shadow-sm">
                                         <input type="checkbox" name="qty_acceptable[]" value="1" class="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 shrink-0"
                                             <?php echo ($mode === 'edit' ? ((int)($item['qty_acceptable'] ?? 0) > 0 ? 'checked' : '') : 'checked'); ?>>
                                         <span class="text-xs font-bold text-gray-800">OK</span>
