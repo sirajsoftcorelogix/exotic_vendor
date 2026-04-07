@@ -320,16 +320,14 @@ $formatStatusLabel = static function (string $status): string {
                                             <i class="fas fa-edit text-xs" aria-hidden="true"></i>
                                         </a>
                                         <?php if ((int)($transfer['grn_count'] ?? 0) === 0): ?>
-                                            <form method="post" action="?page=products&action=stock_transfer_delete" class="inline"
-                                                onsubmit="return confirm('Delete this stock transfer? Outbound quantities will be restored at the source warehouse. This cannot be undone.');">
-                                                <input type="hidden" name="transfer_id" value="<?php echo (int)$transfer['id']; ?>">
-                                                <button type="submit"
-                                                    class="inline-flex h-7 w-7 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
-                                                    title="Delete transfer (no GRN yet)"
-                                                    aria-label="Delete transfer">
-                                                    <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
-                                                </button>
-                                            </form>
+                                            <button type="button"
+                                                class="st-transfer-delete-open inline-flex h-7 w-7 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
+                                                title="Delete transfer (no GRN yet)"
+                                                aria-label="Delete transfer"
+                                                data-st-transfer-id="<?php echo (int)$transfer['id']; ?>"
+                                                data-st-order-no="<?php echo htmlspecialchars((string)($transfer['transfer_order_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                                <i class="fas fa-trash-alt text-xs" aria-hidden="true"></i>
+                                            </button>
                                         <?php endif; ?>
                                         <a href="?page=stock_transfer_grns&action=create&transfer_id=<?php echo urlencode($transfer['id']); ?>"
                                             class="inline-flex h-7 w-7 items-center justify-center rounded bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
@@ -375,3 +373,109 @@ $formatStatusLabel = static function (string $status): string {
         </div>
     <?php endif; ?>
 </div>
+
+<form id="stTransferDeleteForm" method="post" action="?page=products&action=stock_transfer_delete" class="hidden" aria-hidden="true">
+    <input type="hidden" name="transfer_id" id="stTransferDeleteTransferIdInput" value="">
+</form>
+
+<div id="stTransferDeleteModal" class="fixed inset-0 z-[200] hidden" role="dialog" aria-modal="true" aria-labelledby="stTransferDeleteModalTitle">
+    <div class="absolute inset-0 bg-slate-900/55 backdrop-blur-[2px] transition-opacity" data-st-transfer-delete-backdrop tabindex="-1"></div>
+    <div class="relative flex min-h-full items-center justify-center p-4 pointer-events-none">
+        <div class="pointer-events-auto w-full max-w-md rounded-2xl border border-gray-200/80 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-slate-900/5 overflow-hidden">
+            <div class="px-5 pt-5 pb-4 border-b border-gray-100 bg-gradient-to-br from-red-50/80 to-white">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                        <i class="fas fa-exclamation-triangle text-lg" aria-hidden="true"></i>
+                    </span>
+                    <div class="min-w-0 pt-0.5">
+                        <h3 id="stTransferDeleteModalTitle" class="text-base font-semibold text-gray-900 leading-snug">Delete this stock transfer?</h3>
+                        <p class="text-sm text-gray-600 mt-1.5 leading-relaxed">This removes the transfer and all its line items. Outbound quantities will be restored at the source warehouse. This cannot be undone.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="px-5 py-4 bg-white">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-3">You are about to delete</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="rounded-xl border-2 border-slate-200 bg-slate-50/90 px-4 py-3.5 ring-1 ring-slate-900/[0.04] shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">Transfer ID</div>
+                        <div id="stTransferDeleteMetaId" class="text-2xl sm:text-[1.65rem] font-bold tabular-nums tracking-tight text-slate-900 font-mono leading-none">—</div>
+                    </div>
+                    <div class="rounded-xl border-2 border-amber-300/80 bg-gradient-to-br from-amber-50 to-amber-100/50 px-4 py-3.5 ring-1 ring-amber-900/10 shadow-sm">
+                        <div class="text-[10px] font-bold uppercase tracking-widest text-amber-900/70 mb-1.5">Order no.</div>
+                        <div id="stTransferDeleteMetaOrder" class="text-lg sm:text-xl font-bold text-amber-950 font-mono break-all leading-snug">—</div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-5 py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50/80 border-t border-gray-100">
+                <button type="button" data-st-transfer-delete-cancel
+                    class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition">
+                    Cancel
+                </button>
+                <button type="button" data-st-transfer-delete-confirm
+                    class="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-b from-red-600 to-red-700 text-white text-sm font-semibold shadow-md shadow-red-900/20 hover:from-red-700 hover:to-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition">
+                    <i class="fas fa-trash-alt text-xs opacity-90" aria-hidden="true"></i>
+                    Delete transfer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var modal = document.getElementById('stTransferDeleteModal');
+    var form = document.getElementById('stTransferDeleteForm');
+    var input = document.getElementById('stTransferDeleteTransferIdInput');
+    var metaIdEl = document.getElementById('stTransferDeleteMetaId');
+    var metaOrderEl = document.getElementById('stTransferDeleteMetaOrder');
+    var pendingId = '';
+
+    function openStTransferDeleteModal(id, orderNo) {
+        pendingId = id ? String(id) : '';
+        if (input) input.value = pendingId;
+        if (metaIdEl) metaIdEl.textContent = pendingId || '—';
+        if (metaOrderEl) metaOrderEl.textContent = orderNo && String(orderNo).trim() !== '' ? String(orderNo).trim() : '—';
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        var c = modal.querySelector('[data-st-transfer-delete-confirm]');
+        if (c) c.focus();
+    }
+
+    function closeStTransferDeleteModal() {
+        pendingId = '';
+        if (input) input.value = '';
+        if (modal) modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    document.querySelectorAll('.st-transfer-delete-open').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openStTransferDeleteModal(
+                btn.getAttribute('data-st-transfer-id') || '',
+                btn.getAttribute('data-st-order-no') || ''
+            );
+        });
+    });
+
+    if (modal) {
+        var cancelBtn = modal.querySelector('[data-st-transfer-delete-cancel]');
+        var backdrop = modal.querySelector('[data-st-transfer-delete-backdrop]');
+        var confirmBtn = modal.querySelector('[data-st-transfer-delete-confirm]');
+        if (cancelBtn) cancelBtn.addEventListener('click', closeStTransferDeleteModal);
+        if (backdrop) backdrop.addEventListener('click', closeStTransferDeleteModal);
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function () {
+                if (form && input && input.value) {
+                    form.submit();
+                }
+            });
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+                closeStTransferDeleteModal();
+            }
+        });
+    }
+})();
+</script>
