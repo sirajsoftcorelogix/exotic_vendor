@@ -178,7 +178,7 @@ if (!function_exists('grn_item_group_camel_case')) {
                                             <input type="checkbox" name="grn_filter_group[]" id="<?php echo htmlspecialchars($cbId); ?>"
                                                 value="<?php echo htmlspecialchars($optKey, ENT_QUOTES, 'UTF-8'); ?>"
                                                 class="grn-group-cb h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500/50" />
-                                            <span class="min-w-0 flex-1 leading-snug"><?php echo htmlspecialchars($showLabel); ?></span>
+                                            <span class="min-w-0 flex-1 leading-snug capitalize"><?php echo htmlspecialchars($showLabel); ?></span>
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
@@ -269,7 +269,7 @@ if (!function_exists('grn_item_group_camel_case')) {
                                 data-sku="<?php echo htmlspecialchars($skuNorm, ENT_QUOTES, 'UTF-8'); ?>"
                                 data-item-code="<?php echo htmlspecialchars($codeNorm, ENT_QUOTES, 'UTF-8'); ?>">
                                 <td class="px-4 py-3 tabular-nums text-gray-700"><?php echo (int) $grn['id']; ?></td>
-                                <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate font-mono text-xs"
+                                <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate capitalize"
                                     <?php echo $itemGroup !== '' ? 'title="' . htmlspecialchars($itemGroup, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>><?php echo $itemGroup !== '' ? htmlspecialchars(grn_item_group_camel_case($itemGroup)) : '—'; ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['sku'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['item_code'] ?? ''); ?></td>
