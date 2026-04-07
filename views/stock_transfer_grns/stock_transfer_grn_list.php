@@ -132,6 +132,11 @@ $grnTotal = count($grns);
                                     (string) ($grn['transfer_order_no'] ?? ''),
                                     (string) ($grn['sku'] ?? ''),
                                     (string) ($grn['item_code'] ?? ''),
+                                    (string) ($grn['size'] ?? ''),
+                                    (string) ($grn['color'] ?? ''),
+                                    (string) ($grn['transfer_qty'] ?? ''),
+                                    (string) ($grn['qty_received'] ?? ''),
+                                    (string) ($grn['qty_acceptable'] ?? ''),
                                     (string) ($grn['received_by_name'] ?? ''),
                                     (string) ($grn['location_name'] ?? ''),
                                     (string) ($grn['remarks'] ?? ''),
@@ -139,6 +144,11 @@ $grnTotal = count($grns);
                                 if (!empty($grn['received_date'])) {
                                     $searchParts[] = date('Y-m-d', strtotime($grn['received_date']));
                                     $searchParts[] = date('j M Y', strtotime($grn['received_date']));
+                                }
+                                if (!empty($grn['created_at'])) {
+                                    $searchParts[] = date('Y-m-d', strtotime($grn['created_at']));
+                                    $searchParts[] = date('j M Y', strtotime($grn['created_at']));
+                                    $searchParts[] = date('Y-m-d H:i', strtotime($grn['created_at']));
                                 }
                                 $searchBlob = strtolower(preg_replace('/\s+/', ' ', trim(implode(' ', $searchParts))));
                             ?>
@@ -174,12 +184,20 @@ $grnTotal = count($grns);
     var rows = document.querySelectorAll('tr.grn-item-row');
     var visibleEl = document.getElementById('grnVisibleCount');
 
+    function tokensFromQuery(q) {
+        return q
+            .trim()
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(function (t) { return t.length > 0; });
+    }
+
     function runFilter() {
-        var q = input.value.trim().toLowerCase().replace(/\s+/g, ' ');
+        var tokens = tokensFromQuery(input.value);
         var n = 0;
         rows.forEach(function (tr) {
             var hay = (tr.getAttribute('data-search') || '');
-            var show = !q || hay.indexOf(q) !== -1;
+            var show = tokens.length === 0 || tokens.every(function (t) { return hay.indexOf(t) !== -1; });
             tr.style.display = show ? '' : 'none';
             if (show) n++;
         });
@@ -188,5 +206,14 @@ $grnTotal = count($grns);
 
     input.addEventListener('input', runFilter);
     input.addEventListener('search', runFilter);
+
+    try {
+        var params = new URLSearchParams(window.location.search);
+        var preset = params.get('grn_search') || params.get('q') || '';
+        if (preset) {
+            input.value = preset;
+            runFilter();
+        }
+    } catch (e) { /* ignore */ }
 })();
 </script>
