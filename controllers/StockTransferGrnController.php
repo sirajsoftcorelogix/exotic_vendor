@@ -13,16 +13,18 @@ class StockTransferGrnController {
         $this->usersModel = new User($conn);
     }
 
-    private function getWarehouseList() {
-        $warehouses = [];
-        $warehouseQuery = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
-        $warehouseResult = mysqli_query($this->conn, $warehouseQuery);
-        if ($warehouseResult) {
-            while ($row = mysqli_fetch_assoc($warehouseResult)) {
-                $warehouses[] = $row;
-            }
+    private function getWarehouseById($warehouseId) {
+        $warehouseId = (int)$warehouseId;
+        if ($warehouseId <= 0) {
+            return null;
         }
-        return $warehouses;
+        $warehouseIdEsc = (int)$warehouseId;
+        $q = "SELECT id, address_title FROM exotic_address WHERE id = {$warehouseIdEsc} LIMIT 1";
+        $res = mysqli_query($this->conn, $q);
+        if ($res && ($row = mysqli_fetch_assoc($res))) {
+            return $row;
+        }
+        return null;
     }
 
     public function listGrns() {
@@ -59,29 +61,50 @@ class StockTransferGrnController {
             $transfer['dispatch_date'] = date('Y-m-d');
         }
 
-        // Make sure previously received qty is based on actual last TRANSFER_IN/IN movement
-        if (!empty($transfer['items']) && !empty($transfer['to_warehouse'])) {
+        // Cumulative qty already GRN'd for this SKU on this transfer (for remaining / caps in UI)
+        if (!empty($transfer['items'])) {
             foreach ($transfer['items'] as &$item) {
                 $itemSku = trim($item['sku'] ?? '');
-                $item['previously_received_qty'] = 0;
-                if ($itemSku !== '') {
-                    $item['previously_received_qty'] = (int)$this->stockTransferModel->getLastReceivedQty($itemSku, (int)$transfer['to_warehouse']);
+                $item['already_received_on_transfer'] = 0;
+                if ($itemSku !== '' && $transferId > 0) {
+                    $item['already_received_on_transfer'] = (int)$this->stockTransferModel->getReceivedQtyForTransferSku($transferId, $itemSku);
                 }
+                $tq = (int)($item['transfer_qty'] ?? 0);
+                $item['remaining_to_receive'] = max(0, $tq - $item['already_received_on_transfer']);
             }
             unset($item);
         }
 
-        // Provide a list of users for the "received by" dropdown.
-        $users = $this->usersModel->getAllUsers();
+        // Receiving warehouse is always the transfer destination (single option)
+        $destId = (int)($transfer['to_warehouse'] ?? 0);
+        if ($destId <= 0) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Transfer has no destination warehouse']], 'Error');
+            return;
+        }
+        $destRow = $this->getWarehouseById($destId);
+        if (!$destRow) {
+            renderTemplate('views/errors/error.php', ['message' => ['type' => 'error', 'text' => 'Destination warehouse not found']], 'Error');
+            return;
+        }
+        $warehouses = [$destRow];
 
-        // Provide warehouse list for receiving location
-        $warehouses = [];
-        $warehouseQuery = "SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY address_title ASC";
-        $warehouseResult = mysqli_query($this->conn, $warehouseQuery);
-        if ($warehouseResult) {
-            while ($row = mysqli_fetch_assoc($warehouseResult)) {
-                $warehouses[] = $row;
-            }
+        // "Received by" — only users assigned to the destination warehouse
+        $users = $this->usersModel->getActiveUsersByWarehouseId($destId);
+        if ($users === []) {
+            renderTemplate('views/errors/error.php', [
+                'message' => [
+                    'type' => 'error',
+                    'text' => 'No active users are assigned to the destination warehouse (' . htmlspecialchars($destRow['address_title'] ?? '') . '). Assign at least one user to this warehouse before creating a GRN.',
+                ],
+            ], 'Error');
+            return;
+        }
+        $sessionUid = (int)($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0));
+        $defaultReceivedBy = 0;
+        if ($sessionUid > 0 && isset($users[$sessionUid])) {
+            $defaultReceivedBy = $sessionUid;
+        } else {
+            $defaultReceivedBy = (int)array_key_first($users);
         }
 
         renderTemplate('views/stock_transfer_grns/stock_trasfer_grn.php', [
@@ -90,7 +113,7 @@ class StockTransferGrnController {
             'users' => $users,
             'warehouses' => $warehouses,
             'default_warehouse_id' => (int)($transfer['to_warehouse'] ?? 0),
-            'default_received_by' => (int)($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0))
+            'default_received_by' => $defaultReceivedBy
         ], 'Stock Transfer GRN');
     }
 
@@ -123,8 +146,14 @@ class StockTransferGrnController {
             return;
         }
 
-        $this->stockTransferModel->deleteTransferGrn($grnId);
-        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . (int)$grn['transfer_id']);
+        $tid = (int)$grn['transfer_id'];
+        if (!$this->stockTransferModel->deleteTransferGrn($grnId)) {
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Could not delete GRN. Stock rollback may have failed; try again or contact support.'],
+            ], 'Error');
+            return;
+        }
+        header('Location: ?page=stock_transfer_grns&action=list&transfer_id=' . $tid);
     }
 
     public function createPost() {
@@ -148,9 +177,10 @@ class StockTransferGrnController {
         $files = $_FILES['grn_file'] ?? null;
 
         $transferId = isset($data['transfer_id']) ? (int)$data['transfer_id'] : 0;
-        $receivedBy = isset($data['received_by']) ? (int)$data['received_by'] : ($_SESSION['user']['id'] ?? ($_SESSION['user_id'] ?? 0));
-        $receivedDate = isset($data['received_date']) ? $data['received_date'] : date('Y-m-d');
-        $remarks = isset($data['grn_remarks']) ? trim($data['grn_remarks']) : '';
+        $receivedBy = isset($data['received_by']) ? (int)$data['received_by'] : 0;
+        $receivedDate = isset($data['received_date']) ? trim((string)$data['received_date']) : '';
+        $remarks = isset($data['grn_remarks']) ? trim((string)$data['grn_remarks'])
+            : (isset($data['remarks']) ? trim((string)$data['remarks']) : '');
         $warehouseId = isset($data['warehouse_id']) ? (int)$data['warehouse_id'] : 0;
 
         $items = isset($data['items']) && is_array($data['items']) ? $data['items'] : [];
@@ -160,8 +190,46 @@ class StockTransferGrnController {
             return;
         }
 
+        $transfer = $this->stockTransferModel->getTransferById($transferId);
+        if (!$transfer) {
+            echo json_encode(['success' => false, 'message' => 'Stock transfer not found']);
+            return;
+        }
+
+        $toWarehouseId = (int)($transfer['to_warehouse'] ?? 0);
+
+        if ($receivedDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $receivedDate)) {
+            echo json_encode(['success' => false, 'message' => 'Please enter a valid received date']);
+            return;
+        }
+
+        if (!empty($transfer['dispatch_date'])) {
+            $dispatchTs = strtotime((string)$transfer['dispatch_date']);
+            if ($dispatchTs !== false) {
+                $dispatchYmd = date('Y-m-d', $dispatchTs);
+                if ($receivedDate < $dispatchYmd) {
+                    echo json_encode(['success' => false, 'message' => 'Received date cannot be before the transfer dispatch date']);
+                    return;
+                }
+            }
+        }
+
         if ($warehouseId <= 0) {
             echo json_encode(['success' => false, 'message' => 'Please select warehouse']);
+            return;
+        }
+
+        if ($toWarehouseId <= 0 || $warehouseId !== $toWarehouseId) {
+            echo json_encode(['success' => false, 'message' => 'Receiving warehouse must match the transfer destination']);
+            return;
+        }
+
+        if ($receivedBy <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Please select who received the goods']);
+            return;
+        }
+        if (!$this->usersModel->userIsActiveAtWarehouse($receivedBy, $toWarehouseId)) {
+            echo json_encode(['success' => false, 'message' => 'Selected user is not assigned to the destination warehouse']);
             return;
         }
 

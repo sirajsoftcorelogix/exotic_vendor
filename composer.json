@@ -6,7 +6,8 @@
 		"cboden/ratchet": "^0.4",
         "endroid/qr-code": "^6.0",
         "setasign/fpdi": "^2.6",
-        "setasign/fpdf": "^1.8"
+        "setasign/fpdf": "^1.8",
+        "phpoffice/phpspreadsheet": "2.0"
     },
 	"autoload": {
 		"psr-4": { "ChatModule\\": "src/" }

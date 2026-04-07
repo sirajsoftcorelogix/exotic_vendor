@@ -462,6 +462,28 @@ class product
         return 0;
     }
 
+    /**
+     * Autocomplete by SKU only (partial match).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function searchProductsBySkuLike($query)
+    {
+        $q = '%' . $query . '%';
+        $sql = "SELECT id, sku, item_code, title, size, color, image, local_stock
+                FROM vp_products WHERE sku LIKE ? ORDER BY sku ASC LIMIT 25";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $q);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+
+        return $rows;
+    }
+
     public function searchProductsBySkuOrItemCode($query)
     {
         $q = '%' . $query . '%';
