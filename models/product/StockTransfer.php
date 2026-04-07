@@ -1378,11 +1378,14 @@ class StockTransfer
     public function listTransferGrns($transferId = 0)
     {
         $transferId = (int)$transferId;
-        $sql = "SELECT g.*, t.transfer_order_no, w.address_title AS location_name, u.name AS received_by_name
+        $sql = "SELECT g.*, t.transfer_order_no, w.address_title AS location_name, u.name AS received_by_name,
+                       COALESCE(ps.groupname, pic.groupname, '') AS item_group
                 FROM vp_stock_transfer_grns g
                 LEFT JOIN vp_stock_transfer t ON t.id = g.transfer_id
                 LEFT JOIN exotic_address w ON w.id = g.location
-                LEFT JOIN vp_users u ON u.id = g.received_by";
+                LEFT JOIN vp_users u ON u.id = g.received_by
+                LEFT JOIN vp_products ps ON TRIM(COALESCE(g.sku, '')) <> '' AND ps.sku = g.sku
+                LEFT JOIN vp_products pic ON TRIM(COALESCE(g.item_code, '')) <> '' AND pic.item_code = g.item_code";
 
         if ($transferId > 0) {
             $sql .= " WHERE g.transfer_id = ?";

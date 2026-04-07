@@ -16,7 +16,7 @@ $grnTotal = count($grns);
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">GRN line items</h1>
             <p class="mt-2 text-sm sm:text-base text-gray-600 max-w-2xl">
-                Receipt lines recorded against stock transfers. Search by SKU, item code, location, or other fields.
+                Receipt lines recorded against stock transfers. Filter by item group, SKU, or item code.
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-3 shrink-0">
@@ -90,17 +90,40 @@ $grnTotal = count($grns);
         </div>
     <?php else: ?>
         <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-            <div class="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <label for="grnItemSearch" class="block text-xs font-semibold text-gray-600 mb-1.5">Item search</label>
-                    <div class="relative max-w-md">
-                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none" aria-hidden="true"></i>
-                        <input type="search" id="grnItemSearch" autocomplete="off"
-                            placeholder="SKU, item code, order, location, received by…"
-                            class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" />
+            <div class="px-5 py-4 border-b border-gray-100 flex flex-col gap-4">
+                <form id="grnLineFilterForm" class="space-y-3" action="javascript:void(0)" novalidate>
+                    <div class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Filter line items</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 lg:gap-4 lg:items-end">
+                        <div class="lg:col-span-4">
+                            <label for="grnFilterItemGroup" class="block text-xs font-semibold text-gray-600 mb-1.5">Item group</label>
+                            <div class="relative">
+                                <i class="fas fa-layer-group absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="search" name="grn_filter_group" id="grnFilterItemGroup" autocomplete="off"
+                                    placeholder="Product group / category"
+                                    class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" />
+                            </div>
+                        </div>
+                        <div class="lg:col-span-4">
+                            <label for="grnFilterSkuCode" class="block text-xs font-semibold text-gray-600 mb-1.5">Item code / SKU</label>
+                            <div class="relative">
+                                <i class="fas fa-barcode absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="search" name="grn_filter_sku" id="grnFilterSkuCode" autocomplete="off"
+                                    placeholder="Match code or SKU"
+                                    class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" />
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 lg:col-span-4">
+                            <button type="submit" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold shadow-sm hover:bg-amber-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+                                <i class="fas fa-search text-xs" aria-hidden="true"></i>
+                                Search
+                            </button>
+                            <button type="button" id="grnFilterClear" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-800 text-sm font-semibold hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/40 transition">
+                                Clear
+                            </button>
+                        </div>
                     </div>
-                </div>
-                <p id="grnSearchCount" class="text-sm text-gray-600 tabular-nums shrink-0 self-end sm:self-center pt-1">
+                </form>
+                <p id="grnSearchCount" class="text-sm text-gray-600 tabular-nums">
                     Showing <span class="font-medium text-gray-900" id="grnVisibleCount"><?php echo (int) $grnTotal; ?></span>
                     of <span id="grnTotalCount"><?php echo (int) $grnTotal; ?></span>
                     line<?php echo $grnTotal === 1 ? '' : 's'; ?>
@@ -112,6 +135,7 @@ $grnTotal = count($grns);
                         <tr>
                             <th class="px-4 py-3 whitespace-nowrap">GRN ID</th>
                             <th class="px-4 py-3 whitespace-nowrap">Transfer order</th>
+                            <th class="px-4 py-3 whitespace-nowrap">Item group</th>
                             <th class="px-4 py-3 whitespace-nowrap">SKU</th>
                             <th class="px-4 py-3 whitespace-nowrap">Item code</th>
                             <th class="px-4 py-3 whitespace-nowrap">Received</th>
@@ -127,9 +151,14 @@ $grnTotal = count($grns);
                     <tbody class="divide-y divide-gray-100">
                         <?php foreach ($grns as $grn): ?>
                             <?php
+                                $itemGroup = trim((string) ($grn['item_group'] ?? ''));
+                                $groupNorm = strtolower(preg_replace('/\s+/', ' ', $itemGroup));
+                                $skuNorm = strtolower(preg_replace('/\s+/', ' ', trim((string) ($grn['sku'] ?? ''))));
+                                $codeNorm = strtolower(preg_replace('/\s+/', ' ', trim((string) ($grn['item_code'] ?? ''))));
                                 $searchParts = [
                                     (string) ($grn['id'] ?? ''),
                                     (string) ($grn['transfer_order_no'] ?? ''),
+                                    $itemGroup,
                                     (string) ($grn['sku'] ?? ''),
                                     (string) ($grn['item_code'] ?? ''),
                                     (string) ($grn['size'] ?? ''),
@@ -152,9 +181,14 @@ $grnTotal = count($grns);
                                 }
                                 $searchBlob = strtolower(preg_replace('/\s+/', ' ', trim(implode(' ', $searchParts))));
                             ?>
-                            <tr class="grn-item-row hover:bg-amber-50/30 transition-colors" data-search="<?php echo htmlspecialchars($searchBlob, ENT_QUOTES, 'UTF-8'); ?>">
+                            <tr class="grn-item-row hover:bg-amber-50/30 transition-colors"
+                                data-search="<?php echo htmlspecialchars($searchBlob, ENT_QUOTES, 'UTF-8'); ?>"
+                                data-item-group="<?php echo htmlspecialchars($groupNorm, ENT_QUOTES, 'UTF-8'); ?>"
+                                data-sku="<?php echo htmlspecialchars($skuNorm, ENT_QUOTES, 'UTF-8'); ?>"
+                                data-item-code="<?php echo htmlspecialchars($codeNorm, ENT_QUOTES, 'UTF-8'); ?>">
                                 <td class="px-4 py-3 tabular-nums text-gray-700"><?php echo (int) $grn['id']; ?></td>
                                 <td class="px-4 py-3 font-mono text-xs font-medium text-gray-900"><?php echo htmlspecialchars($grn['transfer_order_no'] ?? ''); ?></td>
+                                <td class="px-4 py-3 text-gray-700 max-w-[12rem] truncate" title="<?php echo htmlspecialchars($itemGroup, ENT_QUOTES, 'UTF-8'); ?>"><?php echo $itemGroup !== '' ? htmlspecialchars($itemGroup) : '—'; ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['sku'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-800"><?php echo htmlspecialchars($grn['item_code'] ?? ''); ?></td>
                                 <td class="px-4 py-3 text-gray-700 whitespace-nowrap"><?php echo !empty($grn['received_date']) ? htmlspecialchars(date('j M Y', strtotime($grn['received_date']))) : '—'; ?></td>
@@ -179,41 +213,97 @@ $grnTotal = count($grns);
 
 <script>
 (function () {
-    var input = document.getElementById('grnItemSearch');
-    if (!input) return;
+    var form = document.getElementById('grnLineFilterForm');
+    var groupInput = document.getElementById('grnFilterItemGroup');
+    var skuInput = document.getElementById('grnFilterSkuCode');
+    var clearBtn = document.getElementById('grnFilterClear');
+    if (!form || !groupInput || !skuInput) return;
+
     var rows = document.querySelectorAll('tr.grn-item-row');
     var visibleEl = document.getElementById('grnVisibleCount');
 
-    function tokensFromQuery(q) {
-        return q
-            .trim()
-            .toLowerCase()
+    function norm(s) {
+        return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    }
+
+    function tokens(s) {
+        return norm(s)
             .split(/\s+/)
             .filter(function (t) { return t.length > 0; });
     }
 
+    function rowMatches(tr, groupQ, skuQ) {
+        var gTokens = tokens(groupQ);
+        var sTokens = tokens(skuQ);
+        var rowGroup = (tr.getAttribute('data-item-group') || '');
+        var rowSku = (tr.getAttribute('data-sku') || '');
+        var rowCode = (tr.getAttribute('data-item-code') || '');
+
+        if (gTokens.length > 0 && !gTokens.every(function (t) { return rowGroup.indexOf(t) !== -1; })) {
+            return false;
+        }
+        if (sTokens.length > 0) {
+            var haySkuCode = rowSku + ' ' + rowCode;
+            if (!sTokens.every(function (t) { return haySkuCode.indexOf(t) !== -1; })) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     function runFilter() {
-        var tokens = tokensFromQuery(input.value);
+        var gq = groupInput.value;
+        var sq = skuInput.value;
         var n = 0;
         rows.forEach(function (tr) {
-            var hay = (tr.getAttribute('data-search') || '');
-            var show = tokens.length === 0 || tokens.every(function (t) { return hay.indexOf(t) !== -1; });
+            var show = rowMatches(tr, gq, sq);
             tr.style.display = show ? '' : 'none';
             if (show) n++;
         });
         if (visibleEl) visibleEl.textContent = String(n);
     }
 
-    input.addEventListener('input', runFilter);
-    input.addEventListener('search', runFilter);
+    function pushQueryToUrl() {
+        try {
+            var u = new URL(window.location.href);
+            var g = norm(groupInput.value);
+            var s = norm(skuInput.value);
+            if (g) u.searchParams.set('grn_group', groupInput.value.trim()); else u.searchParams.delete('grn_group');
+            if (s) u.searchParams.set('grn_sku', skuInput.value.trim()); else u.searchParams.delete('grn_sku');
+            u.searchParams.delete('grn_search');
+            u.searchParams.delete('q');
+            window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+        } catch (e) { /* ignore */ }
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        runFilter();
+        pushQueryToUrl();
+    });
+
+    groupInput.addEventListener('input', runFilter);
+    groupInput.addEventListener('search', runFilter);
+    skuInput.addEventListener('input', runFilter);
+    skuInput.addEventListener('search', runFilter);
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            groupInput.value = '';
+            skuInput.value = '';
+            runFilter();
+            pushQueryToUrl();
+            groupInput.focus();
+        });
+    }
 
     try {
         var params = new URLSearchParams(window.location.search);
-        var preset = params.get('grn_search') || params.get('q') || '';
-        if (preset) {
-            input.value = preset;
-            runFilter();
-        }
+        var pg = params.get('grn_group') || '';
+        var ps = params.get('grn_sku') || params.get('grn_search') || params.get('q') || '';
+        if (pg) groupInput.value = pg;
+        if (ps) skuInput.value = ps;
+        if (pg || ps) runFilter();
     } catch (e) { /* ignore */ }
 })();
 </script>
